@@ -1,0 +1,49 @@
+
+# To test the code of loading the base configuration.
+
+# Dataset-related terms used in the project
+data:
+  data_name: MATH
+  data_path: data
+  
+environment:
+  dotenv_path: .env
+
+
+# Model-related terms used in the project
+model:
+  model_name: &model_name TestModel
+
+  sub_model:
+    sub_model_name: *model_name
+
+
+
+# Train-related terms used in the project
+train:
+  epoch: 10
+
+
+# Log-related terms used in the project
+logging:
+
+  checkpoint_path: checkpoints
+  result_path: results
+  logging_path: loggings
+  visualization_path: visualizations
+
+# Eval-related terms used in the project
+evaluation:
+    n_step: 10
+
+  
+
+
+
+   
+
+
+
+
+
+
