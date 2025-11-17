@@ -1,1 +1,1 @@
-cdemo: A python coding template to be used for a quick start.
+finmy: A codebase used to collect target finance data from different sources.

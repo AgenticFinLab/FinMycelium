@@ -18,20 +18,20 @@ def get_requirements():
 
 def get_version():
     current_dir = os.path.abspath(os.path.dirname(__file__))
-    version_file = os.path.join(current_dir, "cdemo", "__init__.py")
+    version_file = os.path.join(current_dir, "finmy", "__init__.py")
     with io.open(version_file, encoding="utf-8") as f:
         return re.search(r'^__version__ = [\'"]([^\'"]*)[\'"]', f.read(), re.M).group(1)
 
 
 setuptools.setup(
-    name="python-coding-template",
+    name="finmy",
     version=get_version(),
     author="",
     license="Apache-2.0",
-    description="Packaged version of financial trend tracer for visual language models",
+    description="Package for collecting financial data from various sources",
     long_description=get_long_description(),
     long_description_content_type="text/markdown",
-    url="https://github.com/AgenticFin/python-coding-structure",
+    url="https://github.com/AgenticFinLab/FinMycelium",
     packages=setuptools.find_packages(exclude=["tests"]),
     python_requires=">=3.11",
     install_requires=get_requirements(),
@@ -51,5 +51,5 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    keywords="python-coding, template",
+    keywords="Data Spider, Financial Data, Large Language Models",
 )

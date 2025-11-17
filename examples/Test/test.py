@@ -4,7 +4,7 @@ This is a test to check if the setup.py file is correctly configured
 
 from projinit import config
 
-import cdemo
+import finmy
 
 
 if __name__ == "__main__":
