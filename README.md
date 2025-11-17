@@ -1,4 +1,4 @@
-## Mandatory Reading -- Must read
+## FinMycelium: Collecting Financial Data from Public Sources
 
 
 ### Structure
