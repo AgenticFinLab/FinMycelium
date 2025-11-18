@@ -13,9 +13,11 @@ Notes:
 
 import os
 import re
+import csv
 import glob
 import time
 import zipfile
+import datetime
 import requests
 from dotenv import load_dotenv
 from urllib.parse import urlparse
@@ -392,7 +394,7 @@ def _truncate_filename(filename, max_length=80):
 
 
 def download_results(
-    api_key, batch_id, output_directory, max_wait_minutes=120, poll_interval=30
+    api_key, batch_id, input_directory, output_directory, max_wait_minutes=120, poll_interval=30
 ):
     """
     Download processed results for a given batch ID.
@@ -400,6 +402,7 @@ def download_results(
     Args:
         api_key (str): API key for authentication
         batch_id (str): Unique identifier for the batch to process
+        input_directory (str): Directory where input files are located
         output_directory (str): Directory to save downloaded files
         max_wait_minutes (int): Maximum time to wait for processing (default: 60)
         poll_interval (int): Time interval between status checks (default: 120)
@@ -413,6 +416,17 @@ def download_results(
     """
     # Create the output directory if it doesn't exist
     os.makedirs(output_directory, exist_ok=True)
+
+    # Define the path for the parser information CSV file
+    csv_file_path = os.path.join(output_directory, "parser_information.csv")
+    # Define the field names for the CSV
+    csv_fieldnames = ["source_path","raw_data_path", "time", "batch_id"]
+
+    # Initialize the CSV file with headers if it doesn't exist
+    if not os.path.exists(csv_file_path):
+        with open(csv_file_path, mode='w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
+            writer.writeheader()
 
     # Set up the API endpoint for checking batch status
     api_url = f"https://mineru.net/api/v4/extract-results/batch/{batch_id}"
@@ -515,16 +529,44 @@ def download_results(
             # Truncate filename to avoid path length issues
             filename = _truncate_filename(original_filename)
 
-            # Store failed files' data_id and potentially original path (if known)
+            # Store failed files' data_id and potentially original path
             if state == "failed":
-                # We'll need to map this back later
+                # Map this back later
                 failed_files_map[data_id] = None 
                 print(f"File {filename} (data_id: {data_id}) failed processing.")
 
             # Only download if the file was processed successfully and has download URL
             if state == "done" and "full_zip_url" in item:
+                # Determine the intended extraction directory (where the zip content goes)
+                base_name = os.path.splitext(original_filename)[0]
+                source_path = os.path.join(input_directory, original_filename)
+                raw_data_path = os.path.join(output_directory, base_name)
+
                 if _download_zip(item["full_zip_url"], filename, output_directory):
                     success_count += 1
+
+                    # Prepare data for the CSV row
+                    csv_row_data = {
+                        # Store the path where the original input file was located if passed down
+                        "source_path": source_path,
+                        # Store the path where the raw data is stored
+                        "raw_data_path": raw_data_path,
+                        # Time of processing for this file
+                        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "batch_id": batch_id,
+                    }
+
+                    # Append the row to the CSV file
+                    try:
+                        # Open in append mode
+                        with open(csv_file_path, mode='a', newline='', 
+                        encoding='utf-8') as csvfile: 
+                            writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
+                            # Write the single row
+                            writer.writerow(csv_row_data)
+                        print(f"Logged successful processing for: {original_filename}")
+                    except IOError as e:
+                        print(f"Error writing to CSV for {original_filename}: {e}")
                 else:
                     print(f"Failed to download file: {filename} (state: {state})")
             elif state != "done":
@@ -629,7 +671,7 @@ def parse_pdfs(
     all_failed_files_maps = {} 
     for batch_id in batch_ids:
         success, total, status_report, failed_map = download_results(
-            api_key=api_key, batch_id=batch_id, output_directory=output_dir
+            api_key=api_key, batch_id=batch_id, input_directory=input_dir, output_directory=output_dir
         )
         # Store the failed map for this batch
         all_failed_files_maps[batch_id] = failed_map
@@ -759,7 +801,7 @@ def retry_failed_files(
     print("\nStarting result downloads for retry batch...")
     for retry_batch_id in retry_batch_ids:
         download_results(
-            api_key=api_key, batch_id=retry_batch_id, output_directory=output_dir
+            api_key=api_key, batch_id=retry_batch_id, input_directory=input_dir, output_directory=output_dir
         )
 
     # Clean up the temporary directory after processing
