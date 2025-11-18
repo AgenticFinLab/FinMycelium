@@ -15,10 +15,7 @@ import os
 import re
 import glob
 import time
-import shutil
-import random
 import zipfile
-import argparse
 import requests
 from dotenv import load_dotenv
 from urllib.parse import urlparse
