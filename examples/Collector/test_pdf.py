@@ -44,13 +44,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c",
         "--check_pdf_limits",
-        action="store_true",
+        type=bool,
+        default=True,
         help="Enable PDF size/page limits check",
     )
     parser.add_argument(
         "-r",
         "--retry_failed",
-        action="store_true",
+        type=bool,
+        default=True,
         help="Retry failed files after initial processing",
     )
 
