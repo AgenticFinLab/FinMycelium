@@ -47,14 +47,35 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable PDF size/page limits check",
     )
+    parser.add_argument(
+        "-r",
+        "--retry_failed",
+        action="store_true",
+        help="Retry failed files after initial processing",
+    )
 
     args = parser.parse_args()
 
     # Run the main processing function with default parameters
-    pdf_parser.parse_pdfs(
-        input_dir="input",
-        output_dir="output",
-        batch_size=200,
-        language="en",
-        check_pdf_limits=True,
+    # Return the failed files map and original files list
+    failed_maps, orig_list = pdf_parser.parse_pdfs(
+        input_dir=args.input_dir,
+        output_dir=args.output_dir,
+        batch_size=args.batch_size,
+        language=args.language,
+        check_pdf_limits=args.check_pdf_limits,
     )
+
+    # Run the retry function if there are failed files map and retry_failed is True
+    if failed_maps and args.retry_failed:
+        pdf_parser.retry_failed_files(
+            all_failed_files_maps=failed_maps,
+            original_files_list=orig_list,
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            batch_size=args.batch_size,
+            language=args.language,
+            check_pdf_limits=args.check_pdf_limits,
+        )
+    else:
+        print("\nNo failed files found from initial processing. Skipping retry.")
