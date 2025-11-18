@@ -1,12 +1,12 @@
 """
-This script processes PDF files using the Mineru API with the following features:  
-1. Splits large PDFs into smaller chunks  
-2. Uploads batches of PDFs for parsing, converting them into Markdown files and images  
-3. Downloads and extracts the processed results  
+This script processes PDF files using the Mineru API with the following features:
+1. Splits large PDFs into smaller chunks
+2. Uploads batches of PDFs for parsing, converting them into Markdown files and images
+3. Downloads and extracts the processed results
 
-Notes:  
-1. Mineru imposes limits on PDF parsing: each PDF must be less than 200 MB and 600 pages. Files exceeding these limits will be automatically split into multiple smaller PDFs.  
-2. Each batch can process up to 200 PDFs. If more than 200 PDFs are submitted, they will be automatically divided into multiple batches.  
+Notes:
+1. Mineru imposes limits on PDF parsing: each PDF must be less than 200 MB and 600 pages. Files exceeding these limits will be automatically split into multiple smaller PDFs.
+2. Each batch can process up to 200 PDFs. If more than 200 PDFs are submitted, they will be automatically divided into multiple batches.
 3. Mineru API tokens expire after 14 days. Please obtain a new token from https://mineru.net/apiManage/token before expiration and update it in your .env file.
 """
 
@@ -137,6 +137,7 @@ def get_pdf_info(pdf_path):
             os.path.getsize(pdf_path) / (1024 * 1024) if os.path.exists(pdf_path) else 0
         ), 0
 
+
 def check_and_process_pdfs(
     api_key,
     pdf_directory,
@@ -266,11 +267,11 @@ def check_and_process_pdfs(
                 api_url,
                 headers=headers,
                 json={
-                    "enable_formula": True,  # Enable formula extraction
-                    "language": "en",  # Set language for processing
-                    "layout_model": "doclayout_yolo",  # Use YOLO layout model
-                    "enable_table": True,  # Enable table extraction
-                    "files": files_data,  # The list of files to process
+                    "enable_formula": True,
+                    "language": "en",
+                    "layout_model": "doclayout_yolo",
+                    "enable_table": True,
+                    "files": files_data,
                 },
             )
             response.raise_for_status()
@@ -327,19 +328,20 @@ def _sanitize_filename(filename):
     """
     # 1. Replace invalid characters with an underscore
     # Also remove leading/trailing spaces and dots which are problematic
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    
+    sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
+
     # 2. Remove leading/trailing spaces and dots
-    sanitized = sanitized.strip().rstrip('.')
+    sanitized = sanitized.strip().rstrip(".")
 
     # 3. Handle reserved names (CON, PRN, AUX, NUL, COM1-COM9, LPT1-LPT9)
     # Case-insensitive check at the beginning followed by a dot or end of string
     # This regex checks if the sanitized name starts with a reserved name followed by nothing or a dot and extension
-    if re.match(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$', sanitized.upper()):
+    if re.match(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$", sanitized.upper()):
         # If it matches a reserved name, prepend an underscore
         sanitized = f"_{sanitized}"
 
     return sanitized
+
 
 def _truncate_filename(filename, max_length=80):
     """
@@ -352,8 +354,10 @@ def _truncate_filename(filename, max_length=80):
     sanitized_ext = _sanitize_filename(ext)
 
     # If the sanitized extension is empty or just dots, provide a default
-    if not sanitized_ext or sanitized_ext.strip('.') == '':
-        sanitized_ext = '.pdf' # Or '.txt', or whatever default you prefer, or just '.tmp'
+    if not sanitized_ext or sanitized_ext.strip(".") == "":
+        sanitized_ext = (
+            ".pdf"  # Or '.txt', or whatever default you prefer, or just '.tmp'
+        )
 
     # Combine the sanitized parts
     full_sanitized = sanitized_name + sanitized_ext
@@ -371,19 +375,19 @@ def _truncate_filename(filename, max_length=80):
 
     truncated_name = sanitized_name[:available_length]
     # Ensure the truncated name doesn't end in a dot or space after truncation
-    truncated_name = truncated_name.rstrip('.')
+    truncated_name = truncated_name.rstrip(".")
 
     result = truncated_name + sanitized_ext
 
     # Final result length check:
     if len(result) > max_length:
-         # Fallback: truncate the name part more aggressively if somehow still too long
-         # This could happen if sanitized_ext was different than original ext
-         final_available = max_length - len(sanitized_ext)
-         if final_available > 0:
-             result = sanitized_name[:final_available].rstrip('.') + sanitized_ext
-         else:
-             result = sanitized_ext[:max_length]
+        # Fallback: truncate the name part more aggressively if somehow still too long
+        # This could happen if sanitized_ext was different than original ext
+        final_available = max_length - len(sanitized_ext)
+        if final_available > 0:
+            result = sanitized_name[:final_available].rstrip(".") + sanitized_ext
+        else:
+            result = sanitized_ext[:max_length]
 
     return result
 
@@ -579,7 +583,7 @@ def parse_pdfs(
         language (str): Document language code.
         check_pdf_limits (bool): Whether to check PDF size/pages and split if needed (default: True)
     """
-    
+
     # Load environment variables from .env file
     load_dotenv()
 
@@ -611,14 +615,3 @@ def parse_pdfs(
         success, total, status_report = download_results(
             api_key=api_key, batch_id=batch_id, output_directory=output_dir
         )
-
-
-if __name__ == "__main__":
-    # Run the main processing function with default parameters
-    parse_pdfs(
-        input_dir="input",
-        output_dir="output",
-        batch_size=200,
-        language="en",
-        check_pdf_limits=True,
-    )
