@@ -540,6 +540,9 @@ def download_results(
                 source_path = os.path.join(input_directory, original_filename)
                 raw_data_path = os.path.join(output_directory, base_name)
 
+                source_path = os.path.abspath(source_path)
+                raw_data_path = os.path.abspath(raw_data_path)
+
                 if _download_zip(item["full_zip_url"], filename, output_directory):
                     success_count += 1
 
