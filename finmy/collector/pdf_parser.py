@@ -330,13 +330,11 @@ def _sanitize_filename(filename):
     # 1. Replace invalid characters with an underscore
     # Also remove leading/trailing spaces and dots which are problematic
     sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
+    # Add this line to remove leading and trailing spaces and dots
+    sanitized = sanitized.strip(" .") # Removes spaces and dots from start and end
 
-    # 2. Remove leading/trailing spaces and dots
-    sanitized = sanitized.strip().rstrip(".")
-
-    # 3. Handle reserved names (CON, PRN, AUX, NUL, COM1-COM9, LPT1-LPT9)
+    # 2. Handle reserved names (CON, PRN, AUX, NUL, COM1-COM9, LPT1-LPT9)
     # Case-insensitive check at the beginning followed by a dot or end of string
-    # This regex checks if the sanitized name starts with a reserved name followed by nothing or a dot and extension
     if re.match(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$", sanitized.upper()):
         # If it matches a reserved name, prepend an underscore
         sanitized = f"_{sanitized}"
@@ -390,7 +388,7 @@ def _truncate_filename(filename, max_length=80):
         else:
             result = sanitized_ext[:max_length]
 
-    return result
+    return result.strip()
 
 
 def download_results(
