@@ -9,7 +9,7 @@ import sys
 import argparse
 from typing import NoReturn
 
-from finmy.pdf_collector.db_storage_manager import DataStorageManager
+from finmy.db_manage.storage_manager import DataStorageManager
 
 
 def parse_arguments() -> argparse.Namespace:

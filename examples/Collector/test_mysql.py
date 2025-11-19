@@ -4,7 +4,7 @@ This script demonstrates how to use the MySQLDatabaseManager class
 for various database operations.
 """
 
-from finmy.pdf_collector.mysql_manager import MySQLDatabaseManager
+from finmy.db_manage.mysql_manager import MySQLDatabaseManager
 
 
 def demonstrate_basic_operations():

@@ -321,7 +321,7 @@ def check_and_process_pdfs(
             print(f"Batch {batch_index + 1} failed: No files uploaded successfully")
 
     # Return the original list of files processed in this batch
-    return batch_ids, all_files_to_process 
+    return batch_ids, all_files_to_process
 
 
 def _sanitize_filename(filename):
@@ -332,7 +332,7 @@ def _sanitize_filename(filename):
     # Also remove leading/trailing spaces and dots which are problematic
     sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
     # Add this line to remove leading and trailing spaces and dots
-    sanitized = sanitized.strip(" .") # Removes spaces and dots from start and end
+    sanitized = sanitized.strip(" .")  # Removes spaces and dots from start and end
 
     # 2. Handle reserved names (CON, PRN, AUX, NUL, COM1-COM9, LPT1-LPT9)
     # Case-insensitive check at the beginning followed by a dot or end of string
@@ -393,7 +393,12 @@ def _truncate_filename(filename, max_length=80):
 
 
 def download_results(
-    api_key, batch_id, input_directory, output_directory, max_wait_minutes=120, poll_interval=30
+    api_key,
+    batch_id,
+    input_directory,
+    output_directory,
+    max_wait_minutes=120,
+    poll_interval=30,
 ):
     """
     Download processed results for a given batch ID.
@@ -419,11 +424,20 @@ def download_results(
     # Define the path for the parser information CSV file
     csv_file_path = os.path.join(output_directory, "parser_information.csv")
     # Define the field names for the CSV
-    csv_fieldnames = ["RawDataID","Source","Location", "Time", "Copyright", "Method", "Tag", "BatchID"]
+    csv_fieldnames = [
+        "RawDataID",
+        "Source",
+        "Location",
+        "Time",
+        "Copyright",
+        "Method",
+        "Tag",
+        "BatchID",
+    ]
 
     # Initialize the CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file_path):
-        with open(csv_file_path, mode='w', newline='', encoding='utf-8') as csvfile:
+        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
             writer.writeheader()
 
@@ -531,7 +545,7 @@ def download_results(
             # Store failed files' data_id and potentially original path
             if state == "failed":
                 # Map this back later
-                failed_files_map[data_id] = None 
+                failed_files_map[data_id] = None
                 print(f"File {filename} (data_id: {data_id}) failed processing.")
 
             # Only download if the file was processed successfully and has download URL
@@ -539,11 +553,11 @@ def download_results(
                 # Determine the intended extraction directory (where the zip content goes)
                 base_name = os.path.splitext(original_filename)[0]
                 # Remove the last 3 characters (pdf)
-                if base_name.lower().endswith('pdf'):
+                if base_name.lower().endswith("pdf"):
                     base_name = base_name[:-3]
-                
+
                 # Replace spaces with underscores
-                base_name = base_name.replace(' ', '_')
+                base_name = base_name.replace(" ", "_")
 
                 # Construct paths for source and raw data
                 source_path = os.path.join(input_directory, original_filename)
@@ -556,9 +570,13 @@ def download_results(
                 if _download_zip(item["full_zip_url"], base_name, output_directory):
                     success_count += 1
                     if os.path.exists(csv_file_path):
-                        with open(csv_file_path, mode='r', newline='', encoding='utf-8') as csvfile:
+                        with open(
+                            csv_file_path, mode="r", newline="", encoding="utf-8"
+                        ) as csvfile:
                             row_count = sum(1 for row in csv.DictReader(csvfile))
-                            data_id = row_count + 1  # ID starts from 1, so add 1 to existing count
+                            data_id = (
+                                row_count + 1
+                            )  # ID starts from 1, so add 1 to existing count
                     else:
                         data_id = 1  # If file doesn't exist, start from ID 1
 
@@ -583,12 +601,15 @@ def download_results(
                     # Append the row to the CSV file
                     try:
                         # Open in append mode
-                        with open(csv_file_path, mode='a', newline='', 
-                        encoding='utf-8') as csvfile: 
+                        with open(
+                            csv_file_path, mode="a", newline="", encoding="utf-8"
+                        ) as csvfile:
                             writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
                             # Write the single row
                             writer.writerow(csv_row_data)
-                        print(f"Logged successful processing for: {original_filename} (RawDataID: {data_id})")
+                        print(
+                            f"Logged successful processing for: {original_filename} (RawDataID: {data_id})"
+                        )
                     except IOError as e:
                         print(f"Error writing to CSV for {original_filename}: {e}")
                 else:
@@ -690,26 +711,29 @@ def parse_pdfs(
     # Start downloading the results for each batch
     print("\nStarting result downloads...")
     # Collect failed files maps from all batches
-    all_failed_files_maps = {} 
+    all_failed_files_maps = {}
     for batch_id in batch_ids:
         success, total, status_report, failed_map = download_results(
-            api_key=api_key, batch_id=batch_id, input_directory=input_dir, output_directory=output_dir
+            api_key=api_key,
+            batch_id=batch_id,
+            input_directory=input_dir,
+            output_directory=output_dir,
         )
         # Store the failed map for this batch
         all_failed_files_maps[batch_id] = failed_map
 
     # Return the collected failed maps and the original lists
-    return all_failed_files_maps, original_files_list 
+    return all_failed_files_maps, original_files_list
 
 
 def retry_failed_files(
-    all_failed_files_maps, 
-    original_files_list, 
-    input_dir: str = "input", 
-    output_dir: str = "output_retry", 
-    batch_size: int = 200, 
-    language: str = "en", 
-    check_pdf_limits=True
+    all_failed_files_maps,
+    original_files_list,
+    input_dir: str = "input",
+    output_dir: str = "output_retry",
+    batch_size: int = 200,
+    language: str = "en",
+    check_pdf_limits=True,
 ):
     """
     Collects failed files from initial processing results and retries them in a new batch.
@@ -733,7 +757,7 @@ def retry_failed_files(
 
     # Collect the original file paths for failed items
     # Use a set to avoid duplicates if a file was split and both parts failed
-    files_to_retry = set() 
+    files_to_retry = set()
 
     for batch_id, failed_map in all_failed_files_maps.items():
         print(f"Analyzing batch {batch_id} for failed files...")
@@ -748,20 +772,26 @@ def retry_failed_files(
             # Example data_id: "MyDoc_b1"
             # Extract the original truncated name part (first 16 chars of original name)
             # Split from the right, take the first part
-            original_name_part = data_id.rsplit('_b', 1)[0] 
-            print(f"  Looking for original file associated with data_id: {data_id} (original part: {original_name_part})")
+            original_name_part = data_id.rsplit("_b", 1)[0]
+            print(
+                f"  Looking for original file associated with data_id: {data_id} (original part: {original_name_part})"
+            )
 
             # Find the original file path that matches this part
             matched_original_file = None
             for orig_path in original_files_list:
                 orig_basename = os.path.splitext(os.path.basename(orig_path))[0]
-                truncated_orig_name = orig_basename[:16] if len(orig_basename) > 16 else orig_basename
+                truncated_orig_name = (
+                    orig_basename[:16] if len(orig_basename) > 16 else orig_basename
+                )
                 if truncated_orig_name == original_name_part:
                     matched_original_file = orig_path
                     break
 
             if matched_original_file:
-                print(f"Matched data_id {data_id} to original file: {matched_original_file}")
+                print(
+                    f"Matched data_id {data_id} to original file: {matched_original_file}"
+                )
                 files_to_retry.add(matched_original_file)
             else:
                 print(f"Warning: Could not find original file for data_id {data_id}")
@@ -786,7 +816,7 @@ def retry_failed_files(
         if os.path.exists(src_file):
             dest_file = os.path.join(temp_retry_dir, os.path.basename(src_file))
             # Use copy2 to preserve metadata
-            shutil.copy2(src_file, dest_file) 
+            shutil.copy2(src_file, dest_file)
             copied_files.append(dest_file)
         else:
             print(f"Warning: Original file for retry not found: {src_file}")
@@ -798,10 +828,12 @@ def retry_failed_files(
             os.rmdir(temp_retry_dir)
         except OSError:
             # Directory not empty or other error, ignore for now
-            pass 
+            pass
         return
 
-    print(f"\nCopied {len(copied_files)} files to temporary retry directory: {temp_retry_dir}")
+    print(
+        f"\nCopied {len(copied_files)} files to temporary retry directory: {temp_retry_dir}"
+    )
 
     # Process the copied files in the temp directory as a new batch
     retry_batch_ids, _ = check_and_process_pdfs(
@@ -810,7 +842,7 @@ def retry_failed_files(
         max_files_per_batch=batch_size,
         language=language,
         # Apply limits again for the retry batch
-        check_pdf_limits=check_pdf_limits, 
+        check_pdf_limits=check_pdf_limits,
     )
 
     if not retry_batch_ids:
@@ -823,7 +855,10 @@ def retry_failed_files(
     print("\nStarting result downloads for retry batch...")
     for retry_batch_id in retry_batch_ids:
         download_results(
-            api_key=api_key, batch_id=retry_batch_id, input_directory=input_dir, output_directory=output_dir
+            api_key=api_key,
+            batch_id=retry_batch_id,
+            input_directory=input_dir,
+            output_directory=output_dir,
         )
 
     # Clean up the temporary directory after processing
