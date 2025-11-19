@@ -16,6 +16,7 @@ import re
 import csv
 import glob
 import time
+import uuid
 import shutil
 import zipfile
 import datetime
@@ -570,20 +571,10 @@ def download_results(
 
                 if _download_zip(item["full_zip_url"], base_name, output_directory):
                     success_count += 1
-                    if os.path.exists(csv_file_path):
-                        with open(
-                            csv_file_path, mode="r", newline="", encoding="utf-8"
-                        ) as csvfile:
-                            row_count = sum(1 for row in csv.DictReader(csvfile))
-                            data_id = (
-                                row_count + 1
-                            )  # ID starts from 1, so add 1 to existing count
-                    else:
-                        data_id = 1  # If file doesn't exist, start from ID 1
 
                     # Prepare data for the CSV row
                     csv_row_data = {
-                        "RawDataID": data_id,
+                        "RawDataID": str(uuid.uuid4()),
                         # Store the path where the original input file was located if passed down
                         "Source": source_path,
                         # Store the path where the raw data is stored
