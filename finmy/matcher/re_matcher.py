@@ -13,17 +13,18 @@ import re
 import csv
 import json
 from datetime import datetime
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Optional
+
 
 def extract_context_with_sentences(
     content: str,
     keyword_start: int,
     keyword_end: int,
-    context_chars: int
+    context_chars: int,
 ) -> str:
     """Extracts context around a keyword within a character window, expanded to full sentences."""
     total_len = len(content)
-    
+
     # Define the raw character window
     raw_start = max(0, keyword_start - context_chars)
     raw_end = min(total_len, keyword_end + context_chars)
@@ -35,7 +36,7 @@ def extract_context_with_sentences(
             actual_start = 0
             break
         # Check if previous character is a sentence ending punctuation
-        if re.match(r'[.!?。！？]', content[i - 1]):
+        if re.match(r"[.!?。！？]", content[i - 1]):
             actual_start = i
             break
 
@@ -43,7 +44,7 @@ def extract_context_with_sentences(
     actual_end = raw_end
     for i in range(raw_end, total_len):
         # Check if current character is a sentence ending punctuation
-        if re.match(r'[.!?。！？]', content[i]):
+        if re.match(r"[.!?。！？]", content[i]):
             actual_end = i + 1
             break
     else:
@@ -57,11 +58,11 @@ def extract_context_with_sentences(
 def search_keyword_in_file(
     file_path: str,
     keyword: str,
-    context_chars: int = 2000
+    context_chars: int = 2000,
 ) -> List[Dict[str, any]]:
     """Searches for a keyword in a file and returns context around matches with complete sentences."""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
     except Exception as e:
         print(f"Warning: Could not read file {file_path}: {e}")
@@ -70,29 +71,29 @@ def search_keyword_in_file(
     # Create case-insensitive pattern for the keyword
     pattern = re.compile(re.escape(keyword), re.IGNORECASE)
     matches = []
-    
+
     # Find all occurrences of the keyword in the content
     for match in pattern.finditer(content):
         start_pos = match.start()
         end_pos = match.end()
-        
+
         # Extract context around the match with full sentences
         context = extract_context_with_sentences(
             content, start_pos, end_pos, context_chars
         )
-        
+
         # Calculate line number where the match occurs
-        line_number = content[:start_pos].count('\n') + 1
-        
+        line_number = content[:start_pos].count("\n") + 1
+
         match_info = {
-            'line_number': line_number,
+            "line_number": line_number,
             # Character positions of the match
-            'keyword_position': (start_pos, end_pos),  
+            "keyword_position": (start_pos, end_pos),
             # Context text with complete sentences
-            'context': context,  
+            "context": context,
         }
         matches.append(match_info)
-    
+
     return matches
 
 
@@ -100,7 +101,7 @@ def get_next_sample_id(output_path: str) -> int:
     """Gets the next SampleID based on existing results in the JSON file."""
     if os.path.exists(output_path):
         try:
-            with open(output_path, 'r', encoding='utf-8') as f:
+            with open(output_path, "r", encoding="utf-8") as f:
                 existing_results = json.load(f)
             if isinstance(existing_results, list):
                 # Return the next ID after the last existing result
@@ -122,47 +123,44 @@ def create_search_result_entry(
     keyword: str,
     matches: List[Dict[str, any]],
     raw_data_id: str,
-    sample_id: int
+    sample_id: int,
 ) -> Dict[str, any]:
     """Creates a structured entry for search results."""
     return {
         # Sequential ID for this search result
-        'SampleID': str(sample_id),
+        "SampleID": str(sample_id),
         # ID from the source CSV file
-        'RawDataID': raw_data_id,
+        "RawDataID": raw_data_id,
         # Absolute path to the output JSON file
-        'Location': os.path.abspath(output_path),
+        "Location": os.path.abspath(output_path),
         # Timestamp of the search
-        'Time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         # Placeholder for category classification
-        'Category': '',
+        "Category": "",
         # Placeholder for field classification
-        'Field': '',
+        "Field": "",
         # Tag identifying the project/organization
-        'Tag': 'AgenticFin, HKUST(GZ)',
+        "Tag": "AgenticFin, HKUST(GZ)",
         # Search method used
-        'Method': 'Regular Expression',
+        "Method": "Regular Expression",
         # Placeholder for review comments
-        'Reviews': '',
+        "Reviews": "",
         # Path to the source markdown file
-        'Source': file_path,
+        "Source": file_path,
         # The keyword that was searched for
-        'keyword': keyword,
+        "keyword": keyword,
         # Number of matches found in this file
-        'match_count': len(matches),
+        "match_count": len(matches),
         # List of individual match details
-        'matches': matches
+        "matches": matches,
     }
 
 
-def save_search_results(
-    results: List[Dict[str, any]],
-    output_path: str
-) -> None:
+def save_search_results(results: List[Dict[str, any]], output_path: str) -> None:
     """Saves search results to a JSON file."""
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
 
@@ -170,7 +168,7 @@ def perform_keyword_search(
     input_directory: str,
     keyword: str,
     context_chars: int = 2000,
-    output_path: Optional[str] = None
+    output_path: Optional[str] = None,
 ) -> List[Dict[str, any]]:
     """Performs keyword search using parser_information.csv to locate full.md files.
 
@@ -185,32 +183,36 @@ def perform_keyword_search(
     """
     # Set default output path if not provided
     if output_path is None:
-        output_path = os.path.join(input_directory, 'search_information.json')
-    
+        output_path = os.path.join(input_directory, "search_information.json")
+
     # Path to the CSV file that maps RawDataID to markdown files
-    csv_path = os.path.join(input_directory, 'parser_information.csv')
+    csv_path = os.path.join(input_directory, "parser_information.csv")
     if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"Expected parser_information.csv at {csv_path} but it does not exist.")
-    
+        raise FileNotFoundError(
+            f"Expected parser_information.csv at {csv_path} but it does not exist."
+        )
+
     # Get the starting SampleID based on existing results
     current_sample_id = get_next_sample_id(output_path)
-    
+
     all_results = []
-    
+
     # Read the CSV file to get file locations
-    with open(csv_path, 'r', encoding='utf-8') as csvfile:
+    with open(csv_path, "r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             # Get the markdown file path from the CSV row
-            md_file_path = row.get('Location')
+            md_file_path = row.get("Location")
             # Get the RawDataID from the CSV row
-            raw_data_id = row.get('RawDataID', '')
-            
+            raw_data_id = row.get("RawDataID", "")
+
             # Skip if file path is missing or file doesn't exist
             if not md_file_path or not os.path.exists(md_file_path):
-                print(f"Warning: Markdown file not found or missing Location: {md_file_path}")
+                print(
+                    f"Warning: Markdown file not found or missing Location: {md_file_path}"
+                )
                 continue
-            
+
             # Search for the keyword in the markdown file
             matches = search_keyword_in_file(md_file_path, keyword, context_chars)
             if matches:
@@ -221,12 +223,12 @@ def perform_keyword_search(
                     keyword=keyword,
                     matches=matches,
                     raw_data_id=raw_data_id,
-                    sample_id=current_sample_id
+                    sample_id=current_sample_id,
                 )
                 all_results.append(result_entry)
                 # Increment SampleID for next result if any
                 current_sample_id += 1
-    
+
     # Save all results to the output JSON file
     save_search_results(all_results, output_path)
     return all_results

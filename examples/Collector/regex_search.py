@@ -8,7 +8,7 @@ to a JSON file.
 import os
 import argparse
 
-from finmy.pdf_collector import regex_searcher
+from finmy.matcher import re_matcher
 
 
 def main():
@@ -57,7 +57,7 @@ def main():
 
     # Perform the keyword search
     try:
-        results = regex_searcher.perform_keyword_search(
+        results = re_matcher.perform_keyword_search(
             input_directory=args.input_path,
             keyword=args.keyword,
             context_chars=args.context_chars,
