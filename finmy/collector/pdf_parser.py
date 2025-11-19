@@ -537,13 +537,22 @@ def download_results(
             if state == "done" and "full_zip_url" in item:
                 # Determine the intended extraction directory (where the zip content goes)
                 base_name = os.path.splitext(original_filename)[0]
+                # Remove the last 3 characters (pdf)
+                if base_name.lower().endswith('pdf'):
+                    base_name = base_name[:-3]
+                
+                # Replace spaces with underscores
+                base_name = base_name.replace(' ', '_')
+
+                # Construct paths for source and raw data
                 source_path = os.path.join(input_directory, original_filename)
                 raw_data_path = os.path.join(output_directory, base_name)
 
+                # Convert paths to absolute paths
                 source_path = os.path.abspath(source_path)
                 raw_data_path = os.path.abspath(raw_data_path)
 
-                if _download_zip(item["full_zip_url"], filename, output_directory):
+                if _download_zip(item["full_zip_url"], base_name, output_directory):
                     success_count += 1
                     if os.path.exists(csv_file_path):
                         with open(csv_file_path, mode='r', newline='', encoding='utf-8') as csvfile:
@@ -601,11 +610,9 @@ def download_results(
     return success_count, total_files, status_report, failed_files_map
 
 
-def _download_zip(zip_url, original_name, output_dir):
+def _download_zip(zip_url, base_name, output_dir):
     """Helper function to download and extract a ZIP file."""
     try:
-        # Extract the base name without extension for directory creation
-        base_name = os.path.splitext(original_name)[0]
         # Create a directory for this file's results
         extraction_dir = os.path.join(output_dir, base_name)
         os.makedirs(extraction_dir, exist_ok=True)
