@@ -7,8 +7,8 @@ Example Usage:
 
 manager = DataStorageManager(
     table_name="RawData_PDF",
-    required_columns=['Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag'],
-    column_types=['VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)']
+    required_columns=['RawDataID','Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag'],
+    column_types=['INT', 'VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)']
 )
 
 manager.create_table()
@@ -181,16 +181,21 @@ class DataStorageManager(MySQLDatabaseManager):
             print(f"Error counting records: {e}")
             return None
 
-    def clear_table(self) -> bool:
-        """Delete all rows from the table (does not drop the table)."""
-        query = f"DELETE FROM `{self.table_name}`"
+    def drop_table(self) -> bool:
+        """
+        Drop the table completely (removes table structure and all data).
+        
+        Returns:
+            bool: True on success, False on failure.
+        """
+        query = f"DROP TABLE IF EXISTS `{self.table_name}`"
         try:
             if self.execute_query(query) is not None:
-                print(f"All records cleared from '{self.table_name}'.")
+                print(f"Table '{self.table_name}' dropped successfully.")
                 return True
             else:
-                print(f"Failed to clear table '{self.table_name}'.")
+                print(f"Failed to drop table '{self.table_name}'.")
                 return False
         except Exception as e:
-            print(f"Error clearing table: {e}")
+            print(f"Error dropping table: {e}")
             return False
