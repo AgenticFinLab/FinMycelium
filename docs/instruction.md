@@ -183,3 +183,78 @@ The script generates a JSON file containing a list of result entries, one per `f
 ```
 
 > **Note**: Context snippets are automatically expanded to include complete sentences while respecting the `--context-chars` limit. Only files containing at least one match are included in the results.
+
+---
+
+### 3. Import the PDF parsing results
+
+Import the PDF parsing results as `RawData` into the database. The data format followed by `RawData` can be found at [metadata-specific](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).
+
+#### Basic Usage
+
+```bash
+# Import parser info with default settings
+python examples/Collector/csv_to_db.py
+
+# Custom configuration example
+python examples/Collector/csv_to_db.py \
+  --csv-file "data/custom_parsers.csv" \
+  --table-name "CustomRawData_PDF" \
+  --clear-table \
+  --show-stats
+```
+
+> **Tip**: Use `--clear-table` if you want to replace all existing records. Use `--create-table` (enabled by default) to ensure the target table exists.
+
+---
+
+#### Parameters
+
+| Parameter            | Short Form | Default Value                                                                 | Description                                                                                   |
+| -------------------- | ---------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `--csv-file`         | `-f`       | `output/parser_information.csv`                                               | Path to the CSV file containing parser metadata                                               |
+| `--table-name`       | `-t`       | `RawData_PDF`                                                                 | Name of the target database table                                                             |
+| `--required-columns` | `-c`       | `['Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag']`                 | List of expected column names in the CSV (order-sensitive)                                    |
+| `--column-types`     | `-y`       | `['VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)']` | SQL data types corresponding to each required column                                          |
+| `--create-table`     | `-n`       | `True`                                                                        | Automatically create the database table if it doesn’t exist                                   |
+| `--clear-table`      | `-x`       | `False`                                                                       | Delete all existing rows in the table before importing new data                               |
+| `--show-stats`       | `-s`       | `True`                                                                        | Display import summary including total records and sample entries after completion            |
+
+> **Important**: The `--required-columns` and `--column-types` must be provided as **matching lists**, each column must have a corresponding SQL type.
+
+---
+
+#### Expected CSV Format
+
+Your CSV file must include the following columns (unless overridden via `--required-columns`):
+
+```csv
+Source,Location,Time,Copyright,Method,Tag
+D:\GitHub\FinMycelium\input\A Novel Approach to Hurdle Rate Calibration.pdf,D:\GitHub\FinMycelium\output\A Novel Approach to Hurdle Rate Calibration\full.md,2025-11-19 12:14:07,N/A,MinerU,"AgenticFin, HKUST(GZ)",
+...
+```
+
+- **Time** must be in a parseable datetime format (e.g., `YYYY-MM-DD HH:MM:SS`)
+- Missing or malformed rows may cause import failures
+
+---
+
+#### Output & Feedback
+
+On successful execution, the script will:
+
+- Confirm database connection
+- Create or clear the target table (if requested)
+- Import all valid rows from the CSV
+- Print statistics like:
+
+```
+--- Import Statistics ---
+Total records in database: 42
+Sample records (first 5):
+  Record 1: ('D:\\GitHub\\FinMycelium\\input\\A Novel Approach to Hurdle Rate Calibration.pdf', 'D:\\GitHub\\FinMycelium\\output\\A Novel Approach to Hurdle Rate Calibration\\full.md', datetime.datetime(2025, 11, 19, 12, 14, 7), None, 'MinerU', 'AgenticFin, HKUST(GZ)', datetime.datetime(2025, 11, 19, 13, 39, 36), datetime.datetime(2025, 11, 19, 13, 39, 36))
+  ...
+Data import completed successfully!
+```
+
+---
