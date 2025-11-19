@@ -6,9 +6,22 @@ to a JSON file.
 """
 
 import os
+import sys
 import argparse
 
 from finmy.matcher import re_matcher
+
+
+def parse_keywords(keyword_input):
+    """Parse the keyword input, which can be a single keyword or a comma-separated list.
+
+    Supports hyphen-to-space conversion for multi-word phrases (e.g., 'reinforcement-learning' -> 'reinforcement learning').
+    """
+    # Split by comma first
+    keywords = [kw.strip() for kw in keyword_input.split(",")]
+    # Replace hyphens with spaces in each keyword, then remove empty strings
+    keywords = [kw.replace("-", " ") for kw in keywords if kw]
+    return keywords
 
 
 def main():
@@ -30,7 +43,7 @@ def main():
         "-k",
         type=str,
         required=True,
-        help="Keyword to search for in the markdown files",
+        help="""Keyword or list of keywords to search for in the markdown files. Can be a single keyword, comma-separated keywords (e.g., 'keyword1,keyword2,keyword3')""",
     )
 
     parser.add_argument(
@@ -55,11 +68,16 @@ def main():
         print(f"Error: Input path '{args.input_path}' is not a valid directory.")
         return 1
 
+    # Parse keywords from input
+    keywords = parse_keywords(args.keyword)
+    print(f"Parsed keywords: {keywords}")
+
     # Perform the keyword search
     try:
+        print(f"Searching for keywords: {keywords}")
         results = re_matcher.perform_keyword_search(
             input_directory=args.input_path,
-            keyword=args.keyword,
+            keyword=keywords,  # Pass the list of keywords
             context_chars=args.context_chars,
             output_path=args.output_path,
         )
@@ -79,4 +97,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

@@ -13,7 +13,7 @@ import re
 import csv
 import json
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 
 def extract_context_with_sentences(
@@ -55,12 +55,12 @@ def extract_context_with_sentences(
     return context
 
 
-def search_keyword_in_file(
+def search_keywords_in_file(
     file_path: str,
-    keyword: str,
+    keywords: List[str],
     context_chars: int = 2000,
 ) -> List[Dict[str, any]]:
-    """Searches for a keyword in a file and returns context around matches with complete sentences."""
+    """Searches for multiple keywords in a file and returns context around matches with complete sentences."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -68,33 +68,41 @@ def search_keyword_in_file(
         print(f"Warning: Could not read file {file_path}: {e}")
         return []
 
-    # Create case-insensitive pattern for the keyword
-    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
-    matches = []
+    all_matches = []
 
-    # Find all occurrences of the keyword in the content
-    for match in pattern.finditer(content):
-        start_pos = match.start()
-        end_pos = match.end()
+    # Process each keyword separately
+    for keyword in keywords:
+        # Create case-insensitive pattern for the keyword
+        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
 
-        # Extract context around the match with full sentences
-        context = extract_context_with_sentences(
-            content, start_pos, end_pos, context_chars
-        )
+        # Find all occurrences of the keyword in the content
+        for match in pattern.finditer(content):
+            start_pos = match.start()
+            end_pos = match.end()
 
-        # Calculate line number where the match occurs
-        line_number = content[:start_pos].count("\n") + 1
+            # Extract context around the match with full sentences
+            context = extract_context_with_sentences(
+                content, start_pos, end_pos, context_chars
+            )
 
-        match_info = {
-            "line_number": line_number,
-            # Character positions of the match
-            "keyword_position": (start_pos, end_pos),
-            # Context text with complete sentences
-            "context": context,
-        }
-        matches.append(match_info)
+            # Calculate line number where the match occurs
+            line_number = content[:start_pos].count("\n") + 1
 
-    return matches
+            match_info = {
+                "line_number": line_number,
+                # Character positions of the match
+                "keyword_position": (start_pos, end_pos),
+                # Context text with complete sentences
+                "context": context,
+                # The keyword that was matched
+                "matched_keyword": keyword,
+            }
+            all_matches.append(match_info)
+
+    # Sort matches by their position in the content to maintain order
+    all_matches.sort(key=lambda x: x["keyword_position"][0])
+
+    return all_matches
 
 
 def get_next_sample_id(output_path: str) -> int:
@@ -120,7 +128,7 @@ def get_next_sample_id(output_path: str) -> int:
 def create_search_result_entry(
     file_path: str,
     output_path: str,
-    keyword: str,
+    keywords: List[str],
     matches: List[Dict[str, any]],
     raw_data_id: str,
     sample_id: int,
@@ -147,8 +155,8 @@ def create_search_result_entry(
         "Reviews": "",
         # Path to the source markdown file
         "Source": file_path,
-        # The keyword that was searched for
-        "keyword": keyword,
+        # The keywords that were searched for
+        "keywords": keywords,
         # Number of matches found in this file
         "match_count": len(matches),
         # List of individual match details
@@ -166,7 +174,7 @@ def save_search_results(results: List[Dict[str, any]], output_path: str) -> None
 
 def perform_keyword_search(
     input_directory: str,
-    keyword: str,
+    keyword: Union[str, List[str]],  # Accept both string and list of strings
     context_chars: int = 2000,
     output_path: Optional[str] = None,
 ) -> List[Dict[str, any]]:
@@ -174,13 +182,19 @@ def perform_keyword_search(
 
     Args:
         input_directory: Directory containing 'parser_information.csv'.
-        keyword: The keyword to search for.
+        keyword: The keyword or list of keywords to search for.
         context_chars: Number of characters to include around each match.
         output_path: Optional path for the output JSON file. If not provided, defaults to 'search_information.json' in the input directory.
 
     Returns:
         A list of search result entries.
     """
+    # Convert single keyword to list for consistent processing
+    if isinstance(keyword, str):
+        keywords = [keyword]
+    else:
+        keywords = keyword
+
     # Set default output path if not provided
     if output_path is None:
         output_path = os.path.join(input_directory, "search_information.json")
@@ -213,14 +227,14 @@ def perform_keyword_search(
                 )
                 continue
 
-            # Search for the keyword in the markdown file
-            matches = search_keyword_in_file(md_file_path, keyword, context_chars)
+            # Search for all keywords in the markdown file
+            matches = search_keywords_in_file(md_file_path, keywords, context_chars)
             if matches:
                 # Create a result entry for this file if matches are found
                 result_entry = create_search_result_entry(
                     file_path=md_file_path,
                     output_path=output_path,
-                    keyword=keyword,
+                    keywords=keywords,
                     matches=matches,
                     raw_data_id=raw_data_id,
                     sample_id=current_sample_id,
