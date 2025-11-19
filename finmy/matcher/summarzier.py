@@ -4,7 +4,7 @@ Codebase used to summarize the main content from the query content.
 Both english and chinese are supported.
 
 Support:
-    - keywords: Noun words or phrases
+    - keywords: Noun words or noun-phrases or fixed combination
 
 """
 
