@@ -1,7 +1,7 @@
 """
 Parser Information Data Import Script
 This script provides command-line functionality to import parser information
-from a CSV file into the database using the DataStorageManager.
+from a CSV or JSON file into the database using the DataStorageManager.
 """
 
 import os
@@ -22,54 +22,33 @@ def parse_arguments() -> argparse.Namespace:
         argparse.Namespace: Parsed command-line arguments
     """
     parser = argparse.ArgumentParser(
-        description="Import parser information data from CSV to database",
+        description="Import parser information data from CSV or JSON to database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Examples:
-        %(prog)s --csv-file /path/to/parser_information.csv
-        %(prog)s --csv-file /path/to/parser_information.csv --create-table
-        %(prog)s --csv-file /path/to/parser_information.csv --clear-table
-        %(prog)s --csv-file /path/to/parser_information.csv --delete-table
+        %(prog)s --file /path/to/parser_information.csv
+        %(prog)s --file /path/to/parser_information.json --table-name RawData_JSON
+        %(prog)s --file /path/to/parser_information.csv --delete-table
         """
     )
     
     parser.add_argument(
-        '--csv-file',
+        '--file',
         type=str,
-        default="output/parser_information.csv",
-        help='Path to the CSV file containing parser information data'
+        default="output/search_information.json",
+        help='Path to the CSV or JSON file containing parser information data'
     )
     
     parser.add_argument(
         '--table-name',
         type=str,
-        default="RawData_PDF",
+        default="Sample_PDF",
         help='Name of the database table to use'
     )
 
     parser.add_argument(
-        '--required-columns',
-        type=list[str],
-        default=['RawDataID','Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag'],
-        help='Comma-separated list of required columns in the CSV file'
-    )
-
-    parser.add_argument(
-        '--column-types',
-        type=list[str],
-        default=['INT', 'VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)'],
-        help='Comma-separated list of column types for the required columns'
-    )
-
-    parser.add_argument(
-        '--create-table',
-        default=True,
-        help='Create the table before importing data'
-    )
-        
-    parser.add_argument(
         '--delete-table',
-        default=True,
+        default=False,
         help='Delete the existing table and recreate it before importing data'
     )
     
@@ -82,29 +61,35 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def validate_csv_file(csv_file_path: str) -> bool:
+def validate_data_file(file_path: str) -> bool:
     """
-    Validate that the specified CSV file exists and is accessible.
+    Validate that the specified data file exists and is accessible.
     
-    This function checks if the provided CSV file path is valid
+    This function checks if the provided data file path is valid
     and the file can be read.
     
     Args:
-        csv_file_path (str): Path to the CSV file to validate
+        file_path: Path to the data file to validate
         
     Returns:
-        bool: True if the file is valid, False otherwise
+        True if the file is valid, False otherwise
     """
-    if not os.path.exists(csv_file_path):
-        print(f"Error: CSV file does not exist at '{csv_file_path}'")
+    if not os.path.exists(file_path):
+        print(f"Error: File does not exist at '{file_path}'")
         return False
     
-    if not os.path.isfile(csv_file_path):
-        print(f"Error: '{csv_file_path}' is not a file")
+    if not os.path.isfile(file_path):
+        print(f"Error: '{file_path}' is not a file")
         return False
     
-    if not os.access(csv_file_path, os.R_OK):
-        print(f"Error: Cannot read CSV file at '{csv_file_path}' - check permissions")
+    if not os.access(file_path, os.R_OK):
+        print(f"Error: Cannot read file at '{file_path}' - check permissions")
+        return False
+    
+    # Check file extension
+    file_extension = os.path.splitext(file_path)[1].lower()
+    if file_extension not in ['.csv', '.json']:
+        print(f"Error: Unsupported file format: {file_extension}. Supported formats: .csv, .json")
         return False
     
     return True
@@ -118,7 +103,7 @@ def show_import_statistics(db_manager: DataStorageManager) -> None:
     data stored in the table.
     
     Args:
-        db_manager (DataStorageManager): Instance of DataStorageManager
+        db_manager: Instance of DataStorageManager
     """
     print("\n--- Import Statistics ---")
     
@@ -154,16 +139,12 @@ def main() -> NoReturn:
     # Parse command-line arguments
     args = parse_arguments()
     
-    # Validate CSV file
-    if not validate_csv_file(args.csv_file):
+    # Validate data file
+    if not validate_data_file(args.file):
         sys.exit(1)
         
     # Initialize database manager
-    db_manager = DataStorageManager(
-        table_name=args.table_name,
-        required_columns=args.required_columns,
-        column_types=args.column_types
-    )
+    db_manager = DataStorageManager(table_name=args.table_name)
     
     try:
         # Connect to the database
@@ -179,17 +160,10 @@ def main() -> NoReturn:
                 print(f"Failed to drop the {args.table_name} table.")
                 sys.exit(1)
         
-        # Create table if requested
-        if args.create_table:
-            print(f"Creating {args.table_name} table...")
-            if not db_manager.create_table():
-                print(f"Failed to create the {args.table_name} table.")
-                sys.exit(1)
-        
-        # Import data from CSV
-        print(f"Importing data from '{args.csv_file}'...")
-        if not db_manager.import_csv_to_database(args.csv_file):
-            print("Failed to import data from CSV file.")
+        # Import data from file
+        print(f"Importing data from '{args.file}'...")
+        if not db_manager.import_data_to_database(args.file):
+            print("Failed to import data from file.")
             sys.exit(1)
         
         # Show statistics if requested
