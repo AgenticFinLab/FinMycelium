@@ -34,6 +34,7 @@ def parse_arguments() -> argparse.Namespace:
     
     parser.add_argument(
         '--file',
+        '-f',
         type=str,
         default="output/search_information.json",
         help='Path to the CSV or JSON file containing parser information data'
@@ -41,6 +42,7 @@ def parse_arguments() -> argparse.Namespace:
     
     parser.add_argument(
         '--table-name',
+        '-t',
         type=str,
         default="Sample_PDF",
         help='Name of the database table to use'
@@ -48,12 +50,14 @@ def parse_arguments() -> argparse.Namespace:
 
     parser.add_argument(
         '--delete-table',
+        '-d',
         default=False,
         help='Delete the existing table and recreate it before importing data'
     )
     
     parser.add_argument(
         '--show-stats',
+        '-s',
         default=True,
         help='Show statistics about the imported data after completion'
     )
