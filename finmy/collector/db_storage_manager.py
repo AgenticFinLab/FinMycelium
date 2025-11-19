@@ -11,11 +11,14 @@ manager.import_data_to_database("data.json")  # This will automatically create t
 """
 
 import os
-import json
-import pandas as pd
-from typing import Optional, List, Tuple, Any, Dict, Union
-from finmy.collector.mysql_manager import MySQLDatabaseManager
 import re
+import json
+from typing import Optional, List, Tuple, Any, Dict, Union
+
+import pandas as pd
+
+from finmy.collector.mysql_manager import MySQLDatabaseManager
+
 
 
 class DataStorageManager(MySQLDatabaseManager):
