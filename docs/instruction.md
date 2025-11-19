@@ -129,7 +129,71 @@ RawDataID,Source,Location,Time,Copyright,Method,Tag,BatchID
 
 ---
 
-### 2. Keyword Search in Parsed PDFs
+### 2. Filter Parsed PDFs by Keywords
+
+Use regular expressions to filter parsed PDF records based on **keywords or phrases** in multiple markdown files (`full.md`) and save the matching records to a CSV file.
+
+#### Basic Usage
+
+```bash
+# Filter for records containing a single phrase
+python examples/Collector/filter_pdf.py -i output -k reinforcement-learning
+
+# Filter for records containing multiple keywords or phrases
+python examples/Collector/filter_pdf.py -i output -k ESG,financial-risk,market-volatility
+
+# Custom input path with multiple keywords
+python examples/Collector/filter_pdf.py \
+  --input_path "parsed_results" \
+  --keywords "deep-q-network,market-volatility"
+```
+
+> **Tip**: 
+> 1. The script reads `parser_information.csv` from the specified input folder and processes each record's corresponding `full.md` file using the 'Location' field.  
+> 2. Any `-` in a keyword is automatically replaced with a space, enabling natural phrase input via CLI (e.g., `reinforcement-learning` -> `reinforcement learning`). 
+>  
+**Note**: Because command-line shells treat spaces as argument separators, multi-word phrases must be entered without literal spaces, use hyphens (`-`) to connect words instead (e.g., use `reinforcement-learning` rather than `"reinforcement learning"` to avoid quoting issues or parsing errors).
+
+---
+
+#### Parameters
+
+| Parameter      | Short Form | Default Value | Description                                                                                                                                                                                              |
+| -------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--input_path` | `-i`       | **Required**  | Root directory containing `parser_information.csv` and corresponding `full.md` files                                                                                                                     |
+| `--keywords`   | `-k`       | **Required**  | A string of keywords or phrases, separated by commas (e.g., `ESG,financial-risk,market-volatility`). Hyphens (`-`) are converted to spaces (e.g., `reinforcement-learning` -> `reinforcement learning`). |
+
+---
+
+#### Output Structure
+
+The script generates `filter_information.csv` in the same input folder, containing only records from `parser_information.csv` where the corresponding `full.md` file **contains at least one of the specified keywords**.
+
+The output CSV maintains the same structure as the input `parser_information.csv` with the following fields:
+- **RawDataID**: Unique identifier for the original data record
+- **Source**: Path to the original input PDF file
+- **Location**: Path to the corresponding output markdown file
+- **Time**: Timestamp when the parsing occurred
+- **Copyright**: Copyright information (if available)
+- **Method**: Parsing method used
+- **Tag**: Metadata tags associated with the record
+- **BatchID**: Batch identifier for the processing run
+
+**Example output:**
+```csv
+RawDataID,Source,Location,Time,Copyright,Method,Tag,BatchID
+1,D:\GitHub\FinMycelium\input\A Novel Approach to Hurdle Rate Calibration.pdf,D:\GitHub\FinMycelium\output\A_Novel_Approach_to_Hurdle_Rate_Calibration\full.md,2025-11-19 16:46:39,NULL,MinerU,"AgenticFin, HKUST(GZ)",5b2e1b0a-b78d-49d4-a0ac-b34d603c7a86
+3,D:\GitHub\FinMycelium\input\Reinforcement Learning in Finance.pdf,D:\GitHub\FinMycelium\output\Reinforcement_Learning_in_Finance\full.md,2025-11-19 17:23:15,NULL,MinerU,"AgenticFin, HKUST(GZ)",a1b2c3d4-e5f6-7890-1234-567890abcdef
+```
+
+> **Note**:  
+> - Only records whose corresponding `full.md` files contain **at least one match** for **any keyword** are included in the results.  
+> - Keywords like `deep-q-network` are internally converted to `deep q network` and matched as literal phrases (not individual words).  
+> - The script performs case-insensitive matching using regular expressions.
+
+---
+
+### 3. Keyword Search in Parsed PDFs
 
 Use regular expressions to search for **one or more keywords or phrases** in multiple parsed PDF text files (`full.md`) and save the search results to a JSON file.
 
@@ -229,7 +293,7 @@ Additional fields specific to the keyword search include:
 --- 
 
 
-### 3. Upload data to database
+### 4. Upload data to database
 
 Upload parsing or keyword search results (in CSV or JSON format) into the database as structured records. The format of the data must comply with the [metadata-specific schema](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).
 
