@@ -418,7 +418,7 @@ def download_results(
     # Define the path for the parser information CSV file
     csv_file_path = os.path.join(output_directory, "parser_information.csv")
     # Define the field names for the CSV
-    csv_fieldnames = ["ID","Source","Location", "Time", "Copyright", "Method", "Tag", "BatchID"]
+    csv_fieldnames = ["RawDataID","Source","Location", "Time", "Copyright", "Method", "Tag", "BatchID"]
 
     # Initialize the CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file_path):
@@ -554,7 +554,7 @@ def download_results(
 
                     # Prepare data for the CSV row
                     csv_row_data = {
-                        "ID": data_id,
+                        "RawDataID": data_id,
                         # Store the path where the original input file was located if passed down
                         "Source": source_path,
                         # Store the path where the raw data is stored
@@ -578,7 +578,7 @@ def download_results(
                             writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
                             # Write the single row
                             writer.writerow(csv_row_data)
-                        print(f"Logged successful processing for: {original_filename} (ID: {data_id})")
+                        print(f"Logged successful processing for: {original_filename} (RawDataID: {data_id})")
                     except IOError as e:
                         print(f"Error writing to CSV for {original_filename}: {e}")
                 else:

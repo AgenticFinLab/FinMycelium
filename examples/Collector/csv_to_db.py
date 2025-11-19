@@ -29,6 +29,7 @@ def parse_arguments() -> argparse.Namespace:
         %(prog)s --csv-file /path/to/parser_information.csv
         %(prog)s --csv-file /path/to/parser_information.csv --create-table
         %(prog)s --csv-file /path/to/parser_information.csv --clear-table
+        %(prog)s --csv-file /path/to/parser_information.csv --delete-table
         """
     )
     
@@ -49,14 +50,14 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         '--required-columns',
         type=list[str],
-        default=['Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag'],
+        default=['RawDataID','Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag'],
         help='Comma-separated list of required columns in the CSV file'
     )
 
     parser.add_argument(
         '--column-types',
         type=list[str],
-        default=['VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)'],
+        default=['INT', 'VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)'],
         help='Comma-separated list of column types for the required columns'
     )
 
@@ -65,11 +66,11 @@ def parse_arguments() -> argparse.Namespace:
         default=True,
         help='Create the table before importing data'
     )
-    
+        
     parser.add_argument(
-        '--clear-table',
-        default=False,
-        help='Clear all existing data from the table before importing'
+        '--delete-table',
+        default=True,
+        help='Delete the existing table and recreate it before importing data'
     )
     
     parser.add_argument(
@@ -171,18 +172,18 @@ def main() -> NoReturn:
             print("Failed to connect to the database. Please check your configuration.")
             sys.exit(1)
         
+        # Delete table if requested (this will also clear any existing data)
+        if args.delete_table:
+            print(f"Dropping {args.table_name} table...")
+            if not db_manager.drop_table():
+                print(f"Failed to drop the {args.table_name} table.")
+                sys.exit(1)
+        
         # Create table if requested
         if args.create_table:
             print(f"Creating {args.table_name} table...")
             if not db_manager.create_table():
                 print(f"Failed to create the {args.table_name} table.")
-                sys.exit(1)
-        
-        # Clear table if requested
-        if args.clear_table:
-            print(f"Clearing existing data from {args.table_name} table...")
-            if not db_manager.clear_table():
-                print(f"Failed to clear the {args.table_name} table.")
                 sys.exit(1)
         
         # Import data from CSV
