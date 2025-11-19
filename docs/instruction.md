@@ -75,7 +75,7 @@ python examples/Collector/test_pdf.py \
   --retry_failed True
 ```
 
-> 💡 **Tip**: The script automatically retries failed files once if `--retry_failed True` (default).
+> **Tip**: The script automatically retries failed files once if `--retry_failed True` (default).
 
 ---
 
@@ -102,6 +102,84 @@ Successfully parsed documents are saved as:
   - `output/{file_id}_content_list.pdf` (Content Lisf of PDF)
   - `output/{file_id}_origin.pdf` (Original PDF)
 
-> For large-scale or sensitive document processing, consider [self-hosting MinerU](https://github.com/opendatalab/mineru) to avoid API limits and enhance privacy.
+> **Note**: For large-scale or sensitive document processing, consider [self-hosting MinerU](https://github.com/opendatalab/mineru) to avoid API limits and enhance privacy.
 
 ---
+
+### 2. Keyword Search in Parsed PDFs
+
+Use regular expressions to search for keywords in multiple parsed PDF text content and save the search results to a JSON file.
+
+#### Basic Usage
+
+```bash
+# Basic keyword search (output saved as search_information.json in input directory)
+python examples/Collector/test_search.py -i pdf_parse_results -k "financial risk"
+
+# Custom output path and context window
+python examples/Collector/test_search.py \
+  --input-path "parsed_results" \
+  --keyword "ESG" \
+  --output-path "esg_findings.json" \
+  --context-chars 1500
+```
+
+> **Tip**: The script recursively scans all subdirectories under `--input-path` for files named `full.md`.
+
+---
+
+#### Parameters
+
+| Parameter          | Short Form | Default Value                     | Description                                                                                     |
+| ------------------ | ---------- | --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `--input-path`     | `-i`       | `pdf_parse_results`               | Root directory containing subfolders with `full.md` files                                       |
+| `--keyword`        | `-k`       | **Required**                      | Keyword or phrase to search for in the markdown content                                          |
+| `--output-path`    | `-o`       | `{input-path}/search_information.json` | Path to save the JSON results file                                                             |
+| `--context-chars`  | `-c`       | `2000`                            | Number of characters to capture before and after each keyword match (total context ≈ 4000 chars) |
+
+---
+
+#### Output Structure
+
+The script generates a JSON file containing a list of result entries, one per `full.md` file where the keyword was found. Each entry includes:
+
+- Absolute file path  
+- Searched keyword  
+- Timestamp of the search  
+- Total number of matches in the file  
+- Detailed match information, including:
+  - Approximate line number
+  - Character position range of the keyword (`(start, end)`)
+  - Surrounding context (expanded to full sentence boundaries)
+
+**Example output:**
+```json
+[
+  {
+    "file_path": "D:\\GitHub\\FinMycelium\\output\\A novel data-efficient double deep Q-network framework for intelligent financpdf\\full.md",
+    "keyword": "Reinforcement",
+    "timestamp": "2025-11-19T11:08:06.873718",
+    "match_count": 73,
+    "matches": [
+      {
+        "line_number": 13,
+        "keyword_position": [
+          869,
+          882
+        ],
+        "context": "To address these challenges, this work introduces Portfolio Double Deep Q-Network (PDQN), a novel architecture inspired by recent advancements in reinforcement learning."
+      },
+      {
+        "line_number": 17,
+        "keyword_position": [
+          2127,
+          2140
+        ],
+        "context": "Introduction\n\nThe persistent challenge of achieving optimal decision-making in dynamic and high-dimensional environments remains central to artificial intelligence and reinforcement learning research."
+      },
+    ]
+  },
+]
+```
+
+> **Note**: Context snippets are automatically expanded to include complete sentences while respecting the `--context-chars` limit. Only files containing at least one match are included in the results.
