@@ -55,6 +55,20 @@ class NounKeyWordSummarizer:
         self.nlp_zh = load_spacy_model("zh_core_web_trf")
 
     def extract_nouns_with_frequency(self, text: str) -> dict:
+        """Extract nouns and noun phrases with frequencies from English or Chinese text.
+
+        Overview:
+        - Language detection: use CJK character ratio to select the spaCy pipeline.
+        - Entities first: add full named entity spans (high-value phrases).
+        - Noun chunks: add dependency-based noun phrases and normalize them.
+        - Matcher: capture compound noun patterns and short ADJ+NOUN phrases; normalize spans
+          by stripping leading determiners and most adjectives. Retain canonical ADJ+NOUN when
+          the adjective is an attributive modifier immediately before the noun.
+        - Fallback nouns: include standalone nouns not covered by any span.
+        - Normalization: English phrases lowercased; English tokens use lemma; Chinese phrases
+          concatenated without spaces to avoid gaps.
+        """
+        # Lightweight language detection using Unicode ranges.
         chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
         total_chars = len(re.findall(r"[\w\u4e00-\u9fff]", text))
         if total_chars > 0 and chinese_chars / total_chars > 0.3:
@@ -65,7 +79,9 @@ class NounKeyWordSummarizer:
             nlp_model = self.nlp_en
         is_en = nlp_model == self.nlp_en
 
+        # Accumulator for extracted terms/phrases.
         all_terms = []
+        # 1) Named entities: keep full surface form.
         entity_spans = list(doc.ents)
         for ent in entity_spans:
             all_terms.append(ent.text.strip())
@@ -74,6 +90,7 @@ class NounKeyWordSummarizer:
         try:
             noun_chunk_spans = list(doc.noun_chunks)
         except Exception:
+            # Some models may not expose noun_chunks; fail gracefully.
             noun_chunk_spans = []
 
         def strip_leading_adj_det(span):
@@ -107,21 +124,36 @@ class NounKeyWordSummarizer:
             if phrase:
                 all_terms.append(phrase)
 
+        # 3) Matcher rules: compound nouns and short adjective-led noun phrases
         matcher = Matcher(nlp_model.vocab)
         matcher.add(
             "COMPOUND_NP",
             [
+                # Two-word compound (e.g., "risk management", "market volatility")
                 [
                     {"POS": {"IN": ["PROPN", "NOUN"]}},
                     {"POS": {"IN": ["PROPN", "NOUN"]}},
                 ],
+                # Three-word compound (e.g., "supply chain risk")
                 [
                     {"POS": {"IN": ["PROPN", "NOUN"]}},
+                    {"POS": {"IN": ["PROPN", "NOUN"]}},
+                    {"POS": {"IN": ["PROPN", "NOUN"]}},
+                ],
+                # ADJ + NOUN (e.g., "artificial intelligence")
+                [
+                    {"POS": "ADJ"},
+                    {"POS": {"IN": ["PROPN", "NOUN"]}},
+                ],
+                # ADJ + NOUN + NOUN (e.g., "financial market risk")
+                [
+                    {"POS": "ADJ"},
                     {"POS": {"IN": ["PROPN", "NOUN"]}},
                     {"POS": {"IN": ["PROPN", "NOUN"]}},
                 ],
             ],
         )
+        # Normalize matched spans and collect phrases.
         matched_spans = []
         for match_id, start, end in matcher(doc):
             span = doc[start:end]
@@ -130,6 +162,7 @@ class NounKeyWordSummarizer:
             if phrase:
                 all_terms.append(phrase)
 
+        # Helper: check if a token is covered by any collected span.
         def in_any_span(token):
             for s in entity_spans:
                 if token.idx >= s.start_char and token.idx < s.end_char:
@@ -142,6 +175,7 @@ class NounKeyWordSummarizer:
                     return True
             return False
 
+        # 4) Fallback: standalone nouns not already included in any span.
         for token in doc:
             if (
                 (token.pos_ in ["NOUN", "PROPN"])
@@ -153,5 +187,6 @@ class NounKeyWordSummarizer:
                     if term.strip():
                         all_terms.append(term)
 
+        # Aggregate term frequencies.
         freq_counter = Counter(term for term in all_terms if term.strip() != "")
         return dict(freq_counter)
