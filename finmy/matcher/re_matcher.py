@@ -246,3 +246,15 @@ def perform_keyword_search(
     # Save all results to the output JSON file
     save_search_results(all_results, output_path)
     return all_results
+
+
+def parse_keywords(keyword_input: str) -> List[str]:
+    """Parse the keyword input, which can be a single keyword or a comma-separated list.
+
+    Supports hyphen-to-space conversion for multi-word phrases (e.g., 'reinforcement-learning' -> 'reinforcement learning').
+    """
+    # Split by comma first
+    keywords = [kw.strip() for kw in keyword_input.split(",")]
+    # Replace hyphens with spaces in each keyword, then remove empty strings
+    keywords = [kw.replace("-", " ") for kw in keywords if kw]
+    return keywords

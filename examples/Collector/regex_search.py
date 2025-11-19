@@ -12,18 +12,6 @@ import argparse
 from finmy.matcher import re_matcher
 
 
-def parse_keywords(keyword_input):
-    """Parse the keyword input, which can be a single keyword or a comma-separated list.
-
-    Supports hyphen-to-space conversion for multi-word phrases (e.g., 'reinforcement-learning' -> 'reinforcement learning').
-    """
-    # Split by comma first
-    keywords = [kw.strip() for kw in keyword_input.split(",")]
-    # Replace hyphens with spaces in each keyword, then remove empty strings
-    keywords = [kw.replace("-", " ") for kw in keywords if kw]
-    return keywords
-
-
 def main():
     """Main function to parse arguments and execute the search."""
     parser = argparse.ArgumentParser(
@@ -69,7 +57,7 @@ def main():
         return 1
 
     # Parse keywords from input
-    keywords = parse_keywords(args.keyword)
+    keywords = re_matcher.parse_keywords(args.keyword)
     print(f"Parsed keywords: {keywords}")
 
     # Perform the keyword search
@@ -77,7 +65,8 @@ def main():
         print(f"Searching for keywords: {keywords}")
         results = re_matcher.perform_keyword_search(
             input_directory=args.input_path,
-            keyword=keywords,  # Pass the list of keywords
+            # Pass the list of keywords
+            keyword=keywords,
             context_chars=args.context_chars,
             output_path=args.output_path,
         )
