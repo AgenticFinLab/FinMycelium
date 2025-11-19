@@ -1,5 +1,8 @@
 """
 A session to test the `finmy/matcher/summarizer`
+
+Run:
+    python examples/Matcher/test_summary.py
 """
 
 from finmy.matcher import summarzier
