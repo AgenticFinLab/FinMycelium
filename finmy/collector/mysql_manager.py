@@ -4,10 +4,12 @@ This module provides a comprehensive interface for MySQL database operations
 using environment variables for secure credential management.
 """
 
+import os
+
+from dotenv import load_dotenv
 import mysql.connector
 from mysql.connector import Error
-from dotenv import load_dotenv
-import os
+
 
 # Load environment variables from .env file
 # The .env file should contain database connection parameters and should not be committed to version control

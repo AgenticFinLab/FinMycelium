@@ -1,6 +1,9 @@
 ## FinMycelium: Collecting Financial Data from Public Sources
 
 
+> The folder named "EXPERIMENT" will be ignored by git by default. Thus, please always place experimental results under the "EXPERIMENT" folder.
+
+
 ### Structure
 
 ```text
