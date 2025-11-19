@@ -551,7 +551,7 @@ def download_results(
                         # Store the path where the original input file was located if passed down
                         "Source": source_path,
                         # Store the path where the raw data is stored
-                        "Location": raw_data_path,
+                        "Location": os.path.join(raw_data_path, "full.md"),
                         # Time of processing for this file
                         "Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         # Copyright information
