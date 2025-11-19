@@ -4,9 +4,9 @@ This script demonstrates how to use the base module to search for keywords
 in multiple 'full.md' files within different directories and save the results
 to a JSON file.
 """
-
-import argparse
 import os
+import argparse
+
 from finmy.collector import regex_searcher
 
 

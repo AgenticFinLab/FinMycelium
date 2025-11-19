@@ -4,9 +4,7 @@ An interface to test the pdf parser under the finmy/collector.
 
 import argparse
 
-
 from finmy.collector import pdf_parser
-
 
 if __name__ == "__main__":
 
