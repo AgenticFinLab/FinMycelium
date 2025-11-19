@@ -16,12 +16,13 @@ import re
 import csv
 import glob
 import time
+import shutil
 import zipfile
 import datetime
 import requests
-from dotenv import load_dotenv
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
 from PyPDF2 import PdfReader, PdfWriter
 
 
@@ -640,7 +641,7 @@ def _download_zip(zip_url, base_name, output_dir):
         return True
 
     except Exception as e:
-        print(f"Download/extract error for {original_name}: {e}")
+        print(f"Download/extract error for {base_name}: {e}")
         return False
 
 
