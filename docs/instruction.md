@@ -131,23 +131,30 @@ RawDataID,Source,Location,Time,Copyright,Method,Tag,BatchID
 
 ### 2. Keyword Search in Parsed PDFs
 
-Use regular expressions to search for keywords in multiple parsed PDF text content and save the search results to a JSON file.
+Use regular expressions to search for **one or more keywords or phrases** in multiple parsed PDF text files (`full.md`) and save the search results to a JSON file.
 
 #### Basic Usage
 
 ```bash
-# Basic keyword search (output saved as search_information.json in input directory)
-python examples/Collector/test_search.py -i pdf_parse_results -k "financial risk"
+# Search for a single phrase (hyphen automatically converted to space)
+python examples/Collector/test_search.py -i pdf_parse_results -k "reinforcement-learning"
+
+# Search for multiple keywords or phrases
+python examples/Collector/test_search.py -i pdf_parse_results -k "ESG,reinforcement-learning,financial-risk"
 
 # Custom output path and context window
 python examples/Collector/test_search.py \
   --input-path "parsed_results" \
-  --keyword "ESG" \
-  --output-path "esg_findings.json" \
+  --keyword "deep-q-network,market-volatility" \
+  --output-path "findings.json" \
   --context-chars 1500
 ```
 
-> **Tip**: The script recursively scans all subdirectories under `--input-path` for files named `full.md`.
+> **Tip**: 
+> 1. The script recursively scans all subdirectories under `--input-path` for files named `full.md`.  
+> 2. Any `-` in a keyword is automatically replaced with a space, enabling natural phrase input via CLI (e.g., `deep-q-network` -> `deep q network`). 
+>  
+**Note**: Because command-line shells treat spaces as argument separators, multi-word phrases must be entered without literal spaces—use hyphens (`-`) to connect words instead (e.g., use `reinforcement-learning` rather than `"reinforcement learning"` to avoid quoting issues or parsing errors).
 
 ---
 
@@ -156,7 +163,7 @@ python examples/Collector/test_search.py \
 | Parameter          | Short Form | Default Value                     | Description                                                                                     |
 | ------------------ | ---------- | --------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `--input-path`     | `-i`       | `pdf_parse_results`               | Root directory containing subfolders with `full.md` files                                       |
-| `--keyword`        | `-k`       | **Required**                      | Keyword or phrase to search for in the markdown content                                          |
+| `--keyword`        | `-k`       | **Required**                      | **One or more keywords/phrases**, separated by commas. Hyphens (`-`) are converted to spaces (e.g., `reinforcement-learning` -> `reinforcement learning`). |
 | `--output-path`    | `-o`       | `{input-path}/search_information.json` | Path to save the JSON results file                                                             |
 | `--context-chars`  | `-c`       | `2000`                            | Number of characters to capture before and after each keyword match (total context ≈ 4000 chars) |
 
@@ -164,18 +171,21 @@ python examples/Collector/test_search.py \
 
 #### Output Structure
 
-The script generates a JSON file containing one entry per `full.md` file where the keyword was found.  
+The script generates a JSON file containing one entry per `full.md` file **where any of the keywords were found**.
 
-Fields **SampleID**, **RawDataID**, **Location**, **Time**, **Category**, **Field**, **Tag**, **Method**, and **Reviews** follow the standard definitions in the [metadata specification](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).  
+Fields **SampleID**, **RawDataID**, **Location**, **Time**, **Category**, **Field**, **Tag**, **Method**, and **Reviews** follow the standard definitions in the [metadata specification](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).
 
 Additional fields specific to the keyword search include:  
 - **Source**: Path to the original input file.  
-- **keyword**: The searched keyword or phrase.  
-- **match_count**: Total number of matches in the file.  
+- **keyword**: The **list of searched keywords/phrases** (after hyphen-to-space conversion).  
+- **match_count**: Total number of matches **across all keywords** in the file.  
 - **matches**: List of match details, each containing:  
+  - `matched_keyword`: The specific keyword/phrase that was matched.  
   - `line_number`: Approximate line number of the match.  
-  - `keyword_position`: Character range `[start, end]` of the keyword.  
+  - `keyword_position`: Character range `[start, end]` of the matched keyword.  
   - `context`: Full sentence surrounding the match.
+
+> **Note**: Each match records which keyword triggered it, enabling multi-keyword analysis.
 
 **Example output:**
 ```json
@@ -191,33 +201,33 @@ Additional fields specific to the keyword search include:
     "Method": "Regular Expression",
     "Reviews": "",
     "Source": "D:\\GitHub\\FinMycelium\\output\\A_novel_data-efficient_double_deep_Q-network_framework_for_intelligent_financial_portfolio_management\\full.md",
-    "keyword": "reinforcement",
-    "match_count": 73,
+    "keyword": ["reinforcement learning", "financial risk"],
+    "match_count": 75,
     "matches": [
       {
+        "matched_keyword": "reinforcement learning",
         "line_number": 13,
-        "keyword_position": [
-          869,
-          882
-        ],
-        "context": "To address these challenges, this work introduces Portfolio Double Deep Q-Network (PDQN), a novel architecture inspired by recent advancements in reinforcement learning. PDQN enhances portfolio management byintegrating Double Q-Learning to reduce overestimation, alongside Leaky ReLU activatin, Xaviitiaization, Hube oandropout regularization prov earg ability and gaization."
+        "keyword_position": [869, 888],
+        "context": "To address these challenges, this work introduces Portfolio Double Deep Q-Network (PDQN), a novel architecture inspired by recent advancements in reinforcement learning."
       },
       {
-        "line_number": 17,
-        "keyword_position": [
-          2127,
-          2140
-        ],
-        "context": "Introduction\n\nThe persistent challenge of achieving optimal decision-making in dynamic and high-dimensional environments remains central to artificial intelligence and reinforcement learning research."
-      },
+        "matched_keyword": "financial risk",
+        "line_number": 42,
+        "keyword_position": [3201, 3214],
+        "context": "Our model explicitly accounts for financial risk through dynamic volatility weighting."
+      }
     ]
   }
 ]
 ```
 
-> **Note**: Context snippets are automatically expanded to include complete sentences while respecting the `--context-chars` limit. Only files containing at least one match are included in the results.
+> **Note**:  
+> - Context snippets are automatically expanded to include complete sentences while respecting the `--context-chars` limit.  
+> - Only files containing **at least one match** for **any keyword** are included in the results.  
+> - Keywords like `deep-q-network` are internally converted to `deep q network` and matched as literal phrases (not individual words).
 
----
+--- 
+
 
 ### 3. Upload data to database
 
