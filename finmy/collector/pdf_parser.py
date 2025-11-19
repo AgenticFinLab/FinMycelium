@@ -418,7 +418,7 @@ def download_results(
     # Define the path for the parser information CSV file
     csv_file_path = os.path.join(output_directory, "parser_information.csv")
     # Define the field names for the CSV
-    csv_fieldnames = ["Source","Location", "Time", "Copyright", "Method", "Tag", "BatchID"]
+    csv_fieldnames = ["ID","Source","Location", "Time", "Copyright", "Method", "Tag", "BatchID"]
 
     # Initialize the CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file_path):
@@ -545,9 +545,16 @@ def download_results(
 
                 if _download_zip(item["full_zip_url"], filename, output_directory):
                     success_count += 1
+                    if os.path.exists(csv_file_path):
+                        with open(csv_file_path, mode='r', newline='', encoding='utf-8') as csvfile:
+                            row_count = sum(1 for row in csv.DictReader(csvfile))
+                            data_id = row_count + 1  # ID starts from 1, so add 1 to existing count
+                    else:
+                        data_id = 1  # If file doesn't exist, start from ID 1
 
                     # Prepare data for the CSV row
                     csv_row_data = {
+                        "ID": data_id,
                         # Store the path where the original input file was located if passed down
                         "Source": source_path,
                         # Store the path where the raw data is stored
@@ -571,7 +578,7 @@ def download_results(
                             writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
                             # Write the single row
                             writer.writerow(csv_row_data)
-                        print(f"Logged successful processing for: {original_filename}")
+                        print(f"Logged successful processing for: {original_filename} (ID: {data_id})")
                     except IOError as e:
                         print(f"Error writing to CSV for {original_filename}: {e}")
                 else:
