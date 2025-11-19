@@ -17,3 +17,5 @@ einops
 litellm
 mysql-connector-python
 PyPDF2
+
+
