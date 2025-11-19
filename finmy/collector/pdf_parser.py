@@ -418,7 +418,7 @@ def download_results(
     # Define the path for the parser information CSV file
     csv_file_path = os.path.join(output_directory, "parser_information.csv")
     # Define the field names for the CSV
-    csv_fieldnames = ["source_path","raw_data_path", "time", "batch_id"]
+    csv_fieldnames = ["Source","Location", "Time", "Copyright", "Method", "Tag", "BatchID"]
 
     # Initialize the CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file_path):
@@ -549,12 +549,18 @@ def download_results(
                     # Prepare data for the CSV row
                     csv_row_data = {
                         # Store the path where the original input file was located if passed down
-                        "source_path": source_path,
+                        "Source": source_path,
                         # Store the path where the raw data is stored
-                        "raw_data_path": raw_data_path,
+                        "Location": raw_data_path,
                         # Time of processing for this file
-                        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "batch_id": batch_id,
+                        "Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        # Copyright information
+                        "Copyright": "N/A",
+                        # Method used for processing
+                        "Method": "MinerU",
+                        # Tag for categorization
+                        "Tag": "AgenticFin, HKUST(GZ)",
+                        "BatchID": batch_id,
                     }
 
                     # Append the row to the CSV file
