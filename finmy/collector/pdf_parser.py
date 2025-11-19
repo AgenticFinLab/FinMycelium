@@ -562,7 +562,7 @@ def download_results(
                         # Time of processing for this file
                         "Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         # Copyright information
-                        "Copyright": "N/A",
+                        "Copyright": "NULL",
                         # Method used for processing
                         "Method": "MinerU",
                         # Tag for categorization
