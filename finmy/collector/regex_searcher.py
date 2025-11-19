@@ -31,104 +31,42 @@ def find_full_md_files(directory_path: str) -> List[str]:
                 full_md_paths.append(os.path.join(root, file))
     return full_md_paths
 
-
-def find_sentence_boundaries(text: str, start_pos: int, end_pos: int) -> Tuple[int, int]:
-    """Finds the sentence boundaries around a keyword position.
-
-    Args:
-        text: The full text content.
-        start_pos: Start position of the keyword.
-        end_pos: End position of the keyword.
-
-    Returns:
-        A tuple containing the start and end positions of the sentence boundaries.
-    """
-    # Define sentence ending patterns (common sentence terminators)
-    sentence_endings = r'[.!?。！？]'
-    
-    # Find the start of the sentence (look for sentence ending or beginning of text)
-    # Start from the keyword position and go backwards
-    sentence_start = 0
-    for i in range(start_pos - 1, -1, -1):
-        if re.match(sentence_endings, text[i]) or i == 0:
-            # If we found a sentence ending, start from the next character
-            if i == 0 and re.match(sentence_endings, text[i]):
-                sentence_start = 0
-            else:
-                sentence_start = i + 1
-            break
-    else:
-        # If no sentence ending found before keyword, start from the beginning
-        sentence_start = 0
-
-    # Find the end of the sentence (look for sentence ending or end of text)
-    # Start from the keyword position and go forwards
-    sentence_end = len(text)
-    for i in range(end_pos, len(text)):
-        if re.match(sentence_endings, text[i]):
-            # Include the sentence ending character
-            sentence_end = i + 1
-            break
-
-    return sentence_start, sentence_end
-
-
 def extract_context_with_sentences(
     content: str,
     keyword_start: int,
     keyword_end: int,
     context_chars: int
 ) -> str:
-    """Extracts context around a keyword ensuring sentence boundaries.
+    """Extracts context around a keyword within a character window, expanded to full sentences."""
+    total_len = len(content)
+    
+    # Define the raw character window
+    raw_start = max(0, keyword_start - context_chars)
+    raw_end = min(total_len, keyword_end + context_chars)
 
-    Args:
-        content: The full content text.
-        keyword_start: Start position of the keyword.
-        keyword_end: End position of the keyword.
-        context_chars: Number of characters to include before and after the keyword.
-
-    Returns:
-        Context string with complete sentences.
-    """
-    # Calculate initial boundaries based on the specified character count
-    initial_start = max(0, keyword_start - context_chars)
-    initial_end = min(len(content), keyword_end + context_chars)
-
-    # Find the sentence boundaries for the keyword
-    sentence_start, sentence_end = find_sentence_boundaries(
-        content, keyword_start, keyword_end
-    )
-
-    # Expand the boundaries to include complete sentences while respecting the character limit
-    # Start by finding the actual sentence boundaries within the initial context window
-    actual_start = initial_start
-    actual_end = initial_end
-
-    # Expand backwards to find the start of the sentence that contains or is before the initial_start
-    for i in range(initial_start, -1, -1):
+    # Expand backward to the beginning of the first complete sentence in the window
+    actual_start = raw_start
+    # Look backward from raw_start to find the start of a sentence
+    for i in range(raw_start, -1, -1):
         if i == 0:
             actual_start = 0
             break
-        if re.match(r'[.!?。！？]', content[i-1]):
+        if re.match(r'[.!?。！？]', content[i - 1]):
             actual_start = i
             break
 
-    # Expand forwards to find the end of the sentence that contains or is after the initial_end
-    for i in range(initial_end, len(content)):
+    # Expand forward to the end of the last complete sentence in the window
+    actual_end = raw_end
+    for i in range(raw_end, total_len):
         if re.match(r'[.!?。！？]', content[i]):
             actual_end = i + 1
             break
+    else:
+        # If no sentence end found, go to end of text
+        actual_end = total_len
 
-    # Ensure we don't go beyond the original sentence boundaries if they are within the expanded range
-    actual_start = max(actual_start, sentence_start)
-    actual_end = min(actual_end, sentence_end)
-
-    # Extract the context with sentence boundaries
-    context = content[actual_start:actual_end]
-    
-    # Strip leading/trailing whitespace but preserve meaningful content
-    context = context.strip()
-    
+    # Extract and clean
+    context = content[actual_start:actual_end].strip()
     return context
 
 
