@@ -3,6 +3,12 @@
 This script demonstrates how to use the base module to search for keywords
 in multiple 'full.md' files within different directories and save the results
 to a JSON file.
+
+Example Usage:
+    python examples/Collector/regex_search.py -i output -k reinforcement,reinforcement-learning,LLM -c 1000
+
+    -> Searching for keywords: ['reinforcement', 'reinforcement learning', 'LLM']
+
 """
 
 import os
