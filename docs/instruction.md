@@ -55,7 +55,7 @@ Ensure you have installed the required packages:
 pip install python-dotenv
 ```
 
-> **Note**: Mineru API tokens expire after 14 days. Please obtain a new token from [MinerU](https://mineru.net/apiManage/token) before expiration and update it in your .env file.
+> **Note**: MinerU API tokens expire after 14 days. Please obtain a new token from [MinerU](https://mineru.net/apiManage/token) before expiration and update it in your `.env` file.
 
 #### Basic Usage
 
@@ -84,7 +84,7 @@ python examples/Collector/test_pdf.py \
 | Parameter            | Short Form | Default Value | Description                                                                                                                                      |
 | -------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--input_dir`        | `-i`       | `input`       | Directory containing source PDF files                                                                                                            |
-| `--output_dir`       | `-o`       | `output`      | Directory to save parsed Markdown, images, and metadata                                                                                          |
+| `--output_dir`       | `-o`       | `output`      | Directory to save parsed Markdown, images, metadata, and parsing log                                                                             |
 | `--batch_size`       | `-b`       | `200`         | Number of PDFs processed per API batch (max: 200)                                                                                                |
 | `--language`         | `-l`       | `en`          | Document language (`en`, `zh`, etc.)                                                                                                              |
 | `--check_pdf_limits` | `-c`       | `True`        | Enable validation of PDF size (max: 200 MB) and page count (max: 600). If enabled, oversized PDFs are automatically split into compliant chunks. |
@@ -92,17 +92,40 @@ python examples/Collector/test_pdf.py \
 
 ---
 
-#### Output Structure: 
+#### Output Structure
 
-Successfully parsed documents are saved as:
+Successfully parsed documents are saved under `{output_dir}/{sanitized_filename}/` with the following contents:
 
-  - `output/full.md` (Markdown content)
-  - `output/layout.json` (layout information)
-  - `output/images/` (extracted images)
-  - `output/{file_id}_content_list.pdf` (Content Lisf of PDF)
-  - `output/{file_id}_origin.pdf` (Original PDF)
+- `full.md` – Cleaned Markdown representation of the document  
+- `layout.json` – Structured layout and block-level metadata  
+- `images/` – Folder containing all extracted images  
+- `{file_id}_content_list.pdf` – Content list (table of contents or extracted headings)  
+- `{file_id}_origin.pdf` – A copy of the original PDF  
 
-> **Note**: For large-scale or sensitive document processing, consider [self-hosting MinerU](https://github.com/opendatalab/mineru) to avoid API limits and enhance privacy.
+Additionally, a **centralized parsing log file** is generated at the top level of the output directory:
+
+- `parser_information.csv`: CSV file recording metadata for each successfully parsed PDF
+
+##### Example `parser_information.csv` entry:
+
+```csv
+RawDataID,Source,Location,Time,Copyright,Method,Tag,BatchID
+1,D:\GitHub\FinMycelium\input\A Novel Approach to Hurdle Rate Calibration.pdf,D:\GitHub\FinMycelium\output\A_Novel_Approach_to_Hurdle_Rate_Calibration\full.md,2025-11-19 16:46:39,NULL,MinerU,"AgenticFin, HKUST(GZ)",5b2e1b0a-b78d-49d4-a0ac-b34d603c7a86
+```
+
+**Field Descriptions**:
+- `RawDataID`: Unique numeric ID assigned per parsed file  
+- `Source`: Full path to the input PDF  
+- `Location`: Full path to the generated `full.md` file  
+- `Time`: Timestamp of successful parsing (ISO format)  
+- `Copyright`: Placeholder for copyright info (currently `NULL`)  
+- `Method`: Parsing engine used (`MinerU`)  
+- `Tag`: Optional user-defined tags (e.g., for dataset labeling)  
+- `BatchID`: UUID identifying the processing batch (useful for tracking retries or parallel jobs)
+
+> **Note**: Only successfully parsed files appear in `parser_information.csv`.
+
+> **Privacy & Scalability Tip**: For large-scale or sensitive document processing, consider [self-hosting MinerU](https://github.com/opendatalab/mineru) to avoid API limits and enhance data privacy.
 
 ---
 
@@ -141,24 +164,34 @@ python examples/Collector/test_search.py \
 
 #### Output Structure
 
-The script generates a JSON file containing a list of result entries, one per `full.md` file where the keyword was found. Each entry includes:
+The script generates a JSON file containing one entry per `full.md` file where the keyword was found.  
 
-- Absolute file path  
-- Searched keyword  
-- Timestamp of the search  
-- Total number of matches in the file  
-- Detailed match information, including:
-  - Approximate line number
-  - Character position range of the keyword (`(start, end)`)
-  - Surrounding context (expanded to full sentence boundaries)
+Fields **SampleID**, **RawDataID**, **Location**, **Time**, **Category**, **Field**, **Tag**, **Method**, and **Reviews** follow the standard definitions in the [metadata specification](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).  
+
+Additional fields specific to the keyword search include:  
+- **Source**: Path to the original input file.  
+- **keyword**: The searched keyword or phrase.  
+- **match_count**: Total number of matches in the file.  
+- **matches**: List of match details, each containing:  
+  - `line_number`: Approximate line number of the match.  
+  - `keyword_position`: Character range `[start, end]` of the keyword.  
+  - `context`: Full sentence surrounding the match.
 
 **Example output:**
 ```json
 [
   {
-    "file_path": "D:\\GitHub\\FinMycelium\\output\\A novel data-efficient double deep Q-network framework for intelligent financpdf\\full.md",
-    "keyword": "Reinforcement",
-    "timestamp": "2025-11-19T11:08:06.873718",
+    "SampleID": "1",
+    "RawDataID": "2",
+    "Location": "D:\\GitHub\\FinMycelium\\output\\search_information.json",
+    "Time": "2025-11-19 17:31:39",
+    "Category": "",
+    "Field": "",
+    "Tag": "AgenticFin, HKUST(GZ)",
+    "Method": "Regular Expression",
+    "Reviews": "",
+    "Source": "D:\\GitHub\\FinMycelium\\output\\A_novel_data-efficient_double_deep_Q-network_framework_for_intelligent_financial_portfolio_management\\full.md",
+    "keyword": "reinforcement",
     "match_count": 73,
     "matches": [
       {
@@ -167,7 +200,7 @@ The script generates a JSON file containing a list of result entries, one per `f
           869,
           882
         ],
-        "context": "To address these challenges, this work introduces Portfolio Double Deep Q-Network (PDQN), a novel architecture inspired by recent advancements in reinforcement learning."
+        "context": "To address these challenges, this work introduces Portfolio Double Deep Q-Network (PDQN), a novel architecture inspired by recent advancements in reinforcement learning. PDQN enhances portfolio management byintegrating Double Q-Learning to reduce overestimation, alongside Leaky ReLU activatin, Xaviitiaization, Hube oandropout regularization prov earg ability and gaization."
       },
       {
         "line_number": 17,
@@ -178,7 +211,7 @@ The script generates a JSON file containing a list of result entries, one per `f
         "context": "Introduction\n\nThe persistent challenge of achieving optimal decision-making in dynamic and high-dimensional environments remains central to artificial intelligence and reinforcement learning research."
       },
     ]
-  },
+  }
 ]
 ```
 
@@ -186,56 +219,77 @@ The script generates a JSON file containing a list of result entries, one per `f
 
 ---
 
-### 3. Import the PDF parsing results
+### 3. Upload data to database
 
-Import the PDF parsing results as `RawData` into the database. The data format followed by `RawData` can be found at [metadata-specific](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).
+Upload parsing or keyword search results (in CSV or JSON format) into the database as structured records. The format of the data must comply with the [metadata-specific schema](https://github.com/AgenticFinLab/group-resource/blob/main/materials/metadata-specific.md).
+
+#### Prerequisites
+
+Add the database configuration to `.env`:
+
+```python
+DB_HOST = "xxx" 
+DB_PORT = 3306
+DB_NAME= "xxx"
+DB_USER= "xxx"
+DB_PASSWORD="xxx"
+DB_CHARSET="xxx"
+```
 
 #### Basic Usage
 
 ```bash
-# Import parser info with default settings
-python examples/Collector/csv_to_db.py
+# Import default JSON file into default table
+python examples/Collector/data_to_db.py
 
-# Custom configuration example
-python examples/Collector/csv_to_db.py \
-  --csv-file "data/custom_parsers.csv" \
-  --table-name "CustomRawData_PDF" \
-  --clear-table \
-  --show-stats
+# Import custom CSV file into a specific table
+python examples/Collector/data_to_db.py \
+  --file "data/custom_parsers.csv" \
+  --table-name "CustomRawData_PDF"
+
+# Import JSON file and recreate the table from scratch
+python examples/Collector/data_to_db.py \
+  --file "data/search_results.json" \
+  --table-name "Sample_PDF" \
+  --delete-table
 ```
 
-> **Tip**: Use `--clear-table` if you want to replace all existing records. Use `--create-table` (enabled by default) to ensure the target table exists.
+> **Tip**: Use `--delete-table` to drop and recreate the table (equivalent to clearing and reinitializing). The table is automatically created if it doesn't exist during import.
 
 ---
 
 #### Parameters
 
-| Parameter            | Short Form | Default Value                                                                 | Description                                                                                   |
-| -------------------- | ---------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `--csv-file`         | `-f`       | `output/parser_information.csv`                                               | Path to the CSV file containing parser metadata                                               |
-| `--table-name`       | `-t`       | `RawData_PDF`                                                                 | Name of the target database table                                                             |
-| `--required-columns` | `-c`       | `['Source', 'Location', 'Time', 'Copyright', 'Method', 'Tag']`                 | List of expected column names in the CSV (order-sensitive)                                    |
-| `--column-types`     | `-y`       | `['VARCHAR(255)', 'VARCHAR(255)', 'DATETIME', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)']` | SQL data types corresponding to each required column                                          |
-| `--create-table`     | `-n`       | `True`                                                                        | Automatically create the database table if it doesn’t exist                                   |
-| `--clear-table`      | `-x`       | `False`                                                                       | Delete all existing rows in the table before importing new data                               |
-| `--show-stats`       | `-s`       | `True`                                                                        | Display import summary including total records and sample entries after completion            |
+| Parameter        | Short Form | Default Value                  | Description                                                                 |
+|------------------|------------|--------------------------------|-----------------------------------------------------------------------------|
+| `--file`         | `-f`       | `output/search_information.json` | Path to the input **CSV or JSON** file containing the data to upload        |
+| `--table-name`   | `-t`       | `Sample_PDF`                   | Name of the target database table                                           |
+| `--delete-table` | `-d`       | `False`                        | **Drop and recreate** the table before importing (removes all existing data)|
+| `--show-stats`   | `-s`       | `True`                         | Display import summary including total records and sample entries           |
 
-> **Important**: The `--required-columns` and `--column-types` must be provided as **matching lists**, each column must have a corresponding SQL type.
+> **Note**:  
+> - The script **does not require column or type definitions**, it infers structure from the input file.  
+> - Supported file extensions: `.csv` and `.json` only.  
+> - For JSON files, the top-level must be a **list of objects**, where each object represents one record.
 
 ---
 
-#### Expected CSV Format
+#### Expected File Format
 
-Your CSV file must include the following columns (unless overridden via `--required-columns`):
+For unified format, the expected columns are as follows.
+
+##### For CSV:
+Must contain headers, and column order is not critical as long as field names match the database schema expectations (e.g., from `metadata-specific.md`):
 
 ```csv
-Source,Location,Time,Copyright,Method,Tag
-D:\GitHub\FinMycelium\input\A Novel Approach to Hurdle Rate Calibration.pdf,D:\GitHub\FinMycelium\output\A Novel Approach to Hurdle Rate Calibration\full.md,2025-11-19 12:14:07,N/A,MinerU,"AgenticFin, HKUST(GZ)",
-...
+RawDataID,Source,Location,Time,Copyright,Method,Tag,BatchID
+1,D:\GitHub\FinMycelium\input\A Novel Approach to Hurdle Rate Calibration.pdf,D:\GitHub\FinMycelium\output\A_Novel_Approach_to_Hurdle_Rate_Calibration\full.md,2025-11-19 16:46:39,NULL,MinerU,"AgenticFin, HKUST(GZ)",5b2e1b0a-b78d-49d4-a0ac-b34d603c7a86
 ```
 
-- **Time** must be in a parseable datetime format (e.g., `YYYY-MM-DD HH:MM:SS`)
-- Missing or malformed rows may cause import failures
+##### For JSON:
+
+Refer to the `Example Output` in Section 2 for the expected format.
+
 
 ---
 
@@ -243,16 +297,18 @@ D:\GitHub\FinMycelium\input\A Novel Approach to Hurdle Rate Calibration.pdf,D:\G
 
 On successful execution, the script will:
 
-- Confirm database connection
-- Create or clear the target table (if requested)
-- Import all valid rows from the CSV
+- Validate the input file
+- Connect to the database
+- Optionally drop and recreate the table (`--delete-table`)
+- Import all records
 - Print statistics like:
 
+The displayed record includes all user-provided fields:
 ```
 --- Import Statistics ---
 Total records in database: 42
 Sample records (first 5):
-  Record 1: ('D:\\GitHub\\FinMycelium\\input\\A Novel Approach to Hurdle Rate Calibration.pdf', 'D:\\GitHub\\FinMycelium\\output\\A Novel Approach to Hurdle Rate Calibration\\full.md', datetime.datetime(2025, 11, 19, 12, 14, 7), None, 'MinerU', 'AgenticFin, HKUST(GZ)', datetime.datetime(2025, 11, 19, 13, 39, 36), datetime.datetime(2025, 11, 19, 13, 39, 36))
+  Record 1: (1, 'D:\\GitHub\\FinMycelium\\input\\A Novel Approach to Hurdle Rate Calibration.pdf', 'D:\\GitHub\\FinMycelium\\output\\A_Novel_Approach_to_Hurdle_Rate_Calibration\\full.md', datetime.datetime(2025, 11, 19, 16, 46, 39), '', 'MinerU', 'AgenticFin, HKUST(GZ)', '5b2e1b0a-b78d-49d4-a0ac-b34d603c7a86', datetime.datetime(2025, 11, 19, 17, 29, 19), datetime.datetime(2025, 11, 19, 17, 29, 19))
   ...
 Data import completed successfully!
 ```
