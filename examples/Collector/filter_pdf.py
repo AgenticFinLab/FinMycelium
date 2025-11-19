@@ -7,7 +7,7 @@ and creates a filtered output file with matching records.
 
 Example Usage:
 
-python examples/Collector/filter_pdf.py -i output -k reinforcement learning
+python examples/Collector/filter_pdf.py -i output -k reinforcement-learning,LLM
 
 The script will:
 1. Read parser_information.csv from the specified folder
