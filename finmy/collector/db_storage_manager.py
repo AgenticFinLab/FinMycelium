@@ -146,11 +146,16 @@ class DataStorageManager(MySQLDatabaseManager):
                     str_val = str(val)
                     # Check common datetime patterns
                     datetime_patterns = [
-                        r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}',  # YYYY-MM-DD HH:MM:SS
-                        r'\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}',  # YYYY/MM/DD HH:MM:SS
-                        r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}',  # MM/DD/YYYY HH:MM:SS
-                        r'\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
-                        r'\d{4}/\d{2}/\d{2}',  # YYYY/MM/DD
+                        # YYYY-MM-DD HH:MM:SS
+                        r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}',
+                        # YYYY/MM/DD HH:MM:SS
+                        r'\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}',
+                        # MM/DD/YYYY HH:MM:SS
+                        r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}',
+                        # YYYY-MM-DD
+                        r'\d{4}-\d{2}-\d{2}',
+                        # YYYY/MM/DD
+                        r'\d{4}/\d{2}/\d{2}',
                     ]
                     
                     for pattern in datetime_patterns:
@@ -238,8 +243,7 @@ class DataStorageManager(MySQLDatabaseManager):
             # Optional: Validate column names for SQL safety (basic check)
             for col in self.required_columns:
                 if not col.replace('_', '').replace('-', '').isalnum():
-                    raise ValueError(f"Potentially unsafe column name: '{col}'. "
-                                     f"Only alphanumeric characters and underscores/hyphens allowed.")
+                    raise ValueError(f"Potentially unsafe column name: '{col}'. "f"Only alphanumeric characters and underscores/hyphens allowed.")
 
             # Build column definitions using original case and inferred types
             column_defs = []
