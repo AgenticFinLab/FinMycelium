@@ -1,7 +1,7 @@
 """Basic module that supports keyword search in text parsed from PDFs.
 
 This module provides core utilities for:
-- Reading 'parser_information.csv' to locate 'full.md' files
+- Reading 'filter_information.csv' to locate 'full.md' files
 - Reading content from markdown files
 - Searching for keywords using regular expressions
 - Extracting surrounding context from text with complete sentences
@@ -12,8 +12,9 @@ import os
 import re
 import csv
 import json
+import uuid
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 
 def extract_context_with_sentences(
@@ -55,12 +56,12 @@ def extract_context_with_sentences(
     return context
 
 
-def search_keyword_in_file(
+def search_keywords_in_file(
     file_path: str,
-    keyword: str,
+    keywords: List[str],
     context_chars: int = 2000,
 ) -> List[Dict[str, any]]:
-    """Searches for a keyword in a file and returns context around matches with complete sentences."""
+    """Searches for multiple keywords in a file and returns context around matches with complete sentences."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -68,67 +69,54 @@ def search_keyword_in_file(
         print(f"Warning: Could not read file {file_path}: {e}")
         return []
 
-    # Create case-insensitive pattern for the keyword
-    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
-    matches = []
+    all_matches = []
 
-    # Find all occurrences of the keyword in the content
-    for match in pattern.finditer(content):
-        start_pos = match.start()
-        end_pos = match.end()
+    # Process each keyword separately
+    for keyword in keywords:
+        # Create case-insensitive pattern for the keyword
+        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
 
-        # Extract context around the match with full sentences
-        context = extract_context_with_sentences(
-            content, start_pos, end_pos, context_chars
-        )
+        # Find all occurrences of the keyword in the content
+        for match in pattern.finditer(content):
+            start_pos = match.start()
+            end_pos = match.end()
 
-        # Calculate line number where the match occurs
-        line_number = content[:start_pos].count("\n") + 1
+            # Extract context around the match with full sentences
+            context = extract_context_with_sentences(
+                content, start_pos, end_pos, context_chars
+            )
 
-        match_info = {
-            "line_number": line_number,
-            # Character positions of the match
-            "keyword_position": (start_pos, end_pos),
-            # Context text with complete sentences
-            "context": context,
-        }
-        matches.append(match_info)
+            # Calculate line number where the match occurs
+            line_number = content[:start_pos].count("\n") + 1
 
-    return matches
+            match_info = {
+                "line_number": line_number,
+                # Character positions of the match
+                "keyword_position": (start_pos, end_pos),
+                # Context text with complete sentences
+                "context": context,
+                # The keyword that was matched
+                "matched_keyword": keyword,
+            }
+            all_matches.append(match_info)
 
+    # Sort matches by their position in the content to maintain order
+    all_matches.sort(key=lambda x: x["keyword_position"][0])
 
-def get_next_sample_id(output_path: str) -> int:
-    """Gets the next SampleID based on existing results in the JSON file."""
-    if os.path.exists(output_path):
-        try:
-            with open(output_path, "r", encoding="utf-8") as f:
-                existing_results = json.load(f)
-            if isinstance(existing_results, list):
-                # Return the next ID after the last existing result
-                return len(existing_results) + 1
-            else:
-                # If not a list, start with ID 1
-                return 1
-        except (json.JSONDecodeError, KeyError):
-            # If JSON is invalid, start with ID 1
-            return 1
-    else:
-        # If output file doesn't exist, start with ID 1
-        return 1
+    return all_matches
 
 
 def create_search_result_entry(
     file_path: str,
     output_path: str,
-    keyword: str,
+    keywords: List[str],
     matches: List[Dict[str, any]],
     raw_data_id: str,
-    sample_id: int,
 ) -> Dict[str, any]:
     """Creates a structured entry for search results."""
     return {
         # Sequential ID for this search result
-        "SampleID": str(sample_id),
+        "SampleID": str(uuid.uuid4()),
         # ID from the source CSV file
         "RawDataID": raw_data_id,
         # Absolute path to the output JSON file
@@ -147,8 +135,8 @@ def create_search_result_entry(
         "Reviews": "",
         # Path to the source markdown file
         "Source": file_path,
-        # The keyword that was searched for
-        "keyword": keyword,
+        # The keywords that were searched for
+        "keywords": keywords,
         # Number of matches found in this file
         "match_count": len(matches),
         # List of individual match details
@@ -166,34 +154,37 @@ def save_search_results(results: List[Dict[str, any]], output_path: str) -> None
 
 def perform_keyword_search(
     input_directory: str,
-    keyword: str,
+    keyword: Union[str, List[str]],  # Accept both string and list of strings
     context_chars: int = 2000,
     output_path: Optional[str] = None,
 ) -> List[Dict[str, any]]:
-    """Performs keyword search using parser_information.csv to locate full.md files.
+    """Performs keyword search using filter_information.csv to locate full.md files.
 
     Args:
-        input_directory: Directory containing 'parser_information.csv'.
-        keyword: The keyword to search for.
+        input_directory: Directory containing 'filter_information.csv'.
+        keyword: The keyword or list of keywords to search for.
         context_chars: Number of characters to include around each match.
         output_path: Optional path for the output JSON file. If not provided, defaults to 'search_information.json' in the input directory.
 
     Returns:
         A list of search result entries.
     """
+    # Convert single keyword to list for consistent processing
+    if isinstance(keyword, str):
+        keywords = [keyword]
+    else:
+        keywords = keyword
+
     # Set default output path if not provided
     if output_path is None:
         output_path = os.path.join(input_directory, "search_information.json")
 
     # Path to the CSV file that maps RawDataID to markdown files
-    csv_path = os.path.join(input_directory, "parser_information.csv")
+    csv_path = os.path.join(input_directory, "filter_information.csv")
     if not os.path.exists(csv_path):
         raise FileNotFoundError(
-            f"Expected parser_information.csv at {csv_path} but it does not exist."
+            f"Expected filter_information.csv at {csv_path} but it does not exist."
         )
-
-    # Get the starting SampleID based on existing results
-    current_sample_id = get_next_sample_id(output_path)
 
     all_results = []
 
@@ -213,22 +204,31 @@ def perform_keyword_search(
                 )
                 continue
 
-            # Search for the keyword in the markdown file
-            matches = search_keyword_in_file(md_file_path, keyword, context_chars)
+            # Search for all keywords in the markdown file
+            matches = search_keywords_in_file(md_file_path, keywords, context_chars)
             if matches:
                 # Create a result entry for this file if matches are found
                 result_entry = create_search_result_entry(
                     file_path=md_file_path,
                     output_path=output_path,
-                    keyword=keyword,
+                    keywords=keywords,
                     matches=matches,
                     raw_data_id=raw_data_id,
-                    sample_id=current_sample_id,
                 )
                 all_results.append(result_entry)
-                # Increment SampleID for next result if any
-                current_sample_id += 1
 
     # Save all results to the output JSON file
     save_search_results(all_results, output_path)
     return all_results
+
+
+def parse_keywords(keyword_input: str) -> List[str]:
+    """Parse the keyword input, which can be a single keyword or a comma-separated list.
+
+    Supports hyphen-to-space conversion for multi-word phrases (e.g., 'reinforcement-learning' -> 'reinforcement learning').
+    """
+    # Split by comma first
+    keywords = [kw.strip() for kw in keyword_input.split(",")]
+    # Replace hyphens with spaces in each keyword, then remove empty strings
+    keywords = [kw.replace("-", " ") for kw in keywords if kw]
+    return keywords

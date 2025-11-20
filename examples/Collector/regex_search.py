@@ -3,9 +3,16 @@
 This script demonstrates how to use the base module to search for keywords
 in multiple 'full.md' files within different directories and save the results
 to a JSON file.
+
+Example Usage:
+    python examples/Collector/regex_search.py -i output -k reinforcement,reinforcement-learning,LLM -c 1000
+
+    -> Searching for keywords: ['reinforcement', 'reinforcement learning', 'LLM']
+
 """
 
 import os
+import sys
 import argparse
 
 from finmy.matcher import re_matcher
@@ -30,7 +37,7 @@ def main():
         "-k",
         type=str,
         required=True,
-        help="Keyword to search for in the markdown files",
+        help="""Keyword or list of keywords to search for in the markdown files. Can be a single keyword, comma-separated keywords (e.g., 'keyword1,keyword2,keyword3')""",
     )
 
     parser.add_argument(
@@ -55,11 +62,17 @@ def main():
         print(f"Error: Input path '{args.input_path}' is not a valid directory.")
         return 1
 
+    # Parse keywords from input
+    keywords = re_matcher.parse_keywords(args.keyword)
+    print(f"Parsed keywords: {keywords}")
+
     # Perform the keyword search
     try:
+        print(f"Searching for keywords: {keywords}")
         results = re_matcher.perform_keyword_search(
             input_directory=args.input_path,
-            keyword=args.keyword,
+            # Pass the list of keywords
+            keyword=keywords,
             context_chars=args.context_chars,
             output_path=args.output_path,
         )
@@ -79,4 +92,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())
