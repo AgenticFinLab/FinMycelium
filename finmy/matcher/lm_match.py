@@ -6,75 +6,73 @@ LLM-powered semantic extraction of relevant content spans from long text.
 - Returns verbatim excerpts (no paraphrasing) with exact character positions.
 """
 
-import json
 from typing import TypedDict, List, Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
 
 from .utils import split_paragraphs, get_subset_positions, safe_parse_json
 
+from lmbase.inference import api_call
+
+SYSTEM_PROMPT = (
+    "You identify ALL semantically relevant information from the provided content, "
+    "using the user's query and keywords as guidance (keywords are hints, not strict filters). "
+    "Relevance MUST be semantic: include synonyms, references, and logically connected sentences. "
+    "Select COMPLETE PARAGRAPHS. Prefer contiguous paragraph ranges when expanding context. "
+    "Return ONLY JSON with key 'excerpts': each item contains: "
+    "{'paragraph_indices': indices from the list below, 'quote': exact verbatim text, "
+    " 'reason': semantic explanation, 'score': number 0-1, 'matched_keywords': subset of given keywords}. "
+    "Do NOT paraphrase; copy text verbatim. Do NOT modify punctuation or spacing. "
+    "Include all relevant passages; skip unrelated text."
+)
+
+HUMAN_PROMPT_TEMPLATE = (
+    "Query: {query_text}\n"
+    "Keywords: {keywords_joined}\n\n"
+    "Paragraphs (use indices for 'paragraph_indices'):\n"
+    "{paragraphs_text}\n\n"
+    "Output strictly in JSON: {\n"
+    '  "excerpts": [\n'
+    "    {\n"
+    '      "paragraph_indices": [0],\n'
+    '      "quote": "...",\n'
+    '      "reason": "...",\n'
+    '      "score": 0.0,\n'
+    '      "matched_keywords": ["..."]\n'
+    "    }\n"
+    "  ]\n"
+    "}"
+)
+
+PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
+    [
+        ("system", SYSTEM_PROMPT),
+        ("human", HUMAN_PROMPT_TEMPLATE),
+    ]
+)
+
 
 def build_messages(query_text: str, key_words: List[str], content: str):
-    """Construct chat messages for the extraction request.
+    """Construct chat messages using a template with string content.
 
-    - The system message enforces output as JSON and forbids paraphrasing.
-    - The human message carries the query, keywords, and the original content.
-    - The returned messages are consumed directly by `ChatOpenAI.invoke`.
-
-    Expected JSON schema (illustrative):
-    {
-      "excerpts": [
-        {
-          "paragraph_indices": [0, 1],
-          "quote": "verbatim excerpt covering selected paragraphs",
-          "reason": "short semantic explanation",
-          "score": 0.87,
-          "matched_keywords": ["risk management", "ai"]
-        }
-      ]
-    }
+    The prompt explicitly defines expected JSON output and provides content as
+    enumerated paragraphs so the model can reference indices directly.
     """
-    # The system message emphasizes semantic relevance over lexical match.
-    # Keywords act as guidance signals, not hard filters. The model is instructed
-    # to return complete paragraphs and to prefer contiguous ranges when expanding context.
-    system = (
-        "You identify ALL semantically relevant information from the provided content, "
-        "using the user's query and keywords as guidance (keywords are hints, not strict filters). "
-        "Relevance MUST be semantic: include synonyms, references, and logically connected sentences. "
-        "Select COMPLETE PARAGRAPHS. Prefer contiguous paragraph ranges when expanding context. "
-        "Return ONLY JSON with key 'excerpts': each item contains: "
-        "{'paragraph_indices': contiguous indices from provided 'paragraphs', 'quote': exact substring from content covering those paragraphs, "
-        " 'reason': semantic relevance explanation, 'score': number 0-1, 'matched_keywords': [subset of given keywords that apply]}. "
-        "Do NOT paraphrase; copy text verbatim. Do NOT modify punctuation or spacing. "
-        "Include all relevant passages; skip unrelated text."
-    )
-    # Split the content by blank lines to create a paragraph list with offsets.
-    # This allows the model to choose paragraph indices explicitly.
     paragraphs = split_paragraphs(content)
-    # Payload that the model uses to determine relevance and select complete paragraphs.
-    user_payload = {
-        "query_text": query_text,
-        "keywords": key_words,
-        "content": content,
-        "paragraphs": paragraphs,
-        "format": {
-            "excerpts": [
-                {
-                    "paragraph_indices": [0],
-                    "quote": "...",
-                    "reason": "...",
-                    "score": 0.0,
-                    "matched_keywords": ["..."],
-                }
-            ]
-        },
-    }
-    return [
-        SystemMessage(content=system),
-        HumanMessage(content=json.dumps(user_payload, ensure_ascii=False)),
-    ]
+    keywords_joined = ", ".join(key_words)
+    parts = []
+    for p in paragraphs:
+        idx = p.get("index")
+        txt = p.get("text")
+        parts.append(f"[{idx}] >>> {txt}")
+    paragraphs_text = "\n\n".join(parts)
+
+    return PROMPT_TEMPLATE.format_messages(
+        query_text=query_text,
+        keywords_joined=keywords_joined,
+        paragraphs_text=paragraphs_text,
+    )
 
 
 def match_content_llm(
@@ -100,7 +98,7 @@ def match_content_llm(
     3) Normalize and locate excerpts (`get_subset_positions`).
     """
     messages = build_messages(query_text, key_words, content)
-    llm = build_llm(model_override=model)
+    llm = api_call.build_llm(model_override=model)
     resp = llm.invoke(messages)
     raw = resp.content
 
