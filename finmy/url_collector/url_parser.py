@@ -5,18 +5,19 @@ This module provides functionality to parse web pages and extract structured con
 including text, images, and videos while maintaining their original layout order.
 """
 
-import requests
 import time
 import json
 import csv
+import random
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional
-from urllib.parse import urljoin, urlparse
+
+from urllib.parse import urljoin
+import requests
 import mysql.connector
 from mysql.connector import Error
 from bs4 import BeautifulSoup
-import random
-from datetime import datetime
 
 
 class URLParser:
@@ -212,11 +213,12 @@ class URLParser:
                 elif element.name in ["video", "iframe"]:
                     video_src = self.extract_video_source(element, base_url)
                     if video_src:
+                        # Video elements typically don't have separate hrefs
                         content_elements.append(
                             {
                                 "video": video_src,
                                 "no": element_counter,
-                                "href": None,  # Video elements typically don't have separate hrefs
+                                "href": None,
                             }
                         )
                         element_counter += 1
@@ -406,30 +408,3 @@ class URLParser:
             if connection.is_connected():
                 cursor.close()
                 connection.close()
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Example URL list
-    sample_urls = [
-        "http://www.jyb.cn/rmtzcg/xwy/wzxw/202511/t20251119_2111415715.html",
-        # Add more URLs here for testing
-    ]
-
-    # Initialize parser
-    parser = URLParser(delay=2.0)
-
-    # Parse URLs
-    results = parser.parse_urls(sample_urls)
-
-    # Save results to JSON (default)
-    parser.save_to_json(results)
-
-    # Example of saving to other formats
-    # parser.save_to_csv(results)
-    # parser.save_to_mysql(results, 'localhost', 'user', 'password', 'database_name')
-
-    print("Parsing completed. Results:")
-    for result in results:
-        print(f"URL {result['ID']}: {result['url']}")
-        print(f"Elements found: {len(result['content'])}")
