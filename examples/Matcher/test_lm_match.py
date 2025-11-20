@@ -1,8 +1,10 @@
 """
 A session to test the lm_match module.
+
+Run:
+    python examples/Matcher/test_lm_match.py
 """
 
-from finmy.matcher.lm_match import build_extract_app
 from finmy.matcher.lm_match import build_extract_app
 
 app = build_extract_app()
