@@ -1,5 +1,6 @@
 """
 Codebase used to summarize the main content from the query content.
+To preserve the original content, this summarizer avoids any operations based on large language models and relies solely on tools or methods that do not alter or damage the source material.
 
 Both english and chinese are supported.
 
