@@ -53,11 +53,17 @@ PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
 )
 
 
-def build_messages(query_text: str, key_words: List[str], content: str):
+def build_messages(
+    query_text: str,
+    key_words: List[str],
+    content: str,
+    system_prompt: Optional[str] = None,
+    user_prompt: Optional[str] = None,
+):
     """Construct chat messages using a template with string content.
 
-    The prompt explicitly defines expected JSON output and provides content as
-    enumerated paragraphs so the model can reference indices directly.
+    Accepts optional `system_prompt` and `user_prompt`. When omitted,
+    defaults to `SYSTEM_PROMPT` and `HUMAN_PROMPT_TEMPLATE`.
     """
     paragraphs = split_paragraphs(content)
     keywords_joined = ", ".join(key_words)
@@ -68,7 +74,15 @@ def build_messages(query_text: str, key_words: List[str], content: str):
         parts.append(f"[{idx}] >>> {txt}")
     paragraphs_text = "\n\n".join(parts)
 
-    return PROMPT_TEMPLATE.format_messages(
+    sys_txt = system_prompt or SYSTEM_PROMPT
+    human_txt = user_prompt or HUMAN_PROMPT_TEMPLATE
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", sys_txt),
+            ("human", human_txt),
+        ]
+    )
+    return prompt.format_messages(
         query_text=query_text,
         keywords_joined=keywords_joined,
         paragraphs_text=paragraphs_text,
