@@ -11,27 +11,13 @@ Implementers should:
 """
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from abc import ABC, abstractmethod
 
-from finmy.query import QueryInput
 
 from .utils import get_paragraph_positions
-
-
-@dataclass
-class SummarizedUserQuery:
-    """Summarized user query.
-
-    - `content`: original text content (required), used for semantic matching/extraction
-    - `intention_text`: semantic intent (optional) that guides selection
-    - `key_words`: keyword hints (optional), guidance signals not strict filters
-    """
-
-    summarization: str
-    keywords: List[str] = field(default_factory=list)
-    user_query: Optional[QueryInput] = None
+from .summarzier import SummarizedUserQuery
 
 
 @dataclass

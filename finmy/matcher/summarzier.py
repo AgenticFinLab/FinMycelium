@@ -13,9 +13,27 @@ import re
 import sys
 import subprocess
 from collections import Counter
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 import spacy
 from spacy.matcher import Matcher
+
+from finmy.query import QueryInput
+
+
+@dataclass
+class SummarizedUserQuery:
+    """Summarized user query.
+
+    - `content`: original text content (required), used for semantic matching/extraction
+    - `intention_text`: semantic intent (optional) that guides selection
+    - `key_words`: keyword hints (optional), guidance signals not strict filters
+    """
+
+    summarization: str
+    keywords: List[str] = field(default_factory=list)
+    user_query: Optional[QueryInput] = None
 
 
 def load_spacy_model(model_name: str):
