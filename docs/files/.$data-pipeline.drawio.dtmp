@@ -52,7 +52,7 @@
         <mxCell id="2rZd7lql2X69urvZef5Q-10" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" parent="1" vertex="1">
           <mxGeometry x="820" y="10" width="140" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="2rZd7lql2X69urvZef5Q-11" value="&lt;div&gt;pdf&lt;/div&gt;Raw_data" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
+        <mxCell id="2rZd7lql2X69urvZef5Q-11" value="&lt;div&gt;&lt;strike&gt;pdf&lt;/strike&gt;&lt;/div&gt;&lt;strike&gt;Raw_data&lt;/strike&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
           <mxGeometry x="855" y="20" width="70" height="80" as="geometry" />
         </mxCell>
         <mxCell id="2rZd7lql2X69urvZef5Q-13" value="&lt;div&gt;url&lt;/div&gt;Raw_data" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
@@ -70,7 +70,7 @@
         <mxCell id="2rZd7lql2X69urvZef5Q-16" value="re_match" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="1020" y="20" width="120" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="2rZd7lql2X69urvZef5Q-17" value="lm_match" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+        <mxCell id="2rZd7lql2X69urvZef5Q-17" value="&lt;strike&gt;lm_match&lt;/strike&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="1020" y="80" width="120" height="50" as="geometry" />
         </mxCell>
         <mxCell id="2rZd7lql2X69urvZef5Q-18" value="rag_match" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
@@ -170,7 +170,7 @@
         <mxCell id="2rZd7lql2X69urvZef5Q-49" value="url_filter" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="600" y="290" width="120" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="2rZd7lql2X69urvZef5Q-51" value="url_parser" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+        <mxCell id="2rZd7lql2X69urvZef5Q-51" value="&lt;strike&gt;url_parser&lt;/strike&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="600" y="210" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="2rZd7lql2X69urvZef5Q-53" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" target="2rZd7lql2X69urvZef5Q-15" edge="1">

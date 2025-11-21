@@ -15,7 +15,7 @@ import os
 import sys
 import argparse
 
-from finmy.matcher import re_matcher
+from finmy.matcher import re_match
 
 
 def main():
@@ -63,13 +63,13 @@ def main():
         return 1
 
     # Parse keywords from input
-    keywords = re_matcher.parse_keywords(args.keyword)
+    keywords = re_match.parse_keywords(args.keyword)
     print(f"Parsed keywords: {keywords}")
 
     # Perform the keyword search
     try:
         print(f"Searching for keywords: {keywords}")
-        results = re_matcher.perform_keyword_search(
+        results = re_match.perform_keyword_search(
             input_directory=args.input_path,
             # Pass the list of keywords
             keyword=keywords,

@@ -37,11 +37,11 @@ def split_paragraphs(content: str) -> List[Dict[str, Any]]:
     return paragraphs
 
 
-def get_subset_positions(
+def get_paragraph_positions(
     content: str,
-    subsets: List[Dict[str, Any]],
+    paragraphs: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Compute positions of selected subsets within `content`.
+    """Compute positions of selected paragraphs within `content`.
 
     Accepts generic selection items (not tied to any specific model schema). Each item may include:
     - `paragraph_indices`: list[int] indicating which paragraphs to span
@@ -50,10 +50,10 @@ def get_subset_positions(
     Returns mapping-only dicts: `text`, `start`, `end`, optionally
     `paragraph_indices` and `contiguous`. Unmatched quotes yield `start/end=None`.
     """
-    paragraphs = split_paragraphs(content)
+    content_paragraphs = split_paragraphs(content)
     used_ranges: List[range] = []
     results: List[Dict[str, Any]] = []
-    for item in subsets:
+    for item in paragraphs:
         idxs = item.get("paragraph_indices") or []
         if (
             isinstance(idxs, list)
@@ -66,9 +66,9 @@ def get_subset_positions(
                 for i in range(len(idxs_sorted) - 1)
             )
             first = max(0, min(idxs_sorted))
-            last = min(len(paragraphs) - 1, max(idxs_sorted))
-            start = paragraphs[first]["start"]
-            end = paragraphs[last]["end"]
+            last = min(len(content_paragraphs) - 1, max(idxs_sorted))
+            start = content_paragraphs[first]["start"]
+            end = content_paragraphs[last]["end"]
             text = content[start:end]
             r = range(start, end)
             conflict = any(
@@ -103,11 +103,6 @@ def get_subset_positions(
             results.append({"text": q, "start": start, "end": end})
 
     return results
-
-
-# Backward-compatible aliases
-map_selections_to_positions = get_subset_positions
-map_excerpts_to_positions = get_subset_positions
 
 
 def safe_parse_json(text: str) -> Dict[str, Any]:

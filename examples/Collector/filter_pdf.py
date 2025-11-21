@@ -26,7 +26,7 @@ from typing import List
 
 from finmy.pdf_collector import pdf_filter
 
-from finmy.matcher import re_matcher
+from finmy.matcher import re_match
 
 
 def main(input_path: str, keywords: List[str]) -> None:
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Parse keywords from input
-    keywords = re_matcher.parse_keywords(args.keywords)
+    keywords = re_match.parse_keywords(args.keywords)
     print(f"Parsed keywords: {keywords}")
 
     # Run the main function
