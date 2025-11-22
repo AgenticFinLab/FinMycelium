@@ -21,31 +21,27 @@ class ReMatch(MatchBase):
     This class implements the MatchBase interface using regular expressions
     to search for keywords in text content and extract relevant contexts.
     It finds all occurrences of keywords, extracts surrounding context with
-    complete sentences, and maps positions for standardized output.
+    complete paragraphs, and maps positions for standardized output.
 
     Main features:
     - Case-insensitive keyword matching using regular expressions
-    - Context extraction with sentence boundaries preserved
-    - Deduplication of overlapping context matches
+    - Context extraction with complete paragraph boundaries preserved
     - Position mapping for paragraphs and content segments
     """
 
     def match(self, match_input: MatchInput) -> List[dict]:
         """Extract relevant text segments from match data based on keywords.
 
-        This method searches for keywords from the summarized query in the match data,
-        extracts context around each match with complete sentences, and returns a list
-        of dictionaries containing matched text segments with 'paragraph_indices' and 'quote' keys.
+        This method searches for keywords from the summarized query in the match data, extracts context around each match with complete paragraphs, and returns a list of dictionaries containing matched text segments with 'paragraph_indices' and 'quote' keys.
 
         Args:
-            match_input: The input containing match data and summarized query with keywords
+            match_input:
                 - match_data: The text content to search for keywords
                 - db_item: The database item containing the metadata
                 - summarized_query: Including summarization, keywords, and user_query
 
         Return:
-            List[dict]: List of dictionaries with 'paragraph_indices' and 'quote' keys containing matched text segments,
-                each preserving sentence boundaries
+            List[dict]: List of dictionaries with 'paragraph_indices' and 'quote' keys containing matched text segments, each preserving sentence boundaries
         """
         # Check if match_data is empty
         if not match_input.match_data:
@@ -72,14 +68,14 @@ class ReMatch(MatchBase):
 
                 # Find all occurrences of the keyword in the content
                 for match in pattern.finditer(match_input.match_data):
-                    start_pos = match.start()
-                    end_pos = match.end()
+                    keyword_start = match.start()
+                    keyword_end = match.end()
 
                     # Extract context around the match with full sentences and get paragraph indices
                     context, paragraph_indices = extract_context_with_paragraphs(
                         content=match_input.match_data,
-                        keyword_start=start_pos,
-                        keyword_end=end_pos,
+                        keyword_start=keyword_start,
+                        keyword_end=keyword_end,
                         context_chars=2000,
                         content_paragraphs=content_paragraphs,
                     )
