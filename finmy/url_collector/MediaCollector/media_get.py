@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DeepSentimentCrawling Module - Main Workflow
+Media Collector Module - Main Workflow
 Full-platform keyword crawling based on topics extracted from BroadTopicExtraction
 """
 
