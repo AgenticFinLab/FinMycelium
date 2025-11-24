@@ -6,7 +6,6 @@ The Web Search API Service of Bocha
 Bocha:
 https://bocha-ai.feishu.cn/wiki/RXEOw02rFiwzGSkd9mUcqoeAnNK
 
-
 """
 
 import requests
@@ -21,7 +20,7 @@ def bocha_api_call(query: str, summary: bool = False, count: int = 20):
     payload = json.dumps({"query": query, "summary": summary, "count": count})
 
     load_dotenv()
-    BOCHA_API = os.getenv("DB_HOST")
+    BOCHA_API = os.getenv("BOCHA_API_KEY")
 
     headers = {
         "Authorization": f"Bearer {BoCHA_API}",
