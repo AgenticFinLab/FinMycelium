@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DeepSentimentCrawling Module - Keyword Manager
+Media Collector Module - Keyword Manager
 Get keywords and assign them to different platforms for crawling
+Based on the MindSpider/DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
 """
 
 import sys

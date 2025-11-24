@@ -3,6 +3,7 @@
 """
 Media Collector Module - Platform Crawler Manager
 Responsible for configuring and calling MediaCrawler for multi-platform crawling
+Based on the MindSpider/DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
 """
 
 import os

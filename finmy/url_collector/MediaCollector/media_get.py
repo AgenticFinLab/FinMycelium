@@ -3,6 +3,7 @@
 """
 Media Collector Module - Main Workflow
 Full-platform keyword crawling based on topics
+Based on the DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
 """
 
 import sys
