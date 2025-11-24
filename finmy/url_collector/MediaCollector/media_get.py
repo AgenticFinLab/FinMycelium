@@ -3,7 +3,7 @@
 """
 Media Collector Module - Main Workflow
 Full-platform keyword crawling based on topics
-Based on the DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
+Based on the MindSpider/DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
 """
 
 import sys
@@ -20,7 +20,7 @@ from keyword_manager import KeywordManager
 from platform_crawler import PlatformCrawler
 
 
-class DeepSentimentCrawling:
+class MediaCrawling:
     """Deep Sentiment Crawling Main Workflow"""
 
     def __init__(self):
@@ -212,7 +212,7 @@ class DeepSentimentCrawling:
 def main():
     """Command line entry point"""
     parser = argparse.ArgumentParser(
-        description="DeepSentimentCrawling - Topic-based Deep Sentiment Crawling"
+        description="MediaCrawling - Topic-based Media Crawling"
     )
 
     # Basic parameters
@@ -280,7 +280,7 @@ def main():
             return
 
     # Create crawling instance
-    crawler = DeepSentimentCrawling()
+    crawler = MediaCrawling()
 
     try:
         # Display guide

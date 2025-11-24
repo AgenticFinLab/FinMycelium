@@ -5,7 +5,7 @@ Full-platform keyword crawling based on topics
 
 import argparse
 
-from finmy.url_collector.MediaCollector.media_get import DeepSentimentCrawling
+from finmy.url_collector.MediaCollector.media_get import MediaCrawling
 
 
 def main():
@@ -79,7 +79,7 @@ def main():
             return
 
     # Create crawling instance
-    crawler = DeepSentimentCrawling()
+    crawler = MediaCrawling
 
     try:
         # Display guide
