@@ -1,12 +1,17 @@
+"""
+Media Collector Module - Main Workflow
+Full-platform keyword crawling based on topics
+"""
+
 import argparse
 
-from finmy.url_collector.MediaCollector.media_get import MediaCollector
+from finmy.url_collector.MediaCollector.media_get import DeepSentimentCrawling
 
 
 def main():
     """Command line entry point"""
     parser = argparse.ArgumentParser(
-        description="DeepSentimentCrawling - Topic-based Deep Sentiment Crawling"
+        description="MediaCrawling - Topic-based Media Crawling"
     )
 
     # Basic parameters

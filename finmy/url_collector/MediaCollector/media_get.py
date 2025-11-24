@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Media Collector Module - Main Workflow
-Full-platform keyword crawling based on topics extracted from BroadTopicExtraction
+Full-platform keyword crawling based on topics
 """
 
 import sys

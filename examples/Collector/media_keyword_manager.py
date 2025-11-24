@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+DeepSentimentCrawling Module - Keyword Manager
+Get keywords and assign them to different platforms for crawling
+"""
+
+
 from finmy.url_collector.MediaCollector.keyword_manager import KeywordManager
 
 if __name__ == "__main__":

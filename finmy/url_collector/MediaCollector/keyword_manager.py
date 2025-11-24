@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 DeepSentimentCrawling Module - Keyword Manager
-Get keywords from BroadTopicExtraction module and assign them to different platforms for crawling
+Get keywords and assign them to different platforms for crawling
 """
 
 import sys
 import json
 from datetime import date, timedelta, datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+
 import random
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine

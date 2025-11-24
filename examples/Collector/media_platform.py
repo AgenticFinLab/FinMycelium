@@ -1,3 +1,8 @@
+"""
+Media Collector Module - Platform Crawler Manager
+Responsible for configuring and calling MediaCrawler for multi-platform crawling
+"""
+
 from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MediaCollector Module - Platform Crawler Manager
+Media Collector Module - Platform Crawler Manager
 Responsible for configuring and calling MediaCrawler for multi-platform crawling
 """
 
@@ -9,9 +9,13 @@ import os
 import sys
 import subprocess
 import tempfile
+
+
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
+
+
 import json
 from loguru import logger
 
