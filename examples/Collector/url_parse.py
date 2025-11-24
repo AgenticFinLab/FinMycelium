@@ -9,7 +9,8 @@ if __name__ == "__main__":
     # Example URL list
     # Add more URLs here for testing
     sample_urls = [
-        "http://www.jyb.cn/rmtzcg/xwy/wzxw/202511/t20251119_2111415715.html",
+        # "http://www.jyb.cn/rmtzcg/xwy/wzxw/202511/t20251119_2111415715.html",
+        "http://v.people.cn/n1/2025/1121/c431305-40608834.html"
     ]
 
     # Initialize parser
