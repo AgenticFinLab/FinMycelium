@@ -1,13 +1,12 @@
 """
-
 The Web Search API Service of Bocha
 
 
 Bocha:
 https://bocha-ai.feishu.cn/wiki/RXEOw02rFiwzGSkd9mUcqoeAnNK
-
 """
 
+import os
 import requests
 import json
 from dotenv import load_dotenv
@@ -23,7 +22,7 @@ def bocha_api_call(query: str, summary: bool = False, count: int = 20):
     BOCHA_API = os.getenv("BOCHA_API_KEY")
 
     headers = {
-        "Authorization": f"Bearer {BoCHA_API}",
+        "Authorization": f"Bearer {BOCHA_API}",
         "Content-Type": "application/json",
     }
 
