@@ -97,28 +97,6 @@ class LLMMatcher(MatchBase):
         resp = llm.invoke(messages)
         return resp.content
 
-    def _parse_items(self, raw: str) -> List[Dict[str, Any]]:
-        """Parse model JSON into position-ready selection items.
-
-        Accepts either a list of items or an object with `excerpts`.
-        Converts each to `{"paragraph_indices": [...]}` for downstream mapping.
-        """
-        data = safe_parse_json(raw)
-        items: List[Dict[str, Any]] = []
-        if isinstance(data, list):
-            for it in data:
-                if isinstance(it, dict):
-                    idxs = it.get("paragraphs") or []
-                    if isinstance(idxs, list) and all(isinstance(i, int) for i in idxs):
-                        items.append({"paragraph_indices": idxs})
-        elif isinstance(data, dict):
-            for it in data.get("excerpts", []):
-                if isinstance(it, dict):
-                    idxs = it.get("paragraphs") or it.get("paragraph_indices") or []
-                    if isinstance(idxs, list) and all(isinstance(i, int) for i in idxs):
-                        items.append({"paragraph_indices": idxs})
-        return items
-
     def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
         """Produce selection dicts representing matched paragraph ranges.
 
@@ -132,4 +110,4 @@ class LLMMatcher(MatchBase):
             target_content=match_input.match_data,
         )
         raw = self._invoke_llm(messages)
-        return self._parse_items(raw)
+        return safe_parse_json(raw)

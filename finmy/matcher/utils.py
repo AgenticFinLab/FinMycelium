@@ -110,7 +110,7 @@ def safe_parse_json(text: str) -> Dict[str, Any]:
 
     Some models may wrap JSON with additional prose. This routine first attempts
     a direct parse; if that fails, it extracts the first JSON-looking block via regex.
-    Returns a default structure with an empty 'excerpts' list when parsing fails.
+    Returns a default structure with an empty list when parsing fails.
     """
     try:
         return json.loads(text)
@@ -121,7 +121,7 @@ def safe_parse_json(text: str) -> Dict[str, Any]:
                 return json.loads(m.group(0))
             except Exception:
                 pass
-        return {"excerpts": []}
+        return [{}]
 
 
 def extract_context_with_paragraphs(
