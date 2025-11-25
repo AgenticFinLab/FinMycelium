@@ -11,13 +11,16 @@ Support:
 
 import re
 import sys
+import time
 import subprocess
 from collections import Counter
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
 import spacy
 from spacy.matcher import Matcher
+from lmbase.inference import api_call
 
 from finmy.query import UserQueryInput
 
@@ -33,7 +36,6 @@ class SummarizedUserQuery:
 
     summarization: str
     key_words: List[str] = field(default_factory=list)
-    user_query: Optional[UserQueryInput] = None
 
     extras: Dict[str, Any] = field(default_factory=dict)
 
@@ -65,18 +67,55 @@ def load_spacy_model(model_name: str):
             raise
 
 
-class NounKeyWordSummarizer:
+class BaseSummarizer(ABC):
+    """Abstract base class for all summarizers."""
+
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+        method_name: Optional[str] = None,
+    ):
+        self.config = config
+        self.method_name = method_name
+
+    @abstractmethod
+    def summarize(self, query_input: UserQueryInput) -> SummarizedUserQuery:
+        """Produce a summarization from the content.
+
+        Return:
+        - List[str]: list of strings, each string is a matched sub-content that may containing one target paragraph (word) or multiple paragraphs (words).
+        """
+
+    def invoke_llm(self, messages, llm_name: str) -> str:
+        """Invoke the LLM with prepared messages and return raw content."""
+        llm = api_call.build_llm(model_override=llm_name)
+        resp = llm.invoke(messages)
+        return resp.content
+
+    def run(self, query_input: UserQueryInput) -> SummarizedUserQuery:
+        """End-to-end execution returning a standardized `summarize`."""
+        # Compute the time of the whole matching process
+        start_time = time.time()
+        summarized = self.summarize(query_input)
+        end_time = time.time()
+        summarized.extras["time_cost"] = end_time - start_time
+        return summarized
+
+
+class NounKWRuleSummarizer(BaseSummarizer):
     """
-    Summarizer the text content by extract all noun as the key words.
+    Summarizer the text content by extract all noun as the key words (KW)
+    based on rule-based summarization.
     """
 
-    def __init__(self):
+    def __init__(self, config):
+        super().__init__(config=config, method_name="keywords_summarize")
         # Download necessary NLTK data for English
         self.nlp_en = load_spacy_model("en_core_web_md")
         self.nlp_zh = load_spacy_model("zh_core_web_trf")
 
-    def extract_nouns_with_frequency(self, text: str) -> dict:
-        """Extract nouns and noun phrases with frequencies from English or Chinese text.
+    def rule_summarize(self, content: str) -> dict:
+        """Extract nouns and noun phrases with frequencies from English or Chinese content. Summarized the content based on the rule.
 
         Overview:
         - Language detection: use CJK character ratio to select the spaCy pipeline.
@@ -90,13 +129,13 @@ class NounKeyWordSummarizer:
           concatenated without spaces to avoid gaps.
         """
         # Lightweight language detection using Unicode ranges.
-        chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
-        total_chars = len(re.findall(r"[\w\u4e00-\u9fff]", text))
+        chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", content))
+        total_chars = len(re.findall(r"[\w\u4e00-\u9fff]", content))
         if total_chars > 0 and chinese_chars / total_chars > 0.3:
-            doc = self.nlp_zh(text)
+            doc = self.nlp_zh(content)
             nlp_model = self.nlp_zh
         else:
-            doc = self.nlp_en(text)
+            doc = self.nlp_en(content)
             nlp_model = self.nlp_en
         is_en = nlp_model == self.nlp_en
 
@@ -211,3 +250,12 @@ class NounKeyWordSummarizer:
         # Aggregate term frequencies.
         freq_counter = Counter(term for term in all_terms if term.strip() != "")
         return dict(freq_counter)
+
+    def summarize(self, query_input: UserQueryInput) -> SummarizedUserQuery:
+        """Summarize the user query to obtain the keywords."""
+        n_kws = self.rule_summarize(query_input.query_text)
+        return SummarizedUserQuery(
+            summarization=query_input.query_text,
+            key_words=n_kws,
+            extras={},
+        )

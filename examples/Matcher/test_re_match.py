@@ -13,8 +13,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 
 from finmy.matcher.re_match import ReMatch
 from finmy.matcher.base import MatchInput, MatchResult
-from finmy.matcher.summarzier import SummarizedUserQuery
-from finmy.query import QueryInput
+from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.query import UserQueryInput
 
 
 def create_test_data():

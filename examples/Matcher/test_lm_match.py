@@ -6,7 +6,7 @@ Run:
 """
 
 from finmy.matcher.lm_match import LLMMatcher
-from finmy.matcher.summarzier import SummarizedUserQuery
+from finmy.matcher.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 
 query_text = "识别与人工智能在金融风控与合规相关的内容"

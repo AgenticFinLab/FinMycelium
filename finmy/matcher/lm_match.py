@@ -9,9 +9,8 @@ from typing import List, Dict, Any, Optional
 from langchain_core.prompts import ChatPromptTemplate
 
 from .utils import safe_parse_json
-from .base import MatchInput, MatchBase
+from .base import MatchInput, BaseMatcher
 
-from lmbase.inference import api_call
 
 SYSTEM_PROMPT = """
 You identify ALL semantically relevant information from the provided content,
@@ -46,7 +45,7 @@ Output each matched item containing the content segment that are continuous para
 """
 
 
-class LLMMatcher(MatchBase):
+class LLMMatcher(BaseMatcher):
     """
     LLM-based matcher that extracts semantically relevant content.
     """
@@ -90,12 +89,6 @@ class LLMMatcher(MatchBase):
             targets_content=target_content,
         )
 
-    def _invoke_llm(self, messages) -> str:
-        """Invoke the LLM with prepared messages and return raw content."""
-        llm = api_call.build_llm(model_override=self.model_name)
-        resp = llm.invoke(messages)
-        return resp.content
-
     def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
         """Produce selection dicts representing matched paragraph ranges.
 
@@ -108,5 +101,5 @@ class LLMMatcher(MatchBase):
             key_words=sq.keywords,
             target_content=match_input.match_data,
         )
-        raw = self._invoke_llm(messages)
+        raw = self.invoke_llm(messages, llm_name=self.model_name)
         return safe_parse_json(raw)

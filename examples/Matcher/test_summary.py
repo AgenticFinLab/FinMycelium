@@ -5,13 +5,13 @@ Run:
     python examples/Matcher/test_summary.py
 """
 
-from finmy.matcher import summarzier
+from finmy.matcher import summarizer
 
 
 if __name__ == "__main__":
 
     # Create extractor instance
-    extractor = summarzier.NounKeyWordSummarizer()
+    extractor = summarizer.NounKeyWordSummarizer()
 
     # English text demo
     english_text = """

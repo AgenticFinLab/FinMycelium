@@ -15,9 +15,10 @@ from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from abc import ABC, abstractmethod
 
+from lmbase.inference import api_call
 
 from .utils import get_paragraph_positions
-from .summarzier import SummarizedUserQuery
+from .summarizer import SummarizedUserQuery
 
 
 @dataclass
@@ -66,7 +67,7 @@ class MatchResult:
     time: Optional[float] = None
 
 
-class MatchBase(ABC):
+class BaseMatcher(ABC):
     """Abstract base class for all matchers.
 
     Responsibilities:
@@ -92,6 +93,12 @@ class MatchBase(ABC):
         Return:
         - List[str]: list of strings, each string is a matched sub-content taht may containing one target paragraph or multiple paragraphs.
         """
+
+    def invoke_llm(self, messages, llm_name: str) -> str:
+        """Invoke the LLM with prepared messages and return raw content."""
+        llm = api_call.build_llm(model_override=llm_name)
+        resp = llm.invoke(messages)
+        return resp.content
 
     def map_positions(
         self,
