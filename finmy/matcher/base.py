@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Union
 from abc import ABC, abstractmethod
 
-from lmbase.inference import api_call
+from finmy.lmbase.inference import api_call
 
 from .utils import get_paragraph_positions
 from .summarizer import SummarizedUserQuery
