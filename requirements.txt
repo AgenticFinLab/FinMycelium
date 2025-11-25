@@ -1,6 +1,7 @@
 pandas
 torch
 transformers
+langchain-core
 selenium
 python-dotenv
 pyarrow
