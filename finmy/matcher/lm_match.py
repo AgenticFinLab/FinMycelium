@@ -3,7 +3,6 @@ LLM-powered semantic extraction of relevant content spans from long text.
 
 - Focuses on semantic relevance guided by `query_text` and `key_words`.
 - Prefers selecting complete and contiguous paragraphs for context preservation.
-- Returns verbatim excerpts (no paraphrasing) with exact character positions.
 """
 
 from typing import List, Dict, Any, Optional
