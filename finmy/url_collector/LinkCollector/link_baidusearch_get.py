@@ -6,6 +6,7 @@ Baidusearch Document:
 https://cloud.baidu.com/doc/AppBuilder/s/pmaxd1hvy
 """
 
+import os
 import requests
 import json
 from dotenv import load_dotenv
@@ -39,7 +40,7 @@ def baidusearch_api_call(query: str):
 
     response.encoding = "utf-8"
 
-    return response
+    return json.loads(response.text)
 
 
 if __name__ == "__main__":
