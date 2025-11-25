@@ -11,7 +11,7 @@ from finmy.matcher import summarizer
 if __name__ == "__main__":
 
     # Create extractor instance
-    extractor = summarizer.NounKeyWordSummarizer()
+    summary_func = summarizer.KWRuleSummarizer()
 
     # English text demo
     english_text = """
@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     print("English text:")
     print(english_text)
-    english_nouns_freq = extractor.extract_nouns_with_frequency(english_text)
+    english_nouns_freq = summary_func.rule_summarize(english_text)
     print("Extracted nouns and noun phrases with frequencies:")
     for noun, freq in english_nouns_freq.items():
         print(f"'{noun}': {freq}")

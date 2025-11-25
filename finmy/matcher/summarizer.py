@@ -102,7 +102,7 @@ class BaseSummarizer(ABC):
         return summarized
 
 
-class NounKWRuleSummarizer(BaseSummarizer):
+class KWRuleSummarizer(BaseSummarizer):
     """
     Summarizer the text content by extract all noun as the key words (KW)
     based on rule-based summarization.
