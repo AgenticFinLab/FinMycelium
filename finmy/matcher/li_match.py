@@ -7,11 +7,11 @@ from typing import List, Dict, Any, Optional, Set, Tuple
 
 from llama_index.core import Document, SimpleKeywordTableIndex
 
-from .base import MatchInput, MatchBase
+from .base import MatchInput, BaseMatcher
 from .utils import split_paragraphs
 
 
-class LIMatcher(MatchBase):
+class LIMatcher(BaseMatcher):
     """Rule-based matcher that extracts relevant contiguous paragraphs.
 
     Overview:

@@ -6,7 +6,7 @@ import re
 import time
 from typing import List
 
-from .base import MatchBase, MatchInput, MatchResult, MatchItem
+from .base import BaseMatcher, MatchInput, MatchOutput, MatchItem
 
 from .utils import (
     get_paragraph_positions,
@@ -15,7 +15,7 @@ from .utils import (
 )
 
 
-class ReMatch(MatchBase):
+class ReMatch(BaseMatcher):
     """Regex-based matcher implementation.
 
     This class implements the MatchBase interface using regular expressions
@@ -144,26 +144,26 @@ class ReMatch(MatchBase):
             )
         return items
 
-    def run(self, match_input: MatchInput) -> MatchResult:
-        """Execute the complete matching process and return a standardized MatchResult.
+    def run(self, match_input: MatchInput) -> MatchOutput:
+        """Execute the complete matching process and return a standardized MatchOutput.
 
         This method orchestrates the entire matching workflow:
         1. Extracts matched text segments using the match method
         2. Maps these segments to positional information using map_positions
-        3. Creates a MatchResult with timing information and matched items
+        3. Creates a MatchOutput with timing information and matched items
 
         Args:
             match_input: The input containing match data and summarized query
 
         Returns:
-            MatchResult: Result object containing matched items, method name, and execution time
+            MatchOutput: Result object containing matched items, method name, and execution time
         """
         # Compute the time of the whole matching process
         start_time = time.time()
         matches = self.match(match_input)
         end_time = time.time()
         items = self.map_positions(match_input.match_data, matches)
-        return MatchResult(
+        return MatchOutput(
             items=items,
             method=self.method_name,
             time=end_time - start_time,

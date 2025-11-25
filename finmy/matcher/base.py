@@ -1,7 +1,7 @@
 """
 Base abstractions for content matching.
 
-- Provides a consistent result structure (`MatchResult`, `MatchItem`).
+- Provides a consistent result structure (`MatchOutput`, `MatchItem`).
 - Defines an abstract `MatchBase` to be extended by concrete matchers
   (e.g., LLM-based, rule-based, hybrid).
 
@@ -12,7 +12,7 @@ Implementers should:
 
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from abc import ABC, abstractmethod
 
 from lmbase.inference import api_call
@@ -54,7 +54,7 @@ class MatchItem:
 
 
 @dataclass
-class MatchResult:
+class MatchOutput:
     """Standardized container for match outputs.
 
     - `items`: MatchItem
@@ -87,11 +87,11 @@ class BaseMatcher(ABC):
         self.method_name = method_name
 
     @abstractmethod
-    def match(self, match_input: MatchInput) -> List[str]:
+    def match(self, match_input: MatchInput) -> List[Union[str, Any]]:
         """Produce raw output and selection items for positional mapping.
 
         Return:
-        - List[str]: list of strings, each string is a matched sub-content taht may containing one target paragraph or multiple paragraphs.
+        - List[str]: list of strings, each string is a matched sub-content that may containing one target paragraph or multiple paragraphs.
         """
 
     def invoke_llm(self, messages, llm_name: str) -> str:
@@ -103,7 +103,7 @@ class BaseMatcher(ABC):
     def map_positions(
         self,
         content: str,
-        matches: List[str],
+        matches: List[Union[str, Any]],
     ) -> List[MatchItem]:
         """Translate generic matches from the `match` into positional `MatchItem`s.
 
@@ -133,8 +133,8 @@ class BaseMatcher(ABC):
             )
         return items
 
-    def run(self, match_input: MatchInput) -> MatchResult:
-        """End-to-end execution returning a standardized `MatchResult`.
+    def run(self, match_input: MatchInput) -> MatchOutput:
+        """End-to-end execution returning a standardized `MatchOutput`.
 
         - Delegates extraction to `match`
         - Normalizes positions via `map_positions`
@@ -145,7 +145,7 @@ class BaseMatcher(ABC):
         matches = self.match(match_input)
         end_time = time.time()
         items = self.map_positions(match_input.match_data, matches)
-        return MatchResult(
+        return MatchOutput(
             items=items,
             method=self.method_name,
             time=end_time - start_time,

@@ -5,7 +5,7 @@ LLM-powered semantic extraction of relevant content spans from long text.
 - Prefers selecting complete and contiguous paragraphs for context preservation.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Any, Optional, Union
 from langchain_core.prompts import ChatPromptTemplate
 
 from .utils import safe_parse_json
@@ -89,7 +89,7 @@ class LLMMatcher(BaseMatcher):
             targets_content=target_content,
         )
 
-    def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
+    def match(self, match_input: MatchInput) -> List[Union[str, Any]]:
         """Produce selection dicts representing matched paragraph ranges.
 
         - Uses `summarization` as the primary intent and `keywords` as hints

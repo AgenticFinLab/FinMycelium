@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from finmy.matcher.re_match import ReMatch
-from finmy.matcher.base import MatchInput, MatchResult
+from finmy.matcher.base import MatchInput, MatchOutput
 from finmy.matcher.summarizer import SummarizedUserQuery
 from finmy.query import UserQueryInput
 
@@ -157,7 +157,7 @@ def test_re_match_run_method():
     print()
 
     # Verify result structure
-    assert isinstance(result, MatchResult), "Result should be a MatchResult object"
+    assert isinstance(result, MatchOutput), "Result should be a MatchOutput object"
     assert len(result.items) > 0, "Result should contain items"
     assert result.method == "test_re_match", "Method name should match"
     assert result.time >= 0, "Execution time should be non-negative"
