@@ -41,7 +41,3 @@ def baidusearch_api_call(query: str):
     response.encoding = "utf-8"
 
     return json.loads(response.text)
-
-
-if __name__ == "__main__":
-    print(baidusearch_api_call("蓝天格锐庞氏骗局"))
