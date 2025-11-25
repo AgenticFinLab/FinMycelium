@@ -18,5 +18,5 @@ litellm
 mysql-connector-python
 PyPDF2
 spacy
-
+llama_index
 
