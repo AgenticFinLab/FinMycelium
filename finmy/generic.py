@@ -25,29 +25,6 @@ class UserQueryInput:
 
 
 @dataclass
-class DataQueryInput:
-    """Unified query input structure for Data.
-
-    Fields:
-
-    """
-
-    data_content: str = None
-
-
-@dataclass
-class QuerySample:
-    """Unified query sample structure for the financial event pipeline building.
-
-    Fields:
-    - `query_text`: semantic intent (optional) that guides selection
-    - `key_words`: keyword hints (optional), guidance signals not strict filters
-    - `time_range`: time range (optional), used for determine content only within the given time range.
-    - `extras`: extra information (optional), set for backup.
-    """
-
-
-@dataclass
 class RawData:
     """Raw data descriptor
 
