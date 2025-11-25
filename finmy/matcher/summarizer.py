@@ -21,8 +21,10 @@ from typing import List, Optional, Dict, Any
 import spacy
 from spacy.matcher import Matcher
 from lmbase.inference import api_call
+from langchain_core.prompts import ChatPromptTemplate
 
 from finmy.query import UserQueryInput
+from .utils import safe_parse_json
 
 
 @dataclass
@@ -253,9 +255,93 @@ class KWRuleSummarizer(BaseSummarizer):
 
     def summarize(self, query_input: UserQueryInput) -> SummarizedUserQuery:
         """Summarize the user query to obtain the keywords."""
-        n_kws = self.rule_summarize(query_input.query_text)
+        n_kws = self.rule_summarize(query_input.query_text.strip())
         return SummarizedUserQuery(
             summarization=query_input.query_text,
             key_words=n_kws,
             extras={},
+        )
+
+
+class KWLMSummarizer(BaseSummarizer):
+    """LLM-based keyword summarizer.
+
+    Purpose:
+    - Extract domain-relevant keywords/key phrases from free text via an LLM.
+    - Keep original content unchanged; only produce a keyword list.
+
+    Config:
+    - `llm_name`: backend model identifier (default: `deepseek-chat`).
+
+    Output:
+    - Returns `SummarizedUserQuery` with `summarization` = original text and
+      `key_words` = LLM-extracted keywords. Raw model output is stored in
+      `extras["raw"]` for debugging/auditing.
+    """
+
+    def __init__(self, config: Optional[dict]):
+        super().__init__(config=config, method_name="keywords_summarize_llm")
+        self.llm_name = config["llm_name"]
+
+    def _build_messages(self, content: str) -> List[Any]:
+        """Build prompts requiring STRICT JSON array of keywords.
+
+        The system prompt guides the model toward noun phrases, entities, and
+        domain terms. The human prompt provides the text and a concrete output
+        format example to reduce schema deviations.
+        """
+        system = (
+            "You extract concise, informative keywords and key phrases from the given text. "
+            "Return ONLY JSON with an array of strings. Focus on noun phrases, named entities, and domain terms."
+        )
+        human = (
+            "Text:\n{content}\n\n"
+            'Output strictly in JSON as an array of keywords/phrases. Example: ["market volatility", "risk management"]'
+        )
+        tmpl = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
+        return tmpl.format_messages(content=content)
+
+    def _parse_keywords(self, raw: str) -> List[str]:
+        """Normalize LLM output into a clean list of keywords.
+
+        Accepts:
+        - JSON array (preferred)
+        - JSON object with `keywords` or `key_words`
+        - Bare JSON array string
+        - Comma-separated fallback
+        """
+        data = safe_parse_json(raw)
+        if isinstance(data, list):
+            return [str(x).strip() for x in data if isinstance(x, (str, int, float))]
+        if isinstance(data, dict):
+            arr = data.get("keywords") or data.get("key_words") or []
+            if isinstance(arr, list):
+                return [str(x).strip() for x in arr if isinstance(x, (str, int, float))]
+        txt = raw.strip()
+        if txt.startswith("[") and txt.endswith("]"):
+            try:
+                arr = safe_parse_json(txt)
+                if isinstance(arr, list):
+                    return [str(x).strip() for x in arr]
+            except Exception:
+                pass
+        parts = [p.strip() for p in txt.split(",") if p.strip()]
+        return parts
+
+    def summarize(self, query_input: UserQueryInput) -> SummarizedUserQuery:
+        """End-to-end keyword extraction using the configured LLM.
+
+        Steps:
+        1) Build structured prompts demanding JSON array output
+        2) Invoke LLM and capture raw content
+        3) Parse keywords and return `SummarizedUserQuery`
+        """
+        content = query_input.query_text.strip()
+        messages = self._build_messages(content)
+        raw = self.invoke_llm(messages, self.llm_name)
+        kws = self._parse_keywords(raw)
+        return SummarizedUserQuery(
+            summarization=content,
+            key_words=kws,
+            extras={"raw": raw},
         )
