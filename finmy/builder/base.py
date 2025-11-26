@@ -70,12 +70,6 @@ class Action:
     # Unique identifier for this action instance.
     action_id: str
 
-    # Participants responsible for triggering the action.
-    executor_participant_ids: List[str] = field(default_factory=list)
-
-    # Primary target entity IDs affected by the action (can include executor).
-    target_participant_ids: List[str] = field(default_factory=list)
-
     # Chronological context.
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
@@ -132,9 +126,7 @@ class ParticipantStateSnapshot:
     # Examples: {"market_sentiment": "neutral", "news_coverage": "low"}
     external_state_attributes: Dict[str, Any] = field(default_factory=dict)
 
-    # IDs of actions that directly influenced this state snapshot
-    # Each entry references Action.action_id.
-    influencing_action_ids: List[str] = field(default_factory=list)
+    actions: List[Action] = field(default_factory=list)
 
     # Participant's subjective understanding of the event's true nature.
     # Values: 'unknowing', 'suspicious', 'aware', 'whistleblower'.
