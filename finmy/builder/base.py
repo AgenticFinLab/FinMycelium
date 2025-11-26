@@ -63,6 +63,51 @@ class Participant:
     # Avoid embedding full Participant objects in memory-heavy structures.
 
 
+@dataclass
+class Action:
+    """Discrete action executed by one participant and affecting others."""
+
+    # Unique identifier for this action instance.
+    action_id: str
+
+    # Participants responsible for triggering the action.
+    executor_participant_ids: List[str] = field(default_factory=list)
+
+    # Primary target entity IDs affected by the action (can include executor).
+    target_participant_ids: List[str] = field(default_factory=list)
+
+    # Chronological context.
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+    # High-level label (e.g., 'transfer_funds', 'broadcast_message').
+    action_type: str = "unspecified"
+
+    # Natural language description or snippet from evidence.
+    description: str = ""
+
+    # Motivations or triggers inferred from evidence (ER attribute: 原因).
+    reasons: List[str] = field(default_factory=list)
+
+    # Immediate consequences or outputs (ER attribute: 结果).
+    outcomes: List[str] = field(default_factory=list)
+
+    # References to the state snapshots this action belongs to.
+    # Note: This list may include snapshots from multiple participants involved in the action.
+    related_state_snapshots: List["ParticipantStateSnapshot"] = field(
+        default_factory=list
+    )
+
+    # Evidence backing this action (URLs, doc ids, etc.).
+    evidence_sources: List[str] = field(default_factory=list)
+
+    # Flexible metadata container for downstream models.
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+    # NOTE:
+    # For high-volume pipelines, store Action documents separately and only resolve
+    # related_state_snapshots on-demand to avoid heavy in-memory graphs.
+
+
 # ============================================================================
 # MICRO → TEMPORAL: State evolution of a single participant
 # ============================================================================
@@ -87,17 +132,9 @@ class ParticipantStateSnapshot:
     # Examples: {"market_sentiment": "neutral", "news_coverage": "low"}
     external_state_attributes: Dict[str, Any] = field(default_factory=dict)
 
-    # Observable behaviors or decisions made near this timestamp.
-    # Examples: ["clicked_link", "transferred_funds", "shared_post"]
-    actions_taken: List[str] = field(default_factory=list)
-
-    # The perceived or inferred reason(s) behind the actions or state.
-    # Captures motivation, belief, or trigger.
-    # Examples:
-    #   - ["promised_high_return", "peer_endorsement", "fear_of_missing_out"]
-    #   - ["saw_government_warning", "experienced_loss"]
-    #   - ["algorithmic_recommendation", "emotional_manipulation"]
-    actions_reasons: List[str] = field(default_factory=list)
+    # IDs of actions that directly influenced this state snapshot
+    # Each entry references Action.action_id.
+    influencing_action_ids: List[str] = field(default_factory=list)
 
     # Participant's subjective understanding of the event's true nature.
     # Values: 'unknowing', 'suspicious', 'aware', 'whistleblower'.
