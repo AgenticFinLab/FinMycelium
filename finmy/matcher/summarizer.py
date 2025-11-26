@@ -20,10 +20,10 @@ from typing import List, Optional, Dict, Any
 
 import spacy
 from spacy.matcher import Matcher
-from finmy.lmbase.inference import api_call
+from lmbase.inference import api_call
 from langchain_core.prompts import ChatPromptTemplate
 
-from finmy.query import UserQueryInput
+from ..generic import UserQueryInput
 from .utils import safe_parse_json
 
 

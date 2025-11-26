@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from finmy.matcher.re_match import ReMatch
 from finmy.matcher.base import MatchInput, MatchOutput
 from finmy.matcher.summarizer import SummarizedUserQuery
-from finmy.query import UserQueryInput
+from finmy.generic import UserQueryInput
 
 
 def create_test_data():
@@ -37,12 +37,11 @@ def create_test_data():
     # Create a summarized query with keywords
     summarized_query = SummarizedUserQuery(
         summarization="Analyze financial market and risk management",
-        keywords=[
+        key_words=[
             "financial markets",
             "risk management",
         ],
-        user_query=QueryInput(
-            content=match_data,
+        extras=UserQueryInput(
             query_text="I want to know about financial markets and risk management",
             key_words=[
                 "financial markets",
@@ -78,7 +77,7 @@ def test_re_match_match_method():
         print(f"Match {i}:\n{match}\n")
 
     # Verify that we got matches for all keywords
-    expected_matches = len(summarized_query.keywords)
+    expected_matches = len(summarized_query.key_words)
     assert (
         len(matches) >= expected_matches
     ), f"Expected at least {expected_matches} matches, got {len(matches)}"

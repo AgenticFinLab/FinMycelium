@@ -53,9 +53,9 @@ class ReMatch(BaseMatcher):
         # Get keywords from summarized_query
         keywords = []
         if match_input.summarized_query and hasattr(
-            match_input.summarized_query, "keywords"
+            match_input.summarized_query, "key_words"
         ):
-            keywords = match_input.summarized_query.keywords
+            keywords = match_input.summarized_query.key_words
 
         # Use keywords for matching, return empty list if no keywords
         if keywords:

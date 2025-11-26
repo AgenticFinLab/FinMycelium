@@ -27,7 +27,7 @@ from .base import MatchInput, BaseMatcher
 from .utils import split_paragraphs
 
 
-class LIMatcher(BaseMatcher):
+class LXMatcher(BaseMatcher):
     """Legacy LlamaIndex matcher invoking SimpleKeywordTableIndex.
 
     Notes:
