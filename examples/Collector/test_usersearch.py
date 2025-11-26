@@ -30,15 +30,15 @@ def create_test_files():
 
     # Create XLSX file
     df = pd.DataFrame(sample_data)
-    xlsx_path = os.path.join(test_dir, "usls_usersearch.xlsx")
+    xlsx_path = os.path.join(test_dir, "urls_usersearch.xlsx")
     df.to_excel(xlsx_path, index=False)
 
     # Create CSV file
-    csv_path = os.path.join(test_dir, "usls_usersearch.csv")
+    csv_path = os.path.join(test_dir, "urls_usersearch.csv")
     df.to_csv(csv_path, index=False)
 
     # Create JSON file
-    json_path = os.path.join(test_dir, "usls_usersearch.json")
+    json_path = os.path.join(test_dir, "urls_usersearch.json")
     with open(json_path, "w") as f:
         json.dump(sample_data, f, indent=2)
 
