@@ -21,9 +21,9 @@ Select COMPLETE PARAGRAPHS. Prefer contiguous paragraph ranges when expanding co
 Return ONLY JSON: output EACH related content segment as a SEPARATE item.
 A content segment is a series of consecutive paragraphs forming one coherent relevant unit.
 For each item, include ONLY three keys:
-{'paragraphs': related content segment,
+{{'paragraphs': related content segment,
  'reason': semantic explanation,
- 'score': number 0-1}.
+ 'score': number 0-1}}.
 Do NOT paraphrase; copy text verbatim. Do NOT modify punctuation or spacing.
 Include all relevant passages; skip unrelated text.
 """
@@ -36,11 +36,11 @@ Please match the related paragraphs from the following content:
 {content}
 
 Output each matched item containing the content segment that are continuous paragraphs, strictly in JSON: [
-    {
+    {{
       "paragraphs": "...",
       "reason": "...",
-      "score": a float ranging from 0.0 to 0.1
-    }
+      "score": a float ranging from 0.0 to 1.0
+    }}
 ]
 """
 
@@ -86,7 +86,7 @@ class LLMMatcher(BaseMatcher):
         return prompt.format_messages(
             query_text=query_text,
             keywords_joined=keywords_joined,
-            targets_content=target_content,
+            content=target_content,
         )
 
     def match(self, match_input: MatchInput) -> List[Union[str, Any]]:
@@ -98,7 +98,7 @@ class LLMMatcher(BaseMatcher):
         sq = match_input.summarized_query
         messages = self._build_messages(
             query_text=sq.summarization,
-            key_words=sq.keywords,
+            key_words=sq.key_words,
             target_content=match_input.match_data,
         )
         raw = self.invoke_llm(messages, llm_name=self.model_name)
