@@ -524,15 +524,3 @@ postgresql_db_config = {{
             logger.info(f"Crawling log saved to: {log_path}")
         except Exception as e:
             logger.exception(f"Failed to save crawling log: {e}")
-
-
-if __name__ == "__main__":
-    # Test Platform Crawler Manager
-    crawler = PlatformCrawler()
-
-    # Test configuration
-    test_keywords = ["蓝天格锐庞氏骗局"]
-    result = crawler.run_crawler("xhs", test_keywords, max_notes=5)
-
-    logger.info(f"Test result: {result}")
-    logger.info("Platform Crawler Manager test completed!")
