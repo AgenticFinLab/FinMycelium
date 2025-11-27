@@ -21,11 +21,22 @@ from llama_index.core import (
     SimpleKeywordTableIndex,
     SummaryIndex,
     VectorStoreIndex,
+    Settings
 )
 
 from .base import MatchInput, BaseMatcher
 from .utils import split_paragraphs
 
+from llama_index.llms.openai_like import OpenAILike
+
+import os
+import dotenv
+
+dotenv.load_dotenv()
+
+# Set up LlamaIndex LLM settings using environment variables
+llm = OpenAILike(model=os.getenv('LLAMA_INDEX_MODEL_NAME'), api_key=os.getenv('LLAMA_INDEX_MODEL_API_KEY'), api_base=os.getenv('LLAMA_INDEX_MODEL_BASE_URL'),is_chat_model=True)
+Settings.llm = llm
 
 class LXMatcher(BaseMatcher):
     """Legacy LlamaIndex matcher invoking SimpleKeywordTableIndex.
@@ -83,7 +94,7 @@ class LXMatcher(BaseMatcher):
             except Exception:
                 continue
         selections: List[Dict[str, Any]] = []
-        for grp in self._group_contiguous(matched):
+        for grp in _group_contiguous(matched):
             if grp:
                 selections.append({"paragraph_indices": grp})
         return selections
@@ -122,7 +133,7 @@ class LXMatcher(BaseMatcher):
         content = match_input.match_data or ""
         sq = match_input.summarized_query
         summarization = sq.summarization if sq and sq.summarization else ""
-        keywords = sq.keywords if sq and sq.keywords else []
+        keywords = sq.key_words if sq and sq.key_words else []
 
         # Use LlamaIndex for matching
         li_selections = self._match_with_llamaindex(
