@@ -5,6 +5,7 @@ Full-platform keyword crawling based on topics
 
 import argparse
 
+
 from finmy.url_collector.MediaCollector.media_get import MediaCrawling
 
 
