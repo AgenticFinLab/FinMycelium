@@ -1,31 +1,22 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) 2025 relakkes@gmail.com
-#
-# This file is part of MediaCrawler project.
-# Repository: https://github.com/NanmiCoder/MediaCrawler/blob/main/config/db_config.py
-# GitHub: https://github.com/NanmiCoder
-# Licensed under NON-COMMERCIAL LEARNING LICENSE 1.1
-#
-
-# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：
-# 1. 不得用于任何商业用途。
-# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。
-# 3. 不得进行大规模爬取或对平台造成运营干扰。
-# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。
+# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：  
+# 1. 不得用于任何商业用途。  
+# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。  
+# 3. 不得进行大规模爬取或对平台造成运营干扰。  
+# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。   
 # 5. 不得用于任何非法或不当的用途。
-#
-# 详细许可条款请参阅项目根目录下的LICENSE文件。
-# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
+#   
+# 详细许可条款请参阅项目根目录下的LICENSE文件。  
+# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。  
 
 
 import os
 
-# mysql config
-MYSQL_DB_PWD = os.getenv("MYSQL_DB_PWD", "LYrxcTXM5Kpz5z3S")
-MYSQL_DB_USER = os.getenv("MYSQL_DB_USER", "finmyceliumdata")
-MYSQL_DB_HOST = os.getenv("MYSQL_DB_HOST", "10.123.4.30")
-MYSQL_DB_PORT = os.getenv("MYSQL_DB_PORT", 3306)
-MYSQL_DB_NAME = os.getenv("MYSQL_DB_NAME", "finmyceliumdata")
+# mysql config - Use MindSpider's database configuration
+MYSQL_DB_PWD = "LYrxcTXM5Kpz5z3S"
+MYSQL_DB_USER = "finmyceliumdata"
+MYSQL_DB_HOST = "10.123.4.30"
+MYSQL_DB_PORT = 3306
+MYSQL_DB_NAME = "finmyceliumdata"
 
 mysql_db_config = {
     "user": MYSQL_DB_USER,
@@ -47,23 +38,24 @@ CACHE_TYPE_REDIS = "redis"
 CACHE_TYPE_MEMORY = "memory"
 
 # sqlite config
-SQLITE_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "database", "sqlite_tables.db"
-)
+SQLITE_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database", "sqlite_tables.db")
 
-sqlite_db_config = {"db_path": SQLITE_DB_PATH}
-
-# mongodb config
-MONGODB_HOST = os.getenv("MONGODB_HOST", "localhost")
-MONGODB_PORT = os.getenv("MONGODB_PORT", 27017)
-MONGODB_USER = os.getenv("MONGODB_USER", "")
-MONGODB_PWD = os.getenv("MONGODB_PWD", "")
-MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "media_crawler")
-
-mongodb_config = {
-    "host": MONGODB_HOST,
-    "port": int(MONGODB_PORT),
-    "user": MONGODB_USER,
-    "password": MONGODB_PWD,
-    "db_name": MONGODB_DB_NAME,
+sqlite_db_config = {
+    "db_path": SQLITE_DB_PATH
 }
+
+# postgresql config - Use MindSpider's database configuration (if DB_DIALECT is postgresql) or environment variables
+POSTGRESQL_DB_PWD = os.getenv("POSTGRESQL_DB_PWD", "bettafish")
+POSTGRESQL_DB_USER = os.getenv("POSTGRESQL_DB_USER", "bettafish")
+POSTGRESQL_DB_HOST = os.getenv("POSTGRESQL_DB_HOST", "127.0.0.1")
+POSTGRESQL_DB_PORT = os.getenv("POSTGRESQL_DB_PORT", "5432")
+POSTGRESQL_DB_NAME = os.getenv("POSTGRESQL_DB_NAME", "bettafish")
+
+postgresql_db_config = {
+    "user": POSTGRESQL_DB_USER,
+    "password": POSTGRESQL_DB_PWD,
+    "host": POSTGRESQL_DB_HOST,
+    "port": POSTGRESQL_DB_PORT,
+    "db_name": POSTGRESQL_DB_NAME,
+}
+
