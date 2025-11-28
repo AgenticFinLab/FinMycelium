@@ -44,7 +44,8 @@ class FinMyceliumWebInterface:
         """Initialize the web interface with configuration and state management."""
         self.setup_page_config()
         self.initialize_session_state()
-        self.setup_ai_client()
+        self.ai_client = None
+        # self.setup_ai_client()
 
     def setup_page_config(self):
         """Configure Streamlit page settings for optimal user experience."""
@@ -186,17 +187,23 @@ class FinMyceliumWebInterface:
 
     def render_analysis_page(self):
         """Render the analysis page with fraud type selection and data input options."""
-        st.title("Financial Fraud Analysis")
-        st.markdown("Provide details about the fraud case you want to analyze.")
+        # st.title("Financial Fraud Analysis")
+        # st.markdown("Provide details about the fraud case you want to analyze.")
 
         # Natural language input box
-        st.subheader("🔍 Case Description")
+        st.subheader("🔍 Event Description")
+        prev_text = st.session_state.get("main_input", "")
+        visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
+        dynamic_height = min(600, max(100, visible_lines * 24))
         main_input = st.text_area(
-            "Describe the fraud case in natural language:",
+            "",
+            value=prev_text,
             placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
-            height=150,
+            height=dynamic_height,
+            key=f"main_input_{dynamic_height}",
             help="Provide a comprehensive description for better analysis results",
         )
+        st.session_state.main_input = main_input
 
         if main_input:
             st.session_state.main_input = main_input
@@ -344,10 +351,10 @@ class FinMyceliumWebInterface:
             }
 
             # Process with AI analysis
-            results = self.perform_ai_analysis(analysis_inputs)
+            # results = self.perform_ai_analysis(analysis_inputs)
 
             # Store results
-            st.session_state.analysis_results = results
+            # st.session_state.analysis_results = results
             st.session_state.processing_status = "completed"
 
             # Navigate to results page
