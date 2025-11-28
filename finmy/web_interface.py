@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 
 # Load environment variables
-load_dotenv(project_root / ".env")
+load_dotenv()
 
 # Import project modules (with fallbacks for missing modules)
 try:
@@ -100,9 +100,9 @@ class FinMyceliumWebInterface:
 
             # Module availability status
             modules_status = {
+                "AI Analysis": self.ai_client is not None,
                 "Database Manager": DatabaseManager is not None,
                 "Generic Processor": GenericProcessor is not None,
-                "AI Analysis": self.ai_client is not None,
             }
 
             for module, available in modules_status.items():
@@ -191,15 +191,15 @@ class FinMyceliumWebInterface:
 
         # Natural language input box
         st.subheader("🔍 Case Description")
-        natural_language_input = st.text_area(
+        main_input = st.text_area(
             "Describe the fraud case in natural language:",
             placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
             height=150,
             help="Provide a comprehensive description for better analysis results",
         )
 
-        if natural_language_input:
-            st.session_state.natural_language_input = natural_language_input
+        if main_input:
+            st.session_state.main_input = main_input
 
         # st.markdown("---")
 
@@ -234,7 +234,7 @@ class FinMyceliumWebInterface:
         """Render keyword input section with validation and suggestions."""
         # st.subheader("🔤 Keyword Analysis")
 
-        col1, col2 = st.columns([2, 1])
+        # col1, col2 = st.columns([2, 1])
 
         # with col1:
         keywords = st.text_area(
@@ -313,8 +313,7 @@ class FinMyceliumWebInterface:
     def validate_analysis_inputs(self) -> bool:
         """Validate that required inputs are provided for analysis."""
         has_natural_language = (
-            hasattr(st.session_state, "natural_language_input")
-            and st.session_state.natural_language_input
+            hasattr(st.session_state, "main_input") and st.session_state.main_input
         )
         has_keywords = (
             hasattr(st.session_state, "keywords") and st.session_state.keywords
@@ -339,9 +338,7 @@ class FinMyceliumWebInterface:
         try:
             # Collect analysis inputs
             analysis_inputs = {
-                "natural_language": getattr(
-                    st.session_state, "natural_language_input", ""
-                ),
+                "main_input": getattr(st.session_state, "main_input", ""),
                 "keywords": getattr(st.session_state, "keywords", []),
                 "structured_data": getattr(st.session_state, "structured_data", None),
             }
@@ -406,18 +403,28 @@ class FinMyceliumWebInterface:
 
     def construct_analysis_prompt(self, inputs: Dict[str, Any]) -> str:
         """Construct detailed prompt for fraud analysis."""
-        natural_language = inputs["natural_language"]
+        main_search_input = inputs["main_input"]
         keywords = inputs["keywords"]
-        has_structured_data = inputs["structured_data"] is not None
+        structured_data = inputs["structured_data"] is not None
+
+        # main_search_input -> summarizer -> refined description and keywords
+
+        # keywords -> MediaCollector (Get media info) -> filter -> clean data
+        # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
+
+        # structured_data -> if url -> url_parser -> filter -> clean data
+        # structured_data -> if pdf/word path -> pdf_parser/word_parser -> filter -> clean data
+
+        # info_to_analyze = cleaned and filtered data from above steps
 
         prompt = f"""
         As a financial fraud analysis expert, analyze the following financial fraud case:
         
-        CASE DESCRIPTION: {natural_language if natural_language else 'No natural language description provided'}
+        CASE DESCRIPTION: {main_search_input if main_search_input else 'No natural language description provided'}
         
         KEYWORDS: {', '.join(keywords) if keywords else 'No keywords provided'}
         
-        STRUCTURED DATA: {'Provided' if has_structured_data else 'Not provided'}
+        STRUCTURED DATA: {structured_data if structured_data else 'Not provided'}
         
         Please provide a comprehensive analysis including:
         
