@@ -21,24 +21,43 @@ from llama_index.core import (
     SimpleKeywordTableIndex,
     SummaryIndex,
     VectorStoreIndex,
-    Settings
+    Settings,
 )
 
 from .base import MatchInput, BaseMatcher
 from .utils import split_paragraphs
 
 from llama_index.llms.openai_like import OpenAILike
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 import os
-import dotenv
 
-dotenv.load_dotenv()
 
-# Set up LlamaIndex LLM settings using environment variables
-llm = OpenAILike(model=os.getenv('LLAMA_INDEX_MODEL_NAME'), api_key=os.getenv('LLAMA_INDEX_MODEL_API_KEY'), api_base=os.getenv('LLAMA_INDEX_MODEL_BASE_URL'),is_chat_model=True)
-Settings.llm = llm
+class LXMatcherBase(BaseMatcher):
+    def __init__(
+        self, config: Optional[dict] = None, method_name: Optional[str] = None
+    ):
+        super().__init__(config=config, method_name="lx_match")
+        self.context_chars: int = (config or {}).get("context_chars", 96)
+        self.top_k: int = int((config or {}).get("top_k", 8))
+        self.llm = self._build_llm()
+        self.embed_model = self._build_embed_model()
+        Settings.llm = self.llm
+        Settings.embed_model = self.embed_model
 
-class LXMatcher(BaseMatcher):
+    def _build_llm(self):
+        return OpenAILike(
+            model=os.getenv("LLAMA_INDEX_LLM_MODEL_NAME"),
+            api_key=os.getenv("LLAMA_INDEX_LLM_MODEL_API_KEY"),
+            api_base=os.getenv("LLAMA_INDEX_LLM_MODEL_BASE_URL"),
+            is_chat_model=True,
+        )
+
+    def _build_embed_model(self):
+        return HuggingFaceEmbedding(model_name="Qwen/Qwen3-Embedding-0.6B")
+
+
+class LXMatcher(LXMatcherBase):
     """Legacy LlamaIndex matcher invoking SimpleKeywordTableIndex.
 
     Notes:
@@ -55,7 +74,7 @@ class LXMatcher(BaseMatcher):
             config: may include `context_chars` (reserved) and `top_k` for
                     keyword table retrieval.
         """
-        super().__init__(config=config, method_name="li_match")
+        super().__init__(config=config, method_name="lx_kw_match")
         self.context_chars: int = (config or {}).get("context_chars", 96)
         self.top_k: int = int((config or {}).get("top_k", 8))
 
@@ -163,7 +182,7 @@ def _group_contiguous(indices: List[int]) -> List[List[int]]:
     return groups
 
 
-class KWMatcher(BaseMatcher):
+class KWMatcher(LXMatcherBase):
     """Direct keyword-based matching via SimpleKeywordTableIndex.
 
     - Builds a keyword index over paragraphs and retrieves relevant nodes.
@@ -171,7 +190,7 @@ class KWMatcher(BaseMatcher):
     """
 
     def __init__(self, config: Optional[dict] = None):
-        super().__init__(config=config, method_name="li_keyword_match")
+        super().__init__(config=config, method_name="lx_keyword_match")
         self.top_k: int = int((config or {}).get("similarity_top_k", 8))
 
     def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
@@ -179,7 +198,7 @@ class KWMatcher(BaseMatcher):
         content = match_input.match_data or ""
         sq = match_input.summarized_query
         query_text = sq.summarization if sq and sq.summarization else ""
-        keywords = sq.keywords if sq and sq.keywords else []
+        keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
         docs = [
             Document(text=p["text"], metadata={"paragraph_index": p["index"]})
@@ -204,7 +223,7 @@ class KWMatcher(BaseMatcher):
         return selections
 
 
-class LMMatcher(BaseMatcher):
+class LMMatcher(LXMatcherBase):
     """LLM-aware matching via LlamaIndex SummaryIndex.
 
     - Uses index summaries/LLM guidance to select relevant paragraphs.
@@ -212,7 +231,7 @@ class LMMatcher(BaseMatcher):
     """
 
     def __init__(self, config: Optional[dict] = None):
-        super().__init__(config=config, method_name="li_llm_match")
+        super().__init__(config=config, method_name="lx_llm_match")
         self.top_k: int = int((config or {}).get("similarity_top_k", 8))
 
     def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
@@ -220,7 +239,7 @@ class LMMatcher(BaseMatcher):
         content = match_input.match_data or ""
         sq = match_input.summarized_query
         query_text = sq.summarization if sq and sq.summarization else ""
-        keywords = sq.keywords if sq and sq.keywords else []
+        keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
         docs = [
             Document(text=p["text"], metadata={"paragraph_index": p["index"]})
@@ -245,7 +264,7 @@ class LMMatcher(BaseMatcher):
         return selections
 
 
-class VectorMatcher(BaseMatcher):
+class VectorMatcher(LXMatcherBase):
     """RAG-style matching via embedding search with VectorStoreIndex.
 
     - Encodes paragraphs into vectors and retrieves nearest matches.
@@ -253,15 +272,34 @@ class VectorMatcher(BaseMatcher):
     """
 
     def __init__(self, config: Optional[dict] = None):
-        super().__init__(config=config, method_name="li_rag_match")
+        super().__init__(config=config, method_name="lx_vector_match")
         self.top_k: int = int((config or {}).get("similarity_top_k", 8))
+        # Set up LlamaIndex LLM settings using environment variables
+        model_name = os.getenv("LLAMA_INDEX_LLM_MODEL_NAME")
+        api_key = os.getenv("LLAMA_INDEX_LLM_MODEL_API_KEY")
+        api_base = os.getenv("LLAMA_INDEX_LLM_MODEL_BASE_URL")
+
+        if not model_name or not api_key or not api_base:
+            raise ValueError("Environment variables not set")
+
+        llm = OpenAILike(
+            model=model_name,
+            api_key=api_key,
+            api_base=api_base,
+            is_chat_model=True,
+        )
+
+        Settings.llm = llm
+        # TODO: use the embedding model from the environment variable and not hardcode it
+        embed_model = HuggingFaceEmbedding(model_name="Qwen/Qwen3-Embedding-0.6B")
+        Settings.embed_model = embed_model
 
     def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
         """Return contiguous paragraph index selections via vector/RAG retrieval."""
         content = match_input.match_data or ""
         sq = match_input.summarized_query
         query_text = sq.summarization if sq and sq.summarization else ""
-        keywords = sq.keywords if sq and sq.keywords else []
+        keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
         docs = [
             Document(text=p["text"], metadata={"paragraph_index": p["index"]})

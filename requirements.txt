@@ -21,3 +21,5 @@ spacy
 llama_index
 openai
 dotenv
+huggingface-hub
+llama-index-embeddings-huggingface
