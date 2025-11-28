@@ -1,6 +1,16 @@
 """
 Implementation of the base builder to be used by all subsequent builders.
 
+The builder is to reconstruction the target event from the source data, including news, reports, and other relevant documents. It includes:
+
+- Participant
+- Action
+- ParticipantStateSnapshot
+- ParticipantTrajectory
+- EventStage
+- EventCascade
+
+
 It should be emphasized that the `BaseBuilder` is built on the large models as it is impossible for the human to build a pipeline manually or even based on some algorithms.
 """
 
@@ -66,9 +76,6 @@ class Participant:
 @dataclass
 class Action:
     """Discrete action executed by one participant and affecting others."""
-
-    # Unique identifier for this action instance.
-    action_id: str
 
     # Chronological context.
     timestamp: datetime = field(default_factory=datetime.utcnow)
@@ -239,7 +246,7 @@ class EventCascade:
     """Whole event cascade reconstruction."""
 
     # Globally unique identifier (e.g., 'fraud_crypto_2025_001').
-    id: str
+    event_id: str
 
     # Human-readable title summarizing the event.
     title: str
@@ -296,20 +303,6 @@ class EventCascade:
     # Flexible container for event-level metadata (e.g., tags, version, curator ID).
     extras: Dict[str, Any] = field(default_factory=dict)
 
-    # Internal lookup tables for performance (not persisted; rebuilt on load).
-    #   - participant_id → Participant
-    #   - participant_id → ParticipantTrajectory
-    #   - stage_index → EventStage
-    _participant_registry: Dict[str, Participant] = field(
-        default_factory=dict, repr=False, init=False
-    )
-    _trajectory_index: Dict[str, ParticipantTrajectory] = field(
-        default_factory=dict, repr=False, init=False
-    )
-    _stage_index: Dict[int, EventStage] = field(
-        default_factory=dict, repr=False, init=False
-    )
-
     # NOTE ON SCALABILITY FOR EVENT CASCADE:
     # For small/medium events (< 10k participants), serialize entire object to JSON/Parquet.
     # For large-scale events:
@@ -319,71 +312,24 @@ class EventCascade:
     #   - Use lazy loading: reconstruct full cascade on-demand from database
     # Consider formats: Apache Parquet (columnar), Delta Lake, or graph databases (Neo4j) for relations.
 
-    def __post_init__(self) -> None:
-        # Rebuild internal indexes after deserialization or construction.
-        self._participant_registry = {p.participant_id: p for p in self.participants}
-        self._trajectory_index = {
-            t.participant_id: t for t in self.participant_trajectories
-        }
-        self._stage_index = {s.stage_index: s for s in self.stages}
-
-    def get_participant(self, participant_id: str) -> Optional[Participant]:
-        """Retrieve participant identity by ID."""
-        return self._participant_registry.get(participant_id)
-
-    def get_trajectory(
-        self,
-        participant_id: str,
-    ) -> Optional[ParticipantTrajectory]:
-        """Retrieve full behavioral trajectory by ID."""
-        return self._trajectory_index.get(participant_id)
-
-    def get_stage(self, stage_index: int) -> Optional[EventStage]:
-        """Retrieve event stage by index."""
-        return self._stage_index.get(stage_index)
-
-    def get_participants_in_stage(self, stage_index: int) -> List[Participant]:
-        """Get all participant identities active in a given stage."""
-        stage = self.get_stage(stage_index)
-        if not stage:
-            return []
-        return [
-            self._participant_registry[pid]
-            for pid in stage.active_participants
-            if pid in self._participant_registry
-        ]
-
-    def get_trajectories_in_stage(
-        self, stage_index: int
-    ) -> List[ParticipantTrajectory]:
-        """Get all trajectories active in a given stage."""
-        stage = self.get_stage(stage_index)
-        if not stage:
-            return []
-        return [
-            self._trajectory_index[pid]
-            for pid in stage.active_participants
-            if pid in self._trajectory_index
-        ]
-
 
 @dataclass
 class BuildInput:
-    """Input format of the pipeline builder."""
+    """Input format of the event reconstruction builder."""
 
     samples: List[MetaSample]
-    configs: Dict[str, Any] = field(default_factory=dict)
-    time_cost: Optional[float] = None
+
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class BuildOutput:
-    """Input format of the pipeline builder."""
+    """Output format of the pipeline builder."""
 
     event_cascades: List[EventCascade] = field(default_factory=list)
     result: Optional[Any] = None
     logs: List[str] = field(default_factory=list)
+    usages: Optional[float] = None
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
