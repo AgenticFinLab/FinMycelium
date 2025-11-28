@@ -55,7 +55,7 @@ class LLMMatcher(BaseMatcher):
     def __init__(
         self,
         lm_name: Optional[str] = None,
-        config: Optional[dict] = None,
+        config: Optional[dict] = dict(),
     ):
 
         super().__init__(config=config, method_name="lm_match")
