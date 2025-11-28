@@ -6,7 +6,9 @@ LLM-powered semantic extraction of relevant content spans from long text.
 """
 
 from typing import List, Any, Optional, Union
-from langchain_core.prompts import ChatPromptTemplate
+
+from lmbase.inference import api_call
+from lmbase.inference.base import InferInput
 
 from .utils import safe_parse_json
 from .base import MatchInput, BaseMatcher
@@ -60,33 +62,9 @@ class LLMMatcher(BaseMatcher):
         # LLM model name to use for inference
         self.model_name = lm_name
 
-    def _build_messages(
-        self,
-        query_text: str,
-        key_words: List[str],
-        target_content: str,
-        system_prompt: Optional[str] = None,
-        user_prompt: Optional[str] = None,
-    ):
-        """Construct system/human messages for the chat model.
-
-        - Splits content into paragraphs with indices
-        - Injects query, keywords, and full target_content into the template
-        """
-        keywords_joined = ", ".join(key_words)
-        sys_txt = system_prompt or SYSTEM_PROMPT
-        human_txt = user_prompt or HUMAN_PROMPT_TEMPLATE
-
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", sys_txt),
-                ("human", human_txt),
-            ]
-        )
-        return prompt.format_messages(
-            query_text=query_text,
-            keywords_joined=keywords_joined,
-            content=target_content,
+        self.api_infer = api_call.LangChainAPIInference(
+            lm_name=self.model_name,
+            generation_config=self.config,
         )
 
     def match(self, match_input: MatchInput) -> List[Union[str, Any]]:
@@ -96,10 +74,15 @@ class LLMMatcher(BaseMatcher):
         - Returns a list of dicts with `paragraph_indices` for position mapping
         """
         sq = match_input.summarized_query
-        messages = self._build_messages(
+        # Obtain the inference output `base.InferOutput`
+        output = self.api_infer.run(
+            infer_input=InferInput(
+                system_msg=self.config.get("system_prompt", SYSTEM_PROMPT),
+                user_msg=self.config.get("user_prompt", HUMAN_PROMPT_TEMPLATE),
+            ),
             query_text=sq.summarization,
-            key_words=sq.key_words,
-            target_content=match_input.match_data,
+            keywords_joined=sq.key_words,
+            content=match_input.match_data,
         )
-        raw = self.invoke_llm(messages, llm_name=self.model_name)
-        return safe_parse_json(raw)
+        output.response = safe_parse_json(output.response)
+        return output.response

@@ -14,6 +14,7 @@ Each matcher converts content paragraphs into LlamaIndex `Document`s with
 returns selections as `{"paragraph_indices": [...]}`.
 """
 
+import os
 from typing import List, Dict, Any, Optional, Tuple
 
 from llama_index.core import (
@@ -23,14 +24,12 @@ from llama_index.core import (
     VectorStoreIndex,
     Settings,
 )
-
-from .base import MatchInput, BaseMatcher
-from .utils import split_paragraphs
-
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-import os
+
+from .base import MatchInput, BaseMatcher
+from .utils import split_paragraphs
 
 
 class LXMatcherBase(BaseMatcher):

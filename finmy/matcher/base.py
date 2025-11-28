@@ -5,6 +5,17 @@ Base abstractions for content matching.
 - Defines an abstract `MatchBase` to be extended by concrete matchers
   (e.g., LLM-based, rule-based, hybrid).
 
+We support different ways of matchers:
+- LLM-based matcher: uses large models to extract semantically relevant content.
+- Rule-based matcher: applies manually crafted or predefined rules to match content.
+- Hybrid matcher: combines multiple methods for improved accuracy.
+
+Based on the following platforms:
+- Haystack: a flexible framework for building search and question-answering pipelines.
+- Langchain: a library for building applications that use language models.
+- LlamaIndex: a library for building applications that use language models to index and query data.
+
+
 Implementers should:
 - Override `match` to produce raw output and a list of selection dicts.
 - Use `run` for end-to-end execution and standardized results.
@@ -14,8 +25,6 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Union
 from abc import ABC, abstractmethod
-
-from lmbase.inference import api_call
 
 from .utils import get_paragraph_positions
 from .summarizer import SummarizedUserQuery
@@ -93,12 +102,6 @@ class BaseMatcher(ABC):
         Return:
         - List[str]: list of strings, each string is a matched sub-content that may containing one target paragraph or multiple paragraphs.
         """
-
-    def invoke_llm(self, messages, llm_name: str) -> str:
-        """Invoke the LLM with prepared messages and return raw content."""
-        llm = api_call.build_llm(model_override=llm_name)
-        resp = llm.invoke(messages)
-        return resp.content
 
     def map_positions(
         self,
