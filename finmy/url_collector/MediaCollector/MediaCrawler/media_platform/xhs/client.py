@@ -66,7 +66,9 @@ class XiaoHongShuClient(AbstractApiClient):
         # 初始化 xhshow 客户端用于签名生成
         self._xhshow_client = Xhshow()
 
-    async def _pre_headers(self, url: str, params: Optional[Dict] = None, payload: Optional[Dict] = None) -> Dict:
+    async def _pre_headers(
+        self, url: str, params: Optional[Dict] = None, payload: Optional[Dict] = None
+    ) -> Dict:
         """请求头参数签名
 
         Args:
@@ -139,7 +141,11 @@ class XiaoHongShuClient(AbstractApiClient):
 
         if response.status_code == 471 or response.status_code == 461:
             # someday someone maybe will bypass captcha
-            verify_type = response.headers["Verifytype"]
+            # verify_type = response.headers["Verifytype"]
+            verify_type = response.headers.get("Verifytype") or response.headers.get(
+                "verifytype", ""
+            )
+
             verify_uuid = response.headers["Verifyuuid"]
             msg = f"出现验证码，请求失败，Verifytype: {verify_type}，Verifyuuid: {verify_uuid}, Response: {response}"
             utils.logger.error(msg)
@@ -170,15 +176,12 @@ class XiaoHongShuClient(AbstractApiClient):
         if isinstance(params, dict):
             # 使用 xhsshow build_url 构建完整的 URL
             full_url = self._xhshow_client.build_url(
-                base_url=f"{self._host}{uri}",
-                params=params
+                base_url=f"{self._host}{uri}", params=params
             )
         else:
             full_url = f"{self._host}{uri}"
 
-        return await self.request(
-            method="GET", url=full_url, headers=headers
-        )
+        return await self.request(method="GET", url=full_url, headers=headers)
 
     async def post(self, uri: str, data: dict, **kwargs) -> Dict:
         """

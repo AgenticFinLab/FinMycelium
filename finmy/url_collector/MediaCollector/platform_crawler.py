@@ -20,14 +20,7 @@ from typing import List, Dict, Optional
 import json
 from loguru import logger
 
-# Add project root directory to path
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
-
-try:
-    import config
-except ImportError:
-    raise ImportError("Unable to import config.py configuration file")
+from configs import media_config
 
 
 class PlatformCrawler:
@@ -53,7 +46,7 @@ class PlatformCrawler:
         """Configure MediaCrawler to use our database (MySQL or PostgreSQL)"""
         try:
             # Determine database type
-            db_dialect = (config.settings.DB_DIALECT or "mysql").lower()
+            db_dialect = (media_config.settings.DB_DIALECT or "mysql").lower()
             is_postgresql = db_dialect in ("postgresql", "postgres")
 
             # Modify MediaCrawler's database configuration
@@ -64,11 +57,13 @@ class PlatformCrawler:
                 content = f.read()
 
             # PostgreSQL configuration values: Use MindSpider configuration if using PostgreSQL, otherwise use default values or environment variables
-            pg_password = config.settings.DB_PASSWORD if is_postgresql else "bettafish"
-            pg_user = config.settings.DB_USER if is_postgresql else "bettafish"
-            pg_host = config.settings.DB_HOST if is_postgresql else "127.0.0.1"
-            pg_port = config.settings.DB_PORT if is_postgresql else 5432
-            pg_db_name = config.settings.DB_NAME if is_postgresql else "bettafish"
+            pg_password = (
+                media_config.settings.DB_PASSWORD if is_postgresql else "bettafish"
+            )
+            pg_user = media_config.settings.DB_USER if is_postgresql else "bettafish"
+            pg_host = media_config.settings.DB_HOST if is_postgresql else "127.0.0.1"
+            pg_port = media_config.settings.DB_PORT if is_postgresql else 5432
+            pg_db_name = media_config.settings.DB_NAME if is_postgresql else "bettafish"
 
             # Replace database configuration - Use MindSpider's database configuration
             new_config = f"""# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：  
@@ -85,11 +80,11 @@ class PlatformCrawler:
 import os
 
 # mysql config - Use MindSpider's database configuration
-MYSQL_DB_PWD = "{config.settings.DB_PASSWORD}"
-MYSQL_DB_USER = "{config.settings.DB_USER}"
-MYSQL_DB_HOST = "{config.settings.DB_HOST}"
-MYSQL_DB_PORT = {config.settings.DB_PORT}
-MYSQL_DB_NAME = "{config.settings.DB_NAME}"
+MYSQL_DB_PWD = "{media_config.settings.DB_PASSWORD}"
+MYSQL_DB_USER = "{media_config.settings.DB_USER}"
+MYSQL_DB_HOST = "{media_config.settings.DB_HOST}"
+MYSQL_DB_PORT = {media_config.settings.DB_PORT}
+MYSQL_DB_NAME = "{media_config.settings.DB_NAME}"
 
 mysql_db_config = {{
     "user": MYSQL_DB_USER,
@@ -167,7 +162,7 @@ postgresql_db_config = {{
         """
         try:
             # Determine database type, set SAVE_DATA_OPTION
-            db_dialect = (config.settings.DB_DIALECT or "mysql").lower()
+            db_dialect = (media_config.settings.DB_DIALECT or "mysql").lower()
             is_postgresql = db_dialect in ("postgresql", "postgres")
             save_data_option = "postgresql" if is_postgresql else "db"
 
@@ -190,9 +185,7 @@ postgresql_db_config = {{
                         f'PLATFORM = "{platform}"  # Platform, xhs | dy | ks | bili | wb | tieba | zhihu'
                     )
                 elif line.startswith("KEYWORDS = "):
-                    new_lines.append(
-                        f'KEYWORDS = "{keywords_str}"  # Keyword search configuration, separated by English commas'
-                    )
+                    new_lines.append(f'KEYWORDS = "{keywords_str}" ')
                 elif line.startswith("CRAWLER_TYPE = "):
                     new_lines.append(
                         f'CRAWLER_TYPE = "{crawler_type}"  # Crawling type, search(keyword search) | detail(post details)| creator(creator homepage data)'
@@ -266,9 +259,9 @@ postgresql_db_config = {{
                 return {"success": False, "error": "Base configuration creation failed"}
 
             # Determine database type, set save_data_option
-            db_dialect = (config.settings.DB_DIALECT or "mysql").lower()
+            db_dialect = (media_config.settings.DB_DIALECT or "mysql").lower()
             is_postgresql = db_dialect in ("postgresql", "postgres")
-            save_data_option = "postgresql" if is_postgresql else "db"
+            save_data_option = "db"  # "postgresql" if is_postgresql else "db"
 
             # Build command
             cmd = [
@@ -531,15 +524,3 @@ postgresql_db_config = {{
             logger.info(f"Crawling log saved to: {log_path}")
         except Exception as e:
             logger.exception(f"Failed to save crawling log: {e}")
-
-
-if __name__ == "__main__":
-    # Test Platform Crawler Manager
-    crawler = PlatformCrawler()
-
-    # Test configuration
-    test_keywords = ["科技", "AI", "编程"]
-    result = crawler.run_crawler("xhs", test_keywords, max_notes=5)
-
-    logger.info(f"Test result: {result}")
-    logger.info("Platform Crawler Manager test completed!")

@@ -18,13 +18,14 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 # 基础配置
-PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
-KEYWORDS = "大模型"  # 关键词搜索配置，以英文逗号分隔
+PLATFORM = "wb"  # Platform, xhs | dy | ks | bili | wb | tieba | zhihu
+# 关键词搜索配置，以英文逗号分隔
+KEYWORDS = "蓝天格锐庞氏骗局"
 LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
 COOKIES = ""
-CRAWLER_TYPE = (
-    "search"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
-)
+# 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
+CRAWLER_TYPE = "search"  # Crawling type, search(keyword search) | detail(post details)| creator(creator homepage data)
+
 # 是否开启 IP 代理
 ENABLE_IP_PROXY = False
 
@@ -38,7 +39,7 @@ IP_PROXY_PROVIDER_NAME = "kuaidaili"  # kuaidaili | wandouhttp
 # 设置False会打开一个浏览器
 # 小红书如果一直扫码登录不通过，打开浏览器手动过一下滑动验证码
 # 抖音如果一直提示失败，打开浏览器看下是否扫码登录之后出现了手机号验证，如果出现了手动过一下再试。
-HEADLESS = False
+HEADLESS = True
 
 # 是否保存登录状态
 SAVE_LOGIN_STATE = True
@@ -71,7 +72,7 @@ BROWSER_LAUNCH_TIMEOUT = 60
 AUTO_CLOSE_BROWSER = True
 
 # 数据保存类型选项配置,支持四种类型：csv、db、json、sqlite, 最好保存到DB，有排重的功能。
-SAVE_DATA_OPTION = "csv"  # csv or db or json or sqlite
+SAVE_DATA_OPTION = "db"  # csv or db or json or sqlite or postgresql
 
 # 用户浏览器缓存的浏览器文件配置
 USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
@@ -80,7 +81,7 @@ USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
 START_PAGE = 1
 
 # 爬取视频/帖子的数量控制
-CRAWLER_MAX_NOTES_COUNT = 15
+CRAWLER_MAX_NOTES_COUNT = 5
 
 # 并发爬虫数量控制
 MAX_CONCURRENCY_NUM = 1
@@ -92,7 +93,7 @@ ENABLE_GET_MEIDAS = False
 ENABLE_GET_COMMENTS = True
 
 # 爬取一级评论的数量控制(单视频/帖子)
-CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 10
+CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 20
 
 # 是否开启爬二级评论模式, 默认不开启爬二级评论
 # 老版本项目使用了 db, 则需参考 schema/tables.sql line 287 增加表字段
