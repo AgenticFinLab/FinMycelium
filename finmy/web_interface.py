@@ -46,7 +46,7 @@ class FinMyceliumWebInterface:
         self.setup_page_config()
         self.initialize_session_state()
         self.ai_client = None
-        # self.setup_ai_client()
+        self.setup_ai_client()
 
     def setup_page_config(self):
         """Configure Streamlit page settings for optimal user experience."""
@@ -55,7 +55,21 @@ class FinMyceliumWebInterface:
             page_icon="🕵️",
             layout="wide",
             initial_sidebar_state="expanded",
+            menu_items={
+                "Get Help": None,
+                "Report a bug": None,
+                "About": None,
+            },
         )
+        hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            .stDeployButton {display: none;}
+            </style>
+            """
+        st.markdown(hide_st_style, unsafe_allow_html=True)
 
     def initialize_session_state(self):
         """Initialize session state variables for maintaining state across interactions."""
@@ -193,27 +207,27 @@ class FinMyceliumWebInterface:
 
         # Natural language input box
         st.subheader("🔍 Event Description")
-        # prev_text = st.session_state.get("main_input", "")
-        # visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
-        # dynamic_height = min(600, max(100, visible_lines * 24))
+        prev_text = st.session_state.get("main_input", "")
+        visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
+        dynamic_height = min(600, max(100, visible_lines * 24))
 
         # need: from streamlit_input_box import input_box
         # docs: https://pypi.org/project/streamlit-input-box/
-        main_input = input_box(
-            min_lines=1,  # min
-            max_lines=5,  # max
-            just_once=False,  #
-            key=None,
-        )
-
-        # main_input = st.text_area(
-        #     "",
-        #     value=prev_text,
-        #     placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
-        #     height="content",
-        #     key=f"main_input_{dynamic_height}",
-        #     help="Provide a comprehensive description for better analysis results",
+        # main_input = input_box(
+        #     min_lines=1,  # min
+        #     max_lines=5,  # max
+        #     just_once=False,  #
+        #     key=None,
         # )
+
+        main_input = st.text_area(
+            "",
+            value=prev_text,
+            placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
+            height="content",
+            key=f"main_input_{dynamic_height}",
+            help="Provide a comprehensive description for better analysis results",
+        )
 
         st.session_state.main_input = main_input
 
@@ -363,10 +377,10 @@ class FinMyceliumWebInterface:
             }
 
             # Process with AI analysis
-            # results = self.perform_ai_analysis(analysis_inputs)
+            results = self.perform_ai_analysis(analysis_inputs)
 
             # Store results
-            # st.session_state.analysis_results = results
+            st.session_state.analysis_results = results
             st.session_state.processing_status = "completed"
 
             # Navigate to results page
