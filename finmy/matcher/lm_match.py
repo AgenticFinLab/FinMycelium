@@ -84,5 +84,12 @@ class LLMMatcher(BaseMatcher):
             keywords_joined=sq.key_words,
             content=match_input.match_data,
         )
+
+        # Automatically parse and normalize response from LLM
+        # TODO: It's better to use Pydantic schemas to strictly validate response structure,
+        # ensuring each item has the required "paragraphs", "reason", and "score" fields with proper types.
+        # For now, we only parse as list/dict.
         output.response = safe_parse_json(output.response)
+        if not isinstance(output.response, list):
+            output.response = [output.response]
         return output.response
