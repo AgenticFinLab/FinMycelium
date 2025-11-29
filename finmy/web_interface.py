@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
+from streamlit_input_box import input_box
 from streamlit_option_menu import option_menu
 import pandas as pd
 from openai import OpenAI
@@ -192,17 +193,28 @@ class FinMyceliumWebInterface:
 
         # Natural language input box
         st.subheader("🔍 Event Description")
-        prev_text = st.session_state.get("main_input", "")
-        visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
-        dynamic_height = min(600, max(100, visible_lines * 24))
-        main_input = st.text_area(
-            "",
-            value=prev_text,
-            placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
-            height=dynamic_height,
-            key=f"main_input_{dynamic_height}",
-            help="Provide a comprehensive description for better analysis results",
+        # prev_text = st.session_state.get("main_input", "")
+        # visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
+        # dynamic_height = min(600, max(100, visible_lines * 24))
+
+        # need: from streamlit_input_box import input_box
+        # docs: https://pypi.org/project/streamlit-input-box/
+        main_input = input_box(
+            min_lines=1,  # min
+            max_lines=5,  # max
+            just_once=False,  #
+            key=None,
         )
+
+        # main_input = st.text_area(
+        #     "",
+        #     value=prev_text,
+        #     placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
+        #     height="content",
+        #     key=f"main_input_{dynamic_height}",
+        #     help="Provide a comprehensive description for better analysis results",
+        # )
+
         st.session_state.main_input = main_input
 
         if main_input:
