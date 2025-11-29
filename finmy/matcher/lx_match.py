@@ -27,7 +27,6 @@ from llama_index.core import (
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-
 from .base import MatchInput, BaseMatcher
 from .utils import split_paragraphs
 
