@@ -25,7 +25,7 @@ from llama_index.core import (
     Settings,
 )
 from llama_index.llms.openai_like import OpenAILike
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 from .base import MatchInput, BaseMatcher
 from .utils import split_paragraphs
@@ -52,7 +52,12 @@ class LXMatcherBase(BaseMatcher):
         )
 
     def _build_embed_model(self):
-        return HuggingFaceEmbedding(model_name="Qwen/Qwen3-Embedding-0.6B")
+        return OpenAIEmbedding(
+            model_name="text-embedding-v4",
+            api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key=os.getenv("LLAMA_INDEX_EMBEDDING_API_KEY"),
+            use_api=True,
+        )
 
 
 class LXMatcher(LXMatcherBase):
@@ -272,25 +277,6 @@ class VectorMatcher(LXMatcherBase):
     def __init__(self, config: Optional[dict] = None):
         super().__init__(config=config, method_name="lx_vector_match")
         self.top_k: int = int((config or {}).get("similarity_top_k", 8))
-        # Set up LlamaIndex LLM settings using environment variables
-        model_name = os.getenv("LLAMA_INDEX_LLM_MODEL_NAME")
-        api_key = os.getenv("LLAMA_INDEX_LLM_MODEL_API_KEY")
-        api_base = os.getenv("LLAMA_INDEX_LLM_MODEL_BASE_URL")
-
-        if not model_name or not api_key or not api_base:
-            raise ValueError("Environment variables not set")
-
-        llm = OpenAILike(
-            model=model_name,
-            api_key=api_key,
-            api_base=api_base,
-            is_chat_model=True,
-        )
-
-        Settings.llm = llm
-        # TODO: use the embedding model from the environment variable and not hardcode it
-        embed_model = HuggingFaceEmbedding(model_name="Qwen/Qwen3-Embedding-0.6B")
-        Settings.embed_model = embed_model
 
     def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
         """Return contiguous paragraph index selections via vector/RAG retrieval."""
