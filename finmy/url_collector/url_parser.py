@@ -11,6 +11,7 @@ import time
 import json
 import csv
 import logging
+import re
 from typing import List, Dict, Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 import mysql.connector
@@ -19,6 +20,7 @@ from bs4 import BeautifulSoup
 import random
 from datetime import datetime
 from pathlib import Path
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -26,7 +28,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-import re
 
 
 class URLParser:
