@@ -3,7 +3,7 @@ xxxxxxxxxxxxxxx
 
 
 Run:
-streamlit run finmy/web_interface.py
+streamlit run examples/test_web_interface.py
 
 """
 
