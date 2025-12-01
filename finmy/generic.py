@@ -34,7 +34,7 @@ class RawData:
     - `source`: URI pointing to where the data was collected (path or URL)
       Examples: `gulm/data/pdfs/Technical_report.pdf`, `https://ieeexplore.ieee.org/...`
     - `location`: URI of the stored content (local path or URL)
-      Examples: `gulm/data/pdfs/Technical_report.pdf`, `https://ieeexplore.ieee.org/...`
+      Examples: `gulm/data/pdfs/Technical_report.md`, `gulm/data/urls/url_parsed.json`
     - `time`: ISO 8601 timestamp when data was obtained (YYYY-MM-DD HH:MM:SS TZ)
       Example: `2024-05-20 10:23:45 UTC`
     - `copyright`: copyright statement or license notice
