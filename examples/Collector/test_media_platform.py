@@ -13,7 +13,7 @@ if __name__ == "__main__":
     crawler = PlatformCrawler()
 
     # Test configuration
-    test_keywords = ["蓝天格锐庞氏骗局"]
+    test_keywords = ["加密货币欺诈"]
     result = crawler.run_crawler("wb", test_keywords, max_notes=5)
 
     logger.info(f"Test result: {result}")
