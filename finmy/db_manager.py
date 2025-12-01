@@ -2,10 +2,13 @@
 Implementation of using pandas to manage the database.
 """
 
+import os
 from typing import Optional, Any, Dict
+from pathlib import Path
+from dotenv import load_dotenv
 
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 
 class PDDataBaseManager:
@@ -25,9 +28,129 @@ class PDDataBaseManager:
         self,
         engine: Optional[Any] = None,
         engine_config: Optional[Dict[str, Any]] = None,
+        env_path: Optional[str] = None,
     ):
-        # Store the SQLAlchemy engine reference; may be set later via `set_engine`
-        self.engine = engine if engine is not None else create_engine(**engine_config)
+        """
+        Initialize PDDataBaseManager.
+
+        Args:
+            engine: Existing SQLAlchemy engine (optional)
+            engine_config: Configuration for creating new engine (optional)
+            env_path: Path to .env file (defaults to root directory)
+        """
+        if engine is not None:
+            # Use provided engine if available
+            self.engine = engine
+        elif engine_config is not None:
+            # Use provided configuration
+            self.engine = create_engine(**engine_config)
+        else:
+            # Load database configuration from .env file
+            self.engine = self._create_engine_from_env(env_path)
+
+    def _create_engine_from_env(self, env_path: Optional[str] = None) -> Any:
+        """
+        Create SQLAlchemy engine from .env file configuration.
+
+        Args:
+            env_path: Path to .env file (defaults to root directory)
+
+        Returns:
+            SQLAlchemy engine instance
+
+        Raises:
+            FileNotFoundError: If .env file is not found
+            ValueError: If required environment variables are missing
+        """
+        # Determine .env file path
+        if env_path is None:
+            # Try root directory by default
+            env_path = Path.cwd() / ".env"
+        else:
+            env_path = Path(env_path)
+
+        # Load environment variables
+        if not env_path.exists():
+            raise FileNotFoundError(f".env file not found at: {env_path}")
+
+        load_dotenv(dotenv_path=env_path)
+
+        # Get database configuration
+        db_host = os.getenv("DB_HOST")
+        db_port = os.getenv("DB_PORT")
+        db_name = os.getenv("DB_NAME")
+        db_user = os.getenv("DB_USER")
+        db_password = os.getenv("DB_PASSWORD")
+        db_charset = os.getenv("DB_CHARSET", "utf8")
+
+        # Validate required variables
+        required_vars = {
+            "DB_HOST": db_host,
+            "DB_PORT": db_port,
+            "DB_NAME": db_name,
+            "DB_USER": db_user,
+            "DB_PASSWORD": db_password,
+        }
+
+        missing_vars = [var for var, value in required_vars.items() if not value]
+        if missing_vars:
+            raise ValueError(
+                f"Missing required environment variables: {', '.join(missing_vars)}"
+            )
+
+        # Construct database URL
+        # Format: dialect+driver://username:password@host:port/database?charset=charset
+        db_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?charset={db_charset}"
+
+        # Create and return engine
+        return create_engine(db_url, echo=False)  # Set echo=True for debug logging
+
+    def test_connection(self) -> bool:
+        """
+        Test database connection.
+
+        Returns:
+            True if connection successful, False otherwise
+        """
+        if self.engine is None:
+            return False
+
+        try:
+            with self.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True
+        except Exception:
+            return False
+
+    def get_database_info(self) -> Dict[str, Optional[str]]:
+        """
+        Get database connection information (without password).
+
+        Returns:
+            Dictionary with database connection details
+        """
+        if self.engine is None:
+            return {}
+
+        # Extract information from engine URL
+        url = str(self.engine.url)
+        # Mask password for security
+        if "@" in url:
+            parts = url.split("@")
+            user_part = parts[0]
+            if ":" in user_part:
+                user = user_part.split(":")[0].replace("mysql+pymysql://", "")
+                url = url.replace(user_part, f"{user}:*****")
+
+        return {
+            "url": url,
+            "dialect": self.engine.dialect.name,
+            "driver": self.engine.dialect.driver,
+            "database": self.engine.url.database,
+            "host": self.engine.url.host,
+            "port": str(self.engine.url.port),
+            "username": self.engine.url.username,
+        }
 
     def read_csv(self, path: str, **kwargs) -> pd.DataFrame:
         """Read a CSV file into a DataFrame using pandas.
@@ -113,3 +236,43 @@ class PDDataBaseManager:
             index=index,
             **kwargs,
         )
+
+
+# Optional: Convenience function for quick initialization
+def create_db_manager_from_env(env_path: Optional[str] = None) -> PDDataBaseManager:
+    """
+    Create a PDDataBaseManager instance from .env file.
+
+    Args:
+        env_path: Path to .env file (defaults to root directory)
+
+    Returns:
+        PDDataBaseManager instance
+    """
+    return PDDataBaseManager(env_path=env_path)
+
+
+# Example usage
+if __name__ == "__main__":
+    # Example 1: Simple initialization (auto-loads from .env in root directory)
+    # db_manager = PDDataBaseManager()
+
+    # Example 2: Specify custom .env path
+    # db_manager = PDDataBaseManager(env_path="/path/to/your/.env")
+
+    # Example 3: Test connection
+    # db_manager = PDDataBaseManager()
+    # if db_manager.test_connection():
+    #     print("Database connection successful!")
+    #     print("Connection info:", db_manager.get_database_info())
+    # else:
+    #     print("Database connection failed!")
+
+    # Example 4: Use existing engine or config
+    # engine_config = {
+    #     'url': 'mysql+pymysql://user:pass@host:port/db',
+    #     'echo': False
+    # }
+    # db_manager = PDDataBaseManager(engine_config=engine_config)
+
+    print("PDDataBaseManager with .env support is ready!")
