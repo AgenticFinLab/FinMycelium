@@ -206,7 +206,9 @@ class FinMyceliumWebInterface:
         #         st.rerun()
 
     def render_analysis_page(self):
-        """Render the analysis page with fraud type selection and data input options."""
+        """
+        Render the analysis page with fraud type selection and data input options.
+        """
         # st.title("Financial Fraud Analysis")
         # st.markdown("Provide details about the fraud case you want to analyze.")
 
