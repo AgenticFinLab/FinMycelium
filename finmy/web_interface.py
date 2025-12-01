@@ -211,7 +211,7 @@ class FinMyceliumWebInterface:
         # st.markdown("Provide details about the fraud case you want to analyze.")
 
         # Natural language input box
-        st.subheader("🔍 Event Description")
+        # st.subheader("🔍 Event Description")
         prev_text = st.session_state.get("main_input", "")
         visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
         dynamic_height = min(600, max(100, visible_lines * 24))
@@ -226,7 +226,7 @@ class FinMyceliumWebInterface:
         # )
 
         main_input = st.text_area(
-            "",
+            "Event Description",
             value=prev_text,
             placeholder="Enter a detailed description of the fraud case, including key details, suspicious activities, involved parties, timeline, and any other relevant information...",
             height="content",
@@ -343,8 +343,9 @@ class FinMyceliumWebInterface:
             with status_placeholder.container():
                 if st.session_state.processing_status == "processing":
                     st.info("🔄 Analysis in progress... This may take a few minutes.")
+
                 elif st.session_state.processing_status == "completed":
-                    st.success("✅ Analysis completed!")
+                    st.success("✅ Analysis completed! ")
                 elif st.session_state.processing_status == "error":
                     st.error("❌ Analysis failed. Please try again.")
 
@@ -373,28 +374,39 @@ class FinMyceliumWebInterface:
         """Execute the fraud analysis pipeline with provided inputs."""
         st.session_state.processing_status = "processing"
 
-        try:
-            # Collect analysis inputs
-            analysis_inputs = {
-                "main_input": getattr(st.session_state, "main_input", ""),
-                "keywords": getattr(st.session_state, "keywords", []),
-                "structured_data": getattr(st.session_state, "structured_data", None),
-            }
+        #
+        with st.status(
+            "🔄 Analysis in progress... This may take a few minutes.", state="running"
+        ) as status:
+            try:
+                #
+                analysis_inputs = {
+                    "main_input": getattr(st.session_state, "main_input", ""),
+                    "keywords": getattr(st.session_state, "keywords", []),
+                    "structured_data": getattr(
+                        st.session_state, "structured_data", None
+                    ),
+                }
 
-            # Process with AI analysis
-            results = self.perform_ai_analysis(analysis_inputs)
+                #
+                st.write("Processing data...")
+                results = self.perform_ai_analysis(analysis_inputs)
 
-            # Store results
-            st.session_state.analysis_results = results
-            st.session_state.processing_status = "completed"
+                #
+                status.update(label="✅ Analysis completed!", state="complete")
 
-            # Navigate to results page
-            st.session_state.current_page = "Results"
-            st.rerun()
+                #
+                st.session_state.analysis_results = results
+                st.session_state.processing_status = "completed"
 
-        except Exception as e:
-            st.error(f"Analysis failed: {e}")
-            st.session_state.processing_status = "error"
+                #
+                st.session_state.current_page = "Results"
+                st.success("Redirecting to results...")
+                st.rerun()
+
+            except Exception as e:
+                status.update(label=f"❌ Analysis failed: {e}", state="error")
+                st.session_state.processing_status = "error"
 
     def perform_ai_analysis(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -468,15 +480,39 @@ class FinMyceliumWebInterface:
                 ",".join(keywords), summary=True, count=10
             )
             # Print the search results to console for verification
-            print(bocha_search_results)
+            formatted_bocha_search_results = []
+            for item in bocha_search_results["data"]["webPages"]["value"]:
+                formatted_item = {
+                    "title": item["name"],
+                    "url": item["url"],
+                    "snippet": item["snippet"],
+                    "content": item["summary"],
+                    "sitename": item["siteName"],
+                    "datepublished": item["datePublished"],
+                }
+                formatted_bocha_search_results.append(formatted_item)
+
+            print(formatted_bocha_search_results)
         except:
             print("Bocha Search: Error!")
 
         try:
             print("Testing: Baidu Search")
             baidu_search_results = baidusearch_api(",".join(keywords))
+            formatted_baidu_search_results = []
+            if "references" in baidu_search_results:
+                for ref in baidu_search_results["references"]:
+                    formatted_item = {
+                        "title": ref.get("title", ""),
+                        "url": ref.get("url", ""),
+                        "snippet": ref.get("snippet", ""),
+                        "content": ref.get("content", ""),
+                        "sitename": ref.get("website", ""),
+                        "datepublished": ref.get("date", ""),
+                    }
+                    formatted_baidu_search_results.append(formatted_item)
             # Print the search results to console for verification
-            print(baidu_search_results)
+            print(formatted_baidu_search_results)
         except:
             print("Baidu Search: Error!")
 
