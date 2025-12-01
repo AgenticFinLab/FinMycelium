@@ -10,6 +10,7 @@ import asyncio
 import random
 import tempfile
 from pathlib import Path
+from loguru import logger
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
@@ -19,6 +20,10 @@ import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from finmy.url_collector.SearchCollector.bocha_search import bochasearch_api
+from finmy.url_collector.SearchCollector.baidu_search import baidusearch_api
+from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
+from finmy.url_collector.url_parser import URLParser
 
 # Load environment variables
 load_dotenv()
@@ -443,7 +448,67 @@ class FinMyceliumWebInterface:
         # main_search_input -> summarizer -> refined description and keywords
 
         # keywords -> MediaCollector (Get media info) -> filter -> clean data
+        # Test Platform Crawler Manager
+
+        # There is still something wrong currently
+        try:
+            print("Testing: PlatformCrawler")
+            platformcrawler = PlatformCrawler()
+            result = platformcrawler.run_crawler("wb", keywords, max_notes=5)
+            logger.info(f"Test result: {result}")
+            logger.info("Platform Crawler Manager test completed!")
+        except:
+            print("PlatformCrawler: Error!")
+
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
+        # Bocha Search API test
+        try:
+            print("Testing: Bocha Search")
+            bocha_search_results = bochasearch_api(
+                ",".join(keywords), summary=True, count=10
+            )
+            # Print the search results to console for verification
+            print(bocha_search_results)
+        except:
+            print("Bocha Search: Error!")
+
+        try:
+            print("Testing: Baidu Search")
+            baidu_search_results = baidusearch_api(",".join(keywords))
+            # Print the search results to console for verification
+            print(baidu_search_results)
+        except:
+            print("Baidu Search: Error!")
+
+        try:
+            # url parser
+            sample_urls = [
+                "https://baijiahao.baidu.com/s?id=1850027474872762323&wfr=spider&for=pc",
+            ]
+            print("Testing: URL Parser")
+            parser = URLParser(
+                delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
+            )
+            # Parse URLs
+            results = parser.parse_urls(sample_urls)
+            # Save results to JSON (default)
+            json_file = parser.save_to_json(
+                results,
+                filename=r"examples\Collector\test_files\parsed_results_202511301611.json",
+            )
+            # Example of saving to other formats
+            # csv_file = parser.save_to_csv(results)
+            # mysql_success = parser.save_to_mysql(results, 'localhost', 'user', 'password', 'database_name')
+            print("Parsing completed. Results:")
+            for result in results:
+                print(f"URL {result['ID']}: {result['url']}")
+                print(f"Elements found: {len(result['content'])}")
+                print(
+                    f"First few elements: {result['content'][:3]}"
+                )  # Show first 3 elements
+                print("-" * 50)
+        except:
+            print("URL Parser: Error!")
 
         # structured_data -> if url -> url_parser -> filter -> clean data
         # structured_data -> if pdf/word path -> pdf_parser/word_parser -> filter -> clean data
