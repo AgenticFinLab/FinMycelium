@@ -23,7 +23,8 @@ Select COMPLETE PARAGRAPHS. Prefer contiguous paragraph ranges when expanding co
 Return ONLY JSON: output EACH related content segment as a SEPARATE item.
 A content segment is a series of consecutive paragraphs forming one coherent relevant unit.
 For each item, include ONLY three keys:
-{{'paragraphs': related content segment,
+{{'paragraph_indices': paragraph indices,
+'quote': related content segment,
  'reason': semantic explanation,
  'score': number 0-1}}.
 Do NOT paraphrase; copy text verbatim. Do NOT modify punctuation or spacing.
@@ -39,7 +40,8 @@ Please match the related paragraphs from the following content:
 
 Output each matched item containing the content segment that are continuous paragraphs, strictly in JSON: [
     {{
-      "paragraphs": "...",
+      "paragraph_indices": an int, 
+      "quote": "...",
       "reason": "...",
       "score": a float ranging from 0.0 to 1.0
     }}
