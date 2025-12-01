@@ -49,7 +49,7 @@ class RawData:
     source: str
     location: str
     time: str
-    copyright: str
+    data_copyright: str
     method: str
     tag: str
 
