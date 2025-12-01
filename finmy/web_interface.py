@@ -301,12 +301,27 @@ class FinMyceliumWebInterface:
 
     def render_structured_data_upload(self):
         """Render structured data upload with format validation."""
-        # st.subheader("📊 Structured Data Analysis")
+        # Check if a file is already uploaded
+        if (
+            hasattr(st.session_state, "structured_data")
+            and st.session_state.structured_data is not None
+        ):
+            st.info(
+                f"📁 File '{st.session_state.uploaded_file_name}' is already uploaded. Clear existing data to upload a new file."
+            )
+            if st.button("Clear Uploaded Data"):
+                st.session_state.structured_data = None
+                st.session_state.uploaded_file_name = None
+                st.rerun()
+            st.dataframe(
+                st.session_state.structured_data.head(), use_container_width=True
+            )
+            return
 
         uploaded_file = st.file_uploader(
             "Upload Excel, CSV, or JSON file:",
             type=["xlsx", "csv", "json"],
-            help="Upload structured data files to enhance analysis. Only one file can be uploaded.",
+            help="Upload structured data files to enhance analysis. Only one file can be uploaded at a time.",
         )
 
         if uploaded_file:
@@ -318,8 +333,45 @@ class FinMyceliumWebInterface:
                 elif uploaded_file.name.endswith(".json"):
                     df = pd.read_json(uploaded_file)
 
+                # Validate required columns
+                required_columns = ["title", "url"]
+                missing_columns = [
+                    col for col in required_columns if col not in df.columns
+                ]
+
+                if missing_columns:
+                    st.error(
+                        f"❌ Upload failed: The file must contain the following columns: {', '.join(missing_columns)}"
+                    )
+                    st.info(
+                        "Please ensure your data includes 'title' and 'url' columns."
+                    )
+                    return
+
                 st.success("✅ File uploaded successfully")
                 st.dataframe(df.head(), use_container_width=True)
+
+                # Process each row based on URL type
+                for index, row in df.iterrows():
+                    title = row["title"]
+                    url = row["url"]
+
+                    # Check if URL is a web link or local file path
+                    if isinstance(url, str):
+                        # Web URL detection (basic check)
+                        if url.startswith(("http://", "https://", "www.")):
+                            # Process web URL
+                            # Replace with web URL processing logic
+                            pass
+                        else:
+                            # Assume local file path
+                            # Replace with your local file processing logic
+                            pass
+                    else:
+                        st.warning(
+                            f"Row {index}: URL is not a string format. Skipping processing."
+                        )
+
                 st.session_state.structured_data = df
                 st.session_state.uploaded_file_name = uploaded_file.name
 
