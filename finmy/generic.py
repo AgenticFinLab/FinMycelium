@@ -65,7 +65,7 @@ class MetaSample:
     - `time`: ISO 8601 timestamp of the sample (same as `RawData.time`)
     - `category`: high-level category label of the sample (user-defined)
       Example: `NULL` or a domain grouping
-    - `belong_field`: primary knowledge field (second-level category)
+    - `knowledge_field`: primary knowledge domain (second-level category)
       Examples: `AI`, `Finance`, `Medicine`, `History`
     - `tag`: inherited tag from `RawData.tag`
     - `method`: inherited collection method from `RawData.method`

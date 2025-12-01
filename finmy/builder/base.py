@@ -1,17 +1,43 @@
 """
-Implementation of the base builder to be used by all subsequent builders.
+Base entities and containers for financial event reconstruction.
 
-The builder is to reconstruction the target event from the source data, including news, reports, and other relevant documents. It includes:
+Structure overview:
+- Participant: identity and stable attributes of entities involved
+- ParticipantRelation: explicit relationship edge between participants
+- ParticipantStateSnapshot: time-stamped dynamic state and actions of a participant
+- Action: atomic behaviors recorded within snapshots/stages/episodes
+- Transaction: financial transfers between participants with evidence
+- Interaction: messages/broadcasts among participants with reasons/rationale
+- Episode: coherent sub-phase within a stage
+- EventStage: one phase of the event, holding participants and per-stage snapshots
+- EventCascade: top-level container, holding ordered stages and event-level metadata
 
-- Participant
-- Action
-- ParticipantStateSnapshot
-- ParticipantTrajectory
-- EventStage
-- EventCascade
+Usage notes:
+- Trajectories are derived on demand by merging snapshots per `participant_id`
+  across stage-level and episode-level `participant_snapshots`, then sorting by
+  `timestamp`.
+- Builders assemble `EventCascade` using LMs or rules and avoid duplicating
+  participant lists outside stages to reduce redundancy.
+- Most entities include `reasons` and `rationale` fields to capture causal
+  explanations and analyst notes for transparency and auditability.
 
+Diagram:
 
-It should be emphasized that the `BaseBuilder` is built on the large models as it is impossible for the human to build a pipeline manually or even based on some algorithms.
+EventCascade
+  └── stages: List[EventStage]
+        ├── episodes: List[Episode]
+        │     ├── participants: List[Participant]
+        │     ├── actions: List[Action]
+        │     ├── transactions: List[Transaction]
+        │     ├── interactions: List[Interaction]
+        │     └── participant_snapshots: { participant_id → [ParticipantStateSnapshot] }
+        ├── stage_actions: List[Action]
+        ├── transactions: List[Transaction]
+        ├── interactions: List[Interaction]
+        └── participant_snapshots: { participant_id → [ParticipantStateSnapshot] }
+
+Derived trajectory (on demand):
+  participant_id → collect snapshots across stages/episodes → sort by timestamp → trajectory
 """
 
 import time
@@ -50,10 +76,10 @@ class Participant:
     #   - Organizations: {"industry": "fintech", "employee_count": 50}
     attributes: Dict[str, Any] = field(default_factory=dict)
 
-    # Social/functional ties to other participants *in this event*.
-    # Key: participant_id of another participant.
-    # Value: relation type (e.g., "friend", "member_of", "client_of", "follower_of").
-    broader_relations: Dict[str, str] = field(default_factory=dict)
+    # Explicit relationship edges to other participants in this event.
+    # Each relation captures type, directionality, temporal bounds, strength,
+    # status, tags/attributes, reasons/rationale, and evidence_sources for auditability.
+    relations: List["ParticipantRelation"] = field(default_factory=list)
 
     # Stable cognitive or behavioral dispositions influencing decisions.
     # Examples: {"risk_tolerance": "high", "credibility_threshold": 0.4}
@@ -71,6 +97,51 @@ class Participant:
     # In large-scale scenarios (millions of participants), store Participant records
     # in a database table (e.g., PostgreSQL, MongoDB) with participant_id as primary key.
     # Avoid embedding full Participant objects in memory-heavy structures.
+
+
+@dataclass
+class ParticipantRelation:
+    """Relationship between two participants.
+
+    Fields:
+    - from_participant_id: source participant_id
+    - to_participant_id: target participant_id
+    - description: optional natural-language description of the relation
+    - relation_type: label of the relation
+      Examples: "member_of", "client_of", "counterparty", "affiliated_with",
+                "controls", "influences", "whistleblows_on"
+    - is_bidirectional: whether the relation is symmetric (e.g., "affiliated_with")
+    - start_time/end_time: temporal bounds for when the relation holds
+    - strength: optional numeric score for relation intensity (e.g., 0.0–1.0)
+    - status: current state of the relation
+      Examples: "active", "inactive", "suspended", "terminated"
+    - tags: domain-specific tags describing relation context
+      Examples: ["contractual", "regulatory", "social", "financial"]
+    - attributes: arbitrary metadata for the relation
+      Examples: {"contract_id": "C-2025-001", "jurisdiction": "HK"}
+    - reasons: concise factors explaining why the relation is recorded
+    - rationale: analyst explanation connecting evidence to this relation
+    - evidence_sources: references supporting the existence of this relation
+      Examples: ["https://regulator.site/filing/123", "file:///reports/audit.pdf"]
+    - extras: extension placeholder for downstream models
+
+    """
+
+    from_participant_id: str
+    to_participant_id: str
+    description: str = ""
+    relation_type: str = "unspecified"
+    is_bidirectional: bool = False
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    strength: Optional[float] = None
+    status: str = "active"
+    tags: List[str] = field(default_factory=list)
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    reasons: List[str] = field(default_factory=list)
+    rationale: str = ""
+    evidence_sources: List[str] = field(default_factory=list)
+    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -107,6 +178,129 @@ class Action:
     # NOTE:
     # For high-volume pipelines, store Action documents separately and only resolve
     # related_state_snapshots on-demand to avoid heavy in-memory graphs.
+
+
+# ============================================================================
+# DOMAIN ENTITIES: Financial constructs and interactions
+# ============================================================================
+@dataclass
+class FinancialInstrument:
+    """Financial instrument used or referenced in the event.
+
+    Fields:
+    - instrument_id: unique identifier of the instrument (e.g., ticker, token id)
+    - instrument_type: type label, examples: "token", "stock", "bond", "contract"
+    - attributes: arbitrary metadata of the instrument (key-value), e.g.,
+      {"issuer": "CompanyA", "chain": "Ethereum", "maturity": "2026-06-30"}
+    - reasons: factors for inclusion/relevance in the event
+    - rationale: analyst explanation for how the instrument relates to actions/transactions
+    - extras: extension placeholder for downstream models
+
+    Example:
+    {"instrument_id": "US1234567890", "instrument_type": "bond",
+     "attributes": {"issuer": "ACME", "coupon": 0.05, "maturity": "2030-12-31"}}
+    """
+
+    instrument_id: str
+    instrument_type: str = "unspecified"
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    reasons: List[str] = field(default_factory=list)
+    rationale: str = ""
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EvidenceItem:
+    """Evidence reference anchoring an action/transaction/interaction.
+
+    Fields:
+    - source_uri: where the evidence is stored (URL, file path)
+    - source_type: type label, examples: "news", "report", "platform_log"
+    - excerpt: short text snippet summarizing relevant content
+    - timestamp: when the evidence was published or logged
+    - confidence: model or analyst confidence in this evidence (0.0–1.0)
+    - reasons: list of short factors explaining relevance
+    - rationale: analyst note connecting evidence to model conclusions
+    - extras: extension placeholder
+
+    Example:
+    {"source_uri": "https://news.site/article/abc", "source_type": "news",
+     "excerpt": "Company promised 30% monthly returns", "timestamp": datetime(...),
+     "confidence": 0.8}
+    """
+
+    source_uri: str
+    source_type: str = "unspecified"
+    excerpt: str = ""
+    timestamp: Optional[datetime] = None
+    confidence: Optional[float] = None
+    reasons: List[str] = field(default_factory=list)
+    rationale: str = ""
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Transaction:
+    """Financial transfer between participants.
+
+    Fields:
+    - timestamp: when the transfer occurred
+    - amount: transfer amount (float)
+    - currency: currency code, e.g., "USD", "EUR", "BTC"
+    - from_participant_id: sender participant_id
+    - to_participant_id: receiver participant_id
+    - instrument: optional instrument related to the transfer (e.g., token/contract)
+    - reasons/rationale: causal explanation for the transfer
+    - evidence: list of evidence items supporting this record
+    - extras: extension placeholder
+
+    Example:
+    {"timestamp": datetime(...), "amount": 10000.0, "currency": "USD",
+     "from_participant_id": "P_A", "to_participant_id": "P_B",
+     "instrument": FinancialInstrument(...), "evidence": [EvidenceItem(...)]}
+    """
+
+    timestamp: datetime
+    amount: float
+    currency: str = "USD"
+    from_participant_id: str = ""
+    to_participant_id: str = ""
+    instrument: Optional[FinancialInstrument] = None
+    reasons: List[str] = field(default_factory=list)
+    rationale: str = ""
+    evidence: List[EvidenceItem] = field(default_factory=list)
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Interaction:
+    """Message or broadcast exchanged among participants.
+
+    Fields:
+    - timestamp: when the communication happened
+    - medium: channel, examples: "social_media", "email", "chat"
+    - sender_id: participant_id of the sender
+    - receiver_ids: list of participant_ids (empty if broadcast)
+    - summary: short content summary (or LLM-generated synopsis)
+    - reasons/rationale: intent and causal context of the interaction
+    - evidence: list of evidence items
+    - extras: extension placeholder
+
+    Example:
+    {"timestamp": datetime(...), "medium": "social_media", "sender_id": "P_X",
+     "receiver_ids": ["P_A", "P_B"], "summary": "Guaranteed 30% monthly returns",
+     "evidence": [EvidenceItem(...)]}
+    """
+
+    timestamp: datetime
+    medium: str = "unspecified"
+    sender_id: str = ""
+    receiver_ids: List[str] = field(default_factory=list)
+    summary: str = ""
+    reasons: List[str] = field(default_factory=list)
+    rationale: str = ""
+    evidence: List[EvidenceItem] = field(default_factory=list)
+    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -156,41 +350,124 @@ class ParticipantStateSnapshot:
 # MICRO → MESO: Full behavioral trajectory of one participant
 # ============================================================================
 @dataclass
-class ParticipantTrajectory:
-    """Trajectory of a participant's state snapshots over time."""
+class StageActivity:
+    """Aggregated view of a participant's roles and timing within a stage.
 
-    # ID of the participant whose trajectory this is.
-    participant_id: str
+    Fields:
+    - stage_index: zero-based index of the stage this activity belongs to
+    - start_time/end_time: participant-specific temporal bounds inside the stage
+    - roles: list of role labels observed for the participant in this stage
+      Examples: ["victim", "promoter", "operator"]
 
-    # Chronologically ordered list of state snapshots (by timestamp).
-    trajectory: List[ParticipantStateSnapshot]
+    Example:
+    {
+      "stage_index": 1,
+      "start_time": datetime(...),
+      "end_time": datetime(...),
+      "roles": ["influencer", "promoter"]
+    }
+    """
 
-    # Index of the EventStage when this participant first became active.
-    entry_stage: int
-
-    # Index of the EventStage after which they disengaged (if applicable).
-    exit_stage: Optional[int] = None
-
-    # Optional: Sequence of roles over stages (e.g., ["victim", "whistleblower"]).
-    role_evolution: List[str] = field(default_factory=list)
-
-    # Flexible container for trajectory-level metadata (e.g., clustering label, risk score).
-    extras: Dict[str, Any] = field(default_factory=dict)
-
-    # NOTE ON SCALABILITY:
-    # For large N, avoid storing full trajectory lists in memory.
-    # Instead:
-    #   - Store trajectory metadata (entry/exit, role_evolution) in a main table
-    #   - Store actual snapshots in a separate time-series store
-    #   - Load trajectories on-demand using participant_id
+    stage_index: int
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    roles: List[str] = field(default_factory=list)
 
 
 # ============================================================================
 # MESO: Coherent phase in event development
 # ============================================================================
 @dataclass
+class Episode:
+    """A coherent episode within a stage.
+
+    Episodes group participants, actions, transactions, interactions, and
+    snapshots that share a tighter temporal window or thematic focus than the
+    surrounding stage. They enable fine-grained modeling without losing
+    stage-level aggregation.
+
+    Fields:
+    - episode_id: unique label for the episode within a stage
+    - name: human-readable title
+    - sequence_index: index ordering episodes within the stage (0-based)
+    - start_time/end_time: temporal bounds of the episode
+    - description: concise summary of the episode
+    - participants: entities involved in this episode
+    - participant_snapshots: per-participant snapshots observed here
+      Format: { participant_id → [ParticipantStateSnapshot] }
+    - actions: actions aggregated or recorded in this episode
+    - transactions: financial transfers recorded in this episode
+    - interactions: participant interactions recorded in this episode
+    - evidence_sources: references supporting this episode
+    - extras: extension placeholder
+
+    Example:
+    {
+      "episode_id": "E1",
+      "name": "Private Pitch",
+      "sequence_index": 0,
+      "start_time": datetime(...),
+      "end_time": datetime(...),
+      "description": "Key investors received targeted promises",
+      "participants": [Participant(...)],
+      "participant_snapshots": {"P_A": [ParticipantStateSnapshot(...), ...]},
+      "actions": [Action(...)],
+      "transactions": [Transaction(...)],
+      "interactions": [Interaction(...)],
+      "evidence_sources": ["https://news.site/article/abc"],
+      "extras": {"analyst_notes": "high-pressure sales tactics"}
+    }
+    """
+
+    episode_id: str
+    name: str = ""
+    sequence_index: int = 0
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    description: str = ""
+
+    participants: List[Participant] = field(default_factory=list)
+    participant_snapshots: Dict[str, List[ParticipantStateSnapshot]] = field(
+        default_factory=dict
+    )
+    actions: List[Action] = field(default_factory=list)
+    transactions: List[Transaction] = field(default_factory=list)
+    interactions: List[Interaction] = field(default_factory=list)
+    evidence_sources: List[str] = field(default_factory=list)
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class EventStage:
-    """Stage of the event development."""
+    """Stage of the event development.
+
+    Fields:
+    - name: stage name, e.g., "Bait Deployment", "Amplification"
+    - stage_index: zero-based index ordering stages
+    - start_time/end_time: temporal boundaries of the stage
+    - description: concise natural-language summary
+    - stage_highlights: salient sub-events defining this phase
+    - stage_actions: actions aggregated or recorded in this stage
+    - transactions: financial transfers recorded in this stage
+    - interactions: participant interactions recorded in this stage
+    - participants: entities involved in this stage
+    - participant_snapshots: per-participant snapshots observed in this stage
+    - group_metrics: aggregated metrics derived from participants or actions
+    - systemic_indicators: signals of broader instability
+    - stage_drivers: underlying forces/conditions
+    - evidence_sources: references supporting this stage
+    - extras: extension placeholder
+
+    Example:
+    {
+      "name": "Amplification", "stage_index": 2,
+      "transactions": [{"amount": 250000.0, "currency": "USD", ...}],
+      "interactions": [{"medium": "social_media", "summary": "Guaranteed returns", ...}],
+      "participants": [Participant(...)],
+      "participant_snapshots": {"P_A": [ParticipantStateSnapshot(...), ...]},
+      "group_metrics": {"new_victims": 120}
+    }
+    """
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
     name: str
@@ -207,11 +484,22 @@ class EventStage:
     # Concise natural-language summary of this stage’s essence.
     description: str
 
-    # Salient sub-events that define the phase.
-    key_events: List[str] = field(default_factory=list)
+    # Salient sub-events or highlights that define this phase.
+    stage_highlights: List[str] = field(default_factory=list)
 
-    # IDs of participants behaviorally active in this stage.
-    active_participants: List[str] = field(default_factory=list)
+    # Stage-level actions/transactions/communications
+    stage_actions: List[Action] = field(default_factory=list)
+    transactions: List[Transaction] = field(default_factory=list)
+    interactions: List[Interaction] = field(default_factory=list)
+
+    # Episodes nested within this stage
+    episodes: List[Episode] = field(default_factory=list)
+
+    participants: List[Participant] = field(default_factory=list)
+
+    participant_snapshots: Dict[str, List[ParticipantStateSnapshot]] = field(
+        default_factory=dict
+    )
 
     # Aggregated statistics derived from participant trajectories.
     # Examples: {"new_victims": 120, "avg_trust_growth_rate": 0.05}
@@ -279,12 +567,6 @@ class EventCascade:
     # Ordered sequence of event phases (sorted by stage_index).
     stages: List[EventStage] = field(default_factory=list)
 
-    # All unique entities involved (identity + background).
-    participants: List[Participant] = field(default_factory=list)
-
-    # Time-evolving behaviors of participants.
-    participant_trajectories: List[ParticipantTrajectory] = field(default_factory=list)
-
     # Breakdown of source types and counts.
     # Example: {"news_articles": 24, "government_reports": 2}
     sources_summary: Dict[str, int] = field(default_factory=dict)
@@ -329,7 +611,6 @@ class BuildOutput:
     event_cascades: List[EventCascade] = field(default_factory=list)
     result: Optional[Any] = None
     logs: List[str] = field(default_factory=list)
-    usages: Optional[float] = None
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -354,3 +635,33 @@ class BaseBuilder(ABC):
         output = self.build(build_input)
         output.extras["time_cost"] = time.time() - start
         return output
+
+
+def build_participant_snapshots_map(
+    stages: List[EventStage],
+) -> Dict[str, List[ParticipantStateSnapshot]]:
+    """Merge stage-level and episode-level snapshots into a global map keyed by participant_id.
+
+    Returns a mapping `participant_id -> List[ParticipantStateSnapshot]` sorted by timestamp.
+    """
+
+    snapshots_by_participant: Dict[str, List[ParticipantStateSnapshot]] = {}
+    for stage in stages or []:
+        for pid, snaps in (stage.participant_snapshots or {}).items():
+            snapshots_by_participant.setdefault(pid, []).extend(snaps or [])
+        for episode in stage.episodes or []:
+            for pid, snaps in (episode.participant_snapshots or {}).items():
+                snapshots_by_participant.setdefault(pid, []).extend(snaps or [])
+
+    for _, pid in snapshots_by_participant.items():
+        snapshots_by_participant[pid].sort(key=lambda s: s.timestamp)
+
+    return snapshots_by_participant
+
+
+def build_participant_snapshots_map_from_event(
+    event: EventCascade,
+) -> Dict[str, List[ParticipantStateSnapshot]]:
+    """Convenience wrapper to derive participant snapshots map from an EventCascade."""
+
+    return build_participant_snapshots_map(event.stages or [])
