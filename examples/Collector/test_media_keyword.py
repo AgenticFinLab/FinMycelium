@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DeepSentimentCrawling Module - Keyword Manager
+Media Collector Module - Keyword Manager
 Get keywords and assign them to different platforms for crawling
 """
 
