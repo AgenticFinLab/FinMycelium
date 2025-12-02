@@ -31,7 +31,7 @@ match_input = MatchInput(match_data=content, summarized_query=sq)
 
 matcher = LXMatcher()
 result = matcher.run(match_input)
-
+print("result:", result)
 for item in result.items:
-    print(item.start, item.end, item.contiguous_indices)
+    print(item.start, item.end)
     print(item.paragraph)

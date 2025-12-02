@@ -23,13 +23,13 @@ Implementers should:
 
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Any, Union, Dict
+from typing import List, Optional, Any, Dict
 from abc import ABC, abstractmethod
 
 
 from finmy.generic import RawData
 
-from .utils import get_paragraph_positions
+from .utils import get_paragraph_positions, PositionWisedParagraph
 from .summarizer import SummarizedUserQuery
 
 
@@ -58,11 +58,8 @@ class MatchItem:
     """
 
     paragraph: str
-    paragraph_index: int
     start: Optional[int]
     end: Optional[int]
-    paragraph_contiguous: Optional[List[str]] = None
-    contiguous_indices: Optional[List[int]] = None
 
     extras: Dict[str, Any] = field(default_factory=dict)
 
@@ -102,7 +99,7 @@ class BaseMatcher(ABC):
         self.method_name = method_name
 
     @abstractmethod
-    def match(self, match_input: MatchInput) -> List[MatchItem]:
+    def match(self, match_input: MatchInput) -> List[str]:
         """Produce raw output and selection items for positional mapping.
 
         Return:
@@ -112,32 +109,18 @@ class BaseMatcher(ABC):
     def map_positions(
         self,
         content: str,
-        matches: List[MatchItem],
-    ) -> List[MatchItem]:
+        matches: List[str],
+    ) -> List[PositionWisedParagraph]:
         """Translate generic matches from the `match` into positional `MatchItem`s.
 
         Uses `get_subset_positions` to compute `start`/`end` based on either
         paragraph indices or the first occurrence of an exact quote.
         """
 
-        mapped = get_paragraph_positions(content, matches)
-        items: List[MatchItem] = []
-        for m in mapped:
-            idxs = m.paragraph_indices or []
-            idxs_sorted = idxs if isinstance(idxs, list) else []
-            paragraph_index = min(idxs_sorted) if idxs_sorted else -1
-            contiguous_indices = sorted(idxs_sorted) if idxs_sorted else None
-            items.append(
-                MatchItem(
-                    paragraph=m.text,
-                    paragraph_index=paragraph_index,
-                    start=m.start,
-                    end=m.end,
-                    paragraph_contiguous=None,
-                    contiguous_indices=contiguous_indices,
-                )
-            )
-        return items
+        position_wised_paragraphs: List[PositionWisedParagraph] = (
+            get_paragraph_positions(content, matches)
+        )
+        return position_wised_paragraphs
 
     def run(self, match_input: MatchInput) -> MatchOutput:
         """End-to-end execution returning a standardized `MatchOutput`.
@@ -150,9 +133,14 @@ class BaseMatcher(ABC):
         start_time = time.time()
         matches = self.match(match_input)
         end_time = time.time()
-        items: MatchItem = self.map_positions(match_input.match_data, matches)
+        items: List[PositionWisedParagraph] = self.map_positions(
+            match_input.match_data, matches
+        )
+
         return MatchOutput(
-            items=items,
+            items=[
+                MatchItem(paragraph=i.text, start=i.start, end=i.end) for i in items
+            ],
             method=self.method_name,
             time=end_time - start_time,
         )

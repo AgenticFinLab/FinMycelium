@@ -5,9 +5,7 @@ General useful utilities for the matcher module.
 from dataclasses import dataclass
 import re
 import json
-from typing import List, Dict, Any
-
-from marshmallow.fields import Boolean
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
@@ -23,8 +21,6 @@ class PositionWisedParagraph:
     text: str
     start: int
     end: int
-    paragraph_indices: int
-    contiguous: bool
 
 
 def split_paragraphs(content: str) -> List[SplitParagraph]:
@@ -59,68 +55,23 @@ def split_paragraphs(content: str) -> List[SplitParagraph]:
 
 def get_paragraph_positions(
     content: str,
-    paragraphs: List[Dict[str, Any]],
+    paragraphs: List[str],
 ) -> List[PositionWisedParagraph]:
     """Compute positions of selected paragraphs within `content`.
 
-    Accepts generic selection items (not tied to any specific model schema). Each item may include:
-    - `paragraph_indices`: list[int] indicating which paragraphs to span
-    - `quote`: exact substring to locate
 
     Returns mapping-only dicts: `text`, `start`, `end`, optionally
     `paragraph_indices` and `contiguous`. Unmatched quotes yield `start/end=None`.
     """
-    content_paragraphs: List[SplitParagraph] = split_paragraphs(content)
-    used_ranges: List[range] = []
     results: List[PositionWisedParagraph] = []
     for item in paragraphs:
-        idxs = item.get("paragraph_indices") or []
-        if (
-            isinstance(idxs, list)
-            and len(idxs) > 0
-            and all(isinstance(i, int) for i in idxs)
-        ):
-            idxs_sorted = sorted(idxs)
-            contiguous: bool = all(
-                (idxs_sorted[i] + 1 == idxs_sorted[i + 1])
-                for i in range(len(idxs_sorted) - 1)
-            )
-            first = max(0, min(idxs_sorted))
-            last = min(len(content_paragraphs) - 1, max(idxs_sorted))
-            start = content_paragraphs[first].start
-            end = content_paragraphs[last].end
-            text = content[start:end]
-            r = range(start, end)
-            conflict = any(
-                (max(r.start, ur.start) < min(r.stop, ur.stop)) for ur in used_ranges
-            )
-            if not conflict:
-                used_ranges.append(r)
-            results.append(
-                PositionWisedParagraph(
-                    text=text,
-                    start=start,
-                    end=end,
-                    paragraph_indices=idxs_sorted,
-                    contiguous=contiguous,
-                )
-            )
-            continue
-
-        q = item.get("quote", "")
-        if q:
-            start = content.find(q)
+        if item:
+            start = content.find(item)
             if start == -1:
-                results.append({"text": q, "start": None, "end": None})
+                results.append({"text": item, "start": None, "end": None})
                 continue
-            end = start + len(q)
-            r = range(start, end)
-            conflict = any(
-                (max(r.start, ur.start) < min(r.stop, ur.stop)) for ur in used_ranges
-            )
-            if not conflict:
-                used_ranges.append(r)
-            results.append({"text": q, "start": start, "end": end})
+            end = start + len(item)
+            results.append(PositionWisedParagraph(text=item, start=start, end=end))
 
     return results
 

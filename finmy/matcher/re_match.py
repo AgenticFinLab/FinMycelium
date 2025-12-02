@@ -6,8 +6,7 @@ import re
 from typing import List
 
 from .base import BaseMatcher, MatchInput, MatchItem
-
-from .utils import split_paragraphs, SplitParagraph
+from .utils import extract_context_with_paragraphs, split_paragraphs
 
 
 class ReMatch(BaseMatcher):
@@ -41,7 +40,8 @@ class ReMatch(BaseMatcher):
         # Check if match_data is empty
         if not match_input.match_data:
             return []
-
+        # Split content into paragraphs to find paragraph indices
+        content_paragraphs = split_paragraphs(match_input.match_data)
         # Get keywords from summarized_query
         keywords = []
         if match_input.summarized_query and hasattr(
@@ -61,10 +61,16 @@ class ReMatch(BaseMatcher):
                 # Find all occurrences of the keyword in the content
                 for match in pattern.finditer(match_input.match_data):
                     # Ensure context boundaries are within content bounds
-                    keyword_start = max(0, match.start())
-                    keyword_end = min(len(match_input.match_data), match.end())
+                    keyword_start = match.start()
+                    keyword_end = match.end()
                     # Extract context around the match with full sentences and get paragraph indices
-                    context = match_input.match_data[keyword_start:keyword_end].strip()
+                    context, paragraph_indices = extract_context_with_paragraphs(
+                        content=match_input.match_data,
+                        keyword_start=keyword_start,
+                        keyword_end=keyword_end,
+                        context_chars=2000,
+                        content_paragraphs=content_paragraphs,
+                    )
                     # Format match as dictionary with 'paragraph_indices' and 'quote' keys
                     all_matches.append(context)
 

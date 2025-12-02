@@ -28,7 +28,7 @@ from llama_index.llms.openai_like import OpenAILike
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 from .base import MatchInput, BaseMatcher
-from .utils import split_paragraphs, SplitedParagraph
+from .utils import split_paragraphs, SplitParagraph
 
 
 class LXMatcherBase(BaseMatcher):
@@ -59,6 +59,31 @@ class LXMatcherBase(BaseMatcher):
             use_api=True,
         )
 
+    def _get_matches_from_lx_response(self, resp) -> List[str]:
+        """
+        Extracts matched text segments from the LlamaIndex response.
+
+        Hint:
+            The LlamaIndex query response object typically contains a 'source_nodes' attribute,
+            which holds the retrieved nodes (such as paragraph segments) relevant to the query.
+            This method collects the text content from these nodes for further processing or output.
+
+        Args:
+            resp: LlamaIndex query response, expected to include 'source_nodes'.
+
+        Returns:
+            List of matched text strings extracted from the response.
+        """
+        src = getattr(
+            resp, "source_nodes", []
+        )  # nodes with scoring/metadata, may be empty if no matches
+        matched: List[str] = []
+        for sn in src:
+            # Each 'sn' is a node object; retrieve its text content.
+            matched.append(sn.get_text())
+
+        return matched
+
 
 class LXMatcher(LXMatcherBase):
     """Legacy LlamaIndex matcher invoking SimpleKeywordTableIndex.
@@ -86,20 +111,15 @@ class LXMatcher(LXMatcherBase):
         content: str,
         query_text: str,
         keywords: List[str],
-    ) -> List[Dict[str, Any]]:
+    ) -> List[str]:
         """Retrieve relevant paragraphs via SimpleKeywordTableIndex.
 
         - Converts each paragraph to a `Document` with `paragraph_index` metadata.
         - Builds a keyword-table index and queries with query_text + keywords.
         - Maps `source_nodes` back to paragraph indices.
         """
-        paragraphs: List[SplitedParagraph] = split_paragraphs(
-            content
-        )  # [{index, text}]
-        docs: List[Document] = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        paragraphs: List[SplitParagraph] = split_paragraphs(content)  # [{index, text}]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = SimpleKeywordTableIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
@@ -107,21 +127,7 @@ class LXMatcher(LXMatcherBase):
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])  # nodes with scoring/metadata
-        matched: List[int] = []
-        for sn in src:
-            try:
-                md = getattr(getattr(sn, "node", sn), "metadata", {})
-                idx = md.get("paragraph_index")
-                if isinstance(idx, int):
-                    matched.append(idx)
-            except Exception:
-                continue
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            if grp:
-                selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)
 
     def _find_occurrences(
         self,
@@ -147,7 +153,7 @@ class LXMatcher(LXMatcherBase):
             start = idx + len(term)
         return occ
 
-    def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
+    def match(self, match_input: MatchInput) -> List[str]:
         """Return selections of contiguous paragraph indices.
 
         Current strategy:
@@ -164,27 +170,6 @@ class LXMatcher(LXMatcherBase):
             content=content, query_text=summarization, keywords=keywords
         )
         return li_selections
-
-
-def _group_contiguous(indices: List[int]) -> List[List[int]]:
-    """Group indices into contiguous ranges (module-level helper).
-
-    Example:
-        [0, 1, 3] -> [[0, 1], [3]]
-    """
-    if not indices:
-        return []
-    s = sorted(set(indices))
-    groups: List[List[int]] = []
-    cur: List[int] = [s[0]]
-    for i in s[1:]:
-        if i == cur[-1] + 1:
-            cur.append(i)
-        else:
-            groups.append(cur)
-            cur = [i]
-    groups.append(cur)
-    return groups
 
 
 class KWMatcher(LXMatcherBase):
@@ -205,27 +190,14 @@ class KWMatcher(LXMatcherBase):
         query_text = sq.summarization if sq and sq.summarization else ""
         keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
-        docs = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = SimpleKeywordTableIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])
-        matched: List[int] = []
-        for sn in src:
-            md = getattr(getattr(sn, "node", sn), "metadata", {})
-            idx = md.get("paragraph_index")
-            if isinstance(idx, int):
-                matched.append(idx)
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)
 
 
 class LMMatcher(LXMatcherBase):
@@ -246,27 +218,14 @@ class LMMatcher(LXMatcherBase):
         query_text = sq.summarization if sq and sq.summarization else ""
         keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
-        docs = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = SummaryIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])
-        matched: List[int] = []
-        for sn in src:
-            md = getattr(getattr(sn, "node", sn), "metadata", {})
-            idx = md.get("paragraph_index")
-            if isinstance(idx, int):
-                matched.append(idx)
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)
 
 
 class VectorMatcher(LXMatcherBase):
@@ -287,24 +246,11 @@ class VectorMatcher(LXMatcherBase):
         query_text = sq.summarization if sq and sq.summarization else ""
         keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
-        docs = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = VectorStoreIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])
-        matched: List[int] = []
-        for sn in src:
-            md = getattr(getattr(sn, "node", sn), "metadata", {})
-            idx = md.get("paragraph_index")
-            if isinstance(idx, int):
-                matched.append(idx)
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)

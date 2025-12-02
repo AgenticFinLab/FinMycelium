@@ -33,5 +33,5 @@ matcher = LMMatcher()
 result = matcher.run(match_input)
 
 for item in result.items:
-    print(item.start, item.end, item.contiguous_indices)
+    print(item.start, item.end)
     print(item.paragraph)
