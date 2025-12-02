@@ -12,6 +12,9 @@ import tempfile
 from pathlib import Path
 from loguru import logger
 from typing import List, Dict, Any, Optional
+import pandas as pd
+import datetime
+import json
 
 import streamlit as st
 from streamlit_input_box import input_box
@@ -353,27 +356,6 @@ class FinMyceliumWebInterface:
                 st.success("✅ File uploaded successfully")
                 st.dataframe(df.head(), use_container_width=True)
 
-                # Process each row based on URL type
-                for index, row in df.iterrows():
-                    title = row["title"]
-                    url = row["url"]
-
-                    # Check if URL is a web link or local file path
-                    if isinstance(url, str):
-                        # Web URL detection (basic check)
-                        if url.startswith(("http://", "https://", "www.")):
-                            # Process web URL
-                            # Replace with web URL processing logic
-                            pass
-                        else:
-                            # Assume local file path
-                            # Replace with your local file processing logic
-                            pass
-                    else:
-                        st.warning(
-                            f"Row {index}: URL is not a string format. Skipping processing."
-                        )
-
                 st.session_state.structured_data = df
                 st.session_state.uploaded_file_name = uploaded_file.name
 
@@ -499,6 +481,8 @@ class FinMyceliumWebInterface:
 
             # Parse and structure results
             analysis_text = response.choices[0].message.content
+            print("================ AIHUBMIX RESPONSE ==================")
+            print(analysis_text)
             return self.parse_analysis_results(analysis_text, inputs)
 
         except Exception as e:
@@ -515,10 +499,11 @@ class FinMyceliumWebInterface:
 
         # keywords -> MediaCollector (Get media info) -> filter -> clean data
         # Test Platform Crawler Manager
-
         # There is still something wrong currently
         try:
+            print("=====================================")
             print("Testing: PlatformCrawler")
+            print("=====================================")
             platformcrawler = PlatformCrawler()
             result = platformcrawler.run_crawler("wb", keywords, max_notes=5)
             logger.info(f"Test result: {result}")
@@ -528,8 +513,13 @@ class FinMyceliumWebInterface:
 
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
         # Bocha Search API test
+        parser = URLParser(delay=2.0, use_selenium_fallback=True, selenium_wait_time=5)
+        save_dir = r"examples\utest\Collector\test_files"
+        os.makedirs(save_dir, exist_ok=True)
         try:
+            print("=====================================")
             print("Testing: Bocha Search")
+            print("=====================================")
             bocha_search_results = bochasearch_api(
                 ",".join(keywords), summary=True, count=10
             )
@@ -539,19 +529,35 @@ class FinMyceliumWebInterface:
                 formatted_item = {
                     "title": item["name"],
                     "url": item["url"],
+                    "keywords": ",".join(keywords),
                     "snippet": item["snippet"],
                     "content": item["summary"],
                     "sitename": item["siteName"],
                     "datepublished": item["datePublished"],
                 }
+                results = parser.parse_urls([item["url"]])
+                print(results)
+                formatted_item["parsed_content"] = (
+                    results[0]["content"] if results else []
+                )
                 formatted_bocha_search_results.append(formatted_item)
 
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            filepath = os.path.join(
+                save_dir, f"formatted_bocha_search_results_{timestamp}.json"
+            )
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(
+                    formatted_bocha_search_results, f, ensure_ascii=False, indent=4
+                )
             print(formatted_bocha_search_results)
         except:
             print("Bocha Search: Error!")
 
         try:
+            print("=====================================")
             print("Testing: Baidu Search")
+            print("=====================================")
             baidu_search_results = baidusearch_api(",".join(keywords))
             formatted_baidu_search_results = []
             if "references" in baidu_search_results:
@@ -559,13 +565,28 @@ class FinMyceliumWebInterface:
                     formatted_item = {
                         "title": ref.get("title", ""),
                         "url": ref.get("url", ""),
+                        "keywords": ",".join(keywords),
                         "snippet": ref.get("snippet", ""),
                         "content": ref.get("content", ""),
                         "sitename": ref.get("website", ""),
                         "datepublished": ref.get("date", ""),
                     }
+                    results = parser.parse_urls([ref.get("url", "")])
+                    print(results)
+                    formatted_item["parsed_content"] = (
+                        results[0]["content"] if results else []
+                    )
                     formatted_baidu_search_results.append(formatted_item)
             # Print the search results to console for verification
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            filepath = os.path.join(
+                save_dir, f"formatted_baidu_search_results_{timestamp}.json"
+            )
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(
+                    formatted_baidu_search_results, f, ensure_ascii=False, indent=4
+                )
             print(formatted_baidu_search_results)
         except:
             print("Baidu Search: Error!")
@@ -575,16 +596,19 @@ class FinMyceliumWebInterface:
             sample_urls = [
                 "https://baijiahao.baidu.com/s?id=1850027474872762323&wfr=spider&for=pc",
             ]
+            print("=====================================")
             print("Testing: URL Parser")
+            print("=====================================")
             parser = URLParser(
                 delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
             )
             # Parse URLs
             results = parser.parse_urls(sample_urls)
             # Save results to JSON (default)
-            json_file = parser.save_to_json(
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            parser.save_to_json(
                 results,
-                filename=r"examples\Collector\test_files\parsed_results_202511301611.json",
+                filename=f"examples\\utest\\Collector\\test_files\\parsed_results_{timestamp}.json",
             )
             # Example of saving to other formats
             # csv_file = parser.save_to_csv(results)
@@ -602,6 +626,49 @@ class FinMyceliumWebInterface:
 
         # structured_data -> if url -> url_parser -> filter -> clean data
         # structured_data -> if pdf/word path -> pdf_parser/word_parser -> filter -> clean data
+        # Process each row based on URL type
+
+        try:
+            if st.session_state.structured_data is not None:
+
+                structured_data_urllink = []
+                structure_data_filepath = []
+                for index, row in st.session_state.structured_data.iterrows():
+                    title = row["title"]
+                    url = row["url"]
+                    # Check if URL is a web link or local file path
+                    if isinstance(url, str):
+                        # Web URL detection (basic check)
+                        if url.startswith(("http://", "https://", "www.")):
+                            # Process web URL
+                            # Repla ce with web URL processing logic
+                            results = parser.parse_urls([url])
+                            print(results)
+                            row = row.to_dict()
+                            row["parsed_content"] = (
+                                results[0]["content"] if results else []
+                            )
+                            structured_data_urllink.append(row)
+                        else:
+                            # Assume local file path
+                            # Replace with your local file processing logic
+                            pass
+                    else:
+                        st.warning(
+                            f"Row {index}: URL is not a string format. Skipping processing."
+                        )
+
+                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                filepath = os.path.join(
+                    save_dir, f"structured_data_urllink_{timestamp}.json"
+                )
+                print("===== Structured Data URL Link =====")
+                print(structured_data_urllink)
+                print("=====================================")
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(structured_data_urllink, f, ensure_ascii=False, indent=4)
+        except:
+            print("No structured_data")
 
         # info_to_analyze = cleaned and filtered data from above steps
 
