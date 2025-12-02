@@ -23,11 +23,12 @@ Implementers should:
 
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Any, Union
 from abc import ABC, abstractmethod
 
 from .utils import get_paragraph_positions
 from .summarizer import SummarizedUserQuery
+from finmy.generic import RawData
 
 
 @dataclass
@@ -40,7 +41,7 @@ class MatchInput:
     """
 
     match_data: Optional[str] = None
-    db_item: Optional[Dict[str, Any]] = None
+    db_item: Optional[RawData] = None
     summarized_query: Optional[SummarizedUserQuery] = None
 
 
@@ -66,14 +67,16 @@ class MatchItem:
 class MatchOutput:
     """Standardized container for match outputs.
 
-    - `items`: MatchItem
-    - `raw`: raw string produced by upstream matcher (e.g., model JSON)
+    - `items`: list of MatchItem
+    - `time`: Time elapsed during matching process, or None if not measured.
+    - `raw`: Raw data (db item)
     - `method`: identifier of the method used by the matcher (if any)
     """
 
     items: List[MatchItem]
     method: Optional[str] = None
     time: Optional[float] = None
+    raw: Optional[RawData] = None
 
 
 class BaseMatcher(ABC):
@@ -152,4 +155,5 @@ class BaseMatcher(ABC):
             items=items,
             method=self.method_name,
             time=end_time - start_time,
+            raw=match_input.db_item,
         )

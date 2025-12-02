@@ -4,7 +4,13 @@ General useful utilities for the matcher module.
 
 import re
 import json
-from typing import List, Dict, Any
+import uuid
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
+
+from finmy.generic import MetaSample
+
+if TYPE_CHECKING:
+    from .base import MatchOutput
 
 
 def split_paragraphs(content: str) -> List[Dict[str, Any]]:
@@ -240,3 +246,59 @@ def extract_context_with_paragraphs(
             paragraph_indices.append(i)
 
     return context, paragraph_indices
+
+
+def match_output_to_meta_sample(
+    match_output: "MatchOutput",
+    category: Optional[str] = None,
+    knowledge_field: Optional[str] = None,
+    sample_id: Optional[str] = None,
+) -> MetaSample:
+    """Convert a MatchOutput to a MetaSample.
+
+    This function extracts metadata from MatchOutput (primarily from its `raw` RawData field)
+    and creates a corresponding MetaSample record. The MetaSample represents a processed
+    sample derived from the raw data, typically after matching operations.
+
+    Args:
+        match_output: The MatchOutput containing matched items and raw data metadata
+        category: Optional high-level category label for the sample
+        knowledge_field: Optional primary knowledge domain (e.g., 'AI', 'Finance', 'Medicine')
+        sample_id: Optional sample identifier. If not provided, uses raw_data_id
+                   if available, otherwise generates a new UUID. Can be a string or UUID object.
+
+    Returns:
+        MetaSample: A MetaSample instance with metadata extracted from MatchOutput
+
+    Raises:
+        ValueError: If match_output.raw is None (required for conversion)
+    """
+    if match_output.raw is None:
+        raise ValueError(
+            "Cannot convert MatchOutput to MetaSample: raw data is required but is None"
+        )
+
+    raw_data = match_output.raw
+
+    # Generate sample_id if not provided
+    if sample_id is None:
+        # Use raw_data_id as sample_id if available, otherwise generate new UUID
+        sample_id = raw_data.raw_data_id if raw_data.raw_data_id else str(uuid.uuid4())
+    else:
+        # Convert UUID object to string if needed
+        if isinstance(sample_id, uuid.UUID):
+            sample_id = str(sample_id)
+        elif not isinstance(sample_id, str):
+            sample_id = str(sample_id)
+
+    return MetaSample(
+        sample_id=sample_id,
+        raw_data_id=raw_data.raw_data_id,
+        location=raw_data.location,
+        time=raw_data.time,
+        category=category,
+        knowledge_field=knowledge_field,
+        tag=raw_data.tag,
+        method=raw_data.method or match_output.method,
+        reviews=[],  # Default to empty reviews list
+    )
