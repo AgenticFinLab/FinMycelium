@@ -3,17 +3,11 @@ Module for regex-based matching with context extraction.
 """
 
 import re
-import time
 from typing import List
 
-from .base import BaseMatcher, MatchInput, MatchOutput, MatchItem
+from .base import BaseMatcher, MatchInput, MatchItem
 
-from .utils import (
-    get_paragraph_positions,
-    extract_context_with_paragraphs,
-    split_paragraphs,
-    PositionWisedParagraph,
-)
+from .utils import split_paragraphs, SplitParagraph
 
 
 class ReMatch(BaseMatcher):
@@ -30,7 +24,7 @@ class ReMatch(BaseMatcher):
     - Position mapping for paragraphs and content segments
     """
 
-    def match(self, match_input: MatchInput) -> List[dict]:
+    def match(self, match_input: MatchInput) -> List[str]:
         """Extract relevant text segments from match data based on keywords.
 
         This method searches for keywords from the summarized query in the match data, extracts context around each match with complete paragraphs, and returns a list of dictionaries containing matched text segments with 'paragraph_indices' and 'quote' keys.
@@ -48,9 +42,6 @@ class ReMatch(BaseMatcher):
         if not match_input.match_data:
             return []
 
-        # Split content into paragraphs to find paragraph indices
-        content_paragraphs = split_paragraphs(match_input.match_data)
-
         # Get keywords from summarized_query
         keywords = []
         if match_input.summarized_query and hasattr(
@@ -60,7 +51,7 @@ class ReMatch(BaseMatcher):
 
         # Use keywords for matching, return empty list if no keywords
         if keywords:
-            all_matches = []
+            all_matches: List[MatchItem] = []
 
             # Process each keyword separately
             for keyword in keywords:
@@ -69,36 +60,18 @@ class ReMatch(BaseMatcher):
 
                 # Find all occurrences of the keyword in the content
                 for match in pattern.finditer(match_input.match_data):
-                    keyword_start = match.start()
-                    keyword_end = match.end()
-
+                    # Ensure context boundaries are within content bounds
+                    keyword_start = max(0, match.start())
+                    keyword_end = min(len(match_input.match_data), match.end())
                     # Extract context around the match with full sentences and get paragraph indices
-                    context, paragraph_indices = extract_context_with_paragraphs(
-                        content=match_input.match_data,
-                        keyword_start=keyword_start,
-                        keyword_end=keyword_end,
-                        context_chars=2000,
-                        content_paragraphs=content_paragraphs,
-                    )
-
+                    context = match_input.match_data[keyword_start:keyword_end].strip()
                     # Format match as dictionary with 'paragraph_indices' and 'quote' keys
-                    all_matches.append(
-                        {"paragraph_indices": paragraph_indices, "quote": context}
-                    )
-
-            # Sort matches by their position in the match_data to maintain order
-            all_matches.sort(key=lambda x: match_input.match_data.find(x["quote"]))
+                    all_matches.append(context)
 
             # If no matches found, return the entire content as a single quote
             if not all_matches:
                 # Find all paragraph indices for the entire content
-                paragraph_indices = list(range(len(content_paragraphs)))
-                return [
-                    {
-                        "paragraph_indices": paragraph_indices,
-                        "quote": match_input.match_data,
-                    }
-                ]
+                return [match_input.match_data]
 
             return all_matches
         else:
