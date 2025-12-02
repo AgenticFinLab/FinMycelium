@@ -8,7 +8,7 @@ This module centralizes all conversion utilities so that:
 
 The generally data flow of this framework is:
 
-source_data
+source_data -> collector -> parsed_data
 --> converter --> raw_data in the database (RawData)
 --> converter --> MatchInput -> matcher -> MatchOutput
 --> converter --> meta sample in the database (MetaSample)
