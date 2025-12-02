@@ -28,7 +28,7 @@ from llama_index.llms.openai_like import OpenAILike
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 from .base import MatchInput, BaseMatcher
-from .utils import split_paragraphs
+from .utils import split_paragraphs, SplitedParagraph
 
 
 class LXMatcherBase(BaseMatcher):
@@ -93,7 +93,9 @@ class LXMatcher(LXMatcherBase):
         - Builds a keyword-table index and queries with query_text + keywords.
         - Maps `source_nodes` back to paragraph indices.
         """
-        paragraphs = split_paragraphs(content)  # [{index, text}]
+        paragraphs: List[SplitedParagraph] = split_paragraphs(
+            content
+        )  # [{index, text}]
         docs: List[Document] = [
             Document(text=p["text"], metadata={"paragraph_index": p["index"]})
             for p in paragraphs

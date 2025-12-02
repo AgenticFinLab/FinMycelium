@@ -2,12 +2,32 @@
 General useful utilities for the matcher module.
 """
 
+from dataclasses import dataclass
 import re
 import json
 from typing import List, Dict, Any
 
+from marshmallow.fields import Boolean
 
-def split_paragraphs(content: str) -> List[Dict[str, Any]]:
+
+@dataclass
+class SplitParagraph:
+    index: int
+    text: str
+    start: int
+    end: int
+
+
+@dataclass
+class PositionWisedParagraph:
+    text: str
+    start: int
+    end: int
+    paragraph_indices: int
+    contiguous: bool
+
+
+def split_paragraphs(content: str) -> List[SplitParagraph]:
     """Split content into paragraphs separated by blank lines and record offsets.
 
     Returns a list of dicts with keys: 'index', 'text', 'start', 'end'.
@@ -16,7 +36,7 @@ def split_paragraphs(content: str) -> List[Dict[str, Any]]:
     # We track the absolute character offsets for each paragraph to enable
     # reconstructing verbatim spans later without altering the original text.
     parts = re.split(r"(?:\r?\n\s*){2,}", content)
-    paragraphs: List[Dict[str, Any]] = []
+    paragraphs: List[SplitParagraph] = []
     pos = 0
     for i, part in enumerate(parts):
         start = content.find(part, pos)
@@ -27,12 +47,12 @@ def split_paragraphs(content: str) -> List[Dict[str, Any]]:
         if end is not None:
             pos = end
         paragraphs.append(
-            {
-                "index": i,
-                "text": part,
-                "start": start,
-                "end": end,
-            }
+            SplitParagraph(
+                index=i,
+                text=part,
+                start=start,
+                end=end,
+            )
         )
     return paragraphs
 
@@ -40,7 +60,7 @@ def split_paragraphs(content: str) -> List[Dict[str, Any]]:
 def get_paragraph_positions(
     content: str,
     paragraphs: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+) -> List[PositionWisedParagraph]:
     """Compute positions of selected paragraphs within `content`.
 
     Accepts generic selection items (not tied to any specific model schema). Each item may include:
@@ -50,9 +70,9 @@ def get_paragraph_positions(
     Returns mapping-only dicts: `text`, `start`, `end`, optionally
     `paragraph_indices` and `contiguous`. Unmatched quotes yield `start/end=None`.
     """
-    content_paragraphs = split_paragraphs(content)
+    content_paragraphs: List[SplitParagraph] = split_paragraphs(content)
     used_ranges: List[range] = []
-    results: List[Dict[str, Any]] = []
+    results: List[PositionWisedParagraph] = []
     for item in paragraphs:
         idxs = item.get("paragraph_indices") or []
         if (
@@ -61,7 +81,7 @@ def get_paragraph_positions(
             and all(isinstance(i, int) for i in idxs)
         ):
             idxs_sorted = sorted(idxs)
-            contiguous = all(
+            contiguous: bool = all(
                 (idxs_sorted[i] + 1 == idxs_sorted[i + 1])
                 for i in range(len(idxs_sorted) - 1)
             )
@@ -77,13 +97,13 @@ def get_paragraph_positions(
             if not conflict:
                 used_ranges.append(r)
             results.append(
-                {
-                    "text": text,
-                    "start": start,
-                    "end": end,
-                    "paragraph_indices": idxs_sorted,
-                    "contiguous": contiguous,
-                }
+                PositionWisedParagraph(
+                    text=text,
+                    start=start,
+                    end=end,
+                    paragraph_indices=idxs_sorted,
+                    contiguous=contiguous,
+                )
             )
             continue
 

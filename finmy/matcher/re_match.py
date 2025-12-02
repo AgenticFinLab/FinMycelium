@@ -12,6 +12,7 @@ from .utils import (
     get_paragraph_positions,
     extract_context_with_paragraphs,
     split_paragraphs,
+    PositionWisedParagraph,
 )
 
 
@@ -122,22 +123,21 @@ class ReMatch(BaseMatcher):
             List[MatchItem]: List of MatchItem objects with positional information
         """
 
-        mapped = get_paragraph_positions(match_data, matches)
+        mapped: List[PositionWisedParagraph] = get_paragraph_positions(
+            match_data, matches
+        )
         items: List[MatchItem] = []
         for m in mapped:
-            text = m.get("text", "")
-            start = m.get("start")
-            end = m.get("end")
             idxs = m.get("paragraph_indices") or []
             idxs_sorted = idxs if isinstance(idxs, list) else []
             paragraph_index = min(idxs_sorted) if idxs_sorted else -1
             contiguous_indices = sorted(idxs_sorted) if idxs_sorted else None
             items.append(
                 MatchItem(
-                    paragraph=text,
+                    paragraph=m.text,
                     paragraph_index=paragraph_index,
-                    start=start,
-                    end=end,
+                    start=m.start,
+                    end=m.end,
                     paragraph_contiguous=None,
                     contiguous_indices=contiguous_indices,
                 )
