@@ -23,6 +23,7 @@ class ReMatch(BaseMatcher):
     - Position mapping for paragraphs and content segments
     """
 
+    # TODO: this function has problem about returning repetitive matched string.
     def match(self, match_input: MatchInput) -> List[str]:
         """Extract relevant text segments from match data based on keywords.
 
@@ -68,7 +69,7 @@ class ReMatch(BaseMatcher):
                         content=match_input.match_data,
                         keyword_start=keyword_start,
                         keyword_end=keyword_end,
-                        context_chars=2000,
+                        context_chars=2000,  # TODO: this windows may be too long, need to be reviewed
                         content_paragraphs=content_paragraphs,
                     )
                     # Format match as dictionary with 'paragraph_indices' and 'quote' keys
