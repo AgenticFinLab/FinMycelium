@@ -149,7 +149,7 @@ class BaseMatcher(ABC):
         start_time = time.time()
         matches = self.match(match_input)
         end_time = time.time()
-        items = self.map_positions(match_input.match_data, matches)
+        items: MatchItem = self.map_positions(match_input.match_data, matches)
         return MatchOutput(
             items=items,
             method=self.method_name,

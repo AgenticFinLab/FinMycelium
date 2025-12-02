@@ -62,6 +62,7 @@ class MetaSample:
     - `sample_id`: identifier of the sample; typically aligned to `raw_data_id`
     - `raw_data_id`: the UUID from `RawData` that this sample originates from
     - `location`: storage URI of the sample content (same as `RawData.location`)
+    - `content`: sample's content
     - `time`: ISO 8601 timestamp of the sample (same as `RawData.time`)
     - `category`: high-level category label of the sample (user-defined)
       Example: `NULL` or a domain grouping
@@ -78,6 +79,7 @@ class MetaSample:
     sample_id: str
     raw_data_id: str
     location: str
+    content: str
     time: str
     category: Optional[str] = None
     knowledge_field: Optional[str] = None

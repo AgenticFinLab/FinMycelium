@@ -13,7 +13,7 @@ from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 from finmy.generic import RawData
-from finmy.converter import match_output_to_meta_sample
+from finmy.converter import match_to_samples
 
 
 dotenv.load_dotenv()
@@ -42,13 +42,15 @@ rd = RawData(
 )
 
 sq = SummarizedUserQuery(summarization=query_text, key_words=key_words)
-match_input = MatchInput(match_data=content, summarized_query=sq, db_item=rd)
+match_input = MatchInput(
+    match_data=content, summarized_query=sq, db_item=rd
+)  # TODO: to be determined that removing db_item argument.
 
 matcher = LLMMatcher(lm_name="deepseek-chat")
 result = matcher.run(match_input)
 
-meta_sample = match_output_to_meta_sample(
-    result, category="fintech", knowledge_field="accountant", sample_id=uuid.uuid4()
+meta_samples = match_to_samples(
+    result, rd, category="fintech", knowledge_field="accountant"
 )
 
 print(f"Method: {result.method}")
@@ -60,5 +62,5 @@ for item in result.items:
     print(f"Span: ({item.start}, {item.end}) -> {item.contiguous_indices}")
     print(item.paragraph)
 
-print("meta_sample:", meta_sample)
+print("meta_sample:", meta_samples)
 #

@@ -15,7 +15,7 @@ from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
 
 
-from finmy.builder.base import BaseBuilder, BuildOutput
+from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 
 
 SYSTEM_PROMPT = """
@@ -188,7 +188,7 @@ class LMBuilder(BaseBuilder):
             USER_PROMPT if "user_prompt" not in config else config["user_prompt"]
         )
 
-    def load_samples(self, build_input) -> Any:
+    def load_samples(self, build_input: BuildInput) -> Any:
         """Load the specific content of samples from the files."""
         # For the input of the lm-based builder, we need to combine the content of the samples into a long string.
         samples_content = "\n\n".join(
@@ -196,7 +196,7 @@ class LMBuilder(BaseBuilder):
         )
         return samples_content
 
-    def build(self, build_input) -> BuildOutput:
+    def build(self, build_input: BuildInput) -> BuildOutput:
         """Build the event cascades from the input samples."""
         # We first need to convert the samples presented in the build input
         # to the format required by this function

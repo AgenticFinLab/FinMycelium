@@ -23,15 +23,15 @@ import uuid
 from typing import Optional, List
 
 from finmy.generic import RawData, MetaSample
-from finmy.matcher.base import MatchOutput, MatchItem
+from finmy.matcher.base import MatchOutput
 
 
-def match_to_sample(
+def match_to_samples(
     match_output: MatchOutput,
+    raw_data: RawData,
     category: Optional[str] = None,
     knowledge_field: Optional[str] = None,
-    sample_id: Optional[object] = None,
-) -> MetaSample:
+) -> List[MetaSample]:
     """
     Convert a `MatchOutput` to a `MetaSample`.
 
@@ -54,32 +54,22 @@ def match_to_sample(
     Raises:
         ValueError: If `match_output.raw` is None.
     """
-    if match_output.raw is None:
-        raise ValueError(
-            "Cannot convert MatchOutput to MetaSample: raw data is required but is None"
+    meta_samples: List[MetaSample] = []
+
+    for matched_item in match_output.items:
+        meta_samples.append(
+            MetaSample(
+                sample_id=str(uuid.uuid4()),
+                raw_data_id=raw_data.raw_data_id,
+                location=raw_data.location,
+                content=matched_item.paragraph,
+                time=raw_data.time,
+                category=category,
+                knowledge_field=knowledge_field,
+                tag=raw_data.tag,
+                method=raw_data.method or match_output.method,
+                reviews=[],
+            )
         )
 
-    raw_data = match_output.raw
-
-    # Normalize / generate sample_id
-    if sample_id is None:
-        # Prefer using raw_data_id when available
-        sample_id_str = raw_data.raw_data_id or str(uuid.uuid4())
-    else:
-        # Accept UUID or any object, but store as string
-        if isinstance(sample_id, uuid.UUID):
-            sample_id_str = str(sample_id)
-        else:
-            sample_id_str = str(sample_id)
-
-    return MetaSample(
-        sample_id=sample_id_str,
-        raw_data_id=raw_data.raw_data_id,
-        location=raw_data.location,
-        time=raw_data.time,
-        category=category,
-        knowledge_field=knowledge_field,
-        tag=raw_data.tag,
-        method=raw_data.method or match_output.method,
-        reviews=[],
-    )
+    return meta_samples
