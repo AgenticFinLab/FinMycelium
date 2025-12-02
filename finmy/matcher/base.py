@@ -53,7 +53,6 @@ class MatchItem:
     - `paragraph`: paragraph of the source content (no paraphrasing)
     - `start`/`end`: for the paragraph, character offsets into the original content; `None` when
       the selection could not be matched (e.g., quote not found)
-
     """
 
     paragraph: str
