@@ -87,8 +87,8 @@ def get_paragraph_positions(
             )
             first = max(0, min(idxs_sorted))
             last = min(len(content_paragraphs) - 1, max(idxs_sorted))
-            start = content_paragraphs[first]["start"]
-            end = content_paragraphs[last]["end"]
+            start = content_paragraphs[first].start
+            end = content_paragraphs[last].end
             text = content[start:end]
             r = range(start, end)
             conflict = any(
@@ -149,7 +149,7 @@ def extract_context_with_paragraphs(
     keyword_start: int,
     keyword_end: int,
     context_chars: int,
-    content_paragraphs: list = None,
+    content_paragraphs: List[PositionWisedParagraph] = None,
 ) -> tuple:
     """
     Extracts context around a keyword within a character window, expanded to full paragraphs.
@@ -161,7 +161,7 @@ def extract_context_with_paragraphs(
         keyword_start: The start index of the keyword in content.
         keyword_end: The end index of the keyword in content.
         context_chars: The number of characters of context to extract on each side of the keyword.
-        content_paragraphs: List of paragraph dictionaries with 'start' and 'end' keys to calculate paragraph indices.
+        content_paragraphs: List of PositionWisedParagraph objects with 'start' and 'end' attrubution to calculate paragraph indices.
 
     Returns:
         tuple: A tuple containing (context_string, paragraph_indices_list) where:
@@ -179,8 +179,8 @@ def extract_context_with_paragraphs(
     # Find the paragraph that contains the keyword
     keyword_para_index = -1
     for i, para in enumerate(content_paragraphs or []):
-        para_start = para["start"]
-        para_end = para["end"]
+        para_start = para.start
+        para_end = para.end
 
         # Check if the keyword is within this paragraph
         if para_start <= keyword_start < para_end:
@@ -190,15 +190,13 @@ def extract_context_with_paragraphs(
     # Find the start of the first paragraph to include in context
     # Start from the paragraph containing the keyword and work backward
     context_start = (
-        content_paragraphs[keyword_para_index]["start"]
-        if keyword_para_index >= 0
-        else 0
+        content_paragraphs[keyword_para_index].start if keyword_para_index >= 0 else 0
     )
 
     # Find the paragraph that contains raw_start
     for i, para in enumerate(content_paragraphs or []):
-        para_start = para["start"]
-        para_end = para["end"]
+        para_start = para.start
+        para_end = para.end
 
         # If this paragraph overlaps with our raw_start position,
         # use this paragraph's start as context start
@@ -208,21 +206,21 @@ def extract_context_with_paragraphs(
         elif raw_start < para_start:
             # If raw_start is before this paragraph, use previous paragraph's start
             if i > 0:
-                context_start = content_paragraphs[i - 1]["start"]
+                context_start = content_paragraphs[i - 1].start
             break
 
     # Find the end of the last paragraph to include in context
     # Start from the paragraph containing the keyword and work forward
     context_end = (
-        content_paragraphs[keyword_para_index]["end"]
+        content_paragraphs[keyword_para_index].end
         if keyword_para_index >= 0
         else total_len
     )
 
     # Find the paragraph that contains raw_end
     for i, para in enumerate(content_paragraphs or []):
-        para_start = para["start"]
-        para_end = para["end"]
+        para_start = para.start
+        para_end = para.end
 
         # If this paragraph overlaps with our raw_end position,
         # use this paragraph's end as context end
@@ -235,7 +233,7 @@ def extract_context_with_paragraphs(
         else:
             # raw_end is before this paragraph starts, so use previous paragraph's end
             if i > 0:
-                context_end = content_paragraphs[i - 1]["end"]
+                context_end = content_paragraphs[i - 1].end
             break
 
     # Ensure context boundaries are within content bounds
@@ -248,8 +246,8 @@ def extract_context_with_paragraphs(
     # Find which paragraphs this context spans
     paragraph_indices = []
     for i, para in enumerate(content_paragraphs or []):
-        para_start = para["start"]
-        para_end = para["end"]
+        para_start = para.start
+        para_end = para.end
 
         # Check if the context overlaps with this paragraph
         context_start_pos = context_start
