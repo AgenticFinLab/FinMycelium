@@ -26,9 +26,10 @@ from dataclasses import dataclass
 from typing import List, Optional, Any, Union
 from abc import ABC, abstractmethod
 
+from finmy.generic import RawData
+
 from .utils import get_paragraph_positions
 from .summarizer import SummarizedUserQuery
-from finmy.generic import RawData
 
 
 @dataclass
@@ -76,7 +77,6 @@ class MatchOutput:
     items: List[MatchItem]
     method: Optional[str] = None
     time: Optional[float] = None
-    raw: Optional[RawData] = None
 
 
 class BaseMatcher(ABC):
@@ -155,5 +155,4 @@ class BaseMatcher(ABC):
             items=items,
             method=self.method_name,
             time=end_time - start_time,
-            raw=match_input.db_item,
         )

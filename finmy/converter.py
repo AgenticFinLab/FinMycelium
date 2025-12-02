@@ -5,6 +5,16 @@ This module centralizes all conversion utilities so that:
 - matcher logic stays in `finmy.matcher.*`
 - data model definitions stay in `finmy.generic`
 - conversion logic is decoupled and reusable.
+
+The generally data flow of this framework is:
+
+source_data
+--> converter --> raw_data in the database (RawData)
+--> converter --> MatchInput -> matcher -> MatchOutput
+--> converter --> meta sample in the database (MetaSample)
+--> converter --> BuildInput -> builder -> BuildOutput
+--> converter --> EventCascade in the database (EventCascade)
+
 """
 
 from __future__ import annotations
@@ -16,13 +26,14 @@ from finmy.generic import RawData, MetaSample
 from finmy.matcher.base import MatchOutput, MatchItem
 
 
-def match_output_to_meta_sample(
+def match_to_sample(
     match_output: MatchOutput,
     category: Optional[str] = None,
     knowledge_field: Optional[str] = None,
     sample_id: Optional[object] = None,
 ) -> MetaSample:
-    """Convert a `MatchOutput` to a `MetaSample`.
+    """
+    Convert a `MatchOutput` to a `MetaSample`.
 
     This function extracts metadata from `MatchOutput.raw` (a `RawData` instance)
     and creates a corresponding `MetaSample` record. The `MetaSample` represents
