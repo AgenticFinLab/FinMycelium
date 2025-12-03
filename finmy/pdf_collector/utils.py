@@ -4,18 +4,21 @@ Utility functions for PDF parsing and processing.
 
 import os
 import re
-import csv
 import glob
 import time
 import uuid
+import json
 import shutil
 import zipfile
 import datetime
 import requests
+from typing import List
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader, PdfWriter
+
+from .base import PDFCollectorOutputSample, PDFCollectorOutput
 
 
 def split_large_pdf(pdf_path, max_pages=600):
@@ -345,25 +348,11 @@ def download_results(
     # Create the output directory if it doesn't exist
     os.makedirs(output_directory, exist_ok=True)
 
-    # Define the path for the parser information CSV file
-    csv_file_path = os.path.join(output_directory, "parser_information.csv")
-    # Define the field names for the CSV
-    csv_fieldnames = [
-        "RawDataID",
-        "Source",
-        "Location",
-        "Time",
-        "Copyright",
-        "Method",
-        "Tag",
-        "BatchID",
-    ]
+    # Initialize the PDFCollectorOutput to store all parsing results
+    parsed_info = PDFCollectorOutput()
 
-    # Initialize the CSV file with headers if it doesn't exist
-    if not os.path.exists(csv_file_path):
-        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
-            writer.writeheader()
+    # Define the path for the parser information JSON file
+    json_file_path = os.path.join(output_directory, "parser_information.json")
 
     # Set up the API endpoint for checking batch status
     api_url = f"https://mineru.net/api/v4/extract-results/batch/{batch_id}"
@@ -494,38 +483,24 @@ def download_results(
                 if _download_zip(item["full_zip_url"], base_name, output_directory):
                     success_count += 1
 
-                    # Prepare data for the CSV row
-                    csv_row_data = {
-                        "RawDataID": str(uuid.uuid4()),
-                        # Store the path where the original input file was located if passed down
-                        "Source": source_path,
-                        # Store the path where the raw data is stored
-                        "Location": os.path.join(raw_data_path, "full.md"),
-                        # Time of processing for this file
-                        "Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        # Copyright information
-                        "Copyright": "NULL",
-                        # Method used for processing
-                        "Method": "MinerU",
-                        # Tag for categorization
-                        "Tag": "AgenticFin, HKUST(GZ)",
-                        "BatchID": batch_id,
-                    }
+                    # Create PDFCollectorOutputSample instance
+                    sample = PDFCollectorOutputSample(
+                        RawDataID=str(uuid.uuid4()),
+                        Source=source_path,
+                        Location=os.path.join(raw_data_path, "full.md"),
+                        Time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        Copyright="NULL",
+                        Method="MinerU",
+                        Tag="AgenticFin, HKUST(GZ)",
+                        BatchID=batch_id,
+                    )
 
-                    # Append the row to the CSV file
-                    try:
-                        # Open in append mode
-                        with open(
-                            csv_file_path, mode="a", newline="", encoding="utf-8"
-                        ) as csvfile:
-                            writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
-                            # Write the single row
-                            writer.writerow(csv_row_data)
-                        print(
-                            f"Logged successful processing for: {original_filename} (RawDataID: {data_id})"
-                        )
-                    except IOError as e:
-                        print(f"Error writing to CSV for {original_filename}: {e}")
+                    # Add the sample to the PDFCollectorOutput
+                    parsed_info.records.append(sample)
+
+                    print(
+                        f"Logged successful processing for: {original_filename} (RawDataID: {sample.RawDataID})"
+                    )
                 else:
                     print(f"Failed to download file: {filename} (state: {state})")
             elif state != "done":
@@ -543,7 +518,20 @@ def download_results(
     except Exception as e:
         print(f"Download error (general): {str(e)}")
 
-    return success_count, total_files, status_report, failed_files_map
+    # After processing all files, save the PDFCollectorOutput to JSON file
+    with open(json_file_path, mode="w", encoding="utf-8") as jsonfile:
+        # Convert the dataclass to dictionary and then save as JSON
+        json.dump(
+            parsed_info,
+            jsonfile,
+            default=lambda obj: obj.__dict__,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+        print(f"Parser information saved to: {json_file_path}")
+
+    return (failed_files_map, parsed_info)
 
 
 def parse_pdfs(
@@ -592,8 +580,9 @@ def parse_pdfs(
     print("\nStarting result downloads...")
     # Collect failed files maps from all batches
     all_failed_files_maps = {}
+    parsed_info = []
     for batch_id in batch_ids:
-        success, total, status_report, failed_map = download_results(
+        failed_map, parsed_info = download_results(
             api_key=api_key,
             batch_id=batch_id,
             input_directory=input_dir,
@@ -603,7 +592,7 @@ def parse_pdfs(
         all_failed_files_maps[batch_id] = failed_map
 
     # Return the collected failed maps and the original lists
-    return all_failed_files_maps, original_files_list
+    return all_failed_files_maps, original_files_list, parsed_info
 
 
 def _sanitize_filename(filename):
@@ -836,7 +825,7 @@ def retry_failed_files(
     # Download results for the retry batch
     print("\nStarting result downloads for retry batch...")
     for retry_batch_id in retry_batch_ids:
-        download_results(
+        _, retry_parsed_info = download_results(
             api_key=api_key,
             batch_id=retry_batch_id,
             input_directory=input_dir,
@@ -848,3 +837,26 @@ def retry_failed_files(
     shutil.rmtree(temp_retry_dir)
 
     print("\n--- Retry Process Completed ---")
+
+    return retry_parsed_info
+
+
+def contains_keywords(text: str, keywords: List[str]) -> bool:
+    """
+    Check if the text contains any of the specified keywords using regex matching.
+
+    Args:
+        text (str): Text to search in
+        keywords (List[str]): List of keywords to search for
+
+    Returns:
+        bool: True if any keyword is found in the text, False otherwise
+    """
+    # Create a regex pattern that matches any of the keywords
+    for keyword in keywords:
+        # Escape special regex characters in the keyword
+        escaped_keyword = re.escape(keyword)
+        # Use re.IGNORECASE for case-insensitive matching
+        if re.search(escaped_keyword, text, re.IGNORECASE):
+            return True
+    return False
