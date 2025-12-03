@@ -3,6 +3,7 @@ An interface to test the pdf parser under the finmy/collector.
 """
 
 import argparse
+
 from dotenv import load_dotenv
 
 from finmy.pdf_collector.base import PDFCollectorInput
@@ -63,11 +64,12 @@ if __name__ == "__main__":
     # Initialize PDFParser
     parser_instance = PDFParser(pdf_input)
 
-    print(parser_instance)
-
     # Run the main processing function
     print("\nStarting PDF processing...")
+
+    # Collect the parsed results
     results = parser_instance.collect()
+
     # Print results summary
-    print(f"\nProcessing completed. Results saved to: {args.output_dir}")
     print(f"Total PDFs parsed results saved: {len(results.results)}")
+    print(f"\nProcessing completed. Results saved to: {args.output_dir}")
