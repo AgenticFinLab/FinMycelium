@@ -24,7 +24,7 @@ from typing import Optional, List
 
 from finmy.generic import RawData, MetaSample, UserQueryInput
 from finmy.builder.base import BuildInput
-from finmy.matcher.base import MatchOutput
+from finmy.matcher.base import MatchOutput, MatchInput
 import os
 
 
@@ -85,7 +85,7 @@ def read_data_from_file(filename: str) -> str:
     return content
 
 
-def match_to_meta_samples(
+def match_output_to_meta_samples(
     match_output: MatchOutput,
     raw_data: RawData,
     category: Optional[str] = None,
@@ -134,22 +134,26 @@ def match_to_meta_samples(
     return meta_samples
 
 
-def get_raw_data_content(raw_data: RawData) -> str:
+def raw_data_to_match_input(raw_data: RawData) -> MatchInput:
     """
-    Retrieve the main content from a RawData object.
+    Convert a RawData object into a MatchInput for content matching.
 
     Args:
-        raw_data: The RawData instance.
+        raw_data: RawData instance containing content to be matched.
 
     Returns:
-        The content (str) stored in the RawData object.
+        MatchInput populated with `match_data` and `db_item` from RawData.
     """
-    return read_data_from_file(raw_data.location)
+    return MatchInput(
+        match_data=read_data_from_file(raw_data.location),
+        db_item=raw_data,
+        summarized_query=None,
+    )
 
 
 def convert_to_build_input(
     user_query: UserQueryInput,
-    samples: List[MetaSample],
+    meta_samples: List[MetaSample],
     extras: dict = None,
 ) -> BuildInput:
     """
@@ -157,7 +161,7 @@ def convert_to_build_input(
 
     Args:
         user_query: UserQueryInput instance describing the user query.
-        samples: List of MetaSample objects to be included.
+        meta_samples: List of MetaSample objects to be included.
         extras: Optional dictionary with additional information.
 
     Returns:
@@ -167,6 +171,6 @@ def convert_to_build_input(
         extras = {}
     return BuildInput(
         user_query=user_query,
-        samples=samples,
+        samples=meta_samples,
         extras=extras,
     )
