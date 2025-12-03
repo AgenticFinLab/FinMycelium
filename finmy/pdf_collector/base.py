@@ -13,10 +13,9 @@ Implementers should:
 """
 
 import os
-import csv
 import logging
+from typing import List, Optional
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
@@ -26,45 +25,43 @@ from dotenv import load_dotenv
 class PDFCollectorInput:
     """Represents input for a PDF collection/processing task."""
 
-    # The directory containing the files
-    input_dir_path: str = "input"
-    # The directory to store output files
-    output_dir_path: str = "output"
-    # The batch size for processing pdfs (max 200)
-    batch_size: int = 200
-    # The language code for the document (e.g., "en" for English)
-    language: str = "en"
-    # Whether to check PDF size and page limits
-    check_pdf_limits: bool = True
+    # The directory containing the PDFs to be parsed
+    input_dir: str = "input"
     # List of keywords to filter by
     keywords: List[str] = field(default_factory=list)
-    # Path to the .env file for loading environment variables
-    env_file: Optional[str] = ".env"
 
 
 @dataclass
 class PDFCollectorOutputSample:
     """Represents parse results from a single PDF."""
 
-    # List of extracted text snippets
-    content_list: List[str] = field(default_factory=list)
-    # List of extracted image paths
-    images: List[str] = field(default_factory=list)
-    # The full text content of the document
-    full_content: str = ""
-    # Layout information (e.g., page structure)
-    layout: Dict = field(default_factory=dict)
+    # The unique identifier for the parsed result
+    RawDataID: str = ""
+    # The source path of the PDF
+    Source: str = ""
+    # The parsed markdown content of the PDF
+    Location: str = ""
+    # The parsed time of the PDF
+    Time: str = ""
+    # The parsed copyright information of the PDF
+    Copyright: str = ""
+    # The parsing method used (e.g., "Mineru API")
+    Method: str = ""
+    # Tags for the parsed content
+    Tag: str = ""
+    # The batch ID for the parsed result
+    BatchID: str = ""
 
 
 @dataclass
 class PDFCollectorOutput:
     """Represents parse results from a PDF collection/processing task.
 
-    A list of PDF parsing results, where each item corresponds to a subfolder in output_dir_path.
+    A list of PDF parsing results, where each item corresponds to a subfolder in output_dir.
     """
 
     # List of parsed PDF results
-    results: List[PDFCollectorOutputSample] = field(default_factory=list)
+    records: List[PDFCollectorOutputSample] = field(default_factory=list)
 
 
 class BasePDFCollector(ABC):
@@ -76,37 +73,34 @@ class BasePDFCollector(ABC):
     such as parsing via an API or filtering based on content.
     """
 
-    def __init__(self, pdf_collector_input: PDFCollectorInput):
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+    ):
         """
         Initializes the base collector.
 
         Args:
-            pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
+            config (dict, optional): Configuration dictionary for the collector. Defaults to None.
         """
-        self.input_dir = pdf_collector_input.input_dir_path
-        self.output_dir = pdf_collector_input.output_dir_path
-        self.batch_size = pdf_collector_input.batch_size
-        self.language = pdf_collector_input.language
-        self.check_pdf_limits = pdf_collector_input.check_pdf_limits
-        self.keywords = pdf_collector_input.keywords
+
+        self.config = config
+        self.output_dir = self.config["output_dir"]
+        self.batch_size = self.config["batch_size"]
+        self.language = self.config["language"]
+        self.check_pdf_limits = self.config["check_pdf_limits"]
         self.logger = self._setup_logger()
-        self._ensure_directories_exist()
+
+        # Create output directory if it doesn't exist
+        os.makedirs(self.config["output_dir"], exist_ok=True)
 
         # Load environment variables, typically for API keys
-        if pdf_collector_input.env_file:
-            load_dotenv(dotenv_path=pdf_collector_input.env_file)
+        if self.config["env_file"]:
+            load_dotenv(dotenv_path=self.config["env_file"])
             self.logger.info(
                 "Environment variables loaded from %s",
-                pdf_collector_input.env_file,
+                self.config["env_file"],
             )
-
-    def _ensure_directories_exist(self):
-        """Creates input and output directories if they don't exist."""
-        os.makedirs(self.input_dir, exist_ok=True)
-        os.makedirs(self.output_dir, exist_ok=True)
-        self.logger.debug(
-            "Ensured directories exist: %s, %s", self.input_dir, self.output_dir
-        )
 
     def _setup_logger(self) -> logging.Logger:
         """Sets up a logger for the collector instance."""
@@ -122,60 +116,11 @@ class BasePDFCollector(ABC):
             logger.setLevel(logging.INFO)
         return logger
 
-    @staticmethod
-    def read_csv_file(file_path: str) -> List[Dict[str, str]]:
-        """
-        Read a CSV file and return its content as a list of dictionaries.
-
-        Args:
-            file_path (str): Path to the CSV file to be read.
-
-        Returns:
-            List[Dict[str, str]]: List of dictionaries representing CSV rows.
-        """
-        records = []
-        with open(file_path, "r", encoding="utf-8", newline="") as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                records.append(row)
-        return records
-
-    @staticmethod
-    def write_csv_file(
-        file_path: str,
-        records: List[Dict[str, str]],
-        fieldnames: List[str],
-    ) -> None:
-        """
-        Write records to a CSV file.
-
-        Args:
-            file_path (str): Path to the output CSV file.
-            records (List[Dict[str, str]]): List of dictionaries to write.
-            fieldnames (List[str]): List of field names for the CSV header.
-        """
-        with open(file_path, "w", encoding="utf-8", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(records)
-
-    @staticmethod
-    def get_csv_fieldnames(file_path: str) -> List[str]:
-        """
-        Get the field names from the header of a CSV file.
-
-        Args:
-            file_path (str): Path to the CSV file.
-
-        Returns:
-            List[str]: List of field names from the CSV header.
-        """
-        with open(file_path, "r", encoding="utf-8", newline="") as csvfile:
-            reader = csv.DictReader(csvfile)
-            return reader.fieldnames or []
-
     @abstractmethod
-    def collect(self) -> PDFCollectorOutput:
+    def collect(
+        self,
+        pdf_collector_input: PDFCollectorInput,
+    ) -> PDFCollectorOutput:
         """
         Abstract method to perform the collection or processing task.
 
@@ -188,7 +133,11 @@ class BasePDFCollector(ABC):
         pass
 
     @abstractmethod
-    def filter(self, content: str) -> List[Dict[str, str]]:
+    def filter(
+        self,
+        pdf_collector_input: PDFCollectorInput,
+        parsed_info: PDFCollectorOutput,
+    ) -> PDFCollectorOutput:
         """
         Abstract method to filter records based on keywords.
 
@@ -196,9 +145,9 @@ class BasePDFCollector(ABC):
         for filtering records.
 
         Args:
-            content (str): The content to filter.
+            pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
 
         Returns:
-            List[Dict[str, str]]: Filtered list of records.
+            PDFCollectorOutput: Filtered records.
         """
         pass
