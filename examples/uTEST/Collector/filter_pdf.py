@@ -107,7 +107,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Parse keywords from input (assuming re_match is available or using a simple split)
-    # Using simple split for now, you can import re_match if needed
     keywords = [kw.strip() for kw in args.keywords.split(",")]
     print(f"Parsed keywords: {keywords}")
 

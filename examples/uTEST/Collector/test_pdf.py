@@ -71,5 +71,4 @@ if __name__ == "__main__":
     results = parser_instance.collect()
 
     # Print results summary
-    print(f"Total PDFs parsed results saved: {len(results.results)}")
-    print(f"\nProcessing completed. Results saved to: {args.output_dir}")
+    print(f"\nTotal PDFs parsed results saved: {len(results.results)}")
