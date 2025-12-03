@@ -88,7 +88,6 @@ class BasePDFCollector(ABC):
         self.batch_size = self.config["batch_size"]
         self.language = self.config["language"]
         self.check_pdf_limits = self.config["check_pdf_limits"]
-        self.logger = self._setup_logger()
 
         # Create output directory if it doesn't exist
         os.makedirs(self.config["output_dir"], exist_ok=True)
@@ -96,24 +95,9 @@ class BasePDFCollector(ABC):
         # Load environment variables, typically for API keys
         if self.config["env_file"]:
             load_dotenv(dotenv_path=self.config["env_file"])
-            self.logger.info(
-                "Environment variables loaded from %s",
-                self.config["env_file"],
-            )
 
-    def _setup_logger(self) -> logging.Logger:
-        """Sets up a logger for the collector instance."""
-        logger = logging.getLogger(self.__class__.__name__)
-        # Avoid adding handlers multiple times
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
 
     @abstractmethod
     def collect(
@@ -151,3 +135,23 @@ class BasePDFCollector(ABC):
             PDFCollectorOutput: Filtered records.
         """
         pass
+
+    def run(
+        self,
+        pdf_collector_input: PDFCollectorInput,
+    ) -> PDFCollectorOutput:
+        """
+        Runs the collection and filtering process.
+
+        Args:
+            pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
+
+        Returns:
+            PDFCollectorOutput: Filtered records.
+        """
+        # Parse PDFs and save the successful records
+        parsed_info = self.collect(pdf_collector_input)
+        # Filter parsed records based on keywords
+        filtered_info = self.filter(pdf_collector_input, parsed_info)
+
+        return filtered_info
