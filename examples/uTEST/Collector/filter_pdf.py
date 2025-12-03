@@ -49,8 +49,6 @@ def main(input_path: str, keywords: List[str]) -> None:
     # Create input configuration
     pdf_input = PDFCollectorInput(
         input_dir_path=input_path,
-        # Not using a specific PDF file in this case
-        input_pdf_path="",
         output_dir_path=input_path,
         keywords=keywords,
     )

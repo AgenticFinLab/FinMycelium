@@ -1,13 +1,13 @@
 """
 Module for filtering PDF content based on keywords, extending the base PDF collector functionality.
 
-This module provides concrete implementation for filtering PDF content based on specified keywords,
-leveraging the base abstractions defined in base.py.
+This module provides concrete implementation for filtering PDF content based on specified keywords, leveraging the base abstractions defined in base.py.
 """
 
 import os
 import re
 from typing import List, Dict
+
 from .base import BasePDFCollector, PDFCollectorInput, PDFCollectorOutput
 
 
@@ -98,9 +98,8 @@ class PDFFilter(BasePDFCollector):
         filtered_records = []
 
         for record in records:
-            location = record.get("Location", "")
-            if not location:
-                continue
+            # get the successful parsed file path from the record
+            location = record["Location"]
 
             # Construct the full path to the file
             file_path = os.path.join(base_folder, location)
