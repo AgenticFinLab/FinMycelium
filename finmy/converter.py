@@ -85,7 +85,7 @@ def read_data_from_file(filename: str) -> str:
     return content
 
 
-def match_to_samples(
+def match_to_meta_samples(
     match_output: MatchOutput,
     raw_data: RawData,
     category: Optional[str] = None,
@@ -147,7 +147,7 @@ def get_raw_data_content(raw_data: RawData) -> str:
     return read_data_from_file(raw_data.location)
 
 
-def build_build_input(
+def convert_to_build_input(
     user_query: UserQueryInput,
     samples: List[MetaSample],
     extras: dict = None,
