@@ -6,8 +6,8 @@ import argparse
 
 from dotenv import load_dotenv
 
-from finmy.pdf_collector.base import PDFCollectorInput
-from finmy.pdf_collector.pdf_parser import PDFParser
+from finmy.pdf_collector.pdf_parser import PDFCollector
+from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 
 if __name__ == "__main__":
     # Load environment variables
@@ -50,25 +50,61 @@ if __name__ == "__main__":
         dest="check_pdf_limits",
         help="Disable PDF size/page limits check",
     )
+    parser.add_argument(
+        "--keywords",
+        type=str,
+        nargs="*",
+        default=[],
+        help="Keywords to filter the parsed content (space separated)",
+    )
 
     args = parser.parse_args()
 
-    # Create PDFCollectorInput object
-    pdf_input = PDFCollectorInput(
-        input_dir_path=args.input_dir,
-        output_dir_path=args.output_dir,
-        batch_size=args.batch_size,
-        language=args.language,
-        check_pdf_limits=args.check_pdf_limits,
+    config = {
+        # The directory to store output files
+        "output_dir": args.output_dir,
+        # The batch size for processing pdfs (max: 200)
+        "batch_size": args.batch_size,
+        # The language code for the document (e.g., "en" for English)
+        "language": args.language,
+        # Whether to check PDF size and page limits
+        "check_pdf_limits": args.check_pdf_limits,
+        # Path to the .env file for loading environment variables
+        "env_file": ".env",
+    }
+
+    test_keywords = ["finance"]
+    # Create PDFCollectorInput object with keywords from command line or test keywords
+    keywords = args.keywords if args.keywords else test_keywords
+    pdf_collector_input = PDFCollectorInput(
+        input_dir=args.input_dir,
+        keywords=keywords,
     )
-    # Initialize PDFParser
-    parser_instance = PDFParser(pdf_input)
+
+    # Initialize PDFCollector
+    parser_instance = PDFCollector(config)
 
     # Run the main processing function
     print("\nStarting PDF processing...")
 
-    # Collect the parsed results
-    results = parser_instance.collect()
+    results = PDFCollectorOutput()
 
-    # Print results summary
-    print(f"\nTotal PDFs parsed results saved: {len(results.results)}")
+    # Collect the parsed results
+    print("Collecting parsed results...")
+    results = parser_instance.collect(pdf_collector_input)
+
+    # Print results summary before filtering
+    print(f"\nTotal PDFs parsed results before filtering: {len(results.records)}")
+
+    # Filter the results based on keywords
+    print(f"Filtering results with keywords: {keywords}")
+    filtered_results = parser_instance.filter(pdf_collector_input, results)
+
+    # Print final results summary
+    print(
+        f"\nTotal PDFs parsed results after filtering: {len(filtered_results.records)}"
+    )
+
+    print(
+        f"\nProcessing completed. Results saved to the directory: {config['output_dir']}"
+    )
