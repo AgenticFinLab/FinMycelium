@@ -1,14 +1,27 @@
 """
-Implementation of using pandas to manage the database.
+Database layer helpers.
+
+This module provides:
+
+- `PDDataBaseManager`: a thin wrapper around pandas / SQLAlchemy
+  for generic CSV / SQL IO.
+- `DataManager`: a higher‑level helper tailored to FinMycelium's
+  data model (`RawData`, `MetaSample`, `UserQueryInput`), roughly
+  following the ER diagram in `docs/files/database-er.drawio`.
+
+The goal is to keep all DB‑specific glue code in one place while
+keeping the rest of the codebase focused on domain logic.
 """
 
 import os
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from pathlib import Path
 from dotenv import load_dotenv
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+
+from finmy.generic import RawData, MetaSample, UserQueryInput
 
 
 class PDDataBaseManager:
@@ -236,3 +249,159 @@ class PDDataBaseManager:
             index=index,
             **kwargs,
         )
+
+
+class DataManager(PDDataBaseManager):
+    """High-level manager for RAW_DATA / MEAT_SAMPLE / USER_QUERY tables.
+
+    This class is a thin domain layer on top of `PDDataBaseManager`
+    and assumes a relational schema compatible with the ER diagram
+    in `docs/files/database-er.drawio`.
+
+    Table conventions (can be adjusted later if needed):
+    - RAW_DATA:
+        raw_data_id (PK, str)
+        source_file_path (str, optional)
+        source_url (str, optional)
+        location (str)
+        time (str)
+        copyright (str)
+        method (str)
+        tag (str)
+    - MEAT_SAMPLE:
+        sample_id (PK, str)
+        raw_data_id (FK -> RAW_DATA.raw_data_id)
+        location (str)
+        time (str)
+        category (str, nullable)
+        knowledge_field (str, nullable)
+        tag (str, nullable)
+        method (str, nullable)
+        reviews (JSON/text, nullable)
+    - USER_QUERY:
+        id (PK, str)
+        query_text (text)
+        key_words (JSON/text)
+        time_range (JSON/text, nullable)
+        extras (JSON/text, nullable)
+
+    Notes:
+    - We intentionally avoid hard SQLAlchemy models here and rely on
+      simple pandas <-> table mappings to stay close to the existing
+      `PDDataBaseManager` design.
+    - JSON-like fields are stored as text using `repr()` by default;
+      you can switch to a proper JSON column later if desired.
+    """
+
+    TABLE_RAW_DATA = "RAW_DATA"
+    TABLE_MEAT_SAMPLE = "MEAT_SAMPLE"
+    TABLE_USER_QUERY = "USER_QUERY"
+
+    # ---------- RAW_DATA ----------
+
+    def insert_raw_data(self, raw: RawData) -> None:
+        """Insert a single `RawData` record into `RAW_DATA`.
+
+        For now we map:
+        - `raw.source` -> both `source_file_path` and `source_url`
+          (the caller can later refine the schema if needed).
+        """
+        record = {
+            "raw_data_id": raw.raw_data_id,
+            "source_file_path": raw.source,
+            "source_url": raw.source,
+            "location": raw.location,
+            "time": raw.time,
+            "copyright": raw.data_copyright,
+            "method": raw.method,
+            "tag": raw.tag,
+        }
+        df = pd.DataFrame([record])
+        self.write_sql(
+            df, table_name=self.TABLE_RAW_DATA, if_exists="append", index=False
+        )
+
+    def insert_raw_data_batch(self, raws: List[RawData]) -> None:
+        """Batch insert multiple `RawData` records."""
+        if not raws:
+            return
+        records = []
+        for raw in raws:
+            records.append(
+                {
+                    "raw_data_id": raw.raw_data_id,
+                    "source_file_path": raw.source,
+                    "source_url": raw.source,
+                    "location": raw.location,
+                    "time": raw.time,
+                    "copyright": raw.data_copyright,
+                    "method": raw.method,
+                    "tag": raw.tag,
+                }
+            )
+        df = pd.DataFrame(records)
+        self.write_sql(
+            df, table_name=self.TABLE_RAW_DATA, if_exists="append", index=False
+        )
+
+    # ---------- MEAT_SAMPLE ----------
+
+    def insert_meta_samples(self, samples: List[MetaSample]) -> None:
+        """Batch insert `MetaSample` records into `MEAT_SAMPLE`."""
+        if not samples:
+            return
+
+        records = []
+        for s in samples:
+            records.append(
+                {
+                    "sample_id": s.sample_id,
+                    "raw_data_id": s.raw_data_id,
+                    "location": s.location,
+                    "time": s.time,
+                    "category": s.category,
+                    "knowledge_field": s.knowledge_field,
+                    "tag": s.tag,
+                    "method": s.method,
+                    # store reviews as a simple text representation
+                    "reviews": repr(s.reviews) if s.reviews is not None else None,
+                }
+            )
+
+        df = pd.DataFrame(records)
+        self.write_sql(
+            df, table_name=self.TABLE_MEAT_SAMPLE, if_exists="append", index=False
+        )
+
+    # ---------- USER_QUERY ----------
+
+    def insert_user_query(self, uq: UserQueryInput, query_id: str) -> None:
+        """Insert a `UserQueryInput` into `USER_QUERY`.
+
+        Args:
+            uq: `UserQueryInput` dataclass instance.
+            query_id: unique identifier for this query (typically a UUID).
+        """
+        record = {
+            "id": query_id,
+            "query_text": uq.query_text,
+            "key_words": repr(uq.key_words),
+            "time_range": repr(uq.time_range),
+            "extras": repr(uq.extras),
+        }
+        df = pd.DataFrame([record])
+        self.write_sql(
+            df, table_name=self.TABLE_USER_QUERY, if_exists="append", index=False
+        )
+
+    # Simple query helpers -------------------------------------------------
+
+    def fetch_raw_data_by_id(self, raw_data_id: str) -> pd.DataFrame:
+        """Fetch `RAW_DATA` rows by `raw_data_id`."""
+        where = f"raw_data_id = '{raw_data_id}'"
+        return self.read_sql_table(self.TABLE_RAW_DATA, where=where)
+
+    def fetch_samples_by_raw_id(self, raw_data_id: str) -> pd.DataFrame:
+        """Fetch `MEAT_SAMPLE` rows linked to a given `raw_data_id`."""
+        where = f"raw_data_id = '{raw_data_id}'"
+        return self.read_sql_table(self.TABLE_MEAT_SAMPLE, where=where)
