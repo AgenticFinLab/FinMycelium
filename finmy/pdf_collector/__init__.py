@@ -9,7 +9,6 @@ Classes:
     PDFCollectorInput - Data class for collector input parameters
     PDFCollectorOutput - Data class for collector output results
     PDFParser - PDF parser implementation using Mineru API
-    PDFFilter - PDF filter implementation based on keyword matching
 
 Functions:
     Various utility functions for file operations, PDF processing, and data handling
@@ -22,7 +21,6 @@ from .base import (
     PDFCollectorOutput,
 )
 from .pdf_parser import PDFParser
-from .pdf_filter import PDFFilter
 
 __all__ = [
     "BasePDFCollector",
@@ -30,5 +28,4 @@ __all__ = [
     "PDFCollectorOutputSample",
     "PDFCollectorOutput",
     "PDFParser",
-    "PDFFilter",
 ]
