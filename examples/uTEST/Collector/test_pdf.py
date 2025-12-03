@@ -89,22 +89,9 @@ if __name__ == "__main__":
 
     results = PDFCollectorOutput()
 
-    # Collect the parsed results
-    print("Collecting parsed results...")
-    results = parser_instance.collect(pdf_collector_input)
-
-    # Print results summary before filtering
-    print(f"\nTotal PDFs parsed results before filtering: {len(results.records)}")
-
-    # Filter the results based on keywords
-    print(f"Filtering results with keywords: {keywords}")
-    filtered_results = parser_instance.filter(pdf_collector_input, results)
+    # Collect the parsed and filtered results
+    print("Collecting parsed and filtered results...")
+    results = parser_instance.run(pdf_collector_input)
 
     # Print final results summary
-    print(
-        f"\nTotal PDFs parsed results after filtering: {len(filtered_results.records)}"
-    )
-
-    print(
-        f"\nProcessing completed. Results saved to the directory: {config['output_dir']}"
-    )
+    print(f"\nTotal PDFs parsed results after filtering: {len(results.records)}")
