@@ -15,13 +15,19 @@ Functions:
     Various utility functions for file operations, PDF processing, and data handling
 """
 
-from .base import BasePDFCollector, PDFCollectorInput, PDFCollectorOutput
+from .base import (
+    BasePDFCollector,
+    PDFCollectorInput,
+    PDFCollectorOutputSample,
+    PDFCollectorOutput,
+)
 from .pdf_parser import PDFParser
 from .pdf_filter import PDFFilter
 
 __all__ = [
     "BasePDFCollector",
     "PDFCollectorInput",
+    "PDFCollectorOutputSample",
     "PDFCollectorOutput",
     "PDFParser",
     "PDFFilter",
