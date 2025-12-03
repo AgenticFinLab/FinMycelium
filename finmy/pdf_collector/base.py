@@ -27,29 +27,44 @@ class PDFCollectorInput:
     """Represents input for a PDF collection/processing task."""
 
     # The directory containing the files
-    input_dir_path: str
-    # The specific path to a PDF file (if applicable)
-    input_pdf_path: str
+    input_dir_path: str = "input"
     # The directory to store output files
-    output_dir_path: str
+    output_dir_path: str = "output"
+    # The batch size for processing pdfs (max 200)
+    batch_size: int = 200
+    # The language code for the document (e.g., "en" for English)
+    language: str = "en"
+    # Whether to check PDF size and page limits
+    check_pdf_limits: bool = True
     # List of keywords to filter by
-    keywords: List[str]
+    keywords: List[str] = field(default_factory=list)
     # Path to the .env file for loading environment variables
     env_file: Optional[str] = ".env"
 
 
 @dataclass
-class PDFCollectorOutput:
-    """Represents output from a PDF collection/processing task."""
+class PDFCollectorOutputSample:
+    """Represents parse results from a single PDF."""
 
     # List of extracted text snippets
-    content_list: list[str] = field(default_factory=list)
+    content_list: List[str] = field(default_factory=list)
     # List of extracted image paths
-    images: list[str] = field(default_factory=list)
+    images: List[str] = field(default_factory=list)
     # The full text content of the document
     full_content: str = ""
     # Layout information (e.g., page structure)
-    layout: dict = field(default_factory=dict)
+    layout: Dict = field(default_factory=dict)
+
+
+@dataclass
+class PDFCollectorOutput:
+    """Represents parse results from a PDF collection/processing task.
+
+    A list of PDF parsing results, where each item corresponds to a subfolder in output_dir_path.
+    """
+
+    # List of parsed PDF results
+    results: List[PDFCollectorOutputSample] = field(default_factory=list)
 
 
 class BasePDFCollector(ABC):
@@ -70,6 +85,9 @@ class BasePDFCollector(ABC):
         """
         self.input_dir = pdf_collector_input.input_dir_path
         self.output_dir = pdf_collector_input.output_dir_path
+        self.batch_size = pdf_collector_input.batch_size
+        self.language = pdf_collector_input.language
+        self.check_pdf_limits = pdf_collector_input.check_pdf_limits
         self.keywords = pdf_collector_input.keywords
         self.logger = self._setup_logger()
         self._ensure_directories_exist()
