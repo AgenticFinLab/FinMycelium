@@ -1,7 +1,7 @@
 """
-PDF Parser class for processing PDF files using the Mineru API.
+PDF Collector class for parsing PDF files using the Mineru API and filtering records based on keywords.
 
-This module contains the PDFCollector class which provides methods to parse PDF files, collect results, and retry failed files using the Mineru API.
+This module contains the PDFCollector class which provides methods to parse PDF files, collect results, and retry failed files using the Mineru API. After parsing, the class filters records based on keywords.
 """
 
 import os
@@ -18,8 +18,7 @@ from .utils import parse_pdfs, retry_failed_files, contains_keywords
 class PDFCollector(BasePDFCollector):
     """
     PDF collector class, inheriting from BasePDFCollector
-    Uses Mineru API to parse PDF files and maps results to PDFCollectorOutput format.
-    Filters records based on keywords.
+    Uses Mineru API to parse PDF files and maps results to PDFCollectorOutput format. After parsing, filters records based on keywords.
     """
 
     def __init__(self, config):
