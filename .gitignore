@@ -9,7 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 venv/
-examples/Collector/test_files
+examples/utest/Collector/test_files
 build/
 develop-eggs/
 dist/
