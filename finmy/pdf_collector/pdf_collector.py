@@ -163,6 +163,6 @@ class PDFCollector(BasePDFCollector):
                 indent=2,
             )
 
-            print(f"Parser information saved to: {filtered_info_path}")
+            print(f"Filtered information saved to: {filtered_info_path}")
 
         return filtered_info
