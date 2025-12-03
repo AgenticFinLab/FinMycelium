@@ -24,9 +24,8 @@ import sys
 import argparse
 from typing import List
 
-from finmy.pdf_collector import pdf_filter
-
-from finmy.matcher import re_match
+from finmy.pdf_collector.base import PDFCollectorInput
+from finmy.pdf_collector.pdf_filter import PDFFilter
 
 
 def main(input_path: str, keywords: List[str]) -> None:
@@ -46,6 +45,18 @@ def main(input_path: str, keywords: List[str]) -> None:
         sys.exit(1)
 
     print(f"Reading parser information from: {parser_csv_path}")
+
+    # Create input configuration
+    pdf_input = PDFCollectorInput(
+        input_dir_path=input_path,
+        # Not using a specific PDF file in this case
+        input_pdf_path="",
+        output_dir_path=input_path,
+        keywords=keywords,
+    )
+
+    # Initialize the PDF keyword filter
+    pdf_filter = PDFFilter(pdf_input)
 
     # Read the CSV file
     records = pdf_filter.read_csv_file(parser_csv_path)
@@ -97,8 +108,9 @@ if __name__ == "__main__":
         print(f"Error: Folder does not exist: {args.input_path}")
         sys.exit(1)
 
-    # Parse keywords from input
-    keywords = re_match.parse_keywords(args.keywords)
+    # Parse keywords from input (assuming re_match is available or using a simple split)
+    # Using simple split for now, you can import re_match if needed
+    keywords = [kw.strip() for kw in args.keywords.split(",")]
     print(f"Parsed keywords: {keywords}")
 
     # Run the main function

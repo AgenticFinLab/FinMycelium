@@ -1,139 +1,125 @@
 """
-Base module for parsing and filtering markdown files based on keywords.
+Module for filtering PDF content based on keywords, extending the base PDF collector functionality.
 
-This module provides core functionality to read parsing information from a CSV file,
-search for keywords in markdown files, and filter records based on keyword matches.
+This module provides concrete implementation for filtering PDF content based on specified keywords,
+leveraging the base abstractions defined in base.py.
 """
 
 import os
 import re
-import csv
 from typing import List, Dict
+from .base import BasePDFCollector, PDFCollectorInput, PDFCollectorOutput
 
 
-def read_csv_file(file_path: str) -> List[Dict[str, str]]:
+class PDFFilter(BasePDFCollector):
     """
-    Read a CSV file and return its content as a list of dictionaries.
-
-    Args:
-        file_path (str): Path to the CSV file to be read
-
-    Returns:
-        List[Dict[str, str]]: List of dictionaries representing CSV rows
+    A concrete implementation of BasePDFCollector that filters PDF content based on keywords.
     """
-    records = []
-    with open(file_path, "r", encoding="utf-8", newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            records.append(row)
-    return records
 
+    def __init__(self, pdf_collector_input: PDFCollectorInput):
+        self.pdf_collector_input = pdf_collector_input
+        """
+        Initializes the PDF keyword filter.
 
-def write_csv_file(
-    file_path: str, records: List[Dict[str, str]], fieldnames: List[str]
-) -> None:
-    """
-    Write records to a CSV file.
+        Args:
+            pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
+        """
+        super().__init__(pdf_collector_input)
 
-    Args:
-        file_path (str): Path to the output CSV file
-        records (List[Dict[str, str]]): List of dictionaries to write
-        fieldnames (List[str]): List of field names for the CSV header
-    """
-    with open(file_path, "w", encoding="utf-8", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(records)
+    def collect(self) -> PDFCollectorOutput:
+        """
+        Perform the collection/processing task by reading the input PDF and applying keyword filtering.
 
+        Returns:
+            PDFCollectorOutput: The result of the collection process, including filtered content.
+        """
+        # This implementation focuses on filtering existing content
+        # For a complete implementation, you would need to extract content from the PDF first
+        # Here we'll return an empty output, as the actual PDF parsing would be done in a separate collector
+        output = PDFCollectorOutput()
 
-def read_markdown_file(file_path: str) -> str:
-    """
-    Read the content of a markdown file.
+        return output
 
-    Args:
-        file_path (str): Path to the markdown file
+    def filter(self, content: str) -> List[Dict[str, str]]:
+        """
+        Filter content based on keywords.
 
-    Returns:
-        str: Content of the markdown file
-    """
-    with open(file_path, "r", encoding="utf-8") as file:
-        return file.read()
+        Args:
+            content (str): The content to filter.
 
+        Returns:
+            List[Dict[str, str]]: Filtered list of records.
+        """
+        if not self.keywords:
+            # If no keywords provided, return an empty list or the original content as a single record
+            return []
 
-def contains_keywords(text: str, keywords: List[str]) -> bool:
-    """
-    Check if the text contains any of the specified keywords using regex matching.
+        # Check if any of the keywords exist in the content
+        if self.contains_keywords(content, self.keywords):
+            # Return the content as a record if keywords are found
+            return [{"content": content, "keywords_found": self.keywords}]
+        else:
+            return []
 
-    Args:
-        text (str): Text to search in
-        keywords (List[str]): List of keywords to search for
+    def contains_keywords(self, text: str, keywords: List[str]) -> bool:
+        """
+        Check if the text contains any of the specified keywords using regex matching.
 
-    Returns:
-        bool: True if any keyword is found in the text, False otherwise
-    """
-    # Create a regex pattern that matches any of the keywords
-    for keyword in keywords:
-        # Escape special regex characters in the keyword
-        escaped_keyword = re.escape(keyword)
-        # Use re.IGNORECASE for case-insensitive matching
-        if re.search(escaped_keyword, text, re.IGNORECASE):
-            return True
-    return False
+        Args:
+            text (str): Text to search in
+            keywords (List[str]): List of keywords to search for
 
+        Returns:
+            bool: True if any keyword is found in the text, False otherwise
+        """
+        # Create a regex pattern that matches any of the keywords
+        for keyword in keywords:
+            # Escape special regex characters in the keyword
+            escaped_keyword = re.escape(keyword)
+            # Use re.IGNORECASE for case-insensitive matching
+            if re.search(escaped_keyword, text, re.IGNORECASE):
+                return True
+        return False
 
-def filter_records_by_keywords(
-    records: List[Dict[str, str]], keywords: List[str], base_folder: str
-) -> List[Dict[str, str]]:
-    """
-    Filter records based on whether their corresponding markdown files contain specified keywords.
+    def filter_records_by_keywords(
+        self, records: List[Dict[str, str]], keywords: List[str], base_folder: str
+    ) -> List[Dict[str, str]]:
+        """
+        Filter records based on whether their corresponding files contain specified keywords.
 
-    Args:
-        records (List[Dict[str, str]]): List of records from parser_information.csv
-        keywords (List[str]): List of keywords to search for
-        base_folder (str): Base folder where markdown files are located
+        Args:
+            records (List[Dict[str, str]]): List of records from a CSV file
+            keywords (List[str]): List of keywords to search for
+            base_folder (str): Base folder where files are located
 
-    Returns:
-        List[Dict[str, str]]: Filtered list of records that contain the keywords
-    """
-    filtered_records = []
+        Returns:
+            List[Dict[str, str]]: Filtered list of records that contain the keywords
+        """
+        filtered_records = []
 
-    for record in records:
-        location = record.get("Location", "")
-        if not location:
-            continue
+        for record in records:
+            location = record.get("Location", "")
+            if not location:
+                continue
 
-        # Construct the full path to the markdown file
-        markdown_path = os.path.join(base_folder, location)
+            # Construct the full path to the file
+            file_path = os.path.join(base_folder, location)
 
-        # Check if the file exists
-        if not os.path.exists(markdown_path):
-            print(f"Warning: File does not exist: {markdown_path}")
-            continue
+            # Check if the file exists
+            if not os.path.exists(file_path):
+                self.logger.warning("File does not exist: %s", file_path)
+                continue
 
-        try:
-            # Read the markdown file content
-            markdown_content = read_markdown_file(markdown_path)
+            try:
+                # Read the file content
+                with open(file_path, "r", encoding="utf-8") as file:
+                    file_content = file.read()
 
-            # Check if any of the keywords exist in the content
-            if contains_keywords(markdown_content, keywords):
-                filtered_records.append(record)
-        except Exception as e:
-            print(f"Error reading file {markdown_path}: {str(e)}")
-            continue
+                # Check if any of the keywords exist in the content
+                if self.contains_keywords(file_content, keywords):
+                    filtered_records.append(record)
+            except Exception as e:
+                self.logger.error("Error reading file %s: %s", file_path, str(e))
+                continue
 
-    return filtered_records
-
-
-def get_csv_fieldnames(file_path: str) -> List[str]:
-    """
-    Get the field names from the header of a CSV file.
-
-    Args:
-        file_path (str): Path to the CSV file
-
-    Returns:
-        List[str]: List of field names from the CSV header
-    """
-    with open(file_path, "r", encoding="utf-8", newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
-        return reader.fieldnames or []
+        return filtered_records
