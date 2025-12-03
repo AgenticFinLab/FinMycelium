@@ -561,17 +561,17 @@ class FinMyceliumWebInterface:
             baidu_search_results = baidusearch_api(",".join(keywords))
             formatted_baidu_search_results = []
             if "references" in baidu_search_results:
-                for ref in baidu_search_results["references"]:
+                for item in baidu_search_results["references"]:
                     formatted_item = {
-                        "title": ref.get("title", ""),
-                        "url": ref.get("url", ""),
+                        "title": item["title"],
+                        "url": item["url"],
                         "keywords": ",".join(keywords),
-                        "snippet": ref.get("snippet", ""),
-                        "content": ref.get("content", ""),
-                        "sitename": ref.get("website", ""),
-                        "datepublished": ref.get("date", ""),
+                        "snippet": item["snippet"],
+                        "content": item["content"],
+                        "sitename": item["website"],
+                        "datepublished": item["date"],
                     }
-                    results = parser.parse_urls([ref.get("url", "")])
+                    results = parser.parse_urls([item["url"]])
                     print(results)
                     formatted_item["parsed_content"] = (
                         results[0]["content"] if results else []
