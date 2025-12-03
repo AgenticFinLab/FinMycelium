@@ -6,7 +6,7 @@ import argparse
 
 from dotenv import load_dotenv
 
-from finmy.pdf_collector.pdf_parser import PDFParser
+from finmy.pdf_collector.pdf_parser import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 
 if __name__ == "__main__":
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     config = {
         # The directory to store output files
         "output_dir": args.output_dir,
-        # The batch size for processing pdfs (max 200)
+        # The batch size for processing pdfs (max: 200)
         "batch_size": args.batch_size,
         # The language code for the document (e.g., "en" for English)
         "language": args.language,
@@ -81,8 +81,8 @@ if __name__ == "__main__":
         keywords=keywords,
     )
 
-    # Initialize PDFParser
-    parser_instance = PDFParser(config)
+    # Initialize PDFCollector
+    parser_instance = PDFCollector(config)
 
     # Run the main processing function
     print("\nStarting PDF processing...")

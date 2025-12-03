@@ -1,15 +1,14 @@
 """
-Base abstractions for PDF collection and processing.
+Base abstractions for PDF parsing and filtering.
 
-- Provides a consistent result structure (`PDFCollectorInput`, `PDFCollectorOutput`).
-- Defines an abstract `BasePDFCollector` to be extended by concrete collectors.
-
-We support different ways of PDF processing:
-- API-based parser: uses external APIs (e.g., Mineru API) to extract content from PDFs.
+- Defines standard input/output structures (`PDFCollectorInput`, `PDFCollectorOutputSample`, `PDFCollectorOutput`)
+- Provides abstract `BasePDFCollector` base class for concrete implementations
+- Supports Mineru API-based parsing
 
 Implementers should:
-- Override `collect` to produce structured output using `PDFCollectorOutput`.
-- Use the provided helper methods for file operations, logging, and directory management.
+- Override `collect()` to return structured `PDFCollectorOutput`
+- Override `filter()` to implement keyword-based filtering logic
+- Use built-in helpers for file operations, logging, and directory management
 """
 
 import os
@@ -57,7 +56,7 @@ class PDFCollectorOutputSample:
 class PDFCollectorOutput:
     """Represents parse results from a PDF collection/processing task.
 
-    A list of PDF parsing results, where each item corresponds to a subfolder in output_dir.
+    A list of records, where each record corresponds to a parsed PDF result.
     """
 
     # List of parsed PDF results
@@ -66,7 +65,7 @@ class PDFCollectorOutput:
 
 class BasePDFCollector(ABC):
     """
-    An abstract base class for PDF collection and processing modules.
+    An abstract base class for PDF parsing and filtering modules.
 
     This class provides common functionalities and configurations
     that can be shared across different PDF processing strategies,
@@ -125,10 +124,10 @@ class BasePDFCollector(ABC):
         Abstract method to perform the collection or processing task.
 
         Subclasses must implement this method to define their specific logic
-        for collecting or processing PDF data.
+        for parsing PDF data.
 
         Returns:
-            PDFCollectorOutput: The result of the collection process.
+            PDFCollectorOutput: The result of the parsing process.
         """
         pass
 
@@ -146,6 +145,7 @@ class BasePDFCollector(ABC):
 
         Args:
             pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
+            parsed_info (PDFCollectorOutput): The parsed records to filter.
 
         Returns:
             PDFCollectorOutput: Filtered records.
