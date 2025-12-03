@@ -17,7 +17,7 @@ def create_test_files():
     """Create simple test files for demonstration."""
 
     # Create test directory
-    test_dir = "examples/Collector/test_files"
+    test_dir = "examples/utest/Collector/test_files"
     os.makedirs(test_dir, exist_ok=True)
 
     # Sample data
