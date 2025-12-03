@@ -3,10 +3,14 @@ An interface to test the pdf parser under the finmy/collector.
 """
 
 import argparse
+from dotenv import load_dotenv
 
-from finmy.pdf_collector import pdf_parser
+from finmy.pdf_collector.base import PDFCollectorInput
+from finmy.pdf_collector.pdf_parser import PDFParser
 
 if __name__ == "__main__":
+    # Load environment variables
+    load_dotenv()
 
     parser = argparse.ArgumentParser(
         description="Parse PDFs with configurable options."
@@ -40,42 +44,30 @@ if __name__ == "__main__":
         help="Language code for parsing (e.g., 'en', 'es')",
     )
     parser.add_argument(
-        "-c",
-        "--check_pdf_limits",
-        type=bool,
-        default=True,
-        help="Enable PDF size/page limits check",
-    )
-    parser.add_argument(
-        "-r",
-        "--retry_failed",
-        type=bool,
-        default=True,
-        help="Retry failed files after initial processing",
+        "--no-check-limits",
+        action="store_false",
+        dest="check_pdf_limits",
+        help="Disable PDF size/page limits check",
     )
 
     args = parser.parse_args()
 
-    # Run the main processing function with default parameters
-    # Return the failed files map and original files list
-    failed_maps, orig_list = pdf_parser.parse_pdfs(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
+    # Create PDFCollectorInput object
+    pdf_input = PDFCollectorInput(
+        input_dir_path=args.input_dir,
+        output_dir_path=args.output_dir,
         batch_size=args.batch_size,
         language=args.language,
         check_pdf_limits=args.check_pdf_limits,
     )
+    # Initialize PDFParser
+    parser_instance = PDFParser(pdf_input)
 
-    # Run the retry function if there are failed files map and retry_failed is True
-    if failed_maps and args.retry_failed:
-        pdf_parser.retry_failed_files(
-            all_failed_files_maps=failed_maps,
-            original_files_list=orig_list,
-            input_dir=args.input_dir,
-            output_dir=args.output_dir,
-            batch_size=args.batch_size,
-            language=args.language,
-            check_pdf_limits=args.check_pdf_limits,
-        )
-    else:
-        print("\nNo failed files found from initial processing. Skipping retry.")
+    print(parser_instance)
+
+    # Run the main processing function
+    print("\nStarting PDF processing...")
+    results = parser_instance.collect()
+    # Print results summary
+    print(f"\nProcessing completed. Results saved to: {args.output_dir}")
+    print(f"Total PDFs parsed results saved: {len(results.results)}")
