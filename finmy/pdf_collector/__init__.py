@@ -20,7 +20,7 @@ from .base import (
     PDFCollectorOutputSample,
     PDFCollectorOutput,
 )
-from .pdf_parser import PDFCollector
+from .pdf_collector import PDFCollector
 
 __all__ = [
     "BasePDFCollector",

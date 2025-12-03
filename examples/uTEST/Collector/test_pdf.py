@@ -6,7 +6,7 @@ import argparse
 
 from dotenv import load_dotenv
 
-from finmy.pdf_collector.pdf_parser import PDFCollector
+from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 
 if __name__ == "__main__":
