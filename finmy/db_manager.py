@@ -17,6 +17,7 @@ import os
 from typing import Optional, Any, Dict, List
 from pathlib import Path
 from dotenv import load_dotenv
+import uuid
 
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -299,7 +300,7 @@ class DataManager(PDDataBaseManager):
 
     # ---------- RAW_DATA ----------
 
-    def insert_raw_data(self, raw: RawData) -> None:
+    def insert_raw_data(self, raw: RawData) -> dict:
         """Insert a single `RawData` record into `RAW_DATA`.
 
         For now we map:
@@ -307,7 +308,7 @@ class DataManager(PDDataBaseManager):
           (the caller can later refine the schema if needed).
         """
         record = {
-            "raw_data_id": raw.raw_data_id,
+            "raw_data_id": raw.raw_data_id if raw.raw_data_id else str(uuid.uuid4()),
             "source_file_path": raw.source,
             "source_url": raw.source,
             "location": raw.location,
@@ -320,8 +321,9 @@ class DataManager(PDDataBaseManager):
         self.write_sql(
             df, table_name=self.TABLE_RAW_DATA, if_exists="append", index=False
         )
+        return record
 
-    def insert_raw_data_batch(self, raws: List[RawData]) -> None:
+    def insert_raw_data_batch(self, raws: List[RawData]) -> dict:
         """Batch insert multiple `RawData` records."""
         if not raws:
             return
@@ -329,7 +331,9 @@ class DataManager(PDDataBaseManager):
         for raw in raws:
             records.append(
                 {
-                    "raw_data_id": raw.raw_data_id,
+                    "raw_data_id": (
+                        raw.raw_data_id if raw.raw_data_id else str(uuid.uuid4())
+                    ),
                     "source_file_path": raw.source,
                     "source_url": raw.source,
                     "location": raw.location,
@@ -343,10 +347,11 @@ class DataManager(PDDataBaseManager):
         self.write_sql(
             df, table_name=self.TABLE_RAW_DATA, if_exists="append", index=False
         )
+        return records
 
     # ---------- MEAT_SAMPLE ----------
 
-    def insert_meta_samples(self, samples: List[MetaSample]) -> None:
+    def insert_meta_samples(self, samples: List[MetaSample]) -> list:
         """Batch insert `MetaSample` records into `MEAT_SAMPLE`."""
         if not samples:
             return
@@ -355,7 +360,7 @@ class DataManager(PDDataBaseManager):
         for s in samples:
             records.append(
                 {
-                    "sample_id": s.sample_id,
+                    "sample_id": s.sample_id if s.sample_id else str(uuid.uuid4()),
                     "raw_data_id": s.raw_data_id,
                     "location": s.location,
                     "time": s.time,
@@ -373,9 +378,11 @@ class DataManager(PDDataBaseManager):
             df, table_name=self.TABLE_MEAT_SAMPLE, if_exists="append", index=False
         )
 
+        return records
+
     # ---------- USER_QUERY ----------
 
-    def insert_user_query(self, uq: UserQueryInput, query_id: str) -> None:
+    def insert_user_query(self, uq: UserQueryInput) -> dict:
         """Insert a `UserQueryInput` into `USER_QUERY`.
 
         Args:
@@ -383,7 +390,9 @@ class DataManager(PDDataBaseManager):
             query_id: unique identifier for this query (typically a UUID).
         """
         record = {
-            "id": query_id,
+            "user_query_id": (
+                uq.user_query_id if uq.user_query_id else str(uuid.uuid4())
+            ),
             "query_text": uq.query_text,
             "key_words": repr(uq.key_words),
             "time_range": repr(uq.time_range),
@@ -393,6 +402,7 @@ class DataManager(PDDataBaseManager):
         self.write_sql(
             df, table_name=self.TABLE_USER_QUERY, if_exists="append", index=False
         )
+        return record
 
     # Simple query helpers -------------------------------------------------
 
@@ -405,3 +415,8 @@ class DataManager(PDDataBaseManager):
         """Fetch `MEAT_SAMPLE` rows linked to a given `raw_data_id`."""
         where = f"raw_data_id = '{raw_data_id}'"
         return self.read_sql_table(self.TABLE_MEAT_SAMPLE, where=where)
+
+    def fetch_user_query_by_id(self, user_query_id: str) -> pd.DataFrame:
+        """Fetch `USER_QUERY` rows by `user_query_id`."""
+        where = f"user_query_id = '{user_query_id}'"
+        return self.read_sql_table(self.TABLE_USER_QUERY, where=where)
