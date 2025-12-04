@@ -9,6 +9,7 @@ import time
 import uuid
 import json
 import shutil
+import logging
 import zipfile
 import datetime
 import requests
@@ -20,6 +21,8 @@ from PyPDF2 import PdfReader, PdfWriter
 
 from .base import PDFCollectorOutputSample, PDFCollectorOutput
 
+logging.basicConfig(level=logging.INFO)
+
 
 def split_large_pdf(pdf_path, max_pages=600):
     """Split a large PDF into smaller chunks."""
@@ -29,12 +32,14 @@ def split_large_pdf(pdf_path, max_pages=600):
 
         # Check if the PDF is encrypted and try to decrypt it
         if reader.is_encrypted:
-            print(f"Warning: {pdf_path} is encrypted, trying to decrypt...")
+            logging.warning(
+                "  - Warning: %s is encrypted, trying to decrypt...", pdf_path
+            )
             try:
                 # Try to decrypt with an empty password
                 reader.decrypt("")
             except Exception:
-                print(f"Failed to decrypt {pdf_path}, skipping...")
+                logging.warning("  - Failed to decrypt %s, skipping...", pdf_path)
                 return []
 
         # Get the total number of pages in the PDF
@@ -61,7 +66,12 @@ def split_large_pdf(pdf_path, max_pages=600):
                 try:
                     writer.add_page(reader.pages[i])
                 except Exception as e:
-                    print(f"Warning: Could not add page {i} from {pdf_path}: {e}")
+                    logging.warning(
+                        "  - Warning: Could not add page %d from %s: %s",
+                        i,
+                        pdf_path,
+                        e,
+                    )
                     continue
 
             # Create the path for the split file
@@ -74,21 +84,25 @@ def split_large_pdf(pdf_path, max_pages=600):
                     writer.write(f)
                 split_files.append(split_path)
             except Exception as e:
-                print(f"Error writing split file {split_path}: {e}")
+                logging.error("  - Error writing split file %s: %s", split_path, e)
                 continue
 
         # If multiple parts were created, remove the original file
         if len(split_files) > 1:
             try:
                 os.remove(pdf_path)
-                print(f"Removed original file: {pdf_path}")
+                logging.info("  - Removed original file: %s", pdf_path)
             except Exception as e:
-                print(f"Warning: Could not remove original file {pdf_path}: {e}")
+                logging.warning(
+                    "  - Warning: Could not remove original file %s: %s",
+                    pdf_path,
+                    e,
+                )
 
         return split_files
 
     except Exception as e:
-        print(f"Error splitting {pdf_path}: {e}")
+        logging.error("  - Error splitting %s: %s", pdf_path, e)
         return []
 
 
@@ -105,14 +119,20 @@ def get_pdf_info(pdf_path):
             try:
                 # Try to decrypt with an empty password
                 if reader.decrypt("") == 0:
-                    print(f"Could not decrypt {pdf_path}, deleting file...")
+                    logging.warning(
+                        "  - Could not decrypt %s, deleting file...", pdf_path
+                    )
                     os.remove(pdf_path)
-                    print(f"Deleted: {pdf_path}")
+                    logging.info("  - Deleted: %s", pdf_path)
                     return 0, 0
             except Exception as decrypt_error:
-                print(f"Decryption failed for {pdf_path}: {decrypt_error}, deleting...")
+                logging.error(
+                    "  - Decryption failed for %s: %s, deleting...",
+                    pdf_path,
+                    decrypt_error,
+                )
                 os.remove(pdf_path)
-                print(f"Deleted: {pdf_path}")
+                logging.info("  - Deleted: %s", pdf_path)
                 return 0, 0
 
         # Get the page count from the PDF
@@ -121,14 +141,16 @@ def get_pdf_info(pdf_path):
 
     except Exception as pdf_error:
         # If the PDF can't be read, delete the file and return 0 for both values
-        print(
-            f"Warning: Could not read PDF info for {pdf_path}: {pdf_error}, deleting..."
+        logging.warning(
+            "  - Warning: Could not read PDF info for %s: %s, deleting...",
+            pdf_path,
+            pdf_error,
         )
         try:
             os.remove(pdf_path)
-            print(f"Deleted: {pdf_path}")
+            logging.info("  - Deleted: %s", pdf_path)
         except Exception as delete_error:
-            print(f"Failed to delete {pdf_path}: {delete_error}")
+            logging.error("  - Failed to delete %s: %s", pdf_path, delete_error)
         return (
             os.path.getsize(pdf_path) / (1024 * 1024) if os.path.exists(pdf_path) else 0
         ), 0
@@ -147,7 +169,7 @@ def check_and_process_pdfs(
     # Find all PDF files in the specified directory
     pdf_files = glob.glob(os.path.join(pdf_directory, "*.pdf"))
     if not pdf_files:
-        print(f"No PDF files found in {pdf_directory}")
+        logging.info("  - No PDF files found in %s", pdf_directory)
         return [], []
 
     # Set up the API endpoint and headers
@@ -161,7 +183,7 @@ def check_and_process_pdfs(
 
     # Check PDF limits and split large files if enabled
     if check_pdf_limits:
-        print("Analyzing PDF files...")
+        logging.info("  - Analyzing PDF files...")
         for pdf in pdf_files:
             try:
                 # Get file size and page count for the current PDF
@@ -169,18 +191,21 @@ def check_and_process_pdfs(
 
                 # Skip files that couldn't be read properly
                 if page_count == 0 and file_size_mb > 0:
-                    print(f"Skipping {pdf} due to PDF reading errors")
+                    logging.warning("  - Skipping %s due to PDF reading errors", pdf)
                     continue
 
                 # Skip files with access issues
                 if file_size_mb == 0:
-                    print(f"Skipping {pdf} due to file access issues")
+                    logging.warning("  - Skipping %s due to file access issues", pdf)
                     continue
 
                 # Check if the file exceeds size or page limits
                 if file_size_mb > max_pdf_size_mb or page_count > max_pdf_pages:
-                    print(
-                        f"Splitting {pdf} due to size ({file_size_mb:.2f} MB) or pages ({page_count})"
+                    logging.info(
+                        "  - Splitting %s due to size (%.2f MB) or pages (%d)",
+                        pdf,
+                        file_size_mb,
+                        page_count,
                     )
                     # Split the large PDF into smaller chunks
                     split_paths = split_large_pdf(pdf, max_pages=max_pdf_pages)
@@ -188,27 +213,31 @@ def check_and_process_pdfs(
                         # Add the split files to the processing list
                         all_files_to_process.extend(split_paths)
                     else:
-                        print(f"Failed to split {pdf}, skipping...")
+                        logging.error("  - Failed to split %s, skipping...", pdf)
                 else:
                     # Add the original file to the processing list if it doesn't need splitting
                     all_files_to_process.append(pdf)
 
             except Exception as e:
-                print(f"Error processing {pdf}: {e}")
+                logging.error("  - Error processing %s: %s", pdf, e)
                 continue
     else:
-        print("Skipping PDF limit checks, processing all files directly...")
+        logging.info("  - Skipping PDF limit checks, processing all files directly...")
         all_files_to_process = pdf_files
 
     # Return early if no valid files to process
     if not all_files_to_process:
-        print("No valid files to process")
+        logging.info("  - No valid files to process")
         return [], []
 
     # Calculate batch information
     total_files = len(all_files_to_process)
     total_batches = (total_files + max_files_per_batch - 1) // max_files_per_batch
-    print(f"Found {total_files} files. Processing in {total_batches} batches...")
+    logging.info(
+        "  - Found %d files. Processing in %d batches...",
+        total_files,
+        total_batches,
+    )
 
     # Process files in batches
     for batch_index in range(total_batches):
@@ -216,8 +245,11 @@ def check_and_process_pdfs(
         start_idx = batch_index * max_files_per_batch
         # Get the files for this batch
         batch_files = all_files_to_process[start_idx : start_idx + max_files_per_batch]
-        print(
-            f"\nProcessing batch {batch_index + 1}/{total_batches} ({len(batch_files)} files)"
+        logging.info(
+            "  - Processing batch %d/%d (%d files)",
+            batch_index + 1,
+            total_batches,
+            len(batch_files),
         )
         start_time = time.time()
 
@@ -249,12 +281,14 @@ def check_and_process_pdfs(
                     }
                 )
             except Exception as e:
-                print(f"Error preparing {pdf} for batch: {e}")
+                logging.error("  - Error preparing %s for batch: %s", pdf, e)
                 continue
 
         # Skip this batch if no valid files were prepared
         if not files_data:
-            print(f"Batch {batch_index + 1} has no valid files, skipping...")
+            logging.info(
+                "  - Batch %d has no valid files, skipping...", batch_index + 1
+            )
             continue
 
         try:
@@ -269,18 +303,23 @@ def check_and_process_pdfs(
                     "enable_table": True,
                     "files": files_data,
                 },
+                # timeout=600,
             )
             response.raise_for_status()
             result = response.json()
 
             # Check if the API request was successful
             if result.get("code") != 0:
-                print(
-                    f"Batch {batch_index + 1} failed: {result.get('msg', 'Unknown error')}"
+                logging.error(
+                    "  - Batch %d failed: %s",
+                    batch_index + 1,
+                    result.get("msg", "Unknown error"),
                 )
                 continue
         except Exception as e:
-            print(f"API request failed for batch {batch_index + 1}: {str(e)}")
+            logging.error(
+                "  - API request failed for batch %d: %s", batch_index + 1, str(e)
+            )
             continue
 
         # Get the batch ID and file upload URLs from the response
@@ -298,22 +337,31 @@ def check_and_process_pdfs(
                     if upload_res.status_code in [200, 201]:
                         success_count += 1
                     else:
-                        print(f"Upload failed for {pdf_path}: {upload_res.status_code}")
+                        logging.error(
+                            "  - Upload failed for %s: %d",
+                            pdf_path,
+                            upload_res.status_code,
+                        )
             except Exception as e:
-                print(f"Upload error for {pdf_path}: {e}")
+                logging.error("  - Upload error for %s: %s", pdf_path, e)
                 continue
 
         # Record successful batch if any files were uploaded
         if success_count > 0:
             batch_ids.append(batch_id)
-            print(
-                f"Batch {batch_index + 1} processed: {success_count}/{len(batch_files)} files"
+            logging.info(
+                "  - Batch %d processed: %d/%d files",
+                batch_index + 1,
+                success_count,
+                len(batch_files),
             )
-            print(f"Batch ID: {batch_id}")
+            logging.info("  - Batch ID: %s", batch_id)
             end_time = time.time()
-            print(f"Time taken: {end_time - start_time:.2f}s")
+            logging.info("  - Time taken: %.2fs\n", end_time - start_time)
         else:
-            print(f"Batch {batch_index + 1} failed: No files uploaded successfully")
+            logging.error(
+                "  - Batch %d failed: No files uploaded successfully", batch_index + 1
+            )
 
     # Return the original list of files processed in this batch
     return batch_ids, all_files_to_process
@@ -370,7 +418,7 @@ def download_results(
     start_time = time.time()
     max_wait_seconds = max_wait_minutes * 60
 
-    print(f"\nMonitoring batch {batch_id} for completion...")
+    logging.info("  - Monitoring batch %s for completion...", batch_id)
 
     # Poll the API until all files are processed or timeout occurs
     while (time.time() - start_time) < max_wait_seconds:
@@ -410,27 +458,31 @@ def download_results(
 
             # If no files are still incomplete, break out of the polling loop
             if incomplete_count == 0:
-                print("All files processed. Starting download...")
+                logging.info("  - All files processed. Starting download...")
                 break
 
             # Print current status and wait before next poll
             status_msg = ", ".join([f"{k}:{v}" for k, v in status_report.items()])
-            print(
-                f"  Status: {status_msg} | Incomplete: {incomplete_count} | Waiting {poll_interval}s..."
+            logging.info(
+                "  - Status: %s | Incomplete: %d | Waiting %ds...",
+                status_msg,
+                incomplete_count,
+                poll_interval,
             )
             time.sleep(poll_interval)
 
         except requests.exceptions.RequestException as e:
-            print(f"Status check error (network): {e}")
+            logging.error("  - Status check error (network): %s", e)
             time.sleep(poll_interval)
         except Exception as e:
-            print(f"Status check error (general): {e}")
+            logging.error("  - Status check error (general): %s", e)
             time.sleep(poll_interval)
     else:
         # This else clause executes if the while loop completed without breaking
         # (i.e., timeout occurred)
-        print(
-            f"Timeout reached after {max_wait_minutes} minutes. Proceeding with available results..."
+        logging.warning(
+            "  - Timeout reached after %d minutes. Proceeding with available results...",
+            max_wait_minutes,
         )
 
     # Initialize download counters
@@ -459,7 +511,9 @@ def download_results(
             if state == "failed":
                 # Map this back later
                 failed_files_map[data_id] = None
-                print(f"File {filename} (data_id: {data_id}) failed processing.")
+                logging.error(
+                    "  - File %s (data_id: %s) failed processing.", filename, data_id
+                )
 
             # Only download if the file was processed successfully and has download URL
             if state == "done" and "full_zip_url" in item:
@@ -503,25 +557,29 @@ def download_results(
                     # Add the sample to the PDFCollectorOutput
                     parsed_info.records.append(sample)
 
-                    print(
-                        f"Logged successful processing for: {original_filename} (RawDataID: {sample.RawDataID})"
+                    logging.info(
+                        "  - Logged successful processing for: %s (RawDataID: %s)",
+                        original_filename,
+                        sample.RawDataID,
                     )
                 else:
-                    print(f"Failed to download file: {filename} (state: {state})")
+                    logging.error(
+                        "  - Failed to download file: %s (state: %s)", filename, state
+                    )
             elif state != "done":
-                print(f"Skipping file {filename} with state: {state}")
+                logging.info("  - Skipping file %s with state: %s", filename, state)
 
         # Print the completion summary
-        print(f"\nBatch {batch_id} completed:")
+        logging.info("  - Batch %s completed:", batch_id)
         for state, count in status_report.items():
             if count > 0:
-                print(f"  - {state.capitalize()}: {count}")
-        print(f"Downloaded: {success_count}/{total_files} files")
+                logging.info("  - %s: %d", state.capitalize(), count)
+        logging.info("  - Downloaded: %d/%d files", success_count, total_files)
 
     except requests.exceptions.RequestException as e:
-        print(f"Download error (network): {str(e)}")
+        logging.error("  - Download error (network): %s", str(e))
     except Exception as e:
-        print(f"Download error (general): {str(e)}")
+        logging.error("  - Download error (general): %s", str(e))
 
     # After processing all files, save the PDFCollectorOutput to JSON file
     with open(json_file_path, mode="w", encoding="utf-8") as jsonfile:
@@ -534,7 +592,7 @@ def download_results(
             indent=2,
         )
 
-        print(f"Parser information saved to: {json_file_path}")
+        logging.info("  - Parser information saved to: %s\n", json_file_path)
 
     return (failed_files_map, parsed_info)
 
@@ -578,11 +636,11 @@ def parse_pdfs(
 
     # If no batches were processed successfully, return early
     if not batch_ids:
-        print("\nNo batches processed successfully")
+        logging.info("  - No batches processed successfully")
         return [], original_files_list
 
     # Start downloading the results for each batch
-    print("\nStarting result downloads...")
+    logging.info("  - Starting result downloads...")
     # Collect failed files maps from all batches
     all_failed_files_maps = {}
     parsed_info = []
@@ -698,7 +756,7 @@ def _download_zip(zip_url, base_name, output_dir):
         return True
 
     except Exception as e:
-        print(f"Download/extract error for {base_name}: {e}")
+        logging.error("  - Download/extract error for %s: %s", base_name, e)
         return False
 
 
@@ -723,7 +781,7 @@ def retry_failed_files(
         language (str): Document language code.
         check_pdf_limits (bool): Whether to check PDF size/pages and split if needed for retry batch.
     """
-    print("\n--- Starting Retry Process for Failed Files ---")
+    logging.info("  - Starting Retry Process for Failed Files...")
 
     # Load environment variables from .env file
     load_dotenv()
@@ -736,9 +794,9 @@ def retry_failed_files(
     files_to_retry = set()
 
     for batch_id, failed_map in all_failed_files_maps.items():
-        print(f"Analyzing batch {batch_id} for failed files...")
+        logging.info("  - Analyzing batch %s for failed files...", batch_id)
         if not failed_map:
-            print(f"  No failed files recorded for batch {batch_id}.")
+            logging.info("  - No failed files recorded for batch %s.", batch_id)
             continue
 
         for data_id in failed_map.keys():
@@ -749,8 +807,10 @@ def retry_failed_files(
             # Extract the original truncated name part (first 16 chars of original name)
             # Split from the right, take the first part
             original_name_part = data_id.rsplit("_b", 1)[0]
-            print(
-                f"  Looking for original file associated with data_id: {data_id} (original part: {original_name_part})"
+            logging.info(
+                "  - Looking for original file associated with data_id: %s (original part: %s)",
+                data_id,
+                original_name_part,
             )
 
             # Find the original file path that matches this part
@@ -765,21 +825,25 @@ def retry_failed_files(
                     break
 
             if matched_original_file:
-                print(
-                    f"Matched data_id {data_id} to original file: {matched_original_file}"
+                logging.info(
+                    "  - Matched data_id %s to original file: %s",
+                    data_id,
+                    matched_original_file,
                 )
                 files_to_retry.add(matched_original_file)
             else:
-                print(f"Warning: Could not find original file for data_id {data_id}")
+                logging.warning(
+                    "  - Warning: Could not find original file for data_id %s", data_id
+                )
 
     if not files_to_retry:
-        print("\nNo files identified for retry.")
+        logging.info("  - No files identified for retry.")
         return
 
-    print(f"\nIdentified {len(files_to_retry)} unique files for retry.")
-    print("Files to retry:")
+    logging.info("  - Identified %d unique files for retry.", len(files_to_retry))
+    logging.info("  - Files to retry:")
     for f in files_to_retry:
-        print(f"  - {f}")
+        logging.info("  - %s", f)
 
     # Create a temporary directory to hold the files for the retry batch
     # This is necessary because the API functions expect a directory of PDFs
@@ -795,10 +859,10 @@ def retry_failed_files(
             shutil.copy2(src_file, dest_file)
             copied_files.append(dest_file)
         else:
-            print(f"Warning: Original file for retry not found: {src_file}")
+            logging.warning("  - Original file for retry not found: %s", src_file)
 
     if not copied_files:
-        print("\nNo files were successfully copied for retry.")
+        logging.info("  - No files were successfully copied for retry.")
         # Clean up temp directory if empty
         try:
             os.rmdir(temp_retry_dir)
@@ -807,8 +871,10 @@ def retry_failed_files(
             pass
         return
 
-    print(
-        f"\nCopied {len(copied_files)} files to temporary retry directory: {temp_retry_dir}"
+    logging.info(
+        "  - Copied %d files to temporary retry directory: %s",
+        len(copied_files),
+        temp_retry_dir,
     )
 
     # Process the copied files in the temp directory as a new batch
@@ -822,13 +888,13 @@ def retry_failed_files(
     )
 
     if not retry_batch_ids:
-        print("\nRetry batch processing failed. No batch IDs obtained.")
+        logging.error("  - Retry batch processing failed. No batch IDs obtained.")
         # Clean up temp directory
         shutil.rmtree(temp_retry_dir)
         return
 
     # Download results for the retry batch
-    print("\nStarting result downloads for retry batch...")
+    logging.info("  - Starting result downloads for retry batch...")
     for retry_batch_id in retry_batch_ids:
         _, retry_parsed_info = download_results(
             api_key=api_key,
@@ -838,10 +904,10 @@ def retry_failed_files(
         )
 
     # Clean up the temporary directory after processing
-    print(f"\nCleaning up temporary retry directory: {temp_retry_dir}")
+    logging.info("  - Cleaning up temporary retry directory: %s", temp_retry_dir)
     shutil.rmtree(temp_retry_dir)
 
-    print("\n--- Retry Process Completed ---")
+    logging.info("  - Retry Process Completed")
 
     return retry_parsed_info
 

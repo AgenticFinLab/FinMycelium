@@ -7,6 +7,7 @@ This module contains the PDFCollector class which provides methods to parse PDF 
 import os
 import json
 import time
+import logging
 
 from .base import (
     BasePDFCollector,
@@ -14,6 +15,8 @@ from .base import (
     PDFCollectorOutput,
 )
 from .utils import parse_pdfs, retry_failed_files, contains_keywords
+
+logging.basicConfig(level=logging.INFO)
 
 
 class PDFCollector(BasePDFCollector):
@@ -66,8 +69,8 @@ class PDFCollector(BasePDFCollector):
         )
         # Retry failed files if any
         if any(len(files) > 0 for files in all_failed_files_maps.values()):
-            self.logger.info(
-                "Retrying %d failed files",
+            logging.info(
+                "  - Retrying %d failed files",
                 sum(len(files) for files in all_failed_files_maps.values()),
             )
             retry_parsed_info = retry_failed_files(
@@ -113,7 +116,7 @@ class PDFCollector(BasePDFCollector):
 
         # If no keywords provided, return all results
         if not pdf_collector_input.keywords:
-            self.logger.info("No keywords provided, returning all results")
+            logging.info("  - No keywords provided, returning all results")
             # Calculate total time if no filtering needed
             end_time = time.time()
             total_time = end_time - getattr(parsed_info, "start_time", end_time)
@@ -122,8 +125,8 @@ class PDFCollector(BasePDFCollector):
                 sample.CostTime = f"{total_time:.2f}s"
             return parsed_info
 
-        self.logger.info(
-            "Filtering %d records with keywords: %s",
+        logging.info(
+            "  - Filtering %d records with keywords: %s",
             len(parsed_info.records),
             pdf_collector_input.keywords,
         )
@@ -138,7 +141,7 @@ class PDFCollector(BasePDFCollector):
 
             # Check if the file exists
             if not os.path.exists(markdown_path):
-                self.logger.warning("Markdown file does not exist: %s", markdown_path)
+                logging.warning("  - Markdown file does not exist: %s", markdown_path)
                 continue
 
             try:
@@ -150,16 +153,8 @@ class PDFCollector(BasePDFCollector):
                 if contains_keywords(file_content, pdf_collector_input.keywords):
                     # Add the sample to filtered results
                     filtered_info.records.append(sample)
-                    self.logger.info(
-                        "Sample %s matched keywords, added to filtered results",
-                        sample.RawDataID,
-                    )
-                else:
-                    self.logger.debug(
-                        "Sample %s did not match keywords, skipped", sample.RawDataID
-                    )
             except Exception as e:
-                self.logger.error("Error reading file %s: %s", markdown_path, str(e))
+                logging.error("  - Error reading file %s: %s", markdown_path, str(e))
                 continue
 
         # Calculate total time from parsing start to filtering end
@@ -170,8 +165,8 @@ class PDFCollector(BasePDFCollector):
         for sample in filtered_info.records:
             sample.CostTime = f"{total_time:.2f}s"
 
-        self.logger.info(
-            "Filtering completed, %d records matched keywords",
+        logging.info(
+            "  - Filtering completed, %d records matched keywords",
             len(filtered_info.records),
         )
 
@@ -186,6 +181,6 @@ class PDFCollector(BasePDFCollector):
                 indent=2,
             )
 
-            print(f"Filtered information saved to: {filtered_info_path}")
+            logging.info("  - Filtered information saved to: %s", filtered_info_path)
 
         return filtered_info

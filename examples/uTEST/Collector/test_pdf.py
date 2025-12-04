@@ -2,12 +2,15 @@
 An interface to test the pdf parser under the finmy/collector.
 """
 
+import logging
 import argparse
 
 from dotenv import load_dotenv
 
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
+
+logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     # Load environment variables
@@ -85,13 +88,15 @@ if __name__ == "__main__":
     parser_instance = PDFCollector(config)
 
     # Run the main processing function
-    print("\nStarting PDF processing...")
+    logging.info("  - Starting PDF processing...")
 
     results = PDFCollectorOutput()
 
     # Collect the parsed and filtered results
-    print("Collecting parsed and filtered results...")
     results = parser_instance.run(pdf_collector_input)
 
     # Print final results summary
-    print(f"\nTotal PDFs parsed results after filtering: {len(results.records)}")
+    logging.info(
+        "  - Total PDFs parsed results after filtering: %d",
+        len(results.records),
+    )
