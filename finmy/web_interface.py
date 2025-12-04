@@ -16,6 +16,7 @@ import pandas as pd
 import datetime
 import json
 
+
 import streamlit as st
 from streamlit_input_box import input_box
 from streamlit_option_menu import option_menu
@@ -27,6 +28,9 @@ from finmy.url_collector.SearchCollector.bocha_search import bochasearch_api
 from finmy.url_collector.SearchCollector.baidu_search import baidusearch_api
 from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
 from finmy.url_collector.url_parser import URLParser
+from finmy.pdf_collector.pdf_collector import PDFCollector
+from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
+
 
 # Load environment variables
 load_dotenv()
@@ -652,7 +656,54 @@ class FinMyceliumWebInterface:
                         else:
                             # Assume local file path
                             # Replace with your local file processing logic
-                            pass
+
+                            if os.path.exists(url) and url.lower().endswith(".pdf"):
+
+                                print("Processing local PDF file:", url)
+                                output_dir = "output"
+                                batch_size = 200
+                                language = "en"
+                                check_pdf_limits = True
+
+                                config = {
+                                    # The directory to store output files
+                                    "output_dir": output_dir,
+                                    # The batch size for processing pdfs (max: 200)
+                                    "batch_size": batch_size,
+                                    # The language code for the document (e.g., "en" for English)
+                                    "language": language,
+                                    # Whether to check PDF size and page limits
+                                    "check_pdf_limits": check_pdf_limits,
+                                    # Path to the .env file for loading environment variables
+                                    "env_file": ".env",
+                                }
+
+                                # Create PDFCollectorInput object with keywords from command line or test keywords
+
+                                keywords = keywords if keywords else []
+                                pdf_collector_input = PDFCollectorInput(
+                                    # input_dir=args.input_dir,
+                                    input_pdf_path=url,
+                                    keywords=keywords,
+                                )
+
+                                # Initialize PDFCollector
+                                parser_instance = PDFCollector(config)
+
+                                # Run the main processing function
+                                logging.info("  - Starting PDF processing...")
+
+                                results = PDFCollectorOutput()
+
+                                # Collect the parsed and filtered results
+                                results = parser_instance.run(pdf_collector_input)
+
+                                # Print final results summary
+                                logging.info(
+                                    "  - Total PDFs parsed results after filtering: %d",
+                                    len(results.records),
+                                )
+
                     else:
                         st.warning(
                             f"Row {index}: URL is not a string format. Skipping processing."
