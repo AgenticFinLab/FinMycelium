@@ -13,7 +13,7 @@ from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 from finmy.generic import RawData
-from finmy.converter import match_to_samples
+from finmy.converter import match_output_to_meta_samples
 
 
 dotenv.load_dotenv()
@@ -49,7 +49,7 @@ match_input = MatchInput(
 matcher = LLMMatcher(lm_name="deepseek/deepseek-chat")
 result = matcher.run(match_input)
 
-meta_samples = match_to_samples(
+meta_samples = match_output_to_meta_samples(
     result, rd, category="fintech", knowledge_field="accountant"
 )
 
