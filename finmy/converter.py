@@ -44,10 +44,11 @@ def write_data_to_file(text: str) -> str:
         ValueError: If the DATA_DIR environment variable is not set or the directory does not exist.
     """
     data_dir = os.environ.get("DATA_DIR")
-    if not data_dir or not os.path.isdir(data_dir):
-        raise ValueError(
-            "Environment variable 'DATA_DIR' is not set or the directory does not exist"
-        )
+    if not data_dir:
+        raise ValueError("Environment variable 'DATA_DIR' is not set")
+    if not os.path.isdir(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+
     # Generate a unique filename using UUID
     filename = f"{uuid.uuid4()}.txt"
     file_path = os.path.join(data_dir, filename)
