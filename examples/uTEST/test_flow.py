@@ -105,6 +105,13 @@ meta_samples = match_output_to_meta_samples(
 print("构造得到的meta_samples：", meta_samples)
 print("=" * 25)
 
+print("正在保存meta_samples到数据库...")
+
+data_manager.insert_meta_samples(meta_samples)
+print("meta_samples保存完成")
+print("=" * 25)
+
+
 print("使用convert_to_build_input构造BuildInput对象...")
 build_input = convert_to_build_input(
     user_query=user_query_input,
