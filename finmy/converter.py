@@ -25,6 +25,7 @@ from typing import Optional, List
 from finmy.generic import RawData, MetaSample, UserQueryInput
 from finmy.builder.base import BuildInput
 from finmy.matcher.base import MatchOutput, MatchInput
+from finmy.matcher.summarizer import SummarizedUserQuery
 import os
 
 
@@ -134,20 +135,23 @@ def match_output_to_meta_samples(
     return meta_samples
 
 
-def raw_data_to_match_input(raw_data: RawData) -> MatchInput:
+def raw_data_and_summarized_query_to_match_input(
+    raw_data: RawData, summarized_query: SummarizedUserQuery
+) -> MatchInput:
     """
     Convert a RawData object into a MatchInput for content matching.
 
     Args:
         raw_data: RawData instance containing content to be matched.
+        summarized_query: A summarized query string or object to guide the matching.
 
     Returns:
-        MatchInput populated with `match_data` and `db_item` from RawData.
+        MatchInput populated with `match_data`, `db_item` from RawData, and `summarized_query`.
     """
     return MatchInput(
         match_data=read_data_from_file(raw_data.location),
         db_item=raw_data,
-        summarized_query=None,
+        summarized_query=summarized_query,
     )
 
 
