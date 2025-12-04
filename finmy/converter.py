@@ -21,7 +21,10 @@ from __future__ import annotations
 
 import uuid
 from typing import Optional, List
+import time
+import random
 
+from lmbase.utils.tools import BlockBasedStoreManager
 from finmy.generic import RawData, MetaSample, UserQueryInput
 from finmy.builder.base import BuildInput
 from finmy.matcher.base import MatchOutput, MatchInput
@@ -29,62 +32,60 @@ from finmy.matcher.summarizer import SummarizedUserQuery
 import os
 
 
-def write_data_to_file(text: str) -> str:
+def write_text_data_to_block(text: str) -> str:
     """
-    Write the provided text content to a file under the directory specified by the DATA_DIR environment variable.
-    A unique filename will be generated for each call (UUID-based), and the function returns the generated filename.
+    Store the given text in a block-based persistent store using a unique key.
 
     Args:
-        text: The text content to be written to the file.
+        text: The string content to be stored.
 
     Returns:
-        The generated filename (not the full path).
+        The unique file key identifying the stored record.
 
     Raises:
-        ValueError: If the DATA_DIR environment variable is not set or the directory does not exist.
+        ValueError: If the DATA_DIR environment variable is not set.
     """
+
     data_dir = os.environ.get("DATA_DIR")
     if not data_dir:
         raise ValueError("Environment variable 'DATA_DIR' is not set")
     if not os.path.isdir(data_dir):
         os.makedirs(data_dir, exist_ok=True)
-
+    bbsm = BlockBasedStoreManager(
+        folder=os.environ["DATA_DIR"], file_format="json", block_size=1000
+    )
     # Generate a unique filename using UUID
-    filename = f"{uuid.uuid4()}.txt"
-    file_path = os.path.join(data_dir, filename)
-    # Write the text content to the file with UTF-8 encoding
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    # Return only the filename so it can be accessed later if needed
-    return filename
+
+    file_key = f"text_{int(time.time()*1e6)}{random.randint(1000, 9999)}"
+
+    bbsm.save(savename=file_key, data={"text": text})
+    return file_key
 
 
-def read_data_from_file(filename: str) -> str:
+def read_text_data_from_block(filekey: str) -> str:
     """
-    Read the contents of a text file from the data directory specified by the DATA_DIR environment variable.
+    Read text content from a file in the directory specified by the DATA_DIR environment variable,
+    using the given file key as the record identifier.
 
     Args:
-        filename: The name of the file to read.
+        filekey: The unique file key representing the stored record.
 
     Returns:
-        The contents of the file as a string.
+        The loaded text content associated with the file key.
 
     Raises:
-        ValueError: If the DATA_DIR environment variable is not set or the directory does not exist, or if the file does not exist.
+        ValueError: If the DATA_DIR environment variable is not set or the directory does not exist.
     """
-    import os
 
-    data_dir = os.environ.get("DATA_DIR")
-    if not data_dir or not os.path.isdir(data_dir):
-        raise ValueError(
-            "Environment variable 'DATA_DIR' is not set or the directory does not exist"
+    bbsm = BlockBasedStoreManager(
+        folder=os.environ["DATA_DIR"], file_format="json", block_size=1000
+    )
+    try:
+        return bbsm.load(filekey)["text"]
+    except Exception as e:
+        raise RuntimeError(
+            f"Error loading text data from block for filekey '{filekey}': {e}"
         )
-    file_path = os.path.join(data_dir, filename)
-    if not os.path.isfile(file_path):
-        raise ValueError(f"File '{file_path}' does not exist")
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
-    return content
 
 
 def match_output_to_meta_samples(
@@ -118,12 +119,12 @@ def match_output_to_meta_samples(
     meta_samples: List[MetaSample] = []
 
     for matched_item in match_output.items:
-        filename = write_data_to_file(matched_item.paragraph)
+        file_key = write_text_data_to_block(matched_item.paragraph)
         meta_samples.append(
             MetaSample(
                 sample_id=str(uuid.uuid4()),
                 raw_data_id=raw_data.raw_data_id,
-                location=filename,
+                location=file_key,
                 time=raw_data.time,
                 category=category,
                 knowledge_field=knowledge_field,
@@ -150,7 +151,7 @@ def raw_data_and_summarized_query_to_match_input(
         MatchInput populated with `match_data`, `db_item` from RawData, and `summarized_query`.
     """
     return MatchInput(
-        match_data=read_data_from_file(raw_data.location),
+        match_data=read_text_data_from_block(raw_data.location),
         db_item=raw_data,
         summarized_query=summarized_query,
     )

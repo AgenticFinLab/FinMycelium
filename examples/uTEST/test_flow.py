@@ -2,7 +2,7 @@ import uuid
 
 from finmy.generic import RawData, UserQueryInput
 from finmy.converter import (
-    write_data_to_file,
+    write_text_data_to_block,
     raw_data_and_summarized_query_to_match_input,
     convert_to_build_input,
     match_output_to_meta_samples,
@@ -43,7 +43,7 @@ raw_texts = [
 raw_data_records = []
 for text in raw_texts:
     # 将内容写入文件
-    filename = write_data_to_file(text)
+    filename = write_text_data_to_block(text)
     # 创建RawData对象
     raw_data = RawData(
         raw_data_id=str(uuid.uuid4()),
@@ -74,7 +74,7 @@ print("用户查询输入对象插入数据库完成")
 print("=" * 25)
 
 print("正在使用Summarizer生成summarized query...")
-summarizer = KWLMSummarizer({"llm_name": "deepseek-chat"})
+summarizer = KWLMSummarizer({"llm_name": "deepseek/deepseek-chat"})
 summarized_query = summarizer.summarize(user_query_input)
 print("summarized_query构造完成：", summarized_query)
 print("=" * 25)
@@ -90,7 +90,7 @@ print("=" * 25)
 
 
 print("正在使用lm_matcher进行匹配...")
-lm_matcher = LLMMatcher(lm_name="deepseek-chat")
+lm_matcher = LLMMatcher(lm_name="deepseek/deepseek-chat")
 match_output = lm_matcher.run(match_input)
 print("匹配结果：", match_output)
 print("=" * 25)
