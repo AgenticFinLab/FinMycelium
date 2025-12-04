@@ -125,7 +125,7 @@ class PDFCollector(BasePDFCollector):
             return parsed_info
 
         logging.info(
-            "  - Filtering %d records with keywords: %s",
+            "  - Starting filtering %d records with keywords: %s",
             len(parsed_info.records),
             pdf_collector_input.keywords,
         )

@@ -796,11 +796,35 @@ def _download_zip(zip_url, base_name, output_dir):
 
         # Extract all contents from the ZIP file to the extraction directory
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(extraction_dir)
+            for member in zip_ref.infolist():
+                # Get the target file path
+                target_path = os.path.join(extraction_dir, member.filename)
+
+                # Create parent directories if they don't exist
+                target_dir = os.path.dirname(target_path)
+                if target_dir and not os.path.exists(target_dir):
+                    os.makedirs(target_dir, exist_ok=True)
+
+                # Extract the specific file
+                with zip_ref.open(member) as source, open(target_path, "wb") as target:
+                    target.write(source.read())
+
         # Remove the ZIP file after extraction
         os.remove(zip_path)
 
         return True
+    except Exception as e:
+        logging.error("  - Download/extract error for %s: %s", base_name, str(e))
+        # Clean up the zip file if extraction failed
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        # Clean up the extraction directory if it was created but extraction failed
+        extraction_dir = os.path.join(output_dir, base_name)
+        if os.path.exists(extraction_dir):
+            import shutil
+
+            shutil.rmtree(extraction_dir, ignore_errors=True)
+        return False
 
     except Exception as e:
         logging.error("  - Download/extract error for %s: %s", base_name, e)
