@@ -660,6 +660,9 @@ class FinMyceliumWebInterface:
                             if os.path.exists(url) and url.lower().endswith(".pdf"):
 
                                 print("Processing local PDF file:", url)
+
+                                # Here we need to write code to handle parameter input
+
                                 output_dir = "output"
                                 batch_size = 200
                                 language = "en"
