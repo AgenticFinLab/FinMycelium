@@ -21,6 +21,8 @@ from PyPDF2 import PdfReader, PdfWriter
 
 from .base import PDFCollectorOutputSample, PDFCollectorOutput
 
+logging.basicConfig(level=logging.INFO)
+
 
 def split_large_pdf(pdf_path, max_pages=600):
     """Split a large PDF into smaller chunks."""
@@ -162,13 +164,23 @@ def check_and_process_pdfs(
     max_pdf_size_mb=200,
     max_pdf_pages=600,
     check_pdf_limits=True,
+    input_pdf_path="",
 ):
     """Process PDF files in batches using Mineru API with auto-splitting support."""
-    # Find all PDF files in the specified directory
-    pdf_files = glob.glob(os.path.join(pdf_directory, "*.pdf"))
-    if not pdf_files:
-        logging.info("  - No PDF files found in %s", pdf_directory)
-        return [], []
+    # Determine whether to process a single PDF or all PDFs in the directory
+    if input_pdf_path:
+        # Process only the specified PDF file
+        if os.path.isfile(input_pdf_path) and input_pdf_path.lower().endswith(".pdf"):
+            pdf_files = [input_pdf_path]
+        else:
+            logging.error("  - Invalid PDF file path: %s", input_pdf_path)
+            return [], []
+    else:
+        # Find all PDF files in the specified directory
+        pdf_files = glob.glob(os.path.join(pdf_directory, "*.pdf"))
+        if not pdf_files:
+            logging.info("  - No PDF files found in %s", pdf_directory)
+            return [], []
 
     # Set up the API endpoint and headers
     api_url = "https://mineru.net/api/v4/file-urls/batch"
@@ -372,6 +384,7 @@ def download_results(
     output_directory,
     max_wait_minutes=120,
     poll_interval=30,
+    input_pdf_path="",
 ):
     """
     Download processed results for a given batch ID.
@@ -383,6 +396,7 @@ def download_results(
         output_directory (str): Directory to save downloaded files
         max_wait_minutes (int): Maximum time to wait for processing (default: 60)
         poll_interval (int): Time interval between status checks (default: 120)
+        input_pdf_path (str): Path to a single PDF file (if processing a single file)
 
     Returns:
         tuple: (success_count, total_files, status_report, failed_files_map)
@@ -525,12 +539,27 @@ def download_results(
                 base_name = base_name.replace(" ", "_")
 
                 # Construct paths for source and raw data
-                source_path = os.path.join(input_directory, original_filename)
-                raw_data_path = os.path.join(output_directory, base_name)
+                # For single PDF processing, use the provided input_pdf_path directly
+                if input_pdf_path and os.path.isfile(input_pdf_path):
+                    source_path = os.path.abspath(input_pdf_path)
+                else:
+                    # Try to find the file in the current directory first, then in input_directory
+                    if os.path.exists(os.path.join(input_directory, original_filename)):
+                        source_path = os.path.abspath(
+                            os.path.join(input_directory, original_filename)
+                        )
+                    else:
+                        # If we can't find the file, use the input_directory as a fallback
+                        source_path = os.path.abspath(
+                            os.path.join(input_directory, original_filename)
+                        )
+                        logging.warning(
+                            "  - Could not find original file: %s", source_path
+                        )
 
-                # Convert paths to absolute paths
-                source_path = os.path.abspath(source_path)
-                raw_data_path = os.path.abspath(raw_data_path)
+                raw_data_path = os.path.abspath(
+                    os.path.join(output_directory, base_name)
+                )
 
                 if _download_zip(item["full_zip_url"], base_name, output_directory):
                     success_count += 1
@@ -597,6 +626,7 @@ def download_results(
 
 def parse_pdfs(
     input_dir: str = "input",
+    input_pdf_path: str = "",
     output_dir: str = "output",
     batch_size: int = 200,
     language: str = "en",
@@ -606,6 +636,7 @@ def parse_pdfs(
 
     Args:
         input_dir (str): Directory containing PDF files to process.
+        input_pdf_path (str): Path to a single PDF file to process (if provided, input_dir is ignored).
         output_dir (str): Directory to save processed results.
         batch_size (int): Maximum number of files per batch.
         language (str): Document language code.
@@ -620,14 +651,31 @@ def parse_pdfs(
     if not api_key:
         raise ValueError("MINERU_API_KEY environment variable not set")
 
-    # Process PDF files in batches and get the batch IDs and original file list
-    batch_ids, original_files_list = check_and_process_pdfs(
-        api_key=api_key,
-        pdf_directory=input_dir,
-        max_files_per_batch=batch_size,
-        language=language,
-        check_pdf_limits=check_pdf_limits,
-    )
+    # Determine whether to process a single PDF or a directory of PDFs
+    if input_pdf_path:
+        # Process a single PDF file
+        logging.info("  - Processing single PDF file: %s", input_pdf_path)
+        # Process the single PDF file and get the batch IDs and original file list
+        batch_ids, original_files_list = check_and_process_pdfs(
+            api_key=api_key,
+            pdf_directory="",
+            max_files_per_batch=batch_size,
+            language=language,
+            check_pdf_limits=check_pdf_limits,
+            input_pdf_path=input_pdf_path,
+        )
+    else:
+        # Process all PDF files in the input directory
+        logging.info("  - Processing all PDF files in directory: %s", input_dir)
+        # Process PDF files in batches and get the batch IDs and original file list
+        batch_ids, original_files_list = check_and_process_pdfs(
+            api_key=api_key,
+            pdf_directory=input_dir,
+            max_files_per_batch=batch_size,
+            language=language,
+            check_pdf_limits=check_pdf_limits,
+            input_pdf_path="",
+        )
 
     # Since the MinerU API is currently in a trial/testing phase, it's possible that a task may be successfully submitted and a batch_id obtained, yet the results cannot be downloaded. Therefore, you can manually specify a list of batch_ids to download the parsed results.
     # batch_ids = ["4c8b91b5-xxxx-xxxx-9370-52574ee87e69"]
@@ -648,6 +696,7 @@ def parse_pdfs(
             batch_id=batch_id,
             input_directory=input_dir,
             output_directory=output_dir,
+            input_pdf_path=input_pdf_path,
         )
         # Store the failed map for this batch
         all_failed_files_maps[batch_id] = failed_map

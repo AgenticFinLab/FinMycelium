@@ -26,6 +26,13 @@ if __name__ == "__main__":
         help="Input directory containing PDFs",
     )
     parser.add_argument(
+        "-p",
+        "--input_pdf_path",
+        type=str,
+        default="",
+        help="Path to the single input PDF file",
+    )
+    parser.add_argument(
         "-o",
         "--output_dir",
         type=str,
@@ -80,6 +87,7 @@ if __name__ == "__main__":
     keywords = args.keywords if args.keywords else test_keywords
     pdf_collector_input = PDFCollectorInput(
         input_dir=args.input_dir,
+        input_pdf_path=args.input_pdf_path,
         keywords=keywords,
     )
 

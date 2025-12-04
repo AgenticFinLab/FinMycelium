@@ -59,6 +59,7 @@ class PDFCollector(BasePDFCollector):
         all_failed_files_maps, original_files_list, parsed_info = parse_pdfs(
             # from pdf_collector_input
             input_dir=pdf_collector_input.input_dir,
+            input_pdf_path=pdf_collector_input.input_pdf_path,
             # from self.config
             output_dir=self.output_dir,
             batch_size=self.batch_size,

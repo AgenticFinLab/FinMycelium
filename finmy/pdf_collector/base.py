@@ -25,6 +25,8 @@ class PDFCollectorInput:
 
     # The directory containing the PDFs to be parsed
     input_dir: str = "input"
+    # The absolute path of the single PDF to be parsed
+    input_pdf_path: str = ""
     # List of keywords to filter by
     keywords: List[str] = field(default_factory=list)
 
