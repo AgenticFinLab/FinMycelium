@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 
-logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     # Load environment variables

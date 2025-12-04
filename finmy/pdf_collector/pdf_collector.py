@@ -16,8 +16,6 @@ from .base import (
 )
 from .utils import parse_pdfs, retry_failed_files, contains_keywords
 
-logging.basicConfig(level=logging.INFO)
-
 
 class PDFCollector(BasePDFCollector):
     """

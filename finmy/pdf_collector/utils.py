@@ -21,8 +21,6 @@ from PyPDF2 import PdfReader, PdfWriter
 
 from .base import PDFCollectorOutputSample, PDFCollectorOutput
 
-logging.basicConfig(level=logging.INFO)
-
 
 def split_large_pdf(pdf_path, max_pages=600):
     """Split a large PDF into smaller chunks."""
