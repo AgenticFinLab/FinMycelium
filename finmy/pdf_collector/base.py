@@ -12,7 +12,6 @@ Implementers should:
 """
 
 import os
-import logging
 from typing import List, Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -101,9 +100,6 @@ class BasePDFCollector(ABC):
         # Load environment variables, typically for API keys
         if self.config["env_file"]:
             load_dotenv(dotenv_path=self.config["env_file"])
-
-        # Initialize logger
-        self.logger = logging.getLogger(__name__)
 
     @abstractmethod
     def collect(
