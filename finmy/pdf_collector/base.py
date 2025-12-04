@@ -42,7 +42,9 @@ class PDFCollectorOutputSample:
     Location: str = ""
     # The parsed time of the PDF
     Time: str = ""
-    # The cost time of the PDF parsing process
+    # The cost time of the PDF processing
+    # In parser_information.json, CostTime means the time cost from the start of the upload pdfs to the end of download and unzip the parsed results
+    # In filter_information.json, CostTime means the time cost from the start of the upload pdfs to the end of the filter process
     CostTime: str = ""
     # The parsed copyright information of the PDF
     Copyright: str = ""
@@ -61,9 +63,9 @@ class PDFCollectorOutput:
     A list of records, where each record corresponds to a parsed PDF result.
     """
 
-    # List of parsed PDF results
+    # List of parsed PDF results, each record corresponds to a parsed PDF result
     records: List[PDFCollectorOutputSample] = field(default_factory=list)
-    # Start time of the parsing process (for calculating CostTime)
+    # Start time of the parsing process (just for calculating CostTime)
     start_time: float = 0.0
 
 
