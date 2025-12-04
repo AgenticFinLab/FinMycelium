@@ -42,6 +42,8 @@ class PDFCollectorOutputSample:
     Location: str = ""
     # The parsed time of the PDF
     Time: str = ""
+    # The cost time of the PDF parsing process
+    CostTime: str = ""
     # The parsed copyright information of the PDF
     Copyright: str = ""
     # The parsing method used (e.g., "Mineru API")
@@ -61,6 +63,8 @@ class PDFCollectorOutput:
 
     # List of parsed PDF results
     records: List[PDFCollectorOutputSample] = field(default_factory=list)
+    # Start time of the parsing process (for calculating CostTime)
+    start_time: float = 0.0
 
 
 class BasePDFCollector(ABC):

@@ -483,6 +483,10 @@ def download_results(
                 if _download_zip(item["full_zip_url"], base_name, output_directory):
                     success_count += 1
 
+                    # Calculate the time from start to parsing completion
+                    end_time = time.time()
+                    cost_time = f"{end_time - start_time:.2f}s"
+
                     # Create PDFCollectorOutputSample instance
                     sample = PDFCollectorOutputSample(
                         RawDataID=str(uuid.uuid4()),
@@ -493,6 +497,7 @@ def download_results(
                         Method="MinerU",
                         Tag="AgenticFin, HKUST(GZ)",
                         BatchID=batch_id,
+                        CostTime=cost_time,
                     )
 
                     # Add the sample to the PDFCollectorOutput

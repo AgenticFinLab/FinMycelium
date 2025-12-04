@@ -6,6 +6,7 @@ This module contains the PDFCollector class which provides methods to parse PDF 
 
 import os
 import json
+import time
 
 from .base import (
     BasePDFCollector,
@@ -48,6 +49,10 @@ class PDFCollector(BasePDFCollector):
         Returns:
             PDFCollectorOutput: Parsing results
         """
+
+        # Start timing for CostTime field
+        start_time = time.time()
+
         parsed_info = PDFCollectorOutput()
         # Parse PDFs and collect results
         all_failed_files_maps, original_files_list, parsed_info = parse_pdfs(
@@ -76,6 +81,9 @@ class PDFCollector(BasePDFCollector):
             )
             parsed_info.records.extend(retry_parsed_info.records)
 
+        # Store start_time in parsed_info for use in filter method
+        parsed_info.start_time = start_time
+
         return parsed_info
 
     def filter(
@@ -93,6 +101,7 @@ class PDFCollector(BasePDFCollector):
         Returns:
             PDFCollectorOutput: Filtered results
         """
+
         # Create a new PDFCollectorOutput for filtered results
         filtered_info = PDFCollectorOutput()
 
@@ -105,6 +114,12 @@ class PDFCollector(BasePDFCollector):
         # If no keywords provided, return all results
         if not pdf_collector_input.keywords:
             self.logger.info("No keywords provided, returning all results")
+            # Calculate total time if no filtering needed
+            end_time = time.time()
+            total_time = end_time - getattr(parsed_info, "start_time", end_time)
+            # Set CostTime for all records
+            for sample in parsed_info.records:
+                sample.CostTime = f"{total_time:.2f}s"
             return parsed_info
 
         self.logger.info(
@@ -146,6 +161,14 @@ class PDFCollector(BasePDFCollector):
             except Exception as e:
                 self.logger.error("Error reading file %s: %s", markdown_path, str(e))
                 continue
+
+        # Calculate total time from parsing start to filtering end
+        end_time = time.time()
+        total_time = end_time - getattr(parsed_info, "start_time", end_time)
+
+        # Set CostTime for all filtered records
+        for sample in filtered_info.records:
+            sample.CostTime = f"{total_time:.2f}s"
 
         self.logger.info(
             "Filtering completed, %d records matched keywords",
