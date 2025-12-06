@@ -16,6 +16,9 @@ framework for financial data processing and knowledge extraction.
 """
 
 import uuid
+import logging
+from datetime import datetime
+from pathlib import Path
 from typing import List
 
 from finmy.generic import RawData, UserQueryInput
@@ -30,6 +33,53 @@ from finmy.builder.base import BuildInput
 from finmy.matcher.base import MatchInput, SummarizedUserQuery
 from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.summarizer import KWLMSummarizer
+
+
+def setup_logging() -> logging.Logger:
+    """
+    Setup logging configuration to output to both console and file.
+    Each run creates a new log file with timestamp.
+
+    Returns:
+        Logger instance configured for this script
+    """
+    # Create logs directory if it doesn't exist
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    # Generate log filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = log_dir / f"test_flow_{timestamp}.log"
+
+    # Create logger
+    logger = logging.getLogger("test_flow")
+    logger.setLevel(logging.INFO)
+
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+
+    # Create formatters
+    detailed_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(detailed_formatter)
+
+    # File handler
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(detailed_formatter)
+
+    # Add handlers to logger
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    logger.info(f"Logging initialized. Log file: {log_file}")
+    return logger
 
 
 def get_sample_raw_texts() -> List[str]:
@@ -92,63 +142,72 @@ def create_raw_data_records(texts: List[str]) -> List[RawData]:
     return raw_data_records
 
 
-def store_raw_data(data_manager: DataManager, raw_data_records: List[RawData]) -> None:
+def store_raw_data(
+    data_manager: DataManager, raw_data_records: List[RawData], logger: logging.Logger
+) -> None:
     """
     Store RawData objects in the database.
 
     Args:
         data_manager: DataManager instance for database operations
         raw_data_records: List of RawData objects to be stored
+        logger: Logger instance for logging
     """
-    print("Writing and saving RawData objects...")
+    logger.info("Writing and saving RawData objects...")
     data_manager.insert_raw_data_batch(raw_data_records)
-    print("RawData objects saved successfully")
-    print("=" * 25)
+    logger.info("RawData objects saved successfully")
+    logger.info("=" * 25)
 
 
-def create_and_store_user_query(data_manager: DataManager) -> UserQueryInput:
+def create_and_store_user_query(
+    data_manager: DataManager, logger: logging.Logger
+) -> UserQueryInput:
     """
     Create a user query input object and store it in the database.
 
     Args:
         data_manager: DataManager instance for database operations
+        logger: Logger instance for logging
 
     Returns:
         UserQueryInput object that was created and stored
     """
-    print("Creating user query input object...")
+    logger.info("Creating user query input object...")
     user_query_input = UserQueryInput(
         query_text="识别与人工智能在金融风控与合规相关的内容",
         key_words=["人工智能", "AI", "风险管理", "模型合规", "透明度"],
     )
-    print("User query input object created:", user_query_input)
-    print("Inserting user query input object into database...")
+    logger.info(f"User query input object created: {user_query_input}")
+    logger.info("Inserting user query input object into database...")
     data_manager.insert_user_query(user_query_input)
-    print("User query input object inserted successfully")
-    print("=" * 25)
+    logger.info("User query input object inserted successfully")
+    logger.info("=" * 25)
     return user_query_input
 
 
-def summarize_user_query(user_query_input: UserQueryInput) -> SummarizedUserQuery:
+def summarize_user_query(
+    user_query_input: UserQueryInput, logger: logging.Logger
+) -> SummarizedUserQuery:
     """
     Generate a summarized query from user query input using keyword-based LLM summarizer.
 
     Args:
         user_query_input: UserQueryInput object to be summarized
+        logger: Logger instance for logging
 
     Returns:
         SummarizedUserQuery object containing the summarized query
     """
-    print("Generating summarized query using Summarizer...")
+    logger.info("Generating summarized query using Summarizer...")
     summarizer = KWLMSummarizer({"llm_name": "deepseek/deepseek-chat"})
     summarized_query = summarizer.summarize(user_query_input)
-    print("Summarized query created:", summarized_query)
-    print("=" * 25)
+    logger.info(f"Summarized query created: {summarized_query}")
+    logger.info("=" * 25)
     return summarized_query
 
 
 def match_raw_data_with_query(
-    raw_data: RawData, summarized_query: SummarizedUserQuery
+    raw_data: RawData, summarized_query: SummarizedUserQuery, logger: logging.Logger
 ) -> MatchInput:
     """
     Create a MatchInput object from raw data and summarized query.
@@ -156,94 +215,103 @@ def match_raw_data_with_query(
     Args:
         raw_data: RawData object to be matched
         summarized_query: SummarizedUserQuery object for matching
+        logger: Logger instance for logging
 
     Returns:
         MatchInput object ready for matching operations
     """
-    print("Creating MatchInput object from raw_data and summarized_query...")
+    logger.info("Creating MatchInput object from raw_data and summarized_query...")
     match_input = raw_data_and_summarized_query_to_match_input(
         raw_data=raw_data,
         summarized_query=summarized_query,
     )
-    print("MatchInput object created:", match_input)
-    print("=" * 25)
+    logger.info(f"MatchInput object created: {match_input}")
+    logger.info("=" * 25)
     return match_input
 
 
-def perform_llm_matching(match_input: MatchInput):
+def perform_llm_matching(match_input: MatchInput, logger: logging.Logger):
     """
     Perform matching using LLM matcher.
 
     Args:
         match_input: MatchInput object containing data to be matched
+        logger: Logger instance for logging
 
     Returns:
         Match output from the LLM matcher
     """
-    print("Performing matching using lm_matcher...")
+    logger.info("Performing matching using lm_matcher...")
     lm_matcher = LLMMatcher(lm_name="deepseek/deepseek-chat")
     match_output = lm_matcher.run(match_input)
-    print("Matching result:", match_output)
-    print("=" * 25)
+    logger.info(f"Matching result: {match_output}")
+    logger.info("=" * 25)
     return match_output
 
 
-def create_meta_samples(match_output, raw_data: RawData):
+def create_meta_samples(match_output, raw_data: RawData, logger: logging.Logger):
     """
     Convert match output into meta samples.
 
     Args:
         match_output: Output from the matcher
         raw_data: RawData object associated with the match output
+        logger: Logger instance for logging
 
     Returns:
         List of MetaSample objects created from the match output
     """
-    print("Creating meta_samples from match_output...")
+    logger.info("Creating meta_samples from match_output...")
     meta_samples = match_output_to_meta_samples(
         match_output=match_output,
         raw_data=raw_data,
         category="金融风控",
         knowledge_field="人工智能",
     )
-    print("Meta samples created:", meta_samples)
-    print("=" * 25)
+    logger.info(f"Meta samples created: {meta_samples}")
+    logger.info("=" * 25)
     return meta_samples
 
 
-def store_meta_samples(data_manager: DataManager, meta_samples) -> None:
+def store_meta_samples(
+    data_manager: DataManager, meta_samples, logger: logging.Logger
+) -> None:
     """
     Store meta samples in the database.
 
     Args:
         data_manager: DataManager instance for database operations
         meta_samples: List of MetaSample objects to be stored
+        logger: Logger instance for logging
     """
-    print("Saving meta_samples to database...")
+    logger.info("Saving meta_samples to database...")
     data_manager.insert_meta_samples(meta_samples)
-    print("Meta samples saved successfully")
-    print("=" * 25)
+    logger.info("Meta samples saved successfully")
+    logger.info("=" * 25)
 
 
-def create_build_input(user_query_input: UserQueryInput, meta_samples) -> BuildInput:
+def create_build_input(
+    user_query_input: UserQueryInput, meta_samples, logger: logging.Logger
+) -> BuildInput:
     """
     Create BuildInput object from user query and meta samples.
 
     Args:
         user_query_input: UserQueryInput object
         meta_samples: List of MetaSample objects
+        logger: Logger instance for logging
 
     Returns:
         BuildInput object ready for builder processing
     """
-    print("Creating BuildInput object from user_query and meta_samples...")
+    logger.info("Creating BuildInput object from user_query and meta_samples...")
     build_input = convert_to_build_input(
         user_query=user_query_input,
         meta_samples=meta_samples,
         extras={},
     )
-    print("BuildInput object created:", build_input)
-    print("=" * 25)
+    logger.info(f"BuildInput object created: {build_input}")
+    logger.info("=" * 25)
     return build_input
 
 
@@ -261,6 +329,9 @@ def main():
     7. Store meta samples
     8. Create build input for downstream processing
     """
+    # Initialize logging
+    logger = setup_logging()
+
     # Initialize data manager
     data_manager = DataManager()
 
@@ -269,33 +340,35 @@ def main():
     raw_data_records = create_raw_data_records(raw_texts)
 
     # Step 2: Store raw data records in database
-    store_raw_data(data_manager, raw_data_records)
+    store_raw_data(data_manager, raw_data_records, logger)
 
     # Step 3: Create and store user query input
-    user_query_input = create_and_store_user_query(data_manager)
+    user_query_input = create_and_store_user_query(data_manager, logger)
 
     # Step 4: Summarize user query
-    summarized_query = summarize_user_query(user_query_input)
+    summarized_query = summarize_user_query(user_query_input, logger)
 
     # Step 5: Create match input from raw data and summarized query
-    match_input = match_raw_data_with_query(raw_data_records[0], summarized_query)
+    match_input = match_raw_data_with_query(
+        raw_data_records[0], summarized_query, logger
+    )
 
     # Step 6: Perform LLM matching
-    match_output = perform_llm_matching(match_input)
+    match_output = perform_llm_matching(match_input, logger)
 
     # Step 7: Convert match output to meta samples
-    meta_samples = create_meta_samples(match_output, raw_data_records[0])
+    meta_samples = create_meta_samples(match_output, raw_data_records[0], logger)
 
     # Step 8: Store meta samples in database
-    store_meta_samples(data_manager, meta_samples)
+    store_meta_samples(data_manager, meta_samples, logger)
 
     # Step 9: Create build input for downstream processing
-    build_input = create_build_input(user_query_input, meta_samples)
+    build_input = create_build_input(user_query_input, meta_samples, logger)
     # Note: build_input is created for demonstration purposes and can be used
     # by downstream builders in a production workflow
     assert build_input is not None, "BuildInput should be created successfully"
 
-    print("Test flow completed successfully!")
+    logger.info("Test flow completed successfully!")
 
 
 if __name__ == "__main__":
