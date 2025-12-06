@@ -35,6 +35,5 @@ print(f"Elapsed: {result.time:.6f}s")
 print(f"Matched items: {len(result.items)}")
 
 for item in result.items:
-    print(f"\nParagraph index: {item.paragraph_index}")
-    print(f"Span: ({item.start}, {item.end}) -> {item.contiguous_indices}")
+    print(f"Span: ({item.start}, {item.end})")
     print(item.paragraph)

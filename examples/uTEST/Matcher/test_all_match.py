@@ -10,7 +10,7 @@ import argparse
 import json
 from pathlib import Path
 import gc
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 import dotenv
 
@@ -141,7 +141,7 @@ def main():
     md = render_markdown_aggregated(examples, all_results)
     with open("docs/example-results.md", "w", encoding="utf-8") as f:
         f.write(md)
-    print(f"Wrote matcher results to example-results.md")
+    print("Wrote matcher results to example-results.md")
 
 
 if __name__ == "__main__":

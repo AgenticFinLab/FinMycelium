@@ -22,11 +22,14 @@ Implementers should:
 """
 
 import time
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Union
+from dataclasses import dataclass, field
+from typing import List, Optional, Any, Dict
 from abc import ABC, abstractmethod
 
-from .utils import get_paragraph_positions
+
+from finmy.generic import RawData
+
+from .utils import get_paragraph_positions, PositionWisedParagraph
 from .summarizer import SummarizedUserQuery
 
 
@@ -40,7 +43,7 @@ class MatchInput:
     """
 
     match_data: Optional[str] = None
-    db_item: Optional[Dict[str, Any]] = None
+    db_item: Optional[RawData] = None
     summarized_query: Optional[SummarizedUserQuery] = None
 
 
@@ -51,22 +54,23 @@ class MatchItem:
     - `paragraph`: paragraph of the source content (no paraphrasing)
     - `start`/`end`: for the paragraph, character offsets into the original content; `None` when
       the selection could not be matched (e.g., quote not found)
+    - `extras`: extra informations, such like lm_matcher's reason and score fields.
     """
 
     paragraph: str
-    paragraph_index: int
     start: Optional[int]
     end: Optional[int]
-    paragraph_contiguous: Optional[List[str]] = None
-    contiguous_indices: Optional[List[int]] = None
+
+    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class MatchOutput:
     """Standardized container for match outputs.
 
-    - `items`: MatchItem
-    - `raw`: raw string produced by upstream matcher (e.g., model JSON)
+    - `items`: list of MatchItem
+    - `time`: Time elapsed during matching process, or None if not measured.
+    - `raw`: Raw data (db item)
     - `method`: identifier of the method used by the matcher (if any)
     """
 
@@ -95,7 +99,7 @@ class BaseMatcher(ABC):
         self.method_name = method_name
 
     @abstractmethod
-    def match(self, match_input: MatchInput) -> List[Union[str, Any]]:
+    def match(self, match_input: MatchInput) -> List[str]:
         """Produce raw output and selection items for positional mapping.
 
         Return:
@@ -105,35 +109,18 @@ class BaseMatcher(ABC):
     def map_positions(
         self,
         content: str,
-        matches: List[Union[str, Any]],
-    ) -> List[MatchItem]:
+        matches: List[str],
+    ) -> List[PositionWisedParagraph]:
         """Translate generic matches from the `match` into positional `MatchItem`s.
 
         Uses `get_subset_positions` to compute `start`/`end` based on either
         paragraph indices or the first occurrence of an exact quote.
         """
 
-        mapped = get_paragraph_positions(content, matches)
-        items: List[MatchItem] = []
-        for m in mapped:
-            text = m.get("text", "")
-            start = m.get("start")
-            end = m.get("end")
-            idxs = m.get("paragraph_indices") or []
-            idxs_sorted = idxs if isinstance(idxs, list) else []
-            paragraph_index = min(idxs_sorted) if idxs_sorted else -1
-            contiguous_indices = sorted(idxs_sorted) if idxs_sorted else None
-            items.append(
-                MatchItem(
-                    paragraph=text,
-                    paragraph_index=paragraph_index,
-                    start=start,
-                    end=end,
-                    paragraph_contiguous=None,
-                    contiguous_indices=contiguous_indices,
-                )
-            )
-        return items
+        position_wised_paragraphs: List[PositionWisedParagraph] = (
+            get_paragraph_positions(content, matches)
+        )
+        return position_wised_paragraphs
 
     def run(self, match_input: MatchInput) -> MatchOutput:
         """End-to-end execution returning a standardized `MatchOutput`.
@@ -146,9 +133,14 @@ class BaseMatcher(ABC):
         start_time = time.time()
         matches = self.match(match_input)
         end_time = time.time()
-        items = self.map_positions(match_input.match_data, matches)
+        items: List[PositionWisedParagraph] = self.map_positions(
+            match_input.match_data, matches
+        )
+
         return MatchOutput(
-            items=items,
+            items=[
+                MatchItem(paragraph=i.text, start=i.start, end=i.end) for i in items
+            ],
             method=self.method_name,
             time=end_time - start_time,
         )

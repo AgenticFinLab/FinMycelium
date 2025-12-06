@@ -17,6 +17,7 @@ class UserQueryInput:
     - `extras`: extra information (optional), set for backup.
     """
 
+    user_query_id: Optional[str] = None
     query_text: Optional[str] = None
     key_words: List[str] = field(default_factory=list)
     time_range: Optional[List[str]] = None

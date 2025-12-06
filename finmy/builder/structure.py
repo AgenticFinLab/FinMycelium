@@ -575,7 +575,7 @@ class EventStage:
     end_time: Optional[datetime] = None
 
     # Concise natural-language summary of this stage’s essence.
-    description: str
+    description: Optional[str] = None
 
     # Salient sub-events or highlights that define this phase.
     stage_highlights: List[str] = field(default_factory=list)

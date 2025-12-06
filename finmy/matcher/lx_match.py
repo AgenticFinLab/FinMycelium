@@ -59,130 +59,30 @@ class LXMatcherBase(BaseMatcher):
             use_api=True,
         )
 
+    def _get_matches_from_lx_response(self, resp) -> List[str]:
+        """
+        Extracts matched text segments from the LlamaIndex response.
 
-class LXMatcher(LXMatcherBase):
-    """Legacy LlamaIndex matcher invoking SimpleKeywordTableIndex.
-
-    Notes:
-    - Uses keyword-table retrieval to identify relevant paragraphs.
-    - Returns only `paragraph_indices` for contiguous segments.
-    - `context_chars` in config is reserved for potential future fallback
-      strategies and may be unused in this implementation.
-    """
-
-    def __init__(self, config: Optional[dict] = None):
-        """Initialize with optional configuration.
+        Hint:
+            The LlamaIndex query response object typically contains a 'source_nodes' attribute,
+            which holds the retrieved nodes (such as paragraph segments) relevant to the query.
+            This method collects the text content from these nodes for further processing or output.
 
         Args:
-            config: may include `context_chars` (reserved) and `top_k` for
-                    keyword table retrieval.
-        """
-        super().__init__(config=config, method_name="lx_kw_match")
-        self.context_chars: int = (config or {}).get("context_chars", 96)
-        self.top_k: int = int((config or {}).get("top_k", 8))
-
-    def _match_with_llamaindex(
-        self,
-        content: str,
-        query_text: str,
-        keywords: List[str],
-    ) -> List[Dict[str, Any]]:
-        """Retrieve relevant paragraphs via SimpleKeywordTableIndex.
-
-        - Converts each paragraph to a `Document` with `paragraph_index` metadata.
-        - Builds a keyword-table index and queries with query_text + keywords.
-        - Maps `source_nodes` back to paragraph indices.
-        """
-        paragraphs = split_paragraphs(content)  # [{index, text}]
-        docs: List[Document] = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
-        index = SimpleKeywordTableIndex.from_documents(docs)
-        q = query_text.strip()
-        if keywords:
-            # Attach keyword hints to guide retrieval
-            q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
-        qe = index.as_query_engine(similarity_top_k=self.top_k)
-        resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])  # nodes with scoring/metadata
-        matched: List[int] = []
-        for sn in src:
-            try:
-                md = getattr(getattr(sn, "node", sn), "metadata", {})
-                idx = md.get("paragraph_index")
-                if isinstance(idx, int):
-                    matched.append(idx)
-            except Exception:
-                continue
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            if grp:
-                selections.append({"paragraph_indices": grp})
-        return selections
-
-    def _find_occurrences(
-        self,
-        content: str,
-        term: str,
-    ) -> List[Tuple[int, int]]:
-        """Find non-overlapping occurrences of `term` in `content`.
+            resp: LlamaIndex query response, expected to include 'source_nodes'.
 
         Returns:
-            List of (start, end) offsets covering each exact match span.
+            List of matched text strings extracted from the response.
         """
-        if not term:
-            return []
-        occ: List[Tuple[int, int]] = []
-        start = 0
-        while True:
-            idx = content.find(term, start)
-            if idx == -1:
-                break
-            # Record the exact span for the found term
-            occ.append((idx, idx + len(term)))
-            # Advance to avoid overlapping the same occurrence
-            start = idx + len(term)
-        return occ
+        src = getattr(
+            resp, "source_nodes", []
+        )  # nodes with scoring/metadata, may be empty if no matches
+        matched: List[str] = []
+        for sn in src:
+            # Each 'sn' is a node object; retrieve its text content.
+            matched.append(sn.get_text())
 
-    def match(self, match_input: MatchInput) -> List[Dict[str, Any]]:
-        """Return selections of contiguous paragraph indices.
-
-        Current strategy:
-        - Use SimpleKeywordTableIndex-based retrieval with `summarization` and
-          `keywords` hints; no content modification.
-        """
-        content = match_input.match_data or ""
-        sq = match_input.summarized_query
-        summarization = sq.summarization if sq and sq.summarization else ""
-        keywords = sq.key_words if sq and sq.key_words else []
-
-        # Use LlamaIndex for matching
-        li_selections = self._match_with_llamaindex(
-            content=content, query_text=summarization, keywords=keywords
-        )
-        return li_selections
-
-
-def _group_contiguous(indices: List[int]) -> List[List[int]]:
-    """Group indices into contiguous ranges (module-level helper).
-
-    Example:
-        [0, 1, 3] -> [[0, 1], [3]]
-    """
-    if not indices:
-        return []
-    s = sorted(set(indices))
-    groups: List[List[int]] = []
-    cur: List[int] = [s[0]]
-    for i in s[1:]:
-        if i == cur[-1] + 1:
-            cur.append(i)
-        else:
-            groups.append(cur)
-            cur = [i]
-    groups.append(cur)
-    return groups
+        return matched
 
 
 class KWMatcher(LXMatcherBase):
@@ -203,27 +103,14 @@ class KWMatcher(LXMatcherBase):
         query_text = sq.summarization if sq and sq.summarization else ""
         keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
-        docs = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = SimpleKeywordTableIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])
-        matched: List[int] = []
-        for sn in src:
-            md = getattr(getattr(sn, "node", sn), "metadata", {})
-            idx = md.get("paragraph_index")
-            if isinstance(idx, int):
-                matched.append(idx)
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)
 
 
 class LMMatcher(LXMatcherBase):
@@ -244,27 +131,14 @@ class LMMatcher(LXMatcherBase):
         query_text = sq.summarization if sq and sq.summarization else ""
         keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
-        docs = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = SummaryIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])
-        matched: List[int] = []
-        for sn in src:
-            md = getattr(getattr(sn, "node", sn), "metadata", {})
-            idx = md.get("paragraph_index")
-            if isinstance(idx, int):
-                matched.append(idx)
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)
 
 
 class VectorMatcher(LXMatcherBase):
@@ -285,24 +159,11 @@ class VectorMatcher(LXMatcherBase):
         query_text = sq.summarization if sq and sq.summarization else ""
         keywords = sq.key_words if sq and sq.key_words else []
         paragraphs = split_paragraphs(content)
-        docs = [
-            Document(text=p["text"], metadata={"paragraph_index": p["index"]})
-            for p in paragraphs
-        ]
+        docs: List[Document] = [Document(text=p.text) for p in paragraphs]
         index = VectorStoreIndex.from_documents(docs)
         q = query_text.strip()
         if keywords:
             q = f"{q} \nKeywords: " + ", ".join(k.strip() for k in keywords if k)
         qe = index.as_query_engine(similarity_top_k=self.top_k)
         resp = qe.query(q)
-        src = getattr(resp, "source_nodes", [])
-        matched: List[int] = []
-        for sn in src:
-            md = getattr(getattr(sn, "node", sn), "metadata", {})
-            idx = md.get("paragraph_index")
-            if isinstance(idx, int):
-                matched.append(idx)
-        selections: List[Dict[str, Any]] = []
-        for grp in _group_contiguous(matched):
-            selections.append({"paragraph_indices": grp})
-        return selections
+        return self._get_matches_from_lx_response(resp)

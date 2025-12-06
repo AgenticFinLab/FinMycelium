@@ -3,16 +3,10 @@ Module for regex-based matching with context extraction.
 """
 
 import re
-import time
 from typing import List
 
-from .base import BaseMatcher, MatchInput, MatchOutput, MatchItem
-
-from .utils import (
-    get_paragraph_positions,
-    extract_context_with_paragraphs,
-    split_paragraphs,
-)
+from .base import BaseMatcher, MatchInput, MatchItem
+from .utils import extract_context_with_paragraphs, split_paragraphs
 
 
 class ReMatch(BaseMatcher):
@@ -29,7 +23,8 @@ class ReMatch(BaseMatcher):
     - Position mapping for paragraphs and content segments
     """
 
-    def match(self, match_input: MatchInput) -> List[dict]:
+    # TODO: this function has problem about returning repetitive matched string.
+    def match(self, match_input: MatchInput) -> List[str]:
         """Extract relevant text segments from match data based on keywords.
 
         This method searches for keywords from the summarized query in the match data, extracts context around each match with complete paragraphs, and returns a list of dictionaries containing matched text segments with 'paragraph_indices' and 'quote' keys.
@@ -46,10 +41,8 @@ class ReMatch(BaseMatcher):
         # Check if match_data is empty
         if not match_input.match_data:
             return []
-
         # Split content into paragraphs to find paragraph indices
         content_paragraphs = split_paragraphs(match_input.match_data)
-
         # Get keywords from summarized_query
         keywords = []
         if match_input.summarized_query and hasattr(
@@ -59,7 +52,7 @@ class ReMatch(BaseMatcher):
 
         # Use keywords for matching, return empty list if no keywords
         if keywords:
-            all_matches = []
+            all_matches: List[MatchItem] = []
 
             # Process each keyword separately
             for keyword in keywords:
@@ -68,103 +61,25 @@ class ReMatch(BaseMatcher):
 
                 # Find all occurrences of the keyword in the content
                 for match in pattern.finditer(match_input.match_data):
+                    # Ensure context boundaries are within content bounds
                     keyword_start = match.start()
                     keyword_end = match.end()
-
                     # Extract context around the match with full sentences and get paragraph indices
                     context, paragraph_indices = extract_context_with_paragraphs(
                         content=match_input.match_data,
                         keyword_start=keyword_start,
                         keyword_end=keyword_end,
-                        context_chars=2000,
+                        context_chars=2000,  # TODO: this windows may be too long, need to be reviewed
                         content_paragraphs=content_paragraphs,
                     )
-
                     # Format match as dictionary with 'paragraph_indices' and 'quote' keys
-                    all_matches.append(
-                        {"paragraph_indices": paragraph_indices, "quote": context}
-                    )
-
-            # Sort matches by their position in the match_data to maintain order
-            all_matches.sort(key=lambda x: match_input.match_data.find(x["quote"]))
+                    all_matches.append(context)
 
             # If no matches found, return the entire content as a single quote
             if not all_matches:
                 # Find all paragraph indices for the entire content
-                paragraph_indices = list(range(len(content_paragraphs)))
-                return [
-                    {
-                        "paragraph_indices": paragraph_indices,
-                        "quote": match_input.match_data,
-                    }
-                ]
+                return [match_input.match_data]
 
             return all_matches
         else:
             return []
-
-    def map_positions(
-        self,
-        match_data: str,
-        matches: List[str],
-    ) -> List[MatchItem]:
-        """Map matched text segments to their positions in the original match data.
-
-        This method converts the list of matched text segments into MatchItem objects
-        with positional information including paragraph indices, start/end positions,
-        and contiguous paragraph information.
-
-        Args:
-            match_data: The original text data to map positions against
-            matches: List of matched text segments from the match method
-
-        Returns:
-            List[MatchItem]: List of MatchItem objects with positional information
-        """
-
-        mapped = get_paragraph_positions(match_data, matches)
-        items: List[MatchItem] = []
-        for m in mapped:
-            text = m.get("text", "")
-            start = m.get("start")
-            end = m.get("end")
-            idxs = m.get("paragraph_indices") or []
-            idxs_sorted = idxs if isinstance(idxs, list) else []
-            paragraph_index = min(idxs_sorted) if idxs_sorted else -1
-            contiguous_indices = sorted(idxs_sorted) if idxs_sorted else None
-            items.append(
-                MatchItem(
-                    paragraph=text,
-                    paragraph_index=paragraph_index,
-                    start=start,
-                    end=end,
-                    paragraph_contiguous=None,
-                    contiguous_indices=contiguous_indices,
-                )
-            )
-        return items
-
-    def run(self, match_input: MatchInput) -> MatchOutput:
-        """Execute the complete matching process and return a standardized MatchOutput.
-
-        This method orchestrates the entire matching workflow:
-        1. Extracts matched text segments using the match method
-        2. Maps these segments to positional information using map_positions
-        3. Creates a MatchOutput with timing information and matched items
-
-        Args:
-            match_input: The input containing match data and summarized query
-
-        Returns:
-            MatchOutput: Result object containing matched items, method name, and execution time
-        """
-        # Compute the time of the whole matching process
-        start_time = time.time()
-        matches = self.match(match_input)
-        end_time = time.time()
-        items = self.map_positions(match_input.match_data, matches)
-        return MatchOutput(
-            items=items,
-            method=self.method_name,
-            time=end_time - start_time,
-        )

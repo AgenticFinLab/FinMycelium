@@ -90,9 +90,9 @@ class BaseSummarizer(ABC):
 
     def invoke_llm(self, messages, llm_name: str) -> str:
         """Invoke the LLM with prepared messages and return raw content."""
-        llm = api_call.build_llm(model_override=llm_name)
-        resp = llm.invoke(messages)
-        return resp.content
+        llm = api_call.LangChainAPIInference(lm_name=llm_name)
+        resp = llm._inference(messages)
+        return resp.response
 
     def run(self, query_input: UserQueryInput) -> SummarizedUserQuery:
         """End-to-end execution returning a standardized `summarize`."""

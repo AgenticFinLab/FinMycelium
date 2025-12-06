@@ -94,4 +94,4 @@ class LLMMatcher(BaseMatcher):
         output.response = safe_parse_json(output.response)
         if not isinstance(output.response, list):
             output.response = [output.response]
-        return output.response
+        return [i["quote"] for i in output.response]

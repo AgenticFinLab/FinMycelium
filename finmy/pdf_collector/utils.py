@@ -15,6 +15,7 @@ import datetime
 import requests
 from typing import List
 from urllib.parse import urlparse
+import requests
 
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader, PdfWriter

@@ -5,10 +5,16 @@ Run:
     python examples/Matcher/test_lm_match.py
 """
 
+import time
+import dotenv
+import uuid
+
 from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
-import dotenv
+from finmy.generic import RawData
+from finmy.converter import match_output_to_meta_samples
+
 
 dotenv.load_dotenv()
 
@@ -25,18 +31,35 @@ content = """
 
 展望未来，生成式 AI 在投研、客服与运营场景的应用将更广泛。与此同时，企业需要在创新与风险之间寻找平衡，将模型合规、透明度与韧性纳入治理框架的核心指标。
 """
+rd = RawData(
+    raw_data_id=str(uuid.uuid4()),
+    source="xxx/technical_report.pdf",
+    location="https://example.com/xxx/technical_report.pdf",
+    time=time.strftime("%Y-%m-%d %H:%M:%S %z"),
+    data_copyright="© 2023 ACM, Inc., All rights reserved.",
+    method="PyMuPDF (v1.23.0)",
+    tag="AgenticFin",
+)
 
 sq = SummarizedUserQuery(summarization=query_text, key_words=key_words)
-match_input = MatchInput(match_data=content, summarized_query=sq)
+match_input = MatchInput(
+    match_data=content, summarized_query=sq, db_item=rd
+)  # TODO: to be determined that removing db_item argument.
 
-matcher = LLMMatcher(lm_name="deepseek-chat")
+matcher = LLMMatcher(lm_name="deepseek/deepseek-chat")
 result = matcher.run(match_input)
+
+meta_samples = match_output_to_meta_samples(
+    result, rd, category="fintech", knowledge_field="accountant"
+)
 
 print(f"Method: {result.method}")
 print(f"Elapsed: {result.time:.6f}s")
 print(f"Matched items: {len(result.items)}")
 
 for item in result.items:
-    print(f"\nParagraph index: {item.paragraph_index}")
-    print(f"Span: ({item.start}, {item.end}) -> {item.contiguous_indices}")
+    print(f"Span: ({item.start}, {item.end})")
     print(item.paragraph)
+
+print("meta_sample:", meta_samples)
+#
