@@ -12,6 +12,15 @@ Structure overview:
 - EventStage: one phase of the event, holding participants and per-stage snapshots
 - EventCascade: top-level container, holding ordered stages and event-level metadata
 
+Relationship Among Event, Stage, Episode, and Participant:
+- Event: A financial shock with significant market impact (e.g., a major default, regulatory sanction, market crash, or sudden policy change).
+- Stage: A continuous time interval in the event's evolution, defined by a unified dominant logic or system state. The number and naming of stages should be determined flexibly based on the event itself—do not force predefined templates.
+- Episode: A key sub-event within a stage. Each episode must be:
+(1) Concrete (with clear timestamp, actor, and action),
+(2) Causal (explains subsequent market or institutional responses), and
+(3) Capital-market relevant (impacts asset prices, risk, or liquidity).
+- Participant: An entity associated with an episode, labeled by its financial role
+
 Usage notes:
 - Trajectories are derived on demand by merging snapshots per `participant_id`
   across stage-level and episode-level `participant_snapshots`, then sorting by
@@ -40,8 +49,6 @@ Derived trajectory (on demand):
   participant_id → collect snapshots across stages/episodes → sort by timestamp → trajectory
 """
 
-import uuid
-import re
 from datetime import datetime
 
 from dataclasses import dataclass, field
@@ -58,13 +65,14 @@ class Participant:
     ID format requirement:
     - participant_id must be in canonical form: "P_" + 32 lowercase hex characters
       Regex: ^P_[a-f0-9]{32}$
-    - Use `Participant.make_id()` to generate a compliant ID
 
     Example:
     - P_3f2a1c4b6d7e8f90123456789abcdeff
 
     Fields:
     - participant_id: canonical unique ID (see format above)
+    - entity: specific and concrete financial entity name (e.g., "Credit Suisse", "瑞信");
+      must not be a generic category or placeholder
     - name: human-readable name (may be anonymized)
     - participant_type: entity category, e.g., "individual", "organization"
     - base_role: primary role in this event, e.g., "victim", "perpetrator"
@@ -80,7 +88,10 @@ class Participant:
     # Unique, immutable identifier (e.g., UUID, hashed ID, semantic key).
     participant_id: str
 
-    # Human-readable name (may be anonymized).
+    # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
+    entity: str
+
+    # Human-readable name from the given content (cannot be anonymized).
     name: str = ""
 
     # High-level category.
@@ -121,17 +132,9 @@ class Participant:
     # Use for domain-specific extensions, model outputs, or temporary annotations.
     extras: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
-        pid = (self.participant_id or "").strip()
-        if not re.fullmatch(r"P_[a-f0-9]{32}", pid):
-            raise ValueError(
-                "participant_id must match canonical format: 'P_' + 32 lowercase hex characters"
-            )
-
-    @staticmethod
-    def make_id() -> str:
-        """Create the unique ID for the participant."""
-        return "P_" + uuid.uuid4().hex
+    # Validation note:
+    # - participant_id regex and entity specificity are documented here but enforced
+    #   by builders at runtime. This module intentionally contains no methods.
 
     # NOTE ON SCALABILITY:
     # In large-scale scenarios (millions of participants), store Participant records
