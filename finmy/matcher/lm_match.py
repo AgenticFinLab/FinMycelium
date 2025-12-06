@@ -52,12 +52,6 @@ Output each matched item containing the content segment that are continuous para
       "reason": "...",
       "score": a float ranging from 0.0 to 1.0
     }},
-    {{
-      "paragraph_indices": an int, 
-      "quote": "...",
-      "reason": "...",
-      "score": a float ranging from 0.0 to 1.0
-    }},
     ...
 ]
 """
@@ -137,8 +131,6 @@ class LLMMatcher(BaseMatcher):
             if parsed_response is None:
                 # If safe_parse_json still fails, try standard json.loads
                 try:
-                    import json
-
                     parsed_response = json.loads(cleaned_response)
                 except json.JSONDecodeError as json_err:
                     raise ValueError(
