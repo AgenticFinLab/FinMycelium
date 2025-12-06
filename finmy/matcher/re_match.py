@@ -80,6 +80,6 @@ class ReMatch(BaseMatcher):
                 # Find all paragraph indices for the entire content
                 return [match_input.match_data]
 
-            return all_matches
+            return list(set(all_matches))
         else:
             return []
