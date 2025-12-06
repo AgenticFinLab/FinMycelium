@@ -1,47 +1,46 @@
 """
-This script processes PDF files using the Mineru API with the following features:
-1. Splits large PDFs into smaller chunks
-2. Uploads batches of PDFs for parsing, converting them into Markdown files and images
-3. Downloads and extracts the processed results
-4. PDFs that failed to be parsed the first time were re-uploaded for parsing
-
-Notes:
-1. Mineru imposes limits on PDF parsing: each PDF must be less than 200 MB and 600 pages. Files exceeding these limits will be automatically split into multiple smaller PDFs.
-2. Each batch can process up to 200 PDFs. If more than 200 PDFs are submitted, they will be automatically divided into multiple batches.
-3. Mineru API tokens expire after 14 days. Please obtain a new token from https://mineru.net/apiManage/token before expiration and update it in your .env file.
+Utility functions for PDF parsing and processing.
 """
 
 import os
 import re
-import csv
 import glob
 import time
 import uuid
+import json
 import shutil
+import logging
 import zipfile
 import datetime
-
+import requests
+from typing import List
 from urllib.parse import urlparse
 import requests
 
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader, PdfWriter
 
+from .base import PDFCollectorOutputSample, PDFCollectorOutput
+
+logging.basicConfig(level=logging.INFO)
+
 
 def split_large_pdf(pdf_path, max_pages=600):
-    """Split a large PDF into smaller chunks if it exceeds max_pages."""
+    """Split a large PDF into smaller chunks."""
     try:
         # Create a PDF reader object to read the input PDF file
         reader = PdfReader(pdf_path)
 
         # Check if the PDF is encrypted and try to decrypt it
         if reader.is_encrypted:
-            print(f"Warning: {pdf_path} is encrypted, trying to decrypt...")
+            logging.warning(
+                "  - Warning: %s is encrypted, trying to decrypt...", pdf_path
+            )
             try:
                 # Try to decrypt with an empty password
                 reader.decrypt("")
             except Exception:
-                print(f"Failed to decrypt {pdf_path}, skipping...")
+                logging.warning("  - Failed to decrypt %s, skipping...", pdf_path)
                 return []
 
         # Get the total number of pages in the PDF
@@ -68,7 +67,12 @@ def split_large_pdf(pdf_path, max_pages=600):
                 try:
                     writer.add_page(reader.pages[i])
                 except Exception as e:
-                    print(f"Warning: Could not add page {i} from {pdf_path}: {e}")
+                    logging.warning(
+                        "  - Warning: Could not add page %d from %s: %s",
+                        i,
+                        pdf_path,
+                        e,
+                    )
                     continue
 
             # Create the path for the split file
@@ -81,21 +85,25 @@ def split_large_pdf(pdf_path, max_pages=600):
                     writer.write(f)
                 split_files.append(split_path)
             except Exception as e:
-                print(f"Error writing split file {split_path}: {e}")
+                logging.error("  - Error writing split file %s: %s", split_path, e)
                 continue
 
         # If multiple parts were created, remove the original file
         if len(split_files) > 1:
             try:
                 os.remove(pdf_path)
-                print(f"Removed original file: {pdf_path}")
+                logging.info("  - Removed original file: %s", pdf_path)
             except Exception as e:
-                print(f"Warning: Could not remove original file {pdf_path}: {e}")
+                logging.warning(
+                    "  - Warning: Could not remove original file %s: %s",
+                    pdf_path,
+                    e,
+                )
 
         return split_files
 
     except Exception as e:
-        print(f"Error splitting {pdf_path}: {e}")
+        logging.error("  - Error splitting %s: %s", pdf_path, e)
         return []
 
 
@@ -112,14 +120,20 @@ def get_pdf_info(pdf_path):
             try:
                 # Try to decrypt with an empty password
                 if reader.decrypt("") == 0:
-                    print(f"Could not decrypt {pdf_path}, deleting file...")
+                    logging.warning(
+                        "  - Could not decrypt %s, deleting file...", pdf_path
+                    )
                     os.remove(pdf_path)
-                    print(f"Deleted: {pdf_path}")
+                    logging.info("  - Deleted: %s", pdf_path)
                     return 0, 0
             except Exception as decrypt_error:
-                print(f"Decryption failed for {pdf_path}: {decrypt_error}, deleting...")
+                logging.error(
+                    "  - Decryption failed for %s: %s, deleting...",
+                    pdf_path,
+                    decrypt_error,
+                )
                 os.remove(pdf_path)
-                print(f"Deleted: {pdf_path}")
+                logging.info("  - Deleted: %s", pdf_path)
                 return 0, 0
 
         # Get the page count from the PDF
@@ -128,14 +142,16 @@ def get_pdf_info(pdf_path):
 
     except Exception as pdf_error:
         # If the PDF can't be read, delete the file and return 0 for both values
-        print(
-            f"Warning: Could not read PDF info for {pdf_path}: {pdf_error}, deleting..."
+        logging.warning(
+            "  - Warning: Could not read PDF info for %s: %s, deleting...",
+            pdf_path,
+            pdf_error,
         )
         try:
             os.remove(pdf_path)
-            print(f"Deleted: {pdf_path}")
+            logging.info("  - Deleted: %s", pdf_path)
         except Exception as delete_error:
-            print(f"Failed to delete {pdf_path}: {delete_error}")
+            logging.error("  - Failed to delete %s: %s", pdf_path, delete_error)
         return (
             os.path.getsize(pdf_path) / (1024 * 1024) if os.path.exists(pdf_path) else 0
         ), 0
@@ -149,13 +165,23 @@ def check_and_process_pdfs(
     max_pdf_size_mb=200,
     max_pdf_pages=600,
     check_pdf_limits=True,
+    input_pdf_path="",
 ):
     """Process PDF files in batches using Mineru API with auto-splitting support."""
-    # Find all PDF files in the specified directory
-    pdf_files = glob.glob(os.path.join(pdf_directory, "*.pdf"))
-    if not pdf_files:
-        print(f"No PDF files found in {pdf_directory}")
-        return [], []
+    # Determine whether to process a single PDF or all PDFs in the directory
+    if input_pdf_path:
+        # Process only the specified PDF file
+        if os.path.isfile(input_pdf_path) and input_pdf_path.lower().endswith(".pdf"):
+            pdf_files = [input_pdf_path]
+        else:
+            logging.error("  - Invalid PDF file path: %s", input_pdf_path)
+            return [], []
+    else:
+        # Find all PDF files in the specified directory
+        pdf_files = glob.glob(os.path.join(pdf_directory, "*.pdf"))
+        if not pdf_files:
+            logging.info("  - No PDF files found in %s", pdf_directory)
+            return [], []
 
     # Set up the API endpoint and headers
     api_url = "https://mineru.net/api/v4/file-urls/batch"
@@ -168,7 +194,7 @@ def check_and_process_pdfs(
 
     # Check PDF limits and split large files if enabled
     if check_pdf_limits:
-        print("Analyzing PDF files...")
+        logging.info("  - Analyzing PDF files...")
         for pdf in pdf_files:
             try:
                 # Get file size and page count for the current PDF
@@ -176,18 +202,21 @@ def check_and_process_pdfs(
 
                 # Skip files that couldn't be read properly
                 if page_count == 0 and file_size_mb > 0:
-                    print(f"Skipping {pdf} due to PDF reading errors")
+                    logging.warning("  - Skipping %s due to PDF reading errors", pdf)
                     continue
 
                 # Skip files with access issues
                 if file_size_mb == 0:
-                    print(f"Skipping {pdf} due to file access issues")
+                    logging.warning("  - Skipping %s due to file access issues", pdf)
                     continue
 
                 # Check if the file exceeds size or page limits
                 if file_size_mb > max_pdf_size_mb or page_count > max_pdf_pages:
-                    print(
-                        f"Splitting {pdf} due to size ({file_size_mb:.2f} MB) or pages ({page_count})"
+                    logging.info(
+                        "  - Splitting %s due to size (%.2f MB) or pages (%d)",
+                        pdf,
+                        file_size_mb,
+                        page_count,
                     )
                     # Split the large PDF into smaller chunks
                     split_paths = split_large_pdf(pdf, max_pages=max_pdf_pages)
@@ -195,27 +224,31 @@ def check_and_process_pdfs(
                         # Add the split files to the processing list
                         all_files_to_process.extend(split_paths)
                     else:
-                        print(f"Failed to split {pdf}, skipping...")
+                        logging.error("  - Failed to split %s, skipping...", pdf)
                 else:
                     # Add the original file to the processing list if it doesn't need splitting
                     all_files_to_process.append(pdf)
 
             except Exception as e:
-                print(f"Error processing {pdf}: {e}")
+                logging.error("  - Error processing %s: %s", pdf, e)
                 continue
     else:
-        print("Skipping PDF limit checks, processing all files directly...")
+        logging.info("  - Skipping PDF limit checks, processing all files directly...")
         all_files_to_process = pdf_files
 
     # Return early if no valid files to process
     if not all_files_to_process:
-        print("No valid files to process")
+        logging.info("  - No valid files to process")
         return [], []
 
     # Calculate batch information
     total_files = len(all_files_to_process)
     total_batches = (total_files + max_files_per_batch - 1) // max_files_per_batch
-    print(f"Found {total_files} files. Processing in {total_batches} batches...")
+    logging.info(
+        "  - Found %d files. Processing in %d batches...",
+        total_files,
+        total_batches,
+    )
 
     # Process files in batches
     for batch_index in range(total_batches):
@@ -223,8 +256,11 @@ def check_and_process_pdfs(
         start_idx = batch_index * max_files_per_batch
         # Get the files for this batch
         batch_files = all_files_to_process[start_idx : start_idx + max_files_per_batch]
-        print(
-            f"\nProcessing batch {batch_index + 1}/{total_batches} ({len(batch_files)} files)"
+        logging.info(
+            "  - Processing batch %d/%d (%d files)",
+            batch_index + 1,
+            total_batches,
+            len(batch_files),
         )
         start_time = time.time()
 
@@ -256,12 +292,14 @@ def check_and_process_pdfs(
                     }
                 )
             except Exception as e:
-                print(f"Error preparing {pdf} for batch: {e}")
+                logging.error("  - Error preparing %s for batch: %s", pdf, e)
                 continue
 
         # Skip this batch if no valid files were prepared
         if not files_data:
-            print(f"Batch {batch_index + 1} has no valid files, skipping...")
+            logging.info(
+                "  - Batch %d has no valid files, skipping...", batch_index + 1
+            )
             continue
 
         try:
@@ -276,18 +314,23 @@ def check_and_process_pdfs(
                     "enable_table": True,
                     "files": files_data,
                 },
+                # timeout=600,
             )
             response.raise_for_status()
             result = response.json()
 
             # Check if the API request was successful
             if result.get("code") != 0:
-                print(
-                    f"Batch {batch_index + 1} failed: {result.get('msg', 'Unknown error')}"
+                logging.error(
+                    "  - Batch %d failed: %s",
+                    batch_index + 1,
+                    result.get("msg", "Unknown error"),
                 )
                 continue
         except Exception as e:
-            print(f"API request failed for batch {batch_index + 1}: {str(e)}")
+            logging.error(
+                "  - API request failed for batch %d: %s", batch_index + 1, str(e)
+            )
             continue
 
         # Get the batch ID and file upload URLs from the response
@@ -305,25 +348,362 @@ def check_and_process_pdfs(
                     if upload_res.status_code in [200, 201]:
                         success_count += 1
                     else:
-                        print(f"Upload failed for {pdf_path}: {upload_res.status_code}")
+                        logging.error(
+                            "  - Upload failed for %s: %d",
+                            pdf_path,
+                            upload_res.status_code,
+                        )
             except Exception as e:
-                print(f"Upload error for {pdf_path}: {e}")
+                logging.error("  - Upload error for %s: %s", pdf_path, e)
                 continue
 
         # Record successful batch if any files were uploaded
         if success_count > 0:
             batch_ids.append(batch_id)
-            print(
-                f"Batch {batch_index + 1} processed: {success_count}/{len(batch_files)} files"
+            logging.info(
+                "  - Batch %d processed: %d/%d files",
+                batch_index + 1,
+                success_count,
+                len(batch_files),
             )
-            print(f"Batch ID: {batch_id}")
+            logging.info("  - Batch ID: %s", batch_id)
             end_time = time.time()
-            print(f"Time taken: {end_time - start_time:.2f}s")
+            logging.info("  - Time taken: %.2fs\n", end_time - start_time)
         else:
-            print(f"Batch {batch_index + 1} failed: No files uploaded successfully")
+            logging.error(
+                "  - Batch %d failed: No files uploaded successfully", batch_index + 1
+            )
 
     # Return the original list of files processed in this batch
     return batch_ids, all_files_to_process
+
+
+def download_results(
+    api_key,
+    batch_id,
+    input_directory,
+    output_directory,
+    max_wait_minutes=120,
+    poll_interval=30,
+    input_pdf_path="",
+):
+    """
+    Download processed results for a given batch ID.
+
+    Args:
+        api_key (str): API key for authentication
+        batch_id (str): Unique identifier for the batch to process
+        input_directory (str): Directory where input files are located
+        output_directory (str): Directory to save downloaded files
+        max_wait_minutes (int): Maximum time to wait for processing (default: 60)
+        poll_interval (int): Time interval between status checks (default: 120)
+        input_pdf_path (str): Path to a single PDF file (if processing a single file)
+
+    Returns:
+        tuple: (success_count, total_files, status_report, failed_files_map)
+        - success_count: Number of successfully downloaded files
+        - total_files: Total number of files in the batch
+        - status_report: Dictionary with counts for each state
+        - failed_files_map: Dictionary mapping 'data_id' from the batch to the original file path
+    """
+    # Create the output directory if it doesn't exist
+    os.makedirs(output_directory, exist_ok=True)
+
+    # Initialize the PDFCollectorOutput to store all parsing results
+    parsed_info = PDFCollectorOutput()
+
+    # Define the path for the parser information JSON file
+    json_file_path = os.path.join(output_directory, "parser_information.json")
+
+    # Set up the API endpoint for checking batch status
+    api_url = f"https://mineru.net/api/v4/extract-results/batch/{batch_id}"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    # Initialize status counters to track all possible states
+    status_report = {
+        "done": 0,
+        "pending": 0,
+        "waiting-file": 0,
+        "running": 0,
+        "converting": 0,
+        "failed": 0,
+    }
+    start_time = time.time()
+    max_wait_seconds = max_wait_minutes * 60
+
+    logging.info("  - Monitoring batch %s for completion...", batch_id)
+
+    # Poll the API until all files are processed or timeout occurs
+    while (time.time() - start_time) < max_wait_seconds:
+        try:
+            # Get the current status of the batch
+            response = requests.get(api_url, headers=headers)
+            response.raise_for_status()
+            batch_data = response.json().get("data", {})
+
+            # Reset status counters and count incomplete files
+            status_report = {k: 0 for k in status_report}
+            incomplete_count = 0
+
+            # Count the status of each file in the batch and identify incomplete states
+            for item in batch_data.get("extract_result", []):
+                state = item.get("state", "unknown")
+
+                # Update status counter for this state
+                if state in status_report:
+                    status_report[state] = status_report.get(state, 0) + 1
+                else:
+                    # Handle any unexpected states by adding them to the report
+                    status_report[state] = status_report.get(state, 0) + 1
+
+                # Define states that indicate the file is NOT yet complete
+                # Add any other incomplete states that the API might return
+                incomplete_states = [
+                    "converting",
+                    "failed",
+                    "pending",
+                    "waiting-file",
+                    "running",
+                ]
+
+                if state in incomplete_states:
+                    incomplete_count += 1
+
+            # If no files are still incomplete, break out of the polling loop
+            if incomplete_count == 0:
+                logging.info("  - All files processed. Starting download...")
+                break
+
+            # Print current status and wait before next poll
+            status_msg = ", ".join([f"{k}:{v}" for k, v in status_report.items()])
+            logging.info(
+                "  - Status: %s | Incomplete: %d | Waiting %ds...",
+                status_msg,
+                incomplete_count,
+                poll_interval,
+            )
+            time.sleep(poll_interval)
+
+        except requests.exceptions.RequestException as e:
+            logging.error("  - Status check error (network): %s", e)
+            time.sleep(poll_interval)
+        except Exception as e:
+            logging.error("  - Status check error (general): %s", e)
+            time.sleep(poll_interval)
+    else:
+        # This else clause executes if the while loop completed without breaking
+        # (i.e., timeout occurred)
+        logging.warning(
+            "  - Timeout reached after %d minutes. Proceeding with available results...",
+            max_wait_minutes,
+        )
+
+    # Initialize download counters
+    success_count = 0
+    total_files = sum(status_report.values())
+    # Dictionary to map data_id to original file path
+    failed_files_map = {}
+
+    try:
+        # Get the final status after polling (or timeout)
+        response = requests.get(api_url, headers=headers)
+        response.raise_for_status()
+        batch_data = response.json().get("data", {})
+
+        # Download the results for successfully processed files
+        for idx, item in enumerate(batch_data.get("extract_result", [])):
+            state = item.get("state", "unknown")
+            original_filename = item.get("file_name", f"file_{idx}")
+            # Get the data_id
+            data_id = item.get("data_id", f"unknown_{idx}")
+
+            # Truncate filename to avoid path length issues
+            filename = _truncate_filename(original_filename)
+
+            # Store failed files' data_id and potentially original path
+            if state == "failed":
+                # Map this back later
+                failed_files_map[data_id] = None
+                logging.error(
+                    "  - File %s (data_id: %s) failed processing.", filename, data_id
+                )
+
+            # Only download if the file was processed successfully and has download URL
+            if state == "done" and "full_zip_url" in item:
+                # Determine the intended extraction directory (where the zip content goes)
+                base_name = os.path.splitext(original_filename)[0]
+                # Remove the last 3 characters (pdf)
+                if base_name.lower().endswith("pdf"):
+                    base_name = base_name[:-3]
+
+                # Replace spaces with underscores
+                base_name = base_name.replace(" ", "_")
+
+                # Construct paths for source and raw data
+                # For single PDF processing, use the provided input_pdf_path directly
+                if input_pdf_path and os.path.isfile(input_pdf_path):
+                    source_path = os.path.abspath(input_pdf_path)
+                else:
+                    # Try to find the file in the current directory first, then in input_directory
+                    if os.path.exists(os.path.join(input_directory, original_filename)):
+                        source_path = os.path.abspath(
+                            os.path.join(input_directory, original_filename)
+                        )
+                    else:
+                        # If we can't find the file, use the input_directory as a fallback
+                        source_path = os.path.abspath(
+                            os.path.join(input_directory, original_filename)
+                        )
+                        logging.warning(
+                            "  - Could not find original file: %s", source_path
+                        )
+
+                raw_data_path = os.path.abspath(
+                    os.path.join(output_directory, base_name)
+                )
+
+                if _download_zip(item["full_zip_url"], base_name, output_directory):
+                    success_count += 1
+
+                    # Calculate the time from start to parsing completion
+                    end_time = time.time()
+                    cost_time = f"{end_time - start_time:.2f}s"
+
+                    # Create PDFCollectorOutputSample instance
+                    sample = PDFCollectorOutputSample(
+                        RawDataID=str(uuid.uuid4()),
+                        Source=source_path,
+                        Location=os.path.join(raw_data_path, "full.md"),
+                        Time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        Copyright="NULL",
+                        Method="MinerU",
+                        Tag="AgenticFin, HKUST(GZ)",
+                        BatchID=batch_id,
+                        CostTime=cost_time,
+                    )
+
+                    # Add the sample to the PDFCollectorOutput
+                    parsed_info.records.append(sample)
+
+                    logging.info(
+                        "  - Logged successful processing for: %s (RawDataID: %s)",
+                        original_filename,
+                        sample.RawDataID,
+                    )
+                else:
+                    logging.error(
+                        "  - Failed to download file: %s (state: %s)", filename, state
+                    )
+            elif state != "done":
+                logging.info("  - Skipping file %s with state: %s", filename, state)
+
+        # Print the completion summary
+        logging.info("  - Batch %s completed:", batch_id)
+        for state, count in status_report.items():
+            if count > 0:
+                logging.info("  - %s: %d", state.capitalize(), count)
+        logging.info("  - Downloaded: %d/%d files", success_count, total_files)
+
+    except requests.exceptions.RequestException as e:
+        logging.error("  - Download error (network): %s", str(e))
+    except Exception as e:
+        logging.error("  - Download error (general): %s", str(e))
+
+    # After processing all files, save the PDFCollectorOutput to JSON file
+    with open(json_file_path, mode="w", encoding="utf-8") as jsonfile:
+        # Convert the dataclass to dictionary and then save as JSON
+        json.dump(
+            parsed_info,
+            jsonfile,
+            default=lambda obj: obj.__dict__,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+        logging.info("  - Parser information saved to: %s\n", json_file_path)
+
+    return (failed_files_map, parsed_info)
+
+
+def parse_pdfs(
+    input_dir: str = "input",
+    input_pdf_path: str = "",
+    output_dir: str = "output",
+    batch_size: int = 200,
+    language: str = "en",
+    check_pdf_limits=True,
+):
+    """Process PDFs via Mineru API and download results.
+
+    Args:
+        input_dir (str): Directory containing PDF files to process.
+        input_pdf_path (str): Path to a single PDF file to process (if provided, input_dir is ignored).
+        output_dir (str): Directory to save processed results.
+        batch_size (int): Maximum number of files per batch.
+        language (str): Document language code.
+        check_pdf_limits (bool): Whether to check PDF size/pages and split if needed (default: True)
+    """
+
+    # Load environment variables from .env file
+    load_dotenv()
+
+    # Get the API key from environment variables
+    api_key = os.getenv("MINERU_API_KEY")
+    if not api_key:
+        raise ValueError("MINERU_API_KEY environment variable not set")
+
+    # Determine whether to process a single PDF or a directory of PDFs
+    if input_pdf_path:
+        # Process a single PDF file
+        logging.info("  - Processing single PDF file: %s", input_pdf_path)
+        # Process the single PDF file and get the batch IDs and original file list
+        batch_ids, original_files_list = check_and_process_pdfs(
+            api_key=api_key,
+            pdf_directory="",
+            max_files_per_batch=batch_size,
+            language=language,
+            check_pdf_limits=check_pdf_limits,
+            input_pdf_path=input_pdf_path,
+        )
+    else:
+        # Process all PDF files in the input directory
+        logging.info("  - Processing all PDF files in directory: %s", input_dir)
+        # Process PDF files in batches and get the batch IDs and original file list
+        batch_ids, original_files_list = check_and_process_pdfs(
+            api_key=api_key,
+            pdf_directory=input_dir,
+            max_files_per_batch=batch_size,
+            language=language,
+            check_pdf_limits=check_pdf_limits,
+            input_pdf_path="",
+        )
+
+    # Since the MinerU API is currently in a trial/testing phase, it's possible that a task may be successfully submitted and a batch_id obtained, yet the results cannot be downloaded. Therefore, you can manually specify a list of batch_ids to download the parsed results.
+    # batch_ids = ["4c8b91b5-xxxx-xxxx-9370-52574ee87e69"]
+
+    # If no batches were processed successfully, return early
+    if not batch_ids:
+        logging.info("  - No batches processed successfully")
+        return [], original_files_list
+
+    # Start downloading the results for each batch
+    logging.info("  - Starting result downloads...")
+    # Collect failed files maps from all batches
+    all_failed_files_maps = {}
+    parsed_info = []
+    for batch_id in batch_ids:
+        failed_map, parsed_info = download_results(
+            api_key=api_key,
+            batch_id=batch_id,
+            input_directory=input_dir,
+            output_directory=output_dir,
+            input_pdf_path=input_pdf_path,
+        )
+        # Store the failed map for this batch
+        all_failed_files_maps[batch_id] = failed_map
+
+    # Return the collected failed maps and the original lists
+    return all_failed_files_maps, original_files_list, parsed_info
 
 
 def _sanitize_filename(filename):
@@ -394,236 +774,6 @@ def _truncate_filename(filename, max_length=80):
     return result.strip()
 
 
-def download_results(
-    api_key,
-    batch_id,
-    input_directory,
-    output_directory,
-    max_wait_minutes=120,
-    poll_interval=30,
-):
-    """
-    Download processed results for a given batch ID.
-
-    Args:
-        api_key (str): API key for authentication
-        batch_id (str): Unique identifier for the batch to process
-        input_directory (str): Directory where input files are located
-        output_directory (str): Directory to save downloaded files
-        max_wait_minutes (int): Maximum time to wait for processing (default: 60)
-        poll_interval (int): Time interval between status checks (default: 120)
-
-    Returns:
-        tuple: (success_count, total_files, status_report, failed_files_map)
-        - success_count: Number of successfully downloaded files
-        - total_files: Total number of files in the batch
-        - status_report: Dictionary with counts for each state
-        - failed_files_map: Dictionary mapping 'data_id' from the batch to the original file path
-    """
-    # Create the output directory if it doesn't exist
-    os.makedirs(output_directory, exist_ok=True)
-
-    # Define the path for the parser information CSV file
-    csv_file_path = os.path.join(output_directory, "parser_information.csv")
-    # Define the field names for the CSV
-    csv_fieldnames = [
-        "RawDataID",
-        "Source",
-        "Location",
-        "Time",
-        "Copyright",
-        "Method",
-        "Tag",
-        "BatchID",
-    ]
-
-    # Initialize the CSV file with headers if it doesn't exist
-    if not os.path.exists(csv_file_path):
-        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
-            writer.writeheader()
-
-    # Set up the API endpoint for checking batch status
-    api_url = f"https://mineru.net/api/v4/extract-results/batch/{batch_id}"
-    headers = {"Authorization": f"Bearer {api_key}"}
-
-    # Initialize status counters to track all possible states
-    status_report = {
-        "done": 0,
-        "pending": 0,
-        "waiting-file": 0,
-        "running": 0,
-        "converting": 0,
-        "failed": 0,
-    }
-    start_time = time.time()
-    max_wait_seconds = max_wait_minutes * 60
-
-    print(f"\nMonitoring batch {batch_id} for completion...")
-
-    # Poll the API until all files are processed or timeout occurs
-    while (time.time() - start_time) < max_wait_seconds:
-        try:
-            # Get the current status of the batch
-            response = requests.get(api_url, headers=headers)
-            response.raise_for_status()
-            batch_data = response.json().get("data", {})
-
-            # Reset status counters and count incomplete files
-            status_report = {k: 0 for k in status_report}
-            incomplete_count = 0
-
-            # Count the status of each file in the batch and identify incomplete states
-            for item in batch_data.get("extract_result", []):
-                state = item.get("state", "unknown")
-
-                # Update status counter for this state
-                if state in status_report:
-                    status_report[state] = status_report.get(state, 0) + 1
-                else:
-                    # Handle any unexpected states by adding them to the report
-                    status_report[state] = status_report.get(state, 0) + 1
-
-                # Define states that indicate the file is NOT yet complete
-                # Add any other incomplete states that the API might return
-                incomplete_states = [
-                    "converting",
-                    "failed",
-                    "pending",
-                    "waiting-file",
-                    "running",
-                ]
-
-                if state in incomplete_states:
-                    incomplete_count += 1
-
-            # If no files are still incomplete, break out of the polling loop
-            if incomplete_count == 0:
-                print("All files processed. Starting download...")
-                break
-
-            # Print current status and wait before next poll
-            status_msg = ", ".join([f"{k}:{v}" for k, v in status_report.items()])
-            print(
-                f"  Status: {status_msg} | Incomplete: {incomplete_count} | Waiting {poll_interval}s..."
-            )
-            time.sleep(poll_interval)
-
-        except requests.exceptions.RequestException as e:
-            print(f"Status check error (network): {e}")
-            time.sleep(poll_interval)
-        except Exception as e:
-            print(f"Status check error (general): {e}")
-            time.sleep(poll_interval)
-    else:
-        # This else clause executes if the while loop completed without breaking
-        # (i.e., timeout occurred)
-        print(
-            f"Timeout reached after {max_wait_minutes} minutes. Proceeding with available results..."
-        )
-
-    # Initialize download counters
-    success_count = 0
-    total_files = sum(status_report.values())
-    # Dictionary to map data_id to original file path
-    failed_files_map = {}
-
-    try:
-        # Get the final status after polling (or timeout)
-        response = requests.get(api_url, headers=headers)
-        response.raise_for_status()
-        batch_data = response.json().get("data", {})
-
-        # Download the results for successfully processed files
-        for idx, item in enumerate(batch_data.get("extract_result", [])):
-            state = item.get("state", "unknown")
-            original_filename = item.get("file_name", f"file_{idx}")
-            # Get the data_id
-            data_id = item.get("data_id", f"unknown_{idx}")
-
-            # Truncate filename to avoid path length issues
-            filename = _truncate_filename(original_filename)
-
-            # Store failed files' data_id and potentially original path
-            if state == "failed":
-                # Map this back later
-                failed_files_map[data_id] = None
-                print(f"File {filename} (data_id: {data_id}) failed processing.")
-
-            # Only download if the file was processed successfully and has download URL
-            if state == "done" and "full_zip_url" in item:
-                # Determine the intended extraction directory (where the zip content goes)
-                base_name = os.path.splitext(original_filename)[0]
-                # Remove the last 3 characters (pdf)
-                if base_name.lower().endswith("pdf"):
-                    base_name = base_name[:-3]
-
-                # Replace spaces with underscores
-                base_name = base_name.replace(" ", "_")
-
-                # Construct paths for source and raw data
-                source_path = os.path.join(input_directory, original_filename)
-                raw_data_path = os.path.join(output_directory, base_name)
-
-                # Convert paths to absolute paths
-                source_path = os.path.abspath(source_path)
-                raw_data_path = os.path.abspath(raw_data_path)
-
-                if _download_zip(item["full_zip_url"], base_name, output_directory):
-                    success_count += 1
-
-                    # Prepare data for the CSV row
-                    csv_row_data = {
-                        "RawDataID": str(uuid.uuid4()),
-                        # Store the path where the original input file was located if passed down
-                        "Source": source_path,
-                        # Store the path where the raw data is stored
-                        "Location": os.path.join(raw_data_path, "full.md"),
-                        # Time of processing for this file
-                        "Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        # Copyright information
-                        "Copyright": "NULL",
-                        # Method used for processing
-                        "Method": "MinerU",
-                        # Tag for categorization
-                        "Tag": "AgenticFin, HKUST(GZ)",
-                        "BatchID": batch_id,
-                    }
-
-                    # Append the row to the CSV file
-                    try:
-                        # Open in append mode
-                        with open(
-                            csv_file_path, mode="a", newline="", encoding="utf-8"
-                        ) as csvfile:
-                            writer = csv.DictWriter(csvfile, fieldnames=csv_fieldnames)
-                            # Write the single row
-                            writer.writerow(csv_row_data)
-                        print(
-                            f"Logged successful processing for: {original_filename} (RawDataID: {data_id})"
-                        )
-                    except IOError as e:
-                        print(f"Error writing to CSV for {original_filename}: {e}")
-                else:
-                    print(f"Failed to download file: {filename} (state: {state})")
-            elif state != "done":
-                print(f"Skipping file {filename} with state: {state}")
-
-        # Print the completion summary
-        print(f"\nBatch {batch_id} completed:")
-        for state, count in status_report.items():
-            if count > 0:
-                print(f"  - {state.capitalize()}: {count}")
-        print(f"Downloaded: {success_count}/{total_files} files")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Download error (network): {str(e)}")
-    except Exception as e:
-        print(f"Download error (general): {str(e)}")
-
-    return success_count, total_files, status_report, failed_files_map
-
-
 def _download_zip(zip_url, base_name, output_dir):
     """Helper function to download and extract a ZIP file."""
     try:
@@ -647,75 +797,39 @@ def _download_zip(zip_url, base_name, output_dir):
 
         # Extract all contents from the ZIP file to the extraction directory
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(extraction_dir)
+            for member in zip_ref.infolist():
+                # Get the target file path
+                target_path = os.path.join(extraction_dir, member.filename)
+
+                # Create parent directories if they don't exist
+                target_dir = os.path.dirname(target_path)
+                if target_dir and not os.path.exists(target_dir):
+                    os.makedirs(target_dir, exist_ok=True)
+
+                # Extract the specific file
+                with zip_ref.open(member) as source, open(target_path, "wb") as target:
+                    target.write(source.read())
+
         # Remove the ZIP file after extraction
         os.remove(zip_path)
 
         return True
-
     except Exception as e:
-        print(f"Download/extract error for {base_name}: {e}")
+        logging.error("  - Download/extract error for %s: %s", base_name, str(e))
+        # Clean up the zip file if extraction failed
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        # Clean up the extraction directory if it was created but extraction failed
+        extraction_dir = os.path.join(output_dir, base_name)
+        if os.path.exists(extraction_dir):
+            import shutil
+
+            shutil.rmtree(extraction_dir, ignore_errors=True)
         return False
 
-
-def parse_pdfs(
-    input_dir: str = "input",
-    output_dir: str = "output",
-    batch_size: int = 200,
-    language: str = "en",
-    check_pdf_limits=True,
-):
-    """Process PDFs via Mineru API and download results.
-
-    Args:
-        input_dir (str): Directory containing PDF files to process.
-        output_dir (str): Directory to save processed results.
-        batch_size (int): Maximum number of files per batch.
-        language (str): Document language code.
-        check_pdf_limits (bool): Whether to check PDF size/pages and split if needed (default: True)
-    """
-
-    # Load environment variables from .env file
-    load_dotenv()
-
-    # Get the API key from environment variables
-    api_key = os.getenv("MINERU_API_KEY")
-    if not api_key:
-        raise ValueError("MINERU_API_KEY environment variable not set")
-
-    # Process PDF files in batches and get the batch IDs and original file list
-    batch_ids, original_files_list = check_and_process_pdfs(
-        api_key=api_key,
-        pdf_directory=input_dir,
-        max_files_per_batch=batch_size,
-        language=language,
-        check_pdf_limits=check_pdf_limits,
-    )
-
-    # Since the MinerU API is currently in a trial/testing phase, it's possible that a task may be successfully submitted and a batch_id obtained, yet the results cannot be downloaded. Therefore, you can manually specify a list of batch_ids to download the parsed results.
-    # batch_ids = ["4c8b91b5-xxxx-xxxx-9370-52574ee87e69"]
-
-    # If no batches were processed successfully, return early
-    if not batch_ids:
-        print("\nNo batches processed successfully")
-        return [], original_files_list
-
-    # Start downloading the results for each batch
-    print("\nStarting result downloads...")
-    # Collect failed files maps from all batches
-    all_failed_files_maps = {}
-    for batch_id in batch_ids:
-        success, total, status_report, failed_map = download_results(
-            api_key=api_key,
-            batch_id=batch_id,
-            input_directory=input_dir,
-            output_directory=output_dir,
-        )
-        # Store the failed map for this batch
-        all_failed_files_maps[batch_id] = failed_map
-
-    # Return the collected failed maps and the original lists
-    return all_failed_files_maps, original_files_list
+    except Exception as e:
+        logging.error("  - Download/extract error for %s: %s", base_name, e)
+        return False
 
 
 def retry_failed_files(
@@ -739,7 +853,7 @@ def retry_failed_files(
         language (str): Document language code.
         check_pdf_limits (bool): Whether to check PDF size/pages and split if needed for retry batch.
     """
-    print("\n--- Starting Retry Process for Failed Files ---")
+    logging.info("  - Starting Retry Process for Failed Files...")
 
     # Load environment variables from .env file
     load_dotenv()
@@ -752,9 +866,9 @@ def retry_failed_files(
     files_to_retry = set()
 
     for batch_id, failed_map in all_failed_files_maps.items():
-        print(f"Analyzing batch {batch_id} for failed files...")
+        logging.info("  - Analyzing batch %s for failed files...", batch_id)
         if not failed_map:
-            print(f"  No failed files recorded for batch {batch_id}.")
+            logging.info("  - No failed files recorded for batch %s.", batch_id)
             continue
 
         for data_id in failed_map.keys():
@@ -765,8 +879,10 @@ def retry_failed_files(
             # Extract the original truncated name part (first 16 chars of original name)
             # Split from the right, take the first part
             original_name_part = data_id.rsplit("_b", 1)[0]
-            print(
-                f"  Looking for original file associated with data_id: {data_id} (original part: {original_name_part})"
+            logging.info(
+                "  - Looking for original file associated with data_id: %s (original part: %s)",
+                data_id,
+                original_name_part,
             )
 
             # Find the original file path that matches this part
@@ -781,21 +897,25 @@ def retry_failed_files(
                     break
 
             if matched_original_file:
-                print(
-                    f"Matched data_id {data_id} to original file: {matched_original_file}"
+                logging.info(
+                    "  - Matched data_id %s to original file: %s",
+                    data_id,
+                    matched_original_file,
                 )
                 files_to_retry.add(matched_original_file)
             else:
-                print(f"Warning: Could not find original file for data_id {data_id}")
+                logging.warning(
+                    "  - Warning: Could not find original file for data_id %s", data_id
+                )
 
     if not files_to_retry:
-        print("\nNo files identified for retry.")
+        logging.info("  - No files identified for retry.")
         return
 
-    print(f"\nIdentified {len(files_to_retry)} unique files for retry.")
-    print("Files to retry:")
+    logging.info("  - Identified %d unique files for retry.", len(files_to_retry))
+    logging.info("  - Files to retry:")
     for f in files_to_retry:
-        print(f"  - {f}")
+        logging.info("  - %s", f)
 
     # Create a temporary directory to hold the files for the retry batch
     # This is necessary because the API functions expect a directory of PDFs
@@ -811,10 +931,10 @@ def retry_failed_files(
             shutil.copy2(src_file, dest_file)
             copied_files.append(dest_file)
         else:
-            print(f"Warning: Original file for retry not found: {src_file}")
+            logging.warning("  - Original file for retry not found: %s", src_file)
 
     if not copied_files:
-        print("\nNo files were successfully copied for retry.")
+        logging.info("  - No files were successfully copied for retry.")
         # Clean up temp directory if empty
         try:
             os.rmdir(temp_retry_dir)
@@ -823,8 +943,10 @@ def retry_failed_files(
             pass
         return
 
-    print(
-        f"\nCopied {len(copied_files)} files to temporary retry directory: {temp_retry_dir}"
+    logging.info(
+        "  - Copied %d files to temporary retry directory: %s",
+        len(copied_files),
+        temp_retry_dir,
     )
 
     # Process the copied files in the temp directory as a new batch
@@ -838,15 +960,15 @@ def retry_failed_files(
     )
 
     if not retry_batch_ids:
-        print("\nRetry batch processing failed. No batch IDs obtained.")
+        logging.error("  - Retry batch processing failed. No batch IDs obtained.")
         # Clean up temp directory
         shutil.rmtree(temp_retry_dir)
         return
 
     # Download results for the retry batch
-    print("\nStarting result downloads for retry batch...")
+    logging.info("  - Starting result downloads for retry batch...")
     for retry_batch_id in retry_batch_ids:
-        download_results(
+        _, retry_parsed_info = download_results(
             api_key=api_key,
             batch_id=retry_batch_id,
             input_directory=input_dir,
@@ -854,7 +976,30 @@ def retry_failed_files(
         )
 
     # Clean up the temporary directory after processing
-    print(f"\nCleaning up temporary retry directory: {temp_retry_dir}")
+    logging.info("  - Cleaning up temporary retry directory: %s", temp_retry_dir)
     shutil.rmtree(temp_retry_dir)
 
-    print("\n--- Retry Process Completed ---")
+    logging.info("  - Retry Process Completed")
+
+    return retry_parsed_info
+
+
+def contains_keywords(text: str, keywords: List[str]) -> bool:
+    """
+    Check if the text contains any of the specified keywords using regex matching.
+
+    Args:
+        text (str): Text to search in
+        keywords (List[str]): List of keywords to search for
+
+    Returns:
+        bool: True if any keyword is found in the text, False otherwise
+    """
+    # Create a regex pattern that matches any of the keywords
+    for keyword in keywords:
+        # Escape special regex characters in the keyword
+        escaped_keyword = re.escape(keyword)
+        # Use re.IGNORECASE for case-insensitive matching
+        if re.search(escaped_keyword, text, re.IGNORECASE):
+            return True
+    return False

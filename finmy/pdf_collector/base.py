@@ -1,145 +1,161 @@
-from __future__ import annotations
+"""
+Base abstractions for PDF parsing and filtering.
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+- Defines standard input/output structures (`PDFCollectorInput`, `PDFCollectorOutputSample`, `PDFCollectorOutput`)
+- Provides abstract `BasePDFCollector` base class for concrete implementations
+- Supports Mineru API-based parsing
+
+Implementers should:
+- Override `collect()` to return structured `PDFCollectorOutput`
+- Override `filter()` to implement keyword-based filtering logic
+- Use built-in helpers for file operations, logging, and directory management
+"""
+
+import os
+from typing import List, Optional
 from abc import ABC, abstractmethod
-from datetime import datetime
-from pathlib import Path
+from dataclasses import dataclass, field
+
+from dotenv import load_dotenv
 
 
 @dataclass
-class CollectInput:
-    """
-    Input configuration for PDF collection tasks.
+class PDFCollectorInput:
+    """Represents input for a PDF collection/processing task."""
 
-    Describes parameters for a batch or single PDF processing run, consumed
-    by collectors during `collect`.
-
-    Fields:
-    - source_dir: Directory path containing all PDFs to process
-    - output_dir: Writable directory for outputs and intermediates
-    - batch_size: Max number of documents per batch (default 50)
-    - language: Primary document language (e.g., "zh", "en") to guide tokenization/OCR/layout strategies
-    - check_pdf_limits: Whether to enforce size/page limits
-    - split_large: Split over-limit PDFs (e.g., by pages) when limits are enabled
-    - max_pages: Max pages per PDF (default 600). None disables the limit
-    - max_size_mb: Max size in MB per PDF (default 200). None disables the limit
-    - method: Collection/parsing method name (e.g., "PyMuPDF", "Mineru")
-    - metadata: Task-level extra metadata (key-value), e.g., source tags, task ID
-    """
-
-    source_dir: str = ""
-    output_dir: str = ""
-    batch_size: int = 50
-    language: str = "en"
-    check_pdf_limits: bool = True
-    split_large: bool = True
-    max_pages: Optional[int] = 600
-    max_size_mb: Optional[int] = 200
-    method: str = "unspecified"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    # The directory containing the PDFs to be parsed
+    input_dir: str = "input"
+    # The absolute path of the single PDF to be parsed
+    input_pdf_path: str = ""
+    # List of keywords to filter by
+    keywords: List[str] = field(default_factory=list)
 
 
 @dataclass
-class CollectOutput:
-    """
-    Output of a PDF collection task.
+class PDFCollectorOutputSample:
+    """Represents parse results from a single PDF."""
 
-    Aggregates processing status, produced artifacts, statistics, and timing.
+    # The unique identifier for the parsed result
+    RawDataID: str = ""
+    # The source path of the PDF
+    Source: str = ""
+    # The parsed markdown content of the PDF
+    Location: str = ""
+    # The parsed time of the PDF
+    Time: str = ""
+    # The cost time of the PDF processing
+    # In parser_information.json, CostTime means the time cost from the start of the upload pdfs to the end of download and unzip the parsed results
+    # In filter_information.json, CostTime means the time cost from the start of the upload pdfs to the end of the filter process
+    CostTime: str = ""
+    # The parsed copyright information of the PDF
+    Copyright: str = ""
+    # The parsing method used (e.g., "Mineru API")
+    Method: str = ""
+    # Tags for the parsed content
+    Tag: str = ""
+    # The batch ID for the parsed result
+    BatchID: str = ""
 
-    Fields:
-    - processed_files: Paths of successfully processed files (including split parts)
-    - failed_files: Paths that failed (unreachable, format errors, parsing issues)
-    - artifacts: Produced artifacts keyed by name (text, structured JSON, indexes, thumbnails, etc.)
-    - report: Statistics (durations, error distribution, page counts, size distribution)
-    - status: Final task status ("success", "partial", "failed", "unknown")
-    - start_time: Task start timestamp
-    - end_time: Task end timestamp
-    """
 
-    processed_files: List[str] = field(default_factory=list)
-    failed_files: List[str] = field(default_factory=list)
-    report: Dict[str, Any] = field(default_factory=dict)
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+@dataclass
+class PDFCollectorOutput:
+    """Represents parse results from a PDF collection/processing task.
 
-
-class PDFCollectorBase(ABC):
-    """
-    Base class for PDF collectors.
-
-    Lifecycle:
-    1) validate_input: validate inputs
-    2) prepare: pre-work (env checks, cache/dir setup)
-    3) collect: core collection/parsing (abstract; implemented by subclasses)
-    4) post_process: result post-processing (stats, indexing, cleanup)
-
-    Usage:
-    - Subclass and implement `collect`; optionally override `prepare` and `post_process`
-    - Call `run` to execute the full flow and obtain `CollectOutput`
+    A list of records, where each record corresponds to a parsed PDF result.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        self.config = config or {}
+    # List of parsed PDF results, each record corresponds to a parsed PDF result
+    records: List[PDFCollectorOutputSample] = field(default_factory=list)
+    # Start time of the parsing process (just for calculating CostTime)
+    start_time: float = 0.0
 
-    def run(self, collect_input: CollectInput) -> CollectOutput:
+
+class BasePDFCollector(ABC):
+    """
+    An abstract base class for PDF parsing and filtering modules.
+
+    This class provides common functionalities and configurations
+    that can be shared across different PDF processing strategies,
+    such as parsing via an API or filtering based on content.
+    """
+
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+    ):
         """
-        Execute the full collection flow.
-
-        Steps: validate -> prepare -> collect -> post_process.
+        Initializes the base collector.
 
         Args:
-        - collect_input: input configuration
-
-        Returns:
-        - CollectOutput: aggregated results and artifacts
+            config (dict, optional): Configuration dictionary for the collector. Defaults to None.
         """
-        self.validate_input(collect_input)
-        self.prepare(collect_input)
-        output = self.collect(collect_input)
-        self.post_process(output)
-        return output
 
-    def validate_input(self, collect_input: CollectInput) -> None:
-        """
-        Basic input validation.
+        self.config = config
+        self.output_dir = self.config["output_dir"]
+        self.batch_size = self.config["batch_size"]
+        self.language = self.config["language"]
+        self.check_pdf_limits = self.config["check_pdf_limits"]
 
-        Requires:
-        - writable `output_dir`
-        - `sources` is a directory path
-        - `batch_size` > 0
-        """
-        if not collect_input.output_dir:
-            raise ValueError("output_dir is required")
-        if not isinstance(collect_input.sources, str) or not collect_input.sources:
-            raise ValueError("sources must be a non-empty directory path string")
-        src_path = Path(collect_input.sources)
-        if not src_path.exists() or not src_path.is_dir():
-            raise ValueError("sources must point to an existing directory")
-        if collect_input.batch_size <= 0:
-            raise ValueError("batch_size must be positive")
+        # Create output directory if it doesn't exist
+        os.makedirs(self.config["output_dir"], exist_ok=True)
 
-    def prepare(self, collect_input: CollectInput) -> None:
-        """
-        Pre-work stage.
-
-        Default no-op. Subclasses may:
-        - create/clean output directories
-        - load parsing models or OCR resources
-        - initialize caches/index builders
-        """
-        return None
+        # Load environment variables, typically for API keys
+        if self.config["env_file"]:
+            load_dotenv(dotenv_path=self.config["env_file"])
 
     @abstractmethod
-    def collect(self, collect_input: CollectInput) -> CollectOutput: ...
-
-    def post_process(self, output: CollectOutput) -> None:
+    def collect(
+        self,
+        pdf_collector_input: PDFCollectorInput,
+    ) -> PDFCollectorOutput:
         """
-        Post-processing stage.
+        Abstract method to perform the collection or processing task.
 
-        Default no-op. Subclasses may:
-        - generate and persist reports
-        - archive artifacts and update indexes
-        - clean up intermediate files
+        Subclasses must implement this method to define their specific logic
+        for parsing PDF data.
+
+        Returns:
+            PDFCollectorOutput: The result of the parsing process.
         """
-        return None
+        pass
+
+    @abstractmethod
+    def filter(
+        self,
+        pdf_collector_input: PDFCollectorInput,
+        parsed_info: PDFCollectorOutput,
+    ) -> PDFCollectorOutput:
+        """
+        Abstract method to filter records based on keywords.
+
+        Subclasses must implement this method to define their specific logic
+        for filtering records.
+
+        Args:
+            pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
+            parsed_info (PDFCollectorOutput): The parsed records to filter.
+
+        Returns:
+            PDFCollectorOutput: Filtered records.
+        """
+        pass
+
+    def run(
+        self,
+        pdf_collector_input: PDFCollectorInput,
+    ) -> PDFCollectorOutput:
+        """
+        Runs the collection and filtering process.
+
+        Args:
+            pdf_collector_input (PDFCollectorInput): Input configuration for the collector.
+
+        Returns:
+            PDFCollectorOutput: Filtered records.
+        """
+        # Parse PDFs and save the successful records
+        parsed_info = self.collect(pdf_collector_input)
+        # Filter parsed records based on keywords
+        filtered_info = self.filter(pdf_collector_input, parsed_info)
+
+        return filtered_info
