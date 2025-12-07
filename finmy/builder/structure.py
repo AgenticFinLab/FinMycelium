@@ -542,11 +542,6 @@ class EventStage:
     - start_time/end_time: temporal boundaries of the stage
     - description: concise natural-language summary
     - stage_highlights: salient sub-events defining this phase
-    - stage_actions: actions aggregated or recorded in this stage
-    - transactions: financial transfers recorded in this stage
-    - interactions: participant interactions recorded in this stage
-    - participants: entities involved in this stage
-    - participant_snapshots: per-participant snapshots observed in this stage
     - group_metrics: aggregated metrics derived from participants or actions
     - systemic_indicators: signals of broader instability
     - stage_drivers: underlying forces/conditions
@@ -558,10 +553,6 @@ class EventStage:
     Example:
     {
       "stage_id": "S1", "name": "Amplification", "stage_index": 2,
-      "transactions": [{"amount": 250000.0, "currency": "USD", ...}],
-      "interactions": [{"medium": "social_media", "summary": "Guaranteed returns", ...}],
-      "participants": [Participant(...)],
-      "participant_snapshots": {"P_A": [ParticipantStateSnapshot(...), ...]},
       "group_metrics": {"new_victims": 120}
     }
     """
@@ -583,22 +574,11 @@ class EventStage:
     # Concise natural-language summary of this stage’s essence.
     description: Optional[str] = None
 
-    # Salient sub-events or highlights that define this phase.
-    stage_highlights: List[str] = field(default_factory=list)
-
-    # Stage-level actions/transactions/communications
-    stage_actions: List[Action] = field(default_factory=list)
-    transactions: List[Transaction] = field(default_factory=list)
-    interactions: List[Interaction] = field(default_factory=list)
-
     # Episodes nested within this stage
     episodes: List[Episode] = field(default_factory=list)
 
-    participants: List[Participant] = field(default_factory=list)
-
-    participant_snapshots: Dict[str, List[ParticipantStateSnapshot]] = field(
-        default_factory=dict
-    )
+    # Salient episodes, things, information, highlights, or etc. that define this stage.
+    stage_highlights: List[str] = field(default_factory=list)
 
     # Aggregated statistics derived from participant trajectories.
     # Examples: {"new_victims": 120, "avg_trust_growth_rate": 0.05}
