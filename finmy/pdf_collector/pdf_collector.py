@@ -199,6 +199,6 @@ class PDFCollector(BasePDFCollector):
                 indent=2,
             )
 
-        logging.info("  - Filtered information saved to: %s", filtered_info_path)
+            logging.info("  - Filtered information saved to: %s", filtered_info_path)
 
         return filtered_info
