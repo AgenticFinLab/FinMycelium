@@ -22,9 +22,7 @@ Relationship Among Event, Stage, Episode, and Participant:
 - Participant: An entity associated with an episode, labeled by its financial role
 
 Usage notes:
-- Trajectories are derived on demand by merging snapshots per `participant_id`
-  across stage-level and episode-level `participant_snapshots`, then sorting by
-  `timestamp`.
+- Trajectories are derived on demand by merging snapshots per `participant_id` across stage-level and episode-level `participant_snapshots`, then sorting by `timestamp`.
 - Builders assemble `EventCascade` using LMs or rules and avoid duplicating
   participant lists outside stages to reduce redundancy.
 - Most entities include `reasons` and `rationale` fields to capture causal
@@ -59,15 +57,16 @@ from typing import Optional, Any, Dict, List
 class EvidenceItem:
     """Evidence reference anchoring an action/transaction/interaction.
 
-    Notes:
-    - `source_content` MUST be the exact original text from the given source
-      (no paraphrasing or summarization).
-    - Use `source_type` to categorize the source (e.g., news/report/platform_log).
-
     Example:
-    {"source_type": "news",
-     "source_content": "Company promised 30% monthly returns", "timestamp": datetime(...),
-     "confidence": 0.8}
+    {
+      "source_type": "news",
+      "source_content": "Company promised 30% monthly returns",
+      "timestamp": datetime(...),
+      "confidence": 0.8,
+      "reasons": ["explicit rate claim", "named issuer"],
+      "rationale": "Direct quote supports the transaction inference",
+      "extras": {"language": "en", "supported_field": "Transaction.amount"}
+    }
     """
 
     # Content category label (e.g., "news", "report", "platform_log").
@@ -75,11 +74,9 @@ class EvidenceItem:
     # Exact original text snippet (no rewriting) that supports a specific setting/assignment; clearly include the precise source text that justifies it.
     source_content: str = ""
     # Wall-clock time when the source content was published or logged.
-    # Use UTC where possible; set to None if unknown. Prefer the most relevant
-    # timestamp (e.g., article publish time over crawl time).
+    # Use UTC where possible; set to None if unknown. Prefer the most relevant timestamp (e.g., article publish time over crawl time).
     timestamp: Optional[datetime] = None
-    # Confidence score in [0.0, 1.0] reflecting trustworthiness and relevance
-    # of this evidence. Example: 0.9 for official filings; 0.5 for anonymous claims.
+    # Confidence score in [0.0, 1.0] reflecting trustworthiness and relevance of this evidence. Example: 0.9 for official filings; 0.5 for anonymous claims.
     confidence: Optional[float] = None
     # Short factors (1–5 items) explaining why this evidence is relevant.
     # Examples: ["explicit rate claim", "named issuer", "official filing"].
@@ -87,9 +84,7 @@ class EvidenceItem:
     # Analyst note connecting the evidence to the conclusion/setting in this record.
     # Free-text explanation; may reference the specific field being supported.
     rationale: str = ""
-    # Flexible extension map. Suggested keys: "supported_field" (e.g., "Transaction.amount"),
-    # "support_scope" ("direct"|"indirect"|"contextual"), "char_span" ([start,end]),
-    # "paragraph_index" (int), "language" (e.g., "en").
+    # Flexible extension map. Suggested keys: "supported_field" (e.g., "Transaction.amount"), "support_scope" ("direct"|"indirect"|"contextual"), "char_span" ([start,end]), "paragraph_index" (int), "language" (e.g., "en").
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -101,30 +96,35 @@ class ParticipantRelation:
     {
       "from_participant_id": "P_A",
       "to_participant_id": "P_B",
-      "description": "A 是 B 的客户，存在长期付费关系",
+      "description": "A is a long-term paying client of B",
       "relation_type": "client_of",
       "is_bidirectional": false,
       "start_time": datetime(...),
+      "end_time": None,
       "strength": 0.8,
       "status": "active",
       "tags": ["financial"],
       "attributes": {"contract_id": "C-2025-001"},
       "reasons": ["service agreement signed"],
       "rationale": "Observed formal KYC onboarding and recurring payments",
-      "evidence": [EvidenceItem(source_type="report", source_content="contract signed on ...")]
+      "evidence": [EvidenceItem(source_type="report", source_content="contract signed on ...")],
+      "extras": {"jurisdiction": "US"}
     }
 
     Bidirectional example:
     {
       "from_participant_id": "P_X",
       "to_participant_id": "P_Y",
-      "description": "X 与 Y 存在共同母公司，从公司注册信息可验证",
+      "description": "X and Y share a common parent company (public registry verified)",
       "relation_type": "affiliated_with",
       "is_bidirectional": true,
+      "start_time": None,
+      "end_time": None,
       "tags": ["corporate"],
       "reasons": ["shared ownership structure"],
       "rationale": "Public registry shows common parent entity",
-      "evidence": [EvidenceItem(source_type="registry", source_content="parent company: ...")]
+      "evidence": [EvidenceItem(source_type="registry", source_content="parent company: ...")],
+      "extras": {"registry_country": "UK"}
     }
     """
 
@@ -180,14 +180,19 @@ class FinancialInstrument:
     }
     """
 
+    # Unique identifier for the security/instrument (e.g., ISIN, CUSIP, ticker); used for cross-source alignment and deduplication.
     instrument_id: str
+    # Instrument category label (e.g., 'bond', 'equity', 'derivative'); use a controlled vocabulary and avoid free text.
     instrument_type: str = "unspecified"
+    # Static/semi-static attribute map; examples: issuer, coupon, maturity; include only facts directly supported by evidence and normalize units/formats.
     attributes: Dict[str, Any] = field(default_factory=dict)
+    # 1–5 concise bullets explaining inclusion of this instrument or reasons for attribute settings; improves auditability and review.
     reasons: List[str] = field(default_factory=list)
+    # Analyst free-text explanation linking evidence to conclusions; include assumptions and caveats.
     rationale: str = ""
-    # Evidence items supporting inclusion/relevance of this instrument.
-    # Use to ground attributes or instrument usage in exact source content.
+    # Evidence items with exact `source_content` supporting the instrument's existence or attributes; prefer authoritative sources.
     evidence: List[EvidenceItem] = field(default_factory=list)
+    # Extension metadata for domain-specific details or downstream model outputs (e.g., parsing status, quality flags, normalization markers).
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -196,24 +201,39 @@ class Transaction:
     """Financial transfer between participants.
 
     Example:
-    {"timestamp": datetime(...), "amount": 10000.0, "currency": "USD",
-     "from_participant_id": "P_A", "to_participant_id": "P_B",
-     "instrument": FinancialInstrument(...),
-     "evidence": [EvidenceItem(source_type="news",
-                                source_content="Company promised 30% monthly returns",
-                                timestamp=datetime(...),
-                                confidence=0.8)]}
+    {
+      "timestamp": datetime(...),
+      "amount": 10000.0,
+      "currency": "USD",
+      "from_participant_id": "P_A",
+      "to_participant_id": "P_B",
+      "instrument": FinancialInstrument(...),
+      "reasons": ["bank record indicates transfer"],
+      "rationale": "Direct match between bank record and participant IDs",
+      "evidence": [EvidenceItem(source_type="news", source_content="Company promised 30% monthly returns", timestamp=datetime(...), confidence=0.8)],
+      "extras": {"settlement_channel": "SWIFT", "transaction_hash": null}
+    }
     """
 
+    # Transaction occurrence time (wall-clock); provide the most credible timestamp; use UTC.
     timestamp: datetime
+    # Transaction amount (numeric); positive value; units implied by `currency`; record a single transfer when sources contain multiple splits.
     amount: float
+    # Currency code (ISO 4217); default 'USD'; must correspond to `amount` and be normalized across sources.
     currency: str = "USD"
+    # Payer participant identifier; references `Participant.participant_id`; do not use names or aliases.
     from_participant_id: str = ""
+    # Payee participant identifier; references `Participant.participant_id`; if unknown, leave empty and explain in `extras`.
     to_participant_id: str = ""
+    # Related financial instrument; optional; describes the vehicle of transfer (e.g., bond payment, token transfer).
     instrument: Optional[FinancialInstrument] = None
+    # 1–5 concise bullets explaining why this transaction is recorded or the basis for its credibility.
     reasons: List[str] = field(default_factory=list)
+    # Analyst free-text explanation detailing inference chain, assumptions, and boundaries.
     rationale: str = ""
+    # Evidence list with exact `source_content` directly supporting the transaction (e.g., on-chain tx, bank record, news report).
     evidence: List[EvidenceItem] = field(default_factory=list)
+    # Extended metadata; e.g., settlement channel, transaction hash, batch identifier, parsing status.
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -222,25 +242,51 @@ class Interaction:
     """Message or broadcast exchanged among participants.
 
     Example:
-    {"timestamp": datetime(...), "medium": "social_media", "method": "public_post", "sender_id": "P_X",
-     "receiver_ids": ["P_A", "P_B"], "summary": "Guaranteed 30% monthly returns",
-     "approx_occurrences": 10, "frequency_descriptor": "每周数次",
-      "evidence": [EvidenceItem(...)]}
+    {
+      "timestamp": datetime(...),
+      "medium": "social_media",
+      "method": "public_post",
+      "sender_id": "P_X",
+      "receiver_ids": ["P_A", "P_B"],
+      "summary": "Guaranteed 30% monthly returns",
+      "approx_occurrences": 10,
+      "frequency_descriptor": "several_per_week",
+      "reasons": ["high engagement"],
+      "rationale": "Observed repeated posts with consistent claims",
+      "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
+      "thread_id": "thread_123",
+      "reply_to_id": null,
+      "extras": {"platform": "Weibo", "language": "zh"}
+    }
     """
 
+    # Interaction occurrence time; use UTC; if only publish time is available, note it in `extras`.
     timestamp: datetime
+    # Medium (e.g., 'social_media', 'email', 'press'); controlled vocabulary; used for channel analysis.
     medium: str = "unspecified"
+    # Method (e.g., 'public_post', 'dm', 'press_conference'); combined with `medium` to describe concrete form.
     method: str = "unspecified"
+    # Sender participant identifier; references `Participant.participant_id`.
     sender_id: str = ""
+    # Receiver participant identifiers; reference `Participant.participant_id`; empty means broadcast or undefined audience.
     receiver_ids: List[str] = field(default_factory=list)
+    # Summary of the interaction; distills core information or claims; often a condensed version of evidence text.
     summary: str = ""
+    # Approximate number of occurrences; for imprecise counts (e.g., repeated forwards or talks).
     approx_occurrences: Optional[int] = None
+    # Frequency descriptor (e.g., 'daily', 'several_per_week'); characterizes behavior intensity and cadence.
     frequency_descriptor: str = ""
+    # 1–5 concise bullets explaining why this interaction is recorded or how it relates to the event.
     reasons: List[str] = field(default_factory=list)
+    # Analyst explanation connecting evidence to the interaction's role, impact, or intent.
     rationale: str = ""
+    # Evidence list with exact `source_content`; examples: original post text, email body, news passage.
     evidence: List[EvidenceItem] = field(default_factory=list)
+    # Thread identifier; used to link social media/forum context; None means no explicit thread.
     thread_id: Optional[str] = None
+    # Reply target identifier; indicates the upstream message this interaction responds to.
     reply_to_id: Optional[str] = None
+    # Extended metadata; e.g., platform internal ID, crawl batch, language, model scores.
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -255,7 +301,6 @@ class Action:
       "description": "Guaranteed 30% monthly returns",
       "reasons": ["promotion", "marketing"],
       "outcomes": ["increased signups"],
-      "related_state_snapshots": [],
       "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
       "extras": {"channel": "platform_feed"}
     }
@@ -283,8 +328,7 @@ class Action:
     extras: Dict[str, Any] = field(default_factory=dict)
 
     # NOTE:
-    # For high-volume pipelines, store Action documents separately and only resolve
-    # related_state_snapshots on-demand to avoid heavy in-memory graphs.
+    # For high-volume pipelines, store Action documents separately and only resolve related_state_snapshots on-demand to avoid heavy in-memory graphs.
 
 
 # Represents an immutable, timestamped observation of a participant's dynamic state
@@ -408,8 +452,7 @@ class Participant:
     alias_handles: Dict[str, List[str]] = field(default_factory=dict)
 
     # Explicit relationship edges to other participants in this event.
-    # Each relation captures type, directionality, temporal bounds, strength,
-    # status, tags/attributes, reasons/rationale, and evidence (EvidenceItem) for auditability.
+    # Each relation captures type, directionality, temporal bounds, strength, status, tags/attributes, reasons/rationale, and evidence (EvidenceItem) for auditability.
     relations: List[ParticipantRelation] = field(default_factory=list)
 
     # Stable cognitive or behavioral dispositions influencing decisions.
@@ -430,12 +473,10 @@ class Participant:
     extras: Dict[str, Any] = field(default_factory=dict)
 
     # Validation note:
-    # - participant_id regex and entity specificity are documented here but enforced
-    #   by builders at runtime. This module intentionally contains no methods.
+    # - participant_id regex and entity specificity are documented here but enforced by builders at runtime. This module intentionally contains no methods.
 
     # NOTE ON SCALABILITY:
-    # In large-scale scenarios (millions of participants), store Participant records
-    # in a database table (e.g., PostgreSQL, MongoDB) with participant_id as primary key.
+    # In large-scale scenarios (millions of participants), store Participant records in a database table (e.g., PostgreSQL, MongoDB) with participant_id as primary key.
     # Avoid embedding full Participant objects in memory-heavy structures.
 
 
@@ -446,10 +487,8 @@ class Participant:
 class Episode:
     """A coherent episode within a stage.
 
-    Episodes group participants, actions, transactions, interactions, and
-    snapshots that share a tighter temporal window or thematic focus than the
-    surrounding stage. They enable fine-grained modeling without losing
-    stage-level aggregation.
+    Episodes group participants, actions, transactions, interactions, and snapshots that share a tighter temporal window or thematic focus than the surrounding stage.
+    They enable fine-grained modeling without losing stage-level aggregation.
 
     Example:
     {
@@ -460,33 +499,49 @@ class Episode:
       "end_time": datetime(...),
       "description": "Key investors received targeted promises",
       "participants": [Participant(...)],
-      "participant_snapshots": {"P_A": [ParticipantStateSnapshot(...), ...]},
+      "participant_snapshots": {"P_A": [ParticipantState(...)]},
       "actions": [Action(...)],
       "transactions": [Transaction(...)],
       "interactions": [Interaction(...)],
-      "evidence": [EvidenceItem(source_type="news", source_content="...")],
+      "evidence": [EvidenceItem(source_type="news", source_content:"...")],
+      "tags": ["high_pressure_sales"],
+      "confidence_score": 0.8,
       "extras": {"analyst_notes": "high-pressure sales tactics"}
     }
     """
 
+    # Locally unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
     episode_id: str
+    # Name; human-readable semantic label; not used for logical matching.
     name: str = ""
+    # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     sequence_index: int = 0
+    # Start time; earliest evidence or activity; None if uncertain.
     start_time: Optional[datetime] = None
+    # End time; latest evidence or activity; None if ongoing or boundaries are unclear.
     end_time: Optional[datetime] = None
+    # Short description summarizing the episode's theme and key activities.
     description: str = ""
 
+    # List of entities participating in this episode; directly relevant `Participant` records.
     participants: List[Participant] = field(default_factory=list)
+    # Participant state map: `participant_id -> List[ParticipantState]`; enables fine-grained temporal analysis.
     participant_snapshots: Dict[str, List[ParticipantState]] = field(
         default_factory=dict
     )
+    # Actions occurring within this episode; used to model causal chains.
     actions: List[Action] = field(default_factory=list)
+    # Financial transfers within this episode; linked to participants/instruments.
     transactions: List[Transaction] = field(default_factory=list)
+    # Messages/broadcasts within this episode; used for information diffusion analysis.
     interactions: List[Interaction] = field(default_factory=list)
-    # Evidence items backing this episode; include exact source_content segments.
+    # Evidence supporting the episode's existence and boundaries; include exact `source_content`.
     evidence: List[EvidenceItem] = field(default_factory=list)
+    # Thematic/semantic tags for clustering, filtering, and analysis; prefer controlled vocabularies.
     tags: List[str] = field(default_factory=list)
+    # Confidence score (0.0–1.0); aggregate assessment of evidence quality, coverage, and consistency.
     confidence_score: float = 0.0
+    # Extended metadata; e.g., reviewer, version, auto-summary, quality flags.
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -496,8 +551,21 @@ class EventStage:
 
     Example:
     {
-      "stage_id": "S1", "name": "Amplification", "stage_index": 2,
-      "group_metrics": {"new_victims": 120}
+      "stage_id": "S1",
+      "name": "Amplification",
+      "stage_index": 2,
+      "start_time": datetime(...),
+      "end_time": None,
+      "description": "Rapid spread of promotional messages",
+      "episodes": [Episode(...)],
+      "stage_highlights": ["celebrity endorsement"],
+      "group_metrics": {"new_victims": 120},
+      "systemic_indicators": ["regulatory_attention"],
+      "stage_drivers": ["media_amplification", "social_proof"],
+      "evidence": [EvidenceItem(source_type:"news", source_content:"...")],
+      "tags": ["amplification_phase"],
+      "confidence_score": 0.7,
+      "extras": {"llm_summary": "..."}
     }
     """
 
