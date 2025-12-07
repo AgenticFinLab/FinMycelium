@@ -9,7 +9,10 @@ This method is to reconstruction the financial event purely by prompting a singl
 
 import re
 from pathlib import Path
-from typing import Any
+import json
+import os
+from datetime import datetime
+from typing import Dict, Any
 
 from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
@@ -178,6 +181,87 @@ class LMBuilder(BaseBuilder):
             USER_PROMPT if "user_prompt" not in config else config["user_prompt"]
         )
 
+        # Add output directory configuration
+        self.output_dir = config.get("output_dir", "./data/event_cascade_output")
+
+    def extract_json_from_response(self, response_text: str) -> Dict[str, Any]:
+        """
+        Extract JSON from the LM response text.
+        Handles cases where response includes markdown code blocks.
+        """
+        # Remove markdown code block indicators if present
+        clean_text = response_text.strip()
+
+        # Handle ```json ... ``` pattern
+        json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
+        if json_match:
+            clean_text = json_match.group(1)
+
+        # Parse JSON
+        try:
+            return json.loads(clean_text)
+        except json.JSONDecodeError as e:
+            # Try to find JSON object/array in the text
+            json_pattern = r"(\{.*\}|\[.*\])"
+            matches = re.findall(json_pattern, clean_text, re.DOTALL)
+            if matches:
+                # Try the longest match (most likely to be complete JSON)
+                longest_match = max(matches, key=len)
+                return json.loads(longest_match)
+            raise ValueError(f"Failed to parse JSON from response: {e}")
+
+    def save_event_cascade(
+        self, event_cascade: Dict[str, Any], output_path: str = None
+    ):
+        """
+        Save event cascade data to JSON files in a structured directory.
+
+        Args:
+            event_cascade: Parsed event cascade dictionary
+            output_path: Base output directory (defaults to self.output_dir)
+        """
+        if output_path is None:
+            output_path = self.output_dir
+
+        # Create timestamped directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_dir = os.path.join(output_path, f"event_cascade_{timestamp}")
+        os.makedirs(base_dir, exist_ok=True)
+
+        print(f"Saving event cascade to: {base_dir}")
+
+        # Check structure - looking for FinancialEventReconstruction
+        if "FinancialEventReconstruction" in event_cascade:
+            event_data = event_cascade["FinancialEventReconstruction"]
+        else:
+            # Assume direct structure if key not found
+            event_data = event_cascade
+
+        # Save main event cascade file
+        main_file = os.path.join(base_dir, "EventCascade.json")
+        with open(main_file, "w", encoding="utf-8") as f:
+            json.dump(event_data, f, ensure_ascii=False, indent=2)
+        print(f"Saved main event cascade to: {main_file}")
+
+        # Save stages separately if they exist in the structure
+        if (
+            "EventCascade.json" in event_data
+            and "stages" in event_data["EventCascade.json"]
+        ):
+            stages_dir = os.path.join(base_dir, "stages")
+            os.makedirs(stages_dir, exist_ok=True)
+
+            stages = event_data["EventCascade.json"]["stages"]
+            for stage_id, stage_data in stages.items():
+                if isinstance(stage_data, dict):
+                    # Handle nested stage structure
+                    stage_file = os.path.join(stages_dir, f"{stage_id}.json")
+                    with open(stage_file, "w", encoding="utf-8") as f:
+                        json.dump(stage_data, f, ensure_ascii=False, indent=2)
+                    print(f"✓ Saved stage {stage_id} to: {stage_file}")
+
+        return base_dir
+
     def load_samples(self, build_input: BuildInput) -> Any:
         """Load the specific content of samples from the files."""
         # For the input of the lm-based builder, we need to combine the content of the samples into a long string.
@@ -187,7 +271,7 @@ class LMBuilder(BaseBuilder):
                 for sample in build_input.samples
             ]
         )
-        print(samples_content)
+        print(f"Loaded {len(build_input.samples)} samples")
         return samples_content
 
     def build(self, build_input: BuildInput) -> BuildOutput:
@@ -195,6 +279,7 @@ class LMBuilder(BaseBuilder):
         # We first need to convert the samples presented in the build input
         # to the format required by this function
         samples_content = self.load_samples(build_input)
+
         # Infer the llm API
         output: InferOutput = self.lm_api.run(
             infer_input=InferInput(
@@ -205,4 +290,21 @@ class LMBuilder(BaseBuilder):
             Keywords=build_input.user_query.key_words,
             Content=samples_content,
         )
+
+        # Extract and save JSON
+
+        try:
+            print(output.response)
+            event_cascade_json = self.extract_json_from_response(output.response)
+            saved_dir = self.save_event_cascade(event_cascade_json)
+            print(f"Successfully saved event cascade to directory: {saved_dir}")
+        except Exception as e:
+            print(f"Warning: Failed to save JSON files: {e}")
+            # Fallback: save raw response
+            raw_output_path = os.path.join(self.output_dir, "raw_response.txt")
+            os.makedirs(self.output_dir, exist_ok=True)
+            with open(raw_output_path, "w", encoding="utf-8") as f:
+                f.write(output.response)
+            print(f"Raw response saved to: {raw_output_path}")
+
         return BuildOutput(event_cascades=[output.response])
