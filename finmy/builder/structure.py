@@ -490,7 +490,7 @@ class Episode:
     - interactions: participant interactions recorded in this episode
     - evidence_sources: references supporting this episode
     - tags: thematic labels for grouping/analysis (e.g., ["promotion", "whitelist"])
-    - confidence_score: 0.0–1.0 indicating reliability of this episode
+    - confidence_score: 0.0-1.0 indicating reliability of this episode
     - extras: extension placeholder
 
     Example:
@@ -536,6 +536,7 @@ class EventStage:
     """Stage of the event development.
 
     Fields:
+    - stage_id: unique label for the stage within the event
     - name: stage name, e.g., "Bait Deployment", "Amplification"
     - stage_index: zero-based index ordering stages
     - start_time/end_time: temporal boundaries of the stage
@@ -556,7 +557,7 @@ class EventStage:
 
     Example:
     {
-      "name": "Amplification", "stage_index": 2,
+      "stage_id": "S1", "name": "Amplification", "stage_index": 2,
       "transactions": [{"amount": 250000.0, "currency": "USD", ...}],
       "interactions": [{"medium": "social_media", "summary": "Guaranteed returns", ...}],
       "participants": [Participant(...)],
@@ -564,6 +565,8 @@ class EventStage:
       "group_metrics": {"new_victims": 120}
     }
     """
+
+    stage_id: str
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
     name: str

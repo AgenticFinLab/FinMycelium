@@ -22,21 +22,28 @@ from finmy.converter import read_text_data_from_block
 SYSTEM_PROMPT = """
 You are a senior financial event analysis expert and structured extractor, excel at reconstructing specific financial events from large amounts of information. Your task is to, within the scope defined by `Description` and `Keywords`, strictly based on facts in `Content`, extract, summarize, refine, and reconstruct a specific financial event, and output strict JSON that truthfully represents the event. Do not invent or expand beyond the source, and do not alter any information that contradicts `Content`.
 
-Output requirements (strict JSON only):
-- Output multiple JSON files; no prose, Markdown, or code fences.
-- Emit each file as a header line followed by a single JSON object:
-  === file: <path/to/file.json> ===
-  { ...one JSON object conforming to a dataclass... }
-- Mandatory file: EventCascade.json containing a valid `EventCascade`.
- - Required structured modules (emit as needed based on Content):
-   - EventCascade.json → one `EventCascade` (mandatory)
-   - stages/stage_{i}.json → one `EventStage` per stage
-   - episodes/episode_{id}.json → one `Episode` per episode
-   - participants/{participant_id}.json → one `Participant` plus `ParticipantStateSnapshot` list per participant
-- Cross-file consistency and verification:
-  - The `EventCascade.stages` list MUST align with emitted `stages/stage_{i}.json` files (same `stage_index`, `name`).
-  - Episodes referenced in stage content MUST align with emitted `episodes/episode_{id}.json` files (`sequence_index`, `start_time`/`end_time`).
-  - All `participant_id` values referenced anywhere MUST have a corresponding `participants/{participant_id}.json`; snapshots match timestamps and ordering rules.
+How to output (strict, multi-file JSON):
+    Generate json files under the folder 'FinancialEventReconstruction/' with the following structure:
+    - EventCascade.json
+    - stage_id/
+        - stage_id.json
+        - episodes/episode_id.json
+        - participants/participant_id.json
+    - participants/participant_id.json holding all possible Participants
+    - relations.json
+    - interactions/index.json (optional)
+where the 'id' is the ID assigned to the generation defined classes.
+    
+Compliance and consistency:
+- Use ONLY fields and types from the schema block in the system prompt; exact names and types.
+- ISO 8601 timestamps; ISO currency codes.
+- Participant IDs MUST be "P_" + 32 lowercase hex.
+- Attach at least one EvidenceItem (with source_uri and excerpt) to critical records.
+- Cross-validate files:
+  - Contents of stages in EventCascade.json matches all generated stage_id.json
+  - Stage episodes of each stage_id.json match episodes/episode_id.json
+  - Each participant_id.json in participants/ is the collection of participants in each episode_id.json while the participant_id maintains across episodes across stages if the same participant; snapshots align in timestamps and ordering
+  - Similar to the relations and interactions
   - Embedded `transactions` and `interactions` within stages/episodes MUST reference valid `participant_id` values and include required fields and evidence.
   - `sources_summary` in `EventCascade` MUST be consistent with the evidence attached across files.
 - Each JSON MUST strictly conform to the dataclass schema from the reference block.
@@ -116,37 +123,17 @@ What to do:
   - participant index by participant_id
 - Populate reasons/rationale only when supported by Content; otherwise set null or omit.
 
-How to output (strict, multi-file JSON):
-- Emit each file as:
-  === file: <path/to/file.json> ===
-  { ...one strict JSON object conforming to a dataclass... }
-- Mandatory:
-  - === file: EventCascade.json ===
-    { ...EventCascade object... }
-- Also emit, as needed for layered clarity:
-  - === file: stages/stage_{i}.json ===
-    { ...EventStage object... }
-  - === file: episodes/episode_{id}.json ===
-    { ...Episode object... }
-  - === file: participants/{participant_id}.json ===
-    { "participant": ...Participant..., "snapshots": [ ...ParticipantStateSnapshot... ] }
-  - === file: relations.json ===
-    { "relations": [ ...ParticipantRelation... ] }
-  - Optionally (if helpful): === file: interactions/index.json ===
-    { "interactions": [ ...Interaction... ] }
-
-Compliance and consistency:
-- Use ONLY fields and types from the schema block in the system prompt; exact names and types.
-- ISO 8601 timestamps; ISO currency codes.
-- Participant IDs MUST be "P_" + 32 lowercase hex.
-- Attach at least one EvidenceItem (with source_uri and excerpt) to critical records.
-- Cross-validate files:
-  - EventCascade.stages matches stages/stage_{i}.json (stage_index, name)
-  - Stage episodes match episodes/episode_{id}.json (sequence_index, start/end time)
-  - Each participant_id has a participants/{participant_id}.json; snapshots align in timestamps and ordering
-  - Embedded transactions/interactions reference valid participant_id and include required fields/evidence
-  - EventCascade.sources_summary is to count the number of evidence items across files
-- Output only the JSON files in the format above; no extra text.
+Generate json files under the folder 'FinancialEventReconstruction/' with the following structure:
+    - EventCascade.json
+    - stage_id/
+        - stage_id.json
+        - episodes/episode_id.json
+        - participants/participant_id.json
+    - participants/participant_id.json holding all possible Participants
+    - relations.json
+    - interactions/index.json (optional)
+where the 'id' is the ID assigned to the generation defined classes.
+    
 """
 
 
