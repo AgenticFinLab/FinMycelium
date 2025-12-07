@@ -4,7 +4,7 @@ Define the structure of the financial event cascade by providing base entities a
 Structure overview:
 - Participant: identity and stable attributes of entities involved
 - ParticipantRelation: explicit relationship edge between participants
-- ParticipantStateSnapshot: time-stamped dynamic state and actions of a participant
+- ParticipantState: time-stamped dynamic state and actions of a participant
 - Action: atomic behaviors recorded within snapshots/stages/episodes
 - Transaction: financial transfers between participants with evidence
 - Interaction: messages/broadcasts among participants with reasons/rationale
@@ -39,11 +39,11 @@ EventCascade
         │     ├── actions: List[Action]
         │     ├── transactions: List[Transaction]
         │     ├── interactions: List[Interaction]
-        │     └── participant_snapshots: { participant_id → [ParticipantStateSnapshot] }
+        │     └── participant_snapshots: { participant_id → [ParticipantState] }
         ├── stage_actions: List[Action]
         ├── transactions: List[Transaction]
         ├── interactions: List[Interaction]
-        └── participant_snapshots: { participant_id → [ParticipantStateSnapshot] }
+        └── participant_snapshots: { participant_id → [ParticipantState] }
 
 Derived trajectory (on demand):
   participant_id → collect snapshots across stages/episodes → sort by timestamp → trajectory
@@ -55,118 +55,47 @@ from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
 
 
-# ============================================================================
-# MICRO: Participant Identity — Stable attributes, relations, and background
-# ============================================================================
 @dataclass
-class Participant:
-    """Participant involved in the financial event.
+class EvidenceItem:
+    """Evidence reference anchoring an action/transaction/interaction.
 
-    ID format requirement:
-    - participant_id must be in canonical form: "P_" + 32 lowercase hex characters
-      Regex: ^P_[a-f0-9]{32}$
+    Notes:
+    - `source_content` MUST be the exact original text from the given source
+      (no paraphrasing or summarization).
+    - Use `source_type` to categorize the source (e.g., news/report/platform_log).
 
     Example:
-    - P_3f2a1c4b6d7e8f90123456789abcdeff
-
-    Fields:
-    - participant_id: canonical unique ID (see format above)
-    - entity: specific and concrete financial entity name (e.g., "Credit Suisse", "瑞信");
-      must not be a generic category or placeholder
-    - name: human-readable name (may be anonymized)
-    - participant_type: entity category, e.g., "individual", "organization"
-    - base_role: primary role in this event, e.g., "victim", "perpetrator"
-    - attributes: static/semi-static properties, e.g., {"location": "Shanghai"}
-    - relations: explicit relationship edges to other participants (see ParticipantRelation)
-    - preferences: stable dispositions, e.g., {"risk_tolerance": "high"}
-    - experiences: prior context shaping current behavior
-    - aliases: alternative names for entity resolution
-    - source_ids: platform-specific identifiers, e.g., {"weibo": "uid_123"}
-    - extras: extension placeholder for downstream models
+    {"source_type": "news",
+     "source_content": "Company promised 30% monthly returns", "timestamp": datetime(...),
+     "confidence": 0.8}
     """
 
-    # Unique, immutable identifier (e.g., UUID, hashed ID, semantic key).
-    participant_id: str
-
-    # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
-    entity: str
-
-    # Human-readable name from the given content (cannot be anonymized).
-    name: str = ""
-
-    # High-level category.
-    # Examples: 'individual', 'organization', 'social_media_platform', 'government_agency'.
-    participant_type: str = "individual"
-
-    # Primary functional role in this event.
-    # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
-    base_role: str = "unknown"
-
-    # Static or semi-static descriptive properties.
-    # Examples:
-    #   - Individuals: {"age_group": "30-40", "education": "bachelor", "location": "Shanghai"}
-    #   - Organizations: {"industry": "fintech", "employee_count": 50}
-    attributes: Dict[str, Any] = field(default_factory=dict)
-
-    # Alternative names and platform-specific identifiers for entity resolution.
-    # Examples:
-    #   aliases: ["ACME Ltd.", "ACME Holdings"]
-    #   source_ids: {"weibo": "uid_123", "douyin": "sec_abc", "bilibili": "mid_456"}
-    aliases: List[str] = field(default_factory=list)
-    source_ids: Dict[str, str] = field(default_factory=dict)
-
-    # Explicit relationship edges to other participants in this event.
-    # Each relation captures type, directionality, temporal bounds, strength,
-    # status, tags/attributes, reasons/rationale, and evidence_sources for auditability.
-    relations: List["ParticipantRelation"] = field(default_factory=list)
-
-    # Stable cognitive or behavioral dispositions influencing decisions.
-    # Examples: {"risk_tolerance": "high", "credibility_threshold": 0.4}
-    preferences: Dict[str, Any] = field(default_factory=dict)
-
-    # Prior events or historical context shaping current behavior.
-    # Examples: {"past_scam_victim": True, "crypto_investment_history": ["BTC_2021"]}
-    experiences: Dict[str, Any] = field(default_factory=dict)
-
-    # Flexible container for any additional structured or unstructured metadata.
-    # Use for domain-specific extensions, model outputs, or temporary annotations.
+    # Content category label (e.g., "news", "report", "platform_log").
+    source_type: str = "unspecified"
+    # Exact original text snippet (no rewriting) that supports a specific setting/assignment; clearly include the precise source text that justifies it.
+    source_content: str = ""
+    # Wall-clock time when the source content was published or logged.
+    # Use UTC where possible; set to None if unknown. Prefer the most relevant
+    # timestamp (e.g., article publish time over crawl time).
+    timestamp: Optional[datetime] = None
+    # Confidence score in [0.0, 1.0] reflecting trustworthiness and relevance
+    # of this evidence. Example: 0.9 for official filings; 0.5 for anonymous claims.
+    confidence: Optional[float] = None
+    # Short factors (1–5 items) explaining why this evidence is relevant.
+    # Examples: ["explicit rate claim", "named issuer", "official filing"].
+    reasons: List[str] = field(default_factory=list)
+    # Analyst note connecting the evidence to the conclusion/setting in this record.
+    # Free-text explanation; may reference the specific field being supported.
+    rationale: str = ""
+    # Flexible extension map. Suggested keys: "supported_field" (e.g., "Transaction.amount"),
+    # "support_scope" ("direct"|"indirect"|"contextual"), "char_span" ([start,end]),
+    # "paragraph_index" (int), "language" (e.g., "en").
     extras: Dict[str, Any] = field(default_factory=dict)
-
-    # Validation note:
-    # - participant_id regex and entity specificity are documented here but enforced
-    #   by builders at runtime. This module intentionally contains no methods.
-
-    # NOTE ON SCALABILITY:
-    # In large-scale scenarios (millions of participants), store Participant records
-    # in a database table (e.g., PostgreSQL, MongoDB) with participant_id as primary key.
-    # Avoid embedding full Participant objects in memory-heavy structures.
 
 
 @dataclass
 class ParticipantRelation:
     """Relationship between two participants.
-
-    Fields:
-    - from_participant_id: source participant_id
-    - to_participant_id: target participant_id
-    - description: optional natural-language description of the relation
-    - relation_type: label of the relation
-      Examples: "member_of", "client_of", "counterparty", "affiliated_with",
-                "controls", "influences", "whistleblows_on"
-    - is_bidirectional: whether the relation is symmetric (e.g., "affiliated_with")
-    - start_time/end_time: temporal bounds for when the relation holds
-    - strength: optional numeric score for relation intensity (e.g., 0.0–1.0)
-    - status: current state of the relation
-      Examples: "active", "inactive", "suspended", "terminated"
-    - tags: domain-specific tags describing relation context
-      Examples: ["contractual", "regulatory", "social", "financial"]
-    - attributes: arbitrary metadata for the relation
-      Examples: {"contract_id": "C-2025-001", "jurisdiction": "HK"}
-    - reasons: concise factors explaining why the relation is recorded
-    - rationale: analyst explanation connecting evidence to this relation
-    - evidence_sources: references supporting the existence of this relation
-      Examples: ["https://regulator.site/filing/123", "file:///reports/audit.pdf"]
-    - extras: extension placeholder for downstream models
 
     Example:
     {
@@ -182,7 +111,7 @@ class ParticipantRelation:
       "attributes": {"contract_id": "C-2025-001"},
       "reasons": ["service agreement signed"],
       "rationale": "Observed formal KYC onboarding and recurring payments",
-      "evidence_sources": ["https://regulator.site/filing/123"]
+      "evidence": [EvidenceItem(source_type="report", source_content="contract signed on ...")]
     }
 
     Bidirectional example:
@@ -195,82 +124,60 @@ class ParticipantRelation:
       "tags": ["corporate"],
       "reasons": ["shared ownership structure"],
       "rationale": "Public registry shows common parent entity",
-      "evidence_sources": ["file:///registry/records.csv"]
+      "evidence": [EvidenceItem(source_type="registry", source_content="parent company: ...")]
     }
     """
 
+    # Source participant (edge origin) — references Participant.participant_id.
     from_participant_id: str
+    # Target participant (edge destination) — references Participant.participant_id.
     to_participant_id: str
+    # Natural-language description of the relation.
     description: str = ""
+    # Relation label (e.g., 'member_of', 'client_of', 'counterparty').
     relation_type: str = "unspecified"
+    # Whether the relation is symmetric (e.g., 'affiliated_with').
     is_bidirectional: bool = False
+    # Temporal bounds when the relation holds.
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+    # Optional numeric score representing relation intensity (0.0–1.0).
     strength: Optional[float] = None
+    # Current state: 'active', 'inactive', 'suspended', 'terminated'.
     status: str = "active"
+    # Domain-specific tags describing context (e.g., 'contractual', 'regulatory').
     tags: List[str] = field(default_factory=list)
+    # Arbitrary metadata for this relation (e.g., contract/jurisdiction).
     attributes: Dict[str, Any] = field(default_factory=dict)
+    # Concise factors explaining why the relation is recorded.
     reasons: List[str] = field(default_factory=list)
+    # Analyst explanation connecting evidence to this relation.
     rationale: str = ""
-    evidence_sources: List[str] = field(default_factory=list)
+    # Evidence items backing this relation (exact source_content segments).
+    evidence: List[EvidenceItem] = field(default_factory=list)
+    # Extension placeholder for downstream models.
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class Action:
-    """Discrete action executed by one participant and affecting others."""
-
-    # Chronological context.
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-
-    # High-level label (e.g., 'transfer_funds', 'broadcast_message').
-    action_type: str = "unspecified"
-
-    # Natural language description or snippet from evidence.
-    description: str = ""
-
-    # Motivations or triggers inferred from evidence (ER attribute: 原因).
-    reasons: List[str] = field(default_factory=list)
-
-    # Immediate consequences or outputs (ER attribute: 结果).
-    outcomes: List[str] = field(default_factory=list)
-
-    # References to the state snapshots this action belongs to.
-    # Note: This list may include snapshots from multiple participants involved in the action.
-    related_state_snapshots: List["ParticipantStateSnapshot"] = field(
-        default_factory=list
-    )
-
-    # Evidence backing this action (URLs, doc ids, etc.).
-    evidence_sources: List[str] = field(default_factory=list)
-
-    # Flexible metadata container for downstream models.
-    extras: Dict[str, Any] = field(default_factory=dict)
-
-    # NOTE:
-    # For high-volume pipelines, store Action documents separately and only resolve
-    # related_state_snapshots on-demand to avoid heavy in-memory graphs.
-
-
 # ============================================================================
-# DOMAIN ENTITIES: Financial constructs and interactions
+# DOMAIN ENTITIES: Financial constructs and interactions, actions
 # ============================================================================
+
+
 @dataclass
 class FinancialInstrument:
     """Financial instrument used or referenced in the event.
 
-    Fields:
-    - instrument_id: unique identifier of the instrument (e.g., ticker, token id)
-    - instrument_type: type label, examples: "token", "stock", "bond", "contract"
-    - attributes: arbitrary metadata of the instrument (key-value), e.g.,
-      {"issuer": "CompanyA", "chain": "Ethereum", "maturity": "2026-06-30"}
-    - reasons: factors for inclusion/relevance in the event
-    - rationale: analyst explanation for how the instrument relates to actions/transactions
-    - extras: extension placeholder for downstream models
-
     Example:
-    {"instrument_id": "US1234567890", "instrument_type": "bond",
-     "attributes": {"issuer": "ACME", "coupon": 0.05, "maturity": "2030-12-31"}}
+    {
+      "instrument_id": "US1234567890",
+      "instrument_type": "bond",
+      "attributes": {"issuer": "ACME", "coupon": 0.05, "maturity": "2030-12-31"},
+      "reasons": ["used in funding transaction"],
+      "rationale": "Coupon schedule aligns with transfer timing",
+      "evidence": [EvidenceItem(source_type="report", source_content="Bond prospectus states coupon 5%...")],
+      "extras": {"jurisdiction": "US"}
+    }
     """
 
     instrument_id: str
@@ -278,36 +185,9 @@ class FinancialInstrument:
     attributes: Dict[str, Any] = field(default_factory=dict)
     reasons: List[str] = field(default_factory=list)
     rationale: str = ""
-    extras: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class EvidenceItem:
-    """Evidence reference anchoring an action/transaction/interaction.
-
-    Fields:
-    - source_uri: where the evidence is stored (URL, file path)
-    - source_type: type label, examples: "news", "report", "platform_log"
-    - excerpt: short text snippet summarizing relevant content
-    - timestamp: when the evidence was published or logged
-    - confidence: model or analyst confidence in this evidence (0.0–1.0)
-    - reasons: list of short factors explaining relevance
-    - rationale: analyst note connecting evidence to model conclusions
-    - extras: extension placeholder
-
-    Example:
-    {"source_uri": "https://news.site/article/abc", "source_type": "news",
-     "excerpt": "Company promised 30% monthly returns", "timestamp": datetime(...),
-     "confidence": 0.8}
-    """
-
-    source_uri: str
-    source_type: str = "unspecified"
-    excerpt: str = ""
-    timestamp: Optional[datetime] = None
-    confidence: Optional[float] = None
-    reasons: List[str] = field(default_factory=list)
-    rationale: str = ""
+    # Evidence items supporting inclusion/relevance of this instrument.
+    # Use to ground attributes or instrument usage in exact source content.
+    evidence: List[EvidenceItem] = field(default_factory=list)
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -315,21 +195,14 @@ class EvidenceItem:
 class Transaction:
     """Financial transfer between participants.
 
-    Fields:
-    - timestamp: when the transfer occurred
-    - amount: transfer amount (float)
-    - currency: currency code, e.g., "USD", "EUR", "BTC"
-    - from_participant_id: sender participant_id
-    - to_participant_id: receiver participant_id
-    - instrument: optional instrument related to the transfer (e.g., token/contract)
-    - reasons/rationale: causal explanation for the transfer
-    - evidence: list of evidence items supporting this record
-    - extras: extension placeholder
-
     Example:
     {"timestamp": datetime(...), "amount": 10000.0, "currency": "USD",
      "from_participant_id": "P_A", "to_participant_id": "P_B",
-     "instrument": FinancialInstrument(...), "evidence": [EvidenceItem(...)]}
+     "instrument": FinancialInstrument(...),
+     "evidence": [EvidenceItem(source_type="news",
+                                source_content="Company promised 30% monthly returns",
+                                timestamp=datetime(...),
+                                confidence=0.8)]}
     """
 
     timestamp: datetime
@@ -347,23 +220,6 @@ class Transaction:
 @dataclass
 class Interaction:
     """Message or broadcast exchanged among participants.
-
-    Fields:
-    - timestamp: when the communication happened
-    - medium: channel, examples: "social_media", "email", "chat"
-    - method: specific interaction method on the medium
-      Examples: "private_message", "group_chat", "public_post", "live_stream",
-                "phone_call", "meeting"
-    - approx_occurrences: approximate count of discrete messages/posts represented
-    - frequency_descriptor: textual rate description, e.g., "每周数次", "高频", "偶发"
-    - sender_id: participant_id of the sender
-    - receiver_ids: list of participant_ids (empty if broadcast)
-    - summary: short content summary (or LLM-generated synopsis)
-    - thread_id: conversation/thread identifier when available
-    - reply_to_id: message id that this interaction replies to (if any)
-    - reasons/rationale: intent and causal context of the interaction
-    - evidence: list of evidence items
-    - extras: extension placeholder
 
     Example:
     {"timestamp": datetime(...), "medium": "social_media", "method": "public_post", "sender_id": "P_X",
@@ -388,15 +244,70 @@ class Interaction:
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
-# ============================================================================
-# MICRO → TEMPORAL: State evolution of a single participant
-# ============================================================================
+@dataclass
+class Action:
+    """Discrete action executed by one participant and affecting others.
+
+    Example:
+    {
+      "timestamp": datetime(...),
+      "action_type": "broadcast_message",
+      "description": "Guaranteed 30% monthly returns",
+      "reasons": ["promotion", "marketing"],
+      "outcomes": ["increased signups"],
+      "related_state_snapshots": [],
+      "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
+      "extras": {"channel": "platform_feed"}
+    }
+    """
+
+    # Chronological context.
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+    # High-level label (e.g., 'transfer_funds', 'broadcast_message').
+    action_type: str = "unspecified"
+
+    # Natural language description or snippet from evidence.
+    description: str = ""
+
+    # Motivations or triggers inferred from evidence (ER attribute: 原因).
+    reasons: List[str] = field(default_factory=list)
+
+    # Immediate consequences or outputs (ER attribute: 结果).
+    outcomes: List[str] = field(default_factory=list)
+
+    # Evidence items backing this action; include exact source_content segments.
+    evidence: List[EvidenceItem] = field(default_factory=list)
+
+    # Flexible metadata container for downstream models.
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+    # NOTE:
+    # For high-volume pipelines, store Action documents separately and only resolve
+    # related_state_snapshots on-demand to avoid heavy in-memory graphs.
+
+
 # Represents an immutable, timestamped observation of a participant's dynamic state
 # at a specific moment during the event. Captures behavioral, cognitive, and contextual
 # attributes as recorded or inferred from evidence (e.g., news, logs, reports).
 @dataclass
-class ParticipantStateSnapshot:
-    """Snapshot of a participant's state at a specific timestamp."""
+class ParticipantState:
+    """Snapshot of a participant's state at a specific timestamp.
+
+    Example:
+    {
+      "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
+      "timestamp": datetime(...),
+      "internal_state_attributes": {"trust_in_message": 0.85, "funds_committed_usd": 10000},
+      "external_state_attributes": {"market_sentiment": "neutral"},
+      "related_actions": [Action(...)],
+      "awareness_level": "suspicious",
+      "context_tags": ["mobile_app"],
+      "confidence": 0.7,
+      "evidence": [EvidenceItem(source_type="news", source_content="User reported suspicious behavior...")],
+      "extras": {"note": "derived from platform logs"}
+    }
+    """
 
     # References a Participant.participant_id.
     participant_id: str
@@ -412,7 +323,10 @@ class ParticipantStateSnapshot:
     # Examples: {"market_sentiment": "neutral", "news_coverage": "low"}
     external_state_attributes: Dict[str, Any] = field(default_factory=dict)
 
-    actions: List[Action] = field(default_factory=list)
+    # Actions that contributed to or occurred during this state. Use minimal
+    # references to avoid heavy graphs. Actions also reference states via
+    # Action.related_state_snapshots for bidirectional traceability.
+    related_actions: List[Action] = field(default_factory=list)
 
     # Participant's subjective understanding of the event's true nature.
     # Values: 'unknowing', 'suspicious', 'aware', 'whistleblower'.
@@ -423,11 +337,12 @@ class ParticipantStateSnapshot:
     context_tags: List[str] = field(default_factory=list)
 
     # Confidence score and supporting evidence for this snapshot.
-    # confidence: 0.0–1.0; evidence_sources: URLs or file references.
+    # confidence: 0.0–1.0; evidence: EvidenceItem list with exact source_content.
     confidence: Optional[float] = None
-    evidence_sources: List[str] = field(default_factory=list)
+    # Evidence items grounding this snapshot; include precise source_content segments.
+    evidence: List[EvidenceItem] = field(default_factory=list)
 
-    # Flexible container for any additional data (e.g., model confidence, source excerpt).
+    # Flexible container for any additional data (e.g., model confidence, source_content).
     extras: Dict[str, Any] = field(default_factory=dict)
 
     # NOTE ON SCALABILITY:
@@ -437,31 +352,91 @@ class ParticipantStateSnapshot:
 
 
 # ============================================================================
-# MICRO → MESO: Full behavioral trajectory of one participant
+# MICRO: Participant Identity — Stable attributes, relations, and background
 # ============================================================================
 @dataclass
-class StageActivity:
-    """Aggregated view of a participant's roles and timing within a stage.
-
-    Fields:
-    - stage_index: zero-based index of the stage this activity belongs to
-    - start_time/end_time: participant-specific temporal bounds inside the stage
-    - roles: list of role labels observed for the participant in this stage
-      Examples: ["victim", "promoter", "operator"]
+class Participant:
+    """Participant involved in the financial event.
 
     Example:
     {
-      "stage_index": 1,
-      "start_time": datetime(...),
-      "end_time": datetime(...),
-      "roles": ["influencer", "promoter"]
+      "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
+      "entity": "Credit Suisse",
+      "name": "Credit Suisse",
+      "participant_type": "organization",
+      "base_role": "issuer",
+      "attributes": {"location": "Zurich", "industry": "banking"},
+      "alias_handles": {"alias": ["瑞信", "CS"], "weibo": ["uid_123"]},
+      "relations": [],
+      "preferences": {"risk_tolerance": "medium"},
+      "experiences": {"prior_events": ["2015 restructuring"]},
+      "evidence": [EvidenceItem(source_type="news", source_content="Credit Suisse announced ...")],
+      "extras": {"tags": ["tier1"]}
     }
     """
 
-    stage_index: int
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    roles: List[str] = field(default_factory=list)
+    # Unique, immutable identifier (e.g., UUID, hashed ID, semantic key).
+    # must be in canonical form: "P_" + 32 lowercase hex characters
+    # Regex: ^P_[a-f0-9]{32}$
+    # Example: - P_3f2a1c4b6d7e8f90123456789abcdeff
+    participant_id: str
+
+    # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
+    entity: str
+
+    # Human-readable name from the given content (cannot be anonymized).
+    name: str = ""
+
+    # High-level category.
+    # Examples: 'individual', 'organization', 'social_media_platform', 'government_agency'.
+    participant_type: str = "individual"
+
+    # Primary functional role in this event.
+    # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
+    base_role: str = "unknown"
+
+    # Static or semi-static descriptive properties.
+    # Examples:
+    #   - Individuals: {"age_group": "30-40", "education": "bachelor", "location": "Shanghai"}
+    #   - Organizations: {"industry": "fintech", "employee_count": 50}
+    attributes: Dict[str, Any] = field(default_factory=dict)
+
+    # Unified alias and platform handles to avoid ID interference and clarify resolution semantics.
+    # Keys denote domains, e.g., "alias", "weibo", "douyin", "bilibili", "email".
+    # Values are lists of normalized strings; the only canonical identifier remains `participant_id`.
+    # Example: {"alias": ["ACME Ltd.", "ACME Holdings"], "weibo": ["uid_123"], "douyin": ["sec_abc"]}
+    alias_handles: Dict[str, List[str]] = field(default_factory=dict)
+
+    # Explicit relationship edges to other participants in this event.
+    # Each relation captures type, directionality, temporal bounds, strength,
+    # status, tags/attributes, reasons/rationale, and evidence (EvidenceItem) for auditability.
+    relations: List[ParticipantRelation] = field(default_factory=list)
+
+    # Stable cognitive or behavioral dispositions influencing decisions.
+    # Examples: {"risk_tolerance": "high", "credibility_threshold": 0.4}
+    preferences: Dict[str, Any] = field(default_factory=dict)
+
+    # Prior events or historical context shaping current behavior.
+    # Examples: {"past_scam_victim": True, "crypto_investment_history": ["BTC_2021"]}
+    experiences: Dict[str, Any] = field(default_factory=dict)
+
+    # Evidence items directly supporting this participant record.
+    # Use when the existence, attributes, or roles of the participant are grounded
+    # in specific source content; include exact `source_content` segments.
+    evidence: List[EvidenceItem] = field(default_factory=list)
+
+    # Flexible container for any additional structured or unstructured metadata.
+    # Use for domain-specific extensions, model outputs, or temporary annotations.
+    extras: Dict[str, Any] = field(default_factory=dict)
+
+    # Validation note:
+    # - participant_id regex and entity specificity are documented here but enforced
+    #   by builders at runtime. This module intentionally contains no methods.
+
+    # NOTE ON SCALABILITY:
+    # In large-scale scenarios (millions of participants), store Participant records
+    # in a database table (e.g., PostgreSQL, MongoDB) with participant_id as primary key.
+    # Avoid embedding full Participant objects in memory-heavy structures.
 
 
 # ============================================================================
@@ -476,23 +451,6 @@ class Episode:
     surrounding stage. They enable fine-grained modeling without losing
     stage-level aggregation.
 
-    Fields:
-    - episode_id: unique label for the episode within a stage
-    - name: human-readable title
-    - sequence_index: index ordering episodes within the stage (0-based)
-    - start_time/end_time: temporal bounds of the episode
-    - description: concise summary of the episode
-    - participants: entities involved in this episode
-    - participant_snapshots: per-participant snapshots observed here
-      Format: { participant_id → [ParticipantStateSnapshot] }
-    - actions: actions aggregated or recorded in this episode
-    - transactions: financial transfers recorded in this episode
-    - interactions: participant interactions recorded in this episode
-    - evidence_sources: references supporting this episode
-    - tags: thematic labels for grouping/analysis (e.g., ["promotion", "whitelist"])
-    - confidence_score: 0.0-1.0 indicating reliability of this episode
-    - extras: extension placeholder
-
     Example:
     {
       "episode_id": "E1",
@@ -506,7 +464,7 @@ class Episode:
       "actions": [Action(...)],
       "transactions": [Transaction(...)],
       "interactions": [Interaction(...)],
-      "evidence_sources": ["https://news.site/article/abc"],
+      "evidence": [EvidenceItem(source_type="news", source_content="...")],
       "extras": {"analyst_notes": "high-pressure sales tactics"}
     }
     """
@@ -519,13 +477,14 @@ class Episode:
     description: str = ""
 
     participants: List[Participant] = field(default_factory=list)
-    participant_snapshots: Dict[str, List[ParticipantStateSnapshot]] = field(
+    participant_snapshots: Dict[str, List[ParticipantState]] = field(
         default_factory=dict
     )
     actions: List[Action] = field(default_factory=list)
     transactions: List[Transaction] = field(default_factory=list)
     interactions: List[Interaction] = field(default_factory=list)
-    evidence_sources: List[str] = field(default_factory=list)
+    # Evidence items backing this episode; include exact source_content segments.
+    evidence: List[EvidenceItem] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     confidence_score: float = 0.0
     extras: Dict[str, Any] = field(default_factory=dict)
@@ -534,21 +493,6 @@ class Episode:
 @dataclass
 class EventStage:
     """Stage of the event development.
-
-    Fields:
-    - stage_id: unique label for the stage within the event
-    - name: stage name, e.g., "Bait Deployment", "Amplification"
-    - stage_index: zero-based index ordering stages
-    - start_time/end_time: temporal boundaries of the stage
-    - description: concise natural-language summary
-    - stage_highlights: salient sub-events defining this phase
-    - group_metrics: aggregated metrics derived from participants or actions
-    - systemic_indicators: signals of broader instability
-    - stage_drivers: underlying forces/conditions
-    - evidence_sources: references supporting this stage
-    - tags: thematic labels for grouping/analysis (e.g., ["promotion", "exit"])
-    - confidence_score: 0.0–1.0 indicating reliability of this stage
-    - extras: extension placeholder
 
     Example:
     {
@@ -594,8 +538,9 @@ class EventStage:
     #   - ["media_amplification", "algorithmic_bias", "economic_uncertainty"]
     stage_drivers: List[str] = field(default_factory=list)
 
-    # URLs, report IDs, or references supporting this stage.
-    evidence_sources: List[str] = field(default_factory=list)
+    # Evidence items backing this stage; include exact source_content segments.
+    evidence: List[EvidenceItem] = field(default_factory=list)
+    # Explicit thematic labels for grouping/analysis
     tags: List[str] = field(default_factory=list)
     confidence_score: float = 0.0
 
@@ -613,24 +558,6 @@ class EventStage:
 @dataclass
 class EventCascade:
     """Whole event cascade reconstruction.
-
-    Fields:
-    - event_id: global unique identifier (e.g., "fraud_crypto_2025_001")
-    - title: human-readable event title
-    - event_type: categorical label, e.g., "financial_fraud", "rumor_spread"
-    - start_time/end_time: global temporal bounds of the event
-    - total_impact: quantitative/qualitative consequences
-      Examples: {"total_victims": 2400, "total_financial_loss_usd": 3_200_000}
-    - systemic_risk_indicators: high-level signals of disruption
-      Examples: ["loss_of_trust_in_sector", "regulatory_intervention"]
-    - root_causes: fundamental enablers/causes for the event
-      Examples: ["regulatory_gap", "digital_literacy_deficit"]
-    - stages: ordered sequence of phases (sorted by stage_index)
-    - sources_summary: breakdown of source types and counts
-      Example: {"news_articles": 24, "government_reports": 2}
-    - confidence_score: estimated reliability (0.0–1.0)
-    - domain_context: broader context framing the event
-    - extras: extension placeholder
 
     Example:
     {

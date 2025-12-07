@@ -9,37 +9,37 @@ from typing import Optional, Any, Dict, List
 
 from finmy.generic import UserQueryInput
 from finmy.generic import MetaSample
-from finmy.builder.structure import EventCascade, EventStage, ParticipantStateSnapshot
+from finmy.builder.structure import EventCascade, EventStage, ParticipantState
 
 
-def build_participant_snapshots_map(
+def build_participant_states_map(
     stages: List[EventStage],
-) -> Dict[str, List[ParticipantStateSnapshot]]:
-    """Merge stage-level and episode-level snapshots into a global map keyed by participant_id.
+) -> Dict[str, List[ParticipantState]]:
+    """Merge stage-level and episode-level states into a global map keyed by participant_id.
 
-    Returns a mapping `participant_id -> List[ParticipantStateSnapshot]` sorted by timestamp.
+    Returns a mapping `participant_id -> List[ParticipantState]` sorted by timestamp.
     """
 
-    snapshots_by_participant: Dict[str, List[ParticipantStateSnapshot]] = {}
+    states_by_participant: Dict[str, List[ParticipantState]] = {}
     for stage in stages or []:
-        for pid, snaps in (stage.participant_snapshots or {}).items():
-            snapshots_by_participant.setdefault(pid, []).extend(snaps or [])
+        for pid, states in (stage.participant_states or {}).items():
+            states_by_participant.setdefault(pid, []).extend(states or [])
         for episode in stage.episodes or []:
-            for pid, snaps in (episode.participant_snapshots or {}).items():
-                snapshots_by_participant.setdefault(pid, []).extend(snaps or [])
+            for pid, states in (episode.participant_states or {}).items():
+                states_by_participant.setdefault(pid, []).extend(states or [])
 
-    for pid, snaps in snapshots_by_participant.items():
-        snaps.sort(key=lambda s: s.timestamp)
+    for pid, arr in states_by_participant.items():
+        arr.sort(key=lambda s: s.timestamp)
 
-    return snapshots_by_participant
+    return states_by_participant
 
 
-def build_participant_snapshots_map_from_event(
+def build_participant_states_map_from_event(
     event: EventCascade,
-) -> Dict[str, List[ParticipantStateSnapshot]]:
-    """Convenience wrapper to derive participant snapshots map from an EventCascade."""
+) -> Dict[str, List[ParticipantState]]:
+    """Convenience wrapper to derive participant states map from an EventCascade."""
 
-    return build_participant_snapshots_map(event.stages or [])
+    return build_participant_states_map(event.stages or [])
 
 
 @dataclass
