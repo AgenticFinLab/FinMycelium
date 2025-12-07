@@ -76,7 +76,7 @@ class PDFCollector(BasePDFCollector):
                 all_failed_files_maps=all_failed_files_maps,
                 original_files_list=original_files_list,
                 input_dir=pdf_collector_input.input_dir,
-                output_dir=self.output_dir + "_retry",
+                output_dir=self.output_dir,
                 batch_size=self.batch_size,
                 language=self.language,
                 check_pdf_limits=self.check_pdf_limits,
@@ -170,16 +170,35 @@ class PDFCollector(BasePDFCollector):
         )
 
         # After processing all files, save the filtered results to JSON file
+        # Check if the file exists
+        if os.path.exists(filtered_info_path):
+            # Read existing data
+            with open(filtered_info_path, mode="r", encoding="utf-8") as jsonfile:
+                existing_data = json.load(jsonfile)
+
+            # Ensure records is a list
+            if "records" not in existing_data:
+                existing_data["records"] = []
+
+            # Append new records
+            existing_data["records"].extend(filtered_info.records)
+
+            # Update the data to be written
+            data_to_write = existing_data
+        else:
+            data_to_write = filtered_info
+
+        # Write the data to file
         with open(filtered_info_path, mode="w", encoding="utf-8") as jsonfile:
             # Convert the dataclass to dictionary and then save as JSON
             json.dump(
-                filtered_info,
+                data_to_write,
                 jsonfile,
                 default=lambda obj: obj.__dict__,
                 ensure_ascii=False,
                 indent=2,
             )
 
-            logging.info("  - Filtered information saved to: %s", filtered_info_path)
+        logging.info("  - Filtered information saved to: %s", filtered_info_path)
 
         return filtered_info

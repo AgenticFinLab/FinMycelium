@@ -22,8 +22,6 @@ from PyPDF2 import PdfReader, PdfWriter
 
 from .base import PDFCollectorOutputSample, PDFCollectorOutput
 
-logging.basicConfig(level=logging.INFO)
-
 
 def split_large_pdf(pdf_path, max_pages=600):
     """Split a large PDF into smaller chunks."""
@@ -610,17 +608,34 @@ def download_results(
         logging.error("  - Download error (general): %s", str(e))
 
     # After processing all files, save the PDFCollectorOutput to JSON file
+    # Check if the file exists
+    if os.path.exists(json_file_path):
+        # Read existing data
+        with open(json_file_path, mode="r", encoding="utf-8") as jsonfile:
+            existing_data = json.load(jsonfile)
+
+        # Ensure records is a list
+        if "records" not in existing_data:
+            existing_data["records"] = []
+
+        # Append new records
+        existing_data["records"].extend(parsed_info.records)
+
+        # Update the data to be written
+        data_to_write = existing_data
+    else:
+        data_to_write = parsed_info
+
+    # Write the data to file
     with open(json_file_path, mode="w", encoding="utf-8") as jsonfile:
         # Convert the dataclass to dictionary and then save as JSON
         json.dump(
-            parsed_info,
+            data_to_write,
             jsonfile,
             default=lambda obj: obj.__dict__,
             ensure_ascii=False,
             indent=2,
         )
-
-        logging.info("  - Parser information saved to: %s\n", json_file_path)
 
     return (failed_files_map, parsed_info)
 
