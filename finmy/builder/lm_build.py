@@ -104,7 +104,6 @@ Task: Using the schema and rules defined in the system prompt, reconstruct the s
 {Description}
 === DESCRIPTION END ===
 
-
 === KEYWORDS BEGIN ===
 {Keywords}
 === KEYWORDS END ===
