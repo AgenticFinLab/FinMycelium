@@ -21,13 +21,6 @@ Relationship Among Event, Stage, Episode, and Participant:
 (3) Capital-market relevant (impacts asset prices, risk, or liquidity).
 - Participant: An entity associated with an episode, labeled by its financial role
 
-Usage notes:
-- Trajectories are derived on demand by merging snapshots per `participant_id` across stage-level and episode-level `participant_snapshots`, then sorting by `timestamp`.
-- Builders assemble `EventCascade` using LMs or rules and avoid duplicating
-  participant lists outside stages to reduce redundancy.
-- Most entities include `reasons` and `rationale` fields to capture causal
-  explanations and analyst notes for transparency and auditability.
-
 Diagram:
 
 EventCascade
@@ -43,8 +36,6 @@ EventCascade
         ├── interactions: List[Interaction]
         └── participant_snapshots: { participant_id → [ParticipantState] }
 
-Derived trajectory (on demand):
-  participant_id → collect snapshots across stages/episodes → sort by timestamp → trajectory
 """
 
 from datetime import datetime
@@ -78,11 +69,10 @@ class EvidenceItem:
     timestamp: Optional[datetime] = None
     # Confidence score in [0.0, 1.0] reflecting trustworthiness and relevance of this evidence. Example: 0.9 for official filings; 0.5 for anonymous claims.
     confidence: Optional[float] = None
-    # Short factors (1–5 items) explaining why this evidence is relevant.
-    # Examples: ["explicit rate claim", "named issuer", "official filing"].
+    # Short factors explaining why the 'source_content' is chosen as the  evidence which is relevant to the specific field being supported.
+    # Examples: ["mention the keywords related to xxx", "contain the similar finance content"].
     reasons: List[str] = field(default_factory=list)
-    # Analyst note connecting the evidence to the conclusion/setting in this record.
-    # Free-text explanation; may reference the specific field being supported.
+    # Analyst note connecting the source_content to the evidence to the conclusion/setting in the corresponding record.
     rationale: str = ""
     # Flexible extension map. Suggested keys: "supported_field" (e.g., "Transaction.amount"), "support_scope" ("direct"|"indirect"|"contextual"), "char_span" ([start,end]), "paragraph_index" (int), "language" (e.g., "en").
     extras: Dict[str, Any] = field(default_factory=dict)
