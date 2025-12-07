@@ -30,6 +30,7 @@ from finmy.converter import (
 )
 from finmy.db_manager import DataManager
 from finmy.builder.base import BuildInput
+from finmy.builder.lm_build import LMBuilder
 from finmy.matcher.base import MatchInput, SummarizedUserQuery
 from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.summarizer import KWLMSummarizer
@@ -367,6 +368,13 @@ def main():
     # Note: build_input is created for demonstration purposes and can be used
     # by downstream builders in a production workflow
     assert build_input is not None, "BuildInput should be created successfully"
+
+    print("Start building ...")
+    lmbuilder = LMBuilder()
+    build_output = lmbuilder.build(build_input)
+    print("build_output:", build_output)
+
+    assert build_output is not None, "BuildOutput should be created successfully"
 
     logger.info("Test flow completed successfully!")
 
