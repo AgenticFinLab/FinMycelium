@@ -72,26 +72,26 @@ How to output (strict, single-file JSON):
             ├── interactions: List[Interaction]
             └── participant_snapshots:List[ParticipantStateSnapshot]
             
-      Example:
-      [
-        "stages":[
-          {
-            "name":"",
-            "episodes":[
-              {
-                "participants":[{},{},{}],
-                "actions":[{},{},{}],
-                "transactions":[{},{},{}],
-                "interactions":[{},{},{}],
-                "participant_snapshots:[{},{},{}],
-              },
-            ]
-            "stage_actions":[{},{},{}],
-            "transactions":[{},{},{}],
-            "interactions":[{},{},{}]
-          }
-        ]
+    Example:
+    [
+      "stages":[
+        {
+          "name":"",
+          "episodes":[
+            {
+              "participants":[{},{},{}],
+              "actions":[{},{},{}],
+              "transactions":[{},{},{}],
+              "interactions":[{},{},{}],
+              "participant_snapshots:[{},{},{}],
+            },
+          ]
+          "stage_actions":[{},{},{}],
+          "transactions":[{},{},{}],
+          "interactions":[{},{},{}]
+        }
       ]
+    ]
       
 
 Extraction and validation process:
