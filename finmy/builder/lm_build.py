@@ -16,6 +16,7 @@ from lmbase.inference import api_call
 
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
+from finmy.converter import read_text_data_from_block
 
 
 SYSTEM_PROMPT = """
@@ -173,9 +174,12 @@ class LMBuilder(BaseBuilder):
     """
     Build the financial event cascade from the input content using the LM model."""
 
-    def __init__(self, lm_name: str = "deepseek-chat", config=None):
+    def __init__(self, lm_name: str = "deepseek/deepseek-chat", config={}):
         super().__init__(method_name="lm_builder", config={"lm_name": lm_name})
-        generation_config = config["generation_config"]
+
+        generation_config = (
+            {} if "generation_config" not in config else config["generation_config"]
+        )
         self.lm_api = api_call.LangChainAPIInference(
             lm_name=lm_name,
             generation_config=generation_config,
@@ -192,8 +196,12 @@ class LMBuilder(BaseBuilder):
         """Load the specific content of samples from the files."""
         # For the input of the lm-based builder, we need to combine the content of the samples into a long string.
         samples_content = "\n\n".join(
-            [sample.content for sample in build_input.samples]
+            [
+                read_text_data_from_block(sample.location)
+                for sample in build_input.samples
+            ]
         )
+        print(samples_content)
         return samples_content
 
     def build(self, build_input: BuildInput) -> BuildOutput:
