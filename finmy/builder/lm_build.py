@@ -88,7 +88,8 @@ How to output (strict, single-file JSON):
           ]
           "stage_actions":[{},{},{}],
           "transactions":[{},{},{}],
-          "interactions":[{},{},{}]
+          "interactions":[{},{},{}],
+          "participant_snapshots":[{},{},{}]
         }
       ]
     ]
