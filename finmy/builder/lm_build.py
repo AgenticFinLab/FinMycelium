@@ -66,11 +66,11 @@ How to output (strict, single-file JSON):
             │     ├── actions: List[Action]
             │     ├── transactions: List[Transaction]
             │     ├── interactions: List[Interaction]
-            │     └── participant_snapshots:List[ParticipantState]
+            │     └── participant_states:List[ParticipantState]
             ├── stage_actions: List[Action]
             ├── transactions: List[Transaction]
             ├── interactions: List[Interaction]
-            └── participant_snapshots:List[ParticipantState]
+            └── participant_states:List[ParticipantState]
             
     Example:
     [
@@ -83,13 +83,13 @@ How to output (strict, single-file JSON):
               "actions":[{},{},{}],
               "transactions":[{},{},{}],
               "interactions":[{},{},{}],
-              "participant_snapshots:[{},{},{}],
+              "participant_states:[{},{},{}],
             },
           ]
           "stage_actions":[{},{},{}],
           "transactions":[{},{},{}],
           "interactions":[{},{},{}],
-          "participant_snapshots":[{},{},{}]
+          "participant_states":[{},{},{}]
         }
       ]
     ]

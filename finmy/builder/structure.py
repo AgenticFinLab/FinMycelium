@@ -5,11 +5,11 @@ Structure overview:
 - Participant: identity and stable attributes of entities involved
 - ParticipantRelation: explicit relationship edge between participants
 - ParticipantState: time-stamped dynamic state and actions of a participant
-- Action: atomic behaviors recorded within snapshots/stages/episodes
+- Action: discrete behaviors recorded within states/episodes
 - Transaction: financial transfers between participants with evidence
-- Interaction: messages/broadcasts among participants with reasons/rationale
-- Episode: coherent sub-phase within a stage
-- EventStage: one phase of the event, holding participants and per-stage snapshots
+- Interaction: messages/broadcasts among participants with explanation metadata
+- Episode: coherent sub-phase within a stage holding participants, states, actions, transactions, interactions
+- EventStage: one phase of the event, holding episodes and stage-level metadata
 - EventCascade: top-level container, holding ordered stages and event-level metadata
 
 Relationship Among Event, Stage, Episode, and Participant:
@@ -25,16 +25,12 @@ Diagram:
 
 EventCascade
   └── stages: List[EventStage]
-        ├── episodes: List[Episode]
-        │     ├── participants: List[Participant]
-        │     ├── actions: List[Action]
-        │     ├── transactions: List[Transaction]
-        │     ├── interactions: List[Interaction]
-        │     └── participant_snapshots: { participant_id → [ParticipantState] }
-        ├── stage_actions: List[Action]
-        ├── transactions: List[Transaction]
-        ├── interactions: List[Interaction]
-        └── participant_snapshots: { participant_id → [ParticipantState] }
+        └── episodes: List[Episode]
+              ├── participants: List[Participant]
+              ├── actions: List[Action]
+              ├── transactions: List[Transaction]
+              ├── interactions: List[Interaction]
+              └── participant_states: { participant_id → [ParticipantState] }
 
 """
 
@@ -42,6 +38,28 @@ from datetime import datetime
 
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
+
+
+@dataclass
+class FinancialExplain:
+    """Explanatory metadata for why a record is configured in its current mode/state.
+
+    Purpose:
+    - Provide concrete justification for setting the record as-is (what, why, how)
+    - Improve auditability by separating bullet-point reasons from detailed narrative rationale
+
+    Fields:
+    - reasons: concise bullet points (1–5) capturing key justifications
+    - rationale: detailed prose explaining the reasoning chain, assumptions, scope, and links to the generation, extraction, or summarization.
+
+    Example:
+    {"reasons": ["official filing"], "rationale": "Prospectus confirms coupon and maturity; issuer verified via registry"}
+    """
+
+    # Concise bullet points (1–5) capturing the key justifications; treat as a checklist of factors.
+    reasons: List[str] = field(default_factory=list)
+    # Detailed prose laying out the reasoning chain, constraints/assumptions, and explicit links to assignment.
+    rationale: str = ""
 
 
 @dataclass
@@ -54,8 +72,14 @@ class EvidenceItem:
       "source_content": "Company promised 30% monthly returns",
       "timestamp": datetime(...),
       "confidence": 0.8,
-      "reasons": ["explicit rate claim", "named issuer"],
-      "rationale": "Direct quote supports the transaction inference",
+      "explain": {
+        "reasons": [
+          "exact keyword match: '30% monthly returns'",
+          "named issuer present",
+          "direct claim stating numeric rate"
+        ],
+        "rationale": "Selected as evidence because the text contains an exact keyword match and a direct numeric rate claim attributed to the issuer; selection verified via keyword match and semantic context; links to Transaction.amount via 'supported_field'."
+      },
       "extras": {"language": "en", "supported_field": "Transaction.amount"}
     }
     """
@@ -67,15 +91,15 @@ class EvidenceItem:
     # Wall-clock time when the source content was published or logged.
     # Use UTC where possible; set to None if unknown. Prefer the most relevant timestamp (e.g., article publish time over crawl time).
     timestamp: Optional[datetime] = None
+
+    # Encapsulated explanation for why this source_content was selected as evidence.
+    # reasons should indicate selection criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe).
+    # rationale should detail the selection method (e.g., keyword/regex/semantic), validation steps, and linkage to supported fields.
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
+    # Flexible extension map. Suggested keys: "supported_field" (e.g., "Transaction.amount"), "support_scope" ("direct"|"indirect"|"contextual"), "char_span" ([start,end]), "paragraph_index" (int), "language" (e.g., "en"), "selection_method" ("keyword"|"regex"|"semantic"), "match_score" (float).
+    extras: Dict[str, Any] = field(default_factory=dict)
     # Confidence score in [0.0, 1.0] reflecting trustworthiness and relevance of this evidence. Example: 0.9 for official filings; 0.5 for anonymous claims.
     confidence: Optional[float] = None
-    # Short factors explaining why the 'source_content' is chosen as the  evidence which is relevant to the specific field being supported.
-    # Examples: ["mention the keywords related to xxx", "contain the similar finance content"].
-    reasons: List[str] = field(default_factory=list)
-    # Analyst note connecting the source_content to the evidence to the conclusion/setting in the corresponding record.
-    rationale: str = ""
-    # Flexible extension map. Suggested keys: "supported_field" (e.g., "Transaction.amount"), "support_scope" ("direct"|"indirect"|"contextual"), "char_span" ([start,end]), "paragraph_index" (int), "language" (e.g., "en").
-    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -95,8 +119,7 @@ class ParticipantRelation:
       "status": "active",
       "tags": ["financial"],
       "attributes": {"contract_id": "C-2025-001"},
-      "reasons": ["service agreement signed"],
-      "rationale": "Observed formal KYC onboarding and recurring payments",
+      "explain": {"reasons": ["service agreement signed"], "rationale": "Observed formal KYC onboarding and recurring payments"},
       "evidence": [EvidenceItem(source_type="report", source_content="contract signed on ...")],
       "extras": {"jurisdiction": "US"}
     }
@@ -111,8 +134,7 @@ class ParticipantRelation:
       "start_time": None,
       "end_time": None,
       "tags": ["corporate"],
-      "reasons": ["shared ownership structure"],
-      "rationale": "Public registry shows common parent entity",
+      "explain": {"reasons": ["shared ownership structure"], "rationale": "Public registry shows common parent entity"},
       "evidence": [EvidenceItem(source_type="registry", source_content="parent company: ...")],
       "extras": {"registry_country": "UK"}
     }
@@ -139,10 +161,8 @@ class ParticipantRelation:
     tags: List[str] = field(default_factory=list)
     # Arbitrary metadata for this relation (e.g., contract/jurisdiction).
     attributes: Dict[str, Any] = field(default_factory=dict)
-    # Concise factors explaining why the relation is recorded.
-    reasons: List[str] = field(default_factory=list)
-    # Analyst explanation connecting evidence to this relation.
-    rationale: str = ""
+    # Encapsulated explanation describing why this relation is recorded.
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence items backing this relation (exact source_content segments).
     evidence: List[EvidenceItem] = field(default_factory=list)
     # Extension placeholder for downstream models.
@@ -163,8 +183,7 @@ class FinancialInstrument:
       "instrument_id": "US1234567890",
       "instrument_type": "bond",
       "attributes": {"issuer": "ACME", "coupon": 0.05, "maturity": "2030-12-31"},
-      "reasons": ["used in funding transaction"],
-      "rationale": "Coupon schedule aligns with transfer timing",
+      "explain": {"reasons": ["used in funding transaction"], "rationale": "Coupon schedule aligns with transfer timing"},
       "evidence": [EvidenceItem(source_type="report", source_content="Bond prospectus states coupon 5%...")],
       "extras": {"jurisdiction": "US"}
     }
@@ -176,10 +195,8 @@ class FinancialInstrument:
     instrument_type: str = "unspecified"
     # Static/semi-static attribute map; examples: issuer, coupon, maturity; include only facts directly supported by evidence and normalize units/formats.
     attributes: Dict[str, Any] = field(default_factory=dict)
-    # 1–5 concise bullets explaining inclusion of this instrument or reasons for attribute settings; improves auditability and review.
-    reasons: List[str] = field(default_factory=list)
-    # Analyst free-text explanation linking evidence to conclusions; include assumptions and caveats.
-    rationale: str = ""
+    # Encapsulated explanation describing why this instrument is included or how attributes are set.
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence items with exact `source_content` supporting the instrument's existence or attributes; prefer authoritative sources.
     evidence: List[EvidenceItem] = field(default_factory=list)
     # Extension metadata for domain-specific details or downstream model outputs (e.g., parsing status, quality flags, normalization markers).
@@ -198,8 +215,7 @@ class Transaction:
       "from_participant_id": "P_A",
       "to_participant_id": "P_B",
       "instrument": FinancialInstrument(...),
-      "reasons": ["bank record indicates transfer"],
-      "rationale": "Direct match between bank record and participant IDs",
+      "explain": {"reasons": ["bank record indicates transfer"], "rationale": "Direct match between bank record and participant IDs"},
       "evidence": [EvidenceItem(source_type="news", source_content="Company promised 30% monthly returns", timestamp=datetime(...), confidence=0.8)],
       "extras": {"settlement_channel": "SWIFT", "transaction_hash": null}
     }
@@ -217,10 +233,8 @@ class Transaction:
     to_participant_id: str = ""
     # Related financial instrument; optional; describes the vehicle of transfer (e.g., bond payment, token transfer).
     instrument: Optional[FinancialInstrument] = None
-    # 1–5 concise bullets explaining why this transaction is recorded or the basis for its credibility.
-    reasons: List[str] = field(default_factory=list)
-    # Analyst free-text explanation detailing inference chain, assumptions, and boundaries.
-    rationale: str = ""
+    # Encapsulated explanation describing why this transaction is recorded and its credibility basis.
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence list with exact `source_content` directly supporting the transaction (e.g., on-chain tx, bank record, news report).
     evidence: List[EvidenceItem] = field(default_factory=list)
     # Extended metadata; e.g., settlement channel, transaction hash, batch identifier, parsing status.
@@ -241,8 +255,7 @@ class Interaction:
       "summary": "Guaranteed 30% monthly returns",
       "approx_occurrences": 10,
       "frequency_descriptor": "several_per_week",
-      "reasons": ["high engagement"],
-      "rationale": "Observed repeated posts with consistent claims",
+      "explain": {"reasons": ["high engagement"], "rationale": "Observed repeated posts with consistent claims"},
       "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
       "thread_id": "thread_123",
       "reply_to_id": null,
@@ -266,10 +279,8 @@ class Interaction:
     approx_occurrences: Optional[int] = None
     # Frequency descriptor (e.g., 'daily', 'several_per_week'); characterizes behavior intensity and cadence.
     frequency_descriptor: str = ""
-    # 1–5 concise bullets explaining why this interaction is recorded or how it relates to the event.
-    reasons: List[str] = field(default_factory=list)
-    # Analyst explanation connecting evidence to the interaction's role, impact, or intent.
-    rationale: str = ""
+    # Encapsulated explanation describing why this interaction is recorded and how it relates to the event.
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence list with exact `source_content`; examples: original post text, email body, news passage.
     evidence: List[EvidenceItem] = field(default_factory=list)
     # Thread identifier; used to link social media/forum context; None means no explicit thread.
@@ -289,7 +300,7 @@ class Action:
       "timestamp": datetime(...),
       "action_type": "broadcast_message",
       "description": "Guaranteed 30% monthly returns",
-      "reasons": ["promotion", "marketing"],
+      "explain": {"reasons": ["promotion", "marketing"], "rationale": "Outbound messaging campaign"},
       "outcomes": ["increased signups"],
       "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
       "extras": {"channel": "platform_feed"}
@@ -305,8 +316,8 @@ class Action:
     # Natural language description or snippet from evidence.
     description: str = ""
 
-    # Motivations or triggers inferred from evidence (ER attribute: 原因).
-    reasons: List[str] = field(default_factory=list)
+    # Encapsulated explanation for motivations or triggers inferred from evidence.
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
 
     # Immediate consequences or outputs (ER attribute: 结果).
     outcomes: List[str] = field(default_factory=list)
@@ -318,7 +329,7 @@ class Action:
     extras: Dict[str, Any] = field(default_factory=dict)
 
     # NOTE:
-    # For high-volume pipelines, store Action documents separately and only resolve related_state_snapshots on-demand to avoid heavy in-memory graphs.
+    # For high-volume pipelines, store Action documents separately and resolve participant state references on-demand to avoid heavy in-memory graphs.
 
 
 # Represents an immutable, timestamped observation of a participant's dynamic state
@@ -326,7 +337,7 @@ class Action:
 # attributes as recorded or inferred from evidence (e.g., news, logs, reports).
 @dataclass
 class ParticipantState:
-    """Snapshot of a participant's state at a specific timestamp.
+    """Participant state record at a specific timestamp.
 
     Example:
     {
@@ -358,8 +369,7 @@ class ParticipantState:
     external_state_attributes: Dict[str, Any] = field(default_factory=dict)
 
     # Actions that contributed to or occurred during this state. Use minimal
-    # references to avoid heavy graphs. Actions also reference states via
-    # Action.related_state_snapshots for bidirectional traceability.
+    # references to avoid heavy graphs. Actions may reference states for bidirectional traceability.
     related_actions: List[Action] = field(default_factory=list)
 
     # Participant's subjective understanding of the event's true nature.
@@ -370,17 +380,17 @@ class ParticipantState:
     # Examples: ["late_night", "mobile_app", "peer_pressure"]
     context_tags: List[str] = field(default_factory=list)
 
-    # Confidence score and supporting evidence for this snapshot.
+    # Confidence score and supporting evidence for this state.
     # confidence: 0.0–1.0; evidence: EvidenceItem list with exact source_content.
     confidence: Optional[float] = None
-    # Evidence items grounding this snapshot; include precise source_content segments.
+    # Evidence items grounding this state; include precise source_content segments.
     evidence: List[EvidenceItem] = field(default_factory=list)
 
     # Flexible container for any additional data (e.g., model confidence, source_content).
     extras: Dict[str, Any] = field(default_factory=dict)
 
     # NOTE ON SCALABILITY:
-    # State snapshots can number in billions for large events.
+    # Participant state records can number in billions for large events.
     # Store in time-series databases (e.g., InfluxDB) or partitioned Parquet/ORC files.
     # Index by (participant_id, timestamp) for fast trajectory reconstruction.
 
@@ -442,7 +452,7 @@ class Participant:
     alias_handles: Dict[str, List[str]] = field(default_factory=dict)
 
     # Explicit relationship edges to other participants in this event.
-    # Each relation captures type, directionality, temporal bounds, strength, status, tags/attributes, reasons/rationale, and evidence (EvidenceItem) for auditability.
+    # Each relation captures type, directionality, temporal bounds, strength, status, tags/attributes, explain (FinancialExplain), and evidence (EvidenceItem) for auditability.
     relations: List[ParticipantRelation] = field(default_factory=list)
 
     # Stable cognitive or behavioral dispositions influencing decisions.
@@ -489,7 +499,7 @@ class Episode:
       "end_time": datetime(...),
       "description": "Key investors received targeted promises",
       "participants": [Participant(...)],
-      "participant_snapshots": {"P_A": [ParticipantState(...)]},
+      "participant_states": {"P_A": [ParticipantState(...)]},
       "actions": [Action(...)],
       "transactions": [Transaction(...)],
       "interactions": [Interaction(...)],
@@ -516,9 +526,7 @@ class Episode:
     # List of entities participating in this episode; directly relevant `Participant` records.
     participants: List[Participant] = field(default_factory=list)
     # Participant state map: `participant_id -> List[ParticipantState]`; enables fine-grained temporal analysis.
-    participant_snapshots: Dict[str, List[ParticipantState]] = field(
-        default_factory=dict
-    )
+    participant_states: Dict[str, List[ParticipantState]] = field(default_factory=dict)
     # Actions occurring within this episode; used to model causal chains.
     actions: List[Action] = field(default_factory=list)
     # Financial transfers within this episode; linked to participants/instruments.
