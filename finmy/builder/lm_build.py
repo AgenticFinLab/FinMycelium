@@ -56,7 +56,7 @@ Schema categories (must be covered and sourced from `Content`):
 
 
 How to output (strict, single-file JSON):
-    Please strictly output the content in JSON format according to the following structure: 
+    Please strictly output the EventCascade content in JSON format according to the following structure: 
     
     Hierarchy (must be followed):
     EventCascade
