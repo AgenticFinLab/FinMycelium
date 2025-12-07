@@ -17,9 +17,11 @@ framework for financial data processing and knowledge extraction.
 
 import uuid
 import logging
+import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import List
+
 
 from finmy.generic import RawData, UserQueryInput
 from finmy.converter import (
@@ -370,11 +372,19 @@ def main():
     assert build_input is not None, "BuildInput should be created successfully"
 
     print("Start building ...")
-    lmbuilder = LMBuilder()
+    lmbuilder = LMBuilder(
+        config={"output_dir": "./data/event_cascade_output"}  # Specify output directory
+    )
     build_output = lmbuilder.build(build_input)
     print("build_output:", build_output)
 
     assert build_output is not None, "BuildOutput should be created successfully"
+
+    # Optionally, you can also save the BuildOutput itself
+    output_file = "./data/build_output.pkl"
+    with open(output_file, "wb") as f:
+        pickle.dump(build_output, f)
+    print(f"BuildOutput also saved to: {output_file}")
 
     logger.info("Test flow completed successfully!")
 
