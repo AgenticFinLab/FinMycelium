@@ -63,11 +63,11 @@ EventCascade
         │     ├── actions: List[Action]
         │     ├── transactions: List[Transaction]
         │     ├── interactions: List[Interaction]
-        │     └── participant_snapshots: { participant_id → [ParticipantStateSnapshot] }
+        │     └── participant_snapshots
         ├── stage_actions: List[Action]
         ├── transactions: List[Transaction]
         ├── interactions: List[Interaction]
-        └── participant_snapshots: { participant_id → [ParticipantStateSnapshot] }
+        └── participant_snapshots
 
 Extraction and validation process:
 1) Scope alignment using `Description` and `Keywords`; ignore unrelated content.
@@ -204,7 +204,7 @@ class LMBuilder(BaseBuilder):
         # Infer the llm API
         output: InferOutput = self.lm_api.run(
             infer_input=InferInput(
-                system_msg=self.system_prompt,
+                system_msg=self.system_prompt.replace("{", "{{").replace("}", "}}"),
                 user_msg=self.user_prompt,
             ),
             Description=build_input.user_query.query_text,
