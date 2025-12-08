@@ -2,7 +2,7 @@
 Implementation of the Financial Event Cascade with a large model based multi-agent system.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 from dataclasses import dataclass
 
 
@@ -120,3 +120,184 @@ class FinanceEventRecognizer:
     # May be derived from individual segment confidences or expert judgment.
     # ⚠️ Use to calibrate reliance on priors: low confidence → trust data more; high confidence → use priors for coherence.
     overall_alignment_confidence: Optional[float] = None
+
+
+@dataclass
+class ParticipantManager:
+    """
+    Agent responsible for extracting participants from financial event content
+    and managing their persistence via a database.
+
+    RESPONSIBILITIES:
+    1. Scan input content to identify participant entities and their roles.
+    2. Interact with a persistent database to:
+       - Retrieve existing canonical participants
+       - Store newly discovered participants
+    3. Maintain the current set of recognized participants for the event.
+
+    DESIGN NOTE:
+    This class does not include internal resolution maps or caches —
+    those are handled by external functions or database queries.
+    """
+
+    # The textual content from which to extract participants
+    data_content: List[str]
+
+    # Database connection URI for participant persistence (e.g., PostgreSQL, MongoDB)
+    # Example: "postgresql://user:pass@localhost/finance_kb"
+    database_uri: Optional[str] = None
+
+    # Database table or collection name for storing participants
+    # Example: "financial_entities"
+    participant_table: Optional[str] = "financial_participants"
+
+    # Table Prefix used to store participants for different episodes of the event
+    episode_table_prefix: Optional[str] = "episode_"
+
+
+@dataclass
+class StagePlanner:
+    """
+    Working state of the agent that defines the event's stage structure BEFORE episode extraction.
+
+    PURPOSE:
+    Hypothesize the number, order, and logic of stages based on the FinanceEventRecognizer prior.
+    This provides a structural scaffold into which episodes will later be placed.
+
+    KEY INSIGHT:
+    In financial event reconstruction, we often know the "playbook" (e.g., Bank Run has 4 phases)
+    before we fill in the specific acts. This agent defines that playbook.
+
+    OUTPUT:
+    A list of ReconstructedStage objects with:
+      - stage_id
+      - hypothesized name and logic
+      - expected episode types and participant roles
+    """
+
+    # The domain prior that defines canonical scenario stages
+    scenario_prior: "FinanceEventRecognizer"
+
+    # The hypothesized stages for this event (created BEFORE episode extraction)
+    # Each stage is a structural container waiting for episodes
+    hypothesized_stages: List["ReconstructedStage"]
+
+    # Confidence threshold to include a scenario segment's stages
+    min_scenario_confidence_for_staging: Optional[float] = 0.5
+
+
+@dataclass
+class EpisodeExtractor:
+    """
+    Working state of the agent that extracts episodes INTO pre-defined stages.
+
+    PURPOSE:
+    Identify concrete episodes from evidence and assign them to the appropriate stage
+    based on timing, content, and participant roles.
+
+    KEY CHANGE:
+    - Does NOT contain ParticipantManager
+    - Instead, receives candidate_participants (resolved list) as input
+    - Uses hypothesized_stages to guide episode-to-stage assignment
+
+    WORKFLOW:
+    1. Receive candidate_participants from ParticipantManager
+    2. Extract episode with participant roles
+    3. Assign episode to the most plausible hypothesized_stage
+    """
+
+    # Raw evidence content to extract from
+    data_content: List["EvidenceItem"]
+
+    # Domain prior for focus guidance
+    scenario_prior: "FinanceEventRecognizer"
+
+    # Pre-defined stage structure to fill (from StagePlanner)
+    hypothesized_stages: List["ReconstructedStage"]
+
+    # Resolved participants provided by ParticipantManager for this extraction context
+    candidate_participants: List["CanonicalParticipant"]
+
+    # Episodes already extracted and assigned to stages
+    extracted_episodes: List["ExtractedEpisode"]
+
+    # Current episode being processed
+    current_episode: Optional["ExtractedEpisode"] = None
+
+    # Minimum confidence to accept an episode
+    min_extraction_confidence: Optional[float] = 0.5
+
+
+@dataclass
+class FactChecker:
+    """
+    Working state of the agent that validates episodes against original evidence.
+
+    PURPOSE:
+    Ensure every extracted episode is factually grounded in source data,
+    eliminating hallucination, over-interpretation, or unsupported inference.
+
+    KEY CONSTRAINTS:
+    - Validates **one episode at a time**.
+    - Rejects any claim that cannot be directly observed or logically inferred from evidence.
+    - Preserves source provenance for every verified claim.
+    - Confidence scores must reflect source reliability (e.g., SEC filing > social media).
+
+    COLLABORATION:
+    - Receives ExtractedEpisode from EpisodeExtractor
+    - Cross-references against original data_content
+    - Outputs VerifiedEpisode for StagePlanner
+    """
+
+    # Original evidence stream used for verification
+    data_content: List["EvidenceItem"]
+
+    # The episode under verification
+    current_episode: Optional["ExtractedEpisode"] = None
+
+    # Episodes that have passed verification
+    verified_episodes: List["VerifiedEpisode"]
+
+    # Minimum confidence required to accept an episode as verified
+    min_verification_confidence: Optional[float] = 0.7
+
+    # Optional: weights for source reliability (e.g., {"SEC": 1.0, "Twitter": 0.3})
+    source_reliability_weights: Optional[Dict[str, float]] = None
+
+
+@dataclass
+class QualityReviewer:
+    """
+    Working state of the agent that performs final holistic validation.
+
+    PURPOSE:
+    Ensure the reconstructed event is causally sound, temporally consistent,
+    and fully reflects all relevant scenario dynamics from the prior.
+
+    KEY CONSTRAINTS:
+    - If scenario_prior contains a segment with alignment_confidence > threshold,
+      the reconstruction MUST reflect its dynamics.
+    - Must flag over-reliance on priors (e.g., stages copied verbatim).
+    - Final output must be both accurate (fact-checked) and complete (multi-scenario).
+    - Quality warnings should be specific and actionable.
+
+    COLLABORATION:
+    - Receives ReconstructedStage list from StagePlanner
+    - Compares against full FinanceEventRecognizer prior
+    - Produces final ReconstructedEvent for output
+    """
+
+    # Reconstructed stages to audit
+    reconstructed_stages: List["ReconstructedStage"]
+
+    # Original domain prior for completeness validation
+    scenario_prior: "FinanceEventRecognizer"
+
+    # Final validated event output
+    final_reconstructed_event: Optional["ReconstructedEvent"] = None
+
+    # Minimum alignment confidence to require scenario coverage
+    min_scenario_coverage_threshold: Optional[float] = 0.6
+
+    # List of quality warnings (e.g., "missing_scenario_segment", "prior_overfitting")
+    quality_warnings: Optional[List[str]] = None
