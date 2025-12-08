@@ -29,7 +29,7 @@ Compliance and consistency:
 - Use ONLY fields and types from the schema block in the system prompt; exact names and types.
 - ISO 8601 timestamps; ISO currency codes.
 - Participant IDs MUST be "P_" + 32 lowercase hex.
-- Attach at least one EvidenceItem (with source_content) to critical records.
+- Attach at least one SourceReferenceEvidence (with source_content) to critical records.
 - Cross-validate files:
   - Contents of stages in EventCascade.json matches all generated stage_id.json
   - Stage episodes of each stage_id.json match episodes/episode_id.json
@@ -41,7 +41,7 @@ Compliance and consistency:
 - Use ISO 8601 timestamps; currency must be ISO codes (e.g., "USD", "EUR", "BTC").
 - Participant IDs MUST be canonical: "P_" + 32 lowercase hex (uuid4.hex).
 - Interaction MUST include `medium`, `method`, `approx_occurrences` (approximate int), `frequency_descriptor` (text rate descriptor).
-- Attach at least one `EvidenceItem` (with `source_content`) to critical records for auditability.
+- Attach at least one `SourceReferenceEvidence` (with `source_content`) to critical records for auditability.
 - If information is not present in `Content`, set fields to null or omit; do not fabricate.
 
 Hard compliance mandate:
@@ -52,7 +52,7 @@ Hard compliance mandate:
 - Validate internally that the final JSON would conform to the referenced dataclass schema before outputting.
 
 Schema categories (must be covered and sourced from `Content`):
-- Participant, ParticipantRelation, ParticipantState, Action, Transaction, Interaction, Episode, EventStage, EventCascade, EvidenceItem, FinancialInstrument
+- Participant, ParticipantRelation, ParticipantState, Action, Transaction, Interaction, Episode, EventStage, EventCascade, SourceReferenceEvidence, FinancialInstrument
 
 
 How to output (strict, single-file JSON):
@@ -100,7 +100,7 @@ Extraction and validation process:
 2) Identify participants, roles, relations, transactions, interactions, evidence, episodes, and stage evolution from `Content`.
 3) Construct timelines: sort stages by `stage_index`; sort participant snapshots by `timestamp`.
 4) Reasons/rationale only where supported by `Content`; do not guess.
-5) Evidence linking: attach `EvidenceItem` to critical objects/events (with `source_content`).
+5) Evidence linking: attach `SourceReferenceEvidence` to critical objects/events (with `source_content`).
 6) Normalization: ISO timestamps, ISO currency codes; `participant_id` must be "P_"+uuid4.hex; Interaction fields reflect the source.
 7) Consistency check: coherent fields, closed references, correct chronology, no contradictions.
 8) Final output: strict JSON; missing items null or omitted;
