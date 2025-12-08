@@ -59,7 +59,7 @@ class SourceReferenceEvidence:
     source_content: str = ""
     # Encapsulated explanation for why this source_content was selected as evidence.
     # reasons should indicate selection criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe) to present detailed rationals.
-    reasons: List[str] = None
+    reasons: List[str] = field(default_factory=list)
     # Confidence score in [0.0, 1.0] reflecting confidence of applying reasons for the source content selection as the evidence.
     confidence: Optional[float] = None
 
@@ -97,7 +97,7 @@ class VerifiableField(Generic[T]):
     # Verbatim evidence supporting the value; must include exact source content
     evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Explanation describing why/how this value is set
-    reasons: List[str] = None
+    reasons: List[str] = field(default_factory=list)
     # Reliability score (0.0–1.0) for the assignment
     confidence: Optional[float] = None
 
@@ -120,14 +120,12 @@ class ParticipantRelation:
         value="affiliated_with",
         evidence=[SourceReferenceEvidence(source_content="parent company: ...")],
         reasons=["shared ownership", "Registry shows common parent entity with explicit affiliation"],
-        confidence=0.85,
-        extras={"selection_method": "keyword", "match_score": 0.95}
+        confidence=0.85
       ),
       "is_bidirectional": true,
       "start_time": None,
       "end_time": None,
-      "tags": ["corporate"],
-      "extras": {"registry_country": "UK"}
+      "attributes": {"registry_country": VerifiableField[str](value="UK")}
     }
     """
 
@@ -135,8 +133,8 @@ class ParticipantRelation:
     from_participant_id: str
     # Target participant (edge destination) — references Participant.participant_id.
     to_participant_id: str
-    # Natural-language description of the relation.
-    description: str = ""
+    # Natural-language description of the relation (verbatim or quoted from source when available).
+    description: Optional[VerifiableField[str]] = None
     # Relation label (e.g., 'member_of', 'client_of', 'counterparty'); grounded in source content.
     relation_type: VerifiableField[str] = field(
         default_factory=lambda: VerifiableField(value="unspecified")
@@ -146,14 +144,8 @@ class ParticipantRelation:
     # Temporal bounds when the relation holds as mentioned in the source content.
     start_time: Optional[VerifiableField[str]] = None
     end_time: Optional[VerifiableField[str]] = None
-    # Optional numeric score representing relation intensity (0.0–1.0).
-    strength: Optional[float] = None
-    # Domain-specific tags describing context (e.g., 'contractual', 'regulatory').
-    tags: List[str] = field(default_factory=list)
-    # Arbitrary metadata for this relation (e.g., contract/jurisdiction).
-    attributes: Dict[str, Any] = field(default_factory=dict)
-    # Extension placeholder for downstream models.
-    extras: Dict[str, Any] = field(default_factory=dict)
+    # Arbitrary metadata for this relation (e.g., contract/jurisdiction), each value grounded in source.
+    attributes: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -168,8 +160,7 @@ class FinancialInstrument:
     Example:
     {
       "description": VerifiableField[str](value="bond"),
-      "attributes": {"issuer": "ACME", "coupon": 0.05, "maturity": "2030-12-31"},
-      "extras": {"jurisdiction": "US"}
+      "attributes": {"issuer": VerifiableField[str](value="ACME"), "coupon": VerifiableField[float](value=0.05), "maturity": VerifiableField[str](value="2030-12-31")}
     }
     """
 
@@ -178,9 +169,7 @@ class FinancialInstrument:
         default_factory=lambda: VerifiableField(value="unspecified")
     )
     # Static/semi-static attribute map; examples: issuer, coupon, maturity; include only facts directly supported by evidence and normalize units/formats.
-    attributes: Dict[str, Any] = field(default_factory=dict)
-    # Extension information
-    extras: Dict[str, Any] = field(default_factory=dict)
+    attributes: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -190,11 +179,10 @@ class Transaction:
     Example:
     {
       "timestamp": VerifiableField[str](value="2025-01-01T12:00:00Z"),
-      "details": [VerifiableField[str](value="USD 10,000 wire")],
+      "details": [VerifiableField[str](value="USD 10,000 wire"), VerifiableField[str](value="settlement: SWIFT")],
       "from_participant_id": "P_A",
       "to_participant_id": "P_B",
-      "instrument": FinancialInstrument(...),
-      "extras": {"settlement_channel": "SWIFT", "transaction_hash": null}
+      "instrument": FinancialInstrument(...)
     }
     """
 
@@ -209,9 +197,6 @@ class Transaction:
     # Related financial instrument; optional; describes the vehicle of transfer (e.g., bond payment, token transfer).
     instrument: Optional[FinancialInstrument] = None
 
-    # Extended metadata; e.g., settlement channel, transaction hash, batch identifier, parsing status.
-    extras: Dict[str, Any] = field(default_factory=dict)
-
 
 @dataclass
 class Interaction:
@@ -223,11 +208,12 @@ class Interaction:
       "details": [
         VerifiableField[str](value="Guaranteed 30% monthly returns"),
         VerifiableField[str](value="totally 10 interactions"),
-        VerifiableField[str](value="several_per_week")
+        VerifiableField[str](value="several_per_week"),
+        VerifiableField[str](value="platform: Weibo"),
+        VerifiableField[str](value="language: zh")
       ],
       "sender_id": "P_X",
-      "receiver_ids": ["P_A", "P_B"],
-      "extras": {"platform": "Weibo", "language": "zh"}
+      "receiver_ids": ["P_A", "P_B"]
     }
     """
 
@@ -239,8 +225,6 @@ class Interaction:
     sender_id: str = ""
     # Receiver participant identifiers; reference `Participant.participant_id`; empty means broadcast or undefined audience.
     receiver_ids: List[str] = field(default_factory=list)
-    # Extended metadata; e.g., platform internal ID, crawl batch, language, model scores.
-    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -250,17 +234,14 @@ class Action:
     Example:
     {
       "timestamp": VerifiableField[str](value="2025-01-02T09:00:00Z"),
-      "details": ["broadcast_message", "Guaranteed 30% monthly returns"],
-      "extras": {"channel": "platform_feed"}
+      "details": [VerifiableField[str](value="broadcast_message"), VerifiableField[str](value="Guaranteed 30% monthly returns"), VerifiableField[str](value="channel: platform_feed")]
     }
     """
 
     # Chronological context.
     timestamp: Optional[VerifiableField[str]] = None
-    # Details of one participant's action
-    details: List[str] = field(default_factory=list)
-    # Additional information to make the action more precise.
-    extras: Dict[str, Any] = field(default_factory=dict)
+    # Details of one participant's action (each item grounded in source).
+    details: List[VerifiableField[str]] = field(default_factory=list)
 
 
 # ============================================================================
@@ -276,9 +257,8 @@ class Participant:
       "name": VerifiableField[str](value="Credit Suisse"),
       "participant_type": VerifiableField[str](value="organization"),
       "base_role": VerifiableField[str](value="issuer"),
-      "attributes": {"location": VerifiableField[str](value="Zurich"), "industry": VerifiableField[str](value="banking")},
-      "alias_handles": {"alias": VerifiableField[List[str]](value=["瑞信", "CS"]), "weibo": VerifiableField[List[str]](value=["uid_123"])},
-      "extras": {"tags": ["tier1"]}
+      "attributes": {"location": VerifiableField[str](value="Zurich"), "industry": VerifiableField[str](value="banking"), "tags": VerifiableField[List[str]](value=["tier1"])},
+      "alias_handles": {"alias": VerifiableField[List[str]](value=["瑞信", "CS"]), "weibo": VerifiableField[List[str]](value=["uid_123"])}
     }
     """
 
@@ -314,9 +294,7 @@ class Participant:
     # Unified alias of the participant in different places.
     alias_handles: Dict[str, VerifiableField[List[str]]] = field(default_factory=dict)
 
-    # Flexible container for any additional structured or unstructured metadata.
-    # Use for domain-specific extensions, model outputs, or temporary annotations.
-    extras: Dict[str, Any] = field(default_factory=dict)
+    # No generic extras; encode any grounded metadata via attributes/alias_handles.
 
 
 # ============================================================================
@@ -374,9 +352,6 @@ class Episode:
     # Messages/broadcasts within this episode; used for information diffusion analysis.
     interactions: List[Interaction] = field(default_factory=list)
 
-    # Confidence score (0.0–1.0); aggregate assessment of evidence quality, coverage, and consistency.
-    confidence_score: float = 0.0
-
 
 @dataclass
 class EventStage:
@@ -390,9 +365,7 @@ class EventStage:
       "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
       "end_time": None,
       "details": [VerifiableField[str](value="Rapid spread of promotional messages")],
-      "episodes": [Episode(...)],
-      "confidence_score": 0.7,
-      "extras": {"llm_summary": "..."}
+      "episodes": [Episode(...)]
     }
     """
 
@@ -416,11 +389,6 @@ class EventStage:
 
     # Episodes nested within this stage
     episodes: List[Episode] = field(default_factory=list)
-
-    confidence_score: float = 0.0
-
-    # Flexible container for stage-level annotations (e.g., LLM summary, analyst note).
-    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -447,12 +415,11 @@ class EventCascade:
     # Globally unique identifier (e.g., 'fraud_crypto_2025_001').
     event_id: str
 
-    # Human-readable title summarizing the event.
-    title: str
+    # Human-readable title summarizing the event (verbatim when available).
+    title: Optional[VerifiableField[str]] = None
 
-    # Categorical label from a domain ontology.
-    # Examples: 'financial_fraud', 'rumor_spread', 'data_breach'.
-    event_type: str
+    # Categorical label from domain sources (verbatim when available).
+    event_type: Optional[VerifiableField[str]] = None
 
     details: List[VerifiableField[str]] = field(default_factory=list)
 
@@ -462,12 +429,5 @@ class EventCascade:
     # Latest timestamp (None if ongoing or unresolved).
     end_time: Optional[VerifiableField[str]] = None
 
-    # Ordered sequence of event phases (sorted by stage_index).
+    # Ordered sequence of event phases.
     stages: List[EventStage] = field(default_factory=list)
-
-    # Estimated reliability (0.0 = speculative, 1.0 = fully verified).
-    confidence_score: float = 0.0
-
-    # Broader context framing the event.
-    # Example: "Post-pandemic digital finance boom in Southeast Asia".
-    domain_context: str = ""
