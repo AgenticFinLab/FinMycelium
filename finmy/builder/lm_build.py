@@ -316,7 +316,9 @@ class LMBuilder(BaseBuilder):
         except Exception as e:
             print(f"Warning: Failed to save JSON files: {e}")
             # Fallback: save raw response
-            raw_output_path = os.path.join(self.output_dir, "raw_response.txt")
+            raw_output_path = os.path.join(
+                self.output_dir, "build_out_raw_response.json"
+            )
             os.makedirs(self.output_dir, exist_ok=True)
             with open(raw_output_path, "w", encoding="utf-8") as f:
                 f.write(output.response)
