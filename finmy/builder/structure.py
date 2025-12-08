@@ -203,8 +203,8 @@ class ParticipantRelation:
     # Whether the relation is symmetric (e.g., 'affiliated_with').
     is_bidirectional: bool = False
     # Temporal bounds when the relation holds as mentioned in the source content.
-    start_time: Optional[VerifiableField] = None
-    end_time: Optional[VerifiableField] = None
+    start_time: Optional[VerifiableField[str]] = None
+    end_time: Optional[VerifiableField[str]] = None
     # Optional numeric score representing relation intensity (0.0–1.0).
     strength: Optional[float] = None
     # Domain-specific tags describing context (e.g., 'contractual', 'regulatory').
@@ -242,7 +242,9 @@ class FinancialInstrument:
     # Unique identifier for the security/instrument (e.g., ISIN, CUSIP, ticker); used for cross-source alignment and deduplication.
     instrument_id: str
     # Instrument category label (e.g., 'bond', 'equity', 'derivative'); use a controlled vocabulary and avoid free text.
-    instrument_type: str = "unspecified"
+    instrument_type: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="unspecified")
+    )
     # Static/semi-static attribute map; examples: issuer, coupon, maturity; include only facts directly supported by evidence and normalize units/formats.
     attributes: Dict[str, Any] = field(default_factory=dict)
     # Encapsulated explanation describing why this instrument is included or how attributes are set.
@@ -272,9 +274,11 @@ class Transaction:
     """
 
     # Transaction occurrence time (wall-clock); provide the most credible timestamp; use UTC.
-    timestamp: Optional[VerifiableField] = None
+    timestamp: Optional[VerifiableField[str]] = None
     # Transaction amount (numeric); positive value; units implied by `currency`; record a single transfer when sources contain multiple splits.
-    amount: float = 0.0
+    amount: VerifiableField[float] = field(
+        default_factory=lambda: VerifiableField(value=0.0)
+    )
     # Currency code (ISO 4217); default 'USD'; must correspond to `amount` and be normalized across sources.
     currency: str = "USD"
     # Payer participant identifier; references `Participant.participant_id`; do not use names or aliases.
@@ -314,11 +318,13 @@ class Interaction:
     """
 
     # Interaction occurrence time; use UTC; if only publish time is available, note it in `extras`.
-    timestamp: Optional[VerifiableField] = None
+    timestamp: Optional[VerifiableField[str]] = None
     # Medium (e.g., 'social_media', 'email', 'press'); controlled vocabulary; used for channel analysis.
     medium: str = "unspecified"
     # Method (e.g., 'public_post', 'dm', 'press_conference'); combined with `medium` to describe concrete form.
-    method: str = "unspecified"
+    method: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="unspecified")
+    )
     # Sender participant identifier; references `Participant.participant_id`.
     sender_id: str = ""
     # Receiver participant identifiers; reference `Participant.participant_id`; empty means broadcast or undefined audience.
@@ -351,14 +357,13 @@ class Action:
       "action_type": "broadcast_message",
       "description": "Guaranteed 30% monthly returns",
       "explain": {"reasons": ["promotion", "marketing"], "rationale": "Outbound messaging campaign"},
-      "outcomes": ["increased signups"],
       "evidence": [SourceReferenceEvidence(source_type="social_media", source_content="Join now for 30% monthly returns!")],
       "extras": {"channel": "platform_feed"}
     }
     """
 
     # Chronological context.
-    timestamp: Optional[VerifiableField] = None
+    timestamp: Optional[VerifiableField[str]] = None
 
     # High-level label (e.g., 'transfer_funds', 'broadcast_message').
     action_type: str = "unspecified"
@@ -369,17 +374,11 @@ class Action:
     # Encapsulated explanation for motivations or triggers inferred from evidence.
     explain: FinancialExplain = field(default_factory=FinancialExplain)
 
-    # Immediate consequences or outputs (ER attribute: 结果).
-    outcomes: List[str] = field(default_factory=list)
-
     # Evidence items backing this action; include exact source_content segments.
     evidence: List[SourceReferenceEvidence] = field(default_factory=list)
 
     # Flexible metadata container for downstream models.
     extras: Dict[str, Any] = field(default_factory=dict)
-
-    # NOTE:
-    # For high-volume pipelines, store Action documents separately and resolve participant state references on-demand to avoid heavy in-memory graphs.
 
 
 # Represents an immutable, timestamped observation of a participant's dynamic state
@@ -392,12 +391,10 @@ class ParticipantState:
     Example:
     {
       "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
-      "timestamp": ,
-      "internal_state_attributes": {"trust_in_message": 0.85, "funds_committed_usd": 10000},
-      "external_state_attributes": {"market_sentiment": "neutral"},
+      "timestamp": "2023-12-01T12:00:00Z",
+      "state_attributes": {"trust_in_message": 0.85, "funds_committed_usd": 10000, "awareness_level": "suspicious", "market_sentiment": "neutral"},
       "related_actions": [Action(...)],
       "awareness_level": "suspicious",
-      "context_tags": ["mobile_app"],
       "confidence": 0.7,
       "evidence": [SourceReferenceEvidence(source_type="news", source_content="User reported suspicious behavior...")],
       "extras": {"note": "derived from platform logs"}
@@ -408,15 +405,11 @@ class ParticipantState:
     participant_id: str
 
     # Exact time of this state observation.
-    timestamp: Optional[VerifiableField] = None
+    timestamp: Optional[VerifiableField[str]] = None
 
-    # Time-varying internal conditions.
+    # Time-varying internal conditions presented as attributes
     # Examples: {"trust_in_message": 0.85, "funds_committed_usd": 10000}
-    internal_state_attributes: Dict[str, Any] = field(default_factory=dict)
-
-    # Time-varying external conditions.
-    # Examples: {"market_sentiment": "neutral", "news_coverage": "low"}
-    external_state_attributes: Dict[str, Any] = field(default_factory=dict)
+    state_attributes: Dict[str, Any] = field(default_factory=dict)
 
     # Actions that contributed to or occurred during this state. Use minimal
     # references to avoid heavy graphs. Actions may reference states for bidirectional traceability.
@@ -426,10 +419,6 @@ class ParticipantState:
     # Values: 'unknowing', 'suspicious', 'aware', 'whistleblower'.
     awareness_level: str = "unknowing"
 
-    # Optional semantic tags describing situational context.
-    # Examples: ["late_night", "mobile_app", "peer_pressure"]
-    context_tags: List[str] = field(default_factory=list)
-
     # Confidence score and supporting evidence for this state.
     # confidence: 0.0–1.0; evidence: SourceReferenceEvidence list with exact source_content.
     confidence: Optional[float] = None
@@ -438,11 +427,6 @@ class ParticipantState:
 
     # Flexible container for any additional data (e.g., model confidence, source_content).
     extras: Dict[str, Any] = field(default_factory=dict)
-
-    # NOTE ON SCALABILITY:
-    # Participant state records can number in billions for large events.
-    # Store in time-series databases (e.g., InfluxDB) or partitioned Parquet/ORC files.
-    # Index by (participant_id, timestamp) for fast trajectory reconstruction.
 
 
 # ============================================================================
@@ -476,30 +460,38 @@ class Participant:
     participant_id: str
 
     # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
-    entity: str
+    entity: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="unspecified")
+    )
 
     # Human-readable name from the given content (cannot be anonymized).
-    name: str = ""
+    name: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="unspecified")
+    )
 
     # High-level category.
     # Examples: 'individual', 'organization', 'social_media_platform', 'government_agency'.
-    participant_type: str = "individual"
+    participant_type: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="individual")
+    )
 
     # Primary functional role in this event.
     # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
-    base_role: str = "unknown"
+    base_role: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="unknown")
+    )
 
     # Static or semi-static descriptive properties.
     # Examples:
     #   - Individuals: {"age_group": "30-40", "education": "bachelor", "location": "Shanghai"}
     #   - Organizations: {"industry": "fintech", "employee_count": 50}
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
     # Unified alias and platform handles to avoid ID interference and clarify resolution semantics.
     # Keys denote domains, e.g., "alias", "weibo", "douyin", "bilibili", "email".
     # Values are lists of normalized strings; the only canonical identifier remains `participant_id`.
     # Example: {"alias": ["ACME Ltd.", "ACME Holdings"], "weibo": ["uid_123"], "douyin": ["sec_abc"]}
-    alias_handles: Dict[str, List[str]] = field(default_factory=dict)
+    alias_handles: Dict[str, VerifiableField[List[str]]] = field(default_factory=dict)
 
     # Explicit relationship edges to other participants in this event.
     # Each relation captures type, directionality, temporal bounds, strength, status, tags/attributes, explain (FinancialExplain), and evidence (SourceReferenceEvidence) for auditability.
@@ -507,11 +499,11 @@ class Participant:
 
     # Stable cognitive or behavioral dispositions influencing decisions.
     # Examples: {"risk_tolerance": "high", "credibility_threshold": 0.4}
-    preferences: Dict[str, Any] = field(default_factory=dict)
+    preferences: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
     # Prior events or historical context shaping current behavior.
     # Examples: {"past_scam_victim": True, "crypto_investment_history": ["BTC_2021"]}
-    experiences: Dict[str, Any] = field(default_factory=dict)
+    experiences: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
     # Evidence items directly supporting this participant record.
     # Use when the existence, attributes, or roles of the participant are grounded
@@ -521,13 +513,6 @@ class Participant:
     # Flexible container for any additional structured or unstructured metadata.
     # Use for domain-specific extensions, model outputs, or temporary annotations.
     extras: Dict[str, Any] = field(default_factory=dict)
-
-    # Validation note:
-    # - participant_id regex and entity specificity are documented here but enforced by builders at runtime. This module intentionally contains no methods.
-
-    # NOTE ON SCALABILITY:
-    # In large-scale scenarios (millions of participants), store Participant records in a database table (e.g., PostgreSQL, MongoDB) with participant_id as primary key.
-    # Avoid embedding full Participant objects in memory-heavy structures.
 
 
 # ============================================================================
@@ -567,9 +552,9 @@ class Episode:
     # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     sequence_index: int = 0
     # Start time; earliest evidence or activity; None if uncertain.
-    start_time: Optional[VerifiableField] = None
+    start_time: Optional[VerifiableField[str]] = None
     # End time; latest evidence or activity; None if ongoing or boundaries are unclear.
-    end_time: Optional[VerifiableField] = None
+    end_time: Optional[VerifiableField[str]] = None
     # Short description summarizing the episode's theme and key activities.
     description: str = ""
 
@@ -704,10 +689,10 @@ class EventCascade:
     event_type: str
 
     # Earliest timestamp across all evidence and participant activity.
-    start_time: Optional[VerifiableField] = None
+    start_time: Optional[VerifiableField[str]] = None
 
     # Latest timestamp (None if ongoing or unresolved).
-    end_time: Optional[VerifiableField] = None
+    end_time: Optional[VerifiableField[str]] = None
 
     # Final quantitative/qualitative consequences.
     # Examples: {"total_victims": 2400, "total_financial_loss_usd": 3_200_000}
