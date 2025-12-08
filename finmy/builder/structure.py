@@ -259,7 +259,7 @@ class Transaction:
 
     Example:
     {
-      "timestamp": datetime(...),
+      "timestamp": ,
       "amount": 10000.0,
       "currency": "USD",
       "from_participant_id": "P_A",
@@ -272,9 +272,9 @@ class Transaction:
     """
 
     # Transaction occurrence time (wall-clock); provide the most credible timestamp; use UTC.
-    timestamp: datetime
+    timestamp: Optional[VerifiableField] = None
     # Transaction amount (numeric); positive value; units implied by `currency`; record a single transfer when sources contain multiple splits.
-    amount: float
+    amount: float = 0.0
     # Currency code (ISO 4217); default 'USD'; must correspond to `amount` and be normalized across sources.
     currency: str = "USD"
     # Payer participant identifier; references `Participant.participant_id`; do not use names or aliases.
@@ -314,7 +314,7 @@ class Interaction:
     """
 
     # Interaction occurrence time; use UTC; if only publish time is available, note it in `extras`.
-    timestamp: datetime
+    timestamp: Optional[VerifiableField] = None
     # Medium (e.g., 'social_media', 'email', 'press'); controlled vocabulary; used for channel analysis.
     medium: str = "unspecified"
     # Method (e.g., 'public_post', 'dm', 'press_conference'); combined with `medium` to describe concrete form.
@@ -358,7 +358,7 @@ class Action:
     """
 
     # Chronological context.
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: Optional[VerifiableField] = None
 
     # High-level label (e.g., 'transfer_funds', 'broadcast_message').
     action_type: str = "unspecified"
@@ -392,7 +392,7 @@ class ParticipantState:
     Example:
     {
       "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
-      "timestamp": datetime(...),
+      "timestamp": ,
       "internal_state_attributes": {"trust_in_message": 0.85, "funds_committed_usd": 10000},
       "external_state_attributes": {"market_sentiment": "neutral"},
       "related_actions": [Action(...)],
@@ -408,7 +408,7 @@ class ParticipantState:
     participant_id: str
 
     # Exact time of this state observation.
-    timestamp: datetime
+    timestamp: Optional[VerifiableField] = None
 
     # Time-varying internal conditions.
     # Examples: {"trust_in_message": 0.85, "funds_committed_usd": 10000}
@@ -567,9 +567,9 @@ class Episode:
     # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     sequence_index: int = 0
     # Start time; earliest evidence or activity; None if uncertain.
-    start_time: Optional[datetime] = None
+    start_time: Optional[VerifiableField] = None
     # End time; latest evidence or activity; None if ongoing or boundaries are unclear.
-    end_time: Optional[datetime] = None
+    end_time: Optional[VerifiableField] = None
     # Short description summarizing the episode's theme and key activities.
     description: str = ""
 
@@ -626,10 +626,10 @@ class EventStage:
     stage_index: int
 
     # Earliest timestamp of activity or evidence in this stage.
-    start_time: datetime
+    start_time: Optional[VerifiableField] = None
 
     # Latest timestamp (may be None for ambiguous boundaries).
-    end_time: Optional[datetime] = None
+    end_time: Optional[VerifiableField] = None
 
     # Concise natural-language summary of this stage’s essence.
     description: Optional[str] = None
@@ -704,10 +704,10 @@ class EventCascade:
     event_type: str
 
     # Earliest timestamp across all evidence and participant activity.
-    start_time: datetime
+    start_time: Optional[VerifiableField] = None
 
     # Latest timestamp (None if ongoing or unresolved).
-    end_time: Optional[datetime] = None
+    end_time: Optional[VerifiableField] = None
 
     # Final quantitative/qualitative consequences.
     # Examples: {"total_victims": 2400, "total_financial_loss_usd": 3_200_000}

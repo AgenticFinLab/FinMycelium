@@ -1,0 +1,469 @@
+{
+  "event_id": "ai_financial_risk_compliance_2025",
+  "title": "AI in Financial Risk Management and Compliance",
+  "event_type": "regulatory_technology_evolution",
+  "start_time": null,
+  "end_time": null,
+  "total_impact": {},
+  "systemic_risk_indicators": [],
+  "root_causes": [],
+  "stages": [
+    {
+      "stage_id": "S1",
+      "name": "AI Adoption in Risk Management",
+      "stage_index": 0,
+      "start_time": null,
+      "end_time": null,
+      "description": "Banks and institutions adopt machine learning for credit scoring and anti-fraud detection, improving risk control efficiency and business response speed.",
+      "episodes": [
+        {
+          "episode_id": "E1",
+          "name": "Machine Learning for Credit Scoring and Anti-Fraud",
+          "sequence_index": 0,
+          "start_time": null,
+          "end_time": null,
+          "description": "Banks use machine learning for credit scoring and anti-fraud detection, enhancing risk control efficiency and business response speed.",
+          "participants": [
+            {
+              "participant_id": "P_1234567890abcdef1234567890abcdef",
+              "entity": "Banks",
+              "name": "Banks",
+              "participant_type": "organization",
+              "base_role": "adopter",
+              "attributes": {
+                "industry": "banking"
+              },
+              "alias_handles": {},
+              "relations": [],
+              "preferences": {},
+              "experiences": {},
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "部分银行采用机器学习进行信用评分与反欺诈检测，这提升了风控效率与业务响应速度。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '机器学习', '信用评分', '反欺诈检测'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about banks adopting machine learning for credit scoring and anti-fraud detection."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "participant_states": {},
+          "actions": [
+            {
+              "timestamp": null,
+              "action_type": "adoption",
+              "description": "Adopt machine learning for credit scoring and anti-fraud detection",
+              "explain": {
+                "reasons": [
+                  "direct statement about adoption"
+                ],
+                "rationale": "The content explicitly states that banks adopt machine learning for credit scoring and anti-fraud detection."
+              },
+              "outcomes": [
+                "improved risk control efficiency",
+                "enhanced business response speed"
+              ],
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "部分银行采用机器学习进行信用评分与反欺诈检测，这提升了风控效率与业务响应速度。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '机器学习', '信用评分', '反欺诈检测'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about banks adopting machine learning for credit scoring and anti-fraud detection."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "transactions": [],
+          "interactions": [],
+          "evidence": [
+            {
+              "source_type": "report",
+              "source_content": "部分银行采用机器学习进行信用评分与反欺诈检测，这提升了风控效率与业务响应速度。",
+              "explain": {
+                "reasons": [
+                  "exact keyword match: '机器学习', '信用评分', '反欺诈检测'"
+                ],
+                "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about banks adopting machine learning for credit scoring and anti-fraud detection."
+              },
+              "extras": {},
+              "confidence": 0.9
+            }
+          ],
+          "tags": [
+            "machine_learning",
+            "credit_scoring",
+            "anti_fraud"
+          ],
+          "confidence_score": 0.9,
+          "extras": {}
+        }
+      ],
+      "stage_highlights": [
+        "Adoption of machine learning for credit scoring and anti-fraud detection"
+      ],
+      "group_metrics": {},
+      "systemic_indicators": [],
+      "stage_drivers": [
+        "need for improved risk control efficiency",
+        "demand for faster business response"
+      ],
+      "evidence": [
+        {
+          "source_type": "report",
+          "source_content": "部分银行采用机器学习进行信用评分与反欺诈检测，这提升了风控效率与业务响应速度。",
+          "explain": {
+            "reasons": [
+              "exact keyword match: '机器学习', '信用评分', '反欺诈检测'"
+            ],
+            "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about banks adopting machine learning for credit scoring and anti-fraud detection."
+          },
+          "extras": {},
+          "confidence": 0.9
+        }
+      ],
+      "tags": [
+        "ai_adoption",
+        "risk_management"
+      ],
+      "confidence_score": 0.9,
+      "extras": {}
+    },
+    {
+      "stage_id": "S2",
+      "name": "Risk Management Framework and Model Explainability",
+      "stage_index": 1,
+      "start_time": null,
+      "end_time": null,
+      "description": "Institutions establish end-to-end risk management frameworks including data governance, model validation, monitoring, and backtesting. For black-box models, internal and external audits require higher explainability to meet regulatory principles of transparency and prudence.",
+      "episodes": [
+        {
+          "episode_id": "E2",
+          "name": "End-to-End Risk Management Framework",
+          "sequence_index": 0,
+          "start_time": null,
+          "end_time": null,
+          "description": "Institutions establish end-to-end risk management frameworks including data governance, model validation, monitoring, and backtesting.",
+          "participants": [
+            {
+              "participant_id": "P_234567890abcdef1234567890abcdef1",
+              "entity": "Institutions",
+              "name": "Institutions",
+              "participant_type": "organization",
+              "base_role": "implementer",
+              "attributes": {},
+              "alias_handles": {},
+              "relations": [],
+              "preferences": {},
+              "experiences": {},
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "一些机构建立了端到端的风险管理框架，包括数据治理、模型验证、监控与回溯测试。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '端到端的风险管理框架', '数据治理', '模型验证', '监控', '回溯测试'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about institutions establishing end-to-end risk management frameworks."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "participant_states": {},
+          "actions": [
+            {
+              "timestamp": null,
+              "action_type": "establishment",
+              "description": "Establish end-to-end risk management frameworks including data governance, model validation, monitoring, and backtesting",
+              "explain": {
+                "reasons": [
+                  "direct statement about establishment"
+                ],
+                "rationale": "The content explicitly states that institutions establish end-to-end risk management frameworks."
+              },
+              "outcomes": [
+                "improved risk management"
+              ],
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "一些机构建立了端到端的风险管理框架，包括数据治理、模型验证、监控与回溯测试。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '端到端的风险管理框架', '数据治理', '模型验证', '监控', '回溯测试'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about institutions establishing end-to-end risk management frameworks."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "transactions": [],
+          "interactions": [],
+          "evidence": [
+            {
+              "source_type": "report",
+              "source_content": "一些机构建立了端到端的风险管理框架，包括数据治理、模型验证、监控与回溯测试。",
+              "explain": {
+                "reasons": [
+                  "exact keyword match: '端到端的风险管理框架', '数据治理', '模型验证', '监控', '回溯测试'"
+                ],
+                "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about institutions establishing end-to-end risk management frameworks."
+              },
+              "extras": {},
+              "confidence": 0.9
+            }
+          ],
+          "tags": [
+            "risk_management_framework",
+            "data_governance",
+            "model_validation"
+          ],
+          "confidence_score": 0.9,
+          "extras": {}
+        },
+        {
+          "episode_id": "E3",
+          "name": "Explainability Requirements for Black-Box Models",
+          "sequence_index": 1,
+          "start_time": null,
+          "end_time": null,
+          "description": "For black-box models, internal and external audits require higher explainability to meet regulatory principles of transparency and prudence.",
+          "participants": [
+            {
+              "participant_id": "P_34567890abcdef1234567890abcdef12",
+              "entity": "Internal and External Audits",
+              "name": "Internal and External Audits",
+              "participant_type": "organization",
+              "base_role": "regulator",
+              "attributes": {},
+              "alias_handles": {},
+              "relations": [],
+              "preferences": {},
+              "experiences": {},
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "对于黑箱模型，内部与外部审计要求更高的可解释性，以满足监管对于透明度与审慎监管的原则。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '黑箱模型', '内部与外部审计', '可解释性', '透明度', '审慎监管'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about internal and external audits requiring higher explainability for black-box models."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "participant_states": {},
+          "actions": [
+            {
+              "timestamp": null,
+              "action_type": "requirement",
+              "description": "Require higher explainability for black-box models to meet regulatory principles of transparency and prudence",
+              "explain": {
+                "reasons": [
+                  "direct statement about requirement"
+                ],
+                "rationale": "The content explicitly states that internal and external audits require higher explainability for black-box models."
+              },
+              "outcomes": [
+                "enhanced model transparency",
+                "compliance with regulatory principles"
+              ],
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "对于黑箱模型，内部与外部审计要求更高的可解释性，以满足监管对于透明度与审慎监管的原则。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '黑箱模型', '内部与外部审计', '可解释性', '透明度', '审慎监管'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about internal and external audits requiring higher explainability for black-box models."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "transactions": [],
+          "interactions": [],
+          "evidence": [
+            {
+              "source_type": "report",
+              "source_content": "对于黑箱模型，内部与外部审计要求更高的可解释性，以满足监管对于透明度与审慎监管的原则。",
+              "explain": {
+                "reasons": [
+                  "exact keyword match: '黑箱模型', '内部与外部审计', '可解释性', '透明度', '审慎监管'"
+                ],
+                "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about internal and external audits requiring higher explainability for black-box models."
+              },
+              "extras": {},
+              "confidence": 0.9
+            }
+          ],
+          "tags": [
+            "black_box_models",
+            "explainability",
+            "audits"
+          ],
+          "confidence_score": 0.9,
+          "extras": {}
+        }
+      ],
+      "stage_highlights": [
+        "Establishment of end-to-end risk management frameworks",
+        "Higher explainability requirements for black-box models"
+      ],
+      "group_metrics": {},
+      "systemic_indicators": [],
+      "stage_drivers": [
+        "need for comprehensive risk management",
+        "regulatory demand for transparency and prudence"
+      ],
+      "evidence": [
+        {
+          "source_type": "report",
+          "source_content": "一些机构建立了端到端的风险管理框架，包括数据治理、模型验证、监控与回溯测试。",
+          "explain": {
+            "reasons": [
+              "exact keyword match: '端到端的风险管理框架', '数据治理', '模型验证', '监控', '回溯测试'"
+            ],
+            "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about institutions establishing end-to-end risk management frameworks."
+          },
+          "extras": {},
+          "confidence": 0.9
+        },
+        {
+          "source_type": "report",
+          "source_content": "对于黑箱模型，内部与外部审计要求更高的可解释性，以满足监管对于透明度与审慎监管的原则。",
+          "explain": {
+            "reasons": [
+              "exact keyword match: '黑箱模型', '内部与外部审计', '可解释性', '透明度', '审慎监管'"
+            ],
+            "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about internal and external audits requiring higher explainability for black-box models."
+          },
+          "extras": {},
+          "confidence": 0.9
+        }
+      ],
+      "tags": [
+        "risk_framework",
+        "model_explainability"
+      ],
+      "confidence_score": 0.9,
+      "extras": {}
+    },
+    {
+      "stage_id": "S3",
+      "name": "Model Lifecycle Management and Compliance",
+      "stage_index": 2,
+      "start_time": null,
+      "end_time": null,
+      "description": "Model lifecycle management becomes a focus from a compliance perspective. Approval, version control, change records, and impact assessment need to be fully documented. When model outputs are used for critical business decisions, human-machine collaboration mechanisms and threshold alerts should be established.",
+      "episodes": [
+        {
+          "episode_id": "E4",
+          "name": "Model Lifecycle Management Focus",
+          "sequence_index": 0,
+          "start_time": null,
+          "end_time": null,
+          "description": "Model lifecycle management becomes a focus from a compliance perspective. Approval, version control, change records, and impact assessment need to be fully documented.",
+          "participants": [
+            {
+              "participant_id": "P_4567890abcdef1234567890abcdef123",
+              "entity": "Compliance Perspective",
+              "name": "Compliance Perspective",
+              "participant_type": "concept",
+              "base_role": "regulator",
+              "attributes": {},
+              "alias_handles": {},
+              "relations": [],
+              "preferences": {},
+              "experiences": {},
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "从合规角度来看，模型生命周期管理成为重点。审批、版本控制、变更记录与影响评估需要被完整记录。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '合规角度', '模型生命周期管理', '审批', '版本控制', '变更记录', '影响评估'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about model lifecycle management from a compliance perspective."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "participant_states": {},
+          "actions": [
+            {
+              "timestamp": null,
+              "action_type": "documentation",
+              "description": "Document approval, version control, change records, and impact assessment for model lifecycle management",
+              "explain": {
+                "reasons": [
+                  "direct statement about documentation requirement"
+                ],
+                "rationale": "The content explicitly states that approval, version control, change records, and impact assessment need to be fully documented."
+              },
+              "outcomes": [
+                "complete documentation of model lifecycle"
+              ],
+              "evidence": [
+                {
+                  "source_type": "report",
+                  "source_content": "从合规角度来看，模型生命周期管理成为重点。审批、版本控制、变更记录与影响评估需要被完整记录。",
+                  "explain": {
+                    "reasons": [
+                      "exact keyword match: '合规角度', '模型生命周期管理', '审批', '版本控制', '变更记录', '影响评估'"
+                    ],
+                    "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about model lifecycle management from a compliance perspective."
+                  },
+                  "extras": {},
+                  "confidence": 0.9
+                }
+              ],
+              "extras": {}
+            }
+          ],
+          "transactions": [],
+          "interactions": [],
+          "evidence": [
+            {
+              "source_type": "report",
+              "source_content": "从合规角度来看，模型生命周期管理成为重点。审批、版本控制、变更记录与影响评估需要被完整记录。",
+              "explain": {
+                "reasons": [
+                  "exact keyword match: '合规角度', '模型生命周期管理', '审批', '版本控制', '变更记录', '影响评估'"
+                ],
+                "rationale": "Selected as evidence because the text contains exact keyword matches and direct statements about model lifecycle management from a compliance perspective."
+              },
