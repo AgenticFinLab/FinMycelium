@@ -11,6 +11,8 @@ Structure overview:
 - Episode: coherent sub-phase within a stage holding participants, states, actions, transactions, interactions
 - EventStage: one phase of the event, holding episodes and stage-level metadata
 - EventCascade: top-level container, holding ordered stages and event-level metadata
+- SourceReferenceEvidence: exact source content support for records
+ - VerifiableField: wrapper ensuring a field value is directly grounded in source content
 
 Relationship Among Event, Stage, Episode, and Participant:
 - Event: A financial shock with significant market impact (e.g., a major default, regulatory sanction, market crash, or sudden policy change).
@@ -37,7 +39,7 @@ EventCascade
 from datetime import datetime
 
 from dataclasses import dataclass, field
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, TypeVar, Generic
 
 
 @dataclass
@@ -49,28 +51,27 @@ class FinancialExplain:
     - Improve auditability by separating bullet-point reasons from detailed narrative rationale
 
     Fields:
-    - reasons: concise bullet points (1–5) capturing key justifications
+    - reasons: concise bullet points capturing key justifications
     - rationale: detailed prose explaining the reasoning chain, assumptions, scope, and links to the generation, extraction, or summarization.
 
     Example:
     {"reasons": ["official filing"], "rationale": "Prospectus confirms coupon and maturity; issuer verified via registry"}
     """
 
-    # Concise bullet points (1–5) capturing the key justifications; treat as a checklist of factors.
+    # Concise bullet points capturing the key justifications; treat as a checklist of factors.
     reasons: List[str] = field(default_factory=list)
     # Detailed prose laying out the reasoning chain, constraints/assumptions, and explicit links to assignment.
     rationale: str = ""
 
 
 @dataclass
-class EvidenceItem:
-    """Evidence reference anchoring an action/transaction/interaction.
+class SourceReferenceEvidence:
+    """Evidence reference from the source content that supports anchoring an action/transaction/interaction.
 
     Example:
     {
       "source_type": "news",
       "source_content": "Company promised 30% monthly returns",
-      "timestamp": datetime(...),
       "confidence": 0.8,
       "explain": {
         "reasons": [
@@ -80,7 +81,7 @@ class EvidenceItem:
         ],
         "rationale": "Selected as evidence because the text contains an exact keyword match and a direct numeric rate claim attributed to the issuer; selection verified via keyword match and semantic context; links to Transaction.amount via 'supported_field'."
       },
-      "extras": {"language": "en", "supported_field": "Transaction.amount"}
+      "extras": {}
     }
     """
 
@@ -88,9 +89,6 @@ class EvidenceItem:
     source_type: str = "unspecified"
     # Exact original text snippet (no rewriting) that supports a specific setting/assignment; clearly include the precise source text that justifies it.
     source_content: str = ""
-    # Wall-clock time when the source content was published or logged.
-    # Use UTC where possible; set to None if unknown. Prefer the most relevant timestamp (e.g., article publish time over crawl time).
-    timestamp: Optional[datetime] = None
 
     # Encapsulated explanation for why this source_content was selected as evidence.
     # reasons should indicate selection criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe).
@@ -102,6 +100,47 @@ class EvidenceItem:
     confidence: Optional[float] = None
 
 
+T = TypeVar("T")
+
+
+@dataclass
+class VerifiableField(Generic[T]):
+    """Field wrapper that requires direct grounding in original source content.
+
+    Purpose:
+    - Ensure the assigned `value` is strictly supported by exact text in `EvidenceItem.source_content`
+    - Capture selection criteria and normalization context for auditability
+
+    Fields:
+    - value: assigned value strictly derived from source content (typed via Generic[T])
+    - evidence: list of EvidenceItem with verbatim `source_content` supporting this value
+    - explain: FinancialExplain describing why/how the value is set
+    - confidence: optional reliability score for this assignment (0.0–1.0)
+    - extras: extension metadata (e.g., unit, normalization, selection_method, match_score)
+
+    Example:
+    VerifiableField[float](
+      value=10000.0,
+      evidence=[SourceReferenceEvidence(source_type="bank_record", source_content:"... $10,000 transfer ...")],
+      explain=FinancialExplain(reasons=["exact numeric present"], rationale="Amount is directly quoted from the bank record"),
+      confidence=0.9,
+      extras={"unit": "USD", "normalized": True, "selection_method": "keyword", "match_score": 0.96},
+    )
+    """
+
+    # Assigned value strictly derived from source content
+    value: T
+    # Verbatim evidence supporting the value; must include exact source content
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
+    # Explanation describing why/how this value is set
+    explain: FinancialExplain = field(default_factory=FinancialExplain)
+    # Reliability score (0.0–1.0) for the assignment
+    confidence: Optional[float] = None
+    # Extension metadata (e.g., unit, normalization, selection_method, match_score)
+    extras: Dict[str, Any] = field(default_factory=dict)
+    # No runtime type guard; rely on Generic[T] and static typing.
+
+
 @dataclass
 class ParticipantRelation:
     """Relationship between two participants.
@@ -111,16 +150,21 @@ class ParticipantRelation:
       "from_participant_id": "P_A",
       "to_participant_id": "P_B",
       "description": "A is a long-term paying client of B",
-      "relation_type": "client_of",
+      "relation_type": VerifiableField[str](
+        value="client_of",
+        evidence=[SourceReferenceEvidence(source_type="report", source_content="contract signed on ...")],
+        explain=FinancialExplain(reasons=["explicit label present"], rationale="Relation label appears verbatim in the contract"),
+        confidence=0.9,
+        extras={"selection_method": "keyword", "match_score": 0.98}
+      ),
       "is_bidirectional": false,
-      "start_time": datetime(...),
+      "start_time": None,
       "end_time": None,
       "strength": 0.8,
-      "status": "active",
       "tags": ["financial"],
       "attributes": {"contract_id": "C-2025-001"},
       "explain": {"reasons": ["service agreement signed"], "rationale": "Observed formal KYC onboarding and recurring payments"},
-      "evidence": [EvidenceItem(source_type="report", source_content="contract signed on ...")],
+      "evidence": [SourceReferenceEvidence(source_type="report", source_content="contract signed on ...")],
       "extras": {"jurisdiction": "US"}
     }
 
@@ -129,13 +173,19 @@ class ParticipantRelation:
       "from_participant_id": "P_X",
       "to_participant_id": "P_Y",
       "description": "X and Y share a common parent company (public registry verified)",
-      "relation_type": "affiliated_with",
+      "relation_type": VerifiableField[str](
+        value="affiliated_with",
+        evidence=[SourceReferenceEvidence(source_type="registry", source_content="parent company: ...")],
+        explain=FinancialExplain(reasons=["shared ownership"], rationale="Registry shows common parent entity with explicit affiliation"),
+        confidence=0.85,
+        extras={"selection_method": "keyword", "match_score": 0.95}
+      ),
       "is_bidirectional": true,
       "start_time": None,
       "end_time": None,
       "tags": ["corporate"],
       "explain": {"reasons": ["shared ownership structure"], "rationale": "Public registry shows common parent entity"},
-      "evidence": [EvidenceItem(source_type="registry", source_content="parent company: ...")],
+      "evidence": [SourceReferenceEvidence(source_type="registry", source_content="parent company: ...")],
       "extras": {"registry_country": "UK"}
     }
     """
@@ -146,17 +196,17 @@ class ParticipantRelation:
     to_participant_id: str
     # Natural-language description of the relation.
     description: str = ""
-    # Relation label (e.g., 'member_of', 'client_of', 'counterparty').
-    relation_type: str = "unspecified"
+    # Relation label (e.g., 'member_of', 'client_of', 'counterparty'); grounded in source content.
+    relation_type: VerifiableField[str] = field(
+        default_factory=lambda: VerifiableField(value="unspecified")
+    )
     # Whether the relation is symmetric (e.g., 'affiliated_with').
     is_bidirectional: bool = False
-    # Temporal bounds when the relation holds.
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    # Temporal bounds when the relation holds as mentioned in the source content.
+    start_time: Optional[VerifiableField] = None
+    end_time: Optional[VerifiableField] = None
     # Optional numeric score representing relation intensity (0.0–1.0).
     strength: Optional[float] = None
-    # Current state: 'active', 'inactive', 'suspended', 'terminated'.
-    status: str = "active"
     # Domain-specific tags describing context (e.g., 'contractual', 'regulatory').
     tags: List[str] = field(default_factory=list)
     # Arbitrary metadata for this relation (e.g., contract/jurisdiction).
@@ -164,7 +214,7 @@ class ParticipantRelation:
     # Encapsulated explanation describing why this relation is recorded.
     explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence items backing this relation (exact source_content segments).
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Extension placeholder for downstream models.
     extras: Dict[str, Any] = field(default_factory=dict)
 
@@ -184,7 +234,7 @@ class FinancialInstrument:
       "instrument_type": "bond",
       "attributes": {"issuer": "ACME", "coupon": 0.05, "maturity": "2030-12-31"},
       "explain": {"reasons": ["used in funding transaction"], "rationale": "Coupon schedule aligns with transfer timing"},
-      "evidence": [EvidenceItem(source_type="report", source_content="Bond prospectus states coupon 5%...")],
+      "evidence": [SourceReferenceEvidence(source_type="report", source_content="Bond prospectus states coupon 5%...")],
       "extras": {"jurisdiction": "US"}
     }
     """
@@ -198,7 +248,7 @@ class FinancialInstrument:
     # Encapsulated explanation describing why this instrument is included or how attributes are set.
     explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence items with exact `source_content` supporting the instrument's existence or attributes; prefer authoritative sources.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Extension metadata for domain-specific details or downstream model outputs (e.g., parsing status, quality flags, normalization markers).
     extras: Dict[str, Any] = field(default_factory=dict)
 
@@ -216,7 +266,7 @@ class Transaction:
       "to_participant_id": "P_B",
       "instrument": FinancialInstrument(...),
       "explain": {"reasons": ["bank record indicates transfer"], "rationale": "Direct match between bank record and participant IDs"},
-      "evidence": [EvidenceItem(source_type="news", source_content="Company promised 30% monthly returns", timestamp=datetime(...), confidence=0.8)],
+      "evidence": [SourceReferenceEvidence(source_type="news", source_content="Company promised 30% monthly returns", timestamp=datetime(...), confidence=0.8)],
       "extras": {"settlement_channel": "SWIFT", "transaction_hash": null}
     }
     """
@@ -236,7 +286,7 @@ class Transaction:
     # Encapsulated explanation describing why this transaction is recorded and its credibility basis.
     explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence list with exact `source_content` directly supporting the transaction (e.g., on-chain tx, bank record, news report).
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Extended metadata; e.g., settlement channel, transaction hash, batch identifier, parsing status.
     extras: Dict[str, Any] = field(default_factory=dict)
 
@@ -256,7 +306,7 @@ class Interaction:
       "approx_occurrences": 10,
       "frequency_descriptor": "several_per_week",
       "explain": {"reasons": ["high engagement"], "rationale": "Observed repeated posts with consistent claims"},
-      "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
+      "evidence": [SourceReferenceEvidence(source_type="social_media", source_content="Join now for 30% monthly returns!")],
       "thread_id": "thread_123",
       "reply_to_id": null,
       "extras": {"platform": "Weibo", "language": "zh"}
@@ -282,7 +332,7 @@ class Interaction:
     # Encapsulated explanation describing why this interaction is recorded and how it relates to the event.
     explain: FinancialExplain = field(default_factory=FinancialExplain)
     # Evidence list with exact `source_content`; examples: original post text, email body, news passage.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Thread identifier; used to link social media/forum context; None means no explicit thread.
     thread_id: Optional[str] = None
     # Reply target identifier; indicates the upstream message this interaction responds to.
@@ -302,7 +352,7 @@ class Action:
       "description": "Guaranteed 30% monthly returns",
       "explain": {"reasons": ["promotion", "marketing"], "rationale": "Outbound messaging campaign"},
       "outcomes": ["increased signups"],
-      "evidence": [EvidenceItem(source_type="social_media", source_content="Join now for 30% monthly returns!")],
+      "evidence": [SourceReferenceEvidence(source_type="social_media", source_content="Join now for 30% monthly returns!")],
       "extras": {"channel": "platform_feed"}
     }
     """
@@ -323,7 +373,7 @@ class Action:
     outcomes: List[str] = field(default_factory=list)
 
     # Evidence items backing this action; include exact source_content segments.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
 
     # Flexible metadata container for downstream models.
     extras: Dict[str, Any] = field(default_factory=dict)
@@ -349,7 +399,7 @@ class ParticipantState:
       "awareness_level": "suspicious",
       "context_tags": ["mobile_app"],
       "confidence": 0.7,
-      "evidence": [EvidenceItem(source_type="news", source_content="User reported suspicious behavior...")],
+      "evidence": [SourceReferenceEvidence(source_type="news", source_content="User reported suspicious behavior...")],
       "extras": {"note": "derived from platform logs"}
     }
     """
@@ -381,10 +431,10 @@ class ParticipantState:
     context_tags: List[str] = field(default_factory=list)
 
     # Confidence score and supporting evidence for this state.
-    # confidence: 0.0–1.0; evidence: EvidenceItem list with exact source_content.
+    # confidence: 0.0–1.0; evidence: SourceReferenceEvidence list with exact source_content.
     confidence: Optional[float] = None
     # Evidence items grounding this state; include precise source_content segments.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
 
     # Flexible container for any additional data (e.g., model confidence, source_content).
     extras: Dict[str, Any] = field(default_factory=dict)
@@ -414,7 +464,7 @@ class Participant:
       "relations": [],
       "preferences": {"risk_tolerance": "medium"},
       "experiences": {"prior_events": ["2015 restructuring"]},
-      "evidence": [EvidenceItem(source_type="news", source_content="Credit Suisse announced ...")],
+      "evidence": [SourceReferenceEvidence(source_type="news", source_content="Credit Suisse announced ...")],
       "extras": {"tags": ["tier1"]}
     }
     """
@@ -452,7 +502,7 @@ class Participant:
     alias_handles: Dict[str, List[str]] = field(default_factory=dict)
 
     # Explicit relationship edges to other participants in this event.
-    # Each relation captures type, directionality, temporal bounds, strength, status, tags/attributes, explain (FinancialExplain), and evidence (EvidenceItem) for auditability.
+    # Each relation captures type, directionality, temporal bounds, strength, status, tags/attributes, explain (FinancialExplain), and evidence (SourceReferenceEvidence) for auditability.
     relations: List[ParticipantRelation] = field(default_factory=list)
 
     # Stable cognitive or behavioral dispositions influencing decisions.
@@ -466,7 +516,7 @@ class Participant:
     # Evidence items directly supporting this participant record.
     # Use when the existence, attributes, or roles of the participant are grounded
     # in specific source content; include exact `source_content` segments.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
 
     # Flexible container for any additional structured or unstructured metadata.
     # Use for domain-specific extensions, model outputs, or temporary annotations.
@@ -503,7 +553,7 @@ class Episode:
       "actions": [Action(...)],
       "transactions": [Transaction(...)],
       "interactions": [Interaction(...)],
-      "evidence": [EvidenceItem(source_type="news", source_content:"...")],
+      "evidence": [SourceReferenceEvidence(source_type="news", source_content:"...")],
       "tags": ["high_pressure_sales"],
       "confidence_score": 0.8,
       "extras": {"analyst_notes": "high-pressure sales tactics"}
@@ -534,7 +584,7 @@ class Episode:
     # Messages/broadcasts within this episode; used for information diffusion analysis.
     interactions: List[Interaction] = field(default_factory=list)
     # Evidence supporting the episode's existence and boundaries; include exact `source_content`.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Thematic/semantic tags for clustering, filtering, and analysis; prefer controlled vocabularies.
     tags: List[str] = field(default_factory=list)
     # Confidence score (0.0–1.0); aggregate assessment of evidence quality, coverage, and consistency.
@@ -560,7 +610,7 @@ class EventStage:
       "group_metrics": {"new_victims": 120},
       "systemic_indicators": ["regulatory_attention"],
       "stage_drivers": ["media_amplification", "social_proof"],
-      "evidence": [EvidenceItem(source_type:"news", source_content:"...")],
+      "evidence": [SourceReferenceEvidence(source_type:"news", source_content:"...")],
       "tags": ["amplification_phase"],
       "confidence_score": 0.7,
       "extras": {"llm_summary": "..."}
@@ -605,7 +655,7 @@ class EventStage:
     stage_drivers: List[str] = field(default_factory=list)
 
     # Evidence items backing this stage; include exact source_content segments.
-    evidence: List[EvidenceItem] = field(default_factory=list)
+    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
     # Explicit thematic labels for grouping/analysis
     tags: List[str] = field(default_factory=list)
     confidence_score: float = 0.0
