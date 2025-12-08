@@ -11,6 +11,7 @@ import random
 import tempfile
 from pathlib import Path
 from loguru import logger
+import logging
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import datetime
@@ -208,7 +209,7 @@ class FinMyceliumWebInterface:
             )
 
         # with col2:
-        #     if st.button("Start Analysis", type="primary", use_container_width=True):
+        #     if st.button("Start Analysis", type="primary", width='stretch'):
         #         st.session_state.current_page = "Analysis"
         #         st.rerun()
 
@@ -260,7 +261,7 @@ class FinMyceliumWebInterface:
         input_methods = st.multiselect(
             "Select Additional Input Methods",
             options=["Keywords", "Structured Data"],
-            default=["Keywords"],
+            default=["Keywords", "Structured Data"],
             help="Supplement your case description with additional data",
         )
 
@@ -318,13 +319,13 @@ class FinMyceliumWebInterface:
             st.info(
                 f"📁 File '{st.session_state.uploaded_file_name}' is already uploaded. Clear existing data to upload a new file."
             )
+
             if st.button("Clear Uploaded Data"):
                 st.session_state.structured_data = None
                 st.session_state.uploaded_file_name = None
                 st.rerun()
-            st.dataframe(
-                st.session_state.structured_data.head(), use_container_width=True
-            )
+            st.markdown("First 5 rows of data:")
+            st.dataframe(st.session_state.structured_data.head(), width="stretch")
             return
 
         uploaded_file = st.file_uploader(
@@ -336,7 +337,13 @@ class FinMyceliumWebInterface:
         if uploaded_file:
             try:
                 if uploaded_file.name.endswith(".csv"):
-                    df = pd.read_csv(uploaded_file)
+                    try:
+                        df = pd.read_csv(uploaded_file, encoding="utf-8")
+                    except:
+                        try:
+                            df = pd.read_csv(uploaded_file, encoding="latin-1")
+                        except:
+                            df = pd.read_csv(uploaded_file, encoding="gbk")
                 elif uploaded_file.name.endswith(".xlsx"):
                     df = pd.read_excel(uploaded_file)
                 elif uploaded_file.name.endswith(".json"):
@@ -358,7 +365,7 @@ class FinMyceliumWebInterface:
                     return
 
                 st.success("✅ File uploaded successfully")
-                st.dataframe(df.head(), use_container_width=True)
+                st.dataframe(df.head(), width="stretch")
 
                 st.session_state.structured_data = df
                 st.session_state.uploaded_file_name = uploaded_file.name
@@ -371,7 +378,7 @@ class FinMyceliumWebInterface:
         col1, col2, col3 = st.columns([1, 1, 1])
 
         with col2:
-            if st.button("🚀 Start Analysis", type="primary", use_container_width=True):
+            if st.button("🚀 Start Analysis", type="primary", width="stretch"):
                 if self.validate_analysis_inputs():
                     self.run_analysis()
                 else:
@@ -504,16 +511,16 @@ class FinMyceliumWebInterface:
         # keywords -> MediaCollector (Get media info) -> filter -> clean data
         # Test Platform Crawler Manager
         # There is still something wrong currently
-        try:
-            print("=====================================")
-            print("Testing: PlatformCrawler")
-            print("=====================================")
-            platformcrawler = PlatformCrawler()
-            result = platformcrawler.run_crawler("wb", keywords, max_notes=5)
-            logger.info(f"Test result: {result}")
-            logger.info("Platform Crawler Manager test completed!")
-        except:
-            print("PlatformCrawler: Error!")
+        # try:
+        #     print("=====================================")
+        #     print("Testing: PlatformCrawler")
+        #     print("=====================================")
+        #     platformcrawler = PlatformCrawler()
+        #     result = platformcrawler.run_crawler("wb", keywords, max_notes=5)
+        #     logger.info(f"Test result: {result}")
+        #     logger.info("Platform Crawler Manager test completed!")
+        # except:
+        #     print("PlatformCrawler: Error!")
 
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
         # Bocha Search API test
@@ -638,78 +645,83 @@ class FinMyceliumWebInterface:
                 structured_data_urllink = []
                 structure_data_filepath = []
                 for index, row in st.session_state.structured_data.iterrows():
-                    title = row["title"]
-                    url = row["url"]
-                    # Check if URL is a web link or local file path
-                    if isinstance(url, str):
-                        # Web URL detection (basic check)
-                        if url.startswith(("http://", "https://", "www.")):
-                            # Process web URL
-                            # Repla ce with web URL processing logic
-                            results = parser.parse_urls([url])
-                            print(results)
-                            row = row.to_dict()
-                            row["parsed_content"] = (
-                                results[0]["content"] if results else []
-                            )
-                            structured_data_urllink.append(row)
+                    try:
+                        title = row["title"]
+                        url = row["url"]
+                        # Check if URL is a web link or local file path
+                        if isinstance(url, str):
+                            # Web URL detection (basic check)
+                            if url.startswith(("http://", "https://", "www.")):
+                                # Process web URL
+                                # Repla ce with web URL processing logic
+                                results = parser.parse_urls([url])
+                                print(results)
+                                row = row.to_dict()
+                                row["parsed_content"] = (
+                                    results[0]["content"] if results else []
+                                )
+                                structured_data_urllink.append(row)
+                            else:
+                                # Assume local file path
+
+                                if os.path.exists(url) and url.lower().endswith(".pdf"):
+
+                                    print("Processing local PDF file:", url)
+
+                                    # Here we need to write code to handle parameter input
+
+                                    output_dir = "./data/pdf_collector_output"
+                                    batch_size = 200
+                                    language = "en"
+                                    check_pdf_limits = True
+
+                                    config = {
+                                        # The directory to store output files
+                                        "output_dir": output_dir,
+                                        # The batch size for processing pdfs (max: 200)
+                                        "batch_size": batch_size,
+                                        # The language code for the document (e.g., "en" for English)
+                                        "language": language,
+                                        # Whether to check PDF size and page limits
+                                        "check_pdf_limits": check_pdf_limits,
+                                        # Path to the .env file for loading environment variables
+                                        "env_file": ".env",
+                                    }
+
+                                    # Create PDFCollectorInput object with keywords from command line or test keywords
+
+                                    keywords = keywords if keywords else []
+                                    pdf_collector_input = PDFCollectorInput(
+                                        # input_dir=args.input_dir,
+                                        input_pdf_path=url,
+                                        keywords=keywords,
+                                    )
+
+                                    # Initialize PDFCollector
+                                    parser_instance = PDFCollector(config)
+
+                                    # Run the main processing function
+                                    logging.info("  - Starting PDF processing...")
+
+                                    results = PDFCollectorOutput()
+
+                                    # Collect the parsed and filtered results
+                                    results = parser_instance.run(pdf_collector_input)
+
+                                    # Print final results summary
+                                    logging.info(
+                                        "  - Total PDFs parsed results after filtering: %d",
+                                        len(results.records),
+                                    )
+
                         else:
-                            # Assume local file path
-                            # Replace with your local file processing logic
-
-                            if os.path.exists(url) and url.lower().endswith(".pdf"):
-
-                                print("Processing local PDF file:", url)
-
-                                # Here we need to write code to handle parameter input
-
-                                output_dir = "output"
-                                batch_size = 200
-                                language = "en"
-                                check_pdf_limits = True
-
-                                config = {
-                                    # The directory to store output files
-                                    "output_dir": output_dir,
-                                    # The batch size for processing pdfs (max: 200)
-                                    "batch_size": batch_size,
-                                    # The language code for the document (e.g., "en" for English)
-                                    "language": language,
-                                    # Whether to check PDF size and page limits
-                                    "check_pdf_limits": check_pdf_limits,
-                                    # Path to the .env file for loading environment variables
-                                    "env_file": ".env",
-                                }
-
-                                # Create PDFCollectorInput object with keywords from command line or test keywords
-
-                                keywords = keywords if keywords else []
-                                pdf_collector_input = PDFCollectorInput(
-                                    # input_dir=args.input_dir,
-                                    input_pdf_path=url,
-                                    keywords=keywords,
-                                )
-
-                                # Initialize PDFCollector
-                                parser_instance = PDFCollector(config)
-
-                                # Run the main processing function
-                                logging.info("  - Starting PDF processing...")
-
-                                results = PDFCollectorOutput()
-
-                                # Collect the parsed and filtered results
-                                results = parser_instance.run(pdf_collector_input)
-
-                                # Print final results summary
-                                logging.info(
-                                    "  - Total PDFs parsed results after filtering: %d",
-                                    len(results.records),
-                                )
-
-                    else:
-                        st.warning(
-                            f"Row {index}: URL is not a string format. Skipping processing."
+                            st.warning(
+                                f"Row {index}: URL is not a string format. Skipping processing."
+                            )
+                    except:
+                        logging.info(
+                            "Processing error: %s",
+                            row["url"] if row["url"] else "No URL Provided",
                         )
 
                 timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -722,7 +734,7 @@ class FinMyceliumWebInterface:
                 with open(filepath, "w", encoding="utf-8") as f:
                     json.dump(structured_data_urllink, f, ensure_ascii=False, indent=4)
         except:
-            print("No structured_data")
+            print("There is something wrong with structured data processing!")
 
         # info_to_analyze = cleaned and filtered data from above steps
 
@@ -913,7 +925,7 @@ class FinMyceliumWebInterface:
         # Action buttons
         col1, col2, col3 = st.columns(3)
         with col2:
-            if st.button("🔄 New Analysis", use_container_width=True):
+            if st.button("🔄 New Analysis", width="stretch"):
                 st.session_state.analysis_results = None
                 st.session_state.current_page = "Analysis"
                 st.rerun()
