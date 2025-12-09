@@ -202,7 +202,7 @@ def summarize_user_query(
         SummarizedUserQuery object containing the summarized query
     """
     logger.info("Generating summarized query using Summarizer...")
-    summarizer = KWLMSummarizer({"llm_name": "deepseek/deepseek-chat"})
+    summarizer = KWLMSummarizer({"llm_name": "ARK/doubao-seed-1-6-flash-250828"})
     summarized_query = summarizer.summarize(user_query_input)
     logger.info(f"Summarized query created: {summarized_query}")
     logger.info("=" * 25)
@@ -245,7 +245,7 @@ def perform_llm_matching(match_input: MatchInput, logger: logging.Logger):
         Match output from the LLM matcher
     """
     logger.info("Performing matching using lm_matcher...")
-    lm_matcher = LLMMatcher(lm_name="deepseek/deepseek-chat")
+    lm_matcher = LLMMatcher(lm_name="ARK/doubao-seed-1-6-flash-250828")
     match_output = lm_matcher.run(match_input)
     logger.info(f"Matching result: {match_output}")
     logger.info("=" * 25)
