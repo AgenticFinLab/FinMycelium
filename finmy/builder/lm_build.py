@@ -40,7 +40,7 @@ Compliance and consistency:
 - Each JSON MUST strictly conform to the dataclass schema from the reference block.
 - Use ISO 8601 timestamps; currency must be ISO codes (e.g., "USD", "EUR", "BTC").
 - Participant IDs MUST be canonical: "P_" + 32 lowercase hex (uuid4.hex).
-- Interaction MUST include `medium`, `method`, `approx_occurrences` (approximate int), `frequency_descriptor` (text rate descriptor).
+- Interaction details should reflect medium/method/occurrence/frequency descriptors as supported by the source.
 - Attach at least one `SourceReferenceEvidence` (with `source_content`) to critical records for auditability.
 - If information is not present in `Content`, set fields to null or omit; do not fabricate.
 
@@ -52,7 +52,7 @@ Hard compliance mandate:
 - Validate internally that the final JSON would conform to the referenced dataclass schema before outputting.
 
 Schema categories (must be covered and sourced from `Content`):
-- Participant, ParticipantRelation, ParticipantState, Action, Transaction, Interaction, Episode, EventStage, EventCascade, SourceReferenceEvidence, FinancialInstrument
+- Participant, ParticipantRelation, Action, Transaction, Interaction, Episode, EventStage, EventCascade, SourceReferenceEvidence, VerifiableField, FinancialInstrument
 
 
 How to output (strict, single-file JSON):
@@ -61,44 +61,36 @@ How to output (strict, single-file JSON):
     Hierarchy (must be followed):
     EventCascade
       └── stages: List[EventStage]
-            ├── episodes: List[Episode]
-            │     ├── participants: List[Participant]
-            │     ├── actions: List[Action]
-            │     ├── transactions: List[Transaction]
-            │     ├── interactions: List[Interaction]
-            │     └── participant_states:List[ParticipantState]
-            ├── stage_actions: List[Action]
-            ├── transactions: List[Transaction]
-            ├── interactions: List[Interaction]
-            └── participant_states:List[ParticipantState]
+            └── episodes: List[Episode]
+                  ├── participants: List[Participant]
+                  ├── participant_relations: List[ParticipantRelation]
+                  ├── actions: { participant_id → List[Action] }
+                  ├── transactions: List[Transaction]
+                  └── interactions: List[Interaction]
             
     Example:
-    [
-      "stages":[
+    {
+      "stages": [
         {
-          "name":"",
-          "episodes":[
+          "name": "",
+          "episodes": [
             {
-              "participants":[{},{},{}],
-              "actions":[{},{},{}],
-              "transactions":[{},{},{}],
-              "interactions":[{},{},{}],
-              "participant_states:[{},{},{}],
-            },
+              "participants": [{}, {}, {}],
+              "participant_relations": [{}, {}, {}],
+              "actions": { "P_A": [{}, {}] },
+              "transactions": [{}, {}, {}],
+              "interactions": [{}, {}, {}]
+            }
           ]
-          "stage_actions":[{},{},{}],
-          "transactions":[{},{},{}],
-          "interactions":[{},{},{}],
-          "participant_states":[{},{},{}]
         }
       ]
-    ]
+    }
       
 
 Extraction and validation process:
 1) Scope alignment using `Description` and `Keywords`; ignore unrelated content.
 2) Identify participants, roles, relations, transactions, interactions, evidence, episodes, and stage evolution from `Content`.
-3) Construct timelines: sort stages by `stage_index`; sort participant snapshots by `timestamp`.
+3) Construct timelines: sort stages by `stage_index`; sort actions/transactions/interactions by `timestamp`.
 4) Reasons/rationale only where supported by `Content`; do not guess.
 5) Evidence linking: attach `SourceReferenceEvidence` to critical objects/events (with `source_content`).
 6) Normalization: ISO timestamps, ISO currency codes; `participant_id` must be "P_"+uuid4.hex; Interaction fields reflect the source.
@@ -259,21 +251,19 @@ class LMBuilder(BaseBuilder):
         print(f"Saved main event cascade to: {main_file}")
 
         # Save stages separately if they exist in the structure
-        if (
-            "EventCascade.json" in event_data
-            and "stages" in event_data["EventCascade.json"]
-        ):
+        if "stages" in event_data:
             stages_dir = os.path.join(base_dir, "stages")
             os.makedirs(stages_dir, exist_ok=True)
 
-            stages = event_data["EventCascade.json"]["stages"]
-            for stage_id, stage_data in stages.items():
-                if isinstance(stage_data, dict):
-                    # Handle nested stage structure
-                    stage_file = os.path.join(stages_dir, f"{stage_id}.json")
-                    with open(stage_file, "w", encoding="utf-8") as f:
-                        json.dump(stage_data, f, ensure_ascii=False, indent=2)
-                    print(f"✓ Saved stage {stage_id} to: {stage_file}")
+            stages = event_data["stages"]
+            if isinstance(stages, list):
+                for idx, stage in enumerate(stages):
+                    if isinstance(stage, dict):
+                        sid = stage.get("stage_id", f"S{idx+1}")
+                        stage_file = os.path.join(stages_dir, f"{sid}.json")
+                        with open(stage_file, "w", encoding="utf-8") as f:
+                            json.dump(stage, f, ensure_ascii=False, indent=2)
+                        print(f"✓ Saved stage {sid} to: {stage_file}")
 
         return base_dir
 

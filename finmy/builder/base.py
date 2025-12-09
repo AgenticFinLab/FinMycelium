@@ -9,37 +9,7 @@ from typing import Optional, Any, Dict, List
 
 from finmy.generic import UserQueryInput
 from finmy.generic import MetaSample
-from finmy.builder.structure import EventCascade, EventStage, ParticipantState
-
-
-def build_participant_states_map(
-    stages: List[EventStage],
-) -> Dict[str, List[ParticipantState]]:
-    """Merge stage-level and episode-level states into a global map keyed by participant_id.
-
-    Returns a mapping `participant_id -> List[ParticipantState]` sorted by timestamp.
-    """
-
-    states_by_participant: Dict[str, List[ParticipantState]] = {}
-    for stage in stages or []:
-        for pid, states in (stage.participant_states or {}).items():
-            states_by_participant.setdefault(pid, []).extend(states or [])
-        for episode in stage.episodes or []:
-            for pid, states in (episode.participant_states or {}).items():
-                states_by_participant.setdefault(pid, []).extend(states or [])
-
-    for pid, arr in states_by_participant.items():
-        arr.sort(key=lambda s: s.timestamp)
-
-    return states_by_participant
-
-
-def build_participant_states_map_from_event(
-    event: EventCascade,
-) -> Dict[str, List[ParticipantState]]:
-    """Convenience wrapper to derive participant states map from an EventCascade."""
-
-    return build_participant_states_map(event.stages or [])
+from finmy.builder.structure import EventCascade
 
 
 @dataclass
