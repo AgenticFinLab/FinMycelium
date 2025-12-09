@@ -11,7 +11,11 @@ How to run:
 
 from pathlib import Path
 
-from finmy.builder.utils import load_python_text, extract_dataclass_blocks
+from finmy.builder.utils import (
+    load_python_text,
+    extract_dataclass_blocks,
+    filter_dataclass_fields,
+)
 
 
 def test_load_python_text_structure_path() -> str:
@@ -75,6 +79,40 @@ class Holder:
     assert "class Beta" in blocks
 
 
+def test_filter_stage_episode_minimal(code_text: str):
+    """
+    Test the code of filtering out the unnecessary fields of the dataclass.
+    """
+    filtered = filter_dataclass_fields(
+        code_text,
+        {
+            "EventStage": ["stage_id", "name", "index_in_event"],
+            "Episode": ["episode_id", "name", "index_in_stage"],
+            "EventCascade": [],
+        },
+    )
+    print(filtered)
+    assert "class EventStage" in filtered
+    assert (
+        "stage_id" in filtered and "name" in filtered and "index_in_event" in filtered
+    )
+    assert "Descriptive name" in filtered
+    assert "Zero-based index" in filtered
+    assert "episodes:" not in filtered
+    assert "class Episode" in filtered
+    assert (
+        "episode_id" in filtered and "name" in filtered and "index_in_stage" in filtered
+    )
+    assert "Locally unique identifier" in filtered
+    assert "Zero-based index within the owning stage" in filtered
+    assert "Example:" in filtered
+    assert (
+        "participants:" not in filtered
+        and "transactions:" not in filtered
+        and "interactions:" not in filtered
+    )
+
+
 if __name__ == "__main__":
     failures = []
     try:
@@ -104,5 +142,12 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[FAIL] test_extract_from_inline_spec_union_and_optional: {e}")
         failures.append("test_extract_from_inline_spec_union_and_optional")
+
+    try:
+        test_filter_stage_episode_minimal(code_text)
+        print("[PASS] test_filter_stage_episode_minimal")
+    except Exception as e:
+        print(f"[FAIL] test_filter_stage_episode_minimal: {e}")
+        failures.append("test_filter_stage_episode_minimal")
 
     raise SystemExit(1 if failures else 0)

@@ -30,9 +30,7 @@ EventCascade
     - If yes, accept the episode and move to the next one.
 
 
-Although we do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
-
-
+We do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
 """
 
 from pathlib import Path
@@ -78,21 +76,24 @@ _STRUCTURE_SPEC = (
 
 
 class StepWiseEventBuilder(BaseBuilder):
+    """A builder to build the financial event in a step-by-step manner."""
+
     def __init__(
         self,
         lm_name: str = "deepseek/deepseek-chat",
-        config: Dict[str, Any] = {},
+        config: Dict[str, Any] = None,
     ):
         super().__init__(
             method_name="step_wise_builder", config={"lm_name": lm_name, **config}
         )
-        cfg = config.get("layout_creator", {})
-        generation_config = cfg.get("generation_config", {})
+        # Obtain the layout config
+        self.layout_config = config["layout_creator"]
+        # First set the llm with the generation config from the layout
+        # because the layout creator will be the first step.
         self.lm_api = api_call.LangChainAPIInference(
             lm_name=lm_name,
-            generation_config=generation_config,
+            generation_config=self.layout_config["generation_config"],
         )
-        self.output_dir = cfg.get("output_dir", "./data/event_structure_output")
 
     def _compose(self, description: str, keywords: str, content: str) -> Dict[str, Any]:
         sys_prompt = prompts.EventLayoutCreatorSys.format(
