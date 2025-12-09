@@ -1,26 +1,26 @@
 """
-Utilities for extracting dataclass schema blocks from Python source (structure.py).
+Utilities for extracting dataclass schema blocks from Python source.
 
 This module provides helpers to:
-- Load the authoritative dataclass definitions used by builders and prompts
+- Load Python source text from a file path (defaults to `structure.py` for convenience)
 - Extract either all dataclass blocks or a specific subset plus their transitive
   dataclass dependencies referenced in field type annotations
 
 Usage examples:
 
 1) Extract all dataclass definitions
-   >>> from finmy.builder.utils import load_structure_dataclasses_text, extract_dataclass_blocks
-   >>> spec = load_structure_dataclasses_text()  # reads finmy/builder/structure.py by default
+   >>> from finmy.builder.utils import load_python_text, extract_dataclass_blocks
+   >>> spec = load_python_text()  # reads finmy/builder/structure.py by default
    >>> blocks = extract_dataclass_blocks(spec, mode="all")
    >>> print(blocks[:200])
 
 2) Extract a specific dataclass and its referenced dataclass dependencies
-   >>> spec = load_structure_dataclasses_text()
+   >>> spec = load_python_text()
    >>> blocks = extract_dataclass_blocks(spec, mode="single", target_classes=["Episode"])
    >>> print(blocks)
 
 3) Use custom path (e.g., different schema file)
-   >>> spec = load_structure_dataclasses_text(path="/abs/path/to/another_structure.py")
+   >>> spec = load_python_text(path="/abs/path/to/another_structure.py")
    >>> blocks = extract_dataclass_blocks(spec)
 
 Notes:
@@ -34,17 +34,37 @@ from pathlib import Path
 from typing import Optional, List, Set, Dict, Any
 
 
-def load_structure_dataclasses_text(path: Optional[str | Path] = None) -> str:
-    """Load the dataclass schema source text.
+def load_python_text(path: Optional[str | Path] = None) -> str:
+    """Load Python source text.
 
-    Parameters:
-    - path: Optional path to the schema file. Defaults to finmy/builder/structure.py.
+    Behavior:
+    - If `path` is None: load and concatenate all `*.py` files under the `builder` directory
+      (i.e., the directory where this module resides).
+    - If `path` is a file: load that file.
+    - If `path` is a directory: load and concatenate all `*.py` files within it.
 
-    Returns: Full file content as a string. Empty string on failure.
+    Returns: Full file content as a single string. Empty string on failure.
     """
-    p = Path(path) if path is not None else (Path(__file__).parent / "structure.py")
+    base_dir = Path(__file__).parent
+    if path is None:
+        try:
+            contents = []
+            for py in sorted(base_dir.glob("*.py")):
+                contents.append(py.read_text(encoding="utf-8"))
+            return "\n".join(contents)
+        except Exception:
+            return ""
+
+    p = Path(path)
     try:
-        return p.read_text(encoding="utf-8")
+        if p.is_file():
+            return p.read_text(encoding="utf-8")
+        if p.is_dir():
+            contents = []
+            for py in sorted(p.glob("*.py")):
+                contents.append(py.read_text(encoding="utf-8"))
+            return "\n".join(contents)
+        return ""
     except Exception:
         return ""
 
