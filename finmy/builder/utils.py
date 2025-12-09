@@ -28,10 +28,10 @@ Notes:
   regex-based method that simply concatenates all @dataclass blocks.
 """
 
-from pathlib import Path
-from typing import Optional, List, Set, Dict, Any
 import re
 import ast
+from pathlib import Path
+from typing import Optional, List, Set, Dict, Any
 
 
 def load_structure_dataclasses_text(path: Optional[str | Path] = None) -> str:
