@@ -8,7 +8,6 @@ This method is to reconstruction the financial event purely by prompting a singl
 """
 
 import re
-from pathlib import Path
 import json
 import os
 from datetime import datetime
@@ -20,6 +19,10 @@ from lmbase.inference import api_call
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.converter import read_text_data_from_block
+from finmy.builder.utils import (
+    load_structure_dataclasses_text,
+    extract_dataclass_blocks,
+)
 
 
 SYSTEM_PROMPT = """
@@ -146,22 +149,11 @@ where the 'id' is the ID assigned to the generation defined classes.
 """
 
 
-def _load_structure_dataclasses() -> str:
-    p = Path(__file__).parent / "structure.py"
-    try:
-        return p.read_text(encoding="utf-8")
-    except Exception:
-        return ""
-
-
-def _extract_dataclass_blocks(spec: str) -> str:
-    blocks = re.findall(r"@dataclass[\s\S]*?(?=\n@dataclass|\Z)", spec)
-    return ("\n".join(blocks)).strip()
-
-
-_STRUCTURE_SPEC_FULL = _load_structure_dataclasses()
+_STRUCTURE_SPEC_FULL = load_structure_dataclasses_text()
 _STRUCTURE_SPEC = (
-    _extract_dataclass_blocks(_STRUCTURE_SPEC_FULL) if _STRUCTURE_SPEC_FULL else ""
+    extract_dataclass_blocks(_STRUCTURE_SPEC_FULL, mode="all")
+    if _STRUCTURE_SPEC_FULL
+    else ""
 )
 SYSTEM_PROMPT = SYSTEM_PROMPT.replace("xxxxxx", _STRUCTURE_SPEC_FULL)
 

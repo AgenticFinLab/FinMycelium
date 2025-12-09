@@ -57,8 +57,8 @@ class SourceReferenceEvidence:
 
     # Exact original text snippet (no rewriting) that supports a specific setting/assignment; clearly include the precise source text that justifies it.
     source_content: str = ""
-    # Encapsulated explanation for why this source_content was selected as evidence.
-    # reasons should indicate selection criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe) to present detailed rationals.
+    # Encapsulated explanation for why this source_content was selected as evidence and how its support justifies the assigned value.
+    # reasons should indicate selection and support criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe) to present detailed rationals.
     reasons: List[str] = field(default_factory=list)
     # Confidence score in [0.0, 1.0] reflecting confidence of applying reasons for the source content selection as the evidence.
     confidence: Optional[float] = None
