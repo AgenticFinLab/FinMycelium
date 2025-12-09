@@ -9,17 +9,48 @@ from typing import Literal
 # grounded in academic theory and major historical precedents.
 # =============================================================================
 
+from typing import Literal
+
 SupportedFinancialScenario = Literal[
     # Classic Deposit Institution Crises
     # -------------------------------
     # Bank Run: A self-fulfilling loss of confidence leading to mass withdrawal of funds from a solvent but illiquid institution.
     #   Example: Silicon Valley Bank collapse (2023); Northern Rock (2007).
     "Bank Run",
-    # Fraudulent Investment Schemes
-    # ----------------------------
+    # Fraudulent Investment & Business Schemes
+    # ---------------------------------------
     # Ponzi Scheme: A fraudulent operation paying returns to earlier investors from funds of later investors, not from profit.
     #   Example: Bernie Madoff investment scandal (2008); Stanford Financial (2009).
     "Ponzi Scheme",
+    # Pyramid Scheme: A business model focusing on recruiting members with promises of payment for enrolling others, rather than from legitimate product/service sales.
+    "Pyramid Scheme",
+    # Market Manipulation & Fraud
+    # ---------------------------
+    # Market Manipulation: Deliberate actions to distort prices or create false market activity (e.g., spoofing, wash trades).
+    #   Example: Jordan Belfort's Stratton Oakmont (1990s); spoofing cases prosecuted by DOJ.
+    "Market Manipulation",
+    # Pump and Dump: Artificially inflating the price of an owned stock/asset through false/misleading statements, to sell at a higher price.
+    "Pump and Dump",
+    # Insider Trading: Trading based on material, nonpublic information in breach of trust or fiduciary duty.
+    "Insider Trading",
+    # Corporate & Accounting Fraud
+    # ----------------------------
+    # Accounting Fraud: Intentional misrepresentation of financial health through fictitious revenues, hidden liabilities, or forged documentation.
+    #   Example: Enron off-balance-sheet entities (2001); Wirecard fake cash balances (2020).
+    "Accounting Fraud",
+    # Embezzlement / Misappropriation of Funds: Theft or misuse of funds placed in one's trust or belonging to an employer/client.
+    "Embezzlement or Misappropriation of Funds",
+    # Other Fraudulent Schemes & Scams
+    # --------------------------------
+    # Advance-Fee Fraud: Persuading a victim to pay an upfront fee for a larger sum or valuable item that never materializes.
+    "Advance-Fee Fraud",
+    # Affinity Fraud: A scam targeting members of identifiable groups (e.g., race, religion, age), exploiting trust within that community.
+    "Affinity Fraud",
+    # Cryptocurrency / ICO Scam: A fraudulent scheme related to initial coin offerings or cryptocurrencies, including fake exchanges, wallet theft, or deceptive token sales.
+    #   Example: Many fraudulent ICOs during the 2017-2018 boom; FTX (2022) involved elements of this.
+    "Cryptocurrency or ICO Scam",
+    # Forex / Binary Options Fraud: Fraudulent practices in forex or binary options trading, such as manipulating trading software, misappropriating funds, or operating unregistered entities.
+    "Forex or Binary Options Fraud",
     # Equity Market Dynamics
     # ----------------------
     # Short Squeeze: A rapid price increase triggered when short sellers cover positions amid rising prices and margin pressure.
@@ -35,11 +66,6 @@ SupportedFinancialScenario = Literal[
     # Liquidity Spiral: A self-reinforcing cycle where asset price declines force leveraged entities to sell, further depressing prices.
     #   Example: Global financial crisis margin spiral (2008); March 2020 "dash for cash".
     "Liquidity Spiral",
-    # Market Integrity Violations
-    # ---------------------------
-    # Market Manipulation: Deliberate actions to distort prices or create false market activity.
-    #   Example: Jordan Belfort's Stratton Oakmont (1990s); spoofing cases prosecuted by DOJ.
-    "Market Manipulation",
     # Regulatory and Structural Arbitrage
     # ----------------------------------
     # Regulatory Arbitrage: Exploiting differences in regulatory regimes to reduce capital, liquidity, or reporting requirements.
@@ -55,11 +81,6 @@ SupportedFinancialScenario = Literal[
     # Systemic Shock: A sudden, severe external shock that propagates across multiple financial markets and institutions.
     #   Example: Lehman Brothers bankruptcy (2008); global pandemic market crash (2020).
     "Systemic Shock",
-    # Financial Statement Fraud
-    # -------------------------
-    # Accounting Fraud: Intentional misrepresentation of financial health through fictitious revenues, hidden liabilities, or forged documentation.
-    #   Example: Enron off-balance-sheet entities (2001); Wirecard fake cash balances (2020).
-    "Accounting Fraud",
     # Endogenous Leverage Cycles
     # --------------------------
     # Leverage Cycle Collapse: The implosion of a highly leveraged entity or sector when funding conditions reverse.
@@ -70,6 +91,10 @@ SupportedFinancialScenario = Literal[
     # Stablecoin Depeg: Loss of parity between a stablecoin and its reference asset (e.g., USD), triggering redemption pressure.
     #   Example: TerraUSD (UST) collapse (2022); USDC depeg during Silicon Valley Bank crisis (2023).
     "Stablecoin Depeg",
+    # Catch-All for Unclassified Financial Deception
+    # -----------------------------------------------
+    # Other Financial Scam: Use only if the event involves clear financial deception but does not fit any of the above categories.
+    "Other Financial Scam",
 ]
 
 # =============================================================================
