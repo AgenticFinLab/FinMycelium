@@ -35,6 +35,7 @@ Although we do not introduce the idea of the multi-agent system, we indeed have 
 
 """
 
+from pathlib import Path
 import re
 import json
 import os
@@ -66,7 +67,9 @@ from finmy.builder.utils import (
 )
 
 
-_STRUCTURE_SPEC_FULL = load_python_text()
+_STRUCTURE_SPEC_FULL = load_python_text(
+    path=Path(__file__).resolve().parents[1] / "structure.py"
+)
 _STRUCTURE_SPEC = (
     extract_dataclass_blocks(_STRUCTURE_SPEC_FULL, mode="all")
     if _STRUCTURE_SPEC_FULL

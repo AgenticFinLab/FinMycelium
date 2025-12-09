@@ -10,6 +10,7 @@ This method is to reconstruction the financial event purely by prompting a singl
 import re
 import json
 import os
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
 
@@ -19,8 +20,9 @@ from lmbase.inference import api_call
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.converter import read_text_data_from_block
+
 from finmy.builder.utils import (
-    load_structure_dataclasses_text,
+    load_python_text,
     extract_dataclass_blocks,
 )
 
@@ -149,7 +151,9 @@ where the 'id' is the ID assigned to the generation defined classes.
 """
 
 
-_STRUCTURE_SPEC_FULL = load_structure_dataclasses_text()
+_STRUCTURE_SPEC_FULL = load_python_text(
+    path=Path(__file__).resolve().parents[1] / "structure.py"
+)
 _STRUCTURE_SPEC = (
     extract_dataclass_blocks(_STRUCTURE_SPEC_FULL, mode="all")
     if _STRUCTURE_SPEC_FULL

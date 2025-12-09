@@ -2,7 +2,7 @@
 Utilities for extracting dataclass schema blocks from Python source.
 
 This module provides helpers to:
-- Load Python source text from a file path (defaults to `structure.py` for convenience)
+- Load Python source text from a required file or directory path
 - Extract either all dataclass blocks or a specific subset plus their transitive
   dataclass dependencies referenced in field type annotations
 
@@ -10,18 +10,18 @@ Usage examples:
 
 1) Extract all dataclass definitions
    >>> from finmy.builder.utils import load_python_text, extract_dataclass_blocks
-   >>> spec = load_python_text()  # reads finmy/builder/structure.py by default
-   >>> blocks = extract_dataclass_blocks(spec, mode="all")
+   >>> code_text = load_python_text(path="/abs/path/to/structure.py")
+   >>> blocks = extract_dataclass_blocks(code_text, mode="all")
    >>> print(blocks[:200])
 
 2) Extract a specific dataclass and its referenced dataclass dependencies
-   >>> spec = load_python_text()
-   >>> blocks = extract_dataclass_blocks(spec, mode="single", target_classes=["Episode"])
+   >>> code_text = load_python_text(path="/abs/path/to/structure.py")
+   >>> blocks = extract_dataclass_blocks(code_text, mode="single", target_classes=["Episode"])
    >>> print(blocks)
 
-3) Use custom path (e.g., different schema file)
-   >>> spec = load_python_text(path="/abs/path/to/another_structure.py")
-   >>> blocks = extract_dataclass_blocks(spec)
+3) Use directory path to aggregate multiple Python files
+   >>> code_text = load_python_text(path="/abs/path/to/builder/")
+   >>> blocks = extract_dataclass_blocks(code_text)
 
 Notes:
 - When AST parsing fails (e.g., due to incomplete code), the extractor falls back to a
@@ -31,30 +31,18 @@ Notes:
 import re
 import ast
 from pathlib import Path
-from typing import Optional, List, Set, Dict, Any
+from typing import List, Set, Dict, Any, Optional
 
 
-def load_python_text(path: Optional[str | Path] = None) -> str:
-    """Load Python source text.
+def load_python_text(path: str | Path) -> str:
+    """Load Python source text from a required path.
 
     Behavior:
-    - If `path` is None: load and concatenate all `*.py` files under the `builder` directory
-      (i.e., the directory where this module resides).
     - If `path` is a file: load that file.
     - If `path` is a directory: load and concatenate all `*.py` files within it.
 
     Returns: Full file content as a single string. Empty string on failure.
     """
-    base_dir = Path(__file__).parent
-    if path is None:
-        try:
-            contents = []
-            for py in sorted(base_dir.glob("*.py")):
-                contents.append(py.read_text(encoding="utf-8"))
-            return "\n".join(contents)
-        except Exception:
-            return ""
-
     p = Path(path)
     try:
         if p.is_file():
@@ -70,14 +58,14 @@ def load_python_text(path: Optional[str | Path] = None) -> str:
 
 
 def extract_dataclass_blocks(
-    spec: str,
+    code_text: str,
     mode: str = "all",
     target_classes: Optional[List[str]] = None,
 ) -> str:
     """Extract dataclass blocks from Python source.
 
     Parameters:
-    - spec: Full Python source text containing @dataclass definitions
+    - code_text: Full Python source text containing @dataclass definitions
     - mode:
         - "all": return all dataclass blocks
         - "single": return only the target dataclass blocks and any dataclass
@@ -93,12 +81,12 @@ def extract_dataclass_blocks(
     - Falls back to regex if AST parsing fails
     """
 
-    lines = spec.splitlines()
+    lines = code_text.splitlines()
 
     try:
-        tree = ast.parse(spec)
+        tree = ast.parse(code_text)
     except SyntaxError:
-        blocks = re.findall(r"@dataclass[\s\S]*?(?=\n@dataclass|\Z)", spec)
+        blocks = re.findall(r"@dataclass[\s\S]*?(?=\n@dataclass|\Z)", code_text)
         return ("\n".join(blocks)).strip()
 
     def is_dataclass(node: ast.ClassDef) -> bool:
