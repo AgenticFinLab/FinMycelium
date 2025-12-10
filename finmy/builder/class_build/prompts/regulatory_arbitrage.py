@@ -1,125 +1,149 @@
 
-def regulatory_arbitrage_prompt(text: str) -> str:
+def regulatory_arbitrage_prompt() -> str:
     return """
-You are an expert financial analyst, regulatory specialist, and forensic investigator specializing in deconstructing and simulating complex financial events involving regulatory arbitrage. Your task is to reconstruct a complete, detailed, and fact-based narrative of a specified regulatory arbitrage event based on the provided multi-source data (e.g., parsed web content, PDF documents, news articles, regulatory filings, academic papers, court documents).
+You are a senior financial regulatory analyst and forensic investigator specializing in detecting and reconstructing complex regulatory arbitrage schemes. Your expertise spans global financial regulations, banking supervision, capital markets, and shadow banking activities.
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of the regulatory arbitrage scheme. Your output must be a structured JSON that meticulously documents the event's background, design, execution, discovery, and consequences, with a focus on how regulatory gaps or differences were exploited.
+**Core Objective:**
+Comprehensively analyze provided multi-source data to reconstruct a specific case of "Regulatory Arbitrage" — where entities deliberately exploit gaps, differences, or inconsistencies in regulations across jurisdictions, sectors, or product definitions to gain an unfair competitive advantage, reduce regulatory costs (e.g., capital, liquidity, or reporting requirements), or conceal risk. Your output must detail the strategy's design, execution, enablers, economic impact, and ultimate resolution.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Fact-Based Synthesis**: Integrate information from all provided sources. Resolve contradictions by prioritizing official regulatory reports, court judgments, and audited financial statements. Note significant discrepancies in the `simulation_analysis_notes.data_discrepancies` field.
-2.  **Temporal & Causal Logic**: Maintain a strict chronological order. Explicitly link (a) regulatory environments and loopholes to the scheme's design, (b) the execution strategy to its financial and market impact, and (c) triggering events to the eventual unwinding or crackdown.
-3.  **Financial & Regulatory Logic**: Clearly model the capital, risk, liquidity, or reporting advantages sought versus the actual economic substance. Distinguish between *claimed compliance* and *actual regulatory exposure*. Quantify impacts where possible.
-4.  **Multi-Actor Perspective**: Analyze the event from the perspectives of the executing entity, regulators, investors, counterparties, and the broader financial system.
+**Data Input:**
+You will receive raw text/data from sources such as regulatory reports, enforcement actions, academic papers, financial news, and internal documents related to a specific case (e.g., "Certain banks' use of SIVs pre-2008", "Cross-border capital requirement arbitrage", "Structured product repackaging to achieve favorable capital treatment"). Synthesize this information, resolve discrepancies, and base your analysis on the most reliable facts.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+**Output Format Requirements:**
+You MUST output a single, well-structured JSON object. Use the exact field names specified below. All values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any text outside the JSON.
+
+**Comprehensive JSON Schema and Field Definitions for Regulatory Arbitrage:**
 
 ```json
 {
-  "regulatory_arbitrage_simulation_report": {
+  "regulatory_arbitrage_case": {
     "metadata": {
-      "event_name": "string | The commonly recognized name of the event (e.g., 'The London Whale', 'Certain Structured Investment Vehicle (SIV) activities pre-2008').",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation (e.g., '2025-12-09').",
-      "data_sources_summary": "array[string] | Brief list of primary data sources used (e.g., ['SEC Final Order 34-12345', 'Basel Committee Report on Banking Supervision', 'Company 10-K Filing for FY20XX', 'Senate Subcommittee Hearing Transcript']).",
-      "primary_jurisdictions_involved": "array[string] | List of countries/regions where the arbitrage was executed or whose regulations were central (e.g., ['United States', 'European Union', 'United Kingdom', 'Offshore Financial Center X']).",
-      "core_financial_sectors": "array[string] | Relevant financial sectors (e.g., ['Banking', 'Shadow Banking', 'Insurance', 'Securitization', 'Derivatives Trading'])."
+      "case_identifier": "string: The common name or descriptor for the arbitrage case (e.g., 'Eurozone Bank Sovereign Debt Capital Arbitrage 2010-2012').",
+      "primary_jurisdictions_involved": "array: List of countries/regions whose regulatory systems were central to the arbitrage strategy.",
+      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) for this analysis.",
+      "data_sources_summary": "string: Brief description of input sources (e.g., 'Basel Committee reports, ECB working papers, enforcement orders from SEC and FCA').",
+      "relevant_regulatory_regimes": "array: List of the specific regulations, rules, or regimes being arbitraged (e.g., ['Basel II Capital Framework', 'US GAAP vs IFRS accounting rules', 'EU Insurance Solvency II vs Bank Capital Requirements'])."
     },
-    "1_overview": {
-      "executive_summary": "string | A concise 3-5 sentence summary: the entity involved, the regulatory loophole exploited, the financial mechanic used, the scale, and the ultimate outcome (e.g., market loss, regulatory action, system-wide impact).",
-      "event_lifecycle": {
-        "design_and_inception_period": "string (YYYY-YYYY) | Period when the arbitrage strategy was conceived and initially deployed.",
-        "active_exploitation_period": "string (YYYY-YYYY) | Period during which the strategy was actively used to gain advantage.",
-        "crisis_unwind_discovery_date": "string (YYYY-MM-DD or YYYY-MM) | Key date(s) when the strategy failed, was discovered by regulators, or began to unravel publicly.",
-        "resolution_period": "string (YYYY-YYYY) | Period of regulatory response, legal proceedings, and market adjustment."
+    "overview": {
+      "summary": "string: A concise 3-5 sentence summary explaining the core arbitrage strategy, participating entities, regulatory targets, and final outcome.",
+      "arbitrage_type_classification": "array: Categorize the arbitrage. Options include: 'Capital Requirement Arbitrage', 'Liquidity Requirement Arbitrage', 'Accounting/Tax Arbitrage', 'Reporting/Disclosure Arbitrage', 'Legal Entity/Booking Arbitrage', 'Product/Activity Reclassification Arbitrage'.",
+      "primary_motivation": "string: The key financial or strategic driver (e.g., 'Boost Return on Equity (ROE) by reducing risk-weighted assets', 'Avoid costly liquidity coverage ratio compliance', 'Delay loss recognition').",
+      "total_active_duration_months": "number: Approximate duration from strategy initiation to unwinding or regulatory closure, in months.",
+      "was_cross_border": "boolean: True if the strategy fundamentally relied on differences between national regulations.",
+      "was_cross_sectoral": "boolean: True if the strategy exploited differences between regulatory treatments of banks, insurers, asset managers, etc."
+    },
+    "participating_entities": {
+      "arbitrage_designers_and_users": [
+        {
+          "entity_name": "string: Name of the financial institution or firm (e.g., 'Bank XYZ', 'Hedge Fund ABC').",
+          "entity_type": "string: e.g., 'Global Systemically Important Bank (G-SIB)', 'Shadow Banking Entity', 'Special Purpose Vehicle (SPV)'.",,
+          "primary_role": "string: Specific function (e.g., 'Originator of assets', 'Sponsor of conduit', 'Beneficial owner of arbitrage structure').",
+          "headquarters_jurisdiction": "string: Home country of the entity.",
+          "booking_location": "string: Jurisdiction where the arbitrage transaction was legally booked, if different."
+        }
+      ],
+      "enablers_and_counterparties": [
+        {
+          "entity_name": "string: e.g., law firm, auditor, rating agency, swap counterparty.",
+          "enabler_type": "string: e.g., 'Legal Advisor', 'Accounting Firm', 'Credit Rating Agency', 'Derivatives Provider'.",
+          "role_description": "string: How they facilitated the arbitrage (e.g., 'Provided legal opinion on true sale', 'Assigned high rating to structured tranche', 'Executed total return swap to transfer risk')."
+        }
+      ],
+      "regulatory_bodies_affected": [
+        {
+          "regulator_name": "string: e.g., 'Prudential Regulation Authority (PRA)', 'Securities and Exchange Commission (SEC)'.",,
+          "jurisdiction": "string",
+          "regime_circumvented": "string: The specific rule or requirement from this regulator that was circumvented."
+        }
+      ]
+    },
+    "arbitrage_mechanism_design": {
+      "targeted_regulatory_requirement": {
+        "requirement_name": "string: e.g., 'Basel II Credit Risk Capital Charge', 'Dodd-Frank Swaps Push-Out Rule'.",,
+        "formal_requirement": "string: Description of what the regulation formally required under the standard interpretation.",
+        "intended_economic_substance": "string: The regulatory goal (e.g., 'Hold capital commensurate with credit risk', 'Ensure transparency of derivatives exposure')."
+      },
+      "technical_execution_structure": "string: Detailed, step-by-step explanation of the financial, legal, or accounting structure used (e.g., 'Bank originated loans, sold them to an off-balance-sheet SPV it sponsored. The SPV funded itself by issuing ABCP. Bank provided a liquidity backstop and retained first loss exposure via a credit derivative, but under GAAP and Basel rules, the loans were considered sold, removing RWA.').",
+      "key_instruments_used": "array: List of financial instruments central to the structure (e.g., ['Credit Default Swaps (CDS)', 'Total Return Swaps', 'Asset-Backed Commercial Paper (ABCP)', 'Collateralized Loan Obligations (CLO) Tranches']).",
+      "exploited_regulatory_gap_or_difference": "string: Precise description of the inconsistency exploited (e.g., 'Difference between Basel I's broad-brush risk weights and Basel II's internal ratings-based approach for sovereign debt', 'GAAP allowed off-balance-sheet treatment for Qualifying Special Purpose Entities (QSPEs) even with retained risk', 'EU insurance capital charges for certain bonds were lower than bank capital charges, enabling re-packaging via insurers').",
+      "claimed_economic_substance_vs_legal_form": "string: Contrast between the economic reality (risk retention, de facto control) and the legal/accounting treatment achieved (risk transfer, off-balance-sheet)."
+    },
+    "financial_scale_and_impact_analysis": {
+      "scale_of_activity": {
+        "peak_notional_exposure_arbitraged": "number: Estimate of the total notional value of assets/transactions involved in the arbitrage strategy at its peak.",
+        "currency": "string: Primary currency for the above estimate.",
+        "regulatory_capital_savings_achieved": "string: Estimate of the reduction in required regulatory capital (or other targeted requirement like liquidity buffer) achieved through the arbitrage.",
+        "reported_roa_roe_boost": "string: Description of how the strategy artificially enhanced key profitability metrics (Return on Assets, Return on Equity)."
+      },
+      "risk_concentration_and_systemic_effects": {
+        "true_economic_risk_location": "string: Description of where the actual financial risk (credit, market, liquidity) ultimately resided, despite the regulatory treatment.",
+        "created_systemic_vulnerabilities": "array: List of systemic risks created or amplified (e.g., ['Increased interconnectedness through derivatives', 'Built up hidden leverage in the banking system', 'Concentrated liquidity risk in ABCP markets', 'Reduced transparency for regulators']).",
+        "contributed_to_market_distortions": "string: How the arbitrage distorted pricing, capital allocation, or competition (e.g., 'Artificially inflated demand for certain asset classes', 'Created an unlevel playing field vs. less sophisticated competitors')."
       }
     },
-    "2_entities_and_key_actors": {
-      "primary_entity_executing_arbitrage": {
-        "name": "string | The legal entity (e.g., bank, hedge fund, SPV) that designed and executed the strategy.",
-        "type": "string | e.g., 'Global Systemically Important Bank (G-SIB)', 'Investment Bank', 'Special Purpose Vehicle (SPV)', 'Hedge Fund'.",
-        "motivation": "string | Primary driver (e.g., 'Boost reported capital ratios (Tier 1)', 'Reduce Risk-Weighted Assets (RWA)', 'Avoid liquidity coverage requirements', 'Lower tax liability', 'Circumvent leverage limits')."
+    "key_milestones": [
+      {
+        "date": "string: Approximate date (YYYY-MM or YYYY-QQ).",
+        "event": "string: Description of the milestone.",
+        "category": "string: 'Structure Inception', 'Rapid Scaling', 'Regulatory Scrutiny', 'Market Stress Event', 'Regulatory Response', 'Unwinding/Litigation'.",
+        "significance": "string: Why this was a turning point for the arbitrage strategy."
+      }
+    ],
+    "discovery_and_closure": {
+      "trigger_for_scrutiny": "string: What brought the arbitrage to light? (e.g., 'Academic paper highlighting the regulatory gap', 'Internal whistleblower', 'Market crisis exposing hidden risks', 'Regulatory thematic review').",
+      "primary_regulatory_response": {
+        "response_type": "array: e.g., ['Interpretive Guidance/Letter', 'Rule Change/Clarification', 'Enforcement Action', 'Industry-Wide Remediation Order'].",
+        "responding_authority": "string: Main regulator(s) leading the response.",
+        "response_description": "string: What the regulator did to close the arbitrage (e.g., 'Issued supervisory guidance stating that certain liquidity facilities would be considered credit enhancements for capital purposes', 'Amended Basel III to include the 'Credit Valuation Adjustment (CVA) capital charge'').",
+        "response_date_effective": "string: Approximate date when the response took effect."
       },
-      "key_decision_makers_and_roles": "array[object] | List of individuals/groups within the entity responsible. Each object: {'name_or_title': 'string', 'role': 'string (e.g., Head of Trading, CFO, Chief Risk Officer)', 'involvement_description': 'string'}",
-      "external_enablers": "array[object] | List of external parties that facilitated the arbitrage (e.g., law firms, auditors, rating agencies). Each object: {'name': 'string', 'type': 'string', 'role_played': 'string'}",
-      "regulatory_bodies_involved": "array[object] | List of regulators whose rules were gamed or who later intervened. Each object: {'name': 'string (e.g., SEC, PRA, Fed)', 'jurisdiction': 'string', 'primary_regulatory_framework': 'string (e.g., 'Basel III', 'Dodd-Frank', 'IFRS 9')'}"
-    },
-    "3_regulatory_landscape_and_loophole": {
-      "regulatory_gap_exploited": "string | Detailed description of the specific difference, inconsistency, or lack of regulation between jurisdictions, entities, or products that was exploited.",
-      "intended_regulatory_outcome_vs_form": {
-        "substance_of_economic_activity": "string | The actual economic risk, activity, or exposure.",
-        "regulatory_treatment_sought": "string | How the activity was structured to be classified for regulatory purposes (e.g., 'Booking trades in a jurisdiction with lower capital charges', 'Using an SPV to move assets off-balance-sheet', 'Using internal models to lower RWA').",
-        "difference_created": "string | Quantify or describe the advantage gained (e.g., 'Reduced capital requirement by 80%', 'Avoided $X billion in liquidity reserves')."
+      "state_at_closure": {
+        "structural_status": "string: Fate of the arbitrage structure (e.g., 'Unwound voluntarily', 'Frozen by order', 'Grandfathered but prohibited from new business', 'Collapsed due to market forces').",
+        "financial_status": "string: The financial outcome for participating entities at closure (e.g., 'Forced to recognize losses previously avoided', 'Required to consolidate SPVs and add significant RWA', 'Faced margin calls on derivative positions')."
       }
     },
-    "4_execution_mechanism_and_financial_engineering": {
-      "financial_instruments_used": "array[string] | Specific instruments (e.g., ['Credit Default Swaps (CDS)', 'Collateralized Loan Obligations (CLOs)', 'Repurchase Agreements (Repo)', 'Total Return Swaps', 'Special Purpose Entities']).",
-      "transaction_structure": "string | Step-by-step description of how the arbitrage was operationally executed. Include flow of funds, assets, and risk.",
-      "booking_locations_and_legal_vehicles": "array[object] | Where and through what legal structures transactions were booked. Each object: {'location': 'string', 'vehicle_name_type': 'string', 'purpose_in_arbitrage': 'string'}",
-      "accounting_and_reporting_treatment": "string | How the transactions were accounted for (GAAP/IFRS) and reported in financial statements and regulatory filings."
+    "aftermath_and_consequences": {
+      "legal_and_enforcement_actions": [
+        {
+          "authority": "string",
+          "action": "string (e.g., 'Civil money penalty', 'Cease and desist order', 'Settlement without admission of guilt').",
+          "target": "string",
+          "penalty_amount": "number",
+          "currency": "string",
+          "core_violation_cited": "string: The specific legal or regulatory violation alleged (e.g., 'Unsafe and unsound practices', 'Failure to maintain adequate controls', 'Material misrepresentation')."
+        }
+      ],
+      "impact_on_participating_entities": {
+        "financial_impact": "string: Summary of direct financial hits (fines, loss recognition, increased future capital costs).",
+        "reputational_impact": "string: Impact on market credibility and trust.",
+        "strategic_impact": "string: Long-term business changes forced upon them (e.g., 'Exited certain business lines', 'Enhanced regulatory relations function')."
+      },
+      "broader_regulatory_and_market_impact": {
+        "regulatory_changes_precipitated": "array: List of specific new rules or reforms catalyzed by this arbitrage case (e.g., ['Introduction of the Basel III Leverage Ratio', 'FASB elimination of QSPE accounting', 'SEC Rule 15Ga-1 on securitization disclosures']).",
+        "changes_in_supervisory_approach": "string: How regulators changed their oversight (e.g., 'Increased focus on substance-over-form', 'Greater emphasis on horizontal reviews across jurisdictions', 'More use of stress testing to reveal hidden risks').",
+        "market_practice_changes": "string: How industry behavior changed (e.g., 'Decline in specific structured product volumes', 'Increased use of regulatory consultants for pre-clearance')."
+      }
     },
-    "5_scale_impact_and_risk_accumulation": {
-      "peak_exposure_or_scale": {
-        "notional_value_involved": "string | Approximate notional amount of the arbitrage activity at its peak (e.g., '$100B notional CDS portfolio').",
-        "risk_transferred_or_concealed": "string | Description and estimated size of the risk that was effectively hidden or misrepresented (e.g., '$20B in credit risk removed from balance sheet').",
-        "regulatory_capital_benefit_claimed": "string | Estimated capital, leverage, or liquidity benefit reported by the entity due to the arbitrage."
-      },
-      "true_economic_risk": "string | Analysis of the actual, unmitigated risk that remained with the entity or the financial system.",
-      "financial_performance_impact": {
-        "reported_profits_inflated_by": "string | Estimate of how much reported earnings were enhanced by the arbitrage.",
-        "funding_cost_advantages": "string | Any reduction in funding costs achieved."
-      },
-      "systemic_risk_contributions": "string | How this activity contributed to opacity, interconnectedness, or vulnerability in the broader financial system."
-    },
-    "6_discovery_unwind_and_crisis": {
-      "trigger_for_discovery": {
-        "internal_trigger": "string | e.g., 'Large market moves causing losses', 'Whistleblower report', 'Internal audit finding'.",
-        "external_trigger": "string | e.g., 'Regulatory examination', 'Market counterparty concerns', 'Academic or media analysis', 'Broader financial crisis revealing weaknesses'."
-      },
-      "unwind_process": "string | Description of how the arbitrage position was unwound, closed, or forcibly terminated. Was it orderly or a fire sale?",
-      "realized_losses_and_costs": {
-        "direct_financial_loss_to_entity": "string | Monetary loss from unwinding (e.g., '$6.2B trading loss').",
-        "regulatory_fines_and_penalties": "string | Total fines levied.",
-        "litigation_and_settlement_costs": "string"
-      },
-      "liquidity_and_solvency_impact": "string | Impact on the entity's liquidity position and solvency during the unwind."
-    },
-    "7_regulatory_and_legal_aftermath": {
-      "enforcement_actions": {
-        "regulatory_sanctions": "array[object] | List of actions by regulators. Each object: {'agency': 'string', 'action': 'string (e.g., 'Cease and Desist', 'Capital Directive', 'Fine')', 'details': 'string'}",
-        "criminal_or_civil_charges": "array[object] | List of charges against entities or individuals. Each object: {'charges': 'string', 'defendant': 'string', 'outcome': 'string'}",
-        "individual_accountability": "string | Summary of consequences for key actors (e.g., 'Fired', 'Banned from industry', 'Personal fines')."
-      },
-      "regulatory_reforms_prompted": {
-        "specific_rule_changes": "array[string] | New rules or amendments introduced to close the exploited loophole (e.g., 'Basel III revisions to securitization framework', 'Dodd-Frank Volcker Rule provisions on proprietary trading').",
-        "supervisory_practice_changes": "array[string] | Changes in regulatory examination focus or methodology."
-      },
-      "market_practice_changes": "array[string] | How industry behavior changed in response (e.g., 'Reduced use of certain SPV structures', 'Increased margin requirements for specific trades')."
-    },
-    "8_broader_implications_and_analysis": {
-      "impact_on_investors_and_counterparties": "string | How shareholders, bondholders, and trading counterparties were affected (losses, loss of confidence).",
-      "impact_on_market_integrity": "string | Effect on perceptions of fairness, transparency, and trust in the financial system.",
-      "lessons_for_corporate_governance": "array[string] | Key takeaways regarding risk management, internal controls, and board oversight.",
-      "comparison_to_similar_arbitrage_events": "string | Brief contextual comparison to other historical regulatory arbitrage cases."
-    },
-    "9_simulation_analysis_notes": {
-      "key_red_flags_missed_by_management_regulators": "array[string] | List of internal or external warning signs that were ignored.",
-      "sustainability_of_the_arbitrage": "string | Analysis of why the strategy was inherently unstable or doomed to be discovered.",
-      "data_discrepancies": "array[string] | Note any major conflicting information from sources regarding figures, dates, or responsibilities.",
-      "ethical_considerations": "string | Brief analysis of the ethical boundary between legal optimization and deceptive practice in this case.",
-      "simulation_confidence_level": "string | High/Medium/Low based on data quality, consistency, and transparency of the event."
+    "synthesis_and_indicators": {
+      "key_arbitrage_indicators_red_flags": "array: List of tell-tale signs of such arbitrage for future detection (e.g., ['Rapid growth in complex, low-margin businesses booked in favorable jurisdictions', 'Significant differences between regulatory and economic capital measures', 'Extensive use of inter-entity transactions or derivatives with affiliated parties', 'Aggressive accounting judgments around control and risk transfer'].)",
+      "ethical_and_governance_failures": "string: Analysis of the governance, culture, and ethical considerations that allowed the arbitrage to be pursued (e.g., 'Legal & Compliance viewed as a barrier to be navigated rather than a framework', 'Compensation tied to reported ROE without risk adjustment', 'Lack of senior management understanding of true risks')."
     }
   }
 }
 ```
 
-### **INSTRUCTION FOR EXECUTION**
-1.  **Thoroughly Analyze** all provided source data pertaining to the requested regulatory arbitrage event (e.g., "The use of Special Purpose Vehicles to arbitrage Basel I capital requirements").
-2.  **Extract and Synthesize** information to populate every field in the JSON schema above. If precise data for a field is unavailable from sources, make a clear, reasoned estimation based on context and note this in `simulation_analysis_notes.data_discrepancies`. Never invent facts.
-3.  **Ensure Logical Flow** across sections. The report should read as a coherent story: from the regulatory environment, to the entity's motivation and design, to execution and scaling, to the trigger for discovery, and finally to the aftermath and reforms.
-4.  **Maintain an Analytical Tone**. Focus on explaining the "how" and "why," not just the "what."
-5.  **Output ONLY** the raw JSON object, beginning with `{` and ending with `}`. Do not use markdown code block syntax in your final output.
-```
+**Critical Analysis Instructions:**
 
+1.  **Follow the Regulatory Logic:** Trace the precise regulatory difference being exploited. Your explanation must clearly show the "before" (standard compliance path) and "after" (arbitrage path) states for the targeted requirement (capital, liquidity, etc.).
+2.  **Structure over Anecdote:** Focus on explaining the replicable *mechanism* or *structure*, not just individual rule violations. The `technical_execution_structure` field must be detailed enough for a specialist to understand the blueprint.
+3.  **Quantify the Avoidance:** Prioritize finding and including data for `regulatory_capital_savings_achieved` and `peak_notional_exposure_arbitraged`. These are central to understanding the scheme's scale and incentive.
+4.  **Distinguish Form from Substance:** Continuously contrast the achieved *legal/accounting form* with the underlying *economic substance*. This is the heart of most regulatory arbitrage.
+5.  **Track the Regulatory Evolution:** Document the regulatory lifecycle: the exploited gap, the discovery process, and the eventual regulatory response that closed the loop. Place the case in the context of regulatory dialectics.
+6.  **Systemic Risk Perspective:** Do not limit analysis to the participating entities. Explicitly analyze how the widespread use of such arbitrage could undermine the *intent* of the regulation and create hidden, correlated risks in the financial system.
+7.  **Completeness:** Strive to populate every field. If specific information is absent from provided sources, use the value: `"Not explicitly detailed in provided sources."`.
 
+**Final Step Before Output:**
+Perform a logical consistency check. Ensure the `exploited_regulatory_gap_or_difference` aligns with the `targeted_regulatory_requirement`. Verify that the timeline in `key_milestones` reflects the `total_active_duration_months` and includes the `regulatory_response`. Confirm that the consequences in `aftermath` are proportionate to the scale and nature of the arbitrage described.
+
+**Now, synthesize the provided data about the specified regulatory arbitrage case and output the complete JSON object.**
 """
