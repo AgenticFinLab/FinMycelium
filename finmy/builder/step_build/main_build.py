@@ -5,11 +5,7 @@ Implementation of the financial event reconstruction by applying a step-by-step 
 EventCascade
   └── stages: List[EventStage]
         └── episodes: List[Episode]
-              ├── participants: List[Participant]
-              ├── participant_relations: List[ParticipantRelation]
-              ├── actions_by_participant: { participant_id → List[Action] }
-              ├── transactions: List[Transaction]
-              └── interactions: List[Interaction]
+
 
 2. Based on the overall structure, generate the first stage' episodes:
     2.1 Reconstruct the first episode.
@@ -33,30 +29,30 @@ EventCascade
 We do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
 """
 
-from pathlib import Path
-import re
 import json
-import os
+from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, TypedDict, List, Optional
+from typing import Dict, Any, TypedDict, List
+
+from langgraph.graph import StateGraph, START, END
 
 from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.builder.step_build import prompts
-from finmy.converter import read_text_data_from_block
 from finmy.builder.utils import (
     load_python_text,
     filter_dataclass_fields,
+    extract_json_response,
 )
 
 
 class _EventState(TypedDict, total=False):
-    """Event state used across the graph"""
+    """State schema for the LangGraph run"""
 
     build_input: BuildInput
-    response: 
+    event_responses: Dict[str, Any]
     messages: List[Any]
 
 
@@ -64,6 +60,7 @@ class _EventState(TypedDict, total=False):
 _STRUCTURE_SPEC_FULL = load_python_text(
     path=Path(__file__).resolve().parents[1] / "structure.py"
 )
+# Read dataclass definitions from structure.py to embed schema text in prompts
 # Skeleton for guiding layout extraction
 _SKELETON_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
@@ -76,7 +73,12 @@ _SKELETON_SPEC = filter_dataclass_fields(
 
 
 class StepWiseEventBuilder(BaseBuilder):
-    """A builder to build the financial event in a step-by-step manner."""
+    """LangGraph-based event skeleton builder (single-node minimal implementation)
+
+    - Uses a single node `create_layout` to assemble prompts, call the model, and parse JSON
+    - Graph structure: `START → create_layout → END`
+    - Persists output to `output_dir/event_{timestamp}/event_cascade.json`
+    """
 
     def __init__(
         self,
@@ -86,6 +88,7 @@ class StepWiseEventBuilder(BaseBuilder):
         super().__init__(
             method_name="step_wise_builder", config={"lm_name": lm_name, **config}
         )
+
         # Obtain the layout config
         self.layout_config = config["layout_creator"]
         # First set the llm with the generation config from the layout
@@ -94,75 +97,69 @@ class StepWiseEventBuilder(BaseBuilder):
             lm_name=lm_name,
             generation_config=self.layout_config["generation_config"],
         )
+        # Obtain the core folder to save all results
+        self.output_dir = config["output_dir"]
 
-    def _compose(self, description: str, keywords: str, content: str) -> Dict[str, Any]:
-        # Provide the skeleton-relevant schema block to the system prompt
+    def create_layout(self, state: _EventState) -> _EventState:
+        """Single node: generate event skeleton JSON and write into state
+
+        Steps:
+        1) Get samples, that is the source content from the 'build_input'
+        2) Inject schema (skeleton-filtered) into system prompt
+        3) Escape curly braces in the system prompt to avoid `.format` conflicts
+        4) Run LLM inference and parse JSON via the centralized utility
+        5) Write the parsed result to `event_json`
+        """
+        build_ipt = state["build_input"]
+        # Compose prompts (system prompt carries skeleton schema; user prompt carries IO fields)
+        # Inject skeleton-filtered schema text into the system prompt
         sys_prompt = prompts.EventLayoutCreatorSys.format(
-            STRUCTURE_SPEC=_SKELETON_SPEC or _STRUCTURE_SPEC
+            STRUCTURE_SPEC=_SKELETON_SPEC,
         )
-        return {
-            "system_msg": sys_prompt.replace("{", "{{").replace("}", "}}"),
-            "user_msg": prompts.EventLayoutCreatorUser,
-            "description": description,
-            "keywords": keywords,
-            "content": content,
-        }
-
-    def _llm(self, state: _EventStructureState) -> str:
+        # Escape curly braces to prevent downstream formatting altering schema content
+        system_msg = sys_prompt.replace("{", "{{").replace("}", "}}")
+        user_msg = prompts.EventLayoutCreatorUser
+        # Execute model call
         output: InferOutput = self.lm_api.run(
-            infer_input=InferInput(
-                system_msg=state["system_msg"], user_msg=state["user_msg"]
-            ),
-            Description=state.get("description", ""),
-            Keywords=state.get("keywords", ""),
-            Content=state.get("content", ""),
+            infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
+            Description=build_ipt.user_query.query_text,
+            Keywords=build_ipt.user_query.key_words,
+            Content="\n".join(build_ipt.samples),
         )
-        return output.response
-
-    def _parse(self, response_text: str) -> Dict[str, Any]:
-        text = response_text.strip()
-        m = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-        if m:
-            text = m.group(1)
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            m2 = re.findall(r"(\{.*\}|\[.*\])", text, re.DOTALL)
-            if not m2:
-                raise ValueError("No JSON found in LLM response")
-            return json.loads(max(m2, key=len))
-
-    def create_layout(
-        self, description: str, keywords: str, content: str
-    ) -> Dict[str, Any]:
-        state = self._compose(description, keywords, content)
-        resp = self._llm(state)
-        event_json = self._parse(resp)
-        return event_json
-
-    def load_samples(self, build_input: BuildInput) -> str:
-        contents = []
-        for s in build_input.samples:
-            try:
-                contents.append(read_text_data_from_block(s.location))
-            except Exception:
-                continue
-        return "\n\n".join(contents)
+        # Parse JSON and write into state
+        state["event_responses"]["event_skeleton"] = extract_json_response(
+            output.response
+        )
+        return state
 
     def graph(self):
-        """The graph is not used; a single function `create_layout` is provided."""
-        raise NotImplementedError(
-            "Use `create_layout(description, keywords, content)` for layout generation."
-        )
+        """Build a single-node LangGraph state machine"""
+        g = StateGraph(dict)
+        # Nodes
+        g.add_node("create_layout", self.create_layout)
+        # Edges: START → create_layout → END
+        g.add_edge(START, "create_layout")
+        g.add_edge("create_layout", END)
+        return g.compile()
 
     def build(self, build_input: BuildInput) -> BuildOutput:
-        description = build_input.user_query.query_text or ""
-        keywords_list = build_input.user_query.key_words or []
-        keywords = ", ".join(keywords_list)
-        content = self.load_samples(build_input)
-        event_json = self.create_layout(description, keywords, content)
-        saved_dir = self.save_event_structure(event_json)
-        return BuildOutput(result={"saved_dir": saved_dir, "event_json": event_json})
+        """Compile and run the graph, return save path and event JSON"""
+        app = self.graph()
+        # Initial state: pass BuildInput only; node will populate event_json
+        initial = {"build_input": build_input}
+        final_state = app.invoke(initial)
+        event_skeleton = final_state["event_responses"]["event_skeleton"]
+        # Save the event skeleton
+        with open(
+            self.output_dir / "event_skeleton.json",
+            "w",
+            encoding="utf-8",
+        ) as f:
+            json.dump(event_skeleton, f, ensure_ascii=False, indent=2)
 
-
-# LangGraph is not required for the simplified single-step layout creation.
+        return BuildOutput(
+            result={
+                "saved_dir": self.output_dir,
+                "event_skeleton": event_skeleton,
+            }
+        )
