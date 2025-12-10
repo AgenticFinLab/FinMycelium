@@ -67,7 +67,9 @@ _STRUCTURE_SPEC_FULL = load_python_text(
 _SKELETON_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
     {
-        "EventCascade": None,
+        "SourceReferenceEvidence": [],
+        "VerifiableField": [],
+        "EventCascade": [],
         "EventStage": ["stage_id", "name", "index_in_event", "episodes"],
         "Episode": ["episode_id", "name", "index_in_stage"],
     },
@@ -122,6 +124,8 @@ class EventSkeletonBuilder(BaseBuilder):
         # Escape curly braces to prevent downstream formatting altering schema content
         system_msg = sys_prompt.replace("{", "{{").replace("}", "}}")
         user_msg = prompts.EventLayoutCreatorUser
+        print(system_msg)
+        print(user_msg)
         # Execute model call
         output: InferOutput = self.lm_api.run(
             infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),

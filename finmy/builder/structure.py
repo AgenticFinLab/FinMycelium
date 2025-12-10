@@ -310,7 +310,7 @@ class Episode:
     Example:
     {
       "episode_id": "E1",
-      "name": "Private Pitch",
+      "name": VerifiableField[str](value="Private Pitch"),
       "index_in_stage": 0,
       "start_time": VerifiableField[str](value="2025-01-03T10:00:00Z"),
       "end_time": VerifiableField[str](value="2025-01-03T12:00:00Z"),
@@ -325,8 +325,8 @@ class Episode:
 
     # Locally unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
     episode_id: str
-    # Name; human-readable semantic label; not used for logical matching.
-    name: str = ""
+    # Name; human-readable semantic label; grounded via verifiable source content.
+    name: VerifiableField[str]
     # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     index_in_stage: int = 0
 
@@ -360,7 +360,7 @@ class EventStage:
     Example:
     {
       "stage_id": "S1",
-      "name": "Amplification",
+      "name": VerifiableField[str](value="Amplification"),
       "index_in_event": 2,
       "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
       "end_time": None,
@@ -372,7 +372,7 @@ class EventStage:
     stage_id: str
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
-    name: str
+    name: VerifiableField[str]
 
     # Zero-based index (ensures correct ordering) of this stage in
     # the event.

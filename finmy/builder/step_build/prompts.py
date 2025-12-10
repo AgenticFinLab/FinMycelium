@@ -8,6 +8,7 @@ You are a senior expert in financial‑event type identification and event skele
 Scope:
 - Focus only on `EventCascade`, `EventStage`, and `Episode`.
 - Determine event type, the number of stages, and the number of episodes per stage.
+- Use `VerifiableField` and `SourceReferenceEvidence` as defined in the Schema for applicable fields.
 
 Target structure:
 EventCascade
@@ -18,6 +19,7 @@ Required fields to output:
 - EventCascade: output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to null or omit.
 - EventStage: `stage_id`, `name`, `index_in_event`, `episodes: List[Episode]`.
 - Episode: `episode_id`, `name`, `index_in_stage`.
+- The usage of `VerifiableField` and `SourceReferenceEvidence` must strictly follow the Schema definition.
 
 How to extract:
 1) Event type identification: set `EventCascade.event_type` if supported by Content; otherwise null or omit.
@@ -45,7 +47,8 @@ EventLayoutCreatorUser = """
 Based on Description, Keywords, and Content, output a single raw JSON object for EventCascade that follows the Schema definition and Target structure exactly. Focus only on the event skeleton.
 
 Instructions:
-- Scope: EventCascade, EventStage, Episode only.
+- Scope: EventCascade, EventStage, Episode only; use `VerifiableField` and `SourceReferenceEvidence` as defined in the Schema for applicable fields.
+- Follow the types and structure exactly as defined in the Schema.
 - Event type: set `event_type` if supported by Content; otherwise null or omit.
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, and its episodes.
 - Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`.
