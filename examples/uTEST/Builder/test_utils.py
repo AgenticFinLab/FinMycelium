@@ -86,6 +86,8 @@ def test_filter_stage_episode_minimal(code_text: str):
     filtered = filter_dataclass_fields(
         code_text,
         {
+            "SourceReferenceEvidence": [],
+            "VerifiableField": [],
             "EventStage": ["stage_id", "name", "index_in_event"],
             "Episode": ["episode_id", "name", "index_in_stage"],
             "EventCascade": [],
@@ -98,7 +100,7 @@ def test_filter_stage_episode_minimal(code_text: str):
     )
     assert "Descriptive name" in filtered
     assert "Zero-based index" in filtered
-    assert "episodes:" not in filtered
+    assert "episodes:" in filtered
     assert "class Episode" in filtered
     assert (
         "episode_id" in filtered and "name" in filtered and "index_in_stage" in filtered

@@ -7,6 +7,7 @@ Notes:
 """
 
 import re
+import json
 import ast
 from pathlib import Path
 from typing import List, Set, Dict, Any, Optional
@@ -348,3 +349,31 @@ def filter_dataclass_fields(
         blocks.append("\n".join(header + body))
 
     return ("\n\n".join(blocks)).strip()
+
+
+def extract_json_response(response_text: str) -> Dict[str, Any]:
+    """Extract a JSON object/array from an LLM response text.
+
+    Behavior:
+    - Strips markdown code fences if present (``` or ```json).
+    - Attempts to parse the cleaned text directly as JSON.
+    - If that fails, searches for the longest JSON object/array substring and parses it.
+    - Raises ValueError if no valid JSON can be found.
+
+    Examples:
+    >>> t = "Response: OK. {\"b\": [1,2,3]}"
+    >>> extract_json_response(t)
+    {'b': [1, 2, 3]}
+    """
+    clean_text = response_text.strip()
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
+    if m:
+        clean_text = m.group(1)
+    try:
+        return json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        matches = re.findall(r"(\{.*\}|\[.*\])", clean_text, re.DOTALL)
+        if matches:
+            longest = max(matches, key=len)
+            return json.loads(longest)
+        raise ValueError(f"Failed to parse JSON from response: {e}") from e

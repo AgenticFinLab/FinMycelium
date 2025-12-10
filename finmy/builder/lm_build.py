@@ -24,6 +24,7 @@ from finmy.converter import read_text_data_from_block
 from finmy.builder.utils import (
     load_python_text,
     extract_dataclass_blocks,
+    extract_json_response,
 )
 
 
@@ -166,7 +167,7 @@ class LMBuilder(BaseBuilder):
     """
     Build the financial event cascade from the input content using the LM model."""
 
-    def __init__(self, lm_name: str = "deepseek/deepseek-chat", config={}):
+    def __init__(self, lm_name: str = "deepseek/deepseek-chat", config=None):
         super().__init__(method_name="lm_builder", config={"lm_name": lm_name})
 
         generation_config = (
@@ -186,32 +187,6 @@ class LMBuilder(BaseBuilder):
 
         # Add output directory configuration
         self.output_dir = config.get("output_dir", "./data/event_cascade_output")
-
-    def extract_json_from_response(self, response_text: str) -> Dict[str, Any]:
-        """
-        Extract JSON from the LM response text.
-        Handles cases where response includes markdown code blocks.
-        """
-        # Remove markdown code block indicators if present
-        clean_text = response_text.strip()
-
-        # Handle ```json ... ``` pattern
-        json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
-        if json_match:
-            clean_text = json_match.group(1)
-
-        # Parse JSON
-        try:
-            return json.loads(clean_text)
-        except json.JSONDecodeError as e:
-            # Try to find JSON object/array in the text
-            json_pattern = r"(\{.*\}|\[.*\])"
-            matches = re.findall(json_pattern, clean_text, re.DOTALL)
-            if matches:
-                # Try the longest match (most likely to be complete JSON)
-                longest_match = max(matches, key=len)
-                return json.loads(longest_match)
-            raise ValueError(f"Failed to parse JSON from response: {e}")
 
     def save_event_cascade(
         self, event_cascade: Dict[str, Any], output_path: str = None
@@ -296,7 +271,7 @@ class LMBuilder(BaseBuilder):
 
         try:
             print(output.response)
-            event_cascade_json = self.extract_json_from_response(output.response)
+            event_cascade_json = extract_json_response(output.response)
             saved_dir = self.save_event_cascade(event_cascade_json)
             print(f"Successfully saved event cascade to directory: {saved_dir}")
         except Exception as e:
