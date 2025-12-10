@@ -1,125 +1,171 @@
-def other_financial_scam_prompt(text: str) -> str:
+def other_financial_scam_prompt() -> str:
     return """ 
-You are an expert financial analyst, forensic investigator, and economic historian. Your task is to reconstruct a complete, detailed, and fact-based narrative of a specified **"Other Financial Scam"** event based on provided multi-source data (e.g., parsed web content, PDF documents, news articles, court filings, regulatory reports, academic papers).
+You are an expert financial forensic analyst specializing in deconstructing complex financial scams and frauds. Your task is to synthesize multi-source, unstructured data (news articles, regulatory filings, court documents, investor reports, web content) to reconstruct a comprehensive, factual, and logical account of a specified "Other Financial Scam" event.
 
-An **"Other Financial Scam"** is defined as a deliberate act of financial deception that does not cleanly fit the classical definitions of Ponzi schemes, pyramid schemes, or the other listed categories. It typically involves a unique, complex, or hybrid fraudulent mechanism. Its core characteristic is the intentional creation of a false reality regarding an investment, asset, transaction, or financial condition to illicitly obtain funds or value from victims. Examples could include: long-term fraudulent leasing schemes, complex trade finance frauds, sham royalty or licensing programs, fraudulent pension or insurance schemes not based on a Ponzi structure, or sophisticated forgery-based cons targeting financial institutions.
+**Core Objective:**
+Produce a granular reconstruction of the scam's lifecycle, detailing its conception, deceptive mechanics, execution, sustainability tactics, collapse, and aftermath. The analysis must emphasize the unique deceptive elements that differentiate it from classic Ponzi or Pyramid schemes, while thoroughly documenting financial flows, actor motivations, and systemic impacts.
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of the "Other Financial Scam." Your output must be a structured JSON that meticulously documents the event's origin, unique deceptive mechanics, key events, unraveling, and aftermath.
+**Data Input & Synthesis:**
+You will receive raw, potentially fragmented text/data pertaining to a specific financial scam (e.g., "fake corporate bond issuance", "forged trade finance scheme", "boiler room stock fraud"). You must critically evaluate sources, resolve contradictions in favor of authoritative documents (e.g., court verdicts over news reports), and flag assumptions. Your output must be grounded solely in synthesized facts from the provided data.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Fact-Based Synthesis & Source Hierarchy**: Integrate all provided sources. Resolve contradictions using this priority: 1) Official judicial rulings/plea agreements, 2) Regulatory agency findings (SEC, FCA, etc.), 3) Licensed trustee/liquidator reports, 4) Reputable investigative journalism, 5) Other media or forum posts. Document major source conflicts in `analysis.data_discrepancies`.
-2.  **Temporal & Causal Logic**: Construct a strict chronological timeline. Clearly articulate cause-and-effect relationships (e.g., how a specific lie enabled fundraising, how a market shift exposed the fraud).
-3.  **Financial & Deceptive Logic**: Model the scam's unique financial and deceptive mechanics with internal consistency. Clearly delineate between the **FACADE** (what victims were told/show) and the **REALITY** (what was actually happening). Explain how the scam maintained its illusion without necessarily relying on a "new-investor-pays-old-investor" engine.
-4.  **Actor-Centric Analysis**: Identify and analyze the roles, motivations, and knowledge levels of all key actors (perpetrators, facilitators, witting/unwitting agents, victims).
+**Output Format & JSON Schema Requirements:**
+You MUST output a single, comprehensive JSON object. Do not include any markdown formatting, commentary, or text outside the JSON block. Use the exact field structure and data types defined below.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+**Comprehensive JSON Schema for "Other Financial Scam":**
 
 ```json
 {
-  "other_financial_scam_simulation_report": {
+  "scam_reconstruction": {
     "metadata": {
-      "scam_name": "string | The common name of the event (e.g., 'The Parmalat Fraud').",
-      "simulation_date": "string (ISO 8601) | Date this analysis was generated (YYYY-MM-DD).",
-      "data_sources_summary": "array[string] | Brief list of the primary data sources used for this simulation.",
-      "geographic_scope_primary": "string | Main countries/jurisdictions where the scam was orchestrated and executed.",
-      "geographic_scope_victims": "string | Main countries/jurisdictions where victims were located.",
-      "scam_type_classification": "string | A descriptive classification of this unique scam (e.g., 'Fraudulent Accounting & Fake Bank Balances', 'Sham Royalty Licensing Program', 'Forged Trade Finance Consortium')."
+      "event_identifier": "string: The widely recognized name of the scam (e.g., 'The XYZ Forged Treasury Bill Scandal').",
+      "primary_jurisdiction": "string: Main country/region where the fraudulent activity was centered.",
+      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) for this analysis.",
+      "data_sources_used": "array: List of source types referenced, e.g., ['SEC Complaint', 'High Court Judgment', 'Financial Times Articles', 'Company Bankruptcy Filing']."
     },
-    "1_overview": {
-      "executive_summary": "string | A concise 3-5 sentence summary describing: the facade presented to the world, the core deceptive act(s), the scale, and how it ended.",
-      "operating_period": {
-        "facade_start": "string (YYYY-MM or YYYY) | When the fraudulent activity or false narrative began.",
-        "scam_unravel_start": "string (YYYY-MM-DD or YYYY-MM) | The date or period when the key event triggering the collapse occurred (e.g., default, whistleblower, regulatory query).",
-        "public_collapse_date": "string (YYYY-MM-DD) | The date the scam became publicly known or the entity entered administration.",
-        "duration_active_years": "number | Estimated number of years the scam operated before unraveling."
+    "overview": {
+      "executive_summary": "string: A 4-6 sentence summary capturing the scam's essence, core deception, scale, and ultimate resolution.",
+      "scam_type_classification": "string: Specific classification (e.g., 'Advance-Fee Fraud', 'Forged Instrument Scheme', 'Market Manipulation (Pump and Dump)', 'Asset Misappropriation Disguised as Investment').",
+      "core_deceptive_mechanism": "string: A clear description of the primary lie or fabricated reality at the heart of the scam (e.g., 'Falsified bank guarantees', 'Non-existent commodity inventories', 'Spoofed trading platforms').",
+      "total_active_duration_months": "number: Estimated number of months from first fraudulent solicitation to operational collapse.",
+      "is_multi_jurisdictional": "boolean: True if the scam's operations, victims, or perpetrators spanned multiple legal jurisdictions."
+    },
+    "perpetrators_and_facilitators": {
+      "masterminds_and_key_actors": [
+        {
+          "name": "string",
+          "official_role": "string: Their title within the fraudulent structure (e.g., 'Managing Director', 'Fund Advisor', 'Broker').",
+          "actual_function": "string: Their real role in the scam (e.g., 'Architect of forged documents', 'Primary sales liar', 'Money launderer').",
+          "professional_background_used_for_credibility": "string: How their past legit experience was leveraged to deceive.",
+          "final_legal_status": "string: Outcome as of latest data (e.g., 'Convicted, sentenced to 15 years', 'Charges pending', 'Deceased', 'Fugitive')."
+        }
+      ],
+      "fraudulent_entities_vehicles": [
+        {
+          "entity_name": "string",
+          "jurisdiction_of_registration": "string",
+          "front_business_activity": "string: The legitimate-seeming business it purported to conduct.",
+          "actual_fraudulent_activity": "string: The illegal activity it was used for.",
+          "role_in_structure": "string: e.g., 'Solicitation vehicle', 'Money collection account holder', 'False asset holder'."
+        }
+      ],
+      "willing_or_negligent_facilitators": [
+        {
+          "facilitator_type": "string: e.g., 'Bank', 'Law Firm', 'Auditor', 'Payment Processor'.",
+          "name": "string",
+          "nature_of_facilitation": "string: e.g., 'Failed to conduct adequate KYC', 'Issued misleading comfort letter', 'Processed transactions despite red flags'.",
+          "regulatory_action_if_any": "string: Any censure or penalty faced."
+        }
+      ]
+    },
+    "deceptive_mechanics_operations": {
+      "fabricated_asset_or_opportunity": {
+        "description": "string: Detailed description of the fake investment, product, service, or financial instrument.",
+        "stated_underlying_value_driver": "string: The purported source of profits or returns (e.g., 'proprietary algo-trading', 'government infrastructure contracts', 'rare earth metal arbitrage').",
+        "falsified_documentation_examples": "array: List of types of forged/fake documents used (e.g., ['Counterfeit bank SWIFT confirmations', 'Fabricated warehouse receipts', 'Photoshopped performance reports'])."
+      },
+      "solicitation_and_marketing": {
+        "primary_channels": "array: e.g., ['Targeted WhatsApp messages', 'Fake professional networking profiles', 'Seminars at luxury hotels', 'Sponsored financial news articles'].",
+        "target_victim_profile": "string: Description of the demographic or psychographic profile of victims (e.g., 'High-net-worth retirees', 'Small and medium enterprise owners', 'Sophisticated hedge funds seeking yield').",
+        "key_lies_and_narratives": "array: Specific false claims made, e.g., ['Risk-free due to insured collateral', 'Exclusive access for select clients', 'Partnership with top-tier bank ABC'].", 
+        "credibility_enhancement_tactics": "array: Methods used to build trust, e.g., ['Renting prestigious office address', 'Hiring staff with prior reputable firm experience', 'Creating fake media testimonials']."
+      },
+      "investment_process": {
+        "formal_investment_vehicle": "string: The legal form victims were led to believe they were engaging in (e.g., 'Subscription to limited partnership shares', 'Purchase of promissory notes', 'Margin trading account').",
+        "transaction_mechanism": "string: How funds were transferred (e.g., 'Wire to escrow account', 'Cryptocurrency to specified wallet', 'Check to nominee company').",
+        "minimum_investment_amount": "number: The lowest entry point, if defined.",
+        "contractual_documentation_provided": "string: Description of any (potentially falsified) contracts, terms sheets, or agreements given to victims."
+      },
+      "sustainment_and_illusion_management": {
+        "communication_strategy": "string: How perpetrators maintained victim confidence (e.g., 'Regular glossy PDF newsletters', 'Frequent but shallow performance updates', 'Elaborate excuses for delays').",
+        "method_of_faking_returns_or_progress": "string: For scams that paid fake 'returns' or showed fake growth, describe how (e.g., 'Used new investor funds to pay 'profits' to early victims', 'Provided access to a spoofed online portal showing fake account growth', 'Issued worthless cheques that took time to bounce').",
+        "handling_of_redemption_requests": "string: Standard procedure when a victim asked to withdraw funds (e.g., 'Delayed with administrative excuses', 'Paid out small amounts to encourage larger investments', 'Threatened legal action for breach of contract')."
       }
     },
-    "2_origin_and_key_actors": {
-      "primary_perpetrators": "array[object] | List of key individuals who devised and orchestrated the scam. Each object: {'name': 'string', 'title/role': 'string', 'entity_affiliation': 'string', 'background_relevant_to_fraud': 'string'}",
-      "fraudulent_entities": "array[object] | The main legal entities used to execute the fraud. Each object: {'entity_name': 'string', 'jurisdiction': 'string', 'stated_purpose': 'string', 'actual_role_in_fraud': 'string'}",
-      "key_facilitators": "array[object] | Individuals or entities (e.g., complicit lawyers, corrupt officials, negligent auditors) who enabled the fraud, knowingly or through gross negligence. Each object: {'name': 'string', 'role': 'string', 'nature_of_facilitation': 'string'}",
-      "victim_profile": {
-        "demographic_categories": "array[string] | Types of victims (e.g., ['Bondholders', 'Banks providing loans', 'Trade creditors', 'Retail investors', 'Pension funds']).",
-        "accreditation_status": "string | Predominantly institutional/accredited or retail victims.",
-        "basis_of_trust": "string | What led victims to believe the facade (e.g., 'Company's long history', 'Reputable auditor's opinion', 'Complex financial structures mimicking legitimate deals')."
+    "financial_forensics": {
+      "scale": {
+        "estimated_number_of_victims": "number: Best estimate of distinct individuals/entities defrauded.",
+        "estimated_total_fiat_inflow": "number: Total monetary value collected from victims, in primary currency.",
+        "primary_currency": "string: e.g., 'USD', 'CNY', 'EUR'.",
+        "geographic_spread_of_victims": "array: List of countries/regions with significant victim clusters."
+      },
+      "fund_tracing_use_of_proceeds": {
+        "for_maintaining_facade": "string: Funds spent on offices, salaries, marketing, and other costs to appear legitimate.",
+        "for_perpetrator_enrichment": "string: Funds directly diverted for personal luxury assets, real estate, lifestyles.",
+        "for_faking_returns_or_profits": "string: Funds cycled back to victims to simulate successful returns (if applicable).",
+        "for_other_investments_gambling": "string: Funds lost in speculative or side ventures by perpetrators.",
+        "evidence_of_layering_and_concealment": "string: Description of methods to obscure money trail (e.g., 'Multiple shell company transfers', 'Cryptocurrency tumblers', 'Purchase of luxury goods for resale')."
+      },
+      "sustainability_analysis": {
+        "dependency_on_new_inflows": "string: Qualitative assessment of the scam's need for fresh capital to survive (e.g., 'Absolute dependency - zero genuine revenue', 'Partial dependency to cover operational shortfalls').",
+        "cash_flow_strain_indicators": [
+          {
+            "period": "string: e.g., 'Initial Phase', 'Mid-stage Growth', 'Final 6 months'.",
+            "estimated_new_inflow": "number",
+            "estimated_obligatory_outflow": "number: Includes fake returns, operational costs, and perpetrator draws.",
+            "estimated_net_cash_position": "number: New Inflow - Obligatory Outflow. Negative indicates strain."
+          }
+        ]
       }
     },
-    "3_the_facade_deceptive_mechanism": {
-      "core_false_narrative": "string | The central, overarching lie sold to victims and the market (e.g., 'The company had €3.9bn in a liquid bank account', 'A sovereign wealth fund was backing the venture', 'Patented technology generated guaranteed royalties').",
-      "fraudulent_product_or_scheme_description": "string | Detailed description of the fake investment, asset, transaction, or financial status that was marketed or reported.",
-      "key_supporting_deceptions": "array[object] | The specific fraudulent acts that propped up the core narrative. Each object: {'deception_type': 'string (e.g., Forged Document, Fictitious Revenue, Shell Company Transaction)', 'description': 'string', 'purpose': 'string (e.g., To show liquidity, To inflate earnings, To create a credible counterparty)'}",
-      "promotion_and_dissemination_channels": "array[string] | How the false narrative was spread (e.g., ['Fake bank account statements', 'Fraudulent annual reports audited by complicit firm', 'Press releases with false claims', 'Sophisticated presentations to institutional investors'])."
-    },
-    "4_victim_acquisition_and_financial_flows": {
-      "how_victims_provided_funds": "string | The mechanism by which victims transferred value (e.g., 'Purchased corporate bonds', 'Granted loans based on fake collateral', 'Paid upfront licensing fees', 'Extended trade credit based on falsified financials').",
-      "typical_financial_commitment_range": "string | The scale of individual victim exposure (e.g., 'Bond purchases from $10k to $50M per institution', 'Bank loans averaging $100M per facility').",
-      "promised_return_or_benefit": "string | What victims were explicitly or implicitly promised (e.g., 'Interest payments of 5-7% on bonds', 'Repayment of principal at maturity', 'Royalty streams of 15% per annum', 'Value of goods to be delivered').",
-      "method_of_fulfilling_promises_initially": "string | How the scam made payments or showed value in the early/stable phase to maintain credibility (e.g., 'Used new loan proceeds to pay interest on old bonds', 'Used a small fraction of stolen funds to deliver some goods', 'Made royalty payments from principal')."
-    },
-    "5_financial_engine_and_misappropriation": {
-      "claimed_use_of_funds": "string | Where victims were told their money would be used (e.g., 'For working capital and expansion', 'To finance receivables', 'To fund research and development').",
-      "actual_use_of_funds": {
-        "to_sustain_facade": "string | Funds used to perpetuate the fraud (e.g., 'Making interest payments to earlier victims', 'Paying 'royalties' from new investor capital', 'Funding forgery operations').",
-        "for_perpetrator_enrichment": "string | Description of assets purchased or funds diverted for personal gain.",
-        "for_operational_costs": "string | Legitimate business costs, if any, of the front operation.",
-        "other_diversions": "string"
-      },
-      "source_of_funds_analysis": "string | Explanation of where the money to run the scam and make any payments came from (e.g., 'Entirely from new victim inflows', 'Partially from legitimate but overstated business income, supplemented by fraud', 'From looting of existing company assets')."
-    },
-    "6_growth_unraveling_and_collapse": {
-      "scale_at_peak": {
-        "estimated_number_victim_entities": "number | Approximate number of distinct victim entities (not necessarily individuals).",
-        "estimated_total_fraudulent_liabilities_created": "string | Total face value of debts, obligations, or valuations created by the fraud (e.g., '$14bn in fake bank accounts', '$5bn in bonds issued', '$500M in fake invoices').",
-        "peak_period": "string"
-      },
-      "unraveling_trigger": {
-        "immediate_catalyst": "string | The specific event that started the collapse (e.g., 'A missed bond interest payment', 'A bank's query about a forged confirmation letter', 'Whistleblower email to regulator', 'A news article investigating discrepancies').",
-        "underlying_pressure": "string | The fundamental reason the scam became unsustainable (e.g., 'Cash burn exceeded new fraud inflows', 'Market downturn reduced legitimate revenue cover', 'Increased scrutiny post-Enron').",
-        "key_unravel_date": "string (YYYY-MM-DD) | The pivotal date of the triggering event."
-      },
-      "final_state_at_public_collapse": {
-        "total_claimed_assets_per_facade": "string | The asset value reported to the public/victims just before collapse.",
-        "estimated_real_assets_available": "string | The approximate actual, traceable assets available to satisfy claims.",
-        "immediate_liquidity_crisis_description": "string | What happened when the scam could no longer meet demands (e.g., 'Could not redeem commercial paper', 'Banks froze credit lines', 'Company filed for bankruptcy')."
+    "key_milestones_timeline": [
+      {
+        "date_iso": "string: Approximate date in YYYY-MM-DD format. Use YYYY-MM or YYYY if less precise.",
+        "event_title": "string",
+        "detailed_description": "string: What happened.",
+        "criticality": "string: e.g., 'Inception', 'Major Deceptive Action', 'External Threat Emerged', 'Beginning of the End'."
+      }
+    ],
+    "collapse_and_exposure": {
+      "trigger_event": "string: The specific incident that precipitated the collapse (e.g., 'A major victim's redemption request could not be met and they alerted authorities', 'Investigative journalist published expose', 'Internal whistleblower provided documents to regulator', 'Bank compliance froze core accounts').",
+      "date_of_collapse": "string: Approximate date when operations ceased or were frozen.",
+      "immediate_post_collapse_state": {
+        "operational_status": "string: e.g., 'Raided by police, assets seized', 'CEO fled jurisdiction, office empty', 'Website shut down, phones disconnected'.",
+        "victim_reaction": "string: Initial collective response (e.g., 'Formed investor action group', 'Flooded regulator with complaints', 'Social media panic').",
+        "first_public_authority_statement": "string: Brief summary of the first official announcement, if any."
       }
     },
-    "7_aftermath_legal_and_social_outcomes": {
-      "legal_regulatory_action": {
-        "agencies_involved": "array[string]",
-        "primary_charges_indicted": "array[string] | (e.g., ['Securities Fraud', 'Wire Fraud', 'Conspiracy', 'Falsifying Business Records', 'Money Laundering'])",
-        "disposition_against_perpetrators": "string | Summary of trials, pleas, and sentences for primary actors.",
-        "action_against_facilitators": "string | Summary of outcomes for auditors, lawyers, or others held accountable."
+    "aftermath_impacts_consequences": {
+      "legal_regulatory_actions": [
+        {
+          "authority": "string: Name of the regulatory body or law enforcement agency.",
+          "action_type": "string: e.g., 'Criminal Indictment', 'Civil Lawsuit', 'Asset Freeze Order', 'License Revocation', 'Administrative Penalty'.",
+          "targets": "array: Names of individuals/entities action was taken against.",
+          "outcome_status": "string: Current status or final result (e.g., 'Guilty plea entered', 'Case ongoing', 'Fined $10M')."
+        }
+      ],
+      "perpetrator_outcomes_summary": "string: Consolidated summary of the fates of key perpetrators (sentences, fines, extradition status, deceased).",
+      "victim_impact_analysis": {
+        "total_recognized_loss": "number: The aggregate financial loss acknowledged by authorities or courts.",
+        "estimated_recovery_rate": "string: Percentage of loss potentially recoverable via seized assets, settlements. Use '0%' if none expected.",
+        "recovery_mechanisms": "array: e.g., ['Court-appointed liquidator selling seized property', 'Victim compensation fund', 'Negotiated settlement with facilitator banks'].",
+        "demographic_of_most_affected": "string: Which victim subgroups suffered most severe losses (financial or otherwise).",
+        "psychosocial_societal_impact": "string: Description of non-financial harms (e.g., 'Several victim suicides reported', 'Erosion of trust in private banking sector', 'Strained diplomatic relations between Country A and B')."
       },
-      "asset_recovery_and_creditor_outcomes": {
-        "total_assets_recovered_for_liquidation": "string | Value of assets seized/frozen and available for distribution.",
-        "estimated_overall_net_loss_to_victims": "string | Estimated total victim loss after expected recoveries.",
-        "restitution_bankruptcy_process_status": "string | Description of the recovery process (e.g., 'Bankruptcy court approved plan paying creditors 15 cents on the dollar', 'Litigation against third parties (banks, auditors) ongoing').",
-        "recovery_timeline_years": "number | Estimated or actual duration of the asset recovery process."
-      },
-      "broader_impacts": {
-        "regulatory_policy_changes": "array[string] | Changes inspired by this scam (e.g., 'Stricter rules on bank confirmation procedures (Sarbanes-Oxley)', 'Enhanced auditor rotation requirements').",
-        "market_or_industry_impact": "string | Impact on specific sectors, investor confidence, or lending practices.",
-        "notable_systemic_risks_exposed": "array[string] | Broader financial system vulnerabilities highlighted by the event."
-      }
+      "systemic_and_policy_implications": [
+        "string: List of broader changes catalyzed, e.g., ['Tightened regulations on issuance of electronic bank guarantees', 'Enhanced due diligence requirements for family offices investing in alternative assets', 'New inter-agency task force on cross-border investment fraud']."
+      ]
     },
-    "8_simulation_analysis_notes": {
-      "unique_mechanisms_of_deception": "array[string] | List the innovative or particularly effective deceptive techniques used in this scam.",
-      "key_red_flags_missed_by_victims_market": "array[string] | Critical warning signs that were present but overlooked or rationalized.",
-      "sustainability_analysis": "string | Analysis of why this specific fraudulent structure was doomed to fail, even if not a classic Ponzi.",
-      "data_discrepancies_and_assumptions": "array[string] | Note any major conflicting information from sources and any material assumptions made due to data gaps.",
-      "simulation_confidence_assessment": "string | High/Medium/Low, based on data completeness, source reliability, and internal consistency of the reconstructed narrative."
+    "analysis_of_red_flags_detection_failures": {
+      "observable_red_flags": "array: List of specific warning signs that were present but ignored or missed by victims/facilitators, e.g., ['Returns promised were uncorrelated to any market index', 'Auditor was an obscure, unknown firm', 'Address of operation was a virtual office'].",
+      "failure_points_in_ecosystem": "array: Points where checks failed, e.g., ['Bank's transaction monitoring did not flag repetitive large transfers to unrelated third parties', 'Professional network platform did not verify claimed employment at major firms'].",
+      "deviation_from_legitimate_practice": "string: Summary of how this scam specifically mimicked yet perverted standard financial industry practices."
     }
   }
 }
 ```
 
-### **INSTRUCTION FOR EXECUTION**
-1.  **Analyze & Synthesize**: Thoroughly process all provided source data for the requested "Other Financial Scam" case.
-2.  **Populate the Schema**: Extract information to fill every field in the JSON. If precise data is missing, make logical, evidence-based inferences and **explicitly state these assumptions in `8_simulation_analysis_notes.data_discrepancies_and_assumptions`**.
-3.  **Maintain Narrative Coherence**: Ensure the JSON tells a coherent story from `origin` through `facade`, `unraveling`, to `aftermath`. Link fields logically across sections.
-4.  **Output Strictly**: Output **ONLY** the raw JSON object, beginning with `{` and ending with `}`. Do not use markdown code block syntax (` ```json `) in your final output.
+**Critical Analysis Instructions:**
 
+1.  **Scam-Centric Focus:** Identify and elucidate the **core deceptive artifact** (forged document, fake platform, phantom asset). This is the linchpin of your reconstruction. Every operational detail should relate to creating, sustaining, or exploiting this deception.
+2.  **Factual Rigor:** Distinguish clearly between **stated facts** (what perpetrators claimed), **verified facts** (what evidence confirms), and **logical inferences**. Base all fields, especially numerical estimates, on the strongest available evidence. Use `"Information not available in provided sources."` only for genuinely absent data.
+3.  **Narrative Cohesion:** Ensure the `key_milestones_timeline` tells a coherent story that logically connects to phases in `financial_forensics.sustainability_analysis` and the eventual `collapse_and_exposure.trigger_event`.
+4.  **Actor-Centric Analysis:** Detail not just perpetrators and victims, but also the role of `willing_or_negligent_facilitators`. Their actions/inactions are often critical to the scam's scale and duration.
+5.  **Quantitative Discipline:** Provide numerical estimates even if approximate. For `financial_forensics`, ensure the sum of the major `fund_tracing_use_of_proceeds` categories is logically consistent with the `estimated_total_fiat_inflow`.
+6.  **Impact Layering:** Document impacts across multiple levels: individual victim loss (`victim_impact_analysis`), legal consequences (`legal_regulatory_actions`), and broader systemic changes (`systemic_and_policy_implications`).
+7.  **Pre-Collapse Diagnostics:** The `analysis_of_red_flags_detection_failures` section must provide actionable insights by listing specific, observable warning signs and institutional failures that allowed the scam to persist.
 
+**Final Validation Before Output:**
+Conduct an internal audit: Does the `executive_summary` accurately reflect the detailed JSON content? Is the timeline chronologically consistent? Are the financial figures logically plausible within the scam's narrative? Does the reconstruction explain **how** the deception was created, **why** it was believable, and **what** caused it to fail?
+
+**Now, based solely on the provided multi-source data about the specified financial scam, synthesize and output the complete JSON object as defined above.**
 """
