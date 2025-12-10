@@ -280,7 +280,7 @@ class LMBuilder(BaseBuilder):
             "Pump and Dump": pump_and_dump.pump_and_dump_prompt(),
             "Market Manipulation": market_manipulation.market_manipulation_prompt(),
             "Accounting Fraud": accounting_fraud.accounting_fraud_prompt(),
-            "Cryptocurrency / ICO Scam": cryptocurrency_ICO_scam.cryptocurrency_ICO_scam_prompt(),
+            "Cryptocurrency / ICO Scam": cryptocurrency_ico_scam.cryptocurrency_ico_scam_prompt(),
             "Forex / Binary Options Fraud": forex_binary_options_fraud.forex_binary_options_fraud_prompt(),
             "Advance-Fee Fraud": advance_fee_fraud.advance_fee_fraud_prompt(),
             "Affinity Fraud": affinity_fraud.affinity_fraud_prompt(),
@@ -326,7 +326,16 @@ class LMBuilder(BaseBuilder):
             # Extract and save JSON
             try:
                 print(output.response)
-                event_cascade_json = extract_json_response(output.response)
+                output_text = output.response.strip()
+                if output_text.startswith("```json"):
+                    output_text = output_text[7:]  # Remove ```json
+                elif output_text.startswith("```"):
+                    output_text = output_text[3:]  # Remove ```
+                if output_text.endswith("```"):
+                    output_text = output_text[:-3]  # Remove ```
+
+                cleaned_response = output_text.strip()
+                event_cascade_json = extract_json_response(cleaned_response)
                 saved_dir = self.save_event_cascade(event_cascade_json)
                 print(f"Successfully saved event cascade to directory: {saved_dir}")
             except Exception as e:
