@@ -20,7 +20,7 @@ from lmbase.inference import api_call
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.converter import read_text_data_from_block
-
+from finmy.builder.class_build.prompts import *
 from finmy.builder.utils import (
     load_python_text,
     extract_dataclass_blocks,
@@ -113,8 +113,7 @@ xxxxxx
 """
 
 USER_PROMPT = """
-Task: Using the schema and rules defined in the system prompt, reconstruct the specific financial event strictly from the input Content below. Base all details on Content and follow the requirement in the Description and Keywords; do not invent, alter, or extend beyond what it explicitly supports. Produce a clear, layered, professional multi-file JSON output.
-
+Task: Using the schema and rules defined in the system prompt, reconstruct the specific financial event strictly from the input Content below. Base all details on Content and follow the requirement in the Description and Keywords; do not invent, alter, or extend beyond what it explicitly supports. Produce a clear, layered, professional JSON output.
 
 === DESCRIPTION BEGIN ===
 {Description}
@@ -128,27 +127,7 @@ Task: Using the schema and rules defined in the system prompt, reconstruct the s
 {Content}
 === CONTENT END ===
 
-
-What to do:
-- Constrain scope using Description and Keywords; ignore unrelated content.
-- Extract participants, roles, relations, transactions, interactions, evidence, episodes, and stage evolution from Content.
-- Build timelines and apply ordering rules:
-  - stages by stage_index; episodes by sequence_index
-  - transactions/interactions/snapshots by timestamp
-  - participant index by participant_id
-- Populate reasons/rationale only when supported by Content; otherwise set null or omit.
-
-Generate json files under the folder 'FinancialEventReconstruction/' with the following structure:
-    - EventCascade.json
-    - stage_id/
-        - stage_id.json
-        - episodes/episode_id.json
-        - participants/participant_id.json
-    - participants/participant_id.json holding all possible Participants
-    - relations.json
-    - interactions/index.json (optional)
-where the 'id' is the ID assigned to the generation defined classes.
-    
+Generate content in JSON format according to the SYSTEM_PROMPT schema.
 """
 
 
@@ -286,3 +265,79 @@ class LMBuilder(BaseBuilder):
             print(f"Raw response saved to: {raw_output_path}")
 
         return BuildOutput(event_cascades=[output.response])
+
+
+
+    def build_class(self, build_input: BuildInput) -> BuildOutput:
+        """Build the event cascades from the input samples."""
+        # We first need to convert the samples presented in the build input
+        # to the format required by this function
+        samples_content = self.load_samples(build_input)
+
+        class_prompt = {
+            "Ponzi Scheme": ponzi_scheme.ponzi_scheme_prompt(),
+            "Pyramid Scheme": pyramid_scheme.pyramid_scheme_prompt(),
+            "Pump and Dump": pump_and_dump.pump_and_dump_prompt(),
+            "Market Manipulation": market_manipulation.market_manipulation_prompt(),
+            "Accounting Fraud": accounting_fraud.accounting_fraud_prompt(),
+            "Cryptocurrency / ICO Scam": cryptocurrency_ICO_scam.cryptocurrency_ICO_scam_prompt(),
+            "Forex / Binary Options Fraud": forex_binary_options_fraud.forex_binary_options_fraud_prompt(),
+            "Advance-Fee Fraud": advance_fee_fraud.advance_fee_fraud_prompt(),
+            "Affinity Fraud": affinity_fraud.affinity_fraud_prompt(),
+            "Embezzlement / Misappropriation of Funds": embezzlement_misappropriation_of_funds.embezzlement_misappropriation_of_funds_prompt(),
+            "Bank Run": bank_run.bank_run_prompt(),
+            "Short Squeeze": short_squeeze.short_squeeze_prompt(),
+            "Sovereign Defaul": sovereig_default.sovereign_default_prompt(),
+            "Liquidity Spiral": liquidity_spiral.liquidity_spiral_prompt(),
+            "Regulatory Arbitrage": regulatory_arbitrage.regulatory_arbitrage_prompt(),
+            "Credit Event": credit_event.credit_event_prompt(),
+            "Systemic Shock": systemic_shock.systemic_shock_prompt(),
+            "Leverage Cycle Collapse": leverage_cycle_collapse.leverage_cycle_collapse_prompt(),
+            "Stablecoin Depeg": stablecoin_depeg.stablecoin_depeg_prompt(),
+            "Other Financial Scam": other_financial_scam.other_financial_scam_prompt(),
+        }
+
+        print("classify.classify_prompt():\n",classify.classify_prompt())
+
+        # Infer the llm API
+        output: InferOutput = self.lm_api.run(
+            infer_input=InferInput(
+                system_msg=classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
+                user_msg=self.user_prompt,
+            ),
+            Description=build_input.user_query.query_text,
+            Keywords=build_input.user_query.key_words,
+            Content=samples_content,
+        )
+
+        event_classify_json = extract_json_response(output.response)
+        print("classify json:\n", event_classify_json)
+        if event_classify_json["event_type"]["primary_type"] in class_prompt:
+            # Infer the llm API
+            output: InferOutput = self.lm_api.run(
+                infer_input=InferInput(
+                    system_msg=class_prompt[event_classify_json["event_type"]["primary_type"]].replace("{", "{{").replace("}", "}}"),
+                    user_msg=self.user_prompt,
+                ),
+                Description=build_input.user_query.query_text,
+                Keywords=build_input.user_query.key_words,
+                Content=samples_content,
+            )
+            # Extract and save JSON
+            try:
+                print(output.response)
+                event_cascade_json = extract_json_response(output.response)
+                saved_dir = self.save_event_cascade(event_cascade_json)
+                print(f"Successfully saved event cascade to directory: {saved_dir}")
+            except Exception as e:
+                print(f"Warning: Failed to save JSON files: {e}")
+                # Fallback: save raw response
+                raw_output_path = os.path.join(
+                    self.output_dir, "build_out_raw_response.json"
+                )
+                os.makedirs(self.output_dir, exist_ok=True)
+                with open(raw_output_path, "w", encoding="utf-8") as f:
+                    f.write(output.response)
+                print(f"Raw response saved to: {raw_output_path}")
+
+            return BuildOutput(event_cascades=[output.response])
