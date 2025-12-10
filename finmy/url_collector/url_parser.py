@@ -6,21 +6,22 @@ including text, images, and videos while maintaining their original layout order
 It includes fallback to Selenium for JavaScript-heavy pages that cannot be parsed with requests.
 """
 
-import requests
-import time
-import json
+
 import csv
+import json
 import logging
-import re
-from typing import List, Dict, Any, Optional, Union
-from urllib.parse import urljoin, urlparse
-import mysql.connector
-from mysql.connector import Error
-from bs4 import BeautifulSoup
 import random
+import re
+import time
 from datetime import datetime
 from pathlib import Path
+from typing import List, Dict, Any, Optional, Union
+from urllib.parse import urljoin, urlparse
 
+import requests
+from bs4 import BeautifulSoup
+import mysql.connector
+from mysql.connector import Error
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -28,7 +29,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-
 
 class URLParser:
     """
