@@ -47,10 +47,6 @@ class BaseBuilder(ABC):
     def build(self, build_input: BuildInput) -> BuildOutput:
         """Build the event cascades from the input samples."""
 
-    @abstractmethod
-    def load_samples(self, build_input: BuildInput) -> Any:
-        """Load the specific content of samples from the files."""
-
     def run(self, build_input: BuildInput) -> BuildOutput:
         """Run the builder pipeline."""
         start = time.time()

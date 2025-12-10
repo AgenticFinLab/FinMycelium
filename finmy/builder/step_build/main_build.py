@@ -29,12 +29,14 @@ EventCascade
 We do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
 """
 
+import os
 import json
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, Any, TypedDict, List
+from collections import defaultdict
+from typing import Dict, Any, List, DefaultDict
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START, END, MessagesState
+from langgraph.graph.state import CompiledStateGraph
 
 from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
@@ -48,11 +50,11 @@ from finmy.builder.utils import (
 )
 
 
-class _EventState(TypedDict, total=False):
+class EventState(MessagesState):
     """State schema for the LangGraph run"""
 
     build_input: BuildInput
-    event_responses: Dict[str, Any]
+    event_responses: DefaultDict[str, Any] = defaultdict(dict)
     messages: List[Any]
 
 
@@ -72,7 +74,7 @@ _SKELETON_SPEC = filter_dataclass_fields(
 )
 
 
-class StepWiseEventBuilder(BaseBuilder):
+class EventSkeletonBuilder(BaseBuilder):
     """LangGraph-based event skeleton builder (single-node minimal implementation)
 
     - Uses a single node `create_layout` to assemble prompts, call the model, and parse JSON
@@ -99,8 +101,9 @@ class StepWiseEventBuilder(BaseBuilder):
         )
         # Obtain the core folder to save all results
         self.output_dir = config["output_dir"]
+        os.makedirs(self.output_dir, exist_ok=True)
 
-    def create_layout(self, state: _EventState) -> _EventState:
+    def create_layout(self, state: EventState) -> EventState:
         """Single node: generate event skeleton JSON and write into state
 
         Steps:
@@ -124,17 +127,19 @@ class StepWiseEventBuilder(BaseBuilder):
             infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
             Description=build_ipt.user_query.query_text,
             Keywords=build_ipt.user_query.key_words,
-            Content="\n".join(build_ipt.samples),
+            Content="\n".join([sample.content for sample in build_ipt.samples]),
         )
+        # Ensure default dict exists for event responses
+        state.setdefault("event_responses", defaultdict(dict))
         # Parse JSON and write into state
         state["event_responses"]["event_skeleton"] = extract_json_response(
             output.response
         )
         return state
 
-    def graph(self):
+    def graph(self) -> CompiledStateGraph[EventState]:
         """Build a single-node LangGraph state machine"""
-        g = StateGraph(dict)
+        g = StateGraph(EventState)
         # Nodes
         g.add_node("create_layout", self.create_layout)
         # Edges: START → create_layout → END
@@ -151,7 +156,7 @@ class StepWiseEventBuilder(BaseBuilder):
         event_skeleton = final_state["event_responses"]["event_skeleton"]
         # Save the event skeleton
         with open(
-            self.output_dir / "event_skeleton.json",
+            os.path.join(self.output_dir, "event_skeleton.json"),
             "w",
             encoding="utf-8",
         ) as f:
