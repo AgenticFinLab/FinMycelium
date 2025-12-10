@@ -1,130 +1,161 @@
 
-def liquidity_spiral_prompt(text: str) -> str:
+def liquidity_spiral_prompt() -> str:
     return """
-You are an expert financial systemic risk analyst and market historian specializing in deconstructing and simulating complex market dynamics, particularly Liquidity Spirals. Your task is to reconstruct a complete, detailed, and fact-based narrative of a specified Liquidity Spiral event based on the provided multi-source data (e.g., parsed web content, PDF documents, financial reports, regulatory filings, academic papers, news archives).
+You are an expert quantitative financial analyst and systemic risk specialist. Your task is to comprehensively analyze and reconstruct a specified **Liquidity Spiral** event based on provided multi-source data (e.g., market data, regulatory reports, academic papers, news articles, post-mortem analyses).
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of a Liquidity Spiral. Your output must be a structured JSON that meticulously documents the event's preconditions, triggering mechanisms, key phases of the spiral, intervention efforts, and final outcomes.
+**Core Objective:**
+Produce a complete, factual, and quantitatively detailed reconstruction of a liquidity spiral event. Your analysis must trace the self-reinforcing feedback loop from its triggers, through the core mechanisms of forced selling and price-impact, to its terminal point and aftermath. The output should serve as a forensic case study on systemic vulnerability.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Fact-Based Synthesis**: Integrate information from all provided sources. Resolve minor contradictions by prioritizing official data (e.g., central bank reports, exchange records, regulatory post-mortems). Note any significant discrepancies in the `simulation_analysis_notes.data_discrepancies` field.
-2.  **Temporal & Causal Logic**: The narrative must follow a strict chronological order, explicitly linking causes and effects. Each phase of the spiral (e.g., initial shock -> forced selling -> price drop -> margin calls -> further selling) must be logically sequenced.
-3.  **Financial & Market Logic**: Model the interplay between asset prices, leverage ratios, funding liquidity, and market liquidity with internal consistency. Quantify changes where data allows. Clearly distinguish between *reported* figures and *estimated/modeled* figures.
-4.  **Multi-Actor Perspective**: Analyze the event from the perspectives of different key actors (e.g., leveraged funds, dealers, exchanges, regulators) and how their interdependent actions fueled or alleviated the spiral.
+**Data Input:**
+You will receive raw text/data extracted from various sources regarding a specific market event characterized as a liquidity spiral (e.g., "March 2020 Treasury Market Liquidity Spiral", "UK Gilts Crisis September 2022", "Quant Quake / LTCM 1998"). The data may include price series, commentary on leverage, details on key entities, and regulatory findings. You must synthesize this information to build a coherent, evidence-based model of the spiral.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+**Output Format Requirements:**
+You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, arrays, booleans, or nested objects as described. Do not include any explanatory text outside the JSON.
+
+**Comprehensive JSON Schema and Field Definitions:**
 
 ```json
 {
-  "liquidity_spiral_simulation_report": {
+  "liquidity_spiral_analysis": {
     "metadata": {
-      "event_name": "string | The commonly recognized name of the event (e.g., 'The Quant Quake of 2007', 'The UK Gilt Crisis 2022').",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation.",
-      "primary_asset_class": "string | The main asset class at the center of the spiral (e.g., 'Equities', 'Government Bonds (Gilts)', 'Mortgage-Backed Securities', 'Corporate Bonds').",
-      "core_geographic_market": "string | The primary exchange or market where the spiral unfolded.",
-      "data_sources_summary": "array[string] | Brief list of primary data sources used (e.g., ['BIS Quarterly Review Q4 2007', 'Fed Report on Market Liquidity', 'Financial Times Archives Sept 2022', 'LSE Circuit Breaker Logs'])."
+      "event_identifier": "string: The common name for the liquidity spiral event (e.g., 'UK Liability-Driven Investment (LDI) Crisis, Sep 2022').",
+      "primary_market": "string: The core financial market where the spiral occurred (e.g., 'US Treasury Market', 'UK Gilt Market').",
+      "primary_asset_class": "string: The asset class at the epicenter (e.g., 'Sovereign Bonds', 'Equities', 'Mortgage-Backed Securities').",
+      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated (YYYY-MM-DDTHH:MM:SSZ).",
+      "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'Central Bank reports, hedge fund letters, exchange data, financial news')."
     },
-    "1_overview": {
-      "executive_summary": "string | A concise 3-5 sentence summary of the entire event: the context, the core mechanism of the spiral (e.g., 'Leveraged ETF rebalancing meeting with dealer hedging constraints'), the peak intensity, and the final resolution.",
-      "event_period": {
-        "precondition_buildup_start": "string (YYYY-MM) | Approximate start of conditions ripe for a spiral (e.g., rising leverage, declining volatility).",
-        "spiral_trigger_date": "string (YYYY-MM-DD) | The date of the initial shock or trigger.",
-        "spiral_peak_date": "string (YYYY-MM-DD) | The date of maximum market dislocation and price deviation.",
-        "market_stabilization_date": "string (YYYY-MM-DD) | The date when prices and liquidity largely normalized.",
-        "total_duration_days": "number | Calculated active spiral duration in days."
+    "overview": {
+      "summary": "string: A concise 3-5 sentence summary of the entire spiral: the context, the core feedback mechanism, the climax, and the resolution/outcome.",
+      "spiral_type": "string: Specific classification (e.g., 'Leverage-Induced Fire Sale Spiral', 'Margin Spiral', 'Volatility Spiral', 'Collateral Spiral').",
+      "catalyst_asset(s)": "array: List of the specific financial instruments whose initial price decline triggered the spiral (e.g., ['30-Year UK Gilts'], ['Long-dated US Treasuries']).",
+      "total_duration_days": "number: Approximate operational duration from initial catalyst to stabilization in days.",
+      "was_systemically_important": "boolean: Indicates if the spiral posed a risk to the broader financial system, requiring intervention."
+    },
+    "key_entities_and_roles": {
+      "forced_sellers": [
+        {
+          "entity_type": "string (e.g., 'Leveraged Hedge Fund', 'Liability-Driven Investment (LDI) Fund', 'Volatility-Targeting Fund', 'Margin-Called Retail Traders')",
+          "examples": "array: Names or descriptions of prominent entities in this category, if publicly known.",
+          "leverage_mechanism": "string: Description of how leverage was applied (e.g., 'Repo financing', 'Futures margin', 'Dynamic options hedging', 'Portfolio leverage').",
+          "trigger_condition": "string: The specific rule or constraint that forced selling (e.g., 'Margin call at 85% collateral value', 'Volatility target breach', 'Regulatory capital ratio breach')."
+        }
+      ],
+      "liquidity_providers": {
+        "withdrawing_entities": [
+          {
+            "entity_type": "string (e.g., 'Market Makers', 'Principal Trading Firms', 'Banks')",
+            "withdrawal_reason": "string: Why liquidity provision dried up (e.g., 'Risk limits breached', 'Increased volatility haircuts', 'Balance sheet constraints')."
+          }
+        ],
+        "intervening_entities": [
+          {
+            "entity_name": "string (e.g., 'Bank of England', 'Federal Reserve')",
+            "intervention_type": "string (e.g., 'Asset purchase facility', 'Liquidity injection', 'Temporary rule change')"
+          }
+        ]
+      },
+      "amplifying_agents": [
+        {
+          "agent_type": "string (e.g., 'Trend-following CTA funds', 'Delta-hedging options dealers', 'Algorithmic selling programs')",
+          "amplification_mechanism": "string: How this agent's behavior reinforced the price move (e.g., 'Mechanical selling in response to price trend', 'Selling underlying to hedge put options after price drop')."
+        }
+      ]
+    },
+    "spiral_mechanism_dynamics": {
+      "initial_catalyst": {
+        "date": "string: Approximate start date (YYYY-MM-DD).",
+        "event": "string: The macroeconomic or market event that caused the first price shock (e.g., 'Unexpectedly high inflation print', 'Central bank hawkish policy surprise', 'Counterparty default').",
+        "magnitude_of_initial_shock": "string: Description or quantification of the initial price move (e.g., '30Y Gilt yield rose 50bps in 2 days')."
+      },
+      "feedback_loop_steps": [
+        {
+          "step_order": "number: The sequence number in the loop (1, 2, 3...).",
+          "description": "string: A clear, causal description of one step in the reinforcing cycle. The final step should logically connect back to the first, closing the loop. (e.g., ['1. Asset prices fall.', '2. Leveraged entities face mark-to-market losses and declining collateral value.', '3. This triggers margin calls or breaches risk limits (VaR).', '4. To meet margin/deleverage, entities are forced to sell assets.', '5. Aggressive selling into illiquid markets further depresses prices.', '--> Loop back to Step 1.'])."
+        }
+      ],
+      "liquidity_metrics_deterioration": {
+        "bid_ask_spread_increase": "string: Qualitative or quantitative change (e.g., 'Increased by a factor of 5-10x', 'Widened dramatically').",
+        "market_depth_change": "string: Description of the change in order book depth (e.g., 'Depth on top 3 price levels vanished').",
+        "impact_per_trade": "string: Description of how much a typical sale moved the price (e.g., 'Price impact of trades increased significantly')."
       }
     },
-    "2_preconditions_and_setup": {
-      "macro_financial_background": "string | Description of the broader economic and financial conditions preceding the event (e.g., 'Period of low interest rates and compressed volatility leading to reach for yield').",
-      "market_structure_factors": {
-        "dominant_leverage_type": "string | The primary form of leverage involved (e.g., 'Repo financing', 'Derivative-based (e.g., swaps, futures)', 'ETF creation/redemption leverage').",
-        "key_institutional_players": "array[object] | List of major player types and examples. Each object: {'player_type': 'string (e.g., Hedge Fund, Dealer, Pension Fund, ETF)', 'example_names': 'array[string]', 'typical_strategy': 'string'}",
-        "liquidity_provision_landscape": "string | State of market-making and dealer balance sheet capacity pre-spiral."
+    "quantitative_analysis": {
+      "price_and_volume": {
+        "peak_to_trough_price_decline": "number: Percentage decline in the price of the catalyst asset from pre-spiral peak to spiral trough.",
+        "peak_volume_multiplier": "number: How many times higher trading volume was at peak stress vs. normal (e.g., 3 for 3x normal).",
+        "velocity_of_decline": "string: Description of the pace (e.g., 'Majority of price drop occurred within 48 hours')."
       },
-      "vulnerability_metrics_pre_spiral": {
-        "average_leverage_ratio_key_players": "string | Estimated leverage (e.g., 'Hedge Fund Avg Debt/Equity: 4x').",
-        "market_liquidity_indicators": "string | e.g., 'Bid-Ask spreads on core assets at 5-year lows', 'Depth of order book thinning'.",
-        "concentration_of_positions": "string | Description of crowded trades or high ownership concentration in the affected asset."
+      "leverage_and_margin": {
+        "estimated_aggregate_leverage_pre_spiral": "string: Estimate of leverage ratio (e.g., '5:1', 'High') for the key forced seller category.",
+        "margin_call_volume": "string: Estimated total value of margin calls issued or funds required to post collateral (e.g., '£X billion in additional collateral calls').",
+        "haircut_increase": "string: Description of how lenders increased margin requirements (haircuts) during the spiral (e.g., 'Haircuts on gilt collateral doubled from 1% to 2%+')."
+      },
+      "fire_sale_discount": {
+        "estimated_discount_to_fair_value": "string: Estimate of how far prices fell below fundamental/model-based value at the trough (e.g., 'Traded at a 20-30% discount to theoretical value').",
+        "price_reversal_post_stabilization": "string: The percentage price recovery after the spiral was broken, indicating the overshoot (e.g., 'Prices retraced 80% of the spiral move within a week')."
       }
     },
-    "3_trigger_and_spiral_mechanics": {
-      "initial_shock": {
-        "description": "string | The specific event that started the selling pressure (e.g., 'Surprise inflation print leading to rapid rate hike expectations', 'Default of a major counterparty', 'Sharp correction in a correlated asset').",
-        "date": "string (YYYY-MM-DD)",
-        "immediate_market_reaction": "string | First-round price move and volatility spike."
+    "key_milestones": [
+      {
+        "date": "string: Approximate date and time if possible (YYYY-MM-DD or YYYY-MM-DD HH:MM).",
+        "event": "string: Description of the milestone.",
+        "significance": "string: Why this was a turning point in the spiral's progression (e.g., 'Initial rate shock', 'First major fund announces deleveraging', 'Liquidity disappears from futures market', 'Central bank intervention announced')."
+      }
+    ],
+    "termination_and_stabilization": {
+      "breaking_the_spiral": {
+        "primary_breaker": "string: What action or event broke the feedback loop (e.g., 'Central bank asset purchases provided a price floor and liquidity', 'Forced sellers completed deleveraging', 'Volatility mean-reverted, triggering buying programs').",
+        "stabilization_date": "string: Approximate date when prices stopped declining and volatility subsided (YYYY-MM-DD)."
       },
-      "spiral_phase_1_forced_initial_selling": {
-        "who_was_forced_to_sell": "array[string] | Which entities faced the first round of constraints? (e.g., ['Delta-hedging dealers', 'Over-leveraged hedge funds facing mark-to-market losses'])",
-        "selling_trigger": "string | The specific mechanism (e.g., 'Margin calls', 'Volatility-targeting fund rebalancing', 'Breach of VaR limits').",
-        "estimated_volume_sold_phase1": "string",
-        "price_impact_phase1": "string | e.g., 'Asset X price dropped 15% from trigger.'"
-      },
-      "spiral_phase_2_funding_liquidity_crunch": {
-        "funding_channels_affected": "array[string] | e.g., ['Repo rollover became difficult', 'Prime brokers increased haircuts on collateral'].",        "who_faced_funding_pressure": "array[string] | Entities that could not secure usual funding.",
-        "liquidity_hoarding_behavior": "boolean | Did banks/dealers start hoarding cash/balance sheet?",
-        "impact_on_market_liquidity": "string | e.g., 'Dealer bid-offer spreads widened by 300%, depth vanished.'"
-      },
-      "spiral_phase_3_secondary_forced_selling": {
-        "who_was_forced_next": "array[string] | e.g., ['Entities relying on now-scarce repo funding', 'Funds facing investor redemptions due to poor performance'].",        "trigger_for_this_phase": "string | e.g., 'Collateral value decline triggering additional margin calls (negative feedback loop).'",
-        "estimated_volume_sold_phase2": "string",
-        "cumulative_price_impact": "string | Peak-to-trough decline from initial trigger."
-      },
-      "feedback_loops_documented": "array[object] | List identified feedback loops. Each object: {'loop_name': 'string (e.g., Margin Spiral, Loss Spiral)', 'description': 'string', 'key_evidence': 'string'}",
-      "was_there_a_fire_sale": "boolean | Did prices fall significantly below fundamental estimates due to forced selling?"
-    },
-    "4_interventions_and_peak": {
-      "private_sector_actions": "array[object] | Actions by market participants to halt the spiral. Each object: {'actor': 'string', 'action': 'string', 'intended_effect': 'string', 'perceived_effectiveness': 'string (High/Medium/Low)'}",
-      "public_sector_actions": {
-        "central_bank_actions": "array[string] | e.g., ['Launched emergency gilt purchase program (QE)', 'Provided extraordinary liquidity via discount window'].",        "regulatory_exchange_actions": "array[string] | e.g., ['Temporarily suspended short selling', 'Invoked circuit breakers'].",        "government_actions": "array[string] | e.g., ['Announced fiscal backstop', 'Coordinated statement with other central banks']."
-      },
-      "liquidity_injection_scale": "string | Total value of liquidity provided by central banks during the event.",
-      "point_of_maximum_pressure": {
-        "date": "string (YYYY-MM-DD)",
-        "key_metric_extremes": "string | e.g., '10-Year Gilt yield intraday peak: 5.0%', 'S&P 500 VIX peak: 85'.",        "anecdotes_of_market_dysfunction": "array[string] | e.g., ['ETF traded at 30% discount to NAV', 'No bids for AAA-rated bonds in size']."
+      "state_at_stabilization": {
+        "market_functioning": "string: Description of market conditions post-spiral (e.g., 'Liquidity gradually returning but fragile', 'Functioning normally with elevated volatility').",
+        "remaining_systemic_stress": "string: Description of any residual risks or imbalances (e.g., 'Some entities remained highly vulnerable', 'Collateral pipelines still impaired')."
       }
     },
-    "5_resolution_and_aftermath": {
-      "how_spiral_broke": "string | Description of the primary factor that stopped the spiral (e.g., 'Central bank's unconditional buyer-of-last-resort pledge restored confidence', 'Forced selling exhaustion', 'Coordinated dealer capital injection').",
-      "price_recovery_trajectory": "string | How quickly and completely did prices recover? (e.g., 'Prices recovered 80% of the loss within 3 months, but remained 10% below pre-spiral levels for a year').",
-      "immediate_casualties": {
-        "failed_institutions": "array[object] | Institutions that collapsed or were rescued. Each object: {'name': 'string', 'fate': 'string (e.g., Bankruptcy, Forced Merger, Bailout)'}",
-        "significant_losses_reported": "array[object] | Major losses announced. Each object: {'entity': 'string', 'estimated_loss': 'string', 'cause': 'string'}"
+    "aftermath_and_impact": {
+      "direct_consequences": {
+        "entities_failed_or_rescued": [
+          {
+            "entity_name": "string",
+            "outcome": "string (e.g., 'Liquidated', 'Bailed out by parent', 'Required emergency funding from central bank')"
+          }
+        ],
+        "estimated_total_losses": "string: Estimated sum of losses incurred by forced sellers and other market participants (e.g., '£XX billion in fund losses').",
+        "collateral_damage_assets": "array: List of other unrelated asset classes that experienced stress due to spillover effects."
       },
-      "market_structure_changes_post_event": "array[string] | Observable changes (e.g., ['Reduced reliance on certain leverage forms', 'Increased margin requirements for volatile assets', 'New dealer inventory caps'])."
-    },
-    "6_quantitative_impact_assessment": {
-      "market_impact": {
-        "peak_price_decline_affected_asset": "string | Percentage decline from pre-trigger to trough.",
-        "volatility_index_peak": "string | e.g., 'VIX peaked at 82.7'.",        "aggregate_market_cap_loss": "string | Estimated total loss in the relevant market(s)."
-      },
-      "institutional_impact": {
-        "total_estimated_losses_leveraged_players": "string",
-        "number_of_funds_liquidated": "number | Approximate count.",
-        "total_value_of_forced_sales": "string | Estimated sum of assets sold under duress."
-      },
-      "systemic_risk_indicators": {
-        "spillover_to_other_assets_markets": "string | Description of contagion.",
-        "impact_on_credit_availability": "string | e.g., 'Corporate bond issuance froze for 2 weeks'.",        "threat_to_financial_system_stability_perceived": "string (e.g., 'High - Central Bank declared systemic risk event')."
+      "regulatory_and_policy_response": [
+        {
+          "actor": "string (e.g., 'Prudential Regulation Authority (PRA)', 'Financial Stability Board (FSB)')",
+          "action": "string (e.g., 'Review of leverage in LDI funds', 'Strengthened stress testing requirements for dealers', 'Permanent standing repo facility established')",
+          "purpose": "string: The stated goal of the response (e.g., 'To increase resilience of the system to future liquidity shocks')."
+        }
+      ],
+      "systemic_lessons_and_impacts": {
+        "revealed_vulnerabilities": "array: List of structural flaws the spiral exposed (e.g., ['Pro-cyclicality of margin rules', 'Hidden concentration of leveraged positions', 'Fragility of market making under stress', 'Interconnectedness of seemingly separate entities through common risk factors']).",
+        "changes_in_market_practices": "array: List of how market behavior evolved post-event (e.g., ['Funds now hold larger liquidity buffers', 'Increased use of stress scenario analysis', 'More conservative margin assumptions by prime brokers'])."
       }
     },
-    "7_analysis_and_lessons": {
-      "root_causes_analysis": "array[string] | Fundamental causes (e.g., ['Excessive and opaque leverage in non-bank sector', 'Pro-cyclical risk management models (VaR)', 'Fragmented liquidity provision']).",
-      "key_red_flags_missed": "array[string] | Warning signs observable before the spiral (e.g., ['Rising leverage in system, declining market depth', 'Concentration of similar positions']).",
-      "effectiveness_of_interventions": "string | Analysis of which public/private actions worked and which didn't.",
-      "proposed_regulatory_policy_changes": "array[string] | Changes recommended or enacted post-event (e.g., ['Stress tests for non-bank leverage', 'Central bank standing facilities for broader range of counterparties']).",
-      "simulation_confidence_level": "string | High/Medium/Low based on data quality, consistency, and model consensus.",
-      "data_discrepancies": "array[string] | Note any major conflicting information from sources.",
-      "alternative_scenarios_considered": "string | Brief mention of how the spiral could have been worse/better under different conditions."
+    "synthesis_and_red_flags": {
+      "pre_conditions_identified": "array: List of necessary conditions that were present before the spiral (e.g., ['High aggregate leverage in a specific strategy', 'Crowded positioning in one asset', 'Low absolute market liquidity', 'Dependence on continuous market access for funding']).",
+      "real_time_indicators": "array: List of metrics or signals that could have served as early warnings (e.g., ['Sharp increase in futures open interest alongside price decline', 'Rising implied volatility without clear news', 'Abnormal repo market activity', 'Widening of basis between cash and derivative markets']).",
+      "comparison_to_theoretical_model": "string: Brief analysis of how this empirical event aligns with or deviates from academic models of liquidity spirals (e.g., 'Closely followed the Brunnermeier & Pedersen (2009) leverage spiral framework')."
     }
   }
 }
 ```
 
-### **INSTRUCTION FOR EXECUTION**
-1.  **Thoroughly Analyze** all provided source data pertaining to the requested Liquidity Spiral event (e.g., "The [Specific Event Name]").
-2.  **Extract and Synthesize** information to populate every field in the JSON schema above. For quantitative fields lacking precise data, provide reasoned, labeled estimates (e.g., "estimated_") based on available proxies and logical inference. Clearly note estimations in `analysis_and_lessons`.
-3.  **Maintain Causal Narrative**: Ensure the report reads as a coherent story, linking the vulnerability of the pre-conditions to the specific trigger, detailing the mechanics of each spiral phase, and explaining the resolution.
-4.  **Adhere to Schema**: Output **ONLY** the raw JSON object, beginning with `{` and ending with `}`. Do not use markdown code block syntax in your final output.
-```
+**Critical Analysis Instructions:**
+
+1.  **Fact & Data-Driven:** All conclusions, especially quantitative ones (`peak_to_trough_price_decline`, `fire_sale_discount`), must be anchored in the provided source data. Cite the evidence base for estimates. If data is conflicting, state the range or the most reliable estimate and note the discrepancy.
+2.  **Mechanism-First Narrative:** The `feedback_loop_steps` must be the analytical core. Articulate a clear, causal chain that demonstrates the *self-reinforcing* nature. Avoid simple chronological listing; focus on the *interactions* between price, leverage, and liquidity.
+3.  **Quantitative Emphasis:** Strive to populate numerical fields with specific estimates. Use phrases like "estimated to be", "reportedly", if precision is not absolute. Avoid using `"N/A"` unless information is genuinely unavailable.
+4.  **Distinguish Actors & Motivations:** Clearly differentiate the behaviors and constraints of `forced_sellers`, `liquidity_providers`, and `amplifying_agents`. Their interaction *is* the spiral.
+5.  **Identify the Loop Breaker:** Analyze why the spiral stopped. Was it exhaustion of sellers, a policy intervention that changed incentives, or a valuation floor being reached? This is a crucial part of the story.
+6.  **Focus on Systemic Links:** Explain how stress was transmitted. Did it spread to other markets? Why? Through what channels (collateral, correlated positions, panic)?
+7.  **Completeness:** Answer the implicit questions: What broke? How did it break? What were the costs? What did we learn? Ensure the JSON structure is fully addressed.
+
+**Final Step Before Output:**
+Perform a logical consistency check. Ensure the `feedback_loop_steps` form a closed loop. Verify that the `key_milestones` align with the `total_duration_days` and the phases of the spiral (catalyst, acceleration, climax, stabilization).
+
+**Now, synthesize the provided data about the specified liquidity spiral event and output the complete JSON object.**
 """
