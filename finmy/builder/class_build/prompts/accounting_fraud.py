@@ -1,180 +1,150 @@
 
-def accounting_fraud_prompt(text: str) -> str:
+def accounting_fraud_prompt() -> str:
     return """
-You are an expert financial analyst and forensic investigator specializing in corporate fraud. Your task is to simulate a comprehensive accounting fraud event based on provided multi-source data (e.g., news articles, financial reports, regulatory filings, court documents). The simulation must reconstruct the event **logically, chronologically, and factually**, covering all key aspects from inception to resolution.
+You are an expert forensic accountant and financial analyst specializing in the detection and reconstruction of accounting fraud. Your task is to comprehensively analyze and reconstruct a specified accounting fraud event based on provided multi-source data (e.g., financial statements, SEC filings, audit reports, internal emails, whistleblower complaints, news investigations, legal indictments, court verdicts).
 
-#### **Simulation Requirements:**
+**Core Objective:**
+Produce a complete, factual, and logically structured reconstruction of the accounting fraud, detailing its methodology, execution, concealment, discovery, and aftermath. The focus is on the technical manipulation of financial records, the key personnel involved, the breakdown of internal and external controls, and the resultant financial and systemic impacts.
 
-1. **Full Chain Presentation**: Narrate the entire event from cause to effect, including background, execution, exposure, and aftermath.
-2. **Key Nodes**: Identify and detail each critical phase (e.g., fraud initiation, methods used, detection, investigation, legal actions).
-3. **Outcome**: Present the final state of the event, including financial, legal, and reputational consequences.
-4. **Stakeholder Impact**: Analyze impacts on all involved parties (e.g., company, executives, employees, investors, auditors, regulators, industry).
+**Data Input:**
+You will receive raw text/data extracted from various sources regarding a specific accounting fraud scandal (e.g., "Enron Scandal", "Wirecard AG", "Toshiba Accounting Scandal"). This data is likely complex, technical, and may contain discrepancies. You must synthesize information from financial documents, auditor opinions, regulatory findings, and journalistic reports to build a coherent and technically accurate narrative.
 
-#### **Specific Details to Include (Using Enron or Wirecard as Reference Template):**
+**Output Format Requirements:**
+You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any explanatory text outside the JSON.
 
-For the target event (to be extracted from input data), ensure the simulation covers at least the following points:
-
-1. **Event Overview**: A concise summary of the accounting fraud.
-2. **Primary Perpetrators**: Key individuals or entities responsible (e.g., CEO, CFO, specific departments).
-3. **Fraud Motivation**: Why the fraud was initiated (e.g., pressure to meet earnings, hide losses, inflate stock price).
-4. **Fraudulent Methods**: Specific accounting techniques used (e.g., revenue inflation, liability concealment, fake transactions, special purpose entities (SPEs)).
-5. **Documentation & Falsification**: How records were manipulated (e.g., forged invoices, altered ledgers, fake contracts).
-6. **Internal Concealment**: How the fraud was hidden within the company (e.g., collusion, override of controls, misleading internal audits).
-7. **External Presentation**: How the company portrayed its financial health to the public (e.g., earnings reports, investor calls, press releases).
-8. **Auditor Involvement**: Role of external auditors (e.g., negligence, complicity, failure to detect).
-9. **Investor Attraction**: How investors were drawn in based on fraudulent data (e.g., stock performance, dividend promises, growth projections).
-10. **Duration & Scale**: Time period the fraud persisted and cumulative scale (e.g., falsified revenue amount, hidden debt).
-11. **Red Flags**: Warning signs that were missed (e.g., inconsistent cash flows, unusual transactions, whistleblower tips).
-12. **Trigger for Exposure**: Event that led to discovery (e.g., whistleblower, investigative journalism, regulatory inquiry, audit failure).
-13. **Immediate Aftermath**: Market reaction, stock price collapse, credit downgrades, executive departures.
-14. **Regulatory & Legal Actions**: Investigations by agencies (e.g., SEC, DOJ), charges filed, lawsuits (class actions, civil/criminal cases).
-15. **Corporate Outcome**: Bankruptcy, restructuring, delisting, dissolution, or survival.
-16. **Perpetrator Outcomes**: Legal consequences for key individuals (e.g., fines, imprisonment, bans).
-17. **Investor Impact**: Financial losses, recovery efforts (e.g., settlements, insurance claims).
-18. **Employee Impact**: Job losses, pension fund losses, reputational damage.
-19. **Auditor Consequences**: Penalties for audit firms (e.g., fines, lawsuits, reputational damage).
-20. **Industry & Regulatory Reforms**: Changes prompted by the fraud (e.g., new laws like Sarbanes-Oxley, accounting standard updates).
-21. **Total Financial Damage**: Estimated monetary loss across all stakeholders.
-22. **Recovery Rate**: Percentage of investor funds recovered, if any.
-23. **Systemic Implications**: Broader effects on market trust, sector perception, or global finance.
-
-#### **Output Format Instructions:**
-
-- Output **must** be a valid JSON object matching the structure below.
-- All fields should be filled based on simulated data. Use `null` for unknown information.
-- Ensure factual consistency; avoid speculation unless labeled as `estimated` or `alleged`.
-- Use clear, professional language in descriptions.
-
-#### **JSON Schema Definition:**
+**Comprehensive JSON Schema and Field Definitions:**
 
 ```json
 {
-  "event_simulation": {
+  "accounting_fraud_reconstruction": {
     "metadata": {
-      "simulation_type": "Accounting Fraud",
-      "event_name": "Name of the fraud case (e.g., Enron Scandal)",
-      "reference_date_range": "YYYY-MM to YYYY-MM",
-      "data_sources_summary": "Brief list of input sources used"
+      "event_identifier": "string: The common name of the event (e.g., 'Wirecard Accounting Fraud Scandal').",
+      "fraudulent_entity": "string: The primary company that issued fraudulent financial statements.",
+      "primary_exchange": "string: The stock exchange(s) where the entity was listed (e.g., 'Frankfurt Stock Exchange (DAX)').",
+      "primary_jurisdiction": "string: Country/region of the entity's headquarters and primary regulator.",
+      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of analysis generation.",
+      "data_sources_summary": "string: Brief description of source types used (e.g., 'EA&Y audit reports, Financial Times investigations, BaFin rulings, Munich prosecutors' indictment')."
     },
     "overview": {
-      "summary": "Full narrative summary (2-3 paragraphs).",
-      "primary_perpetrators": [
+      "summary": "string: A concise 3-5 sentence summary of the fraud: what was misstated, core method, duration, and final outcome.",
+      "fraud_type_classification": "array: List of specific accounting fraud types involved. Must include from: ['Revenue Recognition Fraud', 'Asset Inflation', 'Liability/Expense Understatement', 'Cash & Bank Balance Falsification', 'Fictitious Transactions/Entities', 'Improper Valuation', 'Management Override of Controls']. Example: ['Revenue Recognition Fraud', 'Fictitious Transactions/Entities', 'Asset Inflation'].",
+      "fraud_motive": "array: List of primary motivations. Must include from: ['Meet Analyst Earnings Expectations', 'Maintain Stock Price / Market Valuation', 'Comply with Debt Covenants', 'Secure Further Financing', 'Achieve Management Bonuses', 'Conceal Operational Failures', 'Facilitate M&A Activity']. Example: ['Maintain Stock Price', 'Secure Further Financing'].",
+      "total_duration_months": "number: Approximate duration from the first material misstatement to the fraud's public discovery/collapse, in months.",
+      "stated_auditor_during_fraud": "string: Name of the external audit firm that issued clean/qualified opinions during the fraud period.",
+      "was_cross_border": "boolean: Indicates if the fraud involved complex international structures, transactions, or subsidiaries to facilitate or conceal the fraud."
+    },
+    "key_perpetrators_and_enablers": {
+      "primary_instigators": [
         {
-          "name": "Name",
-          "title": "Role in company",
-          "alleged_role": "Specific involvement in fraud"
+          "name": "string",
+          "title_during_fraud": "string (e.g., CEO, CFO, COO, Head of Accounting)",
+          "department": "string",
+          "core_action": "string: Specific role in orchestrating the fraud (e.g., 'Directed creation of fake revenue contracts', 'Pressured subordinates to book fake profits').",
+          "legal_status_at_terminal": "string: Status at time of public discovery (e.g., 'Resigned', 'Suspended', 'Arrested', 'Under Investigation')."
         }
       ],
-      "fraud_motivation": "Description of key drivers.",
-      "fraudulent_methods": [
+      "complicit_entities_subsidiaries": [
         {
-          "method": "e.g., Revenue Recognition Fraud",
-          "description": "How it was executed",
-          "estimated_financial_impact": "Amount or percentage"
+          "entity_name": "string",
+          "jurisdiction": "string: Often an offshore or loosely regulated territory.",
+          "role_in_fraud": "string: How this entity was used (e.g., 'Held fictitious cash balances', 'Engaged in round-tripping transactions', 'Booked inflated intercompany sales')."
         }
       ],
-      "falsified_documents": [
-        {
-          "document_type": "e.g., Invoice, Balance Sheet",
-          "purpose": "What it was used to fake"
-        }
-      ]
-    },
-    "execution_timeline": {
-      "start_date": "YYYY-MM",
-      "end_date": "YYYY-MM",
-      "key_milestones": [
-        {
-          "date": "YYYY-MM-DD",
-          "event": "Description of significant occurrence"
-        }
-      ]
-    },
-    "concealment_mechanisms": {
-      "internal_controls_bypassed": "How internal checks were avoided.",
-      "external_auditor_relation": "Description of auditor interaction.",
-      "public_disclosures": "How false info was communicated to market."
-    },
-    "exposure": {
-      "trigger_event": "What led to discovery.",
-      "whistleblower_if_any": "Details if applicable.",
-      "initial_public_reaction": "Market/media response upon news."
-    },
-    "aftermath": {
-      "financial_impact": {
-        "company_market_cap_loss": "Amount in USD",
-        "investor_losses_estimated": "Amount in USD",
-        "hidden_debt_revealed": "Amount in USD",
-        "falsified_revenue_total": "Amount over fraud period"
+      "internal_control_breakdown": {
+        "overridden_controls": "array: List of specific internal controls that were bypassed or disabled (e.g., ['Segregation of Duties in revenue recognition', 'Bank reconciliation oversight by treasury', 'Management review of subsidiary financials']).",
+        "culture_of_fear_or_complicity": "string: Description of the internal environment that allowed the fraud to persist (e.g., 'CEO/CFO dominance silenced dissent', 'Whistleblowers were fired or marginalized', 'Board audit committee was passive')."
       },
-      "legal_actions": [
-        {
-          "entity": "e.g., SEC, DOJ",
-          "action_type": "e.g., Civil Suit, Criminal Charges",
-          "outcome": "e.g., Settlements, Convictions"
-        }
-      ],
-      "corporate_fate": "e.g., Bankruptcy, Acquired, Survived",
-      "perpetrator_outcomes": [
-        {
-          "name": "Perpetrator name",
-          "penalties": "e.g., Fine amount, Prison sentence"
-        }
-      ],
-      "auditor_fate": "What happened to audit firm(s).",
-      "employee_impact": "e.g., Layoffs, pension losses.",
-      "investor_recovery": {
-        "settlement_funds": "Amount in USD",
-        "recovery_rate_percentage": "Estimated percentage",
-        "pending_claims": "If any remain unresolved"
+      "external_audit_failure": {
+        "missed_red_flags": "array: List of warning signs the external auditor allegedly failed to adequately address (e.g., ['Inability to directly confirm bank balances with 3rd party trustees', 'Unusually high profitability vs. industry peers', 'Complex and opaque network of partner entities']).",
+        "alleged_complicity_or_negligence": "string: Summary of allegations against the audit firm (e.g., 'Over-reliance on management representations', 'Failure to apply sufficient professional skepticism', 'Alleged turning a blind eye for high audit fees')."
       }
     },
-    "systemic_effects": {
-      "regulatory_changes": "New laws/standards enacted.",
-      "industry_practices_shift": "Changes in sector behavior.",
-      "trust_impact": "Effect on investor confidence."
+    "fraud_mechanism_and_execution": {
+      "core_fraudulent_technique": "string: Detailed, technical description of the primary accounting manipulation. (e.g., 'Booking sales to fictitious customers via shell companies with forged contracts and invoices', 'Capitalizing ordinary operating expenses as intangible assets', 'Using 'round-tripping' where money is loaned to a partner who then uses it to purchase services, creating fake revenue').",
+      "specific_accounts_manipulated": [
+        {
+          "financial_statement": "string: 'Balance Sheet', 'Income Statement', or 'Cash Flow Statement'.",
+          "account_name": "string (e.g., 'Accounts Receivable', 'Revenue', 'Cash & Cash Equivalents', 'Goodwill', 'Cost of Sales').",
+          "direction_of_misstatement": "string: 'Overstated' or 'Understated'.",
+          "method_of_misstatement": "string: How this account was manipulated (e.g., 'Fictitious invoices recorded', 'Premature revenue recognition from long-term contracts', 'Liabilities moved off-balance sheet through special purpose entities')."
+        }
+      ],
+      "concealment_strategies": "array: List of methods used to hide the fraud from auditors, regulators, and investors. (e.g., ['Forged bank statements and audit confirmation letters', 'Complex layering of inter-company transactions across jurisdictions', 'Threats and NDAs with business partners', 'Using IT systems to generate fake backend data for auditors']).",
+      "falsified_documentation": "array: List of types of documents that were forged or fabricated. (e.g., ['Sales contracts', 'Bank account statements', 'Board meeting minutes', 'Customer purchase orders', 'Service delivery confirmations'])."
     },
-    "summary_metrics": {
-      "total_duration_months": "Integer",
-      "total_investors_affected": "Integer (estimate if unknown)",
-      "total_financial_damage_usd": "Sum of key losses",
-      "largest_single_loss_usd": "If notable",
-      "recovery_rate_percentage": "Overall estimated recovery"
+    "financial_misstatement_analysis": {
+      "scale_of_misstatement": {
+        "peak_market_capitalization_based_on_fraud": "number: The entity's highest market valuation (in primary currency) during the fraud period, which was inflated by the misstatements.",
+        "estimated_cumulative_fictitious_revenue": "number: Total amount of fraudulent revenue recognized over the fraud period.",
+        "estimated_overstatement_of_assets": "number: Total amount by which assets (e.g., cash, receivables, goodwill) were inflated at the point of discovery.",
+        "estimated_understatement_of_liabilities": "number: Total amount by which debts or obligations were hidden or underreported.",
+        "currency": "string: Primary currency for all monetary figures in this section (e.g., 'EUR', 'USD').",
+        "restatement_period": "string: The financial years/quarters ultimately found to be misstated (e.g., 'FY2015 - FY2019')."
+      },
+      "profitability_illusion": {
+        "reported_vs_actual_ebitda_margin": "string: Comparison of the reported EBITDA margin during the fraud to the estimated actual margin (e.g., 'Reported: 25%; Actual: <5%').",
+        "reported_vs_actual_revenue_growth": "string: Comparison of reported revenue growth rates to estimated actual growth (e.g., 'Reported CAGR: 40%; Actual CAGR: ~10%')."
+      }
+    },
+    "key_milestones": [
+      {
+        "date": "string: Approximate date (YYYY-MM-DD or YYYY-MM).",
+        "event": "string: Description of the milestone.",
+        "category": "string: Categorization of the event. Must be one of: ['Fraud Initiation', 'Concealment Action', 'Internal Warning/Whistleblower', 'External Scrutiny (Media, Short-sellers)', 'Regulatory Inquiry', 'Auditor Action', 'Collapse/Discovery', 'Legal Action'].",
+        "significance": "string: Why this was a critical turning point (e.g., 'First material fraudulent journal entry posted', 'Financial Times publishes investigation questioning cash balances', 'Auditor refuses to sign annual report, triggering insolvency')."
+      }
+    ],
+    "discovery_and_collapse": {
+      "trigger_event": "string: The immediate catalyst that caused the fraud to unravel (e.g., 'Whistleblower report to internal audit leaked to media', 'Regulatory forced special investigation', 'External auditor unable to obtain sufficient evidence for cash holdings', 'Key business partner admits to non-existent transactions').",
+      "collapse_date": "string: The date when the fraud was publicly acknowledged or the company entered insolvency (YYYY-MM-DD or YYYY-MM).",
+      "state_at_collapse": {
+        "immediate_action": "string: What happened right after discovery (e.g., 'Trading suspended on stock exchange', 'CEO/CFO arrested', 'Company filed for insolvency', 'Regulator appointed special administrator').",
+        "auditor_action": "string: Final action by the external auditor (e.g., 'Withdrew audit opinions for previous years', 'Issued adverse opinion on last set of statements').",
+        "share_price_drop_percent": "number: Approximate percentage drop in share price from pre-collapse peak to post-discovery low."
+      }
+    },
+    "aftermath_and_impact": {
+      "legal_regulatory_and_professional_action": [
+        {
+          "actor": "string (e.g., 'DOJ', 'SEC', 'BaFin', 'FRC (UK)', 'PCAOB', 'Public Prosecutor')",
+          "action_type": "string: 'Criminal Charges', 'Civil Securities Fraud Charges', 'Monetary Fine/Penalty', 'Market Ban', 'Professional Sanction (Auditor)'.",
+          "target": "string: Whom the action was against (Company, Executives, Auditors).",
+          "outcome": "string: Summary of the result (e.g., 'Guilty plea, 10-year sentence', '$100m fine', 'Revocation of audit license', 'Case pending').",
+          "date": "string: Approximate date of action/outcome."
+        }
+      ],
+      "corporate_outcome": "string: The final fate of the fraudulent entity (e.g., 'Liquidated', 'Acquired in fire sale', 'Delisted and ceased operations', 'Under new management after restructuring').",
+      "perpetrator_outcomes_summary": "string: Consolidated summary of legal and personal outcomes for key instigators.",
+      "investor_and_market_impact": {
+        "total_equity_wiped_out": "number: Approximate value of shareholder equity destroyed at collapse (based on market cap drop).",
+        "creditor_losses_estimated": "number: Estimated losses to bondholders and other creditors.",
+        "impact_on_sector_index": "string: Effect on the relevant market sector or index (e.g., 'Damaged investor confidence in European FinTech stocks', 'Led to sell-off in DAX')."
+      },
+      "systemic_and_regulatory_impacts": [
+        "string: List broader consequences (e.g., 'Strengthened auditor rotation rules in the EU', 'Increased scrutiny of cash balances and third-party trustees', 'Calls for reform of national financial regulator's oversight powers', 'Revised accounting standards for revenue recognition (IFRS 15) enforcement')."
+      ]
+    },
+    "forensic_analysis_and_red_flags": {
+      "ex_post_red_flags": "array: List of clear financial and non-financial warning signs visible in hindsight. (e.g., ['Persistently high cash balances yielding negligible interest', 'Disproportionate revenue from opaque 'third-party acquiring' partners', 'Aggressive, tone-at-the-top corporate culture', 'Frequent disputes and changes in the finance department', 'Complex corporate structure with many offshore subsidiaries']).",
+      "audit_lesson": "string: Key forensic accounting or auditing lesson highlighted by this case."
     }
   }
 }
 ```
 
-#### **Final Instructions:**
+**Critical Analysis Instructions:**
 
-- Process all provided data sources to extract relevant facts.
-- Fill the JSON structure with detailed, coherent information.
-- Maintain a neutral, factual tone; distinguish between proven facts and allegations.
-- If data is insufficient for a field, use `null` and add a note in `metadata["data_sources_summary"]` about gaps.
-- Output only the JSON object, enclosed in a markdown code block.
+1.  **Technical Accuracy & Fact-Based:** Ground all analysis in the provided source data, especially numerical financial data, audit findings, and legal conclusions. Explain accounting mechanisms with precision. If data conflicts, note the discrepancy and follow the preponderance of evidence from authoritative sources (e.g., court verdicts, regulator final reports).
+2.  **Control Focus:** Explicitly analyze the failure of **internal controls** (tone at the top, override mechanisms) and **external gatekeepers** (auditor skepticism, regulator oversight). This is central to accounting fraud.
+3.  **Quantitative Rigor:** Populate all financial misstatement fields with the best available estimates from restatements, investigator reports, or court evidence. Clearly state if figures are approximations. Do not use `"N/A"` lightly; strive to find data.
+4.  **Chronological & Causal Logic:** The `key_milestones` must tell a coherent story linking pressure/motive, fraudulent action, concealment, discovery trigger, and collapse. The `category` field should show the evolution.
+5.  **Impact Differentiation:** Clearly distinguish impacts on different stakeholders: equity investors (total wipe-out), creditors, employees, the auditing profession, and the regulatory landscape.
+6.  **Completeness:** Answer the implicit questions: **What** was misstated? **How** was it done (technically)? **Who** did it and **who** failed to stop it? **How** was it hidden? **What** caused it to be uncovered? **What** were the consequences?
+7.  **Field Compliance:** If information for a specific sub-field is absolutely not found in the provided data, use the value: `"Information not available in provided sources."`
 
----
+**Final Step Before Output:**
+Perform an internal consistency check. Ensure the `fraud_type_classification` aligns with the `core_fraudulent_technique`. Verify that the timeline in `key_milestones` matches the `total_duration_months`. Confirm that the `scale_of_misstatement` figures are logically related (e.g., fictitious revenue inflates receivables and assets).
 
-**Output Example (Markdown Wrapper):**
-
-```json
-{
-  "event_simulation": {
-    "metadata": {
-      "simulation_type": "Accounting Fraud",
-      "event_name": "Enron Scandal",
-      "reference_date_range": "1997-01 to 2001-12",
-      "data_sources_summary": "SEC filings, court documents, news archives"
-    },
-    "overview": {
-      "summary": "Enron Corporation, an American energy company, engaged in systematic accounting fraud...",
-      ...
-    }
-    ...
-  }
-}
-```
-
-Now, simulate the accounting fraud event based on the provided data.
+**Now, synthesize the provided data about the specified accounting fraud event and output the complete JSON object.**
 
 """
