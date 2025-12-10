@@ -1,5 +1,5 @@
 
-def classify_prompt(text: str) -> str:
+def classify_prompt() -> str:
 
     return """
 You are a specialized assistant for analyzing and classifying financial events. Given a financial event narrative or a set of facts, your sole task is to determine and output its **event type** in a structured JSON format.
