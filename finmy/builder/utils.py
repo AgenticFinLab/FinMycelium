@@ -1,60 +1,40 @@
 """
-Utilities for extracting dataclass schema blocks from Python source.
-
-This module provides helpers to:
-- Load Python source text from a file path (defaults to `structure.py` for convenience)
-- Extract either all dataclass blocks or a specific subset plus their transitive
-  dataclass dependencies referenced in field type annotations
-
-Usage examples:
-
-1) Extract all dataclass definitions
-   >>> from finmy.builder.utils import load_python_text, extract_dataclass_blocks
-   >>> spec = load_python_text()  # reads finmy/builder/structure.py by default
-   >>> blocks = extract_dataclass_blocks(spec, mode="all")
-   >>> print(blocks[:200])
-
-2) Extract a specific dataclass and its referenced dataclass dependencies
-   >>> spec = load_python_text()
-   >>> blocks = extract_dataclass_blocks(spec, mode="single", target_classes=["Episode"])
-   >>> print(blocks)
-
-3) Use custom path (e.g., different schema file)
-   >>> spec = load_python_text(path="/abs/path/to/another_structure.py")
-   >>> blocks = extract_dataclass_blocks(spec)
+Utilities for loading Python source and extracting/filtering dataclass blocks.
 
 Notes:
-- When AST parsing fails (e.g., due to incomplete code), the extractor falls back to a
-  regex-based method that simply concatenates all @dataclass blocks.
+- If AST parsing fails (e.g., due to incomplete code), `extract_dataclass_blocks` falls back
+  to a regex that concatenates all `@dataclass` blocks.
 """
 
 import re
+import json
 import ast
 from pathlib import Path
-from typing import Optional, List, Set, Dict, Any
+from typing import List, Set, Dict, Any, Optional
 
 
-def load_python_text(path: Optional[str | Path] = None) -> str:
-    """Load Python source text.
+def load_python_text(path: str | Path) -> str:
+    """Load Python source text from a required path.
 
     Behavior:
-    - If `path` is None: load and concatenate all `*.py` files under the `builder` directory
-      (i.e., the directory where this module resides).
-    - If `path` is a file: load that file.
-    - If `path` is a directory: load and concatenate all `*.py` files within it.
+    - If `path` is a file: returns that file's text.
+    - If `path` is a directory: loads and concatenates all `*.py` files within the directory
+      (sorted by filename) into a single string.
 
-    Returns: Full file content as a single string. Empty string on failure.
+    Returns:
+    - The file/directory content as a single string. Returns empty string on failure or when
+      `path` exists but is neither a file nor a directory.
+
+    Examples:
+    >>> from pathlib import Path
+    >>> text = load_python_text(Path("finmy/builder/structure.py"))
+    >>> isinstance(text, str) and "@dataclass" in text
+    True
+
+    >>> text = load_python_text(Path("finmy/builder/"))
+    >>> isinstance(text, str)
+    True
     """
-    base_dir = Path(__file__).parent
-    if path is None:
-        try:
-            contents = []
-            for py in sorted(base_dir.glob("*.py")):
-                contents.append(py.read_text(encoding="utf-8"))
-            return "\n".join(contents)
-        except Exception:
-            return ""
-
     p = Path(path)
     try:
         if p.is_file():
@@ -70,35 +50,45 @@ def load_python_text(path: Optional[str | Path] = None) -> str:
 
 
 def extract_dataclass_blocks(
-    spec: str,
+    code_text: str,
     mode: str = "all",
     target_classes: Optional[List[str]] = None,
 ) -> str:
-    """Extract dataclass blocks from Python source.
+    """Extract dataclass blocks from Python source text.
 
     Parameters:
-    - spec: Full Python source text containing @dataclass definitions
+    - code_text: Python source text containing `@dataclass` class definitions.
     - mode:
-        - "all": return all dataclass blocks
-        - "single": return only the target dataclass blocks and any dataclass
-          transitively referenced by their field type annotations
-    - target_classes: Class names to start from when mode=="single"
+      - "all": return all dataclass blocks in the order they appear.
+      - "single": return only the target dataclass blocks and any dataclass transitively
+        referenced by their field type annotations.
+    - target_classes: Class names to start from when `mode == "single"`.
 
-    Returns: Concatenated dataclass blocks as a string
+    Returns:
+    - Concatenated dataclass blocks as a single string. Empty string if nothing found.
 
-    Implementation details:
-    - Uses AST to find class definitions decorated with @dataclass
-    - Collects type names from field annotations to resolve dependencies
-    - Preserves original order of appearance when emitting blocks
-    - Falls back to regex if AST parsing fails
+    Behavior:
+    - Parses with `ast` and collects `@dataclass` class blocks by line range, preserving order.
+    - Resolves dependencies in "single" mode by walking field annotations and union/subscript types.
+    - Falls back to regex extraction when `ast.parse` fails, concatenating `@dataclass` blocks.
+
+    Examples:
+    >>> text = load_python_text("finmy/builder/structure.py")
+    >>> all_blocks = extract_dataclass_blocks(text, mode="all")
+    >>> "class EventStage" in all_blocks and "class Episode" in all_blocks
+    True
+
+    >>> single_blocks = extract_dataclass_blocks(text, mode="single", target_classes=["Episode"])
+    >>> "class Episode" in single_blocks
+    True
     """
 
-    lines = spec.splitlines()
+    lines = code_text.splitlines()
 
     try:
-        tree = ast.parse(spec)
+        tree = ast.parse(code_text)
     except SyntaxError:
-        blocks = re.findall(r"@dataclass[\s\S]*?(?=\n@dataclass|\Z)", spec)
+        blocks = re.findall(r"@dataclass[\s\S]*?(?=\n@dataclass|\Z)", code_text)
         return ("\n".join(blocks)).strip()
 
     def is_dataclass(node: ast.ClassDef) -> bool:
@@ -185,3 +175,205 @@ def extract_dataclass_blocks(
         return ("\n".join(emit)).strip()
 
     return ""
+
+
+def filter_dataclass_fields(
+    code_text: str, include: Dict[str, Optional[List[str]]]
+) -> str:
+    """Filter dataclass definitions to include only specified fields per class.
+
+    Parameters:
+    - code_text: Python source text containing `@dataclass` classes.
+    - include: Mapping of `ClassName -> List[field_name]` to retain. Use `None` or an empty
+      list to retain all fields for that class header (not recommended for filtering). Classes
+      not present in the mapping are omitted.
+
+    Returns:
+    - Concatenated text of filtered `@dataclass` class definitions, preserving decorators and
+      class headers, and including only the selected field assignment lines. Class docstrings and
+      non-field statements are omitted.
+
+    Notes:
+    - Field detection covers annotated assignments (`AnnAssign`) and simple assignments (`Assign`).
+    - Retains the contiguous comment lines immediately above each retained field (lines starting with `#`).
+      Stops when encountering a non-comment or a blank line.
+    - The function preserves the original order of class definitions.
+
+    Example:
+    >>> text = load_python_text("finmy/builder/structure.py")
+    >>> filtered = filter_dataclass_fields(text, {
+    ...     "EventStage": ["stage_id", "name", "index_in_event"],
+    ...     "Episode": ["episode_id", "name", "index_in_stage"],
+    ... })
+    >>> "class EventStage" in filtered and "class Episode" in filtered
+    True
+    >>> "episodes:" in filtered
+    False
+    """
+    lines = code_text.splitlines()
+    try:
+        tree = ast.parse(code_text)
+    except SyntaxError:
+        return ""
+
+    def is_dataclass(node: ast.ClassDef) -> bool:
+        for dec in node.decorator_list:
+            if isinstance(dec, ast.Name) and dec.id == "dataclass":
+                return True
+            if isinstance(dec, ast.Attribute) and dec.attr == "dataclass":
+                return True
+        return False
+
+    blocks: List[str] = []
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if not is_dataclass(node):
+            continue
+        name = node.name
+        if name not in include:
+            continue
+        allow = include[name]
+        allow_set = set(allow) if allow else set()
+        deco_lines = [
+            getattr(d, "lineno", node.lineno) for d in node.decorator_list
+        ] or [node.lineno]
+        start = min(deco_lines)
+        # Include decorator lines and the class header line
+        header = lines[start - 1 : node.lineno + 1]
+        # Include class docstring if present, trimming example lines that reference removed fields
+        if (
+            node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(getattr(node.body[0], "value", None), ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        ):
+            ds = getattr(node.body[0], "lineno", None)
+            de = getattr(node.body[0], "end_lineno", None)
+            if ds and de:
+                # Determine all field names in the class
+                all_fields: Set[str] = set()
+                for st in node.body:
+                    if isinstance(st, ast.AnnAssign):
+                        tgt = getattr(st, "target", None)
+                        fn = (
+                            tgt.id
+                            if isinstance(tgt, ast.Name)
+                            else (tgt.attr if isinstance(tgt, ast.Attribute) else None)
+                        )
+                        if fn:
+                            all_fields.add(fn)
+                    elif isinstance(st, ast.Assign):
+                        tgs = getattr(st, "targets", []) or []
+                        t0 = tgs[0] if tgs else None
+                        fn = t0.id if isinstance(t0, ast.Name) else None
+                        if fn:
+                            all_fields.add(fn)
+                removed_fields: Set[str] = set()
+                if allow_set:
+                    removed_fields = all_fields - allow_set
+                # Filter docstring lines: keep everything before 'Example:' intact;
+                # in the example block, drop lines mentioning removed field names
+                doc_lines = lines[ds - 1 : de]
+                filtered_doc: List[str] = []
+                in_example = False
+                for dl in doc_lines:
+                    if not in_example and "Example:" in dl:
+                        in_example = True
+                        filtered_doc.append(dl)
+                        continue
+                    if in_example and removed_fields:
+                        drop = False
+                        for rf in removed_fields:
+                            # match patterns like "field": or field:
+                            if re.search(
+                                rf"[\"']{re.escape(rf)}[\"']\s*:", dl
+                            ) or re.search(rf"\b{re.escape(rf)}\b\s*:", dl):
+                                drop = True
+                                break
+                        if drop:
+                            continue
+                    filtered_doc.append(dl)
+                header.extend(filtered_doc)
+        # Deduplicate consecutive identical lines in header
+        if header:
+            dedup_header: List[str] = []
+            for hl in header:
+                if not dedup_header or dedup_header[-1] != hl:
+                    dedup_header.append(hl)
+            header = dedup_header
+        body: List[str] = []
+        for stmt in node.body:
+            if isinstance(stmt, ast.AnnAssign):
+                target = getattr(stmt, "target", None)
+                fname = (
+                    target.id
+                    if isinstance(target, ast.Name)
+                    else (target.attr if isinstance(target, ast.Attribute) else None)
+                )
+                if not allow_set or (fname in allow_set):
+                    s = getattr(stmt, "lineno", None)
+                    e = getattr(stmt, "end_lineno", None)
+                    if s and e:
+                        # include preceding contiguous comment lines (starting with '#') inside class
+                        prev = s - 1
+                        pre_lines: List[str] = []
+                        while prev > (node.lineno) and prev - 1 >= 0:
+                            line = lines[prev - 1]
+                            if line.lstrip().startswith("#"):
+                                pre_lines.insert(0, line)
+                                prev -= 1
+                                continue
+                            break
+                        body.extend(pre_lines)
+                        body.extend(lines[s - 1 : e])
+            elif isinstance(stmt, ast.Assign):
+                targets = getattr(stmt, "targets", []) or []
+                t0 = targets[0] if targets else None
+                fname = t0.id if isinstance(t0, ast.Name) else None
+                if fname is not None and (not allow_set or (fname in allow_set)):
+                    s = getattr(stmt, "lineno", None)
+                    e = getattr(stmt, "end_lineno", None)
+                    if s and e:
+                        prev = s - 1
+                        pre_lines: List[str] = []
+                        while prev > (node.lineno) and prev - 1 >= 0:
+                            line = lines[prev - 1]
+                            if line.lstrip().startswith("#"):
+                                pre_lines.insert(0, line)
+                                prev -= 1
+                                continue
+                            break
+                        body.extend(pre_lines)
+                        body.extend(lines[s - 1 : e])
+        blocks.append("\n".join(header + body))
+
+    return ("\n\n".join(blocks)).strip()
+
+
+def extract_json_response(response_text: str) -> Dict[str, Any]:
+    """Extract a JSON object/array from an LLM response text.
+
+    Behavior:
+    - Strips markdown code fences if present (``` or ```json).
+    - Attempts to parse the cleaned text directly as JSON.
+    - If that fails, searches for the longest JSON object/array substring and parses it.
+    - Raises ValueError if no valid JSON can be found.
+
+    Examples:
+    >>> t = "Response: OK. {\"b\": [1,2,3]}"
+    >>> extract_json_response(t)
+    {'b': [1, 2, 3]}
+    """
+    clean_text = response_text.strip()
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
+    if m:
+        clean_text = m.group(1)
+    try:
+        return json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        matches = re.findall(r"(\{.*\}|\[.*\])", clean_text, re.DOTALL)
+        if matches:
+            longest = max(matches, key=len)
+            return json.loads(longest)
+        raise ValueError(f"Failed to parse JSON from response: {e}") from e

@@ -30,16 +30,15 @@ EventCascade
     - If yes, accept the episode and move to the next one.
 
 
-Although we do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
-
-
+We do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
 """
 
+from pathlib import Path
 import re
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any, TypedDict
+from typing import Dict, Any, TypedDict, List, Optional
 
 from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
@@ -47,53 +46,59 @@ from lmbase.inference import api_call
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.builder.step_build import prompts
 from finmy.converter import read_text_data_from_block
-
-
-class _EventStructureState(TypedDict, total=False):
-    system_msg: str
-    user_msg: str
-    description: str
-    keywords: str
-    content: str
-    response_text: str
-    event_json: Dict[str, Any]
-    saved_dir: str
-
-
 from finmy.builder.utils import (
     load_python_text,
-    extract_dataclass_blocks,
+    filter_dataclass_fields,
 )
 
 
-_STRUCTURE_SPEC_FULL = load_python_text()
-_STRUCTURE_SPEC = (
-    extract_dataclass_blocks(_STRUCTURE_SPEC_FULL, mode="all")
-    if _STRUCTURE_SPEC_FULL
-    else ""
+class _EventState(TypedDict, total=False):
+    """Event state used across the graph"""
+
+    build_input: BuildInput
+    response: 
+    messages: List[Any]
+
+
+# Obtain all text content under the structure.py
+_STRUCTURE_SPEC_FULL = load_python_text(
+    path=Path(__file__).resolve().parents[1] / "structure.py"
+)
+# Skeleton for guiding layout extraction
+_SKELETON_SPEC = filter_dataclass_fields(
+    _STRUCTURE_SPEC_FULL,
+    {
+        "EventCascade": None,
+        "EventStage": ["stage_id", "name", "index_in_event", "episodes"],
+        "Episode": ["episode_id", "name", "index_in_stage"],
+    },
 )
 
 
 class StepWiseEventBuilder(BaseBuilder):
+    """A builder to build the financial event in a step-by-step manner."""
+
     def __init__(
         self,
         lm_name: str = "deepseek/deepseek-chat",
-        config: Dict[str, Any] = {},
+        config: Dict[str, Any] = None,
     ):
         super().__init__(
             method_name="step_wise_builder", config={"lm_name": lm_name, **config}
         )
-        cfg = config.get("layout_creator", {})
-        generation_config = cfg.get("generation_config", {})
+        # Obtain the layout config
+        self.layout_config = config["layout_creator"]
+        # First set the llm with the generation config from the layout
+        # because the layout creator will be the first step.
         self.lm_api = api_call.LangChainAPIInference(
             lm_name=lm_name,
-            generation_config=generation_config,
+            generation_config=self.layout_config["generation_config"],
         )
-        self.output_dir = cfg.get("output_dir", "./data/event_structure_output")
 
     def _compose(self, description: str, keywords: str, content: str) -> Dict[str, Any]:
+        # Provide the skeleton-relevant schema block to the system prompt
         sys_prompt = prompts.EventLayoutCreatorSys.format(
-            STRUCTURE_SPEC=_STRUCTURE_SPEC_FULL
+            STRUCTURE_SPEC=_SKELETON_SPEC or _STRUCTURE_SPEC
         )
         return {
             "system_msg": sys_prompt.replace("{", "{{").replace("}", "}}"),
@@ -127,28 +132,13 @@ class StepWiseEventBuilder(BaseBuilder):
                 raise ValueError("No JSON found in LLM response")
             return json.loads(max(m2, key=len))
 
-    def save_event_structure(self, event_data: Dict[str, Any]) -> str:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_dir = os.path.join(self.output_dir, f"event_structure_{ts}")
-        os.makedirs(base_dir, exist_ok=True)
-        main_file = os.path.join(base_dir, "EventCascade.json")
-        with open(main_file, "w", encoding="utf-8") as f:
-            json.dump(event_data, f, ensure_ascii=False, indent=2)
-        if isinstance(event_data, dict) and "stages" in event_data:
-            stages = event_data["stages"]
-            stages_dir = os.path.join(base_dir, "stages")
-            os.makedirs(stages_dir, exist_ok=True)
-            if isinstance(stages, list):
-                for idx, stage in enumerate(stages):
-                    if isinstance(stage, dict):
-                        sid = stage.get("stage_id", f"S{idx+1}")
-                        with open(
-                            os.path.join(stages_dir, f"{sid}.json"),
-                            "w",
-                            encoding="utf-8",
-                        ) as f:
-                            json.dump(stage, f, ensure_ascii=False, indent=2)
-        return base_dir
+    def create_layout(
+        self, description: str, keywords: str, content: str
+    ) -> Dict[str, Any]:
+        state = self._compose(description, keywords, content)
+        resp = self._llm(state)
+        event_json = self._parse(resp)
+        return event_json
 
     def load_samples(self, build_input: BuildInput) -> str:
         contents = []
@@ -159,13 +149,20 @@ class StepWiseEventBuilder(BaseBuilder):
                 continue
         return "\n\n".join(contents)
 
+    def graph(self):
+        """The graph is not used; a single function `create_layout` is provided."""
+        raise NotImplementedError(
+            "Use `create_layout(description, keywords, content)` for layout generation."
+        )
+
     def build(self, build_input: BuildInput) -> BuildOutput:
         description = build_input.user_query.query_text or ""
         keywords_list = build_input.user_query.key_words or []
         keywords = ", ".join(keywords_list)
         content = self.load_samples(build_input)
-        state = self._compose(description, keywords, content)
-        resp = self._llm(state)
-        event_json = self._parse(resp)
+        event_json = self.create_layout(description, keywords, content)
         saved_dir = self.save_event_structure(event_json)
         return BuildOutput(result={"saved_dir": saved_dir, "event_json": event_json})
+
+
+# LangGraph is not required for the simplified single-step layout creation.

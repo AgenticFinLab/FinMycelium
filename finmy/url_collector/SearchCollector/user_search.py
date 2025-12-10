@@ -198,7 +198,9 @@ class UserSearchProcessor:
         except FileNotFoundError:
             raise
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format in file {json_path}: {str(e)}")
+            raise ValueError(
+                f"Invalid JSON format in file {json_path}: {str(e)}"
+            ) from e
         except Exception as e:
             raise ValueError(f"Error processing JSON file {json_path}: {str(e)}")
 
