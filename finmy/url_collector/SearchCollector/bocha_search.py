@@ -15,8 +15,9 @@ Key Features:
 """
 
 import os
-import requests
 import json
+
+import requests
 from dotenv import load_dotenv
 
 
