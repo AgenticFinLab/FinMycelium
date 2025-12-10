@@ -1,126 +1,150 @@
 
 
-def credit_event_prompt(text: str) -> str:
+def credit_event_prompt() -> str:
     return """
-    You are an expert financial analyst and forensic investigator specializing in deconstructing and simulating complex credit events, including sovereign defaults, corporate bankruptcies, and bond failures. Your task is to reconstruct a complete, detailed, and fact-based narrative of a specified credit event based on the provided multi-source data (e.g., parsed web content, PDF documents, news articles, credit rating agency reports, ISDA determinations, court filings, regulatory reports).
+You are a specialized Credit Market Analyst with expertise in credit derivatives, corporate finance, and legal bankruptcy proceedings. Your task is to conduct a comprehensive forensic reconstruction and analysis of a specified **Credit Event** based on provided multi-source data (e.g., bond indentures, credit default swap (CDS) documentation, regulatory filings, court petitions, news reports, financial statements).
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of the credit event. Your output must be a structured JSON that meticulously documents the event's antecedents, the trigger event itself, the immediate aftermath, the restructuring or resolution process, and the long-term impacts on all stakeholders.
+**Core Objective:**
+Produce a complete, factual, and technically precise reconstruction of the Credit Event, detailing its preconditions, trigger, legal/financial mechanics, settlement process, and consequential impacts on all relevant market participants.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Fact-Based Synthesis**: Integrate information from all provided sources. Resolve minor contradictions by prioritizing official, definitive sources (e.g., ISDA Determinations Committee rulings, final court judgments, sovereign restructuring term sheets, central bank statements). Note any significant discrepancies in the `simulation_analysis_notes` field.
-2.  **Temporal & Causal Logic**: The narrative must follow a strict chronological order, clearly establishing the chain of causation from macroeconomic pressures or corporate mismanagement to the triggering of the credit event.
-3.  **Financial & Contractual Logic**: Accurately model the financial obligations (principal, interest, covenants), the nature of the default/trigger, and the mechanics of the post-event process (e.g., haircuts, debt-for-equity swaps). Clearly distinguish between the legal/contractual definitions and the practical outcomes.
-4.  **Stakeholder Impact Analysis**: Explicitly analyze the differentiated impacts on various creditor classes (e.g., secured vs. unsecured, domestic vs. foreign law bonds, CDS protection buyers/sellers), equity holders, employees, suppliers, and the broader economy.
+**Data Input:**
+You will receive raw text/data extracted from various sources regarding a specific Credit Event. This data may include legal notices, ISDA Determinations Committee (DC) rulings, financial reports, and news articles. You must synthesize, cross-reference, and resolve technical and legal discrepancies to build a coherent and accurate analysis grounded in the most reliable facts and official determinations.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON. All field descriptions are integral to the prompt and must be followed.
+**Output Format Requirements:**
+You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any explanatory text outside the JSON.
+
+**Comprehensive JSON Schema and Field Definitions:**
 
 ```json
 {
-  "credit_event_simulation_report": {
+  "credit_event_analysis": {
     "metadata": {
-      "event_name": "string | The commonly recognized name of the credit event (e.g., 'Argentina 2001 Default', 'Lehman Brothers Bankruptcy', 'Evergrande 2021 Default').",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation (e.g., '2025-12-09').",
-      "data_sources_summary": "array[string] | Brief list of primary data sources used (e.g., ['ISDA DC Press Release 2021-XX-XX', 'IMF Country Report No. 02/01', 'Chapter 11 Petition Docket 1', 'S&P Downgrade Report']).",
-      "geographic_scope": "string | Primary country/jurisdiction of the defaulting entity and key affected markets.",
-      "entity_type": "string | 'Sovereign' or 'Corporate' or 'Sub-sovereign' (e.g., Municipality)."
+      "event_identifier": "string: The official or commonly accepted name of the Credit Event (e.g., 'Evergrande Failure to Pay - 2022', 'Pacific Gas and Electric Company Bankruptcy 2019').",
+      "reference_entity": "string: The legal entity (obligor) on which the Credit Event is triggered (e.g., 'Company XYZ Corp.').",
+      "reference_obligation": "string: The specific debt instrument(s) relevant to the event (e.g., 'XYZ 5.5% Bonds due 2025', 'Broadly applicable for all senior unsecured obligations').",
+      "primary_jurisdiction": "string: Governing law/jurisdiction for the obligor and its debt.",
+      "isda_governed": "boolean: Indicates if the event is primarily evaluated under ISDA definitions (typical for CDS).",
+      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
+      "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'ISDA DC Press Releases, Bankruptcy Court Docket, Company SEC Filings, Bloomberg Data')."
     },
-    "1_overview": {
-      "executive_summary": "string | A concise 3-5 sentence summary of the entire event: the entity involved, the core causes of distress, the nature of the credit event trigger, and the ultimate resolution/fate.",
-      "credit_event_definition": "string | The specific ISDA-defined or commonly understood trigger (e.g., 'Failure to Pay', 'Bankruptcy', 'Restructuring', 'Repudiation/Moratorium').",
-      "operating_period_until_event": {
-        "antecedent_period_start": "string (YYYY-MM or YYYY) | Approximate start of the period of building financial stress.",
-        "credit_event_trigger_date": "string (YYYY-MM-DD) | The official/recognized date of the credit event.",
-        "duration_to_crisis_months": "number | Calculated duration from start of antecedent period to trigger, in months."
-      }
+    "overview": {
+      "summary": "string: A concise 3-5 sentence summary of the Credit Event, including obligor background, trigger type, and immediate outcome.",
+      "credit_event_type": "string: The specific ISDA-defined or market-recognized type (e.g., 'Failure to Pay', 'Bankruptcy', 'Restructuring', 'Repudiation/Moratorium', 'Obligation Acceleration', 'Obligation Default').",
+      "key_date_trigger": "string: The precise or approximate date (YYYY-MM-DD) when the triggering condition was officially met or publicly acknowledged.",
+      "key_date_public_announcement": "string: The date the event was formally announced by the obligor, trustee, or relevant authority.",
+      "is_multi_trigger": "boolean: Indicates if multiple Credit Event types were declared for the same reference entity in close succession."
     },
-    "2_entity_and_background": {
-      "defaulting_entity": {
-        "name": "string | Legal name of the defaulting sovereign or corporate entity.",
-        "key_decision_makers": "array[object] | Key individuals in leadership during the crisis (e.g., Finance Minister, CEO, CFO). Each object: {'name': 'string', 'title': 'string', 'role_in_crisis': 'string'}",
-        "pre_crisis_profile": {
-          "core_business_or_economy": "string | Description of the entity's primary economic activities pre-crisis.",
-          "credit_rating_pre_crisis": "string | Credit rating and agency approximately 1 year before the event.",
-          "perceived_credibility": "string | Market perception of the entity's creditworthiness prior to distress."
+    "pre_event_financial_condition": {
+      "obligor_status": "string: The financial and operational state of the reference entity prior to the event (e.g., 'Distressed but operating', 'In grace period', 'Under regulatory restructuring talks').",
+      "immediate_catalyst": "string: The direct cause leading to the trigger (e.g., 'Liquidity crisis preventing coupon payment', 'Failed debt restructuring negotiations leading to bankruptcy filing', 'Government intervention imposing a payment moratorium').",
+      "credit_rating_pre_event": [
+        {
+          "agency": "string (e.g., 'Moody's', 'S&P', 'Fitch')",
+          "rating": "string (e.g., 'Caa1', 'D', 'SD (Selective Default)')",
+          "date": "string: Date of the rating action just prior to the event."
         }
-      },
-      "creditor_profiles": {
-        "domestic_creditors": "string | Description of domestic holders of debt (e.g., 'Local pension funds, state-owned banks, retail bondholders').",
-        "international_creditors": "string | Description of foreign holders (e.g., 'US hedge funds, European asset managers, bilateral lenders like China').",
-        "creditor_committee_composition": "string | If applicable, description of major creditor groups in restructuring."
+      ],
+      "outstanding_debt_affected": {
+        "total_amount": "number: Aggregate principal amount of debt obligations directly implicated or eligible for CDS settlement.",
+        "currency": "string",
+        "instrument_types": "array: List of debt types (e.g., ['Senior Unsecured Bonds', 'Loans', 'Commercial Paper'])."
       }
     },
-    "3_antecedents_and_deterioration": {
-      "root_causes": "array[string] | Fundamental, long-term causes (e.g., ['Chronic fiscal deficits', 'Over-reliance on commodity exports', 'Excessive short-term dollar-denominated debt', 'Corporate governance failures', 'Asset-liability maturity mismatch']).",
-      "precipitating_factors": "array[string] | Immediate catalysts (e.g., ['Sharp rise in US interest rates', 'Sudden stop in capital flows', 'Commodity price crash', 'Revelation of accounting fraud', 'Major lawsuit loss', 'Political crisis'].)",
-      "timeline_of_deterioration": "array[object] | Chronological list of key downgrades, warning signs, and policy failures. Each object: {'date': 'string (YYYY-MM-DD)', 'event': 'string', 'significance': 'string'}",
-      "failed_mitigation_attempts": "string | Description of any last-ditch efforts to avoid default (e.g., 'IMF bailout negotiations failed due to austerity condition rejections', 'Attempted asset fire sale that eroded confidence')."
+    "trigger_mechanics": {
+      "trigger_criterion_met": "string: Detailed description of the exact condition that constituted the Credit Event. For 'Failure to Pay': grace period details and unpaid amount. For 'Bankruptcy': relevant legal code sections and filing type.",
+      "grace_period_applicable": "boolean: Relevant for Failure to Pay.",
+      "grace_period_duration_days": "number: If applicable.",
+      "grace_period_end_date": "string: If applicable.",
+      "triggering_payment_missed": {
+        "type": "string (e.g., 'Coupon Interest', 'Principal', 'Sinking Fund Payment')",
+        "due_date": "string",
+        "amount_missed": "number",
+        "currency": "string"
+      },
+      "legal_filing_details": {
+        "court": "string: Name of the court where bankruptcy/insolvency was filed.",
+        "filing_type": "string (e.g., 'Chapter 11', 'Chapter 7', 'Administration', 'Scheme of Arrangement').",
+        "petition_date": "string",
+        "petition_number": "string"
+      },
+      "official_notice_provider": "string: Entity that formally confirmed the event (e.g., 'Bond Trustee', 'Company Press Release', 'ISDA Determinations Committee')."
     },
-    "4_the_credit_event_trigger": {
-      "trigger_description": "string | Detailed factual description of the moment of default/trigger (e.g., 'Government announced a moratorium on payment of $132B in foreign debt', 'Company missed a $20M coupon payment on its 2025 bonds after grace period expiration').",
-      "obligations_in_default": {
-        "instrument_types": "array[string] | e.g., ['Sovereign Eurobonds (Foreign Law)', 'Domestic Treasury Bills', 'Corporate Senior Unsecured Notes'].",
-        "total_face_value_defaulted": "string | Aggregate principal amount of obligations impacted by the trigger event.",
-        "missed_payment_details": "string | Specifics of the missed payment(s) - amount, currency, due date."
-      },
-      "official_announcements": "array[object] | Key statements from the entity or regulators. Each object: {'date': 'string', 'issuer': 'string', 'content_summary': 'string'}",
-      "isda_determination_process": "string | If applicable, summary of the ISDA Credit Derivatives Determinations Committee ruling on the event."
+    "determination_and_settlement": {
+      "isda_dc_involved": "boolean",
+      "dc_decision_date": "string: Date of the ISDA Determinations Committee ruling.",
+      "dc_decision_outcome": "string: The formal finding (e.g., 'Credit Event has occurred', 'No Credit Event', 'Held for 5 days for more info').",
+      "auction_settlement_used": "boolean: Indicates if final CDS settlement was via an ISDA-administered auction.",
+      "auction_date": "string",
+      "final_price": "number: The final auction price (recovery rate) in percentage terms (e.g., 32.5 means 32.5% of face value).",
+      "physical_settlement_notice_period": "string: Details if physical settlement was an option.",
+      "net_cash_settlement_amount_estimate": "number: Estimated total cash transferred from CDS sellers to buyers, based on auction price and net notional.",
+      "settlement_currency": "string"
     },
-    "5_immediate_aftermath_and_market_reaction": {
-      "financial_market_reaction": {
-        "asset_price_movements": "string | Impact on the entity's bonds, CDS spreads, stock (if corporate), and currency.",
-        "contagion_effects": "string | Spillover to peer entities, national stock market, or regional assets."
-      },
-      "operational_consequences": {
-        "for_corporate": "string | e.g., 'Filing for Chapter 11, appointment of trustee, freezing of asset sales.'",
-        "for_sovereign": "string | e.g., 'Loss of market access, capital controls imposed, banking crisis triggered.'"
-      },
-      "legal_actions_initiated": "array[string] | Immediate lawsuits filed by creditors (e.g., 'NML Capital sued for attachment of Argentine naval vessel', 'Ad-hoc bondholder group filed for acceleration of payments')."
-    },
-    "6_resolution_and_restructuring_process": {
-      "process_framework": "string | The legal/institutional framework for resolution (e.g., 'Chapter 11 Bankruptcy', 'Sovereign debt restructuring under IMF guidance', 'Out-of-court exchange offer').",
-      "key_negotiation_milestones": "array[object] | Chronology of offers, rejections, and agreements. Each object: {'date': 'string', 'event': 'string', 'outcome': 'string'}",
-      "final_restructuring_terms": {
-        "haircut_on_principal": "string | Percentage reduction in the face value of debt, if applicable (e.g., '30%', 'Varies by bond series').",
-        "new_instrument_details": "string | Description of new bonds or equity issued in exchange (e.g., 'New bonds with longer maturity and step-up coupons').",
-        "participation_rate": "string | Percentage of eligible creditors who accepted the final offer."
-      },
-      "holdout_creditor_issues": "string | Description of creditors who rejected the settlement and subsequent legal battles."
-    },
-    "7_financial_and_social_outcomes": {
-      "settlement_final_state": {
-        "total_liabilities_pre_event": "string | Approximate total debt of the entity immediately prior to the credit event.",
-        "total_liabilities_post_restructuring": "string | Approximate debt stock after the restructuring is implemented.",
-        "recovery_rates_for_creditors": "string | Estimated net present value recovery for participating creditors (e.g., '35-40 cents on the dollar')."
-      },
-      "impact_on_defaulting_entity": {
-        "long_term_financial_health": "string | Post-restructuring access to capital markets, credit rating trajectory.",
-        "operational_business_changes": "string | For corporates: changes in ownership, asset sales, business model. For sovereigns: fiscal reforms, growth path.",
-        "reputational_cost": "string"
-      },
-      "broader_impacts": {
-        "regulatory_and_policy_changes": "array[string] | Changes prompted by the event (e.g., ['Introduction of Collective Action Clauses (CACs) in sovereign bonds', 'Strengthened bank resolution regimes'].)",
-        "systemic_risk_assessment": "string | How the event changed perceptions of systemic risk in the sector/region.",
-        "notable_casualties": "array[string] | Brief mentions of severely affected non-creditor stakeholders (e.g., 'Local suppliers driven into bankruptcy', 'Surge in national unemployment to 25%')."
+    "key_milestones": [
+      {
+        "date": "string: Date (YYYY-MM-DD).",
+        "event": "string: Description of the milestone.",
+        "significance": "string: Why this was critical (e.g., 'Last coupon payment made', 'Grace period commenced', 'First public warning of liquidity shortfall', 'ISDA DC Question submitted', 'Auction results published').",
+        "source": "string: Primary source of the milestone information."
       }
+    ],
+    "post_event_status_and_restructuring": {
+      "obligor_status_post_event": "string: The immediate status after the trigger (e.g., 'In Chapter 11 bankruptcy protection', 'In default but continuing operations', 'Liquidated').",
+      "proposed_restructuring_plan": "string: Description of any proposed or implemented debt restructuring plan (haircuts, debt-for-equity swaps, new money injection).",
+      "expected_recovery_for_creditors": "string: Qualitative or quantitative estimate of ultimate recovery for holders of the underlying debt, distinct from CDS auction recovery.",
+      "timeline_for_resolution": "string: Estimated or actual timeline for completing insolvency/restructuring proceedings."
     },
-    "8_simulation_analysis_notes": {
-      "predictability_analysis": "string | Analysis of whether the event was foreseen by markets, citing key warning indicators.",
-      "resolution_efficiency_assessment": "string | Brief evaluation of the restructuring process (length, fairness, finality).",
-      "alternative_scenario_plausibility": "string | Could the event have been avoided? What would have been required?",
-      "data_discrepancies": "array[string] | Note any major conflicting information from sources (e.g., differing reported default amounts).",
-      "simulation_confidence_level": "string | High/Medium/Low based on data quality, clarity of event triggers, and consensus in sources."
+    "impact_analysis": {
+      "cds_market_impact": {
+        "net_notional_affected": "string: Estimate of the net CDS notional outstanding on the reference entity at the time of the event.",
+        "major_protection_sellers": "array: List of known or rumored major entities on the hook for payments (e.g., ['Hedge Fund A', 'Dealer Bank B']).",
+        "spillover_to_related_entities": "array: List of other companies/sectors whose CDS spreads widened significantly due to this event.",
+        "market_volatility_measures": "string: Description of observed volatility in credit indices or related asset classes."
+      },
+      "bond_and_loan_market_impact": {
+        "trading_price_post_event": "number: Approximate trading price of the reference obligation(s) immediately after the event (as % of par).",
+        "secondary_market_liquidity": "string: Description of liquidity conditions (e.g., 'Frozen', 'Active at distressed levels').",
+        "impact_on_sector_spreads": "string: Effect on credit spreads of peer companies."
+      },
+      "counterparty_and_systemic_risk": {
+        "significant_counterparty_failures": "boolean: Indicates if any major financial institution faced solvency issues due to losses.",
+        "regulatory_response_triggered": "array: List of regulatory actions prompted (e.g., ['Review of CDS market practices', 'Increased capital requirements for certain exposures'])."
+      },
+      "legal_and_regulatory_actions": [
+        {
+          "actor": "string (e.g., 'SEC', 'FINRA', 'National Regulator')",
+          "action": "string (e.g., 'Investigation opened into insider trading', 'Review of disclosure adequacy', 'Sanctions on directors').",
+          "target": "string",
+          "status": "string (e.g., 'Ongoing', 'Settled', 'Closed')."
+        }
+      ]
+    },
+    "synthesis_and_antecedents": {
+      "identified_warning_signs": "array: List of clear financial, operational, or market-based warning signs preceding the event (e.g., ['Sustained negative free cash flow', 'Rapid credit rating downgrades into speculative grade', 'Skyrocketing CDS spreads months prior', 'Missed earnings guidance repeatedly', 'Asset sales to meet near-term liquidity']).",
+      "was_event_anticipated": "string: Analysis of market-implied probability (via CDS spreads) in the weeks/months prior.",
+      "unique_or_complex_features": "string: Description of any aspects that made this Credit Event particularly notable, complex, or controversial (e.g., 'Controversial DC decision on Succession Event', 'Unprecedented use of government moratorium trigger', 'Cross-border insolvency complications')."
     }
   }
 }
 ```
 
-### **INSTRUCTION FOR EXECUTION**
-1.  **Thoroughly Analyze** all provided source data pertaining to the requested credit event case (e.g., "The Greek Government Debt Restructuring of 2012").
-2.  **Extract and Synthesize** information to populate every field in the JSON schema above. If precise data for a field is unavailable, make a reasoned, logical estimation based on the context and clearly mark this in the `simulation_analysis_notes` under "data_discrepancies" or relevant analysis field.
-3.  **Ensure Logical & Causal Flow** across sections. The report should read as a coherent story from economic antecedents to the trigger, through the chaotic aftermath, to the negotiated resolution and long-term consequences.
-4.  **Maintain Stakeholder Perspective** throughout. Constantly reference how each development affected different groups (the entity, different creditor classes, the public, etc.).
-5.  **Output ONLY** the raw JSON object, beginning with `{` and ending with `}`. Do not use markdown code block syntax or any other text in your final output.
+**Critical Analysis Instructions:**
 
+1.  **Technical & Legal Precision:** Anchor the analysis in the precise definitions from the relevant governing documents (e.g., **2014 ISDA Credit Derivatives Definitions**, bond indentures, local insolvency law). Distinguish clearly between the Credit Event (the trigger) and the subsequent default or bankruptcy process.
+2.  **Source Hierarchy:** Prioritize official sources (ISDA DC rulings, court documents, regulatory filings) over media reports. Clearly attribute key facts to their source in the `key_milestones` and narrative fields.
+3.  **Chronological Fidelity:** Ensure the sequence in `key_milestones` is exact, especially regarding dates for payment due dates, grace periods, filings, and DC decisions. This timeline is crucial for legal validity.
+4.  **Quantitative Rigor:** Populate all numerical fields with the most accurate available data. For estimates, qualify them in the field's string value (e.g., "Estimated at $10bn based on DTCC data"). Do not confuse **CDS settlement amounts** with **total debt outstanding**.
+5.  **Participant Impact Differentiation:** Clearly separate and analyze impacts on:
+    *   **CDS Protection Buyers** (receivers of credit): Their payout.
+    *   **CDS Protection Sellers** (writers of credit): Their loss.
+    *   **Holders of the Underlying Debt:** Their actual recovery process.
+    *   **The Reference Entity/Obligor:** Its fate.
+    *   **The Broader Credit Market:** Systemic effects.
+6.  **Process-Oriented Narrative:** Reconstruct the full chain: **Preconditions** -> **Trigger** -> **Official Determination** -> **Settlement Mechanism (Auction)** -> **Financial Transfers** -> **Post-Event Restructuring/Liquidation**.
+7.  **Completeness:** Strive to provide information for every field. If information for a specific sub-field is absolutely not found in the provided data, use the value: `"Not specified in provided sources."`.
+
+**Final Step Before Output:**
+Perform a consistency check. Ensure dates are logically ordered (e.g., grace period end date is after due date, DC decision date is after the trigger date). Verify that the `credit_event_type` aligns with the described `trigger_criterion_met`. Confirm that monetary figures have associated currencies.
+
+**Now, synthesize the provided data about the specified Credit Event and output the complete JSON object.**
 """
