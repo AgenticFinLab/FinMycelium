@@ -1,124 +1,136 @@
 
-def short_squeeze_prompt(text: str) -> str:
+def short_squeeze_prompt() -> str:
     return """
-You are an expert market analyst and financial forensics specialist with deep expertise in market microstructure, behavioral finance, and systemic risk analysis. Your task is to reconstruct a complete, detailed, and fact-based simulation of a specified **Short Squeeze** event based on provided multi-source data (e.g., parsed news, regulatory filings, exchange data, social media analytics, broker announcements).
+You are an expert financial market analyst specializing in market microstructure, behavioral finance, and event reconstruction. Your task is to comprehensively analyze and reconstruct a specified **Short Squeeze** event based on provided multi-source data (e.g., news articles, SEC filings, exchange data, social media transcripts, analyst reports, academic papers).
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of a Short Squeeze event. Your output must be a structured JSON that meticulously documents the pre-conditions, trigger mechanisms, explosive price action, unwind dynamics, and lasting consequences.
+**Core Objective:**
+Produce a complete, factual, and quantitatively detailed reconstruction of the short squeeze event. The analysis must cover the pre-conditions, the ignition catalyst, the squeeze dynamics, the peak, the unwind, and the aftermath, with emphasis on the interplay between short sellers, retail/mobilized traders, market makers, underlying fundamentals, and trading mechanisms.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Fact & Data Synthesis**: Integrate quantitative (price, volume, short interest) and qualitative (news, social sentiment, corporate actions) data from all sources. Prioritize official data from exchanges, regulatory bodies (SEC, FINRA), and company filings. Note material discrepancies in `analysis_notes`.
-2.  **Chronological & Causal Fidelity**: Maintain a strict event timeline. Clearly establish causal links: e.g., how a catalytic event amplified retail buying, leading to covering pressure, then margin calls, then parabolic price moves.
-3.  **Multi-Actor Perspective**: Model the interplay and conflicting incentives between key actors: **Short Sellers (institutional/retail)**, **Long Buyers (especially retail catalysts)**, **Market Makers**, **Brokers**, and the **Underlying Company**.
-4.  **Liquidity & Market Mechanics Focus**: Explain the role of market mechanics in the squeeze: borrowing costs (hard-to-borrow rates), margin requirements, options gamma exposure, order flow, and settlement (T+2).
+**Data Input:**
+You will receive raw text/data extracted from various sources regarding a specific Short Squeeze event (e.g., "GameStop 2021", "Volkswagen 2008", "AMC 2021"). This data may be fragmented and contain noise. You must synthesize data to build a coherent narrative grounded in verifiable facts, distinguishing between established data (e.g., official short interest) and widely reported narratives (e.g., social media sentiment).
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+**Output Format Requirements:**
+You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any explanatory text outside the JSON.
+
+**Comprehensive JSON Schema and Field Definitions:**
 
 ```json
 {
-  "short_squeeze_simulation_report": {
+  "short_squeeze_analysis": {
     "metadata": {
-      "event_name": "string | The canonical name for the event (e.g., 'GameStop Short Squeeze of January 2021').",
-      "underlying_asset": "string | The ticker symbol and company name (e.g., 'GME - GameStop Corp.').",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation.",
-      "primary_exchange": "string | Main trading exchange (e.g., 'NYSE').",
-      "core_data_sources": "array[string] | Key sources used (e.g., ['FINRA Short Interest Data', 'SEC Form 13F filings', 'NYSE Trade & Quote data', 'Robinhood blog posts', 'r/WallStreetBets sentiment analysis']).",
-      "event_period": {
-        "ignition_date": "string (YYYY-MM-DD) | Start of the rapid price ascent phase.",
-        "peak_date": "string (YYYY-MM-DD) | Date of absolute intraday or closing price peak.",
-        "unwind_initiation_date": "string (YYYY-MM-DD) | Date when price began sustained decline from peak."
+      "event_identifier": "string: The common name of the event (e.g., 'GameStop Short Squeeze of January 2021').",
+      "primary_asset_ticker": "string: The ticker symbol of the primary asset involved (e.g., 'GME', 'VOW3.DE').",
+      "primary_asset_name": "string: The full name of the asset (e.g., 'GameStop Corp.', 'Volkswagen AG').",
+      "primary_exchange": "string: The main exchange where the squeeze occurred (e.g., 'NYSE', 'XETRA').",
+      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated (YYYY-MM-DDTHH:MM:SSZ).",
+      "core_squeeze_period": "string: The approximate date range of the most intense squeeze phase (e.g., '2021-01-22 to 2021-01-28').",
+      "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC filings, exchange statistics, news archives, social media aggregator data')."
+    },
+    "overview": {
+      "executive_summary": "string: A concise 3-5 sentence summary of the entire event: the asset, the pre-existing short thesis, the catalyst, the squeeze magnitude, and the ultimate outcome.",
+      "event_classification": "string: Classification (e.g., 'Retail-Driven Gamma & Short Squeeze', 'Merger-Arbitrage Short Squeeze', 'Low-Float Squeeze').",
+      "key_catalyst": "string: The identified primary trigger that ignited the buying pressure leading to the squeeze (e.g., 'Coordinated buying campaign organized on r/WallStreetBets', 'Unexpected positive corporate development', 'Porsche disclosure of stake').",
+      "was_gamma_squeeze_involved": "boolean: Indicates if option market makers' delta-hedging activities significantly accelerated the price move."
+    },
+    "pre_conditions": {
+      "fundamental_background": "string: Description of the underlying company's business and financial situation pre-squeeze that led to the high short interest (e.g., 'Brick-and-mortar video game retailer facing secular decline', 'Automaker during financial crisis').",
+      "short_interest_metrics": {
+        "days_to_cover_pre_squeeze": "number: The number of days to repurchase all shorted shares based on average volume, measured just before the squeeze ignition.",
+        "short_interest_percent_float_pre_squeeze": "number: The percentage of the free float reported as short interest, measured just before the squeeze ignition.",
+        "short_interest_reporting_source": "string: The source of the short interest data (e.g., 'Exchange Official Data', 'S3 Partners', 'Finra').",
+        "estimated_naked_shorting_presence": "string: Qualitative assessment or reported evidence of naked short selling (e.g., 'Alleged by retail community but not proven', 'Confirmed by regulatory action')."
+      },
+      "market_structure_factors": {
+        "public_float_size": "number: The number of shares available for public trading pre-event (in millions or as a figure).",
+        "institutional_ownership_percent": "number: Percentage of shares held by institutional investors pre-event.",
+        "key_known_large_short_sellers": "array: List of prominent funds or investors publicly identified as being short (e.g., ['Melvin Capital', 'Maplelane Capital'])."
       }
     },
-    "1_pre_squeeze_background": {
-      "company_fundamentals_pre_event": {
-        "business_model": "string | Brief description of the company's core business at time of event.",
-        "financial_health": "string | Pre-event financial status (e.g., 'struggling, declining revenues, burning cash').",
-        "market_cap_pre_event": "string | Approximate market capitalization just before the squeeze ignition."
+    "ignition_and_dynamics": {
+      "initial_catalyst_description": "string: Detailed narrative of how the buying pressure started. Include specific events, posts, or disclosures.",
+      "retail_involvement_characterization": "string: Description of the role and scale of retail investor participation (e.g., 'Massive, coordinated via social media', 'Significant but not the sole driver').",
+      "social_media_platforms_used": "array: List of primary platforms used for coordination/discussion (e.g., ['Reddit r/WallStreetBets', 'Twitter', 'Discord']).",
+      "key_narratives_and_slogans": "array: List of viral narratives, hashtags, or slogans that fueled the movement (e.g., ['#YOLO', 'Hold the line', 'GME to $1000', 'Counter-attack on hedge funds'].).",
+      "options_market_amplification": {
+        "call_option_volume_spike": "string: Description of the surge in call option buying (e.g., 'Volume reached 10x historical average').",
+        "implied_volatility_peak": "number: The peak level of implied volatility (e.g., IV rank) for short-dated options during the event.",
+        "market_maker_hedging_impact": "string: Analysis of how market makers buying shares to hedge sold call options contributed to the upward price spiral (the 'gamma squeeze')."
       },
-      "short_seller_thesis": {
-        "primary_bearish_narrative": "string | The fundamental rationale for heavy shorting (e.g., 'brick-and-mortar retail is dying', 'unsustainable debt').",
-        "key_short_sellers": "array[object] | Known major short entities/funds. Each object: {'name': 'string', 'estimated_short_position': 'string (optional)', 'public_stance': 'string'}."
-      },
-      "market_technical_setup": {
-        "short_interest_ratio": "string | Short Interest as a percentage of float (e.g., '>140%') and/or days to cover (e.g., '~7 days') prior to ignition.",
-        "borrow_cost_pre_squeeze": "string | Cost to borrow shares (annualized fee) before the squeeze (e.g., '1-5%').",
-        "options_chain_activity": "string | Notable pre-event activity in call options (e.g., 'elevated open interest in out-of-the-money calls')."
+      "trading_mechanics_impact": {
+        "restrictions_imposed": "array: List of trading restrictions enacted during the event (e.g., ['Several brokerages (Robinhood) halted buying of GME shares', 'Margin requirements increased']).",
+        "settlement_fails": "string: Evidence or reports of failures to deliver (FTDs) spiking during the period."
       }
     },
-    "2_catalyst_and_ignition": {
-      "primary_catalysts": "array[object] | Events that sparked coordinated long buying. Each object: {'date': 'string', 'catalyst_type': 'string (e.g., Social Media, Corporate Action, Institutional Long)', 'description': 'string', 'impact_metric': 'string (e.g., 'retail buy volume spiked 300%')' }.",
-      "long_side_coordination_mechanism": {
-        "platforms_communities": "array[string] | Primary coordination hubs (e.g., ['r/WallStreetBets on Reddit', 'Discord channels', 'Twitter $GME hashtag']).",
-        "prevailing_narrative": "string | The bullish/activist narrative driving retail buyers (e.g., 'stick it to the hedge funds', 'deep value turnaround', 'the squeeze is coming')."
+    "price_and_volume_analysis": {
+      "price_action": {
+        "price_pre_squeeze": "number: Share price (in primary currency) approximately one week before the recognized squeeze ignition.",
+        "price_peak": "number: The intraday or closing peak price reached during the event.",
+        "price_post_squeeze_settlement": "number: The price approximately one month after the peak, representing a post-squeeze equilibrium.",
+        "percent_gain_from_pre_to_peak": "number: Calculated percentage increase from pre-squeeze price to peak.",
+        "primary_currency": "string: Currency for price figures (e.g., 'USD', 'EUR')."
       },
-      "initial_price_volume_action": {
-        "price_increase_phase_1": "string | Price move from start to early acceleration (e.g., '$20 to $40 in 2 days').",
-        "volume_anomaly": "string | Trading volume vs. historical average (e.g., '10x average daily volume')."
+      "volume_analysis": {
+        "average_daily_volume_pre_event": "number: The average daily trading volume for the month preceding the event.",
+        "peak_daily_volume": "number: The highest single-day trading volume during the event.",
+        "short_volume_ratio_peak": "number: The peak percentage of daily volume attributed to short sales (if available) during the event."
       }
     },
-    "3_the_squeeze_dynamics": {
-      "feedback_loop_mechanics": {
-        "covering_pressure": "string | Description of how initial price rises forced some shorts to buy back shares, fueling further rises.",
-        "margin_call_impact": "string | Role of broker margin calls on short sellers, forcing involuntary covering.",
-        "gamma_squeeze": "string | Explanation of how market makers hedging short call options exacerbated buying (if applicable).",
-        "fomofomo_cycle": "string | Description of the 'fear of missing out' / 'fear of missing out on covering' dynamic."
-      },
-      "market_infrastructure_stress": {
-        "clearinghouse_broker_actions": "array[object] | Key actions by intermediaries. Each object: {'entity': 'string (e.g., Robinhood, DTCC)', 'date': 'string', 'action': 'string (e.g., 'raised margin requirements', 'restricted buying of shares')', 'stated_reason': 'string' }.",
-        "trading_halts": "number | Count of exchange-mandated trading halts during the peak.",
-        "settlement_fails": "string | Any reported issues with T+2 settlement (e.g., 'increased fails to deliver')."
-      },
-      "peak_characteristics": {
-        "absolute_price_peak": "string | The highest traded price (intraday) and date.",
-        "intraday_volatility_at_peak": "string | Peak intraday price range as a percentage (e.g., 'Price swung from $350 to $120 and back to $300 in one session').",
-        "estimated_short_cover_volume_at_peak": "string | Estimated percentage of pre-squeeze short interest that had covered by the peak."
+    "key_milestones": [
+      {
+        "date": "string: Approximate date (YYYY-MM-DD).",
+        "event_title": "string: Name of the milestone.",
+        "event_description": "string: Detailed description of what happened.",
+        "impact_category": "string: Categorization of its effect (e.g., 'Catalyst', 'Amplification', 'Regulatory Response', 'Inflection Point')."
       }
+    ],
+    "unwind_and_termination": {
+      "peak_identification": "string: Description of the market conditions or specific events that marked the absolute peak of the squeeze.",
+      "unwind_triggers": "array: List of factors that contributed to the price decline from the peak (e.g., ['Exhaustion of retail buying power', 'Brokerage trading restrictions', 'Large short positions being covered/closed', 'Profit-taking by early entrants']).",
+      "short_cover_mechanics": "string: Description of how short covering occurred—was it a rapid, forced covering or a gradual exit?",
+      "estimated_proportion_shorts_covered": "string: Estimate of what percentage of the pre-squeeze short interest was actually covered during the peak (e.g., 'Substantial majority', 'Approximately 50%', 'Difficult to estimate')."
     },
-    "4_unwind_and_aftermath": {
-      "price_decline_trigger": {
-        "primary_factors": "array[string] | Reasons for the reversal (e.g., ['Buying restrictions by major brokers', 'Exhaustion of retail buying power', 'New short entries at peak prices', 'Profit-taking by early long entrants']).",
-        "liquidity_crunch_point": "string | Description of the moment when buy-side liquidity dried up."
+    "aftermath_and_impact": {
+      "direct_market_impacts": {
+        "losses_to_short_sellers": "string: Estimated or reported total losses incurred by short sellers (e.g., 'Melvin Capital reported a 53% loss for January 2021', 'Estimated $20bn total losses').",
+        "gains_to_retail_traders_estimate": "string: Qualitative or quantitative estimate of aggregate profits realized by retail traders.",
+        "brokerage_firm_impacts": "array: List of consequences for brokerages (e.g., ['Robinhood required $3.4bn emergency capital infusion', 'Multiple lawsuits filed']).",
+        "target_company_impacts": {
+          "capital_raise_activities": "string: Did the company take advantage of the high price to raise equity? (e.g., 'Issued $1.5bn in new shares post-squeeze').",
+          "strategic_changes": "string: Any strategic shifts prompted by the event (e.g., 'Accelerated digital transformation plans', 'New board appointments from activist retail cohort')."
+        }
       },
-      "final_state_post_unwind": {
-        "price_stabilization_level": "string | Price range where the asset stabilized weeks after the peak (e.g., 'settled around $100-150').",
-        "remaining_short_interest": "string | Short interest as % of float after the main unwind (e.g., '~30%').",
-        "implied_volatility_change": "string | Change in options-implied volatility from peak to post-event (e.g., 'IV dropped from 500% to 150%')."
-      }
+      "regulatory_and_legal_response": [
+        {
+          "authority": "string (e.g., 'SEC', 'FINRA', 'Congressional Committee').",
+          "action": "string (e.g., 'Published investigative report', 'Held public hearings', 'Proposed new rules on payment for order flow').",
+          "key_findings_or_outcomes": "string: Summary of what the authority concluded or changed.",
+          "date": "string: Approximate date (YYYY-MM)."
+        }
+      ],
+      "systemic_and_long_term_implications": [
+        "string: List broader impacts (e.g., 'Intense scrutiny of Payment for Order Flow (PFOF) model', 'Increased retail investor participation in options markets', 'Rise of 'meme stock' as an asset class', 'Debate over market fairness and settlement cycles (T+1)')."
+      ]
     },
-    "5_impact_and_consequences": {
-      "financial_outcomes_for_actors": {
-        "short_seller_losses": "string | Estimated aggregate mark-to-market or realized losses for short sellers (e.g., 'Hedge funds lost an estimated $6B in January').",
-        "retail_investor_gains_losses_distribution": "string | Analysis of outcomes for retail traders (e.g., 'Early entrants realized large gains; late entrants buying near peak suffered significant losses').",
-        "brokerage_fines_settlements": "array[object] | Regulatory penalties. Each object: {'entity': 'string', 'amount': 'string', 'agency': 'string', 'reason': 'string'}."
-      },
-      "corporate_impact": {
-        "capital_raising_activities": "string | If the company issued new shares during/after the event (e.g., 'Company sold $1B in new equity at elevated prices').",
-        "strategic_changes": "string | Any changes in business strategy, board, or management influenced by the event.",
-        "long_term_shareholder_base_change": "string | Shift in the composition of shareholders (e.g., 'high retail ownership lock-up')."
-      },
-      "systemic_and_regulatory_response": {
-        "congressional_hearings": "array[string] | Summary of key governmental inquiries.",
-        "regulatory_reviews_proposals": "array[string] | Rule changes proposed or implemented (e.g., ['SEC Rule 15c2-11 update', 'Review of Payment for Order Flow', 'Closer scrutiny of social media']).",
-        "market_structure_debates": "array[string] | Key issues raised (e.g., ['Gameification of investing', 'Settlement cycle (T+1)', 'Transparency of short positions'])."
-      }
-    },
-    "6_simulation_analysis_notes": {
-      "key_pre_event_signals": "array[string] | Identifiable signals that a squeeze was possible (e.g., 'Extreme short interest + high retail call option buying').",
-      "liquidity_critical_points": "string | Analysis of when and why market liquidity broke down.",
-      "role_of_digital_information_ecosystem": "string | Assessment of how social media and zero-commission trading platforms accelerated and shaped the event.",
-      "data_limitations_discrepancies": "array[string] | Note uncertainties (e.g., 'Precise daily short covering volume is estimated', 'Retail net position data is incomplete').",
-      "simulation_confidence_level": "string | High/Medium/Low based on data quality and availability of granular transaction data."
+    "synthesis_and_indicators": {
+      "pre_squeeze_red_flags": "array: List of identifiable conditions that made the asset prone to a squeeze (e.g., ['Short interest > 100% of float', 'Low public float', 'High concentration of short positions among a few funds', 'High cost to borrow shares']).",
+      "squeeze_dynamics_indicators": "array: List of real-time metrics that signaled the squeeze was in progress (e.g., ['Extreme spikes in call option volume and implied volatility', 'Skyrocketing 'days to cover' metric', 'Social media sentiment concentration']).",
+      "comparison_to_classic_short_squeeze": "string: Brief analysis of how this event fits or deviates from the traditional short squeeze model, highlighting the role of social media, options, and retail coordination."
     }
   }
 }
 ```
 
-### **INSTRUCTION FOR EXECUTION**
-1.  **Analyze Holistically**: Process all provided data for the specified Short Squeeze event (e.g., "GameStop 2021"). Synthesize market data, regulatory reports, news, and social sentiment.
-2.  **Populate the Schema**: Fill every JSON field with specific, extracted facts or reasoned estimates. For estimated fields, provide the logic in `simulation_analysis_notes`.
-3.  **Model the Feedback Loops**: Explicitly connect the actions of one actor group (e.g., retail buying) to the constraints of another (e.g., short seller margin calls) within the narrative.
-4.  **Output Strictly JSON**: Deliver **only** the raw JSON object, beginning with `{` and ending with `}`. Do not enclose it in markdown code blocks or add extra text.
+**Critical Analysis Instructions:**
 
+1.  **Fact & Data Primacy:** Anchor all claims, especially quantitative ones (`price_pre_squeeze`, `short_interest_percent_float`), to the most reliable sources in the provided data. Clearly separate hard data from widely circulated narratives. For conflicting data, note the discrepancy or use the most authoritative source.
+2.  **Chronological Precision:** The `key_milestones` must form a precise timeline. The `core_squeeze_period` should be defensible based on price/volume action.
+3.  **Quantitative Rigor:** Populate all numerical fields with the best available data. Use `null` for genuinely unavailable numerical data. For textual fields where info is absent, use `"Information not available in provided sources."`.
+4.  **Multi-Actor Perspective:** The analysis must detail the motivations, actions, and outcomes for each key group: **Short Sellers**, **Retail/Mobilized Buyers**, **Market Makers/Option Dealers**, **Brokerages**, **The Target Company**, and **Regulators**.
+5.  **Mechanism-Driven Narrative:** Explicitly connect: **Pre-existing Imbalance** (high short interest) -> **Catalyst** (ignition event) -> **Amplification Loops** (gamma squeeze, social feedback) -> **Peak & Unwind** (liquidity dry-up, covering) -> **Structural Aftermath** (regulatory, systemic changes).
+6.  **Completeness:** Strive to provide information for every field in the JSON schema. The analysis should be self-contained and comprehensive.
 
+**Final Step Before Output:**
+Perform an internal consistency check. Ensure the timeline logic holds, and that price/volume figures are consistent with the narrative of extreme movement. Verify that the `unwind_triggers` logically follow the `peak_identification`.
+
+**Now, synthesize the provided data about the specified Short Squeeze event and output the complete JSON object.**
 """
