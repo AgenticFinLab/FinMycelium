@@ -1,146 +1,167 @@
 
-def market_manipulation_prompt(text: str) -> str:
+def market_manipulation_prompt() -> str:
     return """
- You are an expert financial forensic analyst and market surveillance specialist specializing in deconstructing complex market manipulation schemes. Your task is to reconstruct a complete, detailed, and fact-based narrative of a specified market manipulation event (e.g., "Pump and Dump," "Spoofing," "Wash Trading") based on provided multi-source data (parsed web content, regulatory filings, court documents, trading data analysis, news reports).
+You are an expert forensic financial analyst and market surveillance specialist. Your task is to reconstruct a complete narrative of a specified market manipulation scheme (e.g., Pump and Dump, Spoofing, Wash Trading) based on provided multi-source data (news, regulatory filings, court documents, trading data analysis, communications).
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of the market manipulation scheme. Your output must be a structured JSON that meticulously documents the event's planning, execution mechanics, market impact, detection, and legal consequences.
+**Core Objective:**
+Produce a detailed, factual, and logically structured forensic reconstruction of a market manipulation event. The analysis must trace the scheme's conception, execution, market impact, unraveling, and aftermath, with a focus on illicit tactics, key actors, price distortions, and systemic consequences.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Evidence-Based Synthesis**: Integrate information from all provided sources. Prioritize official data sources (e.g., SEC/CFTC orders, criminal indictments, FINRA alerts, exchange disciplinary notices) for factual assertions about trades, communications, and charges. Note significant discrepancies in the `analysis_notes` field.
-2.  **Temporal-Causal Logic**: Construct a timeline where market events (price/volume spikes), manipulative actions (orders, communications), and external triggers (news, investigations) are linked in a cause-and-effect chain.
-3.  **Trading Logic Consistency**: Model the manipulative trading strategy (e.g., order placement hierarchy in spoofing, wash trade pairing) in a technically coherent manner. Clearly distinguish between *real* market impact and *artificial* activity created by the scheme.
-4.  **Multi-Actor Coordination**: If applicable, detail how different actors (traders, promoters, facilitators) interacted to execute the scheme.
+**Data Input:**
+You will receive raw text/data from diverse sources about a specific market manipulation case. Data may include trading records, chat logs, news reports, SEC/regulatory complaints, and legal judgments. Synthesize this information, resolve conflicts by prioritizing official documents (e.g., court orders, settled SEC cases), and build a coherent, evidence-based timeline.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+**Output Format & Schema Requirements:**
+You MUST output a single, comprehensive JSON object. The schema is designed for forensic analysis of market manipulation. Below are the exact field definitions.
 
 ```json
 {
-  "market_manipulation_simulation_report": {
+  "market_manipulation_reconstruction": {
     "metadata": {
-      "case_name": "string | The commonly recognized name (e.g., 'Spoofing in Precious Metals Futures by Trader X', 'The XYZ Stock Social Media Pump & Dump').",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation.",
-      "data_sources_summary": "array[string] | Brief list of primary data sources used (e.g., ['CFTC Order 12345', 'DOJ Indictment CR-22-001', 'NASDAQ Suspension Notice', 'Twitter data archive']).",
-      "primary_jurisdiction": "string | Primary legal/regulatory jurisdiction (e.g., 'U.S. (CFTC/SEC)', 'UK (FCA)', 'Hong Kong SFC').",
-      "manipulation_subtype": "string | Specific type (e.g., 'Pump and Dump', 'Layering/Spoofing', 'Wash Trading', 'Quote Stuffing', 'Marking the Close')."
+      "case_identifier": "string: The common name of the case (e.g., 'XYZ Corp Pump and Dump', 'The 2010 Silver Spoofing Case').",
+      "primary_assets_involved": "array: List of financial instruments manipulated (e.g., ['XYZ Stock', 'ABC Cryptocurrency', 'Silver Futures']).",
+      "primary_jurisdiction": "string: Leading regulatory/legal jurisdiction handling the case.",
+      "analysis_timestamp": "string: ISO 8601 timestamp of analysis generation.",
+      "data_sources_summary": "string: Brief description of input sources (e.g., 'SEC litigation release, chat log excerpts, price data analysis, court verdict')."
     },
-    "1_overview": {
-      "executive_summary": "string | A concise 3-5 sentence summary: the asset targeted, the core manipulative technique used, the scale of impact, and the final outcome (e.g., detection, penalty).",
-      "active_manipulation_period": {
-        "start_date": "string (YYYY-MM or YYYY-MM-DD) | Start of identified manipulative trading/promotional activity.",
-        "peak_impact_date": "string (YYYY-MM-DD) | Date of maximum artificial price distortion or volume.",
-        "end_date": "string (YYYY-MM-DD) | Date of last manipulative act or regulatory halt.",
-        "duration_days": "number | Approximate active duration in days."
-      }
+    "overview": {
+      "summary": "string: A concise 3-5 sentence summary of the manipulation scheme, its method, and final outcome.",
+      "manipulation_type": "string: Specific classification (e.g., 'Pump and Dump', 'Spoofing and Layering', 'Wash Trading', 'Cross-Asset Manipulation', 'Rumormongering').",
+      "core_manipulative_act": "string: The fundamental illegal action performed to distort the market (e.g., 'placing non-bona fide orders to create false liquidity', 'disseminating false merger rumors').",
+      "total_duration_active": "string: Approximate active manipulation period (e.g., '6 months', '2015-2017').",
+      "is_multi_asset_cross_market": "boolean: Indicates if manipulation spanned multiple securities or asset classes (stocks, options, crypto)."
     },
-    "2_actors_and_entities": {
-      "perpetrators": [
+    "key_actors": {
+      "manipulators": [
         {
-          "name": "string | Individual or entity identifier.",
-          "role_in_scheme": "string | e.g., 'Mastermind & Head Trader', 'Promoter/Influencer', 'Wash Trade Counterparty'.",
-          "control_method": "string | How they executed control (e.g., 'controlled 5 brokerage accounts for spoofing', 'led Telegram group with 10k members').",
-          "credibility_source": "string | What gave them influence/access (e.g., 'fake analyst persona', 'registered broker', 'anonymous Twitter account with large following')."
+          "name_or_alias": "string",
+          "role": "string (e.g., 'Mastermind', 'Trader', 'Promoter', 'Boiler Room Operator')",
+          "primary_action": "string: Specific manipulative acts they performed.",
+          "method_of_control": "string: How they influenced the asset (e.g., 'controlled multiple trading accounts', 'ran a paid stock newsletter', 'coordinated a chat room group').",
+          "legal_status_at_terminal": "string: Status at case conclusion (e.g., 'Charged', 'Settled', 'Convicted', 'Penalized')."
         }
       ],
-      "facilitators_and_platforms": [
+      "facilitators_or_enablers": [
         {
-          "entity": "string | e.g., 'Specific Dark Pool', 'Social Media Platform Y', 'Compliant Broker-Dealer Z'.",
-          "role": "string | e.g., 'Provided venue for manipulative orders', 'Amplified false narratives via algorithm', 'Failed to monitor for wash trades'."
+          "entity_or_role": "string (e.g., 'OTC Market Maker', 'Social Media Platform', 'Complicit Auditor')",
+          "nature_of_involvement": "string: How they (intentionally or negligently) enabled the scheme (e.g., 'executed wash trades', 'failed to halt trading on suspicious activity', 'issued misleading reports')."
         }
       ],
-      "target_market_and_victims": {
-        "targeted_asset": {
-          "name": "string | e.g., 'Acme Corp Stock (ACME)'.",
-          "market_cap_category": "string | e.g., 'Micro-cap', 'Small-cap', 'Commodity Futures'.",
-          "pre_manipulation_liquidity": "string | Description of normal trading volume/volatility."
-        },
-        "victim_profile": "string | Description of those harmed (e.g., 'retail investors chasing momentum', 'algorithmic traders reacting to spoof orders', 'counterparties on the opposite side of artificial trades')."
-      },
-      "regulators_and_enforcers": "array[string] | Agencies that intervened (e.g., ['U.S. Commodity Futures Trading Commission (CFTC)', 'Department of Justice (DOJ)'])."
-    },
-    "3_manipulation_mechanics": {
-      "core_technique_description": "string | Detailed, step-by-step explanation of the manipulative tactic as executed in this case.",
-      "setup_and_accumulation_phase": {
-        "initial_position": "string | How perpetrators established their core position (e.g., 'quietly accumulated long position in OTC shares', 'entered short futures position before spoofing attack').",
-        "narrative_creation": "string | The false or misleading narrative crafted (e.g., 'imminent FDA approval rumor', 'fake technical analysis showing 'guaranteed' breakout')."
-      },
-      "execution_phase_artificial_inflation": {
-        "market_action_components": {
-          "order_book_manipulation": "array[string] | Descriptions of order patterns (e.g., ['Large non-bonafide sell orders placed 2% above ask to create false resistance', 'Rapid cancel-replace of buy orders to simulate demand']).",
-          "trade_manipulation": "array[string] | Descriptions of trade patterns (e.g., ['Pre-arranged matching trades between controlled accounts at increasing prices', 'Wash trades executed to inflate volume metrics'].)"
-        },
-        "information_warfare_components": {
-          "communication_channels": "array[string] | e.g., ['Discord', 'StockTwits', 'YouTube', 'Direct Messages'].",
-          "content_themes": "array[string] | Examples of messages/posts used to incite buying (e.g., ['$ACME is the next Tesla!', 'Short squeeze imminent, get in NOW!'].)"
-        },
-        "quantified_impact": {
-          "price_increase_percentage": "number | Percentage increase from pre-pump to peak.",
-          "volume_increase_multiple": "number | Multiple of average daily volume achieved at peak.",
-          "market_depth_distortion": "string | Description of how the order book was affected."
+      "primary_vehicles_used": [
+        {
+          "vehicle_name": "string (e.g., 'Hedge Fund ABC', 'Shell Company XYZ', 'Telegram Group \"Pump Alpha\"')",
+          "purpose_in_scheme": "string: Its function in the manipulation (e.g., 'held undisclosed position', 'conducted spoofing orders', 'disseminated false information')."
         }
+      ]
+    },
+    "manipulation_mechanics": {
+      "pre_manipulation_setup": {
+        "accumulation_phase": "string: Description of how manipulators built their initial position (quietly or aggressively).",
+        "entry_price_range": "string: Approximate price range during accumulation.",
+        "position_size_estimate": "string: Estimated size of the manipulator's core position (shares, contracts)."
       },
-      "cashout_and_exit_phase": {
-        "liquidation_strategy": "string | How perpetrators sold their position (e.g., 'Sold shares incrementally into retail buying frenzy over 3 days', 'Executed large block sell order triggering price collapse').",
-        "attempts_to_conceal": "string | Actions to hide the exit (e.g., 'Continued posting bullish messages while selling', 'Used multiple small orders across different brokers')."
+      "execution_phase_tactics": {
+        "artificial_price_inflation_methods": "array: Tactics used to drive the price up (e.g., ['Coordinated buy orders at ask', 'Spoofing large buy orders', 'Wash trades between controlled accounts', 'False news releases']).",
+        "volume_amplification_methods": "array: Tactics used to create illusion of organic interest (e.g., ['Match trades between colluding parties', 'High-frequency quote stuffing', 'Social media hype campaigns']).",
+        "narrative_propagation_channels": "array: Channels used to spread the false or misleading narrative (e.g., ['Stock message boards (Yahoo, StockTwits)', 'Cryptocurrency Telegram/Discord groups', 'Paid email newsletters', 'Fake news websites']).",
+        "key_false_narratives": "array: Specific lies or exaggerations spread (e.g., ['Imminent buyout at $10/share', 'Groundbreaking patent approval', 'Major partnership with large tech firm'].)"
+      },
+      "distribution_phase_tactics": {
+        "sell_off_method": "string: How manipulators unloaded their position (e.g., 'Sold into artificially inflated bids', 'Dumped shares on retail buying frenzy', 'Used hidden sell orders').",
+        "attempted_concealment": "string: Methods used to hide the dump (e.g., 'selling through offshore accounts', 'layering sell orders with small buys')."
       }
     },
-    "4_event_timeline": [
+    "market_impact_analysis": {
+      "price_distortion": {
+        "price_range_natural": "string: Estimated fair/undisturbed price range before manipulation.",
+        "peak_artificial_price": "string: The highest price achieved during the manipulation.",
+        "magnitude_of_inflation": "string: Percentage or factor of price increase from natural to peak.",
+        "price_collapse_level": "string: Price level after manipulation collapsed/sell-off completed.",
+        "price_recovery_status": "string: Description of if/how the price stabilized post-manipulation."
+      },
+      "volume_analysis": {
+        "average_volume_pre_manipulation": "string",
+        "peak_volume_during_manipulation": "string",
+        "volume_sustenance_period": "string: How long elevated volume was maintained."
+      },
+      "market_quality_metrics_impact": {
+        "bid_ask_spread_impact": "string: How the manipulation affected market liquidity (spread widening/narrowing).",
+        "order_book_depth_impact": "string: Impact on the genuine liquidity available at different price levels.",
+        "victim_counterparties": "string: Description of who traded against the manipulators (e.g., 'Retail investors', 'Algorithmic trading firms', 'Market makers')."
+      }
+    },
+    "financial_forensics": {
+      "manipulator_profits": {
+        "estimated_gross_proceeds": "number: Estimated total proceeds from selling the manipulated position.",
+        "estimated_net_profit_after_costs": "number: Estimated profit after accounting for acquisition costs, commissions, promotional expenses.",
+        "profit_realization_currency": "string: Currency of profit estimates.",
+        "asset_traces": "string: Description of what happened to the profits (e.g., 'transferred offshore', 'used to purchase real estate', 'frozen by regulators')."
+      },
+      "investor_losses": {
+        "estimated_aggregate_investor_loss": "number: Estimated total financial loss suffered by non-manipulating investors.",
+        "loss_distribution": "string: Characterization of loss bearers (e.g., 'concentrated among late-entering retail investors', 'spread across institutional and retail').",
+        "wash_trade_volume_estimate": "string: If applicable, estimate of volume that was non-economic/wash trading."
+      }
+    },
+    "key_milestones": [
       {
-        "date": "string (YYYY-MM-DD) | Approximate date.",
-        "event_description": "string | A significant action or occurrence (e.g., 'Perpetrator A begins accumulating position', 'First coordinated pump message posted in Telegram group', 'Trading volume exceeds 500% of average', 'Regulator Y requests trading data from Exchange Z', 'Major sell order by perpetrator executed').",
-        "category": "string | 'Setup', 'Narrative Push', 'Market Action (Pump/Spoof)', 'Peak', 'Cashout', 'Detection', 'Enforcement'."
+        "date": "string: Approximate date (YYYY-MM-DD or YYYY-MM).",
+        "event": "string: Description of the milestone.",
+        "significance": "string: Its role in the scheme (e.g., 'Accumulation complete', 'Coordinated pump campaign launch', 'First regulatory halt', 'Manipulator begins mass sell-off', 'Key news outlet debunks narrative')."
       }
     ],
-    "5_detection_and_collapse": {
-      "detection_trigger": {
-        "primary_cause": "string | What ultimately exposed the scheme (e.g., 'Exchange surveillance algorithms flagged spoofing pattern', 'Whistleblower from within chat group', 'Unusual price & volume activity triggered SEC review', 'Blockchain analysis revealed connected wallets').",
-        "key_detection_date": "string (YYYY-MM-DD)"
-      },
-      "regulatory_mechanical_response": {
-        "trading_halts": "string | Were any halts/suspensions imposed? When and by whom?",
-        "account_freezes": "string | Were perpetrator accounts frozen? When?"
-      },
-      "final_state_post_manipulation": {
-        "asset_price_trajectory": "string | Description from pre-manipulation -> peak -> post-crash stabilization level.",
-        "market_quality_impact": "string | Assessment of lasting damage to the asset's market (e.g., 'permanent loss of liquidity', 'continued elevated volatility')."
+    "unraveling_and_termination": {
+      "trigger_event": "string: Immediate cause of the scheme's collapse/exposure (e.g., 'Whistleblower report', 'Exchange anomaly detection alert', 'Investigative journalism article', 'Regulatory subpoena', 'Natural failure to attract greater fools').",
+      "termination_date": "string: Approximate date manipulation effectively ceased.",
+      "state_at_termination": {
+        "market_state": "string: Condition of the asset's market (e.g., 'Halted by exchange', 'Price in freefall', 'Illiquid with wide spreads').",
+        "manipulator_position": "string: Status of manipulator's holdings (e.g., 'Fully exited', 'Partially exited, remainder frozen', 'Still holding unsold inventory').",
+        "regulatory_status": "string: Immediate regulatory posture (e.g., 'Under investigation', 'Trading suspension ordered', 'No official action yet')."
       }
     },
-    "6_quantification_and_impact": {
-      "financial_quantification": {
-        "perpetrator_illicit_gain": "string | Estimated total gross profit from the manipulation (e.g., '$4.2 million from stock sales').",
-        "estimated_investor_losses": "string | Estimated total losses to defrauded market participants.",
-        "artificial_volume_proportion": "string | Estimated percentage of total volume during the period deemed manipulative."
-      },
-      "legal_and_regulatory_outcome": {
-        "charges_filed": "array[string] | e.g., ['Commodities Fraud', 'Wire Fraud', 'Securities Fraud', 'Spoofing (under Dodd-Frank)']. ",
-        "settlement_disgorgement_fines": {
-          "disgorgement": "string | Amount ordered to be returned (ill-gotten gains).",
-          "civil_penalty": "string | Monetary fine imposed.",
-          "total": "string"
-        },
-        "criminal_sentences": "array[object] | For individuals: [{'name': 'string', 'sentence': 'string (e.g., 24 months imprisonment)'}]",
-        "entity_resolution": "string | Outcome for any involved firms (e.g., 'Broker-Dealer A fined $1M and required to enhance surveillance')."
-      },
-      "victim_recovery": {
-        "restitution_fund_established": "boolean",
-        "recovery_mechanism": "string | e.g., 'Fair Fund distribution by SEC', 'Class action settlement', 'None'.",
-        "estimated_recovery_rate_for_losses": "string | If known/estimable."
-      },
-      "systemic_and_reputational_impact": {
-        "regulatory_policy_changes": "array[string] | Any rule changes prompted (e.g., ['Enhanced spoofing detection mandates for exchanges', 'Stricter rules for social media financial influencers'].)",
-        "market_integrity_perception": "string | Broader impact on confidence in the affected market segment.",
-        "notable_collateral_damage": "array[string] | e.g., ['Legitimate company XYZ faced reputational harm', 'Retail broker W faced lawsuits for failure to supervise']. "
+    "aftermath_and_consequences": {
+      "legal_regulatory_enforcement": [
+        {
+          "authority": "string (e.g., 'SEC', 'CFTC', 'DOJ', 'FCA')",
+          "action_type": "string (e.g., 'Civil Injunction', 'Criminal Indictment', 'Administrative Fine', 'Trading Ban')",
+          "charges": "array: Specific legal/regulatory charges (e.g., ['Securities Fraud', 'Wire Fraud', 'Market Manipulation']).",
+          "targets": "array: Names of actors charged.",
+          "outcome_or_status": "string (e.g., 'Settled for $X million', 'Convicted at trial', 'Pending litigation')."
+        }
+      ],
+      "key_actor_outcomes": "string: Summary of final personal/corporate outcomes for manipulators and facilitators (fines, prison sentences, bans).",
+      "investor_recovery_actions": [
+        {
+          "action_type": "string (e.g., 'Class Action Lawsuit', 'SEC Fair Fund distribution', 'Bankruptcy proceeding')",
+          "status": "string: Current status of recovery effort.",
+          "estimated_recovery_rate": "string: Estimated percentage of losses potentially recoverable."
+        }
+      ],
+      "systemic_and_market_integrity_impacts": {
+        "regulatory_changes_prompted": "array: List any new rules or surveillance practices adopted in response (e.g., ['Enhanced spoofing detection algorithms', 'Stricter rules for microcap stock promotions']).",
+        "market_confidence_impact": "string: Assessment of the event's impact on trust in the affected market segment.",
+        "broader_implications": "array: List wider impacts (e.g., ['Highlighted vulnerabilities in OTC markets', 'Spurred debate on social media's role in market manipulation', 'Led to cross-regulator task force'].)"
       }
     },
-    "7_simulation_analysis_notes": {
-      "key_manipulation_signatures": "array[string] | List the specific trading or communication patterns that were the 'smoking guns'.",
-      "vulnerabilities_exploited": "array[string] | Systemic weaknesses used (e.g., ['Low liquidity of micro-cap stocks', 'Speed of order cancellation in electronic markets', 'Anonymity of certain social platforms'].)",
-      "effectiveness_of_response": "string | Brief analysis of how effective detection and enforcement were (timeliness, proportionality).",
-      "data_limitations_or_conflicts": "array[string] | Note any major gaps or conflicts in source data.",
-      "simulation_confidence_level": "string | High/Medium/Low based on completeness and reliability of provided data."
+    "forensic_indicators_and_red_flags": {
+      "technical_red_flags": "array: Trading patterns indicative of manipulation (e.g., ['Sudden, unexplained volume spikes on no news', 'Large orders placed and quickly cancelled (spoofing)', 'Tick trades at increasing prices (wash trading)', 'Abnormal correlation between social media hype and price moves'].)",
+      "fundamental_red_flags": "array: Business/narrative inconsistencies (e.g., ['Promoter claims unsupported by SEC filings', 'Company in dormant shell status despite hype', 'Vague business descriptions with grandiose claims'].)",
+      "comparison_to_known_schemes": "string: Brief analysis of how this case aligns with or deviates from classic manipulation playbooks."
     }
   }
-}   
-    
+}
+```
+
+**Critical Analysis Instructions:**
+
+1.  **Evidence-First Synthesis:** All claims, especially in `manipulation_mechanics` and `financial_forensics`, must be rooted in provided data. Prioritize findings from regulatory settlements or court judgments. For conflicting data, state the authoritative source used.
+2.  **Chronological & Causal Logic:** The `key_milestones` must form a logical timeline from setup to termination. Clearly link manipulative actions (`execution_phase_tactics`) to observable market effects (`market_impact_analysis`).
+3.  **Quantitative Rigor:** Fill all numerical fields with the best available estimates. Clearly label estimates. If a numeric field is truly unknown, use `"Estimate not available from sources."`.
+4.  **Mechanism Decomposition:** Break down the manipulation into distinct phases (`pre_manipulation_setup`, `execution_phase_tactics`, `distribution_phase_tactics`). Detail the specific tactics used in each.
+5.  **Impact Differentiation:** Distinguish between the direct financial impact on manipulators (`manipulator_profits`) and victims (`investor_losses`), and the broader impact on market quality and integrity (`market_quality_metrics_impact`, `systemic_and_market_integrity_impacts`).
+6.  **Red Flag Identification:** Deduce and list the observable `technical_red_flags` and `fundamental_red_flags` that, in hindsight, signaled manipulation. This is crucial for the preventative analytical value.
+7.  **Completeness Mandate:** Strive to populate every field. If information for a specific sub-field is absent in the data, use the value: `"Information not specified in provided sources."`.
+
+**Final Validation Before Output:**
+Conduct an internal consistency review. Ensure the timeline aligns with the `total_duration_active`. Verify that the described tactics in `execution_phase_tactics` logically lead to the documented `price_distortion`. Check that `manipulator_profits` and `investor_losses` are contextually plausible given the scale described.
+
+**Now, analyze the provided data regarding the specified market manipulation event and output the complete, detailed JSON object.**
     """
