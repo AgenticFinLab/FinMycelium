@@ -21,7 +21,6 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "common_case_name": "string: The widely recognized name in media (e.g., 'The ABC Corp Earnings Leak').",
       "primary_regulatory_jurisdiction": "string: Primary investigating authority (e.g., 'U.S. SEC', 'UK FCA', 'Hong Kong SFC').",
       "relevant_securities_exchanges": "array: List of exchanges where the implicated securities are traded (e.g., ['NASDAQ', 'NYSE']).",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC Complaint, DOJ Indictment, Final Judgment, Company 8-K filings')."
     },
     "case_overview": {

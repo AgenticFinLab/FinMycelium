@@ -19,11 +19,10 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "event_reconstruction": {
+  "ponzi_scheme_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the event (e.g., 'Lantian Gerui Ponzi Scheme').",
       "primary_jurisdiction": "string: Country/region where the scheme was primarily operated.",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'court verdicts, news reports, regulatory announcements')."
     },
     "overview": {

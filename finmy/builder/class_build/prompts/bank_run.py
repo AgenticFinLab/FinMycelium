@@ -17,12 +17,11 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "bank_run_analysis": {
+  "bank_run_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the event (e.g., 'Silicon Valley Bank Run of 2023').",
       "financial_institution_name": "string: Legal name of the bank or institution at the center of the run.",
       "primary_jurisdiction": "string: Country/region where the institution was primarily regulated and operated.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types and credibility of sources used (e.g., 'FDIC reports, SEC filings, earnings call transcripts, Reuters news timeline')."
     },
     "institution_precondition_profile": {

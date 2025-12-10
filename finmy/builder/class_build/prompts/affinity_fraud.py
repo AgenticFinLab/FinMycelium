@@ -23,11 +23,10 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "affinity_fraud_analysis": {
+  "affinity_fraud_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the event (e.g., 'The [Group Name] Investment Club Scandal').",
       "primary_jurisdiction": "string: Country/region where the scheme was primarily operated.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ).",
       "data_sources_summary": "string: Brief description of source types used."
     },
     "overview": {

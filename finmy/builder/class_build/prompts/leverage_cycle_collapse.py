@@ -16,13 +16,12 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "leverage_cycle_collapse_analysis": {
+  "leverage_cycle_collapse_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the event (e.g., 'Archegos Capital Implosion 2021').",
       "primary_entity_name": "string: The name of the collapsing leveraged entity (e.g., hedge fund, family office, corporation).",
       "primary_sector": "string: The main financial sector involved (e.g., 'Family Office/ Hedge Fund', 'Real Estate Development', 'Shadow Banking').",
       "peak_collapse_year": "number: The year in which the collapse became public and critical.",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types of sources used."
     },
     "overview": {

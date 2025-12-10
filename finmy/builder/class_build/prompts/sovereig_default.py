@@ -22,7 +22,6 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "event_identifier": "string: The common name of the event (e.g., 'Greek Government Debt Crisis 2012 Restructuring').",
       "defaulting_country": "string: The sovereign nation that defaulted.",
       "default_date_iso": "string: The ISO 8601 date considered the formal default/credit event (YYYY-MM-DD or YYYY-MM).",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of sources used (e.g., 'IMF Article IV reports, bond prospectuses, court filings, central bank bulletins')."
     },
     "overview": {

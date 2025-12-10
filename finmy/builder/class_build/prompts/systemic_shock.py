@@ -20,7 +20,6 @@ You MUST output a single, well-structured JSON object. Use the exact field names
     "metadata": {
       "shock_identifier": "string: The canonical name of the shock event (e.g., 'The Lehman Brothers Crisis - 2008').",
       "primary_epicenter": "string: The country, region, or market sector where the shock first manifested severely.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ).",
       "data_sources_summary": "string: Brief description of sources used (e.g., 'FRB reports, SEC filings, Bloomberg terminal data, academic papers').",
       "reference_period": {
         "shock_onset_peak": "string: Approximate date or period marking the acute phase (e.g., '2008 Q3-Q4').",

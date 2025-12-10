@@ -16,12 +16,11 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "liquidity_spiral_analysis": {
+  "liquidity_spiral_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name for the liquidity spiral event (e.g., 'UK Liability-Driven Investment (LDI) Crisis, Sep 2022').",
       "primary_market": "string: The core financial market where the spiral occurred (e.g., 'US Treasury Market', 'UK Gilt Market').",
       "primary_asset_class": "string: The asset class at the epicenter (e.g., 'Sovereign Bonds', 'Equities', 'Mortgage-Backed Securities').",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated (YYYY-MM-DDTHH:MM:SSZ).",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'Central Bank reports, hedge fund letters, exchange data, financial news')."
     },
     "overview": {

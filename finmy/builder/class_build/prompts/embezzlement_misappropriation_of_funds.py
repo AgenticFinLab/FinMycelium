@@ -15,11 +15,10 @@ You MUST output a single, comprehensive JSON object. Use the exact field names a
 
 ```json
 {
-  "embezzlement_reconstruction": {
+  "embezzlement_misappropriation_of_funds_reconstruction": {
     "metadata": {
       "case_identifier": "string: The common name/reference for the case (e.g., 'Midtown Municipal Funds Misappropriation Case').",
       "primary_jurisdiction": "string: Legal jurisdiction where the primary crime occurred.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) for this analysis.",
       "data_sources_summary": "string: Brief description of source types used (e.g., 'Indictment documents, forensic audit report by firm XYZ, local news coverage')."
     },
     "case_overview": {

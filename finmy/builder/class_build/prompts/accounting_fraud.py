@@ -22,7 +22,6 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "fraudulent_entity": "string: The primary company that issued fraudulent financial statements.",
       "primary_exchange": "string: The stock exchange(s) where the entity was listed (e.g., 'Frankfurt Stock Exchange (DAX)').",
       "primary_jurisdiction": "string: Country/region of the entity's headquarters and primary regulator.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of analysis generation.",
       "data_sources_summary": "string: Brief description of source types used (e.g., 'EA&Y audit reports, Financial Times investigations, BaFin rulings, Munich prosecutors' indictment')."
     },
     "overview": {

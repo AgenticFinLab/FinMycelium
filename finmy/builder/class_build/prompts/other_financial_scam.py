@@ -15,11 +15,10 @@ You MUST output a single, comprehensive JSON object. Do not include any markdown
 
 ```json
 {
-  "scam_reconstruction": {
+  "other_financial_scam_reconstruction": {
     "metadata": {
       "event_identifier": "string: The widely recognized name of the scam (e.g., 'The XYZ Forged Treasury Bill Scandal').",
       "primary_jurisdiction": "string: Main country/region where the fraudulent activity was centered.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) for this analysis.",
       "data_sources_used": "array: List of source types referenced, e.g., ['SEC Complaint', 'High Court Judgment', 'Financial Times Articles', 'Company Bankruptcy Filing']."
     },
     "overview": {

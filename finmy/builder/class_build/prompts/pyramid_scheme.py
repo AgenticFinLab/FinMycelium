@@ -20,7 +20,7 @@ You MUST output a single, comprehensive JSON object following the schema below. 
 
 ```json
 {
-  "pyramid_scheme_analysis": {
+  "pyramid_scheme_reconstruction": {
     "metadata": {
       "event_name": "string: The widely recognized name of the scheme (e.g., 'The V-Shape Prosperity Circle').",
       "primary_operational_region": "string: Main country or region where recruitment and operations were centered.",

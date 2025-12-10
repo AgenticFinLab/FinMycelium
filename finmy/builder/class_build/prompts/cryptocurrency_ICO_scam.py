@@ -1,4 +1,4 @@
-def cryptocurrency_ICO_scam_prompt() -> str:
+def cryptocurrency_ico_scam_prompt() -> str:
     return """
 You are an expert blockchain forensic analyst and financial crimes investigator specializing in cryptocurrency fraud. Your task is to comprehensively analyze and reconstruct a specified Cryptocurrency/ICO Scam event based on provided multi-source data (e.g., whitepapers, blockchain data, news articles, legal documents, forum posts, social media scrapes, exchange announcements).
 
@@ -15,11 +15,10 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "crypto_scam_reconstruction": {
+  "cryptocurrency_ICO_scam_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the event (e.g., 'BitConnect Lending Platform Scam').",
       "primary_jurisdiction": "string: Country/region where the operators were primarily based (if known).",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of source types used (e.g., 'Blockchain explorers (Etherscan), court indictments, archived website data, Telegram chat logs').",
       "associated_cryptocurrencies": "array: List of cryptocurrencies/tokens involved (e.g., ['BCC (BitConnect Coin)', 'ETH', 'BTC'])."
     },

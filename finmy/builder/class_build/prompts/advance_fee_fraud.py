@@ -22,7 +22,6 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "primary_jurisdictions_impacted": "array: List of countries/regions where victims were primarily located.",
       "perpetrator_jurisdiction_claimed": "string: Country/region the perpetrators claimed to be operating from.",
       "perpetrator_jurisdiction_actual": "string: Best estimate of the actual operational base, if different.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of this analysis.",
       "source_quality_assessment": "string: Brief assessment of input data reliability (e.g., 'Multiple victim testimonies and one conviction document', 'Primarily news reports; lacking official legal closure')."
     },
     "overview": {

@@ -15,12 +15,11 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "event_reconstruction": {
+  "forex_binary_options_fraud_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the fraud scheme or platform (e.g., 'XYZ Forex Investment Scam', 'ABC Binary Options Fraud').",
       "primary_jurisdiction": "string: Country/region where the scheme was primarily legally registered or operated from.",
       "target_jurisdictions": "array: List of countries/regions where investors were primarily targeted and recruited.",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated (YYYY-MM-DDTHH:MM:SSZ).",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'FCA warning notices, victim forum posts, leaked internal emails, software analysis reports')."
     },
     "overview": {

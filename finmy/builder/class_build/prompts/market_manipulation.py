@@ -19,7 +19,6 @@ You MUST output a single, comprehensive JSON object. The schema is designed for 
       "case_identifier": "string: The common name of the case (e.g., 'XYZ Corp Pump and Dump', 'The 2010 Silver Spoofing Case').",
       "primary_assets_involved": "array: List of financial instruments manipulated (e.g., ['XYZ Stock', 'ABC Cryptocurrency', 'Silver Futures']).",
       "primary_jurisdiction": "string: Leading regulatory/legal jurisdiction handling the case.",
-      "analysis_timestamp": "string: ISO 8601 timestamp of analysis generation.",
       "data_sources_summary": "string: Brief description of input sources (e.g., 'SEC litigation release, chat log excerpts, price data analysis, court verdict')."
     },
     "overview": {

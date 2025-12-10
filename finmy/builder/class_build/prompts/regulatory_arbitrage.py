@@ -16,11 +16,10 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "regulatory_arbitrage_case": {
+  "regulatory_arbitrage_reconstruction": {
     "metadata": {
       "case_identifier": "string: The common name or descriptor for the arbitrage case (e.g., 'Eurozone Bank Sovereign Debt Capital Arbitrage 2010-2012').",
       "primary_jurisdictions_involved": "array: List of countries/regions whose regulatory systems were central to the arbitrage strategy.",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) for this analysis.",
       "data_sources_summary": "string: Brief description of input sources (e.g., 'Basel Committee reports, ECB working papers, enforcement orders from SEC and FCA').",
       "relevant_regulatory_regimes": "array: List of the specific regulations, rules, or regimes being arbitraged (e.g., ['Basel II Capital Framework', 'US GAAP vs IFRS accounting rules', 'EU Insurance Solvency II vs Bank Capital Requirements'])."
     },

@@ -16,13 +16,12 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "short_squeeze_analysis": {
+  "short_squeez_reconstruction": {
     "metadata": {
       "event_identifier": "string: The common name of the event (e.g., 'GameStop Short Squeeze of January 2021').",
       "primary_asset_ticker": "string: The ticker symbol of the primary asset involved (e.g., 'GME', 'VOW3.DE').",
       "primary_asset_name": "string: The full name of the asset (e.g., 'GameStop Corp.', 'Volkswagen AG').",
       "primary_exchange": "string: The main exchange where the squeeze occurred (e.g., 'NYSE', 'XETRA').",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated (YYYY-MM-DDTHH:MM:SSZ).",
       "core_squeeze_period": "string: The approximate date range of the most intense squeeze phase (e.g., '2021-01-22 to 2021-01-28').",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC filings, exchange statistics, news archives, social media aggregator data')."
     },

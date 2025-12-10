@@ -16,13 +16,12 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "stablecoin_depeg_analysis": {
+  "stablecoin_depeg_reconstruction": {
     "metadata": {
       "stablecoin_identifier": "string: The ticker and name of the stablecoin (e.g., 'UST (TerraUSD)').",
       "reference_asset": "string: The asset it is designed to peg to (e.g., 'US Dollar', 'Euro').",
       "target_price": "number: The intended peg price (e.g., 1.0).",
       "primary_blockchain": "string: The main blockchain network it operates on (e.g., 'Terra', 'Ethereum').",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'blockchain explorers, exchange blogs, on-chain analytics dashboards, court filings')."
     },
     "overview": {

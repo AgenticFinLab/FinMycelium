@@ -17,14 +17,13 @@ You MUST output a single, well-structured JSON object. Use the exact field names
 
 ```json
 {
-  "credit_event_analysis": {
+  "credit_event_reconstruction": {
     "metadata": {
       "event_identifier": "string: The official or commonly accepted name of the Credit Event (e.g., 'Evergrande Failure to Pay - 2022', 'Pacific Gas and Electric Company Bankruptcy 2019').",
       "reference_entity": "string: The legal entity (obligor) on which the Credit Event is triggered (e.g., 'Company XYZ Corp.').",
       "reference_obligation": "string: The specific debt instrument(s) relevant to the event (e.g., 'XYZ 5.5% Bonds due 2025', 'Broadly applicable for all senior unsecured obligations').",
       "primary_jurisdiction": "string: Governing law/jurisdiction for the obligor and its debt.",
       "isda_governed": "boolean: Indicates if the event is primarily evaluated under ISDA definitions (typical for CDS).",
-      "analysis_timestamp": "string: ISO 8601 timestamp of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'ISDA DC Press Releases, Bankruptcy Court Docket, Company SEC Filings, Bloomberg Data')."
     },
     "overview": {

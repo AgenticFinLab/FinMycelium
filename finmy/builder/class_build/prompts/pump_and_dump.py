@@ -21,7 +21,6 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "asset_identifier": "string: The ticker symbol, coin name, or identifier of the manipulated asset (e.g., 'XYZ', 'BitcoinXYZ').",
       "asset_type": "string: Type of asset manipulated (e.g., 'Penny Stock', 'Microcap Stock', 'Cryptocurrency', 'OTC Security', 'NFT').",
       "primary_market": "string: Primary exchange or marketplace where the manipulation occurred (e.g., 'OTC Markets', 'Binance', 'NASDAQ').",
-      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of when this analysis is generated.",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC litigation release, Twitter/X dump, trading volume charts, Finviz data')."
     },
     "overview": {
