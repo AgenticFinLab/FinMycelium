@@ -1,210 +1,189 @@
 
-def pyramid_scheme_prompt(text: str) -> str:
+def pyramid_scheme_prompt() -> str:
     return """
-You are a financial events simulation expert. Your task is to reconstruct a pyramid scheme event based on multiple data sources (e.g., web pages, PDFs, news articles). The simulation must be logical, fact-based, and comprehensive. Provide all information in a structured JSON format as specified below.
+You are a forensic financial analyst and investigative researcher specializing in deconstructing and analyzing Pyramid Schemes (also known as Multi-Level Marketing frauds or recruitment-based schemes). Your core task is to synthesize fragmented, multi-source data (news articles, victim testimonies, regulatory orders, court documents, website archives) into a complete, factual, and logical reconstruction of a specified pyramid scheme's lifecycle.
 
-### **Event Reconstruction Guidelines**:
-1. **Full Chain Presentation**: Present the entire event from cause to effect, including background, development, climax, and aftermath.
-2. **Key Nodes**: Highlight critical milestones (e.g., launch, peak, collapse).
-3. **Outcomes**: Describe the final state of the event.
-4. **Impact Analysis**: Analyze impacts on all involved parties (e.g., initiators, investors, regulators, society).
-5. **Fact-Based**: All information must be grounded in verified data from sources. If certain details are unavailable, explicitly state "Information not available" for the relevant field.
-6. **Logical Coherence**: Ensure timelines, figures, and causal relationships are consistent.
+**Primary Objective:**
+To produce a definitive, data-driven analysis that exposes the operational blueprint of the pyramid scheme. Your output must detail the recruitment mechanics, the compensation structure's inherent unsustainability, the flow of money, key actors, and the resultant societal and financial damage. The analysis must trace the full chain from the scheme's conceptual lure to its inevitable collapse and aftermath.
 
-### **Required Content (Detailed Key Points)**:
-For the pyramid scheme event (e.g., "Blue Sky Gary" or similar), include at least the following aspects:
-1. **Event Summary**: A concise overview of the entire event.
-2. **Main Initiator(s)/Entity**: Names, backgrounds, and roles of key founders or entities.
-3. **Promotion Methods**: How the initiators promoted the scheme (e.g., social media, seminars, word-of-mouth).
-4. **Investor Attraction Tactics**: Strategies used to lure investors (e.g., high returns, exclusivity, fake testimonials).
-5. **Investment Process**: How investors were onboarded and the mechanisms for investing.
-6. **Product/Service Design**: Description of the fake or non-existent product/service offered.
-7. **Investment Amounts**: Typical investment ranges, minimum/maximum amounts, and payment methods.
-8. **Return Promises**: Specific promises made regarding returns (e.g., interest rates, timelines).
-9. **Return Distribution**: How returns were initially paid to early investors (e.g., via new investments).
-10. **Propagation Channels**: Channels used to spread the scheme (online/offline, geographic reach).
-11. **Duration & Scale**: Timeframe of the scheme and total number of investors recruited.
-12. **Promised Use of Funds**: Where initiators claimed the funds would be used (e.g., investments, business expansion).
-13. **Actual Use of Funds**: Where funds were actually allocated (e.g., personal luxuries, ponzi payments). Include evidence of misappropriation if any.
-14. **New-to-Old Payment Mechanism**: How the scheme sustained itself by using new investments to pay old investors. Provide data on cash flow gaps over time.
-15. **Collapse Trigger**: What caused the scheme to end (e.g., regulatory intervention, liquidity crisis).
-16. **State at Collapse**: The condition of the scheme at termination (e.g., investor count, outstanding liabilities).
-17. **Fates of Initiators & Participants**: Legal actions against initiators and outcomes for other participants (e.g., associates, promoters).
-18. **Investor Status at Collapse**: Demographic and financial state of investors at termination.
-19. **Total Investment Volume**: Aggregate funds collected throughout the scheme.
-20. **Principal Shortfall**: The gap between total principal invested and recoverable assets at collapse. Include time left if promised returns were ongoing.
-21. **Promised Return Shortfall**: The gap between promised total returns and actual returns paid. Include remaining time for promised returns.
-22. **Investor Losses**: Total net losses suffered by investors (after accounting for any returns received).
-23. **Remaining Funds at Collapse**: Liquid assets left in initiators' accounts available for liquidation.
-24. **Post-Liquidation Shortfall**: The amount and proportion of investor funds irrecoverable after asset liquidation.
-25. **Broader Impacts**: Secondary effects (e.g., regulatory changes, social trust erosion, economic ripple effects).
+**Data Input Protocol:**
+You will be provided with raw, unstructured text/data pertaining to a specific pyramid scheme case (e.g., "XYZ Friendship Club", "Women Empowerment Circle"). This data may be contradictory, incomplete, or sensationalized. You must:
+1.  **Corroborate:** Cross-reference facts across multiple sources where possible.
+2.  **Prioritize:** Weight official documents (court verdicts, regulatory findings) higher than anecdotal reports.
+3.  **Resolve Discrepancies:** Note major conflicts and base conclusions on the preponderance of credible evidence.
+4.  **Infer Logically:** Only make inferences that are directly supportable by the provided facts.
 
-### **Output Format**:
-- Provide output in a **valid JSON object** with the structure below.
-- Use precise dates, figures, and sources where possible.
-- For unavailable data, use `null` or a string like "Information not available".
-- Maintain a neutral, factual tone.
+**Output Format Mandate:**
+You MUST output a single, comprehensive JSON object following the schema below. Do not include any introductory text, summaries, or commentary outside the JSON. The JSON must be parsable and complete.
 
-### **JSON Schema**:
+**Pyramid Scheme Specific JSON Schema & Field Definitions**
+
 ```json
 {
-  "event_reconstruction": {
+  "pyramid_scheme_analysis": {
     "metadata": {
-      "event_name": "string (e.g., Blue Sky Gary Pyramid Scheme)",
-      "simulation_date": "string (YYYY-MM-DD)",
-      "data_sources": "array of strings (list of sources used)",
-      "geographic_scope": "string (primary countries/regions affected)"
+      "event_name": "string: The widely recognized name of the scheme (e.g., 'The V-Shape Prosperity Circle').",
+      "primary_operational_region": "string: Main country or region where recruitment and operations were centered.",
+      "analysis_date": "string: ISO 8601 date (YYYY-MM-DD) when this analysis was generated.",
+      "source_characterization": "string: Brief description of input data quality and types (e.g., 'Mixture of SEC complaint, news investigations, and victim forum posts')."
     },
-    "summary": {
-      "overview": "string (2-3 paragraph summary)",
-      "key_takeaways": "array of strings (bullet-point insights)"
+    "executive_summary": {
+      "one_sentence_definition": "string: A single sentence capturing the scheme's essence (e.g., 'A membership-based pyramid where profits were derived solely from recruiting new members with false promises of high returns').",
+      "core_illegal_mechanism": "string: Explicit statement of the illegal focus (e.g., 'Emphasis on recruitment commissions over product sales to end-users').",
+      "total_active_period": "string: Duration from first recruitment to collapse (e.g., '18 months').",
+      "eventual_outcome": "string: The final status (e.g., 'Shut down by regulatory injunction, founders charged with fraud')."
     },
-    "initiation_phase": {
-      "main_initiators": [
+    "architects_and_operators": {
+      "founders": [
         {
           "name": "string",
-          "role": "string",
-          "background": "string"
+          "claimed_title": "string (e.g., 'Visionary Founder', 'Chief Mentor')",
+          "relevant_background": "string: Prior experience used for credibility (e.g., 'Former network marketing distributor', 'Self-help guru').",
+          "terminal_legal_status": "string: Status at analysis time (e.g., 'Indicted on wire fraud charges', 'Subject of civil asset freeze')."
         }
       ],
-      "promotion_methods": "array of strings",
-      "attraction_tactics": "array of strings",
-      "investment_process": "string (step-by-step description)",
-      "product_service_description": "string (details of the fake product/service)",
-      "typical_investment_amounts": {
-        "min": "number (in original currency)",
-        "max": "number (in original currency)",
-        "currency": "string (e.g., USD, CNY)",
-        "payment_methods": "array of strings"
+      "front_entity": {
+        "legal_name": "string: Registered company name, if any.",
+        "brand_name": "string: Public-facing name.",
+        "stated_purpose": "string: The publicly declared mission (e.g., 'Community empowerment through shared entrepreneurship').",
+        "actual_purpose": "string: The de facto purpose per evidence (e.g., 'To facilitate a money transfer from new recruits to earlier recruits and founders')."
       },
-      "return_promises": {
-        "promised_returns": "string (e.g., 20% monthly)",
-        "timeline": "string (e.g., 6 months)",
-        "conditions": "string (any terms attached)"
-      },
-      "return_distribution_mechanism": "string (how early investors were paid)",
-      "propagation_channels": "array of strings"
+      "key_promoters": [
+        {
+          "role": "string (e.g., 'Top Recruiter', 'Social Media Influencer')",
+          "recruitment_method": "string: How they attracted members.",
+          "level_in_hierarchy": "string: Their estimated rank in the downline."
+        }
+      ]
     },
-    "operation_phase": {
-      "duration": {
-        "start_date": "string (YYYY-MM-DD)",
-        "end_date": "string (YYYY-MM-DD)",
-        "total_months": "number"
+    "recruitment_mechanics": {
+      "entry_requirement": {
+        "initial_buy_in_cost": "number: Monetary amount required to join as a participant/member.",
+        "what_is_purchased": "string: The tangible or intangible item provided for the fee (e.g., 'Starter kit of low-value products', 'Access to exclusive training portal', 'Simply a membership ID').",
+        "obligation_to_recruit": "string: Explicit or implicit requirement to recruit new members to earn."
       },
-      "investor_metrics": {
-        "total_investors": "number",
-        "active_investors_at_peak": "number",
-        "geographic_spread": "object (key-value pairs: region -> investor count)"
+      "target_demographic": {
+        "primary_targets": "array: Groups primarily marketed to (e.g., ['Stay-at-home parents', 'University students', 'Retirees seeking income', 'Immigrant communities']).",
+        "emotional_appeals": "array: Exploited desires (e.g., ['Financial freedom', 'Community belonging', 'Flexible work-from-home opportunity', 'Supporting a cause'])."
       },
-      "promised_use_of_funds": "string",
-      "actual_use_of_funds": {
-        "allocations": [
-          {
-            "category": "string (e.g., Ponzi payments, personal expenses)",
-            "percentage": "number (estimated %)",
-            "evidence": "string (source notes)"
-          }
-        ],
-        "misappropriation_evidence": "string (details if available)"
+      "recruitment_channels": {
+        "online_platforms": "array: e.g., ['Private Facebook groups', 'Instagram testimonials', 'WhatsApp/Telegram broadcasts', 'YouTube motivational videos'].",
+        "offline_events": "array: e.g., ['Hotel seminar workshops', 'House parties', 'Community center meetings'].",
+        "relational_leverage": "array: e.g., ['Family pressure', 'Friend networks', 'Church or religious group affiliations']."
       },
-      "new_to_old_payment_flow": {
-        "mechanism": "string (description)",
-        "cash_flow_gap_analysis": [
-          {
-            "period": "string (e.g., Year 1, Q2)",
-            "inflows": "number (total new investments)",
-            "outflows": "number (total payouts)",
-            "shortfall": "number (outflows - inflows)"
-          }
-        ]
+      "deceptive_claims": {
+        "income_promises": "string: Specific earnings claims (e.g., 'Earn $5,000 per month part-time', 'Recruit 5 to achieve financial freedom').",
+        "success_stories": "string: Nature of fabricated/atypical testimonials used.",
+        "legitimacy_facade": "string: False veneers of legality (e.g., 'Uses a novel legal person-to-person gifting model', 'Protected by first amendment as a club').",
+        "urgency_tactics": "string: Pressure techniques (e.g., 'Price increases next month', 'Only 10 spots left in your region')."
       }
     },
+    "compensation_structure_analysis": {
+      "commission_source": "string: Clear statement that commissions are primarily/solely from new member sign-up fees, not retail sales.",
+      "bonus_types": [
+        {
+          "name": "string (e.g., 'Fast Start Bonus', 'Unilevel Commission', 'Matrix Overflow')",
+          "trigger": "string: Action required to earn it (e.g., 'Personally recruit a new member', 'Members in your 3rd level recruit someone').",
+          "payout_amount": "string: Formula or example (e.g., '50% of new member's entry fee')."
+        }
+      ],
+      "hierarchy_structure": {
+        "name": "string (e.g., '8-Level Matrix', 'Binary Tree')",
+        "required_width_depth": "string: Required number of recruits per level to advance or earn.",
+        "advancement_requirements": "string: Conditions to move up tiers (e.g., 'Maintain 5 personally recruited active members')."
+      },
+      "sustainability_indicators": {
+        "market_saturation_potential": "string: Estimate of how quickly the recruitable population in the target region would be exhausted.",
+        "mathematical_collapse_inevitability": "string: Explanation of why the structure must collapse (e.g., 'Requires exponential growth exceeding population')."
+      }
+    },
+    "financial_flow_reconstruction": {
+      "scale": {
+        "estimated_total_participants": "number: Total number of individuals who paid the entry fee.",
+        "estimated_total_gross_inflow": "number: Sum of all entry fees collected (primary currency).",
+        "primary_currency": "string: e.g., 'USD', 'CNY', 'EUR'.",
+        "estimated_geographic_reach": "array: List of countries/regions with participant clusters."
+      },
+      "distribution_breakdown": {
+        "to_founders_and_operators": "string: Estimated percentage and description of use (e.g., '~30%, for luxury assets, personal expenses, funding promotions').",
+        "to_commission_payouts": "string: Estimated percentage paid out as recruitment bonuses to the participant network.",
+        "for_operational_theater": "string: Estimated percentage for maintaining the facade (e.g., 'Website, event costs, starter kit production').",
+        "for_product_inventory": "string: IF a product exists, percentage spent on actual wholesale goods. Often minimal.",
+        "evidence_of_personal_misuse": "string: Specific examples of founder misappropriation from evidence."
+      },
+      "money_movement": {
+        "payment_methods": "array: e.g., ['Direct bank transfer', 'Cash', 'Cryptocurrency', 'Payment processors (PayPal, Venmo)'].",
+        "account_structure": "string: How funds were collected (e.g., 'Centralized company account', 'Founder's personal account', 'Network of recruiter accounts')."
+      },
+      "victim_financial_profile": {
+        "average_entry_fee": "number",
+        "common_additional_investments": "string: e.g., 'Upsells for higher membership tiers', 'Promotional material purchases'.",
+        "percentage_earning_net_positive": "number: Estimate of participants who recruited enough to recover more than their input. Typically < 10%."
+      }
+    },
+    "key_event_timeline": [
+      {
+        "date": "string: Approximate date (YYYY-MM-DD or YYYY-MM).",
+        "event": "string: Description.",
+        "significance": "string: Why it mattered (e.g., 'Scheme launch', 'Major promotional event doubling recruitment', 'First regulatory warning letter', 'Top recruiter publicly defects', 'Payout delays begin')."
+      }
+    ],
     "collapse_phase": {
-      "trigger_event": "string (what directly caused collapse)",
-      "collapse_date": "string (YYYY-MM-DD)",
+      "breaking_point_trigger": "string: The immediate catalyst (e.g., 'Critical mass of lower-level recruits unable to find new members and demanding refunds', 'Investigative media report goes viral', 'Payment processor suspends accounts due to high chargebacks', 'Regulatory cease-and-desist order').",
+      "collapse_date_estimate": "string: Date when recruitment and payouts effectively stopped.",
       "state_at_collapse": {
-        "total_investors": "number",
-        "total_liabilities": "number (currency as above)",
-        "active_investors": "number",
-        "outstanding_promises": "string (description)"
-      },
-      "fates": {
-        "initiators": [
-          {
-            "name": "string",
-            "legal_action": "string (e.g., arrested, fined)",
-            "outcome": "string (e.g., sentenced to X years)"
-          }
-        ],
-        "other_participants": "string (e.g., associates, promoters outcomes)"
-      },
-      "investor_status": {
-        "demographic_profile": "string (e.g., retirees, young professionals)",
-        "financial_state": "string (general description)"
+        "operational_status": "string: e.g., 'Website taken down', 'Founders unreachable', 'Official announcement of "system reboot" that never occurs'.",
+        "active_recruiting_members": "number: Estimate still trying to recruit at the end.",
+        "pending_commission_claims": "string: Amount of unpaid bonuses owed to members, if known."
       }
     },
-    "financial_analysis": {
-      "total_investment_volume": "number (currency as above)",
-      "principal_shortfall": {
-        "total_principal": "number",
-        "recoverable_assets": "number",
-        "shortfall_amount": "number",
-        "shortfall_percentage": "number",
-        "time_left_if_ongoing": "string (e.g., 3 months)"
+    "aftermath_consequences": {
+      "legal_actions": [
+        {
+          "authority": "string (e.g., 'Federal Trade Commission (FTC)', 'State Attorney General')",
+          "action_type": "string (e.g., 'Civil Lawsuit for Injunction', 'Criminal Indictment', 'Asset Freeze')",
+          "targets": "array: Names of individuals/entities charged.",
+          "allegations": "string: Summary of key legal charges.",
+          "status": "string: Current status of the action."
+        }
+      ],
+      "perpetrator_resolutions": "string: Summary of outcomes for founders and top promoters (sentences, fines, restitution orders, bankruptcy).",
+      "participant_impact_assessment": {
+        "estimated_net_loss_aggregate": "number: Total participant losses (Entry fees - commissions received).",
+        "estimated_percentage_losers": "number: Percentage of participants with a net financial loss.",
+        "demographic_of_most_harmed": "string: Which participant group bore the brunt (often late joiners, those who borrowed to join).",
+        "psycho_social_impact": "string: Documented effects (e.g., 'Destroyed family relationships', 'Significant debt accumulation', 'Loss of trust in communities')."
       },
-      "promised_return_shortfall": {
-        "total_promised_returns": "number",
-        "returns_paid": "number",
-        "shortfall_amount": "number",
-        "time_left_for_promised_returns": "string"
-      },
-      "total_investor_losses": "number (net losses after returns)",
-      "remaining_funds_at_collapse": {
-        "liquid_assets": "number",
-        "other_assets": "number (e.g., real estate, vehicles)",
-        "total_available_for_liquidation": "number"
-      },
-      "post_liquidation_shortfall": {
-        "total_recovered": "number",
-        "total_unrecovered": "number",
-        "percentage_unrecovered": "number",
-        "investors_fully_compensated": "number",
-        "investors_partially_compensated": "number",
-        "investors_uncompensated": "number"
-      }
+      "systemic_and_regulatory_ripples": [
+        "string: Broader effects (e.g., 'Increased scrutiny of all MLM companies in the country', 'Public awareness campaigns about pyramid schemes launched', 'Legislation proposed to close legal loopholes')."
+      ]
     },
-    "broader_impacts": {
-      "regulatory_changes": "array of strings (new laws/policies triggered)",
-      "social_impacts": "array of strings (e.g., loss of trust in financial institutions)",
-      "economic_impacts": "array of strings (e.g., local economic downturn)",
-      "media_coverage": "string (summary of public discourse)"
-    },
-    "verification_notes": {
-      "data_confidence": "string (e.g., High/Medium/Low based on source quality)",
-      "key_assumptions": "array of strings (any assumptions made during reconstruction)",
-      "unverified_claims": "array of strings (claims requiring further verification)"
+    "diagnostic_indicators_red_flags": {
+      "hallmark_pyramid_characteristics": "array: List the defining traits observed (e.g., ['Emphasis on recruitment over product sales to end-users', 'Complex commission structure based on hierarchy levels', 'High pressure to join quickly', 'Lack of genuine retail customer base']).",
+      "early_warning_signs_missed": "array: Signs that could have alerted an observer (e.g., ['No verifiable external revenue stream', 'Founders had history in failed MLMs', 'Income disclosures showed vast majority earned little/nothing'])."
     }
   }
 }
 ```
 
-### **Instructions for LLM**:
-- Populate the JSON object based strictly on the provided data sources.
-- Ensure all monetary values specify the currency.
-- For numerical fields, use `null` if data is missing; for text fields, use "Information not available".
-- Maintain chronological and logical flow across sections.
-- Highlight causal relationships (e.g., how promotion tactics led to investor attraction).
-- In the `verification_notes`, rate data confidence and list assumptions.
+**Mandatory Analytical Instructions for Pyramid Schemes:**
 
-### **Example Reference (for context)**:
-For a scheme like "Blue Sky Gary", you might include:
-- **Main initiator**: "Gary Zhang" (pseudonym), a former financial advisor.
-- **Promotion**: Through WeChat groups and "investment seminars" in Tianjin, China.
-- **Product**: Fake "high-tech mining equipment" investment contracts.
-- **Collapse trigger**: Regulatory raid in July 2023 after investor complaints.
-- **Total investment volume**: ~2 billion CNY.
-- **Investor losses**: ~1.5 billion CNY net.
+1.  **Focus on Recruitment, Not Product:** Constantly ask: "Was real value created for *external* customers, or was money simply recycled from new entrants to earlier entrants?" The output must prove the primary activity was recruitment.
+2.  **Demographic & Psychological Analysis:** Explain not just *how* people were recruited, but *why* they joined. Analyze the exploited social dynamics and emotional vulnerabilities.
+3.  **Mathematical Unsustainability Proof:** Explicitly address the exponential growth requirement. Use the `sustainability_indicators` and `victim_financial_profile` fields to demonstrate the inevitable collapse.
+4.  **Distinguish Participants:** Categorize participants as:
+    *   **Architects/Founders:** Knowing orchestrators.
+    *   **Top Recruiters/Early Joiners:** May have profited significantly but were key to propagation.
+    *   **The Vast Majority/Late Joiners:** The primary financial victims who recruited few or none.
+5.  **Trace the Money Relentlessly:** Your `distribution_breakdown` must account for the major portions of the gross inflow. Specify what tiny fraction, if any, went to legitimate product costs versus recruitment commissions and personal enrichment.
+6.  **Document the Social Fallout:** Pyramid schemes cause unique damage through the exploitation of trust within social networks. Detail the relational breakdowns and community distrust in `psycho_social_impact`.
+7.  **Completeness Over Speculation:** Fill every JSON field. If specific data (e.g., exact founder bank account balance) is unavailable, state `"Not specified in provided sources"` and provide the best available estimate or description for related fields. Do not omit fields.
 
-Now, simulate the pyramid scheme event based on the provided data sources. Output only the JSON object within a markdown code block.
+**Final Validation Before Output:**
+Perform a logic check:
+- Does the `total_active_period` align with the `key_event_timeline`?
+- Is the `estimated_net_loss_aggregate` logically consistent with `estimated_total_gross_inflow` and `distribution_breakdown`?
+- Does the narrative from `recruitment_mechanics` to `collapse_phase` logically explain the scheme's rapid rise and fall?
 
+**Now, analyze the provided data regarding the specified pyramid scheme and output the complete JSON object as your final and only response.**
     """
