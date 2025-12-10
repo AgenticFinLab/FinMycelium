@@ -375,7 +375,8 @@ def main():
     lmbuilder = LMBuilder(
         config={"output_dir": "./data/event_cascade_output"}  # Specify output directory
     )
-    build_output = lmbuilder.build(build_input)
+    # build_output = lmbuilder.build(build_input)
+    build_output = lmbuilder.build_class(build_input)
     print("build_output:", build_output)
 
     assert build_output is not None, "BuildOutput should be created successfully"
