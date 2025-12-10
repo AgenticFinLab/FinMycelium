@@ -23,13 +23,13 @@ import uuid
 from typing import Optional, List
 import time
 import random
+import os
 
 from lmbase.utils.tools import BlockBasedStoreManager
-from finmy.generic import RawData, MetaSample, UserQueryInput
+from finmy.generic import RawData, MetaSample, UserQueryInput, DataSample
 from finmy.builder.base import BuildInput
 from finmy.matcher.base import MatchOutput, MatchInput
 from finmy.matcher.summarizer import SummarizedUserQuery
-import os
 
 
 def write_text_data_to_block(text: str) -> str:
@@ -175,6 +175,19 @@ def convert_to_build_input(
     """
     if extras is None:
         extras = {}
+    data_samples: List[DataSample] = []
+    for meta_sample in meta_samples:
+        data_samples.append(
+            DataSample(
+                sample_id=meta_sample.sample_id,
+                raw_data_id=meta_sample.raw_data_id,
+                content=read_text_data_from_block(meta_sample.location),
+                category=meta_sample.category,
+                knowledge_field=meta_sample.knowledge_field,
+                tag=meta_sample.tag,
+                method=meta_sample.method,
+            )
+        )
     return BuildInput(
         user_query=user_query,
         samples=meta_samples,

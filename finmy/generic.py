@@ -85,3 +85,30 @@ class MetaSample:
     tag: Optional[str] = None
     method: Optional[str] = None
     reviews: List[Dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class DataSample:
+    """Data sample descriptor
+
+    Fields:
+    - `sample_id`: identifier of the sample; typically aligned to `raw_data_id`
+    - `raw_data_id`: the UUID from `RawData` that this sample originates from
+    - `content`: content of the sample
+    - `category`: high-level category label of the sample (user-defined)
+    - `knowledge_field`: primary knowledge domain (second-level category)
+    - `tag`: inherited tag from `RawData.tag`
+    - `method`: inherited collection method from `RawData.method`
+    - `reviews`: list of review records with fields
+      `{ "reviewer_name": str, "review_time": ISO8601 str, "comment": str }`
+      where `comment` ∈ { `Pending`, `Approved`, `Rejected` } and `review_time`
+      follows ISO 8601 (e.g., `2024-05-21 14:30:00 UTC`).
+    """
+
+    sample_id: str
+    raw_data_id: str
+    content: str
+    category: Optional[str] = None
+    knowledge_field: Optional[str] = None
+    tag: Optional[str] = None
+    method: Optional[str] = None

@@ -7,8 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
 
-from finmy.generic import UserQueryInput
-from finmy.generic import MetaSample
+from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.structure import EventCascade
 
 
@@ -18,7 +17,7 @@ class BuildInput:
 
     user_query: UserQueryInput
 
-    samples: List[MetaSample]
+    samples: List[DataSample]
 
     extras: Dict[str, Any] = field(default_factory=dict)
 
