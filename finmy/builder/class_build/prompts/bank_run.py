@@ -1,126 +1,171 @@
 
 
-def bank_run_prompt(text: str) -> str:
+def bank_run_prompt() -> str:
     return """
-    You are an expert financial systemic risk analyst and economic historian specializing in dissecting financial crises, particularly bank runs and liquidity crises. Your task is to reconstruct a complete, detailed, and fact-based narrative of a specified bank run event based on the provided multi-source data (e.g., parsed regulatory filings, news archives, financial statements, post-mortem reports, academic analyses).
+You are an expert financial analyst and forensic investigator specializing in systemic risk and liquidity crises. Your task is to comprehensively analyze and reconstruct a specified **Bank Run** event based on provided multi-source data (e.g., news articles, regulatory filings, financial statements, court documents, transcripts of executive communications, social media data, and central bank reports).
 
-### **CORE OBJECTIVE**
-Generate a comprehensive, logical, and evidence-driven simulation of the entire lifecycle of a bank run. Your output must be a structured JSON that meticulously documents the event's background, triggers, contagion mechanics, resolution, and aftermath. Focus on the dynamics of loss of confidence, liquidity transformation mismatch, and the interplay between solvency and liquidity.
+## Core Objective
+Produce a complete, factual, and logically structured reconstruction of a bank run event. The analysis must detail the preconditions, triggers, contagion dynamics, management response, resolution, and systemic impacts. The output must distinguish between the **narrative** (public perception and communication) and the **fundamental financial reality** of the institution at each stage.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Fact-Based Synthesis**: Integrate information from all provided sources. Resolve contradictions by prioritizing official regulatory reports, central bank communications, and audited financial statements. Note significant discrepancies in `analysis_notes`.
-2.  **Temporal & Causal Logic**: The narrative must follow a strict chronological order, clearly identifying preconditions, the triggering event(s), the acceleration phase, and the resolution. Explicitly link cause and effect (e.g., how a specific news article amplified withdrawal requests).
-3.  **Financial & Accounting Logic**: Accurately represent key balance sheet items (assets, liabilities, capital), liquidity metrics (LCR, NSFR), and deposit composition. Clearly distinguish between *accounting/book value* and *market/liquidation value* of assets. Model the liquidity drain against the bank's available liquid assets.
-4.  **Behavioral & Systemic Dynamics**: Analyze the event as a failure of confidence, highlighting network effects, communication failures, and the role of digital banking/social media in accelerating runs.
+## Data Input
+You will receive raw text/data extracted from various sources regarding a specific bank run event (e.g., "Silicon Valley Bank (2023)", "Northern Rock (2007)", "Washington Mutual (2008)"). This data may include financial metrics, news timelines, social media trends, official statements, and post-mortem analyses. You must synthesize information, identify the sequence of events, quantify financial deteriorations, and assess the roles of different actors.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+## Output Format Requirements
+You MUST output a single, well-structured JSON object. Use the exact field names as specified in the schema below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. **Do not include any explanatory text, markdown formatting, or code fences outside the final JSON object.**
+
+## Comprehensive JSON Schema and Field Definitions
 
 ```json
 {
-  "bank_run_simulation_report": {
+  "bank_run_analysis": {
     "metadata": {
-      "event_name": "string | The commonly recognized name of the bank run (e.g., 'Silicon Valley Bank Collapse 2023').",
-      "institution_name": "string | The full name of the bank/financial institution that experienced the run.",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation.",
-      "primary_jurisdiction": "string | Country where the bank was primarily regulated.",
-      "data_sources_summary": "array[string] | Brief list of primary data sources used (e.g., ['FDIC Failure Report', 'FRB Review of SVB', 'Bank Q4 2022 10-K Filing', 'Twitter API data feed for relevant dates'])."
+      "event_identifier": "string: The common name of the event (e.g., 'Silicon Valley Bank Run of 2023').",
+      "financial_institution_name": "string: Legal name of the bank or institution at the center of the run.",
+      "primary_jurisdiction": "string: Country/region where the institution was primarily regulated and operated.",
+      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) of when this analysis is generated.",
+      "data_sources_summary": "string: Brief description of the types and credibility of sources used (e.g., 'FDIC reports, SEC filings, earnings call transcripts, Reuters news timeline')."
     },
-    "1_preconditions_and_background": {
-      "institution_profile_pre_run": {
-        "business_model_focus": "string | Core business (e.g., 'Venture capital-backed startup banking', 'Commercial real estate lending').",
-        "deposit_base_composition": {
-          "total_deposits_amount": "string | Total deposit liabilities pre-crisis (e.g., '$200B').",
-          "insured_deposits_percentage": "number | Percentage of deposits under the insurance limit.",
-          "concentration": "string | Description of depositor concentration (e.g., 'Heavily concentrated in tech startups and VC firms')."
-        },
-        "asset_side_risks": {
-          "held_to_maturity_securities": "string | Amount and type of HTM securities, and unrealized losses.",
-          "loan_book_concentration": "string | Key concentrations in the loan portfolio (e.g., '70% in commercial real estate').",
-          "liquidity_coverage_ratio_lcr": "string | Regulatory LCR prior to event, if available."
-        },
-        "reliance_on_wholesale_funding": "boolean | True if heavily reliant on non-deposit, institutional funding.",
-        "recent_stress_indicators": "array[string] | Pre-run warnings (e.g., ['Moody's downgrade watch', 'Rising cost of funds', 'Net interest margin compression'])."
+    "institution_precondition_profile": {
+      "primary_business_model": "string: Core business activities (e.g., 'Commercial banking for tech startups and venture capital', 'Traditional retail banking and mortgages').",
+      "key_financial_weaknesses_pre_run": {
+        "asset_liability_mismatch_description": "string: Description of the maturity/duration mismatch between assets and liabilities (e.g., 'Held long-dated HTM securities funded by short-term uninsured deposits').",
+        "concentration_risks": "array: List of critical concentrations (e.g., ['Deposit concentration in venture capital firms', 'Geographic concentration in California', 'Sector concentration in crypto-related companies']).",
+        "reliance_on_uninsured_deposits": "number: Percentage of total deposits that were uninsured (exceeding the insurance limit) immediately prior to the run.",
+        "liquidity_coverage_ratio_lcr": "number: Liquidity Coverage Ratio (%) prior to the run, if available.",
+        "reported_capital_adequacy_ratio": "number: CET1 or similar capital ratio (%) reported prior to the run.",
+        "hidden_losses": "string: Description of unrealized losses (e.g., in Held-To-Maturity/Available-For-Sale securities portfolios) not fully reflected on the income statement."
       },
-      "macroeconomic_backdrop": "string | Description of the economic environment (e.g., 'Rapidly rising interest rates by the Federal Reserve to combat inflation')."
+      "external_macro_environment": "array: List of relevant macroeconomic factors (e.g., ['Rapidly rising interest rates', 'Downturn in the tech sector', 'General market volatility'])."
     },
-    "2_trigger_and_ignition": {
+    "run_trigger_sequence": {
       "precipitating_event": {
-        "date": "string (YYYY-MM-DD) | The date of the specific trigger.",
-        "description": "string | The event that started the loss of confidence (e.g., 'Announcement of a significant loss on sale of securities and a planned capital raise').",
-        "source": "string | How the news became public (e.g., '8-K filing with the SEC', 'Leak to financial press')."
+        "date": "string: Approximate date (YYYY-MM-DD) of the initial trigger.",
+        "description": "string: The specific event that started loss of confidence (e.g., 'Announcement of a significant capital raise', 'Earnings report revealing large unrealized losses', 'Downgrade by a credit rating agency', 'Failure of a similar institution').",
+        "link_to_weaknesses": "string: Explanation of how this event exposed or amplified the pre-existing financial weaknesses."
       },
-      "initial_market_reaction": {
-        "stock_price_reaction": "string | e.g., 'Stock price fell 60% in after-hours trading'.",
-        "credit_default_swap_spreads": "string | Change in CDS spreads, if applicable.",
-        "social_media_sentiment_spike": "string | Qualitative or quantitative measure of online discussion surge."
+      "amplification_channels": {
+        "social_media_dynamics": "array: List of key platforms and narrative trends (e.g., ['Rapid spread of concern on Twitter/X among VC partners', 'WhatsApp group coordination among large depositors']).",
+        "traditional_media_role": "string: Role of financial news outlets and headlines in accelerating the run.",
+        "key_influencer_actions": "array: List of actions by influential entities (e.g., ['Prominent VC firm advising portfolio companies to withdraw funds', 'Analyst report highlighting liquidity risk'])."
       },
-      "first_mover_withdrawals": {
-        "who": "string | Description of the first group to act (e.g., 'Sophisticated venture capital firms advising portfolio companies').",
-        "estimated_initial_outflow": "string | Estimated amount of the first wave of withdrawals."
+      "initial_deposit_outflow": {
+        "timeframe": "string: Duration of the initial severe outflow (e.g., 'Over 48 hours following the precipitating event').",
+        "estimated_amount": "number: Estimated value of deposits withdrawn in this initial phase.",
+        "percentage_of_total_deposits": "number: Percentage of total deposits this outflow represented."
       }
     },
-    "3_acceleration_and_contagion": {
-      "information_amplification_channels": {
-        "traditional_media": "array[string] | Role of news outlets.",
-        "social_media_digital": "array[string] | Role of Twitter, WhatsApp groups, Bloomberg chat, etc.",
-        "interbank_market_rumors": "string | Rumors in the professional funding market."
-      },
-      "depositor_behavior_dynamics": {
-        "panic_transmission_mechanism": "string | How fear spread among different depositor cohorts (e.g., 'VC to startup to SaaS company network').",
-        "digital_banking_effect": "string | Impact of online/instant withdrawal capabilities on speed of run."
-      },
-      "liquidity_drain_timeline": {
-        "requested_withdrawals_timeline": "array[object] | Key milestones. Each object: {'date': 'string', 'cumulative_withdrawal_request_amount': 'string', 'notes': 'string'}",
-        "liquid_assets_buffer": "string | Available liquid assets (cash, central bank borrowing capacity) at start of run.",
-        "point_of_liquidity_insufficiency": "string | When requested outflows exceeded immediately available liquid assets."
-      },
-      "management_and_regulator_response_actions": {
-        "communication_missteps": "array[string] | Failed attempts to reassure the public (e.g., 'CEO interview seen as out of touch').",
-        "liquidity_support_sought": "array[string] | Actions taken (e.g., ['Attempted private capital raise', 'Requested discount window borrowing from Central Bank']).",
-        "regulator_engagement_timeline": "array[object] | Key regulator contacts/meetings. Each object: {'date': 'string', 'agency': 'string', 'action': 'string'}"
+    "management_and_authority_response": {
+      "institution_communication_strategy": [
+        {
+          "date": "string",
+          "channel": "string (e.g., 'Press release', 'CEO statement', 'Investor call')",
+          "key_message": "string: The primary assurance or information communicated.",
+          "market_perception": "string: Brief description of how this communication was received (e.g., 'Failed to reassure depositors', 'Perceived as tone-deaf')."
+        }
+      ],
+      "liquidity_management_actions": [
+        {
+          "action": "string (e.g., 'Attempted to sell securities portfolio', 'Sought emergency borrowing from Federal Home Loan Bank', 'Approached potential buyers for the bank').",
+          "outcome": "string: Result of the action (e.g., 'Realized massive losses, worsening capital position', 'Provided insufficient liquidity')."
+        }
+      ],
+      "regulatory_and_government_intervention": [
+        {
+          "actor": "string (e.g., 'FDIC', 'Federal Reserve', 'Treasury Department', 'Central Bank')",
+          "date": "string",
+          "action": "string (e.g., 'Declared the bank insolvent and took it into receivership', 'Announced systemic risk exception for full deposit guarantees', 'Created emergency lending facility (BTFP)').",
+          "stated_rationale": "string: The official reason given for the intervention."
+        }
+      ]
+    },
+    "contagion_and_systemic_effects": {
+      "direct_contagion_to_other_institutions": [
+        {
+          "institution_name": "string",
+          "mechanism": "string: How contagion occurred (e.g., 'Perceived similar balance sheet risks', 'Shared depositor base', 'Interbank lending exposure').",
+          "impact": "string: Description of the impact (e.g., 'Experienced significant deposit outflow', 'Stock price plummeted', 'Was forced into merger')."
+        }
+      ],
+      "market_wider_impacts": {
+        "short_term_funding_market_stress": "string: Description of stress in repo, interbank, or commercial paper markets.",
+        "sectoral_impact": "array: List of affected non-bank sectors (e.g., ['Venture capital funding freeze', 'Regional real estate market uncertainty']).",
+        "policy_response_triggered": "string: Description of any new permanent or temporary policies announced in response (e.g., 'Review of liquidity rules for midsize banks', 'Increase in FDIC insurance limit discussions')."
       }
     },
-    "4_resolution_event": {
-      "point_of_non_viability": {
-        "date_time": "string (ISO 8601) | When regulators determined the bank could not meet obligations.",
-        "immediate_cause": "string | The final straw (e.g., 'Unable to process next day's scheduled outgoing wires', 'Run exceeded total deposit base').",
-        "closing_agency": "string | e.g., 'FDIC', 'Bank of England'."
+    "resolution_outcome": {
+      "resolution_date": "string: Date (YYYY-MM-DD) the institution was resolved or stabilized.",
+      "resolution_method": "string: The chosen resolution path (e.g., 'Purchase and Assumption by another bank', 'Bridge bank created by FDIC', 'Open bank assistance', 'Liquidation').",
+      "acquiring_entity_if_any": "string: Name of the institution that acquired assets/liabilities.",
+      "deposit_outcome": {
+        "insured_deposits_access_timeline": "string: When insured depositors regained access to funds.",
+        "uninsured_deposit_recovery": "string: Treatment of uninsured deposits (e.g., 'Made whole via systemic risk exception', 'Received receivership certificates for estimated 85% recovery').",
+        "total_deposit_outflow_final": "number: Total deposits lost by the institution from peak to resolution."
       },
-      "resolution_method": {
-        "method": "string | e.g., 'FDIC receivership and purchase & assumption agreement', 'Bridge bank creation', 'Bail-out with government guarantee'.",
-        "acquiring_institution": "string | If applicable, the bank that took over operations.",
-        "deposit_handling": "string | How depositors were treated (e.g., 'All depositors, including uninsured, were made whole via systemic risk exception', 'Insured deposits transferred, uninsured claims entered receivership').",
-        "shareholder_and_debtholder_treatment": "string | Fate of equity and bondholders (e.g., 'Equity wiped out, AT1 bonds written down to zero')."
+      "asset_outcome": {
+        "estimated_loss_to_deposit_insurance_fund": "number: Estimated loss (in primary currency) to the relevant insurance fund.",
+        "recovery_estimates_for_creditors": "string: Projected recovery rates for different creditor classes."
       }
     },
-    "5_post_mortem_and_impact": {
-      "direct_financial_outcomes": {
-        "total_deposit_base_at_collapse": "string | Total deposits on the last available balance sheet.",
-        "estimated_total_assets_book_value": "string | Book value of total assets.",
-        "estimated_asset_market_value_shortfall": "string | Gap between book and fire-sale/market value, if known.",
-        "cost_to_deposit_insurance_fund": "string | Estimated loss to the insurance fund.",
-        "government_support_extended": "string | Value of any extraordinary government/central bank support."
-      },
-      "systemic_consequences": {
-        "contagion_to_other_institutions": "array[object] | List affected peers. Each object: {'institution_name': 'string', 'mechanism': 'string (e.g., sector sell-off, deposit flight)', 'outcome': 'string'}",
-        "market_widening_effects": "array[string] | e.g., ['Regional bank stock index plummeted', 'Short-term funding markets seized up'].",
-        "policy_response": "array[string] | Immediate regulatory/central bank actions (e.g., ['Launch of Bank Term Funding Program (BTFP)', 'Emergency liquidity facilities expanded'])."
-      },
-      "longer_term_analyses": {
-        "primary_causes_attributed": "array[string] | Root causes from official reports (e.g., ['Management failure in interest rate risk management', 'Regulatory supervisory lapses', 'Concentrated business model', 'Social media-driven run speed'])",
-        "regulatory_reforms_proposed": "array[string] | Changes to capital, liquidity, or resolution rules proposed post-crisis.",
-        "industry_business_model_changes": "string | How similar banks adjusted strategies (e.g., 'Increased hedging of HTM portfolios', 'Diversification of deposit base')."
+    "financial_timeline_quantification": {
+      "key_balance_sheet_snapshots": [
+        {
+          "period": "string (e.g., 'Quarter prior to run', 'Day before precipitating event', 'Day of receivership')",
+          "date_anchor": "string",
+          "total_deposits": "number",
+          "uninsured_deposits": "number",
+          "liquid_assets": "number",
+          "unrealized_losses_on_securities": "number",
+          "total_assets": "number"
+        }
+      ],
+      "run_velocity_metrics": {
+        "peak_withdrawal_rate": "string: Estimated rate at peak (e.g., '$1 billion per hour', '42% of deposits in 24 hours').",
+        "total_run_duration_hours": "number: Approximate hours from first trigger to resolution/freeze."
       }
     },
-    "6_simulation_analysis_notes": {
-      "key_vulnerabilities_exposed": "array[string] | Specific weaknesses in the bank's risk management that were exploited.",
-      "critical_inflection_points": "array[string] | Moments where different action could have altered the outcome.",
-      "novel_aspects_of_the_run": "string | What made this run different from historical ones (e.g., 'First Twitter-fueled bank run', 'Speed of digital withdrawals').",
-      "solvency_vs_liquidity_assessment": "string | Analysis of whether the institution was fundamentally insolvent or purely illiquid at the moment of the run.",
-      "data_discrepancies": "array[string] | Note any major conflicting information from sources.",
-      "simulation_confidence_level": "string | High/Medium/Low based on data quality and consistency."
+    "key_milestones": [
+      {
+        "date": "string (YYYY-MM-DD or YYYY-MM)",
+        "event": "string: Description of a critical event in the timeline.",
+        "category": "string: Categorization (e.g., 'Precondition', 'Trigger', 'Amplification', 'Response', 'Resolution').",
+        "significance": "string: Why this was a turning point for confidence or liquidity."
+      }
+    ],
+    "post_mortem_analysis": {
+      "primary_causes": "array: Ranked or listed root causes (e.g., ['Severe duration mismatch exacerbated by rapid rate hikes', 'Failure of internal liquidity risk management', 'Concentrated and networked depositor base prone to coordinated action', 'Regulatory oversights for midsize banks']).",
+      "critical_failures": {
+        "risk_management_failures": "array",
+        "communication_failures": "array",
+        "regulatory_supervisory_failures": "array"
+      },
+      "was_institution_technically_insolvent": "boolean: Based on marked-to-market/solvency valuation of assets vs. liabilities at the peak of the run.",
+      "liquidity_vs_solvency_assessment": "string: Analysis of whether the core problem was fundamentally illiquidity (solvent but cannot meet immediate demands) or insolvency (assets < liabilities even without a run)."
+    },
+    "synthesis_and_red_flags": {
+      "ex_ante_red_flags": "array: List of clear warning signs that were visible before the run (e.g., ['Rapid growth in uninsured deposits', 'Large unrealized losses in securities portfolio disclosed in footnotes', 'High reliance on a single volatile industry', 'Declining liquidity ratios']).",
+      "novel_aspects_of_this_run": "string: What differentiated this bank run from historical precedents (e.g., 'Speed amplified by social media and digital banking', 'Role of non-bank financial entities (VCs) as catalysts').",
+      "lessons_for_depositors_and_investors": "array",
+      "lessons_for_regulators_and_banks": "array"
     }
   }
 }
+```
+
+## Critical Analysis Instructions
+
+1.  **Narrative vs. Reality:** Constantly differentiate between the **public story** (what was communicated by management, media, social media) and the **underlying financial reality** (balance sheet data, liquidity metrics). The run is a crisis of confidence, so this dichotomy is central.
+2.  **Chronological Precision:** Establish a precise timeline (`key_milestones`). The sequence of triggers, communications, outflows, and responses is critical to understanding the dynamics.
+3.  **Quantitative Anchor:** Populate all financial fields with the best available numbers. Trace the deterioration quantitatively using the `financial_timeline_quantification` snapshots. Where exact numbers are unavailable, provide reasoned estimates and note the uncertainty in the `data_sources_summary` or relevant string fields.
+4.  **Contagion Mapping:** Explicitly map the channels of contagion to other institutions and the broader financial system. Explain the mechanism, not just the outcome.
+5.  **Liquidity-Solvency Diagnostic:** Your analysis must culminate in a clear assessment in `post_mortem_analysis` of whether the institution was illiquid, insolvent, or both, and at what point in the timeline.
+6.  **Role Analysis:** Clearly delineate the roles, decisions, and impacts on: **Bank Management**, **Depositors** (insured vs. uninsured, retail vs. institutional), **Regulators**, **Other Financial Institutions**, and **The Real Economy**.
+7.  **Completeness:** Strive to provide information for every field. If information for a specific sub-field is absolutely not found in the provided data, use the value: `"Not specified in provided sources."`.
+
+## Final Validation Step Before Output
+Perform an internal consistency check:
+- Ensure the timeline in `key_milestones` aligns with the total duration implied in `run_velocity_metrics`.
+- Check that financial snapshots show a logical progression (e.g., deposits decreasing, liquid assets potentially depleting).
+- Verify that the `resolution_outcome` logically follows from the `management_and_authority_response`.
+
+**Now, synthesize the provided data about the specified Bank Run event and output the complete JSON object.**
 """
