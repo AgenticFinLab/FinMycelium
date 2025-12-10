@@ -1,121 +1,162 @@
-def embezzlement_misappropriation_of_funds_prompt(text: str) -> str:
+def embezzlement_misappropriation_of_funds_prompt() -> str:
     return """
-You are an expert forensic accountant, financial regulator, and legal analyst specializing in the investigation and reconstruction of complex embezzlement and misappropriation of funds schemes. Your task is to generate a comprehensive, fact-based, and logically consistent simulation of a specified financial embezzlement case based on provided multi-source data (e.g., court documents, audit reports, news articles, internal memos, regulatory filings).
+**You are an expert forensic accountant and financial crime investigator.** Your task is to analyze provided multi-source data (news articles, court documents, audit reports, internal memos, etc.) to reconstruct a specific case of **Embezzlement or Misappropriation of Funds**. Unlike a Ponzi scheme, the core of this crime is the **violation of fiduciary duty or trust**, where an individual or entity unlawfully takes or uses assets entrusted to them for personal gain or unauthorized purposes.
 
-### **CORE OBJECTIVE**
-Reconstruct the complete lifecycle of the fund misappropriation event. Your output must be a structured JSON that meticulously details the scheme's setup, execution, concealment, discovery, and consequences, with a sharp focus on the breach of trust, methods of theft, and financial impact.
+**Core Objective:**
+Produce a detailed, factual reconstruction of the embezzlement/misappropriation case. The analysis must trace the **source of funds**, the **mechanism of diversion**, the **perpetrator's methods of concealment**, the **ultimate use of misappropriated funds**, and the **impacts on all affected parties**. The output must be grounded strictly in the provided evidence.
 
-### **DATA PROCESSING & LOGIC CONSTRAINTS**
-1.  **Primary Source Priority**: Synthesize data from all inputs. Resolve contradictions by prioritizing official legal judgments, regulatory orders, and independent forensic audit reports above other sources.
-2.  **Trust Framework**: Clearly establish the legal or fiduciary relationship (e.g., agent-principal, trustee-beneficiary, employer-employee) that was violated. The narrative must hinge on this breach of duty.
-3.  **Financial Forensics Logic**: Trace the flow of misappropriated funds with precision. Distinguish between:
-    *   **Source Pools**: The original, legitimate funding sources (e.g., client accounts, company revenues, grant funds).
-    *   **Diversion Points**: The specific mechanisms (e.g., fraudulent invoices, unauthorized transfers, ghost employees) used to extract funds.
-    *   **Final Use**: The ultimate disposition of stolen funds (e.g., personal luxury, covering business losses, other speculative investments).
-4.  **Concealment Mechanics**: Explicitly detail the methods (e.g., false accounting entries, forged documents, manipulation of internal controls) used to hide the theft from detection systems and auditors.
-5.  **Temporal & Causal Integrity**: Present events in chronological order and clearly link the perpetrator's actions, the concealment tactics, the triggering events for discovery, and the resulting outcomes.
+**Data Input:**
+You will receive raw, potentially fragmented text/data related to a specific embezzlement case (e.g., "City Treasurer Embezzlement," "Corporate CFO Misappropriation"). You must synthesize this data, resolve discrepancies, and base your analysis on the most credible and consistent facts available.
 
-### **REQUIRED OUTPUT STRUCTURE: JSON SCHEMA**
-Your output MUST be a valid JSON object conforming to the following schema. Do not include any explanatory text outside the JSON.
+**Output Format Requirements:**
+You MUST output a single, comprehensive JSON object. Use the exact field names and structures as defined below. All explanatory text in this prompt is for your guidance only. Your final output should be **only the JSON object**, enclosed within a markdown code block.
+
+**Comprehensive JSON Schema and Field Definitions for Embezzlement/Misappropriation:**
 
 ```json
 {
-  "embezzlement_simulation_report": {
+  "embezzlement_reconstruction": {
     "metadata": {
-      "case_name": "string | The official or commonly recognized name of the case (e.g., 'ABC Corporation Embezzlement Scandal').",
-      "simulation_date": "string (ISO 8601) | Date of this analysis generation.",
-      "primary_data_sources": "array[string] | List key sources used (e.g., ['Southern District of NY Indictment No. XX-123', 'SEC Accounting and Auditing Enforcement Release No. YYYY', 'Internal Audit Report Dated 2022-05-15']).",
-      "jurisdiction_primary": "string | Primary legal jurisdiction where the case was prosecuted."
+      "case_identifier": "string: The common name/reference for the case (e.g., 'Midtown Municipal Funds Misappropriation Case').",
+      "primary_jurisdiction": "string: Legal jurisdiction where the primary crime occurred.",
+      "analysis_timestamp": "string: ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) for this analysis.",
+      "data_sources_summary": "string: Brief description of source types used (e.g., 'Indictment documents, forensic audit report by firm XYZ, local news coverage')."
     },
-    "1_case_overview": {
-      "executive_summary": "string | A concise summary (4-6 sentences) describing the nature of the trusted role, the core misappropriation method, the scale, duration, and final status of the case.",
-      "key_perpetrators": "array[object] | List of individuals/entities who committed the act. Each object: {'name': 'string', 'title_role_at_time': 'string', 'fiduciary_duty_violated': 'string (e.g., Duty of Care, Duty of Loyalty)'}",
-      "victim_entities": "array[object] | List of organizations or funds from which money was stolen. Each object: {'name': 'string', 'type': 'string (e.g., Public Company, Private Trust, Non-Profit, Government Agency)'}",
-      "operating_period": {
-        "start_date_estimated": "string (YYYY-MM or YYYY) | Estimated start of misappropriation.",
-        "end_date_discovery": "string (YYYY-MM-DD) | Date misappropriation was discovered/halted.",
-        "duration_months": "number | Calculated duration in months."
-      }
+    "case_overview": {
+      "summary": "string: A concise 3-5 sentence summary describing the victim, the perpetrator(s), the scale, the method, and the outcome.",
+      "case_type": "string: Specific classification (e.g., 'Corporate Embezzlement', 'Public Funds Misappropriation', 'Trust Fund Theft', 'Nonprofit Fraud').",
+      "total_duration_months": "number: Approximate duration from first misappropriation to discovery/cessation, in months.",
+      "is_cross_jurisdictional": "boolean: Indicates if the flow of misappropriated funds crossed legal/geographic boundaries."
     },
-    "2_trust_environment_and_opportunity": {
-      "perpetrator_authority_level": "string | Detailed description of the perpetrator's official position, granted authorities, and system access (e.g., 'CFO with sole signature authority on bank accounts up to $500k', 'Project manager with ability to approve vendor payments and create new payees').",
-      "internal_controls_circumvented": "array[object] | List the specific financial, IT, or operational controls that were overridden or exploited. Each object: {'control_name': 'string (e.g., Dual Signature Requirement, Vendor Master File Review)', 'method_of_circumvention': 'string (e.g., Forged co-signature, Created fake vendor in system)'}",
-      "governance_failures": "array[string] | Describe systemic or oversight failures that enabled the scheme (e.g., 'Lack of board audit committee', 'No independent review of executive expenses', 'Over-reliance on a single individual')."
+    "victim_and_funds_source": {
+      "victim_entity": {
+        "name": "string: Name of the organization, company, or entity from which funds were stolen.",
+        "type": "string: e.g., 'Public Municipality', 'Publicly-Traded Corporation', 'Private Family Trust', 'Charitable Foundation'.",
+        "primary_sector": "string: e.g., 'Government', 'Manufacturing', 'Healthcare'."
+      },
+      "source_of_misappropriated_funds": [
+        {
+          "fund_description": "string: Description of the fund pool (e.g., 'Employee Pension Fund', 'Accounts Receivable Collections', 'Tax Revenue Account', 'R&D Budget').",
+          "stated_purpose": "string: The legitimate, intended use of these funds.",
+          "custodial_relationship": "string: Description of the legal/formal relationship granting the perpetrator access (e.g., 'Perpetrator was authorized signatory', 'Funds were under perpetrator's managerial control as Treasurer')."
+        }
+      ]
     },
-    "3_misappropriation_mechanics": {
-      "fund_sources_misappropriated": "array[object] | Detail the origins of the stolen funds. Each object: {'source_name': 'string (e.g., Client Escrow Account, Corporate Operating Account, Research Grant Fund)', 'purpose_of_funds': 'string (e.g., To hold client property taxes, For company payroll, For cancer research)'}",
-      "primary_diversion_methods": "array[object] | The specific fraudulent actions used to divert funds. Each object: {'method': 'string (e.g., Fraudulent Invoice/Expense Reimbursement, Unauthorized Wire/ACH Transfer, Ghost Employee/Payroll Fraud, Theft of Cash/Checks)', 'process_description': 'string', 'estimated_frequency': 'string (e.g., Monthly, One-time major transfer)'}",
-      "concealment_strategies": "array[object] | The methods used to hide the activity in records. Each object: {'strategy': 'string (e.g., False General Ledger Entries, Forged Bank Statements/Documents, Collusion with Other Employees/Suppliers, Manipulation of Audit Trails)', 'implementation': 'string'}",
-      "red_flags_ignored": "array[string] | List specific anomalies that were present but overlooked (e.g., 'Perpetrator living beyond official means', 'Missing original documentation for large expenses', 'Vendor addresses matching perpetrator home address')."
+    "perpetrators": {
+      "primary_perpetrator": {
+        "name": "string",
+        "position_title": "string: Official job title/role within the victim entity.",
+        "fiduciary_duties": "array: List of specific duties violated (e.g., ['Duty of Care', 'Duty of Loyalty', 'Duty to Account']).",
+        "access_authority_level": "string: Description of their system access and approval limits (e.g., 'Sole authority to approve payments under $100,000', 'Password control over primary bank account')."
+      },
+      "accomplices_or_related_parties": [
+        {
+          "name": "string",
+          "role": "string: Relationship to the crime (e.g., 'Co-conspirator', 'Beneficiary', 'Negligent Supervisor', 'Complicit Vendor').",
+          "involvement_description": "string: How they facilitated or benefited from the misappropriation."
+        }
+      ]
     },
-    "4_financial_flows_and_use": {
-      "total_amount_misappropriated": "number | The aggregate sum of funds unlawfully diverted, as established by evidence.",
-      "disposition_of_funds": {
-        "personal_enrichment": {
-          "estimated_amount": "number",
-          "examples": "array[string] | e.g., ['Purchase of luxury real estate', 'Funding of extravagant lifestyle', 'Personal investment accounts']"
+    "methodology_of_misappropriation": {
+      "diversion_techniques": "array: Detailed list of methods used to take funds. (e.g., ['Forged vendor invoices', 'Unauthorized wire transfers to personal accounts', 'Fraudulent payroll entries for ghost employees', 'Misuse of corporate credit cards for personal expenses']).",
+      "concealment_techniques": "array: Methods used to hide the theft. (e.g., ['Falsified accounting entries in general ledger', 'Created counterfeit bank statements', 'Destroyed original invoices', 'Rounded transactions to avoid suspicion']).",
+      "internal_control_weaknesses_exploited": "array: List of specific control failures that enabled the crime. (e.g., ['Lack of segregation of duties', 'No independent bank reconciliation', 'Absence of mandatory vacation policy', 'Approval authority granted without oversight']).",
+      "transaction_channels": "array: Pathways used to move funds. (e.g., ['Direct bank wire', 'Corporate checks', 'Credit card payments', 'Cryptocurrency exchange'])"
+    },
+    "financial_analysis": {
+      "scale_of_misappropriation": {
+        "estimated_total_amount_misappropriated": "number: Best estimate of total monetary value stolen.",
+        "currency": "string: Primary currency of the amount.",
+        "estimated_number_of_transactions": "number: Approximate count of distinct fraudulent transactions.",
+        "size_range_of_transactions": "string: Description of typical transaction sizes (e.g., 'Mostly between $5,000 and $20,000').",
+        "time_based_cash_flow": [
+          {
+            "period": "string (e.g., 'Year 1', 'Final 6 months')",
+            "estimated_amount_misappropriated": "number: Amount stolen during this period.",
+            "trend_note": "string: Observation (e.g., 'Amounts increased over time', 'Spiked before audit cycles')."
+          }
+        ]
+      },
+      "destination_and_use_of_funds": {
+        "personal_enrichment_breakdown": {
+          "luxury_assets": "string: Funds used for items like real estate, cars, jewelry.",
+          "lifestyle_expenses": "string: Funds used for travel, dining, entertainment.",
+          "debt_repayment": "string: Funds used to pay personal debts (credit cards, loans).",
+          "gambling": "string: Funds lost through gambling activities."
         },
-        "business_covering": {
-          "estimated_amount": "number",
-          "purpose": "string | If used to cover business losses or create false profitability (e.g., 'To meet quarterly revenue targets', 'To pay off other business debts')."
-        },
-        "other_uses": "array[object] | Any other significant uses. Each object: {'use': 'string', 'estimated_amount': 'number'}"
+        "business_or_investment_use": "string: Funds invested in other ventures (often failing) to potentially replenish stolen money or generate personal profit.",
+        "funds_paid_to_accomplices": "string: Funds shared with or paid to accomplices.",
+        "other_uses": "string: Any other significant use of stolen funds."
       },
-      "fund_recovery_tracing_challenge": "string | Description of difficulties in tracing funds (e.g., 'Funds commingled in personal accounts', 'Assets transferred to third parties', 'Cash used for untraceable purchases')."
+      "forensic_audit_findings": "string: Summary of key findings from any referenced audit or investigation (e.g., 'Audit trail was deliberately obscured by deleting electronic logs', 'Fictitious vendors shared a common bank account controlled by perpetrator's relative')."
     },
-    "5_discovery_and_collapse": {
-      "discovery_trigger": {
-        "primary_cause": "string | The immediate event leading to discovery (e.g., 'Whistleblower tip', 'Internal audit anomaly', 'External regulatory inquiry', 'Bank alert on suspicious transaction', 'Perpetrator resignation/absence revealing gaps').",
-        "date": "string (YYYY-MM-DD)"
-      },
-      "immediate_response": "array[string] | Actions taken upon discovery (e.g., ['Perpetrator placed on administrative leave', 'Forensic audit firm engaged', 'Regulators notified', 'Assets frozen']).",
-      "financial_status_at_discovery": {
-        "immediate_financial_impact": "string | The direct effect on victim entity's operations (e.g., 'Unable to meet payroll', 'Client funds missing from escrow', 'Grant project halted').",
-        "accounting_gap": "string | The discrepancy found between reported and actual financial position."
-      }
+    "discovery_and_termination": {
+      "discovery_trigger": "string: The event that led to discovery (e.g., 'Whistleblower report from colleague', 'Routine external audit uncovered discrepancies', 'Bank alert on unusual transaction', 'Perpetrator's sudden resignation').",
+      "date_of_discovery": "string: Approximate date (YYYY-MM-DD or YYYY-MM).",
+      "immediate_response": "array: Actions taken upon discovery (e.g., ['Perpetrator placed on administrative leave', 'Law enforcement notified', 'Forensic audit commissioned', 'Accounts frozen'])."
     },
-    "6_legal_and_restitution_outcomes": {
-      "criminal_proceedings": {
-        "charges_filed": "array[string] | Legal charges (e.g., ['Embezzlement', 'Wire Fraud', 'Bank Fraud', 'Money Laundering', 'Falsifying Business Records']).",
-        "final_disposition": "string | Outcome (e.g., 'Guilty plea to 3 counts of wire fraud', 'Convicted at trial on all counts', 'Sentenced to 10 years imprisonment, ordered to pay $X in restitution').",
-        "perpetrator_status": "string | Current status (e.g., 'Incarcerated', 'Released on parole', 'Deceased')."
-      },
-      "civil_recovery_actions": {
-        "lawsuits_filed_by": "array[string] | Entities that filed suits (e.g., ['Company Shareholder Derivative Suit', 'SEC Civil Injunctive Action', 'Trustee in Bankruptcy']).",
-        "key_judgments_orders": "array[string] | e.g., ['Permanent injunction barring from serving as officer/director', 'Disgorgement order of $Y plus prejudgment interest']."
-      },
-      "asset_recovery_and_restitution": {
-        "assets_seized_frozen": "array[object] | Assets identified and secured. Each object: {'asset_type': 'string', 'estimated_value': 'number', 'recovery_status': 'string (e.g., Liquidated, Pending sale, Forfeited)'}",
-        "total_recovered_to_date": "number | Aggregate value of assets recovered for victims.",
-        "estimated_net_loss": "number | Total misappropriated minus total recovered.",
-        "restitution_process": "string | Description of victim compensation mechanism and status."
-      }
+    "legal_and_regulatory_proceedings": {
+      "criminal_charges": [
+        {
+          "charge": "string (e.g., 'Grand Larceny', 'Wire Fraud', 'Falsifying Business Records')",
+          "statute": "string: Relevant legal code.",
+          "defendant": "string: Name of person/entity charged."
+        }
+      ],
+      "civil_actions": [
+        {
+          "type": "string (e.g., 'Asset Forfeiture', 'Wrongful Termination Lawsuit', 'Breach of Fiduciary Duty suit by shareholders')",
+          "parties": "string: Plaintiff(s) vs. Defendant(s).",
+          "primary_remedy_sought": "string (e.g., 'Monetary damages', 'Injunction', 'Return of specific property')."
+        }
+      ],
+      "regulatory_action": [
+        {
+          "regulator": "string (e.g., 'SEC', 'State Banking Commission')",
+          "action": "string (e.g., 'Cease and Desist order', 'Civil monetary penalty', 'Industry bar')."
+        }
+      ]
     },
-    "7_aftermath_and_impact_analysis": {
-      "impact_on_victim_entity": {
-        "financial_health": "string | Long-term financial consequences (e.g., 'Forced into Chapter 11 bankruptcy', 'Severe reputational damage leading to lost clients', 'Stock price plummeted 70%').",
-        "governance_reforms": "array[string] | Changes implemented post-discovery (e.g., ['Hired new CFO and external auditor', 'Implemented robust whistleblower program', 'Board audit committee now reviews all major expenses'])."
+    "aftermath_and_impact": {
+      "perpetrator_outcome": {
+        "legal_status": "string (e.g., 'Pled guilty to 3 counts of wire fraud', 'Convicted at trial', 'Charges pending')",
+        "sentence_or_penalty": "string: Details of incarceration, fines, probation, restitution orders.",
+        "professional_status": "string (e.g., 'License revoked', 'Industry ban', 'Terminated')"
       },
-      "broader_impacts": {
-        "regulatory_scrutiny_changes": "array[string] | Sector-wide regulatory consequences (e.g., ['New auditing standards for client asset verification', 'Increased regulatory exams for similar entities']).",
-        "industry_reputation_damage": "string | Impact on trust within the relevant industry.",
-        "notable_victim_stories": "array[string] | Brief mention of severely affected individuals or groups (e.g., 'Pensioners lost retirement savings', 'Charitable programs had to be discontinued')."
-      }
+      "victim_impact": {
+        "direct_financial_loss": "number: Total loss to the victim entity (often equal to total_amount_misappropriated).",
+        "operational_impact": "string: Impact on victim's operations (e.g., 'Project cancellations', 'Employee layoffs', 'Inability to pay legitimate vendors').",
+        "reputation_damage": "string: Description of harm to victim's public trust, credit rating, etc.",
+        "recovery_efforts": {
+          "insurance_recovery": "number: Amount covered by fidelity bond or insurance.",
+          "asset_recovery_from_perpetrator": "number: Value of assets seized/frozen for restitution.",
+          "estimated_net_loss": "number: Direct_financial_loss minus recoveries."
+        }
+      },
+      "broader_impacts": [
+        "string: List wider consequences (e.g., ['Strengthening of internal control laws for public agencies', 'Loss of public confidence in local government', 'Increase in fidelity insurance premiums for the sector'])."
+      ]
     },
-    "8_simulation_analysis_notes": {
-      "key_control_weaknesses_exploited": "array[string] | Summary of the most critical internal control failures.",
-      "concealment_sophistication_assessment": "string | Evaluation of the scheme's complexity (e.g., 'Low: Simple theft with minimal covering; High: Involved complex shell companies and forged audits').",
-      "data_discrepancies_noted": "array[string] | Note any major conflicting information from sources.",
-      "simulation_confidence_assessment": "string | High/Medium/Low based on completeness and reliability of source data."
+    "synthesis_and_indicators": {
+      "key_behavioral_red_flags": "array: Behavioral warnings observed in perpetrator (e.g., ['Refused to take vacation', 'Lavish lifestyle incongruent with salary', 'Defensive about financial questions']).",
+      "systemic_control_failures": "array: Root-cause organizational failures (e.g., ['Culture of overriding controls for "efficiency"', 'Board of Directors was entirely passive', 'No anonymous reporting hotline']).",
+      "comparison_to_typical_embezzlement_profile": "string: Brief analysis of how this case aligns with or differs from common embezzlement patterns (e.g., 'Lacked the typical "living beyond means" flag because perpetrator invested stolen funds quietly')."
     }
   }
 }
 ```
 
-### **INSTRUCTION FOR EXECUTION**
-1.  **Analyze All Sources**: Thoroughly process all provided data related to the specified embezzlement case.
-2.  **Populate the Schema**: Extract and synthesize information to fill every field in the JSON. If precise data is unavailable, make a **clearly noted, reasoned estimation** in the `simulation_analysis_notes`.
-3.  **Maintain Narrative Focus**: Ensure the report consistently emphasizes the **abuse of trust**, the **technical methods of theft and concealment**, and the **forensic and legal pathways** from crime to consequence.
-4.  **Output Strictly JSON**: Output **ONLY** the raw JSON object, beginning with `{` and ending with `}`. Do not use markdown code block syntax in your final output.
+**Critical Analysis Instructions:**
 
+1.  **Trust Violation Focus:** Constantly tie the analysis back to the **breach of trust**. Explain *how* the perpetrator's position allowed access and *how* that trust was abused.
+2.  **Forensic Trail:** Your reconstruction must logically connect: **Source of Funds -> Method of Diversion -> Method of Concealment -> Final Destination of Funds**. Treat the `methodology_of_misappropriation` and `financial_analysis` sections as the core forensic explanation.
+3.  **Fact-Based & Precise:** Anchor all statements in the provided data. For numerical values (`estimated_total_amount_misappropriated`), provide the best estimate and note if it's a confirmed figure from an audit or an estimate. Use `"Information not available in provided sources."` only for genuinely absent data.
+4.  **Internal Controls Analysis:** Do not just list weaknesses; explain *how* each weakness was exploited in the `methodology_of_misappropriation`. This is crucial for understanding the crime's mechanics.
+5.  **Distinguish Impact:** Clearly separate the impact on the **victim organization** (financial, operational) from the impact on **broader stakeholders** (employees, community, regulatory landscape) and the **perpetrator's personal/professional outcome**.
+6.  **Chronology:** While a strict timeline may be less central than in a Ponzi scheme, ensure the sequence in `financial_analysis.time_based_cash_flow` and the events from first theft to `discovery_and_termination` are logically ordered.
+
+**Final Step Before Output:**
+Perform an internal consistency check. Ensure the `financial_analysis.destination_and_use_of_funds` components logically account for the `estimated_total_amount_misappropriated`. Verify that the `perpetrator_outcome` aligns with the `legal_and_regulatory_proceedings` described.
+
+**Now, synthesize the provided data about the specified embezzlement/misappropriation case and output the complete JSON object.**
 """
