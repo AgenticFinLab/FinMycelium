@@ -10,6 +10,7 @@ API connectivity and response format.
 """
 
 import json
+
 from finmy.url_collector.SearchCollector.baidu_search import baidusearch_api
 
 
