@@ -24,7 +24,7 @@ from . import (
     systemic_shock,
     leverage_cycle_collapse,
     stablecoin_depeg,
-    other_financial_scam
+    other_financial_event
 )
 
 # Define __all__ for wildcard imports
@@ -49,5 +49,5 @@ __all__ = [
     'systemic_shock',
     'leverage_cycle_collapse',
     'stablecoin_depeg',
-    'other_financial_scam',
+    'other_financial_event',
 ]
