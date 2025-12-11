@@ -5,6 +5,7 @@ through multiple data sources and AI-powered analysis.
 """
 
 import os
+import re
 import sys
 import asyncio
 import random
@@ -31,6 +32,9 @@ from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
 from finmy.url_collector.url_parser import URLParser
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
+from finmy.url_collector.url_parser_clean import extract_content_from_parsed_content, extract_content_from_results
+from finmy.builder.lm_build_flow import lm_build_flow_main
+
 
 
 # Load environment variables
@@ -304,9 +308,18 @@ class FinMyceliumWebInterface:
         #     """
         #     )
 
-        if keywords:
+        # Process keyword input with flexible delimiter handling
+        if keywords:  # Check if input string is not empty
+            # Step 1: Normalize full-width Chinese commas to standard commas
+            unified_keywords = keywords.replace('，', ',')
+            
+            # Step 2: Split on commas/spaces (supports multiple consecutive delimiters)
+            # Regex pattern matches one or more commas (,) OR whitespace characters (\s)
+            keyword_list = re.split(r'[,|\s]+', unified_keywords)
+            
+            # Step 3: Clean up keywords (strip whitespace + remove empty strings)
             st.session_state.keywords = [
-                k.strip() for k in keywords.split(",") if k.strip()
+                k.strip() for k in keyword_list if k.strip()
             ]
 
     def render_structured_data_upload(self):
@@ -505,6 +518,7 @@ class FinMyceliumWebInterface:
         main_search_input = inputs["main_input"]
         keywords = inputs["keywords"]
         structured_data = inputs["structured_data"] is not None
+        search_query_content=main_search_input+" \n\nkeywords: "+" ".join(keywords)
 
         # main_search_input -> summarizer -> refined description and keywords
 
@@ -525,14 +539,20 @@ class FinMyceliumWebInterface:
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
         # Bocha Search API test
         parser = URLParser(delay=2.0, use_selenium_fallback=True, selenium_wait_time=5)
-        save_dir = r"examples\utest\Collector\test_files"
+        save_dir = r"examples/utest/Collector/test_files"
         os.makedirs(save_dir, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+
+        print("=====================================")
+        print("Testing: Bocha Search")
+        print("=====================================")
+        formatted_bocha_search_results_content=[]
         try:
-            print("=====================================")
-            print("Testing: Bocha Search")
-            print("=====================================")
+            
+            
             bocha_search_results = bochasearch_api(
-                ",".join(keywords), summary=True, count=10
+                search_query_content, summary=True, count=10
             )
             # Print the search results to console for verification
             formatted_bocha_search_results = []
@@ -540,6 +560,7 @@ class FinMyceliumWebInterface:
                 formatted_item = {
                     "title": item["name"],
                     "url": item["url"],
+                    "search_query_content": search_query_content,
                     "keywords": ",".join(keywords),
                     "snippet": item["snippet"],
                     "content": item["summary"],
@@ -547,35 +568,54 @@ class FinMyceliumWebInterface:
                     "datepublished": item["datePublished"],
                 }
                 results = parser.parse_urls([item["url"]])
-                print(results)
+                # print(results)
                 formatted_item["parsed_content"] = (
                     results[0]["content"] if results else []
                 )
                 formatted_bocha_search_results.append(formatted_item)
 
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             filepath = os.path.join(
                 save_dir, f"formatted_bocha_search_results_{timestamp}.json"
             )
+            
+            
+            for item in formatted_bocha_search_results:
+                item_content = ""
+                item_content += "Title:\n"
+                item_content += item["title"]+"\n\n"
+                item_content += "Sitename:\n"
+                item_content += item["sitename"]+"\n\n"
+                item_content += "Content:\n"
+                item_content += item["content"]+"\n\n\n"
+                item_content += "Parsed Content:\n"
+                item_content += extract_content_from_parsed_content(item["parsed_content"])+"\n\n\n"
+                               
+                formatted_bocha_search_results_content.append(item_content)
+
+
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(
                     formatted_bocha_search_results, f, ensure_ascii=False, indent=4
                 )
-            print(formatted_bocha_search_results)
+            # print(formatted_bocha_search_results)
         except:
             print("Bocha Search: Error!")
 
+
+        print("=====================================")
+        print("Testing: Baidu Search")
+        print("=====================================")
+        formatted_baidu_search_results_content=[]
         try:
-            print("=====================================")
-            print("Testing: Baidu Search")
-            print("=====================================")
-            baidu_search_results = baidusearch_api(",".join(keywords))
+            
+            baidu_search_results = baidusearch_api(search_query_content)
             formatted_baidu_search_results = []
             if "references" in baidu_search_results:
                 for item in baidu_search_results["references"]:
                     formatted_item = {
                         "title": item["title"],
                         "url": item["url"],
+                        "search_query_content": search_query_content,
                         "keywords": ",".join(keywords),
                         "snippet": item["snippet"],
                         "content": item["content"],
@@ -583,14 +623,27 @@ class FinMyceliumWebInterface:
                         "datepublished": item["date"],
                     }
                     results = parser.parse_urls([item["url"]])
-                    print(results)
+                    # print(results)
                     formatted_item["parsed_content"] = (
                         results[0]["content"] if results else []
                     )
                     formatted_baidu_search_results.append(formatted_item)
             # Print the search results to console for verification
+            
+            for item in formatted_baidu_search_results:
+                item_content = ""
+                item_content += "Title:\n"
+                item_content += item["title"]+"\n\n"
+                item_content += "Sitename:\n"
+                item_content += item["sitename"]+"\n\n"
+                item_content += "Content:\n"
+                item_content += item["content"]+"\n\n\n"
+                item_content += "Parsed Content:\n"
+                item_content += extract_content_from_parsed_content(item["parsed_content"])+"\n\n\n"
+                               
+                formatted_baidu_search_results_content.append(item_content)
 
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
             filepath = os.path.join(
                 save_dir, f"formatted_baidu_search_results_{timestamp}.json"
             )
@@ -598,56 +651,30 @@ class FinMyceliumWebInterface:
                 json.dump(
                     formatted_baidu_search_results, f, ensure_ascii=False, indent=4
                 )
-            print(formatted_baidu_search_results)
+            # print(formatted_baidu_search_results)
         except:
             print("Baidu Search: Error!")
 
-        try:
-            # url parser
-            sample_urls = [
-                "https://baijiahao.baidu.com/s?id=1850027474872762323&wfr=spider&for=pc",
-            ]
-            print("=====================================")
-            print("Testing: URL Parser")
-            print("=====================================")
-            parser = URLParser(
-                delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
-            )
-            # Parse URLs
-            results = parser.parse_urls(sample_urls)
-            # Save results to JSON (default)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            parser.save_to_json(
-                results,
-                filename=f"examples\\utest\\Collector\\test_files\\parsed_results_{timestamp}.json",
-            )
-            # Example of saving to other formats
-            # csv_file = parser.save_to_csv(results)
-            # mysql_success = parser.save_to_mysql(results, 'localhost', 'user', 'password', 'database_name')
-            print("Parsing completed. Results:")
-            for result in results:
-                print(f"URL {result['ID']}: {result['url']}")
-                print(f"Elements found: {len(result['content'])}")
-                print(
-                    f"First few elements: {result['content'][:3]}"
-                )  # Show first 3 elements
-                print("-" * 50)
-        except:
-            print("URL Parser: Error!")
 
-        # structured_data -> if url -> url_parser -> filter -> clean data
-        # structured_data -> if pdf/word path -> pdf_parser/word_parser -> filter -> clean data
-        # Process each row based on URL type
 
-        try:
+        # structured_data 
+        print("=====================================")
+        print("Testing: structure data processing")
+        print("=====================================")
+        structure_data_urllink = []
+        structure_data_filepath = []
+        structure_data_urllink_content=[]
+        structure_data_filepath_content=[]
+        try:  
             if st.session_state.structured_data is not None:
-
-                structured_data_urllink = []
-                structure_data_filepath = []
+                parser = URLParser(
+                delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
+                )
+                output_dir = f"./examples/utest/Collector/test_files/pdfcollector_output_{timestamp}"
                 for index, row in st.session_state.structured_data.iterrows():
                     try:
-                        title = row["title"]
-                        url = row["url"]
+                        title = row["title"] if row["title"] else "No Title"
+                        url = row["url"] if row["url"] else "No URL"
                         # Check if URL is a web link or local file path
                         if isinstance(url, str):
                             # Web URL detection (basic check)
@@ -655,12 +682,12 @@ class FinMyceliumWebInterface:
                                 # Process web URL
                                 # Repla ce with web URL processing logic
                                 results = parser.parse_urls([url])
-                                print(results)
+                                # print(results)
                                 row = row.to_dict()
                                 row["parsed_content"] = (
                                     results[0]["content"] if results else []
                                 )
-                                structured_data_urllink.append(row)
+                                structure_data_urllink.append(row.to_dict())
                             else:
                                 # Assume local file path
 
@@ -670,9 +697,9 @@ class FinMyceliumWebInterface:
 
                                     # Here we need to write code to handle parameter input
 
-                                    output_dir = "./data/pdf_collector_output"
+                                    
                                     batch_size = 200
-                                    language = "en"
+                                    language = "ch"
                                     check_pdf_limits = True
 
                                     config = {
@@ -702,18 +729,21 @@ class FinMyceliumWebInterface:
 
                                     # Run the main processing function
                                     logging.info("  - Starting PDF processing...")
-
-                                    results = PDFCollectorOutput()
-
+                            
                                     # Collect the parsed and filtered results
-                                    results = parser_instance.run(pdf_collector_input)
+                                    collect_results = parser_instance.collect(pdf_collector_input)
+                                    filter_results = parser_instance.filter(pdf_collector_input,collect_results)
 
                                     # Print final results summary
                                     logging.info(
                                         "  - Total PDFs parsed results after filtering: %d",
-                                        len(results.records),
+                                        len(collect_results.records),
                                     )
-
+                                    
+                                    row["parsed_content"] = (
+                                        collect_results.records[0].__dict__ if collect_results.records[0] else {}
+                                    )
+                                    structure_data_filepath.append(row.to_dict())
                         else:
                             st.warning(
                                 f"Row {index}: URL is not a string format. Skipping processing."
@@ -724,19 +754,83 @@ class FinMyceliumWebInterface:
                             row["url"] if row["url"] else "No URL Provided",
                         )
 
-                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                filepath = os.path.join(
-                    save_dir, f"structured_data_urllink_{timestamp}.json"
-                )
+                
+
                 print("===== Structured Data URL Link =====")
-                print(structured_data_urllink)
+                # print(structure_data_urllink)
                 print("=====================================")
+                filepath = os.path.join(
+                    save_dir, f"structure_data_urllink_{timestamp}.json"
+                )    
                 with open(filepath, "w", encoding="utf-8") as f:
-                    json.dump(structured_data_urllink, f, ensure_ascii=False, indent=4)
+                    json.dump(structure_data_urllink, f, ensure_ascii=False, indent=4)
+                
+                for item in structure_data_urllink:
+                    item_content = ""
+                    item_content += "title:\n"
+                    item_content += item["title"] if item["title"] else "No Title"
+                    item_content += "\n\n"
+                    item_content += "content:\n"
+                    item_content += extract_content_from_parsed_content(item["parsed_content"])
+                    structure_data_urllink_content.append(item_content)
+
+
+                print("===== Structured Data Filepath =====")
+                # print(structure_data_filepath)
+                print("=====================================")
+                filepath = os.path.join(
+                    save_dir, f"structured_data_filepath_{timestamp}.json"
+                )    
+                print(structure_data_filepath)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(structure_data_filepath, f, ensure_ascii=False, indent=4)
+                
+                for item in structure_data_filepath:
+                    item_content=""
+                    if(item["parsed_content"]["Location"]):
+                        with open(item["parsed_content"]["Location"],"r",encoding="utf-8") as f:
+                            item_content += "title:\n"
+                            item_content += item["title"] if item["title"] else "No Title"
+                            item_content += "\n\n"
+                            item_content += "content:\n"
+                            item_content += f.read()
+                            # print(item_content)
+                        structure_data_filepath_content.append(item_content)
+
+        
         except:
             print("There is something wrong with structured data processing!")
 
         # info_to_analyze = cleaned and filtered data from above steps
+        
+        All_Text_Content = formatted_bocha_search_results_content +formatted_baidu_search_results_content + structure_data_urllink_content + structure_data_filepath_content
+        All_Text_Content_filepath = os.path.join(
+                    save_dir, f"All_Text_Content_{timestamp}.json"
+                )    
+        with open(All_Text_Content_filepath, "w", encoding="utf-8") as f:
+                    json.dump(All_Text_Content, f, ensure_ascii=False, indent=4)
+        print("============================")
+        print("=========All_Text_Content==========")
+        print("============================")
+        print(All_Text_Content)
+        print("============================")
+        
+        print("Length of All_Text_Content List")
+        print(len(All_Text_Content))
+        
+        print("Length of All_Text_Content String:")
+        All_Text_Content_Count=0
+        for item in All_Text_Content:
+            All_Text_Content_Count+=len(item)
+        print("============================")
+
+
+
+        print("=====================================")
+        print("Testing: LM_Build_Flow")
+        print("=====================================")
+        lm_build_flow_main(raw_texts=All_Text_Content, query_text=main_search_input, key_words=keywords, output_dir=f"./examples/utest/Collector/test_files/event_output_{timestamp}")
+
 
         prompt = f"""
         As a financial fraud analysis expert, analyze the following financial fraud case:
