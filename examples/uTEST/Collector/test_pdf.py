@@ -4,6 +4,7 @@ An interface to test the pdf parser under the finmy/collector.
 
 import logging
 import argparse
+import json
 
 from dotenv import load_dotenv
 
@@ -97,13 +98,29 @@ if __name__ == "__main__":
     # Run the main processing function
     logging.info("  - Starting PDF processing...")
 
-    results = PDFCollectorOutput()
-
     # Collect the parsed and filtered results
-    results = parser_instance.run(pdf_collector_input)
+    collect_results = parser_instance.collect(pdf_collector_input)
+    filter_results = parser_instance.filter(pdf_collector_input,collect_results)
 
     # Print final results summary
-    logging.info(
-        "  - Total PDFs parsed results after filtering: %d",
-        len(results.records),
-    )
+    test_row={"name":"aaa","time":"bbb"}
+    test_row["parsed_content"]=collect_results.records[0].__dict__
+    print("test_row: ",test_row)
+    print("test_row['parsed_content']['Location']",test_row["parsed_content"]["Location"])
+    
+    with open(test_row["parsed_content"]["Location"],"r",encoding="utf-8") as f:
+        print(f.read())
+    with open("output/test_row.json","w",encoding="utf-8") as f:
+        json.dump(test_row,f,ensure_ascii=False,indent=4)
+
+    print("============")
+    print("===== collect_results =====")
+    print(list(collect_results.records))
+    print(collect_results.records[0].Location)
+    print("============")
+
+    print("============")
+    print("===== filter_results =====")
+    print(filter_results)
+    print("============")
+
