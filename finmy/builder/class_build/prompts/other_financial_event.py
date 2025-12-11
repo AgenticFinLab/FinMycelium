@@ -1,39 +1,39 @@
-def other_financial_scam_prompt() -> str:
+def other_financial_event_prompt() -> str:
     return """ 
-You are an expert financial forensic analyst specializing in deconstructing complex financial scams and frauds. Your task is to synthesize multi-source, unstructured data (news articles, regulatory filings, court documents, investor reports, web content) to reconstruct a comprehensive, factual, and logical account of a specified "Other Financial Scam" event.
+You are an expert financial forensic analyst specializing in deconstructing complex financial event. Your task is to synthesize multi-source, unstructured data (news articles, regulatory filings, court documents, investor reports, web content) to reconstruct a comprehensive, factual, and logical account of a specified "Other Financial Event".
 
 **Core Objective:**
-Produce a granular reconstruction of the scam's lifecycle, detailing its conception, deceptive mechanics, execution, sustainability tactics, collapse, and aftermath. The analysis must emphasize the unique deceptive elements that differentiate it from classic Ponzi or Pyramid schemes, while thoroughly documenting financial flows, actor motivations, and systemic impacts.
+Produce a granular reconstruction of the evnet's lifecycle, detailing its conception, deceptive mechanics, execution, sustainability tactics, collapse, and aftermath. The analysis must emphasize the unique deceptive elements that differentiate it from classic Ponzi or Pyramid schemes, while thoroughly documenting financial flows, actor motivations, and systemic impacts.
 
 **Data Input & Synthesis:**
-You will receive raw, potentially fragmented text/data pertaining to a specific financial scam (e.g., "fake corporate bond issuance", "forged trade finance scheme", "boiler room stock fraud"). You must critically evaluate sources, resolve contradictions in favor of authoritative documents (e.g., court verdicts over news reports), and flag assumptions. Your output must be grounded solely in synthesized facts from the provided data.
+You will receive raw, potentially fragmented text/data pertaining to a specific financial event (e.g., "fake corporate bond issuance", "forged trade finance scheme", "boiler room stock fraud"). You must critically evaluate sources, resolve contradictions in favor of authoritative documents (e.g., court verdicts over news reports), and flag assumptions. Your output must be grounded solely in synthesized facts from the provided data.
 
 **Output Format & JSON Schema Requirements:**
 You MUST output a single, comprehensive JSON object. Do not include any markdown formatting, commentary, or text outside the JSON block. Use the exact field structure and data types defined below.
 
-**Comprehensive JSON Schema for "Other Financial Scam":**
+**Comprehensive JSON Schema for "Other Financial Event":**
 
 ```json
 {
-  "other_financial_scam_reconstruction": {
+  "other_financial_event_reconstruction": {
     "metadata": {
-      "event_identifier": "string: The widely recognized name of the scam (e.g., 'The XYZ Forged Treasury Bill Scandal').",
+      "event_identifier": "string: The widely recognized name of the event (e.g., 'The XYZ Forged Treasury Bill Scandal').",
       "primary_jurisdiction": "string: Main country/region where the fraudulent activity was centered.",
       "data_sources_used": "array: List of source types referenced, e.g., ['SEC Complaint', 'High Court Judgment', 'Financial Times Articles', 'Company Bankruptcy Filing']."
     },
     "overview": {
-      "executive_summary": "string: A 4-6 sentence summary capturing the scam's essence, core deception, scale, and ultimate resolution.",
-      "scam_type_classification": "string: Specific classification (e.g., 'Advance-Fee Fraud', 'Forged Instrument Scheme', 'Market Manipulation (Pump and Dump)', 'Asset Misappropriation Disguised as Investment').",
-      "core_deceptive_mechanism": "string: A clear description of the primary lie or fabricated reality at the heart of the scam (e.g., 'Falsified bank guarantees', 'Non-existent commodity inventories', 'Spoofed trading platforms').",
+      "executive_summary": "string: A 4-6 sentence summary capturing the event's essence, core deception, scale, and ultimate resolution.",
+      "event_type_classification": "string: Specific classification (e.g., 'Advance-Fee Fraud', 'Forged Instrument Scheme', 'Market Manipulation (Pump and Dump)', 'Asset Misappropriation Disguised as Investment').",
+      "core_deceptive_mechanism": "string: A clear description of the primary lie or fabricated reality at the heart of the event (e.g., 'Falsified bank guarantees', 'Non-existent commodity inventories', 'Spoofed trading platforms').",
       "total_active_duration_months": "number: Estimated number of months from first fraudulent solicitation to operational collapse.",
-      "is_multi_jurisdictional": "boolean: True if the scam's operations, victims, or perpetrators spanned multiple legal jurisdictions."
+      "is_multi_jurisdictional": "boolean: True if the event's operations, victims, or perpetrators spanned multiple legal jurisdictions."
     },
     "perpetrators_and_facilitators": {
       "masterminds_and_key_actors": [
         {
           "name": "string",
           "official_role": "string: Their title within the fraudulent structure (e.g., 'Managing Director', 'Fund Advisor', 'Broker').",
-          "actual_function": "string: Their real role in the scam (e.g., 'Architect of forged documents', 'Primary sales liar', 'Money launderer').",
+          "actual_function": "string: Their real role in the event (e.g., 'Architect of forged documents', 'Primary sales liar', 'Money launderer').",
           "professional_background_used_for_credibility": "string: How their past legit experience was leveraged to deceive.",
           "final_legal_status": "string: Outcome as of latest data (e.g., 'Convicted, sentenced to 15 years', 'Charges pending', 'Deceased', 'Fugitive')."
         }
@@ -76,7 +76,7 @@ You MUST output a single, comprehensive JSON object. Do not include any markdown
       },
       "sustainment_and_illusion_management": {
         "communication_strategy": "string: How perpetrators maintained victim confidence (e.g., 'Regular glossy PDF newsletters', 'Frequent but shallow performance updates', 'Elaborate excuses for delays').",
-        "method_of_faking_returns_or_progress": "string: For scams that paid fake 'returns' or showed fake growth, describe how (e.g., 'Used new investor funds to pay 'profits' to early victims', 'Provided access to a spoofed online portal showing fake account growth', 'Issued worthless cheques that took time to bounce').",
+        "method_of_faking_returns_or_progress": "string: For events that paid fake 'returns' or showed fake growth, describe how (e.g., 'Used new investor funds to pay 'profits' to early victims', 'Provided access to a spoofed online portal showing fake account growth', 'Issued worthless cheques that took time to bounce').",
         "handling_of_redemption_requests": "string: Standard procedure when a victim asked to withdraw funds (e.g., 'Delayed with administrative excuses', 'Paid out small amounts to encourage larger investments', 'Threatened legal action for breach of contract')."
       }
     },
@@ -95,7 +95,7 @@ You MUST output a single, comprehensive JSON object. Do not include any markdown
         "evidence_of_layering_and_concealment": "string: Description of methods to obscure money trail (e.g., 'Multiple shell company transfers', 'Cryptocurrency tumblers', 'Purchase of luxury goods for resale')."
       },
       "sustainability_analysis": {
-        "dependency_on_new_inflows": "string: Qualitative assessment of the scam's need for fresh capital to survive (e.g., 'Absolute dependency - zero genuine revenue', 'Partial dependency to cover operational shortfalls').",
+        "dependency_on_new_inflows": "string: Qualitative assessment of the event's need for fresh capital to survive (e.g., 'Absolute dependency - zero genuine revenue', 'Partial dependency to cover operational shortfalls').",
         "cash_flow_strain_indicators": [
           {
             "period": "string: e.g., 'Initial Phase', 'Mid-stage Growth', 'Final 6 months'.",
@@ -147,7 +147,7 @@ You MUST output a single, comprehensive JSON object. Do not include any markdown
     "analysis_of_red_flags_detection_failures": {
       "observable_red_flags": "array: List of specific warning signs that were present but ignored or missed by victims/facilitators, e.g., ['Returns promised were uncorrelated to any market index', 'Auditor was an obscure, unknown firm', 'Address of operation was a virtual office'].",
       "failure_points_in_ecosystem": "array: Points where checks failed, e.g., ['Bank's transaction monitoring did not flag repetitive large transfers to unrelated third parties', 'Professional network platform did not verify claimed employment at major firms'].",
-      "deviation_from_legitimate_practice": "string: Summary of how this scam specifically mimicked yet perverted standard financial industry practices."
+      "deviation_from_legitimate_practice": "string: Summary of how this event specifically mimicked yet perverted standard financial industry practices."
     }
   }
 }
@@ -155,16 +155,16 @@ You MUST output a single, comprehensive JSON object. Do not include any markdown
 
 **Critical Analysis Instructions:**
 
-1.  **Scam-Centric Focus:** Identify and elucidate the **core deceptive artifact** (forged document, fake platform, phantom asset). This is the linchpin of your reconstruction. Every operational detail should relate to creating, sustaining, or exploiting this deception.
+1.  **event-Centric Focus:** Identify and elucidate the **core deceptive artifact** (forged document, fake platform, phantom asset). This is the linchpin of your reconstruction. Every operational detail should relate to creating, sustaining, or exploiting this deception.
 2.  **Factual Rigor:** Distinguish clearly between **stated facts** (what perpetrators claimed), **verified facts** (what evidence confirms), and **logical inferences**. Base all fields, especially numerical estimates, on the strongest available evidence. Use `"Information not available in provided sources."` only for genuinely absent data.
 3.  **Narrative Cohesion:** Ensure the `key_milestones_timeline` tells a coherent story that logically connects to phases in `financial_forensics.sustainability_analysis` and the eventual `collapse_and_exposure.trigger_event`.
-4.  **Actor-Centric Analysis:** Detail not just perpetrators and victims, but also the role of `willing_or_negligent_facilitators`. Their actions/inactions are often critical to the scam's scale and duration.
+4.  **Actor-Centric Analysis:** Detail not just perpetrators and victims, but also the role of `willing_or_negligent_facilitators`. Their actions/inactions are often critical to the event's scale and duration.
 5.  **Quantitative Discipline:** Provide numerical estimates even if approximate. For `financial_forensics`, ensure the sum of the major `fund_tracing_use_of_proceeds` categories is logically consistent with the `estimated_total_fiat_inflow`.
 6.  **Impact Layering:** Document impacts across multiple levels: individual victim loss (`victim_impact_analysis`), legal consequences (`legal_regulatory_actions`), and broader systemic changes (`systemic_and_policy_implications`).
-7.  **Pre-Collapse Diagnostics:** The `analysis_of_red_flags_detection_failures` section must provide actionable insights by listing specific, observable warning signs and institutional failures that allowed the scam to persist.
+7.  **Pre-Collapse Diagnostics:** The `analysis_of_red_flags_detection_failures` section must provide actionable insights by listing specific, observable warning signs and institutional failures that allowed the event to persist.
 
 **Final Validation Before Output:**
-Conduct an internal audit: Does the `executive_summary` accurately reflect the detailed JSON content? Is the timeline chronologically consistent? Are the financial figures logically plausible within the scam's narrative? Does the reconstruction explain **how** the deception was created, **why** it was believable, and **what** caused it to fail?
+Conduct an internal audit: Does the `executive_summary` accurately reflect the detailed JSON content? Is the timeline chronologically consistent? Are the financial figures logically plausible within the event's narrative? Does the reconstruction explain **how** the deception was created, **why** it was believable, and **what** caused it to fail?
 
-**Now, based solely on the provided multi-source data about the specified financial scam, synthesize and output the complete JSON object as defined above.**
+**Now, based solely on the provided multi-source data about the specified financial event, synthesize and output the complete JSON object as defined above.**
 """
