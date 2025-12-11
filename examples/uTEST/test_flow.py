@@ -137,7 +137,7 @@ def create_raw_data_records(texts: List[str]) -> List[RawData]:
             source="https://example.com",
             location=filename,
             time="2024-06-01T12:00:00Z",
-            data_copyright="© 2023 ACM, Inc., All rights reserved.",
+            data_copyright="AgenticFin Lab, All rights reserved.",
             tag=["测试"],
             method="人工导入",
         )
@@ -373,7 +373,7 @@ def main():
 
     print("Start building ...")
     lmbuilder = LMBuilder(
-        config={"output_dir": "./data/event_cascade_output"}  # Specify output directory
+        config={"output_dir": "./examples/utest/Collector/test_files/event_cascade_output"}  # Specify output directory
     )
     # build_output = lmbuilder.build(build_input)
     build_output = lmbuilder.build_class(build_input)
