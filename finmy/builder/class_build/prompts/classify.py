@@ -27,7 +27,7 @@ You are a specialized assistant for analyzing and classifying financial events. 
     *   **Systemic Shock**: A sudden, severe external shock that propagates across multiple markets/institutions.
     *   **Leverage Cycle Collapse**: The implosion of a highly leveraged entity or sector when funding conditions reverse. Example: Archegos (2021).
     *   **Stablecoin Depeg**: Loss of parity between a stablecoin and its reference asset, triggering redemption pressure. Example: TerraUSD (2022).
-    *   **Other Financial Scam**: Use only if the event involves clear financial deception but does not fit any above category.
+    *   **Other Financial Event**: Use only if the event involves clear financial deception but does not fit any above category.
 
 3.  Provide a **confidence score** (0.0 to 1.0) for your classification, where 1.0 represents absolute certainty.
 4.  Provide a concise **rationale** linking the key facts from the provided information to the defining characteristics of your chosen event type.
