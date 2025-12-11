@@ -159,7 +159,7 @@ def check_and_process_pdfs(
     api_key,
     pdf_directory,
     max_files_per_batch=200,
-    language="en",
+    language="ch",
     max_pdf_size_mb=200,
     max_pdf_pages=600,
     check_pdf_limits=True,
@@ -284,7 +284,6 @@ def check_and_process_pdfs(
                 files_data.append(
                     {
                         "name": base_name,
-                        "is_ocr": True,
                         "data_id": data_id,
                         "language": language,
                     }
@@ -307,7 +306,7 @@ def check_and_process_pdfs(
                 headers=headers,
                 json={
                     "enable_formula": True,
-                    "language": "en",
+                    "language": language,
                     "layout_model": "doclayout_yolo",
                     "enable_table": True,
                     "files": files_data,
@@ -645,7 +644,7 @@ def parse_pdfs(
     input_pdf_path: str = "",
     output_dir: str = "output",
     batch_size: int = 200,
-    language: str = "en",
+    language: str = "ch",
     check_pdf_limits=True,
 ):
     """Process PDFs via Mineru API and download results.
@@ -853,7 +852,7 @@ def retry_failed_files(
     input_dir: str = "input",
     output_dir: str = "output_retry",
     batch_size: int = 200,
-    language: str = "en",
+    language: str = "ch",
     check_pdf_limits=True,
 ):
     """

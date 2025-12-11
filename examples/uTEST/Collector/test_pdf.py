@@ -50,8 +50,8 @@ if __name__ == "__main__":
         "-l",
         "--language",
         type=str,
-        default="en",
-        help="Language code for parsing (e.g., 'en', 'es')",
+        default="ch",
+        help="Language code for parsing ('ch' for both Chinese and English)",
     )
     parser.add_argument(
         "--no-check-limits",
