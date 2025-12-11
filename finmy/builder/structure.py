@@ -262,6 +262,11 @@ class Participant:
     }
     """
 
+    # Guidance: Do not enumerate every participant except for key persons and specific entities.
+    # For large cohorts of similar participants, represent them as a single "group participant".
+    # Use `participant_type` to indicate the cohort category and `attributes`/`tags` to describe
+    # the group's scope, characteristics, and provenance.
+
     # Unique, immutable identifier (e.g., UUID, hashed ID, semantic key).
     # must be in canonical form: "P_" + 32 lowercase hex characters
     # Regex: ^P_[a-f0-9]{32}$
@@ -275,6 +280,8 @@ class Participant:
 
     # High-level category.
     # Examples: 'individual', 'organization', 'social_media_platform', 'government_agency'.
+    # For large cohorts, prefer a group category (e.g., 'retail_investor_group', 'marketing_bot_group')
+    # and describe scope via attributes/tags (e.g., size band, region, platform).
     participant_type: VerifiableField[str] = field(
         default_factory=lambda: VerifiableField(value="individual")
     )
@@ -311,6 +318,7 @@ class Episode:
     {
       "episode_id": "E1",
       "name": VerifiableField[str](value="Private Pitch"),
+      "description": VerifiableField[str](value="Targeted promises to select investors"),
       "index_in_stage": 0,
       "start_time": VerifiableField[str](value="2025-01-03T10:00:00Z"),
       "end_time": VerifiableField[str](value="2025-01-03T12:00:00Z"),
@@ -327,6 +335,8 @@ class Episode:
     episode_id: str
     # Name; human-readable semantic label; grounded via verifiable source content.
     name: VerifiableField[str]
+    # Short description that supplements the episode name; less granular than `details`.
+    description: Optional[VerifiableField[str]] = None
     # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     index_in_stage: int = 0
 
@@ -361,6 +371,7 @@ class EventStage:
     {
       "stage_id": "S1",
       "name": VerifiableField[str](value="Amplification"),
+      "description": VerifiableField[str](value="Promotions spread rapidly across channels"),
       "index_in_event": 2,
       "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
       "end_time": None,
@@ -373,6 +384,8 @@ class EventStage:
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
     name: VerifiableField[str]
+    # Short description that supplements the stage name; less granular than `details`.
+    description: Optional[VerifiableField[str]] = None
 
     # Zero-based index (ensures correct ordering) of this stage in
     # the event.
@@ -402,6 +415,7 @@ class EventCascade:
     {
       "event_id": "fraud_crypto_2025_001",
       "title": "High-yield Crypto Scheme",
+      "description": VerifiableField[str](value="A scheme with promised high returns and broad online promotion"),
       "event_type": "financial_fraud",
       "details": [VerifiableField[str](value="A high-yield scheme promoted across social platforms")],
       "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
@@ -417,6 +431,8 @@ class EventCascade:
 
     # Human-readable title summarizing the event (verbatim when available).
     title: Optional[VerifiableField[str]] = None
+    # Short description that supplements the event title; less granular than `details`.
+    description: Optional[VerifiableField[str]] = None
 
     # Categorical label from domain sources (verbatim when available).
     event_type: Optional[VerifiableField[str]] = None
