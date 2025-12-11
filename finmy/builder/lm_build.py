@@ -165,7 +165,7 @@ class LMBuilder(BaseBuilder):
         )
 
         # Add output directory configuration
-        self.output_dir = config.get("output_dir", "./data/event_cascade_output")
+        self.output_dir = config.get("output_dir", "./examples/utest/Collector/test_files/event_cascade_output")
 
     def save_event_cascade(
         self, event_cascade: Dict[str, Any], output_path: str = None
@@ -181,7 +181,7 @@ class LMBuilder(BaseBuilder):
             output_path = self.output_dir
 
         # Create timestamped directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         base_dir = os.path.join(output_path, f"event_cascade_{timestamp}")
         os.makedirs(base_dir, exist_ok=True)
 
@@ -294,7 +294,7 @@ class LMBuilder(BaseBuilder):
             "Systemic Shock": systemic_shock.systemic_shock_prompt(),
             "Leverage Cycle Collapse": leverage_cycle_collapse.leverage_cycle_collapse_prompt(),
             "Stablecoin Depeg": stablecoin_depeg.stablecoin_depeg_prompt(),
-            "Other Financial Scam": other_financial_scam.other_financial_scam_prompt(),
+            "Other Financial Event": other_financial_event.other_financial_event_prompt(),
         }
 
         print("classify.classify_prompt():\n",classify.classify_prompt())
