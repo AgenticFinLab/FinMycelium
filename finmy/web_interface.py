@@ -33,7 +33,7 @@ from finmy.url_collector.url_parser import URLParser
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 from finmy.url_collector.url_parser_clean import extract_content_from_parsed_content, extract_content_from_results
-from finmy.builder.lm_build_flow import lm_build_flow_main
+from finmy.lm_build_pipeline import lm_build_pipeline_main
 
 
 
@@ -829,7 +829,7 @@ class FinMyceliumWebInterface:
         print("=====================================")
         print("Testing: LM_Build_Flow")
         print("=====================================")
-        lm_build_flow_main(raw_texts=All_Text_Content, query_text=main_search_input, key_words=keywords, output_dir=f"./examples/utest/Collector/test_files/event_output_{timestamp}")
+        lm_build_pipeline_main(raw_texts=All_Text_Content, query_text=main_search_input, key_words=keywords, output_dir=f"./examples/utest/Collector/test_files/event_output_{timestamp}")
 
 
         prompt = f"""
