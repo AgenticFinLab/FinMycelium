@@ -321,7 +321,7 @@ def create_build_input(
     return build_input
 
 
-def lm_build_flow_main(raw_texts: List[str], query_text: str, key_words: List[str],output_dir: str):
+def lm_build_pipeline_main(raw_texts: List[str], query_text: str, key_words: List[str],output_dir: str):
     """
     Main function that orchestrates the complete data processing workflow.
 
