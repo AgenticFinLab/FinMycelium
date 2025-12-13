@@ -9,25 +9,71 @@ It handles both full results lists and individual parsed_content lists.
 import re
 from typing import List, Dict, Any, Set, Optional
 
+from finmy.url_collector.base import BaseURLCollector, URLCollectorInput, URLCollectorOutput
 
-class ContentPostProcessor:
+
+class ContentPostProcessor(BaseURLCollector):
     """
     A class to process parsed URL results and extract clean content strings
     with duplicate removal and content deduplication.
     """
     
-    def __init__(self, min_similarity_threshold: float = 0.9, min_text_length: int = 10):
+    def __init__(
+        self,
+        method_name: Optional[str] = None,
+        config: Optional[dict] = None,
+        min_similarity_threshold: float = 0.9,
+        min_text_length: int = 10
+    ):
         """
         Initialize the Content Post-Processor.
         
         Args:
+            method_name (Optional[str]): Name of the method.
+            config (Optional[dict]): Configuration dictionary.
             min_similarity_threshold (float): Threshold for text similarity (0-1).
                                               Higher values mean stricter deduplication.
             min_text_length (int): Minimum text length to consider for deduplication.
         """
+        super().__init__(method_name=method_name, config=config)
         self.min_similarity_threshold = min_similarity_threshold
         self.min_text_length = min_text_length
+    
+    def collect(self, input_data: URLCollectorInput) -> URLCollectorOutput:
+        """
+        Process URL collection results to extract clean content.
+
+        Args:
+            input_data (URLCollectorInput): Input containing URL parsing results.
+
+        Returns:
+            URLCollectorOutput: Cleaned content and processing logs.
+        """
+        results = input_data.extras.get("parsing_results", [])
+        logs = []
         
+        if not results:
+            logs.append("No parsing results provided for cleaning")
+            return URLCollectorOutput(
+                results=[],
+                parsed_contents={},
+                logs=logs,
+                extras=input_data.extras
+            )
+        
+        # Process results to extract clean content
+        parsed_contents = self.process_results(results)
+        
+        logs.append(f"Processed {len(results)} URL results")
+        logs.append(f"Extracted content from {len(parsed_contents)} URLs")
+        
+        return URLCollectorOutput(
+            results=results,
+            parsed_contents=parsed_contents,
+            logs=logs,
+            extras=input_data.extras
+        )
+    
     def process_results(self, results: List[Dict[str, Any]]) -> Dict[int, str]:
         """
         Process complete results list and extract clean content for each URL.
@@ -45,13 +91,13 @@ class ContentPostProcessor:
             url = result.get('url', '')
             
             # Extract content from the result
-            parsed_content = result.get('parsed_content', [])
+            parsed_content = result.get('content', [])
             
             if not parsed_content:
                 url_contents[url_id] = ""
                 continue
             
-            # Process the parsed_content list
+            # Process the content list
             cleaned_content = self.process_parsed_content(parsed_content)
             url_contents[url_id] = cleaned_content
             
