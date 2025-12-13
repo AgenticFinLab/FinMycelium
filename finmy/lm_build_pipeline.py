@@ -21,6 +21,7 @@ import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import List
+import pytz
 
 from finmy.generic import RawData, UserQueryInput
 from finmy.converter import (
@@ -99,36 +100,7 @@ class FinmyLMBuildPipeline:
         self.logger = logger
         return logger
 
-    def get_sample_raw_texts(self) -> List[str]:
-        """
-        Get sample raw text content for testing purposes.
-
-        Returns:
-            List of raw text strings containing financial and AI-related content
-            in both Chinese and English.
-        """
-        return [ 
-            """
-            In recent years, artificial intelligence has seen significant growth in capital markets and retail finance applications. Some banks have adopted machine learning for credit scoring and fraud detection, boosting risk control efficiency and operational responsiveness. However, the stability of models and their performance under extreme market conditions still require continuous assessment.
-            
-            Several institutions have established end-to-end risk management frameworks, incorporating data governance, model validation, monitoring, and back-testing. For black-box models, both internal and external audits demand higher levels of explainability to meet regulatory expectations regarding transparency and sound supervision.
-            
-            From a compliance perspective, model lifecycle management is a key priority. Approval, version control, change tracking, and impact assessments must be fully documented. When model outputs are used for critical business decisions, firms should establish human-in-the-loop mechanisms and threshold alerts.
-            
-            Moreover, data quality directly affects model performance. Organizations should implement data catalogs and quality metrics systems to ensure consistency and lawful, compliant usage of data for training and inference. For scenarios involving personal data, privacy protection and cross-border data flow regulations must be strictly observed.
-            
-            Looking ahead, generative AI will be more widely used in investment research, customer service, and operations. At the same time, organizations need to balance innovation and risk by making model compliance, transparency, and resilience central metrics in their governance frameworks.
-            """,
-            """
-            In recent years, artificial intelligence has seen significant growth in capital markets and retail finance applications. Some banks have adopted machine learning for credit scoring and fraud detection, boosting risk control efficiency and operational responsiveness. However, the stability of models and their performance under extreme market conditions still require continuous assessment.Several institutions have established end-to-end risk management frameworks, incorporating data governance, model validation, monitoring, and back-testing. For black-box models, both internal and external audits demand higher levels of explainability to meet regulatory expectations regarding transparency and sound supervision.
-            
-            From a compliance perspective, model lifecycle management is a key priority. Approval, version control, change tracking, and impact assessments must be fully documented. When model outputs are used for critical business decisions, firms should establish human-in-the-loop mechanisms and threshold alerts.
-            
-            Moreover, data quality directly affects model performance. Organizations should implement data catalogs and quality metrics systems to ensure consistency and lawful, compliant usage of data for training and inference. For scenarios involving personal data, privacy protection and cross-border data flow regulations must be strictly observed.
-            
-            Looking ahead, generative AI will be more widely used in investment research, customer service, and operations. At the same time, organizations need to balance innovation and risk by making model compliance, transparency, and resilience central metrics in their governance frameworks.
-            """,
-        ]
+    
 
     def create_raw_data_records(self, texts: List[str]) -> List[RawData]:
         """
@@ -145,14 +117,16 @@ class FinmyLMBuildPipeline:
             # Write content to block storage
             filename = write_text_data_to_block(text)
             # Create RawData object
+            utc_time = datetime.now(pytz.UTC)
+            formatted_time = utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')
             raw_data = RawData(
                 raw_data_id=str(uuid.uuid4()),
-                source="https://example.com",
+                source="",
                 location=filename,
-                time="2024-06-01T12:00:00Z",
+                time=formatted_time,
                 data_copyright="AgenticFin Lab, All rights reserved.",
-                tag=["test"],
-                method="manual import",
+                tag=[],
+                method="",
             )
             raw_data_records.append(raw_data)
         return raw_data_records
