@@ -24,7 +24,7 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "primary_jurisdiction": "string: Country/region where the institution was primarily regulated and operated.",
       "data_sources_summary": "string: Brief description of the types and credibility of sources used (e.g., 'FDIC reports, SEC filings, earnings call transcripts, Reuters news timeline')."
     },
-    "institution_precondition_profile": {
+    "overview": {
       "primary_business_model": "string: Core business activities (e.g., 'Commercial banking for tech startups and venture capital', 'Traditional retail banking and mortgages').",
       "key_financial_weaknesses_pre_run": {
         "asset_liability_mismatch_description": "string: Description of the maturity/duration mismatch between assets and liabilities (e.g., 'Held long-dated HTM securities funded by short-term uninsured deposits').",

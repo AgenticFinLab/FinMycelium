@@ -21,7 +21,7 @@ You MUST output a single, comprehensive JSON object. Use the exact field names a
       "primary_jurisdiction": "string: Legal jurisdiction where the primary crime occurred.",
       "data_sources_summary": "string: Brief description of source types used (e.g., 'Indictment documents, forensic audit report by firm XYZ, local news coverage')."
     },
-    "case_overview": {
+    "overview": {
       "summary": "string: A concise 3-5 sentence summary describing the victim, the perpetrator(s), the scale, the method, and the outcome.",
       "case_type": "string: Specific classification (e.g., 'Corporate Embezzlement', 'Public Funds Misappropriation', 'Trust Fund Theft', 'Nonprofit Fraud').",
       "total_duration_months": "number: Approximate duration from first misappropriation to discovery/cessation, in months.",

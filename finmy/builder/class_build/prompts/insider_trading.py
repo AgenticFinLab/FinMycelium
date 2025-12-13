@@ -23,7 +23,7 @@ You MUST output a single, well-structured JSON object. Use the exact field names
       "relevant_securities_exchanges": "array: List of exchanges where the implicated securities are traded (e.g., ['NASDAQ', 'NYSE']).",
       "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC Complaint, DOJ Indictment, Final Judgment, Company 8-K filings')."
     },
-    "case_overview": {
+    "overview": {
       "summary": "string: A concise 3-5 sentence summary of the case: who tipped/what was tipped, who traded, on what security, and the core outcome.",
       "legal_theory_violated": "string: The specific legal doctrine (e.g., 'Classical Theory (Breach of Duty)', 'Misappropriation Theory', 'Rule 10b5-1', 'EU Market Abuse Regulation Art. 14').",
       "total_duration_months": "number: Approximate duration from the first unlawful act (e.g., initial tip) to the last trade based on the same MNPI, in months.",

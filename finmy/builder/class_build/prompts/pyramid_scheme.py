@@ -27,7 +27,7 @@ You MUST output a single, comprehensive JSON object following the schema below. 
       "analysis_date": "string: ISO 8601 date (YYYY-MM-DD) when this analysis was generated.",
       "source_characterization": "string: Brief description of input data quality and types (e.g., 'Mixture of SEC complaint, news investigations, and victim forum posts')."
     },
-    "executive_summary": {
+    "overview": {
       "one_sentence_definition": "string: A single sentence capturing the scheme's essence (e.g., 'A membership-based pyramid where profits were derived solely from recruiting new members with false promises of high returns').",
       "core_illegal_mechanism": "string: Explicit statement of the illegal focus (e.g., 'Emphasis on recruitment commissions over product sales to end-users').",
       "total_active_period": "string: Duration from first recruitment to collapse (e.g., '18 months').",
