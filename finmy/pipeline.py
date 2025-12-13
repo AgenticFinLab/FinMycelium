@@ -39,20 +39,20 @@ from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.summarizer import KWLMSummarizer
 
 
-class FinmyLMBuildPipeline:
+class FinmyPipeline:
     """A pipeline class for FinMycelium data processing workflow."""
-    
-    def __init__(self, output_dir: str):
+
+    def __init__(self, finmy_config: dict):
         """
         Initialize the pipeline with output directory.
-        
+
         Args:
             output_dir: Directory where output files will be saved
         """
         self.output_dir = output_dir
         self.logger = None
         self.data_manager = None
-    
+
     def setup_logging(self) -> logging.Logger:
         """
         Setup logging configuration to output to both console and file.
@@ -100,8 +100,6 @@ class FinmyLMBuildPipeline:
         self.logger = logger
         return logger
 
-    
-
     def create_raw_data_records(self, texts: List[str]) -> List[RawData]:
         """
         Convert raw text content into RawData objects and store them in block storage.
@@ -118,7 +116,7 @@ class FinmyLMBuildPipeline:
             filename = write_text_data_to_block(text)
             # Create RawData object
             utc_time = datetime.now(pytz.UTC)
-            formatted_time = utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')
+            formatted_time = utc_time.strftime("%Y-%m-%d %H:%M:%S %Z")
             raw_data = RawData(
                 raw_data_id=str(uuid.uuid4()),
                 source="",
@@ -131,9 +129,7 @@ class FinmyLMBuildPipeline:
             raw_data_records.append(raw_data)
         return raw_data_records
 
-    def store_raw_data(
-        self, raw_data_records: List[RawData]
-    ) -> None:
+    def store_raw_data(self, raw_data_records: List[RawData]) -> None:
         """
         Store RawData objects in the database.
 
@@ -146,7 +142,9 @@ class FinmyLMBuildPipeline:
         self.logger.info("=" * 25)
 
     def create_and_store_user_query(
-        self, query_text: str, key_words: List[str],
+        self,
+        query_text: str,
+        key_words: List[str],
     ) -> UserQueryInput:
         """
         Create a user query input object and store it in the database.
@@ -160,7 +158,7 @@ class FinmyLMBuildPipeline:
         """
         self.logger.info("Creating user query input object...")
         user_query_input = UserQueryInput(
-            query_text= query_text,
+            query_text=query_text,
             key_words=key_words,
         )
         self.logger.info(f"User query input object created: {user_query_input}")
@@ -202,7 +200,9 @@ class FinmyLMBuildPipeline:
         Returns:
             MatchInput object ready for matching operations
         """
-        self.logger.info("Creating MatchInput object from raw_data and summarized_query...")
+        self.logger.info(
+            "Creating MatchInput object from raw_data and summarized_query..."
+        )
         match_input = raw_data_and_summarized_query_to_match_input(
             raw_data=raw_data,
             summarized_query=summarized_query,
@@ -275,7 +275,9 @@ class FinmyLMBuildPipeline:
         Returns:
             BuildInput object ready for builder processing
         """
-        self.logger.info("Creating BuildInput object from user_query and meta_samples...")
+        self.logger.info(
+            "Creating BuildInput object from user_query and meta_samples..."
+        )
         build_input = convert_to_build_input(
             user_query=user_query_input,
             meta_samples=meta_samples,
@@ -285,7 +287,9 @@ class FinmyLMBuildPipeline:
         self.logger.info("=" * 25)
         return build_input
 
-    def lm_build_pipeline_main(self, raw_texts: List[str], query_text: str, key_words: List[str]):
+    def lm_build_pipeline_main(
+        self, raw_texts: List[str], query_text: str, key_words: List[str]
+    ):
         """
         Main function that orchestrates the complete data processing workflow.
 
@@ -314,7 +318,8 @@ class FinmyLMBuildPipeline:
 
         # Step 3: Create and store user query input
         user_query_input = self.create_and_store_user_query(
-            query_text=query_text, key_words=key_words,
+            query_text=query_text,
+            key_words=key_words,
         )
 
         # Step 4: Summarize user query

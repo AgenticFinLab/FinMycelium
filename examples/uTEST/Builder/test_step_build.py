@@ -20,7 +20,10 @@ from dotenv import load_dotenv
 
 from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.base import BuildInput
-from finmy.builder.step_build.main_build import EventSkeletonBuilder
+from finmy.builder.step_build.main_build import (
+    EventSkeletonBuilder,
+    EpisodeReconstructionBuilder,
+)
 
 
 def _generate_ponzi_content() -> str:
@@ -111,6 +114,9 @@ def _generate_ponzi_content() -> str:
 def main():
     """Test the step builder based on the Dutch Tulip Mania."""
     load_dotenv()
+
+    # Set the consistent output directory
+    output_dir = "EXPERIMENT/uTEST/step_builder"
     # Generate tulip mania content (fragmented, full lifecycle)
     ponzi_text = _generate_ponzi_content()
 
@@ -138,7 +144,7 @@ def main():
     builder = EventSkeletonBuilder(
         lm_name="deepseek/deepseek-chat",
         config={
-            "layout_creator": {
+            "layout_reconstructor": {
                 "generation_config": {
                     "temperature": 0.2,
                     "top_p": 0.9,
@@ -146,13 +152,13 @@ def main():
                     "n": 1,
                 }
             },
-            "output_dir": "EXPERIMENT/uTEST/step_builder",
+            "output_dir": output_dir,
         },
     )
     # Run build
     output = builder.build(build_input)
-    print("Saved Dir:", output.result.get("saved_dir"))
-    print("Event JSON:", output.result.get("event_json"))
+
+    ##
 
 
 if __name__ == "__main__":

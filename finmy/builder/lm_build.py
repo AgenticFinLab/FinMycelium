@@ -165,7 +165,9 @@ class LMBuilder(BaseBuilder):
         )
 
         # Add output directory configuration
-        self.output_dir = config.get("output_dir", "./examples/utest/Collector/test_files/event_cascade_output")
+        self.output_dir = config.get(
+            "output_dir", "./examples/utest/Collector/test_files/event_cascade_output"
+        )
 
     def save_event_cascade(
         self, event_cascade: Dict[str, Any], output_path: str = None
@@ -247,7 +249,6 @@ class LMBuilder(BaseBuilder):
         )
 
         # Extract and save JSON
-
         try:
             print(output.response)
             event_cascade_json = extract_json_response(output.response)
