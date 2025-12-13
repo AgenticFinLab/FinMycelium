@@ -389,7 +389,7 @@ class EventStage:
 
     # Zero-based index (ensures correct ordering) of this stage in
     # the event.
-    index_in_event: int
+    index_in_event: int = 0
 
     # Detailed and concise natural-language summary of this stage’s essence.
     details: List[VerifiableField[str]] = field(default_factory=list)
