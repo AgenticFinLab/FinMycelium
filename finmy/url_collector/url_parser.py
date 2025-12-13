@@ -6,7 +6,6 @@ including text, images, and videos while maintaining their original layout order
 It includes fallback to Selenium for JavaScript-heavy pages that cannot be parsed with requests.
 """
 
-
 import csv
 import json
 import logging
@@ -30,7 +29,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-class URLParser:
+from finmy.url_collector.base import BaseURLCollector, URLCollectorInput, URLCollectorOutput
+
+
+class URLParser(BaseURLCollector):
     """
     A class to parse multiple URLs and extract structured content including text,
     images, and videos while preserving the original layout order.
@@ -39,25 +41,31 @@ class URLParser:
 
     def __init__(
         self,
-        user_agent: str = None,
+        method_name: Optional[str] = None,
+        config: Optional[dict] = None,
+        user_agent: Optional[str] = None,
         delay: float = 1.0,
         timeout: int = 30,
         use_selenium_fallback: bool = True,
         selenium_wait_time: int = 5,
-        chromedriver_path: str = None,
+        chromedriver_path: Optional[str] = None,
     ):
         """
         Initialize the URL Parser with configuration options.
 
         Args:
-            user_agent (str, optional): Custom user agent for requests.
+            method_name (Optional[str]): Name of the method.
+            config (Optional[dict]): Configuration dictionary.
+            user_agent (Optional[str]): Custom user agent for requests.
                 Defaults to a common browser user agent.
             delay (float): Delay between requests in seconds to avoid being blocked.
             timeout (int): Request timeout in seconds.
             use_selenium_fallback (bool): Whether to use Selenium as fallback for difficult pages.
             selenium_wait_time (int): Time to wait for page load in Selenium (seconds).
-            chromedriver_path (str, optional): Path to ChromeDriver executable.
+            chromedriver_path (Optional[str]): Path to ChromeDriver executable.
         """
+        super().__init__(method_name=method_name, config=config)
+        
         self.user_agent = user_agent or (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -89,21 +97,25 @@ class URLParser:
         }
         self.session.headers.update(headers)
 
-    def parse_urls(self, url_list: List[str]) -> List[Dict[str, Any]]:
+    def collect(self, input_data: URLCollectorInput) -> URLCollectorOutput:
         """
-        Parse a list of URLs and extract structured content.
+        Collect and parse URLs from the input.
 
         Args:
-            url_list (List[str]): List of URLs to parse.
+            input_data (URLCollectorInput): Input containing URLs to parse.
 
         Returns:
-            List[Dict[str, Any]]: List of parsed results with ID, URL, parse time, and content.
+            URLCollectorOutput: Parsing results and contents.
         """
+        url_list = input_data.urls
         results = []
+        logs = []
 
         for idx, url in enumerate(url_list, 1):
             try:
-                self.logger.info(f"Parsing URL {idx}/{len(url_list)}: {url}")
+                log_msg = f"Parsing URL {idx}/{len(url_list)}: {url}"
+                self.logger.info(log_msg)
+                logs.append(log_msg)
 
                 # Add delay between requests to avoid being blocked
                 if idx > 1:
@@ -115,17 +127,19 @@ class URLParser:
                     results.append(result)
                 else:
                     # Create error result entry
-                    results.append(
-                        {
-                            "ID": idx,
-                            "url": url,
-                            "parsertime": datetime.now().isoformat(),
-                            "content": {"error": "Failed to parse URL"},
-                        }
-                    )
+                    error_result = {
+                        "ID": idx,
+                        "url": url,
+                        "parsertime": datetime.now().isoformat(),
+                        "content": {"error": "Failed to parse URL"},
+                    }
+                    results.append(error_result)
+                    logs.append(f"Failed to parse URL {url}")
 
             except Exception as e:
-                self.logger.error(f"Error parsing URL {url}: {str(e)}")
+                error_msg = f"Error parsing URL {url}: {str(e)}"
+                self.logger.error(error_msg)
+                logs.append(error_msg)
                 # Create error result entry
                 results.append(
                     {
@@ -136,7 +150,18 @@ class URLParser:
                     }
                 )
 
-        return results
+        # Process results to extract clean content
+        from finmy.url_collector.url_parser_clean import extract_content_from_results
+        parsed_contents = extract_content_from_results(results)
+
+        output = URLCollectorOutput(
+            results=results,
+            parsed_contents=parsed_contents,
+            logs=logs,
+            extras=input_data.extras
+        )
+        
+        return output
 
     def parse_single_url(self, url: str, url_id: int) -> Optional[Dict[str, Any]]:
         """
@@ -723,34 +748,3 @@ class URLParser:
             if connection and connection.is_connected():
                 cursor.close()
                 connection.close()
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Example URL list including problematic URLs
-    sample_urls = [
-        "http://www.jyb.cn/rmtzcg/xwy/wzxw/202511/t20251119_2111415715.html",
-        "http://v.people.cn/n1/2025/1121/c431305-40608834.html",
-        "https://baijiahao.baidu.com/s?id=1850027474872762323&wfr=spider&for=pc",
-        # Add more URLs here for testing
-    ]
-
-    # Initialize parser with Selenium fallback enabled
-    parser = URLParser(delay=2.0, use_selenium_fallback=True, selenium_wait_time=5)
-
-    # Parse URLs
-    results = parser.parse_urls(sample_urls)
-
-    # Save results to JSON (default)
-    json_file = parser.save_to_json(results)
-
-    # Example of saving to other formats
-    # csv_file = parser.save_to_csv(results)
-    # mysql_success = parser.save_to_mysql(results, 'localhost', 'user', 'password', 'database_name')
-
-    print("Parsing completed. Results:")
-    for result in results:
-        print(f"URL {result['ID']}: {result['url']}")
-        print(f"Elements found: {len(result['content'])}")
-        print(f"First few elements: {result['content'][:3]}")  # Show first 3 elements
-        print("-" * 50)
