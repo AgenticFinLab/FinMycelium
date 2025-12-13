@@ -26,6 +26,25 @@ from finmy.builder.utils import (
 from finmy.builder.class_build.prompts import *
 
 
+USER_PROMPT = """
+Task: Using the schema and rules defined in the system prompt, reconstruct the specific financial event strictly from the input Content below. Base all details on Content and follow the requirement in the Description and Keywords; do not invent, alter, or extend beyond what it explicitly supports. Produce a clear, layered, professional JSON output.
+
+=== DESCRIPTION BEGIN ===
+{Description}
+=== DESCRIPTION END ===
+
+=== KEYWORDS BEGIN ===
+{Keywords}
+=== KEYWORDS END ===
+
+=== CONTENT BEGIN ===
+{Content}
+=== CONTENT END ===
+
+Generate content in JSON format according to the SYSTEM_PROMPT schema.
+"""
+
+
 class ClassLMBuilder(BaseBuilder):
     """
     Build financial event cascade using classification-first approach.
