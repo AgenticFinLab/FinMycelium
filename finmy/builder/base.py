@@ -2,28 +2,33 @@
 Base entities and containers for financial event reconstruction.
 """
 
-import time
+import os
+import json
+import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
+
+from langgraph.graph import MessagesState
+
+from lmbase.inference.api_call import LangChainAPIInference
+from lmbase.inference.model_call import LLMInference
+from lmbase.utils.tools import BaseContainer
 
 from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.structure import EventCascade
 
 
 @dataclass
-class BuildInput:
+class BuildInput(BaseContainer):
     """Input format of the event reconstruction builder."""
 
     user_query: UserQueryInput
-
     samples: List[DataSample]
-
-    extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
-class BuildOutput:
+class BuildOutput(BaseContainer):
     """Output format of the pipeline builder."""
 
     event_cascades: List[EventCascade] = field(default_factory=list)
@@ -32,24 +37,110 @@ class BuildOutput:
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
+class AgentState(MessagesState):
+    """State schema for the LangGraph run"""
+
+    build_input: BuildInput
+    agent_results: List[Dict[str, Any]]
+    agent_executed: List[str]
+
+    cost: List[Dict[str, Any]]
+
+    agent_system_msgs: Dict[str, str]
+    agent_user_msgs: Dict[str, str]
+
+    messages: List[Any] = None
+
+
 class BaseBuilder(ABC):
     """Base class for event cascade builders."""
 
     def __init__(
         self,
         method_name: Optional[str] = None,
-        config: Optional[dict] = None,
+        build_config: Optional[dict] = None,
     ):
-        self.build_config = config
+        self.build_config = build_config
+        self.agents_config = build_config["agents"]
+
         self.method_name = method_name
 
-    @abstractmethod
-    def build(self, build_input: BuildInput) -> BuildOutput:
-        """Build the event cascades from the input samples."""
+        # By default, we set only one lm for agents
+        # for any agent with a different generation config, we only
+        # change the generation config.
+        self.agents_lm = None
 
-    def run(self, build_input: BuildInput) -> BuildOutput:
-        """Run the builder pipeline."""
-        start = time.time()
-        output = self.build(build_input)
-        output.extras["time_cost"] = time.time() - start
-        return output
+        self.define_agent_models()
+        self.save_dir = build_config["save_folder"]
+        os.makedirs(self.save_dir, exist_ok=True)
+
+    def define_agent_models(self):
+        """Define the models for the agent."""
+        lm_type = self.build_config["lm_type"]
+        model_name = self.build_config["lm_name"]
+
+        if "api" in lm_type.lower():
+            self.agents_lm = LangChainAPIInference(
+                lm_name=model_name,
+                generation_config=self.build_config["generation_config"],
+            )
+        else:
+            self.agents_lm = LLMInference(
+                lm_path=model_name,
+                inference_config=self.build_config["inference_config"],
+                generation_config=self.build_config["generation_config"],
+            )
+
+    def get_save_name(
+        self,
+        agent_name: str,
+        execution_idx: int,
+        **kwargs,
+    ) -> str:
+        """Return the filename (or full path) used to persist stage outputs.
+
+        Parameters
+        - agent_name: The logical name of the agent/stage.
+        - count: The per-agent execution count used for disambiguation.
+        - **kwargs: Optional naming options (e.g., dir, ext, prefix, suffix, timestamp).
+
+        Returns
+        - A deterministic string suitable for saving artifacts like pickled outputs.
+        """
+        return f"{agent_name}-{execution_idx}"
+
+    def save_traces(
+        self,
+        traces: Any,
+        save_name: str,
+        file_format: str,
+        **kwargs,
+    ) -> None:
+        """Save the traces of the agent to the state.
+
+        Parameters
+        - state: The current state of the agent.
+        """
+
+        save_path = os.path.join(self.save_dir, f"{save_name}.{file_format}")
+        # Save the traces
+        if file_format == "json":
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(traces, f)
+        else:
+            with open(save_path, "wb", encoding="utf-8") as f:
+                pickle.dump(traces, f)
+
+    @abstractmethod
+    def execute_agent(self, state: AgentState) -> AgentState:
+        """Execute exactly one stage using prompts from the provided state.
+
+        Requirements
+        - Read system/user prompts from AgentState for the current agent.
+        - Produce a model output and write it to state.agent_results[agent_name].
+        - Update state.execute_count[agent_name] (increment by 1).
+        - Optionally persist artifacts using get_save_name.
+
+        Returns
+        - The updated AgentState after this stage completes.
+        """
