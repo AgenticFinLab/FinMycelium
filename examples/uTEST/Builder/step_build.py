@@ -9,12 +9,17 @@ Minimal uTEST for StepWiseEventBuilder (LangGraph single-node pipeline)
 Notes:
 - This test calls the actual LLM; ensure environment variables/API keys are set
 - The builder's `load_samples` is monkeypatched to read `DataSample.content`
+
+Run:
+
+    python examples/uTEST/Builder/step_build.py -c configs/uTEST/builder/step_build.yml
+
 """
 
-import os
 import uuid
-from pathlib import Path
-from datetime import datetime
+import argparse
+
+import yaml
 
 from dotenv import load_dotenv
 
@@ -24,6 +29,7 @@ from finmy.builder.step_build.main_build import (
     EventSkeletonBuilder,
     EpisodeReconstructionBuilder,
 )
+from finmy.builder.step_build.prompts import *
 
 
 def _generate_ponzi_content() -> str:
@@ -113,11 +119,26 @@ def _generate_ponzi_content() -> str:
 
 def main():
     """Test the step builder based on the Dutch Tulip Mania."""
+    # 1. Load the environment and the configs
     load_dotenv()
+    parser = argparse.ArgumentParser(
+        description="Run sequential multi-agent test with YAML config."
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        default="",
+        help="Path to YAML config file for sequential agents",
+    )
+    args = parser.parse_args()
+    config_path = args.config
 
-    # Set the consistent output directory
-    output_dir = "EXPERIMENT/uTEST/step_builder"
-    # Generate tulip mania content (fragmented, full lifecycle)
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    # 2. Get all the query and samples to create the
+    # build input.
     ponzi_text = _generate_ponzi_content()
 
     # Prepare DataSample (content-based)
@@ -140,25 +161,47 @@ def main():
     # BuildInput
     build_input = BuildInput(user_query=uquery, samples=[data_sample])
 
-    # Instantiate builder with real LLM config
+    # 3. Instantiate builder with real LLM config
     builder = EventSkeletonBuilder(
-        lm_name="deepseek/deepseek-chat",
-        config={
-            "layout_reconstructor": {
-                "generation_config": {
-                    "temperature": 0.2,
-                    "top_p": 0.9,
-                    "max_tokens": 8192,  # deepseek-chat typical maximum token budget
-                    "n": 1,
-                }
-            },
-            "output_dir": output_dir,
-        },
+        method_name="APILMReconstruct",
+        build_config=config,
     )
-    # Run build
-    output = builder.build(build_input)
 
-    ##
+    # 4. Create the system and user prompts
+    agent_names = list(config["agents"].keys())
+    agent_system_msgs = {}
+    agent_user_msgs = {}
+
+    for name in agent_names:
+        if "skeleton" in name.lower():
+            agent_system_msgs[name] = EventLayoutReconstructorSys
+            agent_user_msgs[name] = EventLayoutReconstructorUser
+
+    # Build the state
+    state = {
+        "build_input": build_input,
+        "agent_results": [],
+        "agent_executed": [],
+        "cost": [],
+        "agent_system_msgs": agent_system_msgs,
+        "agent_user_msgs": agent_user_msgs,
+    }
+
+    # Run build
+    ske_graph = builder.graph()
+    final_state = ske_graph.invoke(state)
+    build_input = final_state.pop()
+    # Save the final state to the json
+    builder.save_traces(
+        build_input.to_dict(),
+        save_name="BuildInputforFinalState",
+        file_format="json",
+    )
+    builder.save_traces(
+        final_state,
+        save_name="FinalState",
+        file_format="json",
+    )
 
 
 if __name__ == "__main__":

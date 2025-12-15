@@ -1,0 +1,18 @@
+
+lm_type: &lm_type "api"
+lm_name: &lm_name "deepseek/deepseek-chat"
+inference_config: &infer
+  device: "cuda"
+generation_config: &generation_config
+  max_new_tokens: 256
+  temperature: 0.2
+  top_p: 0.95
+
+save_folder: "EXPERIMENT/uTEST/StepBuilder"
+
+agents:
+  SkeletonReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config

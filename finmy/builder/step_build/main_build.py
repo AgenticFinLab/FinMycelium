@@ -30,6 +30,7 @@ We do not introduce the idea of the multi-agent system, we indeed have several a
 
 import os
 import json
+import time
 from pathlib import Path
 from collections import defaultdict
 from typing import Dict, Any, List, DefaultDict
@@ -47,14 +48,7 @@ from finmy.builder.utils import (
     filter_dataclass_fields,
     extract_json_response,
 )
-
-
-class EventState(MessagesState):
-    """State schema for the LangGraph run"""
-
-    build_input: BuildInput
-    step_results: DefaultDict[str, Any] = defaultdict(dict)
-    messages: List[Any]
+from finmy.builder.base import AgentState
 
 
 # Obtain all text content under the structure.py
@@ -92,28 +86,7 @@ class EventSkeletonBuilder(BaseBuilder):
     - Persists output to `output_dir/event_{timestamp}/event_cascade.json`
     """
 
-    def __init__(
-        self,
-        lm_name: str = "deepseek/deepseek-chat",
-        config: Dict[str, Any] = None,
-    ):
-        super().__init__(
-            method_name="step_wise_builder", config={"lm_name": lm_name, **config}
-        )
-
-        # Obtain the layout reconstructor config
-        self.layout_config = config["layout_reconstructor"]
-        # First set the llm with the generation config from the layout
-        # because the layout reconstructor will be the first step.
-        self.lm_api = api_call.LangChainAPIInference(
-            lm_name=lm_name,
-            generation_config=self.layout_config["generation_config"],
-        )
-        # Obtain the core folder to save all results
-        self.output_dir = config["output_dir"]
-        os.makedirs(self.output_dir, exist_ok=True)
-
-    def reconstruct_layout(self, state: EventState) -> EventState:
+    def execute_agent(self, state: AgentState) -> AgentState:
         """Single node: reconstruct event skeleton JSON and write into state
 
         Steps:
@@ -123,7 +96,14 @@ class EventSkeletonBuilder(BaseBuilder):
         4) Run LLM inference and parse JSON via the centralized utility
         5) Write the parsed result to `event_json`
         """
+        t0 = time.time()
         build_ipt = state["build_input"]
+        num_executed = len(state["agent_executed"])
+        execution_idx = num_executed + 1
+
+        agent_names = list(state["agent_system_msgs"])
+        cur_name = agent_names[execution_idx - 1]
+
         # Compose prompts (system prompt carries skeleton schema; user prompt carries IO fields)
         # Inject skeleton-filtered schema text into the system prompt
         sys_prompt = prompts.EventLayoutReconstructorSys.format(
@@ -133,49 +113,36 @@ class EventSkeletonBuilder(BaseBuilder):
         system_msg = sys_prompt.replace("{", "{{").replace("}", "}}")
         user_msg = prompts.EventLayoutReconstructorUser
         # Execute model call
-        output: InferOutput = self.lm_api.run(
+        out: InferOutput = self.agents_lm.run(
             infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
             Description=build_ipt.user_query.query_text,
             Keywords=build_ipt.user_query.key_words,
             Content="\n".join([sample.content for sample in build_ipt.samples]),
         )
-        # Ensure default dict exists for event responses
-        state.setdefault("step_results", defaultdict(dict))
-        # Parse JSON and write into state
-        state["step_results"]["event_skeleton"] = extract_json_response(output.response)
-        return state
 
-    def graph(self) -> CompiledStateGraph[EventState]:
+        savename = self.get_save_name(cur_name, len(state["agent_executed"]) + 1)
+        self.save_traces({cur_name: out.to_dict()}, savename, "json")
+        state["agent_results"].append({cur_name: out.response})
+        state["cost"].append({cur_name: {"latency": time.time() - t0}})
+        state["agent_executed"].append(cur_name)
+        return {
+            "build_input": build_ipt.to_dict(),
+            "agent_results": state["agent_results"],
+            "agent_executed": state["agent_executed"],
+            "cost": state["cost"],
+            "agent_system_msgs": state["agent_system_msgs"],
+            "agent_user_msgs": state["agent_user_msgs"],
+        }
+
+    def graph(self) -> CompiledStateGraph[AgentState]:
         """Build a single-node LangGraph state machine"""
-        g = StateGraph(EventState)
+        g = StateGraph(AgentState)
         # Nodes
-        g.add_node("reconstruct_layout", self.reconstruct_layout)
+        g.add_node("reconstruct_layout", self.execute_agent)
         # Edges: START → create_layout → END
         g.add_edge(START, "reconstruct_layout")
         g.add_edge("reconstruct_layout", END)
         return g.compile()
-
-    def build(self, build_input: BuildInput) -> BuildOutput:
-        """Compile and run the graph, return save path and event JSON"""
-        app = self.graph()
-        # Initial state: pass BuildInput only; node will populate event_json
-        initial = {"build_input": build_input}
-        final_state = app.invoke(initial)
-        event_skeleton = final_state["step_results"]["event_skeleton"]
-        # Save the event skeleton
-        with open(
-            os.path.join(self.output_dir, "event_skeleton.json"),
-            "w",
-            encoding="utf-8",
-        ) as f:
-            json.dump(event_skeleton, f, ensure_ascii=False, indent=2)
-
-        return BuildOutput(
-            result={
-                "saved_dir": self.output_dir,
-                "event_skeleton": event_skeleton,
-            }
-        )
 
 
 class EpisodeReconstructionBuilder(BaseBuilder):
@@ -225,7 +192,7 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         self.output_dir = config["output_dir"]
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def reconstruct_episode(self, state: EventState) -> EventState:
+    def reconstruct_episode(self, state: AgentState) -> AgentState:
         """Single node that reconstructs the TARGET Episode.
 
         Steps:
@@ -237,55 +204,8 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         """
         build_ipt = state["build_input"]
         # Read skeleton from previous step
-        event_skeleton = state["step_results"]["event_skeleton"]
+        event_skeleton = state["SkeletonAgent"]
 
-        # Resolve targeting hints (stage/episode indices) without .get
-        extras = build_ipt.extras
-        stage_index = (
-            int(extras["target_stage_index"]) if "target_stage_index" in extras else 0
-        )
-        target_episode_index = (
-            extras["target_episode_index"] if "target_episode_index" in extras else None
-        )
-        stages = event_skeleton["stages"] if "stages" in event_skeleton else []
-        if not isinstance(stages, list) or not stages:
-            return state
-        if stage_index < 0 or stage_index >= len(stages):
-            stage_index = 0
-        stage = stages[stage_index]
-        episodes = stage["episodes"] if "episodes" in stage else []
-        # Select the episode stub: prefer explicit index match, else first with `index_in_stage`
-        stub = None
-        if isinstance(episodes, list) and episodes:
-            if target_episode_index is None:
-                for ep in episodes:
-                    if isinstance(ep, dict) and "index_in_stage" in ep:
-                        stub = ep
-                        break
-                if stub is None and isinstance(episodes[0], dict):
-                    stub = episodes[0]
-            else:
-                for ep in episodes:
-                    if (
-                        isinstance(ep, dict)
-                        and "index_in_stage" in ep
-                        and ep["index_in_stage"] == target_episode_index
-                    ):
-                        stub = ep
-                        break
-        if not isinstance(stub, dict):
-            return state
-        # Extract TARGET skeleton fields
-        ep_id = stub["episode_id"] if "episode_id" in stub else ""
-        raw_name = stub["name"] if "name" in stub else ""
-        name_val = raw_name["value"] if isinstance(raw_name, dict) else (raw_name or "")
-        raw_desc = stub["description"] if "description" in stub else ""
-        desc_val = raw_desc["value"] if isinstance(raw_desc, dict) else (raw_desc or "")
-        idx_val = (
-            stub["index_in_stage"]
-            if "index_in_stage" in stub and stub["index_in_stage"] is not None
-            else 0
-        )
         # Inject full Schema into system prompt and escape braces to avoid `.format` conflicts
         sys_prompt = prompts.EpisodeReconstructorSys.format(
             STRUCTURE_SPEC=_EPISODE_SPEC
@@ -294,60 +214,23 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         user_msg = prompts.EpisodeReconstructorUser
         # Execute inference with contextual variables
         output: InferOutput = self.episode_api.run(
-            infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
+            infer_input=InferInput(
+                system_msg=system_msg,
+                user_msg=user_msg,
+            ),
             Description=build_ipt.user_query.query_text,
             Keywords=build_ipt.user_query.key_words,
             Content="\n".join([sample.content for sample in build_ipt.samples]),
-            EPISODE_ID=ep_id,
-            EPISODE_NAME=name_val,
-            INDEX_IN_STAGE=idx_val,
-            EPISODE_DESCRIPTION=desc_val,
-            StageSkeleton=json.dumps(stage, ensure_ascii=False, indent=2),
         )
         # Parse strict JSON response and persist
         episode_obj = extract_json_response(output.response)
-        stage_id = stage["stage_id"] if "stage_id" in stage else f"S{stage_index}"
-        ep_key = ep_id or f"E{idx_val}"
-        store = state.setdefault("episode_responses", defaultdict(dict))
-        if "episode_reconstructions" not in store:
-            store["episode_reconstructions"] = defaultdict(dict)
-        store["episode_reconstructions"][stage_id][ep_key] = episode_obj
-        # Save to disk for external inspection/use
-        episodes_dir = os.path.join(self.output_dir, "episodes")
-        os.makedirs(episodes_dir, exist_ok=True)
-        with open(
-            os.path.join(episodes_dir, f"{stage_id}_{ep_key}.json"),
-            "w",
-            encoding="utf-8",
-        ) as f:
-            json.dump(episode_obj, f, ensure_ascii=False, indent=2)
+
         return state
 
-    def graph(self) -> CompiledStateGraph[EventState]:
+    def graph(self) -> CompiledStateGraph[AgentState]:
         """Compile single-node graph: START → reconstruct_episode → END."""
-        g = StateGraph(EventState)
+        g = StateGraph(AgentState)
         g.add_node("reconstruct_episode", self.reconstruct_episode)
         g.add_edge(START, "reconstruct_episode")
         g.add_edge("reconstruct_episode", END)
         return g.compile()
-
-    def build(self, build_input: BuildInput) -> BuildOutput:
-        """Run the episode reconstruction graph and return outputs.
-
-        - Accepts `BuildInput` (user query, samples, extras).
-        - Returns `BuildOutput.result` with saved directory and episode responses.
-        """
-        app = self.graph()
-        initial = {"build_input": build_input}
-        final_state = app.invoke(initial)
-        responses = (
-            final_state["episode_responses"]
-            if "episode_responses" in final_state
-            else {}
-        )
-        return BuildOutput(
-            result={
-                "saved_dir": self.output_dir,
-                "episode_responses": responses,
-            }
-        )
