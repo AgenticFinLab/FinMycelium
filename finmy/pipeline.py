@@ -43,13 +43,14 @@ class FinmyPipeline:
     """A pipeline class for FinMycelium data processing workflow."""
 
     def __init__(self, finmy_config: dict):
+    # def __init__(self, output_dir: str):
         """
         Initialize the pipeline with output directory.
 
         Args:
             output_dir: Directory where output files will be saved
         """
-        self.output_dir = output_dir
+        self.output_dir = finmy_config["output_dir"]
         self.logger = None
         self.data_manager = None
 
@@ -57,6 +58,7 @@ class FinmyPipeline:
         """
         Setup logging configuration to output to both console and file.
         Each run creates a new log file with timestamp.
+
 
         Returns:
             Logger instance configured for this script
@@ -123,7 +125,7 @@ class FinmyPipeline:
                 location=filename,
                 time=formatted_time,
                 data_copyright="AgenticFin Lab, All rights reserved.",
-                tag=[],
+                tag=[""],
                 method="",
             )
             raw_data_records.append(raw_data)
@@ -325,16 +327,20 @@ class FinmyPipeline:
         # Step 4: Summarize user query
         summarized_query = self.summarize_user_query(user_query_input)
 
-        # Step 5: Create match input from raw data and summarized query
-        match_input = self.match_raw_data_with_query(
-            raw_data_records[0], summarized_query
-        )
+            
+        meta_samples=[]
+        for i in range(len(raw_data_records)):
+            # Step 5: Create match input from raw data and summarized query
+            match_input = self.match_raw_data_with_query(
+                raw_data_records[i], summarized_query
+            )
+            # Step 6: Perform LLM matching
+            match_output = self.perform_llm_matching(match_input)
 
-        # Step 6: Perform LLM matching
-        match_output = self.perform_llm_matching(match_input)
+            # Step 7: Convert match output to meta samples
+            meta_sample = self.create_meta_samples(match_output, raw_data_records[i])
 
-        # Step 7: Convert match output to meta samples
-        meta_samples = self.create_meta_samples(match_output, raw_data_records[0])
+            meta_samples += meta_sample
 
         # Step 8: Store meta samples in database
         self.store_meta_samples(meta_samples)
