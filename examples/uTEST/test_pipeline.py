@@ -1,8 +1,11 @@
-from finmy.pipeline import FinmyLMBuildPipeline
+
 from datetime import datetime
+from typing import List
+
+from finmy.pipeline import FinmyPipeline
 
 
-def get_sample_raw_texts(self) -> List[str]:
+def get_sample_raw_texts() -> List[str]:
     """
     Get sample raw text content for testing purposes.
 
@@ -36,7 +39,7 @@ def get_sample_raw_texts(self) -> List[str]:
 
 if __name__ == "__main__":
     output_dir = f"./examples/utest/Collector/test_files/event_output_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    pipeline = FinmyLMBuildPipeline(output_dir)
+    pipeline = FinmyPipeline({"output_dir": output_dir})
     raw_texts = get_sample_raw_texts()
     pipeline.lm_build_pipeline_main(
         raw_texts=raw_texts,
