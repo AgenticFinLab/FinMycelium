@@ -4,142 +4,148 @@
 def ponzi_scheme_prompt() -> str:
 
     return """
-You are an expert financial analyst specializing in forensic investigation and event reconstruction. Your task is to comprehensively analyze and reconstruct a specified Ponzi scheme or similar financial fraud event based on provided multi-source data (e.g., news articles, legal documents, regulatory filings, PDF reports, web content).
+You are an expert financial forensic analyst and historical event reconstruction specialist. Your task is to reconstruct a detailed, comprehensive, and factually accurate account of a Ponzi scheme event based on user-provided information and/or internet research. The output must be in JSON format, structured to reflect the complete lifecycle of the scheme with extreme granularity.
 
-**Core Objective:**
-Produce a complete, factual, and logically structured reconstruction of the event, detailing its lifecycle from inception to termination and aftermath, with emphasis on mechanisms, key actors, financial flows, and impacts.
+**Objective:** Create a definitive, multi-dimensional record of the Ponzi scheme that captures every conceivable detail—conceptual, operational, financial, legal, sociological, and psychological—based solely on verified facts and widely reported information.
 
-**Data Input:**
-You will receive raw text/data extracted from various sources regarding a specific financial fraud event (e.g., "Lantian Gerui Event", "Bernie Madoff scandal"). This data may be fragmented, redundant, or contain inconsistencies. You must synthesize, cross-reference, and resolve discrepancies to build a coherent narrative grounded in the most reliable facts.
+**Output Format:** A single, extensive JSON object.
 
-**Output Format Requirements:**
-You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, arrays, or nested objects as described. Do not include any explanatory text outside the JSON.
+**Instructions for JSON Construction:**
+1.  **Base Structure:** Organize the JSON under a primary key `"ponzi_scheme_reconstruction"`.
+2.  **Lifecycle Phases:** Structure the main object according to the following six lifecycle phases. Each phase is a top-level key.
+3.  **Granular Fields:** Under each phase, include an exhaustive set of fields. Each field's value should be a detailed string or object that provides specific, concrete information.
+4.  **Integrated Explanation:** For EVERY field, directly embed the explanation or description of what that field represents within its value. For simple string fields, the explanation can be part of the narrative. For object fields, include an `"explanation"` sub-field.
+5.  **Fact-Based:** All information must correspond to real, documented events, individuals, dates, figures, and sources. If specific data is unavailable for a particular case, state "Not publicly documented" or "Information not widely available" rather than speculating.
+6.  **Comprehensiveness:** Aim to create a JSON that is so detailed it could serve as the master dataset for a documentary, academic study, or legal case. Consider technical details, human stories, systemic interactions, and chronological precision.
 
-**Comprehensive JSON Schema and Field Definitions:**
+Here is the required JSON schema outline with exemplary field descriptions, and "Explanation" is just to help you better understand the task. **Populate it with data from the target case.**
 
-```json
 {
   "ponzi_scheme_reconstruction": {
     "metadata": {
-      "event_identifier": "string: The common name of the event (e.g., 'Lantian Gerui Ponzi Scheme').",
-      "primary_jurisdiction": "string: Country/region where the scheme was primarily operated.",
-      "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'court verdicts, news reports, regulatory announcements')."
-    },
-    "overview": {
-      "summary": "string: A concise 3-5 sentence summary of the entire event, its nature, and outcome.",
-      "fraud_type": "string: Specific classification (e.g., 'Classic Ponzi Scheme', 'Cryptocurrency Ponzi').",
-      "total_duration_months": "number: Approximate operational duration from start to termination in months.",
-      "is_cross_border": "boolean: Indicates if the scheme operated across multiple countries."
-    },
-    "perpetrators": {
-      "primary_individuals": [
-        {
-          "name": "string",
-          "role": "string (e.g., Founder, CEO, Mastermind, Promoter)",
-          "background": "string: Relevant professional or personal background.",
-          "legal_status_at_terminal": "string: Status at event termination (e.g., 'Arrested', 'Fled', 'Deceased')."
-        }
-      ],
-      "primary_entities": [
-        {
-          "entity_name": "string (e.g., company name)",
-          "registration_location": "string",
-          "stated_business": "string: The legitimate business it claimed to be.",
-          "actual_operation": "string: The fraudulent operation it conducted."
-        }
-      ]
-    },
-    "mechanism_and_operations": {
-      "product_or_service_description": "string: Detailed description of the fraudulent product, service, or investment plan offered.",
-      "investment_vehicle": "string: How investments were formally made (e.g., 'purchase of fund shares', 'loan agreements', 'cryptocurrency tokens').",
-      "marketing_and_propaganda_channels": "array: List of channels used (e.g., ['Social Media campaigns', 'Seminars/Webinars', 'Celebrity endorsements', 'Multi-level referral programs']).",
-      "key_propaganda_narratives": "array: List of false claims used (e.g., ['Guaranteed 20% monthly return', 'Patented technology', 'Government-backed project']).",
-      "investor_acquisition_method": "string: Description of how investors were recruited and onboarded.",
-      "promised_return_structure": "string: Detailed terms of promised returns (rates, periods, conditions).",
-      "promised_use_of_funds": "string: Where perpetrators claimed investor money would be used."
-    },
-    "financial_analysis": {
-      "scale_and_scope": {
-        "estimated_total_investors": "number: Best estimate of total number of investor participants.",
-        "estimated_total_fiat_inflow": "number: Estimated total cash/investment collected (in primary currency, e.g., CNY, USD).",
-        "currency": "string: Primary currency of inflow estimate.",
-        "peak_active_investors": "number: Estimated number of active investors at peak.",
-        "geographic_spread": "array: List of countries/regions with significant investor presence."
+      "scheme_common_name": "[The most widely recognized name for the scheme, e.g., 'Bernie Madoff Investment Scandal']. Explanation: The colloquial or media-given name of the event.",
+      "official_legal_case_name": "[e.g., 'Securities and Exchange Commission v. Bernard L. Madoff Investment Securities LLC']. Explanation: The formal name used in court proceedings.",
+      "primary_perpetrator_name": "[Full name of the key architect]. Explanation: The individual centrally responsible for designing and/or operating the scheme.",
+      "key_associated_entities": ["List of company names, funds, or organizations used as vehicles for the fraud"]. Explanation: Legal entities instrumental in facilitating the scheme.",
+      "operational_timeframe": {
+        "suspected_inception_year": "YYYY. Explanation: The estimated year the fraudulent activity began.",
+        "public_collapse_year": "YYYY. Explanation: The year the scheme became publicly known and unraveled.",
+        "duration_years": "X. Explanation: The approximate operational lifespan from inception to collapse."
       },
-      "actual_use_of_funds": {
-        "for_operational_facade": "string: Portion used to maintain the illusion (office rent, staff salaries, marketing).",
-        "for_ponzi_payouts": "string: Portion used to pay 'returns' to earlier investors.",
-        "for_personal_enrichment": "string: Portion misappropriated by perpetrators (luxury assets, personal expenses).",
-        "for_other_investments": "string: Portion, if any, put into other risky/legitimate investments (often loss-making).",
-        "evidence_of_misappropriation": "string: Description of clear misuse of funds (e.g., 'diverted to personal real estate')."
-      },
-      "ponzi_dynamics": {
-        "new_old_investor_ratio_estimate": "string: Qualitative or quantitative estimate of dependency on new inflows (e.g., '>80% of payouts came from new investments').",
-        "estimated_cash_flow_gap_timeline": [
-          {
-            "period": "string (e.g., 'Year 1', '6 months before collapse')",
-            "inflow": "number: Estimated new investment inflow.",
-            "obligatory_payout": "number: Estimated required payout to existing investors.",
-            "estimated_deficit": "number: Inflow - Payout (negative indicates growing deficit)."
-          }
-        ]
+      "estimated_global_scale": {
+        "currency": "USD/EUR/etc.",
+        "amount_at_collapse": "XX billion. Explanation: The approximate nominal value of liabilities or promised returns at the time of collapse.",
+        "victim_count_estimate": "Approximate number of individuals or entities defrauded.",
+        "geographic_reach": ["List of primary countries or regions affected"]
       }
     },
-    "key_milestones": [
-      {
-        "date": "string: Approximate date (YYYY-MM or YYYY).",
-        "event": "string: Description of the milestone.",
-        "significance": "string: Why this was a turning point (e.g., 'Launch of key product', 'Regulatory inquiry started', 'Payout delay began')."
-      }
-    ],
-    "termination": {
-      "trigger_event": "string: The immediate cause of collapse (e.g., 'Massive redemption request', 'Regulatory raid', 'Media exposure', 'Perpetrator disappearance').",
-      "termination_date": "string: Approximate date of collapse/cessation.",
-      "state_at_termination": {
-        "operational_status": "string: (e.g., 'Frozen by authorities', 'Ceased payments', 'Website offline').",
-        "remaining_investors_active": "number: Estimated number of investors still involved at termination.",
-        "last_recorded_inflow": "number: Investment inflow in the last period before collapse."
-      }
-    },
-    "aftermath_and_impact": {
-      "legal_and_regulatory_action": [
-        {
-          "actor": "string (e.g., 'SEC', 'Local Public Security Bureau')",
-          "action": "string (e.g., 'Criminal charges filed', 'Assets frozen', 'Civil penalty imposed')",
-          "target": "string: Whom the action was against.",
-          "date": "string: Approximate date."
-        }
-      ],
-      "perpetrator_outcomes": "string: Summary of legal and personal outcomes for main perpetrators (sentences, fines, etc.).",
-      "investor_outcomes": {
-        "total_estimated_loss": "number: Estimated total investor loss (nominal value).",
-        "recovery_estimate": "string: Estimated percentage or amount potentially recoverable through liquidation/compensation.",
-        "investor_demographics_affected": "string: Description of major investor groups (e.g., 'Retirees', 'Middle-class families', 'Sophisticated institutions').",
-        "psychological_social_impact": "string: Brief description of broader societal impact (loss of trust, suicides, community strife)."
+    "phase_1_conception_and_design": {
+      "origin_context": {
+        "perpetrator_background": "Detailed biography prior to the fraud, including education, early career, and reputation. Explanation: Provides insight into the origin of capability and social capital.",
+        "initial_legitimate_activity": "Description of any legitimate business or investment activity that preceded or was used to cloak the fraud. Explanation: The 'kernel of truth' or operational cover.",
+        "catalyst_for_fraud": "The specific circumstance, pressure, or opportunity that initiated the fraudulent plan (e.g., trading losses, desire for status, competitive pressure). Explanation: The perceived trigger point."
       },
-      "systemic_impacts": [
-        "string: List broader impacts (e.g., 'Prompted new regulations on peer-to-peer lending', 'Damaged reputation of FinTech sector in Region X')."
-      ]
+      "fraudulent_design": {
+        "core_promise_to_investors": "Exact description of the returns promised (e.g., 'consistent 1-2% monthly returns, regardless of market conditions'). Explanation: The unsustainable lure.",
+        "claimed_investment_strategy": "The fabricated or misrepresented method for generating returns (e.g., 'split-strike conversion strategy', 'foreign exchange arbitrage'). Explanation: The fictional engine of growth.",
+        "identified_exploits": {
+          "regulatory_gaps": "Specific financial regulations that were circumvented or loopholes exploited.",
+          "auditor_weaknesses": "How audits were avoided, falsified, or conducted by complicit/incompetent firms.",
+          "investor_psychology_levers": "The psychological biases targeted (e.g., exclusivity, fear of missing out, trust in affinity groups)."
+        },
+        "structural_blueprint": "Description of how new investor money was planned to flow to older investors, and how records would be maintained (manually, via simple software, complex accounting)."
+      }
     },
-    "synthesis_and_red_flags": {
-      "identified_red_flags": "array: List of clear warning signs evident in hindsight (e.g., ['Unregistered investment company', 'Promise of impossibly consistent returns', 'Lack of transparent financial statements']).",
-      "comparison_to_classic_ponzi": "string: Brief analysis of how this scheme fits or deviates from the classic Ponzi model."
+    "phase_2_implementation_and_obfuscation": {
+      "onboarding_mechanics": {
+        "target_demographic": "Specific profile of early investors (e.g., family friends, members of a specific community, institutional clients).",
+        "affinity_group_targeting": "Detailed use of religious, ethnic, professional, or social networks to build trust.",
+        "initial_investment_vehicles": "The types of accounts, funds, or notes offered to initial participants."
+      },
+      "fabricated_reality_apparatus": {
+        "statement_generation": "Process for creating false account statements: frequency, format, level of detail, and technological method.",
+        "falsified_documentation": "Types of documents forged (trade confirmations, auditor reports, regulatory filings).",
+        "intermediary_complicity": "Role of feeders, introducers, or third-party marketers: their compensation structure and level of knowledge."
+      },
+      "trust_maintenance_strategies": {
+        "perpetrator_persona_management": "Active cultivation of image (philanthropy, industry boards, perceived lifestyle).",
+        "secrecy_and_exclusivity_cues": "Tactics used to discourage scrutiny (e.g., 'the strategy is too complex to explain', turning away some money).",
+        "response_to_early_inquiries": "Scripted or ad-hoc responses to initial questions from skeptical investors, journalists, or junior staff."
+      }
+    },
+    "phase_3_growth_and_amplification": {
+      "recruitment_acceleration": {
+        "tiered_referral_systems": "Existence and structure of formal referral bonuses or incentives.",
+        "testimonials_and_evangelists": "Key influential investors who actively promoted the scheme and their profiles.",
+        "geographic_expansion_strategy": "How the scheme moved into new regions or countries."
+      },
+      "external_validation_engineering": {
+        "media_manipulation": "Specific positive articles, awards, or rankings obtained, and how they were secured.",
+        "elite_and_celebrity_association": "Names of high-profile individuals/institutions invested, and how their participation was used in marketing.",
+        "simulated_regulatory_compliance": "Appearances at conferences, superficial interactions with regulators, or use of licensed entities."
+      },
+      "systemic_intertwining": {
+        "banking_relationships": "Banks used for operations; their level of suspicion or complicity; how funds were moved.",
+        "legal_and_accounting_service_providers": "Firms providing peripheral services and the nature of their engagement.",
+        "dependence_of_legitimate_entities": "Charities, businesses, or municipalities that became financially reliant on the scheme's fake returns."
+      }
+    },
+    "phase_4_stress_and_fracture": {
+      "liquidity_pressures": {
+        "redemption_trends": "Timing and scale of increased withdrawal requests (due to macroeconomic factors like the 2008 crisis).",
+        "cash_flow_analysis": "The growing gap between incoming new investments and required payout obligations.",
+        "emergency_funding_measures": "Desperate actions taken to attract large, last-minute investments (e.g., offering preferential terms)."
+      },
+      "internal_dissent": {
+        "key_employee_suspicions": "Instances where staff questioned operations; how they were placated, threatened, or dismissed.",
+        "whistleblower_attempts": "Documented efforts by insiders to alert authorities or the media, and the outcome.",
+        "perpetrator_stress_signals": "Observable changes in the perpetrator's behavior, health, or public statements."
+      },
+      "external_threats": {
+        "competitor_analysis": "Warnings from legitimate financial analysts or firms.",
+        "journalistic_investigations": "Specific reporters or publications that began asking questions.",
+        "regulatory_near_misses": "Examinations or inquiries that nearly uncovered the fraud but did not."
+      }
+    },
+    "phase_5_exposure_and_collapse": {
+      "trigger_event": {
+        "precipitating_factor": "The specific event that made continuation impossible (e.g., a single large redemption request, a whistleblower's report to the SEC, a market crash).",
+        "date_and_location": "The precise day and context of the trigger.",
+        "perpetrator_response": "The immediate action of the perpetrator (confession to family, attempt to flee, surrender to authorities)."
+      },
+      "collapse_dynamics": {
+        "communication_of_collapse": "How investors were informed (letter, email, news announcement).",
+        "freeze_actions": "What was immediately frozen: bank accounts, redemptions, websites.",
+        "public_reaction_timeline": "Hour-by-hour or day-by-day account of the public unraveling and media frenzy."
+      },
+      "immediate_fallout": {
+        "suicide_or_extreme_events": "Any tragic immediate consequences among perpetrators or investors.",
+        "first_legal_filings": "Details of the first regulatory complaint or civil lawsuit filed.",
+        "asset_seizures": "Initial properties, accounts, and valuables seized by authorities."
+      }
+    },
+    "phase_6_aftermath_and_legacy": {
+      "legal_proceedings": {
+        "criminal_trials": "Charges, plea deals, trial highlights, verdicts, and sentences for the perpetrator and accomplices.",
+        "civil_litigation": "Major lawsuits by trustees, investors, or regulators against feeder funds, banks, or auditors.",
+        "key_legal_arguments": "The central prosecution and defense theories used in court."
+      },
+      "financial_reconstruction": {
+        "bankruptcy_trust_administration": "The entity formed to liquidate assets and distribute recovered funds.",
+        "recovery_statistics": "Total amount recovered, percentage of principal returned to victims, and timeline of distributions.",
+        "tax_implications": "How losses were treated for tax purposes by victims."
+      },
+      "societal_impact": {
+        "victim_profiles_and_stories": "Notable case studies of individuals, families, or charities devastated.",
+        "industry_reputational_damage": "Impact on the hedge fund, wealth management, or specific community targeted.",
+        "regulatory_and_policy_changes": "Laws enacted (e.g., Dodd-Frank acts), SEC procedure reforms, or new oversight bodies created in response."
+      },
+      "historical_analysis": {
+        "classification_in_fraud_typology": "How it compares to other historical frauds (Ponzi, pyramid, etc.).",
+        "post_mortem_analysis_reports": "Key findings from official government reports or academic studies.",
+        "cultural_artifacts": "Books, films, documentaries, and podcasts produced about the scheme."
+      }
     }
   }
 }
-```
-
-**Critical Analysis Instructions:**
-
-1.  **Fact-Based & Logical:** Anchor every piece of information in the provided source data. If data is conflicting, note the most consistent evidence or state the uncertainty. Inferences must be logical and explicitly tied to facts.
-2.  **Chronological Clarity:** Ensure the sequence of events in `key_milestones` and the narrative flow are chronologically sound.
-3.  **Quantitative Emphasis:** Populate all numerical fields (`estimated_total_investors`, `estimated_total_fiat_inflow`, etc.) with the best estimates available. Use `"N/A"` or `0` only if genuinely unavailable, not as a placeholder.
-4.  **Role-Centric Impact:** Clearly distinguish impacts on different actors: perpetrators, early vs. late investors, employees, regulators, and the broader financial ecosystem.
-5.  **Full Chain Exposition:** The output must explicitly connect: The **lure** (promises), the **mechanism** (how it worked), the **sustainment** (Ponzi dynamics), the **collapse trigger**, and the **consequences**.
-6.  **Completeness:** Strive to provide information for every field in the JSON schema. If information for a specific sub-field is absolutely not found in the provided data, use the value `"Information not available in provided sources."`.
-
-**Final Step Before Output:**
-Perform an internal consistency check. Ensure numbers add up logically where required (e.g., sum of `actual_use_of_funds` components should approximate `estimated_total_fiat_inflow`), and the timeline in `key_milestones` aligns with the `total_duration_months`.
-
-**Now, synthesize the provided data about the specified financial fraud event and output the complete JSON object.**
     """
