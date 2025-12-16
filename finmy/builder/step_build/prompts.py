@@ -88,9 +88,9 @@ Instructions:
 - Complete every field comprehensively, explicitly, and in detail from `Content`, guided by `Query` and `Keywords`. Maximize coverage of all supported facts; avoid omissions.
 - For each assignment, use `VerifiableField` with `SourceReferenceEvidence` and concise reasons that explain selection and support.
 - If evidence is insufficient, set `value` to null or omit and provide brief low‑confidence reasons; never fabricate or infer beyond `Content`.
+- If evidence is insufficient, set `value` to null or omit and explicitly state the reason (e.g., no source support, ambiguity, conflicting information). Attach `SourceReferenceEvidence` that cites the relevant text demonstrating the issue; never fabricate or infer beyond `Content`.
 - Maintain chronological and contextual consistency with StageSkeleton; ensure non‑conflicting ordering and temporal coherence. All relations/flows must reference participants present in this Episode.
 - Participant continuity across episodes: when a participant already exists in earlier episodes, reference the same `participant_id` and explicitly indicate continuity by adding `attributes["same_as"]` = VerifiableField[str](value=`participant_id`) with evidence and reasons. Do not create duplicate participants.
-- Reuse existing participants across episodes: if a participant already appears earlier in this stage, reference the same `participant_id` (do not create duplicates). Make continuity explicit by adding a grounded `same_as` attribute (VerifiableField[str]) referencing that `participant_id` with evidence.
 
 Output:
 - ONE raw JSON `Episode`; no explanations or code fences.
@@ -109,11 +109,6 @@ Task:
 Inputs:
 - StageSkeleton (only stage name, episode identifiers, chronology), TargetEpisode (the given identifiers and any preset fields), Query, Keywords, Content
 
-Constraints:
-- `episode_id` and `index_in_stage` are immutable; `name` changes only with strong, explicit, unambiguous evidence from `Content`.
-- Use `Content` as the sole evidence for field values; use StageSkeleton only for identifiers and chronology.
-- Follow the Schema exactly; names and types must match.
-
 Instructions:
 - Complete every field comprehensively, explicitly, and in detail from `Content`, guided by `Query` and `Keywords`. Maximize coverage of all supported facts; avoid omissions.
 - For each assignment, use `VerifiableField` with `SourceReferenceEvidence` and concise reasons that explain selection and support.
@@ -121,17 +116,10 @@ Instructions:
 - Maintain chronological and contextual consistency with StageSkeleton; all relations/flows must reference participants present in this Episode.
 - Participant continuity across episodes: when a participant already exists in earlier episodes, reference the same `participant_id` and explicitly indicate continuity by adding `attributes["same_as"]` = VerifiableField[str](value=`participant_id`) with evidence and reasons. Do not create duplicate participants.
 
-Field Requirements (Episode):
+Field Requirements (Episode as defined in the Schema):
 - `episode_id`, `name`, `index_in_stage`: identifiers are given; do not modify. Only change `name` if `Content` strongly, explicitly, and unambiguously supports a correction.
-- `description`: VerifiableField[str] when supported; concise and grounded; attach evidence.
-- `details`: List[VerifiableField[str]]; include as many granular facts as supported; each item with evidence.
-- `start_time`, `end_time`: VerifiableField[str]; use UTC; attach evidence; if unclear, set null and explain with low‑confidence reasons.
-- `participants`: List[Participant]; include all relevant entities; populate `name`, `participant_type`, `base_role`, and any `attributes`/`alias_handles` strictly from Content with evidence.
-- `participant_relations`: List[ParticipantRelation]; set `relation_type` (VerifiableField) and optional `description`, `start_time`, `end_time`; attach evidence; ensure IDs reference `participants`.
-- `actions`: Dict[str, List[Action]]; for each participant, list actions with `timestamp` (VerifiableField) and `details` (VerifiableField list); attach evidence.
-- `transactions`: List[Transaction]; set `timestamp` (VerifiableField), `details` (VerifiableField list), `from_participant_id`, `to_participant_id`, and `instrument` if present; attach evidence.
-- `interactions`: List[Interaction]; set `timestamp` (VerifiableField), `details` (VerifiableField list), `sender_id`, `receiver_ids`; attach evidence.
-- For any field not populated, provide explicit low-confidence reasons via the field's `reasons` and include a minimal `SourceReferenceEvidence` explaining absence or ambiguity.
+- All other fields: follow the Schema definitions and annotations strictly. Fill each field comprehensively from `Content`, guided by `Query` and `Keywords`, using `VerifiableField` with `SourceReferenceEvidence` and concise reasons. Maximize coverage of supported facts.
+- All other fields: Never set to be null, empty list ([]) and dict, or omit unless explicitly stated in the Schema or `Content` provides strong, explicit, and unambiguous evidence to support absence. If the null or omit is necessary, always provide VerifiableField with null value, empty SourceReferenceEvidence and explicit reasons such as (e.g., "no source support", "ambiguity and conflict", "no timestamp mentioned in Content", "conflicting timestamps across sources", "only relative/implicit time"), etc.
 
 Output:
 - ONE raw JSON object for `Episode`; no explanations or code fences.

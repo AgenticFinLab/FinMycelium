@@ -221,12 +221,6 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         sys_msg = sys_msg.format(STRUCTURE_SPEC=_EPISODE_SPEC)
         # Escape curly braces
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
-        print(sys_msg)
-        print("-" * 30)
-        print(belong_state)
-        print("-" * 30)
-        print(target_episode)
-        print("-" * 30)
 
         # Execute inference with contextual variables
         out: InferOutput = self.agents_lm.run(
