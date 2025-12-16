@@ -123,7 +123,7 @@ class EventSkeletonBuilder(BaseBuilder):
         state["cost"].append({cur_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(cur_name)
         return {
-            "build_input": build_ipt.to_dict(),
+            "build_input": build_ipt,
             "agent_results": state["agent_results"],
             "agent_executed": state["agent_executed"],
             "cost": state["cost"],

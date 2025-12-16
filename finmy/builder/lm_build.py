@@ -142,7 +142,7 @@ class LMBuilder(BaseBuilder):
     Build the financial event cascade from the input content using the LM model."""
 
     def __init__(self, lm_name: str = "deepseek/deepseek-chat", config=None):
-        super().__init__(method_name="lm_builder", config={"lm_name": lm_name})
+        super().__init__(method_name="lm_builder", build_config={"lm_name": lm_name})
 
         generation_config = (
             {} if "generation_config" not in config else config["generation_config"]

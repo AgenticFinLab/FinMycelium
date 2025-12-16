@@ -11,8 +11,7 @@ Notes:
 - The builder's `load_samples` is monkeypatched to read `DataSample.content`
 
 Run:
-
-    python examples/uTEST/Builder/step_build.py -c configs/uTEST/builder/step_build.yml
+    python examples/uTEST/Builder/skeleton_build.py -c configs/uTEST/builder/skeleton_build.yml
 
 """
 
@@ -194,13 +193,13 @@ def main():
 
     # Save the final state to the json
     builder.save_traces(
-        build_input,
+        build_input.to_dict(),
         save_name="BuildInput",
         file_format="json",
     )
     builder.save_traces(
         final_state,
-        save_name="FinalState",
+        save_name="FinalSkeletonState",
         file_format="json",
     )
 
