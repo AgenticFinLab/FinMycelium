@@ -58,6 +58,7 @@ class AgentState(MessagesState):
 
     # Immutable pipeline input: user query and matched data samples
     build_input: BuildInput
+
     # Aggregated outputs: one entry per agent execution (keep agent_name in each entry)
     agent_results: List[Dict[str, Any]]
     # Logical execution order: list of agent names in the order they ran

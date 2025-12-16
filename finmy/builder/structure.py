@@ -78,17 +78,13 @@ class VerifiableField(Generic[T]):
     Fields:
     - value: assigned value strictly derived from source content (typed via Generic[T])
     - evidence: list of SourceReferenceEvidence with verbatim `source_content` supporting this value
-    - reasons: concise rationals explaining why/how the value is set
-    - confidence: optional reliability score for this assignment (0.0–1.0)
     - extras: extension metadata (e.g., unit, normalization, selection_method, match_score)
 
     Example:
     VerifiableField[float](
       value=10000.0,
       evidence=[SourceReferenceEvidence(source_content:"... $10,000 transfer ...", confidence=0.9)],
-      reasons=["exact numeric present", "Amount is directly quoted from the bank record"]
-      confidence=0.9,
-      extras={"unit": "USD", "normalized": True, "selection_method": "keyword", "match_score": 0.96},
+      extras={"unit": "USD", "normalized": True},
     )
     """
 
@@ -96,11 +92,6 @@ class VerifiableField(Generic[T]):
     value: T
     # Verbatim evidence supporting the value; must include exact source content
     evidence: List[SourceReferenceEvidence] = field(default_factory=list)
-    # Explanation describing why/how this value is set
-    reasons: List[str] = field(default_factory=list)
-    # Reliability score (0.0–1.0) for the assignment
-    confidence: Optional[float] = None
-
     # Additional information of this field
     extras: Dict[str, Any] = field(default_factory=dict)
 

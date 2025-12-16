@@ -204,7 +204,7 @@ def main():
 
     # Save the final state to the json
     builder.save_traces(
-        build_input,
+        build_input.to_dict(),
         save_name="BuildInput",
         file_format="json",
     )

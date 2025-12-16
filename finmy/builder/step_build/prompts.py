@@ -145,3 +145,12 @@ Output:
 === CONTENT END ===
 
 """.strip()
+
+
+StageSummarzierSys = """
+
+"""
+
+StageSummarzierSys = """
+
+"""
