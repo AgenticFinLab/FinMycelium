@@ -28,21 +28,15 @@ EventCascade
 We do not introduce the idea of the multi-agent system, we indeed have several agents working together to complete the task.
 """
 
-import os
-import json
 import time
 from pathlib import Path
-from collections import defaultdict
-from typing import Dict, Any, List, DefaultDict
+from typing import List
 
-from langgraph.graph import StateGraph, START, END, MessagesState
+from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
 
 from lmbase.inference.base import InferInput, InferOutput
-from lmbase.inference import api_call
-
 from finmy.builder.base import BaseBuilder
-from finmy.builder.step_build import prompts
 from finmy.builder.utils import (
     load_python_text,
     filter_dataclass_fields,
@@ -174,24 +168,32 @@ class EpisodeReconstructionBuilder(BaseBuilder):
     - File saved at `<output_dir>/episodes/{stage_id}_{episode_id}.json`.
     """
 
-    def extract_latest_episode(self, event_skeleton: dict):
-        """Extract the latest episode from the event skeleton."""
-        # We visit all item from the start to the end to find the episode which does not have the 'description' filed will be the latest unfilled episode
-        # Also obtain the state that the episode belongs to
-        latest_episode = None
-        belong_state = None
+    def extract_latest_episode(
+        self,
+        event_skeleton: dict,
+        num_episodes: int,
+    ):
+        """
+        Extract the latest episode from the event skeleton based on the num_episodes.
+
+        Args:
+            event_skeleton (dict): The event skeleton to extract the latest episode from.
+            num_episodes (int): The number of episodes that have been reconstructed.
+
+        Returns:
+            tuple: A tuple containing the belong_state and latest_episode.
+        """
+        idx = 0
         for stage in event_skeleton["stages"]:
             for episode in stage["episodes"]:
-                if "description" not in episode:
-                    belong_state = stage
-                    latest_episode = episode
-                    break
-            if latest_episode:
-                break
-        return belong_state, latest_episode
+                if idx == num_episodes + 1:
+                    return stage, episode
+                idx += 1
+        return None, None
 
     def execute_agent(self, state: AgentState) -> AgentState:
-        """Single node that reconstructs the TARGET Episode.
+        """
+        Single node that reconstructs the TARGET Episode.
 
         Steps:
         1) Locate `event_skeleton` from state or `BuildInput.extras`.
@@ -200,21 +202,25 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         4) Run LLM inference and parse response as strict Episode JSON.
         5) Persist result into `episode_responses` and save to disk.
         """
+
         t0 = time.time()
         build_ipt = state["build_input"]
         num_executed = len(state["agent_executed"])
-        execution_idx = num_executed + 1
 
-        agent_names = list(state["agent_system_msgs"])
-        cur_name = agent_names[execution_idx - 1]
+        cur_name = "EpisodeReconstructor"
 
         # Read skeleton from the skeleton reconstructor
         event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
 
-        belong_state, latest_episode = self.extract_latest_episode(event_skeleton)
+        # Get how many episodes have been reconstructed
+        num_episodes = state["agent_executed"].count(cur_name)
+
+        belong_state, latest_episode = self.extract_latest_episode(
+            event_skeleton, num_episodes
+        )
 
         target_episode = Episode(**latest_episode)
-
+        print(target_episode)
         # Organize the system and user prompts
         sys_msg = state["agent_system_msgs"][cur_name]
         user_msg = state["agent_user_msgs"][cur_name]
@@ -237,14 +243,15 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         result = out.response
 
         # Obtain the stage
-        savename = self.get_save_name(cur_name, len(state["agent_executed"]) + 1)
+        savename = self.get_save_name(cur_name, num_executed + 1)
+        savename = f"{savename}-Stage{belong_state["index_in_event"]}-Episode{target_episode.index_in_stage}"
         self.save_traces({cur_name: out.to_dict()}, savename, "json")
         self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
         state["agent_results"].append({cur_name: result})
         state["cost"].append({cur_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(cur_name)
         return {
-            "build_input": build_ipt.to_dict(),
+            "build_input": build_ipt,
             "agent_results": state["agent_results"],
             "agent_executed": state["agent_executed"],
             "cost": state["cost"],
@@ -253,9 +260,29 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         }
 
     def graph(self) -> CompiledStateGraph[AgentState]:
-        """Compile single-node graph: START → reconstruct_episode → END."""
+        """
+        Compile graph with conditional loop: START → reconstruct_episode → [continue/end].
+        """
         g = StateGraph(AgentState)
         g.add_node("reconstruct_episode", self.execute_agent)
         g.add_edge(START, "reconstruct_episode")
-        g.add_edge("reconstruct_episode", END)
+
+        def _route(state: AgentState) -> str:
+            skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            # Count the total number of episodes in the skeleton
+            total = sum([len(stage["episodes"]) for stage in skeleton["stages"]])
+            # Count the number of episode reconstruction agent executed
+            # minus 1 for the SkeletonReconstructor
+            num_processed = len(state["agent_executed"]) - 1
+
+            return "end" if num_processed >= total else "repeat"
+
+        g.add_conditional_edges(
+            "reconstruct_episode",
+            _route,
+            {
+                "repeat": "reconstruct_episode",
+                "end": END,
+            },
+        )
         return g.compile()
