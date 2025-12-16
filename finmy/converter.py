@@ -188,8 +188,4 @@ def convert_to_build_input(
                 method=meta_sample.method,
             )
         )
-    return BuildInput(
-        user_query=user_query,
-        samples=meta_samples,
-        extras=extras,
-    )
+    return BuildInput(user_query=user_query, samples=data_samples)
