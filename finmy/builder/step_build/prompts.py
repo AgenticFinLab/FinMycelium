@@ -8,7 +8,7 @@ You are a senior expert in financial‑event type identification and event skele
 Scope:
 - Focus only on `EventCascade`, `EventStage`, and `Episode`.
 - Determine event type, the number of stages, and the number of episodes per stage.
-- Use `VerifiableField` and `SourceReferenceEvidence` as defined in the Schema for applicable fields.
+- Use `VerifiableField` as defined in the Schema for applicable fields.
 
 Target structure (reconstruction focus):
 EventCascade
@@ -19,7 +19,7 @@ Required fields to output:
 - EventCascade: output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to null or omit.
 - EventStage: `stage_id`, `name`, `index_in_event`, `episodes: List[Episode]`.
 - Episode: `episode_id`, `name`, `index_in_stage`.
-- The usage of `VerifiableField` and `SourceReferenceEvidence` must strictly follow the Schema definition.
+- The usage of `VerifiableField` must strictly follow the Schema definition.
 
 How to reconstruct:
 1) Event type identification: set `EventCascade.event_type` if supported by Content; otherwise null or omit.
@@ -47,7 +47,7 @@ EventLayoutReconstructorUser = """
 Based on Query, Keywords, and Content, output a single raw JSON object for EventCascade that follows the Schema definition and Target structure exactly. Focus only on event skeleton reconstruction.
 
 Instructions:
-- Scope: EventCascade, EventStage, Episode only; use `VerifiableField` and `SourceReferenceEvidence` as defined in the Schema for applicable fields.
+- Scope: EventCascade, EventStage, Episode only; use `VerifiableField` as defined in the Schema for applicable fields.
 - Follow the types and structure exactly as defined in the Schema.
 - Event type: set `event_type` if supported by Content; otherwise null or omit.
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, and its episodes.
@@ -86,9 +86,9 @@ Constraints:
 
 Instructions:
 - Complete every field comprehensively, explicitly, and in detail from `Content`, guided by `Query` and `Keywords`. Maximize coverage of all supported facts; avoid omissions.
-- For each assignment, use `VerifiableField` with `SourceReferenceEvidence` and concise reasons that explain selection and support.
+- For each assignment, use `VerifiableField` and concise reasons that explain selection and support.
 - If evidence is insufficient, set `value` to null or omit and provide brief low‑confidence reasons; never fabricate or infer beyond `Content`.
-- If evidence is insufficient, set `value` to null or omit and explicitly state the reason (e.g., no source support, ambiguity, conflicting information). Attach `SourceReferenceEvidence` that cites the relevant text demonstrating the issue; never fabricate or infer beyond `Content`.
+- If evidence is insufficient, set `value` to null or omit and explicitly state the reason (e.g., no source support, ambiguity, conflicting information). Attach that cites the relevant text demonstrating the issue; never fabricate or infer beyond `Content`.
 - Maintain chronological and contextual consistency with StageSkeleton; ensure non‑conflicting ordering and temporal coherence. All relations/flows must reference participants present in this Episode.
 - Participant continuity across episodes: when a participant already exists in earlier episodes, reference the same `participant_id` and explicitly indicate continuity by adding `attributes["same_as"]` = VerifiableField[str](value=`participant_id`) with evidence and reasons. Do not create duplicate participants.
 
@@ -111,15 +111,15 @@ Inputs:
 
 Instructions:
 - Complete every field comprehensively, explicitly, and in detail from `Content`, guided by `Query` and `Keywords`. Maximize coverage of all supported facts; avoid omissions.
-- For each assignment, use `VerifiableField` with `SourceReferenceEvidence` and concise reasons that explain selection and support.
+- For each assignment, use `VerifiableField` and concise reasons that explain selection and support.
 - If evidence is insufficient, set `value` to null or omit and provide brief low‑confidence reasons; never fabricate or infer beyond `Content`.
 - Maintain chronological and contextual consistency with StageSkeleton; all relations/flows must reference participants present in this Episode.
 - Participant continuity across episodes: when a participant already exists in earlier episodes, reference the same `participant_id` and explicitly indicate continuity by adding `attributes["same_as"]` = VerifiableField[str](value=`participant_id`) with evidence and reasons. Do not create duplicate participants.
 
 Field Requirements (Episode as defined in the Schema):
 - `episode_id`, `name`, `index_in_stage`: identifiers are given; do not modify. Only change `name` if `Content` strongly, explicitly, and unambiguously supports a correction.
-- All other fields: follow the Schema definitions and annotations strictly. Fill each field comprehensively from `Content`, guided by `Query` and `Keywords`, using `VerifiableField` with `SourceReferenceEvidence` and concise reasons. Maximize coverage of supported facts.
-- All other fields: Never set to be null, empty list ([]) and dict, or omit unless explicitly stated in the Schema or `Content` provides strong, explicit, and unambiguous evidence to support absence. If the null or omit is necessary, always provide VerifiableField with null value, empty SourceReferenceEvidence and explicit reasons such as (e.g., "no source support", "ambiguity and conflict", "no timestamp mentioned in Content", "conflicting timestamps across sources", "only relative/implicit time"), etc.
+- All other fields: follow the Schema definitions and annotations strictly. Fill each field comprehensively from `Content`, guided by `Query` and `Keywords`, using `VerifiableField` and concise reasons. Maximize coverage of supported facts.
+- All other fields: Never set to be null, empty list ([]) and dict, or omit unless explicitly stated in the Schema or `Content` provides strong, explicit, and unambiguous evidence to support absence. If the null or omit is necessary, always provide VerifiableField with null value and explicit reasons such as (e.g., "no source support", "ambiguity and conflict", "no timestamp mentioned in Content", "conflicting timestamps across sources", "only relative/implicit time"), etc.
 
 Output:
 - ONE raw JSON object for `Episode`; no explanations or code fences.

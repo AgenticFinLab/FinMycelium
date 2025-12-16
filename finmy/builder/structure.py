@@ -10,7 +10,6 @@ Structure overview:
 - Episode: coherent sub-phase within a stage holding participants, relations, actions, transactions, interactions
 - EventStage: one phase of the event, holding episodes and stage-level metadata
 - EventCascade: top-level container, holding ordered stages and event-level metadata
-- SourceReferenceEvidence: exact source content support for records
 - VerifiableField: wrapper ensuring a field value is directly grounded in source content
 
 Relationship Among Event, Stage, Episode, and Participant:
@@ -39,31 +38,6 @@ from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List, TypeVar, Generic
 
 
-@dataclass
-class SourceReferenceEvidence:
-    """Evidence reference from the source content that supports anchoring an action/transaction/interaction.
-
-    Example:
-    {
-      "source_content": "Company promised 30% monthly returns",
-      "confidence": 0.8,
-      "reasons": [
-          "exact keyword match: '30% monthly returns'",
-          "named issuer present",
-          "direct claim stating numeric rate"
-        ],
-    }
-    """
-
-    # Exact original text snippet (no rewriting) that supports a specific setting/assignment; clearly include the precise source text that justifies it.
-    source_content: str = ""
-    # Encapsulated explanation for why this source_content was selected as evidence and how its support justifies the assigned value.
-    # reasons should indicate selection and support criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe) to present detailed rationals.
-    reasons: List[str] = field(default_factory=list)
-    # Confidence score in [0.0, 1.0] reflecting confidence of applying reasons for the source content selection as the evidence.
-    confidence: Optional[float] = None
-
-
 T = TypeVar("T")
 
 
@@ -72,18 +46,22 @@ class VerifiableField(Generic[T]):
     """Field wrapper that requires direct grounding in original source content.
 
     Purpose:
-    - Ensure the assigned `value` is strictly supported by exact text in `SourceReferenceEvidence.source_content`
+    - Ensure the assigned `value` is strictly supported by the source contents
     - Capture selection criteria and normalization context for auditability
 
     Fields:
     - value: assigned value strictly derived from source content (typed via Generic[T])
-    - evidence: list of SourceReferenceEvidence with verbatim `source_content` supporting this value
+    - evidence_source_contents: list of source contents supporting this value
+    - reasons: list of reasons for the source contents selection and the value assignment
+    - confidence: confidence score in [0.0, 1.0] reflecting confidence of applying reasons for the source content selection as the evidence.
     - extras: extension metadata (e.g., unit, normalization, selection_method, match_score)
 
     Example:
     VerifiableField[float](
       value=10000.0,
-      evidence=[SourceReferenceEvidence(source_content:"... $10,000 transfer ...", confidence=0.9)],
+      evidence_source_contents=["... $10,000 transfer ..."],
+      reasons=["exact keyword match"],
+      confidence=0.9,
       extras={"unit": "USD", "normalized": True},
     )
     """
@@ -91,7 +69,13 @@ class VerifiableField(Generic[T]):
     # Assigned value strictly derived from source content
     value: T
     # Verbatim evidence supporting the value; must include exact source content
-    evidence: List[SourceReferenceEvidence] = field(default_factory=list)
+    # Should be exact original text snippet (no rewriting) that supports the value above; clearly include the precise source text that justifies it.
+    evidence_source_contents: List[str] = field(default_factory=list)
+    # Encapsulated explanation for why evidence_source_contents are selected as evidence and how its support justifies the assigned value.
+    # reasons should indicate selection and support criteria (e.g., exact keyword match, direct quote/claim, numeric data, named entity, explicit timeframe, etc....) to present detailed rationals.
+    reasons: List[str] = field(default_factory=list)
+    # Confidence score in [0.0, 1.0] reflecting confidence of applying reasons for the source content selection as the evidence.
+    confidence: Optional[float] = None
     # Additional information of this field
     extras: Dict[str, Any] = field(default_factory=dict)
 
@@ -109,7 +93,7 @@ class ParticipantRelation:
       "description": "X and Y share a common parent company (public registry verified)",
       "relation_type": VerifiableField[str](
         value="affiliated_with",
-        evidence=[SourceReferenceEvidence(source_content="parent company: ...")],
+        evidence_source_content=["parent company: ..."],
         reasons=["shared ownership", "Registry shows common parent entity with explicit affiliation"],
         confidence=0.85
       ),

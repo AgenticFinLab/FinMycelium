@@ -7,7 +7,6 @@ This method is to reconstruction the financial event purely by prompting a singl
     samples ->
 """
 
-import re
 import json
 import os
 from pathlib import Path
@@ -16,7 +15,6 @@ from typing import Dict, Any
 
 from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
-
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.converter import read_text_data_from_block
@@ -34,8 +32,8 @@ You are a senior financial event analysis expert and structured extractor, excel
 Compliance and consistency:
 - Use ONLY fields and types from the schema block in the system prompt; exact names and types.
 - ISO 8601 timestamps; ISO currency codes.
-- Participant IDs MUST be "P_" + 32 lowercase hex.
-- Attach at least one SourceReferenceEvidence (with source_content) to critical records.
+- Participant IDs MUST be "P_" + integer.
+- Attach at least one source_content to critical records.
 - Cross-validate files:
   - Contents of stages in EventCascade.json matches all generated stage_id.json
   - Stage episodes of each stage_id.json match episodes/episode_id.json
@@ -44,10 +42,7 @@ Compliance and consistency:
   - Embedded `transactions` and `interactions` within stages/episodes MUST reference valid `participant_id` values and include required fields and evidence.
   - `sources_summary` in `EventCascade` MUST be consistent with the evidence attached across files.
 - Each JSON MUST strictly conform to the dataclass schema from the reference block.
-- Use ISO 8601 timestamps; currency must be ISO codes (e.g., "USD", "EUR", "BTC").
-- Participant IDs MUST be canonical: "P_" + 32 lowercase hex (uuid4.hex).
 - Interaction details should reflect medium/method/occurrence/frequency descriptors as supported by the source.
-- Attach at least one `SourceReferenceEvidence` (with `source_content`) to critical records for auditability.
 - If information is not present in `Content`, set fields to null or omit; do not fabricate.
 
 Hard compliance mandate:
@@ -58,7 +53,7 @@ Hard compliance mandate:
 - Validate internally that the final JSON would conform to the referenced dataclass schema before outputting.
 
 Schema categories (must be covered and sourced from `Content`):
-- Participant, ParticipantRelation, Action, Transaction, Interaction, Episode, EventStage, EventCascade, SourceReferenceEvidence, VerifiableField, FinancialInstrument
+- Participant, ParticipantRelation, Action, Transaction, Interaction, Episode, EventStage, EventCascade, VerifiableField, FinancialInstrument
 
 
 How to output (strict, single-file JSON):
@@ -98,7 +93,7 @@ Extraction and validation process:
 2) Identify participants, roles, relations, transactions, interactions, evidence, episodes, and stage evolution from `Content`.
 3) Construct timelines: sort stages by `stage_index`; sort actions/transactions/interactions by `timestamp`.
 4) Reasons/rationale only where supported by `Content`; do not guess.
-5) Evidence linking: attach `SourceReferenceEvidence` to critical objects/events (with `source_content`).
+5) Evidence linking: attach source_content as the evidence to critical objects/events.
 6) Normalization: ISO timestamps, ISO currency codes; `participant_id` must be "P_"+uuid4.hex; Interaction fields reflect the source.
 7) Consistency check: coherent fields, closed references, correct chronology, no contradictions.
 8) Final output: strict JSON; missing items null or omitted;

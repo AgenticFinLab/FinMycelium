@@ -54,7 +54,6 @@ _STRUCTURE_SPEC_FULL = load_python_text(
 _SKELETON_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
     {
-        "SourceReferenceEvidence": [],
         "VerifiableField": [],
         "EventCascade": [],
         "EventStage": ["stage_id", "name", "index_in_event", "episodes"],
@@ -71,7 +70,6 @@ _EPISODE_SPEC = filter_dataclass_fields(
         "FinancialInstrument": [],
         "Transaction": [],
         "Interaction": [],
-        "SourceReferenceEvidence": [],
         "VerifiableField": [],
         "Episode": [],
     },
