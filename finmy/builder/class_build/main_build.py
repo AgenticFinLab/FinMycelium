@@ -29,9 +29,9 @@ from finmy.builder.class_build.prompts import *
 USER_PROMPT = """
 Task: Using the schema and rules defined in the system prompt, reconstruct the specific financial event strictly from the input Content below. Base all details on Content and follow the requirement in the Description and Keywords; do not invent, alter, or extend beyond what it explicitly supports. Produce a clear, layered, professional JSON output.
 
-=== DESCRIPTION BEGIN ===
-{Description}
-=== DESCRIPTION END ===
+=== Query BEGIN ===
+{Query}
+=== Query END ===
 
 === KEYWORDS BEGIN ===
 {Keywords}
@@ -67,8 +67,7 @@ class ClassLMBuilder(BaseBuilder):
         )
 
         self.output_dir = config.get(
-            "output_dir", 
-            "./examples/utest/Collector/test_files/event_cascade_output"
+            "output_dir", "./examples/utest/Collector/test_files/event_cascade_output"
         )
 
         # Map event types to their specific prompts
@@ -156,27 +155,31 @@ class ClassLMBuilder(BaseBuilder):
 
         classification_output: InferOutput = self.lm_api.run(
             infer_input=InferInput(
-                system_msg=classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
+                system_msg=classify.classify_prompt()
+                .replace("{", "{{")
+                .replace("}", "}}"),
                 user_msg=self.user_prompt,
             ),
-            Description=build_input.user_query.query_text,
+            Query=build_input.user_query.query_text,
             Keywords=build_input.user_query.key_words,
             Content=samples_content,
         )
 
         event_classify_json = extract_json_response(classification_output.response)
         print("Classification json:\n", event_classify_json)
-        
+
         primary_type = event_classify_json["event_type"]["primary_type"]
-        
+
         if primary_type in self.class_prompts:
             # Second step: Apply class-specific prompt for detailed reconstruction
             detailed_output: InferOutput = self.lm_api.run(
                 infer_input=InferInput(
-                    system_msg=self.class_prompts[primary_type].replace("{", "{{").replace("}", "}}"),
+                    system_msg=self.class_prompts[primary_type]
+                    .replace("{", "{{")
+                    .replace("}", "}}"),
                     user_msg=self.user_prompt,
                 ),
-                Description=build_input.user_query.query_text,
+                Query=build_input.user_query.query_text,
                 Keywords=build_input.user_query.key_words,
                 Content=samples_content,
             )
@@ -185,7 +188,7 @@ class ClassLMBuilder(BaseBuilder):
             try:
                 print(detailed_output.response)
                 output_text = detailed_output.response.strip()
-                
+
                 # Clean JSON response
                 if output_text.startswith("```json"):
                     output_text = output_text[7:]
@@ -209,7 +212,7 @@ class ClassLMBuilder(BaseBuilder):
                 print(f"Raw response saved to: {raw_output_path}")
 
             return BuildOutput(event_cascades=[detailed_output.response])
-        
+
         else:
             print(f"Warning: Unsupported event type '{primary_type}'")
             return BuildOutput(event_cascades=[classification_output.response])

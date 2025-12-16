@@ -4,7 +4,7 @@ lm_name: &lm_name "deepseek/deepseek-chat"
 inference_config: &infer
   device: "cuda"
 generation_config: &generation_config
-  max_new_tokens: 256
+  max_new_tokens: 10000
   temperature: 0.2
   top_p: 0.95
 

@@ -190,11 +190,12 @@ def main():
     # Run build
     ske_graph = builder.graph()
     final_state = ske_graph.invoke(state)
-    build_input = final_state.pop()
+    build_input = final_state.pop("build_input")
+
     # Save the final state to the json
     builder.save_traces(
-        build_input.to_dict(),
-        save_name="BuildInputforFinalState",
+        build_input,
+        save_name="BuildInput",
         file_format="json",
     )
     builder.save_traces(

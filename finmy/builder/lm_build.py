@@ -29,7 +29,7 @@ from finmy.builder.utils import (
 
 
 SYSTEM_PROMPT = """
-You are a senior financial event analysis expert and structured extractor, excel at reconstructing specific financial events from large amounts of information. Your task is to, within the scope defined by `Description` and `Keywords`, strictly based on facts in `Content`, extract, summarize, refine, and reconstruct a specific financial event, and output strict JSON that truthfully represents the event. Do not invent or expand beyond the source, and do not alter any information that contradicts `Content`.
+You are a senior financial event analysis expert and structured extractor, excel at reconstructing specific financial events from large amounts of information. Your task is to, within the scope defined by `Query` and `Keywords`, strictly based on facts in `Content`, extract, summarize, refine, and reconstruct a specific financial event, and output strict JSON that truthfully represents the event. Do not invent or expand beyond the source, and do not alter any information that contradicts `Content`.
     
 Compliance and consistency:
 - Use ONLY fields and types from the schema block in the system prompt; exact names and types.
@@ -94,7 +94,7 @@ How to output (strict, single-file JSON):
       
 
 Extraction and validation process:
-1) Scope alignment using `Description` and `Keywords`; ignore unrelated content.
+1) Scope alignment using `Query` and `Keywords`; ignore unrelated content.
 2) Identify participants, roles, relations, transactions, interactions, evidence, episodes, and stage evolution from `Content`.
 3) Construct timelines: sort stages by `stage_index`; sort actions/transactions/interactions by `timestamp`.
 4) Reasons/rationale only where supported by `Content`; do not guess.
@@ -115,9 +115,9 @@ xxxxxx
 USER_PROMPT = """
 Task: Using the schema and rules defined in the system prompt, reconstruct the specific financial event strictly from the input Content below. Base all details on Content and follow the requirement in the Description and Keywords; do not invent, alter, or extend beyond what it explicitly supports. Produce a clear, layered, professional JSON output.
 
-=== DESCRIPTION BEGIN ===
-{Description}
-=== DESCRIPTION END ===
+=== Query BEGIN ===
+{Query}
+=== Query END ===
 
 === KEYWORDS BEGIN ===
 {Keywords}
@@ -243,7 +243,7 @@ class LMBuilder(BaseBuilder):
                 system_msg=self.system_prompt.replace("{", "{{").replace("}", "}}"),
                 user_msg=self.user_prompt,
             ),
-            Description=build_input.user_query.query_text,
+            Query=build_input.user_query.query_text,
             Keywords=build_input.user_query.key_words,
             Content=samples_content,
         )

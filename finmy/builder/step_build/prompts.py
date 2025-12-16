@@ -3,7 +3,7 @@ Prompts of the step-wise event builder.
 """
 
 EventLayoutReconstructorSys = """
-You are a senior expert in financial‑event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Description` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the schema exactly.
+You are a senior expert in financial‑event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Query` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the schema exactly.
 
 Scope:
 - Focus only on `EventCascade`, `EventStage`, and `Episode`.
@@ -56,9 +56,9 @@ Instructions:
 - IDs: use stable locally unique IDs (e.g., "S1", "E1").
 - Output: raw JSON only; do not include explanations or code fences.
 
-=== DESCRIPTION BEGIN ===
-{Description}
-=== DESCRIPTION END ===
+=== Query BEGIN ===
+{Query}
+=== Query END ===
 
 === KEYWORDS BEGIN ===
 {Keywords}
@@ -71,17 +71,18 @@ Instructions:
 
 
 EpisodeReconstructorSys = """
-You are a senior expert in financial‑event episode reconstruction. Reconstruct the TARGET episode strictly from source `Content`, aligned by `Description` and `Keywords`. Output ONE raw JSON `Episode` that matches the schema exactly.
+You are a senior expert in financial‑event episode reconstruction. Reconstruct the TARGET episode strictly from source `Content`, aligned by `Query` and `Keywords`. Output ONE raw JSON `Episode` that matches the schema exactly.
 
 Note:
-- The StageSkeleton already specifies the TARGET episode (index, name, id, description) and also contains the list of existing previous episodes. Directly set `episode_id` and `index_in_stage` from the StageSkeleton, and use `name` (and `description`) from the StageSkeleton.
+- The StageSkeleton already specifies the TARGET episode (index, name, id) and also contains the list of previous episodes. Directly copy `episode_id`, `name`, and `index_in_stage` from the StageSkeleton.
+- Generate the full target `Episode` defined in the Schema below completely based on the content `Content`.
 
 Scope:
-- Reconstruct exactly ONE `Episode` for the provided `EventStage`.
+- Reconstruct exactly ONE TARGET `Episode` for the provided `EventStage`.
 - Use `VerifiableField` and `SourceReferenceEvidence` strictly as defined by the Schema for applicable fields.
 
 Inputs:
-- StageSkeleton: target stage (`stage_id`, `name`, `index_in_event`) including `episodes`, with the TARGET episode stub containing `episode_id`, `index_in_stage`, `name`, and `description`.
+- StageSkeleton: target stage (`stage_id`, `name`, `index_in_event`) including `episodes`, with the TARGET episode stub containing `episode_id`, `index_in_stage`, and `name`.
 - Description, Keywords, Content: constrain scope and ground all assignments.
 
 Output shape:
@@ -91,7 +92,6 @@ Reconstruction rules:
 - Ground every `VerifiableField` with verbatim evidence from `Content`; if unsupported, set `value` to null or omit and provide brief reasons with low confidence.
 - Chronology: maintain non‑conflicting order with previous episodes in the StageSkeleton; ensure temporal coherence of timestamps.
 - Consistency: all relations/flows must reference participants present in this episode; avoid contradictions to the stage context.
-- IDs: `episode_id` stable/unique; participant IDs follow Schema’s canonical format; do not invent entities without evidence.
 
 Schema definition (must follow exactly):
 === BEGIN Schema ===
@@ -107,20 +107,18 @@ EpisodeReconstructorUser = """
 Based on Description, Keywords, Content, and StageSkeleton, output a single raw JSON object for the TARGET Episode of the specified stage, strictly following the Schema.
 
 Instructions:
-- Scope: reconstruct ONE TARGET Episode; use TARGET stub fields from StageSkeleton for `episode_id`, `name` (as `VerifiableField[str]`), `description`, and `index_in_stage`.
+- Scope: reconstruct ONE TARGET Episode with the fields defined by the Schema.
 - Use `VerifiableField` and `SourceReferenceEvidence` strictly as defined in the Schema; ground all assignments with `Content`.
 - Maintain continuity with previous episodes in StageSkeleton; ensure chronology and consistency.
 - Episode Output: raw JSON only; do not include explanations or code fences.
 
-TARGET episode skeleton:
-- episode_id: {EPISODE_ID}
-- name: {EPISODE_NAME}
-- index_in_stage: {INDEX_IN_STAGE}
-- description: {EPISODE_DESCRIPTION}
+=== StageSkeleton BEGIN ===
+{StageSkeleton}
+=== StageSkeleton END ===
 
-=== DESCRIPTION BEGIN ===
-{Description}
-=== DESCRIPTION END ===
+=== Query BEGIN ===
+{Query}
+=== Query END ===
 
 === KEYWORDS BEGIN ===
 {Keywords}
@@ -130,5 +128,9 @@ TARGET episode skeleton:
 {Content}
 === CONTENT END ===
 
+TARGET episode skeleton of the Stage shown in StageSkeleton:
+- episode_id: {EPISODE_ID}
+- name: {EPISODE_NAME}
+- index_in_stage: {INDEX_IN_STAGE}
 
 """.strip()

@@ -41,7 +41,7 @@ from langgraph.graph.state import CompiledStateGraph
 from lmbase.inference.base import InferInput, InferOutput
 from lmbase.inference import api_call
 
-from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
+from finmy.builder.base import BaseBuilder
 from finmy.builder.step_build import prompts
 from finmy.builder.utils import (
     load_python_text,
@@ -104,25 +104,24 @@ class EventSkeletonBuilder(BaseBuilder):
         agent_names = list(state["agent_system_msgs"])
         cur_name = agent_names[execution_idx - 1]
 
-        # Compose prompts (system prompt carries skeleton schema; user prompt carries IO fields)
-        # Inject skeleton-filtered schema text into the system prompt
-        sys_prompt = prompts.EventLayoutReconstructorSys.format(
-            STRUCTURE_SPEC=_SKELETON_SPEC,
-        )
-        # Escape curly braces to prevent downstream formatting altering schema content
-        system_msg = sys_prompt.replace("{", "{{").replace("}", "}}")
-        user_msg = prompts.EventLayoutReconstructorUser
+        # Organize the system and user prompts
+        system_msg = state["agent_system_msgs"][cur_name]
+        user_msg = state["agent_user_msgs"][cur_name]
+        system_msg = system_msg.format(STRUCTURE_SPEC=_SKELETON_SPEC)
+        # Escape curly braces
+        system_msg = system_msg.replace("{", "{{").replace("}", "}}")
         # Execute model call
         out: InferOutput = self.agents_lm.run(
             infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
-            Description=build_ipt.user_query.query_text,
+            Query=build_ipt.user_query.query_text,
             Keywords=build_ipt.user_query.key_words,
             Content="\n".join([sample.content for sample in build_ipt.samples]),
         )
-
+        result = out.response
         savename = self.get_save_name(cur_name, len(state["agent_executed"]) + 1)
         self.save_traces({cur_name: out.to_dict()}, savename, "json")
-        state["agent_results"].append({cur_name: out.response})
+        self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
+        state["agent_results"].append({cur_name: result})
         state["cost"].append({cur_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(cur_name)
         return {
@@ -169,30 +168,7 @@ class EpisodeReconstructionBuilder(BaseBuilder):
     - File saved at `<output_dir>/episodes/{stage_id}_{episode_id}.json`.
     """
 
-    def __init__(
-        self,
-        lm_name: str = "deepseek/deepseek-chat",
-        config: Dict[str, Any] = None,
-    ):
-        super().__init__(
-            method_name="episode_reconstruction",
-            config={"lm_name": lm_name, **config},
-        )
-        self.episode_config = config["episode_reconstructor"]
-
-        gen_conf = (
-            self.episode_config["generation_config"]
-            if "generation_config" in self.episode_config
-            else {}
-        )
-        self.episode_api = api_call.LangChainAPIInference(
-            lm_name=lm_name,
-            generation_config=gen_conf,
-        )
-        self.output_dir = config["output_dir"]
-        os.makedirs(self.output_dir, exist_ok=True)
-
-    def reconstruct_episode(self, state: AgentState) -> AgentState:
+    def execute_agent(self, state: AgentState) -> AgentState:
         """Single node that reconstructs the TARGET Episode.
 
         Steps:
@@ -202,35 +178,53 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         4) Run LLM inference and parse response as strict Episode JSON.
         5) Persist result into `episode_responses` and save to disk.
         """
+        t0 = time.time()
         build_ipt = state["build_input"]
-        # Read skeleton from previous step
-        event_skeleton = state["SkeletonAgent"]
+        num_executed = len(state["agent_executed"])
+        execution_idx = num_executed + 1
 
-        # Inject full Schema into system prompt and escape braces to avoid `.format` conflicts
-        sys_prompt = prompts.EpisodeReconstructorSys.format(
-            STRUCTURE_SPEC=_EPISODE_SPEC
-        )
-        system_msg = sys_prompt.replace("{", "{{").replace("}", "}}")
-        user_msg = prompts.EpisodeReconstructorUser
+        agent_names = list(state["agent_system_msgs"])
+        cur_name = agent_names[execution_idx - 1]
+
+        # Read skeleton from the skeleton reconstructor
+        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+
+        # Organize the system and user prompts
+        sys_msg = state["agent_system_msgs"][cur_name]
+        user_msg = state["agent_user_msgs"][cur_name]
+        sys_msg = sys_msg.format(STRUCTURE_SPEC=_EPISODE_SPEC)
+        # Escape curly braces
+        sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
         # Execute inference with contextual variables
-        output: InferOutput = self.episode_api.run(
+        out: InferOutput = self.agents_lm.run(
             infer_input=InferInput(
-                system_msg=system_msg,
+                system_msg=sys_msg,
                 user_msg=user_msg,
             ),
-            Description=build_ipt.user_query.query_text,
+            Query=build_ipt.user_query.query_text,
             Keywords=build_ipt.user_query.key_words,
             Content="\n".join([sample.content for sample in build_ipt.samples]),
         )
-        # Parse strict JSON response and persist
-        episode_obj = extract_json_response(output.response)
-
-        return state
+        result = out.response
+        savename = self.get_save_name(cur_name, len(state["agent_executed"]) + 1)
+        self.save_traces({cur_name: out.to_dict()}, savename, "json")
+        self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
+        state["agent_results"].append({cur_name: result})
+        state["cost"].append({cur_name: {"latency": time.time() - t0}})
+        state["agent_executed"].append(cur_name)
+        return {
+            "build_input": build_ipt.to_dict(),
+            "agent_results": state["agent_results"],
+            "agent_executed": state["agent_executed"],
+            "cost": state["cost"],
+            "agent_system_msgs": state["agent_system_msgs"],
+            "agent_user_msgs": state["agent_user_msgs"],
+        }
 
     def graph(self) -> CompiledStateGraph[AgentState]:
         """Compile single-node graph: START → reconstruct_episode → END."""
         g = StateGraph(AgentState)
-        g.add_node("reconstruct_episode", self.reconstruct_episode)
+        g.add_node("reconstruct_episode", self.execute_agent)
         g.add_edge(START, "reconstruct_episode")
         g.add_edge("reconstruct_episode", END)
         return g.compile()
