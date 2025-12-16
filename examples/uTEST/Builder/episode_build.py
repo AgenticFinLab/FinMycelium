@@ -12,7 +12,7 @@ Notes:
 
 Run:
 
-    python examples/uTEST/Builder/step_build.py -c configs/uTEST/builder/step_build.yml
+    python examples/uTEST/Builder/episode_build.py -c configs/uTEST/builder/episode_build.yml
 
 """
 
@@ -180,12 +180,19 @@ def main():
             agent_system_msgs[name] = EpisodeReconstructorSys
             agent_user_msgs[name] = EpisodeReconstructorUser
 
+    # Load the existing skeleton
+    import json
+
+    folder_path = "EXPERIMENT/uTEST/StepBuilder/SkeletonReconstructor-1-Result.json"
+    with open(folder_path, "r", encoding="utf-8") as f:
+        skeleton = json.load(f)
+
     # Build the state
     state = {
         "build_input": build_input,
-        "agent_results": [],
-        "agent_executed": [],
-        "cost": [],
+        "agent_results": [{"SkeletonReconstructor": skeleton}],
+        "agent_executed": ["SkeletonReconstructor"],
+        "cost": [1],
         "agent_system_msgs": agent_system_msgs,
         "agent_user_msgs": agent_user_msgs,
     }

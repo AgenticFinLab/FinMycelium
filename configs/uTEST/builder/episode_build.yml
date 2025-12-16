@@ -16,3 +16,9 @@ agents:
     lm_name: *lm_name
     inference_config: *infer
     generation_config: *generation_config
+
+  EpisodeReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config

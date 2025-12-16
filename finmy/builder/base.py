@@ -38,17 +38,40 @@ class BuildOutput(BaseContainer):
 
 
 class AgentState(MessagesState):
-    """State schema for the LangGraph run"""
+    """State container used during a multi-agent LangGraph run.
 
+    Purpose:
+    - Carry immutable pipeline inputs (user query and matched samples).
+    - Hold per-agent prompts and collect structured outputs for each agent execution.
+    - Track execution order and basic cost metrics for auditability.
+
+    Lifecycle:
+    - Initialize once at graph start with `build_input` and agent prompt maps.
+    - Each agent node reads its prompts from `agent_system_msgs`/`agent_user_msgs`,
+      produces an output, appends it to `agent_results`, and records its name in `agent_executed`.
+    - Costs (e.g., tokens, latency) may be appended to `cost` after each execution.
+
+    Notes:
+    - Fields are designed to be simple serializable structures (dicts/lists) to ease persistence.
+    - `messages` is reserved for LangGraph internal message passing and may be unused by some nodes.
+    """
+
+    # Immutable pipeline input: user query and matched data samples
     build_input: BuildInput
+    # Aggregated outputs: one entry per agent execution (keep agent_name in each entry)
     agent_results: List[Dict[str, Any]]
+    # Logical execution order: list of agent names in the order they ran
     agent_executed: List[str]
 
+    # Optional execution cost items: e.g., {"agent": "...", "prompt_tokens": 0, "completion_tokens": 0, "latency_ms": 0}
     cost: List[Dict[str, Any]]
 
+    # Per-agent system prompts (agent_name -> system_prompt)
     agent_system_msgs: Dict[str, str]
+    # Per-agent user prompts (agent_name -> user_prompt)
     agent_user_msgs: Dict[str, str]
 
+    # LangGraph runtime messages envelope (optional; may be unused depending on node implementations)
     messages: List[Any] = None
 
 

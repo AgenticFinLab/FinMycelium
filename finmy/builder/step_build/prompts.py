@@ -44,7 +44,7 @@ Output requirements:
 
 
 EventLayoutReconstructorUser = """
-Based on Description, Keywords, and Content, output a single raw JSON object for EventCascade that follows the Schema definition and Target structure exactly. Focus only on event skeleton reconstruction.
+Based on Query, Keywords, and Content, output a single raw JSON object for EventCascade that follows the Schema definition and Target structure exactly. Focus only on event skeleton reconstruction.
 
 Instructions:
 - Scope: EventCascade, EventStage, Episode only; use `VerifiableField` and `SourceReferenceEvidence` as defined in the Schema for applicable fields.
@@ -71,50 +71,78 @@ Instructions:
 
 
 EpisodeReconstructorSys = """
-You are a senior expert in financial‑event episode reconstruction. Reconstruct the TARGET episode strictly from source `Content`, aligned by `Query` and `Keywords`. Output ONE raw JSON `Episode` that matches the schema exactly.
-
-Note:
-- The StageSkeleton already specifies the TARGET episode (index, name, id) and also contains the list of previous episodes. Directly copy `episode_id`, `name`, and `index_in_stage` from the StageSkeleton.
-- Generate the full target `Episode` defined in the Schema below completely based on the content `Content`.
-
-Scope:
-- Reconstruct exactly ONE TARGET `Episode` for the provided `EventStage`.
-- Use `VerifiableField` and `SourceReferenceEvidence` strictly as defined by the Schema for applicable fields.
+You are a senior expert in financial‑event episode reconstruction. Reconstruct the TARGET Episode strictly from `Content`, aligned by `Query` and `Keywords`. Output ONE raw JSON `Episode` that matches the Schema exactly.
 
 Inputs:
-- StageSkeleton: target stage (`stage_id`, `name`, `index_in_event`) including `episodes`, with the TARGET episode stub containing `episode_id`, `index_in_stage`, and `name`.
-- Description, Keywords, Content: constrain scope and ground all assignments.
+- StageSkeleton: stage name, episode identifiers, and chronology only
+- TargetEpisode: given identifiers (`episode_id`, `name`, `index_in_stage`) and any preset fields to be completed
+- Query, Keywords, Content
 
-Output shape:
-Episode (single object, raw JSON only) by following the Schema definition exactly.
+Constraints:
+- The TARGET Episode is identified by `episode_id`, `name`, `index_in_stage`.
+- Treat `episode_id` and `index_in_stage` as immutable; change `name` only with strong, explicit, and unambiguous evidence from `Content`.
+- Use `Content` as the sole evidentiary source for field values; use StageSkeleton only for identifiers and chronology.
+- Follow the Schema exactly; names and types must match.
 
-Reconstruction rules:
-- Ground every `VerifiableField` with verbatim evidence from `Content`; if unsupported, set `value` to null or omit and provide brief reasons with low confidence.
-- Chronology: maintain non‑conflicting order with previous episodes in the StageSkeleton; ensure temporal coherence of timestamps.
-- Consistency: all relations/flows must reference participants present in this episode; avoid contradictions to the stage context.
+Instructions:
+- Complete every field comprehensively, explicitly, and in detail from `Content`, guided by `Query` and `Keywords`. Maximize coverage of all supported facts; avoid omissions.
+- For each assignment, use `VerifiableField` with `SourceReferenceEvidence` and concise reasons that explain selection and support.
+- If evidence is insufficient, set `value` to null or omit and provide brief low‑confidence reasons; never fabricate or infer beyond `Content`.
+- Maintain chronological and contextual consistency with StageSkeleton; ensure non‑conflicting ordering and temporal coherence. All relations/flows must reference participants present in this Episode.
+- Participant continuity across episodes: when a participant already exists in earlier episodes, reference the same `participant_id` and explicitly indicate continuity by adding `attributes["same_as"]` = VerifiableField[str](value=`participant_id`) with evidence and reasons. Do not create duplicate participants.
+- Reuse existing participants across episodes: if a participant already appears earlier in this stage, reference the same `participant_id` (do not create duplicates). Make continuity explicit by adding a grounded `same_as` attribute (VerifiableField[str]) referencing that `participant_id` with evidence.
 
-Schema definition (must follow exactly):
+Output:
+- ONE raw JSON `Episode`; no explanations or code fences.
+
+Schema:
 === BEGIN Schema ===
 {STRUCTURE_SPEC}
 === END Schema ===
-
-Output requirements:
-- Output ONE raw JSON `Episode` object only; no explanations, no code fences.
 """
 
 
 EpisodeReconstructorUser = """
-Based on Description, Keywords, Content, and StageSkeleton, output a single raw JSON object for the TARGET Episode of the specified stage, strictly following the Schema.
+Task:
+- Produce ONE raw JSON `Episode` for the TARGET episode strictly following the Schema. The TARGET episode is identified by `episode_id`, `name`, `index_in_stage`.
+
+Inputs:
+- StageSkeleton (only stage name, episode identifiers, chronology), TargetEpisode (the given identifiers and any preset fields), Query, Keywords, Content
+
+Constraints:
+- `episode_id` and `index_in_stage` are immutable; `name` changes only with strong, explicit, unambiguous evidence from `Content`.
+- Use `Content` as the sole evidence for field values; use StageSkeleton only for identifiers and chronology.
+- Follow the Schema exactly; names and types must match.
 
 Instructions:
-- Scope: reconstruct ONE TARGET Episode with the fields defined by the Schema.
-- Use `VerifiableField` and `SourceReferenceEvidence` strictly as defined in the Schema; ground all assignments with `Content`.
-- Maintain continuity with previous episodes in StageSkeleton; ensure chronology and consistency.
-- Episode Output: raw JSON only; do not include explanations or code fences.
+- Complete every field comprehensively, explicitly, and in detail from `Content`, guided by `Query` and `Keywords`. Maximize coverage of all supported facts; avoid omissions.
+- For each assignment, use `VerifiableField` with `SourceReferenceEvidence` and concise reasons that explain selection and support.
+- If evidence is insufficient, set `value` to null or omit and provide brief low‑confidence reasons; never fabricate or infer beyond `Content`.
+- Maintain chronological and contextual consistency with StageSkeleton; all relations/flows must reference participants present in this Episode.
+- Participant continuity across episodes: when a participant already exists in earlier episodes, reference the same `participant_id` and explicitly indicate continuity by adding `attributes["same_as"]` = VerifiableField[str](value=`participant_id`) with evidence and reasons. Do not create duplicate participants.
 
-=== StageSkeleton BEGIN ===
+Field Requirements (Episode):
+- `episode_id`, `name`, `index_in_stage`: identifiers are given; do not modify. Only change `name` if `Content` strongly, explicitly, and unambiguously supports a correction.
+- `description`: VerifiableField[str] when supported; concise and grounded; attach evidence.
+- `details`: List[VerifiableField[str]]; include as many granular facts as supported; each item with evidence.
+- `start_time`, `end_time`: VerifiableField[str]; use UTC; attach evidence; if unclear, set null and explain with low‑confidence reasons.
+- `participants`: List[Participant]; include all relevant entities; populate `name`, `participant_type`, `base_role`, and any `attributes`/`alias_handles` strictly from Content with evidence.
+- `participant_relations`: List[ParticipantRelation]; set `relation_type` (VerifiableField) and optional `description`, `start_time`, `end_time`; attach evidence; ensure IDs reference `participants`.
+- `actions`: Dict[str, List[Action]]; for each participant, list actions with `timestamp` (VerifiableField) and `details` (VerifiableField list); attach evidence.
+- `transactions`: List[Transaction]; set `timestamp` (VerifiableField), `details` (VerifiableField list), `from_participant_id`, `to_participant_id`, and `instrument` if present; attach evidence.
+- `interactions`: List[Interaction]; set `timestamp` (VerifiableField), `details` (VerifiableField list), `sender_id`, `receiver_ids`; attach evidence.
+- For any field not populated, provide explicit low-confidence reasons via the field's `reasons` and include a minimal `SourceReferenceEvidence` explaining absence or ambiguity.
+
+Output:
+- ONE raw JSON object for `Episode`; no explanations or code fences.
+
+=== STAGE SKELETON BEGIN ===
 {StageSkeleton}
-=== StageSkeleton END ===
+=== STAGE SKELETON END ===
+
+=== TARGET EPISODE BEGIN ===
+{TargetEpisode}
+=== TARGET EPISODE END ===
 
 === Query BEGIN ===
 {Query}
@@ -127,10 +155,5 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
-
-TARGET episode skeleton of the Stage shown in StageSkeleton:
-- episode_id: {EPISODE_ID}
-- name: {EPISODE_NAME}
-- index_in_stage: {INDEX_IN_STAGE}
 
 """.strip()

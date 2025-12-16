@@ -49,7 +49,7 @@ from finmy.builder.utils import (
     extract_json_response,
 )
 from finmy.builder.base import AgentState
-
+from finmy.builder.structure import Episode
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -71,6 +71,12 @@ _SKELETON_SPEC = filter_dataclass_fields(
 _EPISODE_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
     {
+        "Participant": [],
+        "ParticipantRelation": [],
+        "Action": [],
+        "FinancialInstrument": [],
+        "Transaction": [],
+        "Interaction": [],
         "SourceReferenceEvidence": [],
         "VerifiableField": [],
         "Episode": [],
@@ -168,6 +174,22 @@ class EpisodeReconstructionBuilder(BaseBuilder):
     - File saved at `<output_dir>/episodes/{stage_id}_{episode_id}.json`.
     """
 
+    def extract_latest_episode(self, event_skeleton: dict):
+        """Extract the latest episode from the event skeleton."""
+        # We visit all item from the start to the end to find the episode which does not have the 'description' filed will be the latest unfilled episode
+        # Also obtain the state that the episode belongs to
+        latest_episode = None
+        belong_state = None
+        for stage in event_skeleton["stages"]:
+            for episode in stage["episodes"]:
+                if "description" not in episode:
+                    belong_state = stage
+                    latest_episode = episode
+                    break
+            if latest_episode:
+                break
+        return belong_state, latest_episode
+
     def execute_agent(self, state: AgentState) -> AgentState:
         """Single node that reconstructs the TARGET Episode.
 
@@ -189,12 +211,23 @@ class EpisodeReconstructionBuilder(BaseBuilder):
         # Read skeleton from the skeleton reconstructor
         event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
 
+        belong_state, latest_episode = self.extract_latest_episode(event_skeleton)
+
+        target_episode = Episode(**latest_episode)
+
         # Organize the system and user prompts
         sys_msg = state["agent_system_msgs"][cur_name]
         user_msg = state["agent_user_msgs"][cur_name]
         sys_msg = sys_msg.format(STRUCTURE_SPEC=_EPISODE_SPEC)
         # Escape curly braces
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
+        print(sys_msg)
+        print("-" * 30)
+        print(belong_state)
+        print("-" * 30)
+        print(target_episode)
+        print("-" * 30)
+
         # Execute inference with contextual variables
         out: InferOutput = self.agents_lm.run(
             infer_input=InferInput(
@@ -204,8 +237,12 @@ class EpisodeReconstructionBuilder(BaseBuilder):
             Query=build_ipt.user_query.query_text,
             Keywords=build_ipt.user_query.key_words,
             Content="\n".join([sample.content for sample in build_ipt.samples]),
+            StageSkeleton=belong_state,
+            TargetEpisode=target_episode,
         )
         result = out.response
+
+        # Obtain the stage
         savename = self.get_save_name(cur_name, len(state["agent_executed"]) + 1)
         self.save_traces({cur_name: out.to_dict()}, savename, "json")
         self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
