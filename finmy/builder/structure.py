@@ -32,7 +32,7 @@ EventCascade
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Any, Dict, List, Generic
+from typing import Optional, Dict, List
 
 
 @dataclass
@@ -44,19 +44,17 @@ class VerifiableField:
     - Capture selection criteria and normalization context for auditability
 
     Fields:
-    - value: assigned value strictly derived from source content (typed via Generic[T])
+    - value: assigned value strictly derived from source content (string)
     - evidence_source_contents: list of exact source snippets supporting this value
     - reasons: list explaining why sources were selected and how they justify the value
     - confidence: confidence score in [0.0, 1.0] reflecting certainty of assignment
-    - extras: extension metadata (e.g., unit, normalization, selection_method, match_score)
 
     Example:
-    VerifiableField[float](
-      value=10000.0,
+    VerifiableField(
+      value="$10000.0",
       evidence_source_contents=["... $10,000 transfer ..."],
       reasons=["exact keyword match: '$10,000 transfer'", "named entities present"],
-      confidence=0.9,
-      extras={"unit": "USD", "normalized": True},
+      confidence=0.9
     )
     """
 
@@ -86,7 +84,7 @@ class ParticipantRelation:
       "from_participant_id": "P_X",
       "to_participant_id": "P_Y",
       "description": "X and Y share a common parent company (public registry verified)",
-      "relation_type": VerifiableField[str](
+      "relation_type": VerifiableField(
         value="affiliated_with",
         evidence_source_contents=["parent company: ..."],
         reasons=["shared ownership", "Registry shows common parent entity with explicit affiliation"],
@@ -103,19 +101,19 @@ class ParticipantRelation:
     # Target participant (edge destination) — references Participant.participant_id.
     to_participant_id: str
     # Descriptions of the relation, each value grounded in source.
-    descriptions: Optional[List[VerifiableField[str]]] = None
+    descriptions: Optional[List[VerifiableField]] = None
     # Relation label (e.g., 'member_of', 'client_of', 'counterparty'); grounded in source content.
-    relation_type: VerifiableField[str] = field(
+    relation_type: VerifiableField = field(
         default_factory=lambda: VerifiableField(value="unspecified")
     )
     # Temporal bounds when the relation holds as mentioned in the source content.
-    start_time: Optional[VerifiableField[str]] = field(
+    start_time: Optional[VerifiableField] = field(
         default_factory=lambda: VerifiableField(
             value="unknown",
             reasons=["insufficient information in source content"],
         )
     )
-    end_time: Optional[VerifiableField[str]] = field(
+    end_time: Optional[VerifiableField] = field(
         default_factory=lambda: VerifiableField(
             value="unknown",
             reasons=["insufficient information in source content"],
@@ -129,24 +127,24 @@ class Transaction:
 
     Example:
     {
-      "timestamp": VerifiableField[str](value="2025-01-01T12:00:00Z"),
-      "details": [VerifiableField[str](value="USD 10,000 wire"), VerifiableField[str](value="settlement: SWIFT")],
+      "timestamp": VerifiableField(value="2025-01-01T12:00:00Z"),
+      "details": [VerifiableField(value="USD 10,000 wire"), VerifiableField(value="settlement: SWIFT")],
       "from_participant_id": "P_A",
       "to_participant_id": "P_B",
-      "instruments": [VerifiableField[str](value="bond", evidence_source_contents=["... bond payment ..."])]
+      "instruments": [VerifiableField(value="bond", evidence_source_contents=["... bond payment ..."])]
     }
     """
 
     # Transaction occurrence time (wall-clock); provide the most credible timestamp; use UTC.
-    timestamp: Optional[VerifiableField[str]] = None
+    timestamp: Optional[VerifiableField] = None
     # Transaction details presented by the descriptions between two participants
-    details: List[VerifiableField[str]] = field(default_factory=list)
+    details: List[VerifiableField] = field(default_factory=list)
     # Payer participant identifier; references `Participant.participant_id`; do not use names or aliases.
     from_participant_id: str = ""
     # Payee participant identifier; references `Participant.participant_id`; if unknown, leave empty and explain in `extras`.
     to_participant_id: str = ""
     # Related instruments/tools; optional; describes the vehicle of transfer (e.g., bond payment, token transfer).
-    instruments: Optional[List[VerifiableField[str]]] = None
+    instruments: Optional[List[VerifiableField]] = None
 
 
 @dataclass
@@ -155,15 +153,15 @@ class Action:
 
     Example:
     {
-      "timestamp": VerifiableField[str](value="2025-01-02T09:00:00Z"),
-      "details": [VerifiableField[str](value="broadcast_message"), VerifiableField[str](value="Guaranteed 30% monthly returns"), VerifiableField[str](value="channel: platform_feed")]
+      "timestamp": VerifiableField(value="2025-01-02T09:00:00Z"),
+      "details": [VerifiableField(value="broadcast_message"), VerifiableField(value="Guaranteed 30% monthly returns"), VerifiableField(value="channel: platform_feed")]
     }
     """
 
     # Chronological context.
-    timestamp: Optional[VerifiableField[str]] = None
+    timestamp: Optional[VerifiableField] = None
     # Details of one participant's action (each item grounded in source).
-    details: List[VerifiableField[str]] = field(default_factory=list)
+    details: List[VerifiableField] = field(default_factory=list)
 
 
 # ============================================================================
@@ -176,25 +174,23 @@ class Participant:
     Example:
     {
       "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
-      "name": VerifiableField[str](value="Credit Suisse"),
+      "name": VerifiableField(value="Credit Suisse"),
       "participant_type": "organization",
-      "base_role": VerifiableField[str](value="issuer"),
+      "base_role": VerifiableField(value="issuer"),
       "attributes": {
-        "location": VerifiableField[str](value="Zurich"),
-        "industry": VerifiableField[str](value="banking"),
-        "tags": VerifiableField[List[str]](value=["tier1"])
+        "location": VerifiableField(value="Zurich"),
+        "industry": VerifiableField(value="banking"),
+        "tags": VerifiableField(value="tier1")
       },
-      "actions": {
-        "broadcast_message": [
-          Action(
-            timestamp=VerifiableField[str](value="2025-01-02T09:00:00Z"),
-            details=[
-              VerifiableField[str](value="Guaranteed 30% monthly returns"),
-              VerifiableField[str](value="channel: platform_feed")
-            ]
-          )
-        ]
-      }
+      "actions": [
+        Action(
+          timestamp=VerifiableField(value="2025-01-02T09:00:00Z"),
+          details=[
+            VerifiableField(value="Guaranteed 30% monthly returns"),
+            VerifiableField(value="channel: platform_feed")
+          ]
+        )
+      ]
     }
     """
 
@@ -210,7 +206,7 @@ class Participant:
     participant_id: str
 
     # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
-    name: VerifiableField[str] = field(
+    name: VerifiableField = field(
         default_factory=lambda: VerifiableField(value="unspecified")
     )
 
@@ -222,18 +218,18 @@ class Participant:
 
     # Primary functional role in this event.
     # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
-    base_role: VerifiableField[str] = field(
+    base_role: VerifiableField = field(
         default_factory=lambda: VerifiableField(value="unknown")
     )
 
     # Static or semi-static descriptive properties grounded in source content.
     # Examples:
-    #   - Individuals: {"age_group": VerifiableField[str](value="30-40"), "location": VerifiableField[str](value="Shanghai")}
-    #   - Organizations: {"industry": VerifiableField[str](value="fintech"), "employee_count": VerifiableField[int](value=50)}
-    attributes: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
+    #   - Individuals: {"age_group": VerifiableField(value="30-40"), "location": VerifiableField(value="Shanghai")}
+    #   - Organizations: {"industry": VerifiableField(value="fintech"), "employee_count": VerifiableField(value="50")}
+    attributes: Dict[str, VerifiableField] = field(default_factory=dict)
 
-    # Actions executed by this participant (grouped by action type).
-    actions: Dict[str, List[Action]] = field(default_factory=dict)
+    # Actions executed by this participant.
+    actions: List[Action] = field(default_factory=list)
 
 
 # ============================================================================
@@ -250,12 +246,12 @@ class Episode:
     Example:
     {
       "episode_id": "E1",
-      "name": VerifiableField[str](value="Private Pitch"),
+      "name": VerifiableField(value="Private Pitch"),
       "index_in_stage": 0,
-      "description": VerifiableField[str](value="Targeted promises to select investors"),
-      "start_time": VerifiableField[str](value="2025-01-03T10:00:00Z"),
-      "end_time": VerifiableField[str](value="2025-01-03T12:00:00Z"),
-      "details": [VerifiableField[str](value="Key investors received targeted promises")],
+      "description": VerifiableField(value="Targeted promises to select investors"),
+      "start_time": VerifiableField(value="2025-01-03T10:00:00Z"),
+      "end_time": VerifiableField(value="2025-01-03T12:00:00Z"),
+      "details": [VerifiableField(value="Key investors received targeted promises")],
       "participants": [Participant(...)],
       "participant_relations": [ParticipantRelation(...)],
       "transactions": [Transaction(...)]
@@ -265,21 +261,21 @@ class Episode:
     # Locally unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
     episode_id: str
     # Name; human-readable semantic label; grounded via verifiable source content.
-    name: VerifiableField[str]
+    name: VerifiableField
     # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     index_in_stage: int
     # Short description that supplements the episode name; less granular than `details`.
-    description: Optional[VerifiableField[str]] = None
+    description: Optional[VerifiableField] = None
 
     # Detailed and concise information from source content summarizing the episode’s essence.
     # Provide multiple items when available; leave None if not explicitly present in sources.
-    details: List[VerifiableField[str]] = None
+    details: List[VerifiableField] = None
 
     # Start time; earliest evidence or activity; unknown if uncertain.
-    start_time: Optional[VerifiableField[str]] = None
+    start_time: Optional[VerifiableField] = None
     # End time; latest evidence or activity; unknown if ongoing or boundaries are unclear.
     # Set to "unknown" if end time is not available in the source content.
-    end_time: Optional[VerifiableField[str]] = None
+    end_time: Optional[VerifiableField] = None
 
     # List of entities participating in this episode; directly relevant `Participant` records.
     participants: List[Participant] = field(default_factory=list)
@@ -298,12 +294,12 @@ class EventStage:
     Example:
     {
       "stage_id": "S1",
-      "name": VerifiableField[str](value="Amplification"),
+      "name": VerifiableField(value="Amplification"),
       "index_in_event": 2,
-      "description": VerifiableField[str](value="Promotions spread rapidly across channels"),
-      "details": [VerifiableField[str](value="Rapid spread of promotional messages")],
-      "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
-      "end_time": VerifiableField[str](value="unknown", reasons=["insufficient information in source content"]),
+      "description": VerifiableField(value="Promotions spread rapidly across channels"),
+      "details": [VerifiableField(value="Rapid spread of promotional messages")],
+      "start_time": VerifiableField(value="2025-01-01T00:00:00Z"),
+      "end_time": VerifiableField(value="unknown", reasons=["insufficient information in source content"]),
       "episodes": [Episode(...)]
     }
     """
@@ -312,24 +308,24 @@ class EventStage:
     stage_id: str
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
-    name: VerifiableField[str]
+    name: VerifiableField
 
     # Zero-based index (ensures correct ordering) of this stage in the event.
     index_in_event: int
     # Short description that supplements the stage name; less granular than `details`.
-    description: Optional[VerifiableField[str]] = None
+    description: Optional[VerifiableField] = None
 
     # Detailed and concise information from source content summarizing the stage’s essence.
     # Provide multiple items when available; leave None if not explicitly present in sources.
-    details: List[VerifiableField[str]] = None
+    details: List[VerifiableField] = None
 
     # Earliest timestamp of activity or evidence in this stage.
     # Set to "unknown" if start time is not available in the source content.
-    start_time: Optional[VerifiableField[str]] = None
+    start_time: Optional[VerifiableField] = None
 
     # Latest timestamp (may be None for ambiguous boundaries).
     # Set to "unknown" if end time is not available in the source content.
-    end_time: Optional[VerifiableField[str]] = None
+    end_time: Optional[VerifiableField] = None
 
     # Episodes nested within this stage
     episodes: List[Episode] = field(default_factory=list)
@@ -346,11 +342,11 @@ class EventCascade:
     {
       "event_id": "fraud_crypto_2025_001",
       "title": "High-yield Crypto Scheme",
-      "event_type": VerifiableField[str](value="financial_fraud"),
-      "description": VerifiableField[str](value="A scheme with promised high returns and broad online promotion"),
-      "details": [VerifiableField[str](value="A high-yield scheme promoted across social platforms")],
-      "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
-      "end_time": VerifiableField[str](value="2025-01-10T00:00:00Z"),
+      "event_type": VerifiableField(value="financial_fraud"),
+      "description": VerifiableField(value="A scheme with promised high returns and broad online promotion"),
+      "details": [VerifiableField(value="A high-yield scheme promoted across social platforms")],
+      "start_time": VerifiableField(value="2025-01-01T00:00:00Z"),
+      "end_time": VerifiableField(value="2025-01-10T00:00:00Z"),
       "stages": [EventStage(...)]
     }
     """
@@ -359,24 +355,24 @@ class EventCascade:
     event_id: str
 
     # Human-readable title summarizing the event (verbatim when available).
-    title: Optional[VerifiableField[str]] = None
+    title: Optional[VerifiableField] = None
 
     # Categorical label from domain sources (verbatim when available).
-    event_type: Optional[VerifiableField[str]] = None
+    event_type: Optional[VerifiableField] = None
 
     # Short description that supplements the event title; less granular than `details`.
-    description: Optional[VerifiableField[str]] = None
+    description: Optional[VerifiableField] = None
 
     # Detailed and concise information from source content summarizing the event’s essence.
-    details: List[VerifiableField[str]] = None
+    details: List[VerifiableField] = None
 
     # Earliest timestamp across all evidence and participant activity.
     # Set to "unknown" if start time is not available in the source content.
-    start_time: Optional[VerifiableField[str]] = None
+    start_time: Optional[VerifiableField] = None
 
     # Latest timestamp (None if ongoing or unresolved).
     # Set to "unknown" if end time is not available in the source content.
-    end_time: Optional[VerifiableField[str]] = None
+    end_time: Optional[VerifiableField] = None
 
     # Ordered sequence of event phases.
     stages: List[EventStage] = field(default_factory=list)
