@@ -83,7 +83,9 @@ class ParticipantRelation:
     {
       "from_participant_id": "P_X",
       "to_participant_id": "P_Y",
-      "description": "X and Y share a common parent company (public registry verified)",
+      "descriptions": [
+        VerifiableField(value="X and Y share a common parent company (public registry verified)")
+      ],
       "relation_type": VerifiableField(
         value="affiliated_with",
         evidence_source_contents=["parent company: ..."],
@@ -141,7 +143,7 @@ class Transaction:
     details: List[VerifiableField] = field(default_factory=list)
     # Payer participant identifier; references `Participant.participant_id`; do not use names or aliases.
     from_participant_id: str = ""
-    # Payee participant identifier; references `Participant.participant_id`; if unknown, leave empty and explain in `extras`.
+    # Payee participant identifier; references `Participant.participant_id`.
     to_participant_id: str = ""
     # Related instruments/tools; optional; describes the vehicle of transfer (e.g., bond payment, token transfer).
     instruments: Optional[List[VerifiableField]] = None
@@ -248,10 +250,12 @@ class Episode:
       "episode_id": "E1",
       "name": VerifiableField(value="Private Pitch"),
       "index_in_stage": 0,
-      "description": VerifiableField(value="Targeted promises to select investors"),
+      "descriptions": [
+        VerifiableField(value="Targeted promises to select investors"),
+        VerifiableField(value="Pitch targeted to select investors in private settings")
+      ],
       "start_time": VerifiableField(value="2025-01-03T10:00:00Z"),
       "end_time": VerifiableField(value="2025-01-03T12:00:00Z"),
-      "details": [VerifiableField(value="Key investors received targeted promises")],
       "participants": [Participant(...)],
       "participant_relations": [ParticipantRelation(...)],
       "transactions": [Transaction(...)]
@@ -264,12 +268,8 @@ class Episode:
     name: VerifiableField
     # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
     index_in_stage: int
-    # Short description that supplements the episode name; less granular than `details`.
-    description: Optional[VerifiableField] = None
-
-    # Detailed and concise information from source content summarizing the episode’s essence.
-    # Provide multiple items when available; leave None if not explicitly present in sources.
-    details: List[VerifiableField] = None
+    # Detailed and concise information from source content presenting the episode’s essence across aspects. Provide multiple items when supported by sources; each item is a grounded, verifiable statement.
+    descriptions: List[VerifiableField] = None
 
     # Start time; earliest evidence or activity; unknown if uncertain.
     start_time: Optional[VerifiableField] = None
@@ -296,8 +296,10 @@ class EventStage:
       "stage_id": "S1",
       "name": VerifiableField(value="Amplification"),
       "index_in_event": 2,
-      "description": VerifiableField(value="Promotions spread rapidly across channels"),
-      "details": [VerifiableField(value="Rapid spread of promotional messages")],
+      "descriptions": [
+        VerifiableField(value="Promotions spread rapidly across channels"),
+        VerifiableField(value="Rapid spread of promotional messages")
+      ],
       "start_time": VerifiableField(value="2025-01-01T00:00:00Z"),
       "end_time": VerifiableField(value="unknown", reasons=["insufficient information in source content"]),
       "episodes": [Episode(...)]
@@ -312,12 +314,8 @@ class EventStage:
 
     # Zero-based index (ensures correct ordering) of this stage in the event.
     index_in_event: int
-    # Short description that supplements the stage name; less granular than `details`.
-    description: Optional[VerifiableField] = None
-
-    # Detailed and concise information from source content summarizing the stage’s essence.
-    # Provide multiple items when available; leave None if not explicitly present in sources.
-    details: List[VerifiableField] = None
+    # Detailed and concise information from source content presenting the stage’s essence across aspects. Provide multiple items when supported; each item is a grounded, verifiable statement.
+    descriptions: List[VerifiableField] = None
 
     # Earliest timestamp of activity or evidence in this stage.
     # Set to "unknown" if start time is not available in the source content.
@@ -343,8 +341,10 @@ class EventCascade:
       "event_id": "fraud_crypto_2025_001",
       "title": "High-yield Crypto Scheme",
       "event_type": VerifiableField(value="financial_fraud"),
-      "description": VerifiableField(value="A scheme with promised high returns and broad online promotion"),
-      "details": [VerifiableField(value="A high-yield scheme promoted across social platforms")],
+      "descriptions": [
+        VerifiableField(value="A scheme with promised high returns and broad online promotion"),
+        VerifiableField(value="A high-yield scheme promoted across social platforms")
+      ],
       "start_time": VerifiableField(value="2025-01-01T00:00:00Z"),
       "end_time": VerifiableField(value="2025-01-10T00:00:00Z"),
       "stages": [EventStage(...)]
@@ -360,11 +360,8 @@ class EventCascade:
     # Categorical label from domain sources (verbatim when available).
     event_type: Optional[VerifiableField] = None
 
-    # Short description that supplements the event title; less granular than `details`.
-    description: Optional[VerifiableField] = None
-
-    # Detailed and concise information from source content summarizing the event’s essence.
-    details: List[VerifiableField] = None
+    # Detailed and concise information from source content presenting the event’s essence across aspects. Provide multiple items when supported; each item is a grounded, verifiable statement.
+    descriptions: List[VerifiableField] = None
 
     # Earliest timestamp across all evidence and participant activity.
     # Set to "unknown" if start time is not available in the source content.
