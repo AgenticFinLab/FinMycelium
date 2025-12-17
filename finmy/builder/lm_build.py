@@ -38,11 +38,10 @@ Compliance and consistency:
   - Contents of stages in EventCascade.json matches all generated stage_id.json
   - Stage episodes of each stage_id.json match episodes/episode_id.json
   - Each participant_id.json in participants/ is the collection of participants in each episode_id.json while the participant_id maintains across episodes across stages if the same participant; snapshots align in timestamps and ordering
-  - Similar to the relations and interactions
-  - Embedded `transactions` and `interactions` within stages/episodes MUST reference valid `participant_id` values and include required fields and evidence.
+  - Similar to the relations 
+  - Embedded `transactions` within stages/episodes MUST reference valid `participant_id` values and include required fields and evidence.
   - `sources_summary` in `EventCascade` MUST be consistent with the evidence attached across files.
 - Each JSON MUST strictly conform to the dataclass schema from the reference block.
-- Interaction details should reflect medium/method/occurrence/frequency descriptors as supported by the source.
 - If information is not present in `Content`, set fields to null or omit; do not fabricate.
 
 Hard compliance mandate:
@@ -53,7 +52,7 @@ Hard compliance mandate:
 - Validate internally that the final JSON would conform to the referenced dataclass schema before outputting.
 
 Schema categories (must be covered and sourced from `Content`):
-- Participant, ParticipantRelation, Action, Transaction, Interaction, Episode, EventStage, EventCascade, VerifiableField, FinancialInstrument
+- Participant, ParticipantRelation, Action, Transaction, Episode, EventStage, EventCascade, VerifiableField, FinancialInstrument
 
 
 How to output (strict, single-file JSON):
@@ -65,17 +64,15 @@ How to output (strict, single-file JSON):
             └── episodes: List[Episode]
                   ├── participants: List[Participant]
                   ├── participant_relations: List[ParticipantRelation]
-                  ├── actions: { participant_id → List[Action] }
                   ├── transactions: List[Transaction]
-                  └── interactions: List[Interaction]
 
 Extraction and validation process:
 1) Scope alignment using `Query` and `Keywords`; ignore unrelated content.
-2) Identify participants, roles, relations, transactions, interactions, evidence, episodes, and stage evolution from `Content`.
-3) Construct timelines: sort stages by `stage_index`; sort actions/transactions/interactions by `timestamp`.
+2) Identify participants, roles, relations, transactions, evidence, episodes, and stage evolution from `Content`.
+3) Construct timelines: sort stages by `stage_index`; sort transactions by `timestamp`.
 4) Reasons/rationale only where supported by `Content`; do not guess.
 5) Evidence linking: attach source_content as the evidence to critical objects/events.
-6) Normalization: ISO timestamps, ISO currency codes; `participant_id` must be "P_"+uuid4.hex; Interaction fields reflect the source.
+6) Normalization: ISO timestamps, ISO currency codes; `participant_id` must be "P_"+integer.
 7) Consistency check: coherent fields, closed references, correct chronology, no contradictions.
 8) Final output: strict JSON; missing items null or omitted;
 9) Completeness Verification: Ensure field consistency, closed-loop references (all IDs exist and are traceable), correct chronological order, and absence of internal contradictions. 

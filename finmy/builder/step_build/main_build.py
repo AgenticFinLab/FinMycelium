@@ -69,7 +69,6 @@ _EPISODE_SPEC = filter_dataclass_fields(
         "Action": [],
         "FinancialInstrument": [],
         "Transaction": [],
-        "Interaction": [],
         "VerifiableField": [],
         "Episode": [],
     },

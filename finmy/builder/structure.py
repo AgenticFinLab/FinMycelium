@@ -6,8 +6,7 @@ Structure overview:
 - ParticipantRelation: explicit relationship edge between participants
 - Action: discrete behaviors recorded within episodes
 - Transaction: financial transfers between participants
-- Interaction: messages/broadcasts among participants
-- Episode: coherent sub-phase within a stage holding participants, relations, actions, transactions, interactions
+- Episode: coherent sub-phase within a stage holding participants, relations, transactions
 - EventStage: one phase of the event, holding episodes and stage-level metadata
 - EventCascade: top-level container, holding ordered stages and event-level metadata
 - VerifiableField: wrapper ensuring a field value is directly grounded in source content
@@ -28,9 +27,7 @@ EventCascade
         └── episodes: List[Episode]
               ├── participants: List[Participant]
               ├── participant_relations: List[ParticipantRelation]
-              ├── actions_by_participant: { participant_id → List[Action] }
               ├── transactions: List[Transaction]
-              └── interactions: List[Interaction]
 
 """
 
@@ -82,7 +79,7 @@ class VerifiableField(Generic[T]):
 
 @dataclass
 class ParticipantRelation:
-    """Relationship between two participants.
+    """Relationship between two participants. The content may include explicit, implicit relations (e.g., shared ownership, joint venture, or common control), any type of interactions, communications, or cooperations.
 
     Example:
 
@@ -124,7 +121,7 @@ class ParticipantRelation:
 
 
 # ============================================================================
-# DOMAIN ENTITIES: Financial constructs and interactions, actions
+# DOMAIN ENTITIES: Financial constructs and actions
 # ============================================================================
 
 
@@ -174,35 +171,6 @@ class Transaction:
 
 
 @dataclass
-class Interaction:
-    """Message or broadcast exchanged among participants.
-
-    Example:
-    {
-      "timestamp": VerifiableField[str](value="2025-01-01T12:00:00Z"),
-      "details": [
-        VerifiableField[str](value="Guaranteed 30% monthly returns"),
-        VerifiableField[str](value="totally 10 interactions"),
-        VerifiableField[str](value="several_per_week"),
-        VerifiableField[str](value="platform: Weibo"),
-        VerifiableField[str](value="language: zh")
-      ],
-      "sender_id": "P_X",
-      "receiver_ids": ["P_A", "P_B"]
-    }
-    """
-
-    # Interaction occurrence time; use UTC; if only publish time is available, note it in `extras`.
-    timestamp: Optional[VerifiableField[str]] = None
-    # Interaction details presented by the descriptions between two participants
-    details: List[VerifiableField[str]] = field(default_factory=list)
-    # Sender participant identifier; references `Participant.participant_id`.
-    sender_id: str = ""
-    # Receiver participant identifiers; reference `Participant.participant_id`; empty means broadcast or undefined audience.
-    receiver_ids: List[str] = field(default_factory=list)
-
-
-@dataclass
 class Action:
     """The specific action executed by one participant.
 
@@ -230,10 +198,10 @@ class Participant:
     {
       "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
       "name": VerifiableField[str](value="Credit Suisse"),
-      "participant_type": VerifiableField[str](value="organization"),
+      "participant_type": "organization",
       "base_role": VerifiableField[str](value="issuer"),
       "attributes": {"location": VerifiableField[str](value="Zurich"), "industry": VerifiableField[str](value="banking"), "tags": VerifiableField[List[str]](value=["tier1"])},
-      "alias_handles": {"alias": VerifiableField[List[str]](value=["瑞信", "CS"]), "weibo": VerifiableField[List[str]](value=["uid_123"])}
+      "actions": {"broadcast_message": [Action(timestamp=VerifiableField[str](value="2025-01-02T09:00:00Z"), details=[VerifiableField[str](value="Guaranteed 30% monthly returns"), VerifiableField[str](value="channel: platform_feed")])]}
     }
     """
 
@@ -257,9 +225,7 @@ class Participant:
     # Examples: 'individual', 'organization', 'social_media_platform', 'government_agency'.
     # For large cohorts, prefer a group category (e.g., 'retail_investor_group', 'marketing_bot_group')
     # and describe scope via attributes/tags (e.g., size band, region, platform).
-    participant_type: VerifiableField[str] = field(
-        default_factory=lambda: VerifiableField(value="individual")
-    )
+    participant_type: str
 
     # Primary functional role in this event.
     # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
@@ -273,10 +239,8 @@ class Participant:
     #   - Organizations: {"industry": "fintech", "employee_count": 50}
     attributes: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
-    # Unified alias of the participant in different places.
-    alias_handles: Dict[str, VerifiableField[List[str]]] = field(default_factory=dict)
-
-    # No generic extras; encode any grounded metadata via attributes/alias_handles.
+    # Actions executed by this participant.
+    actions: Dict[str, List[Action]] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -286,7 +250,7 @@ class Participant:
 class Episode:
     """A coherent episode within a stage.
 
-    Episodes group participants, actions, transactions, interactions, and snapshots that share a tighter temporal window or thematic focus than the surrounding stage.
+    Episodes group participants, transactions, and snapshots that share a tighter temporal window or thematic focus than the surrounding stage.
     They enable fine-grained modeling without losing stage-level aggregation.
 
     Example:
@@ -299,9 +263,7 @@ class Episode:
       "end_time": VerifiableField[str](value="2025-01-03T12:00:00Z"),
       "details": [VerifiableField[str](value="Key investors received targeted promises")],
       "participants": [Participant(...)],
-      "actions": {"P_A": [Action(...)]},
       "transactions": [Transaction(...)],
-      "interactions": [Interaction(...)],
       "confidence_score": 0.8
     }
     """
@@ -329,13 +291,8 @@ class Episode:
     # Explicit relationship edges among participants in this event.
     participant_relations: List[ParticipantRelation] = field(default_factory=list)
 
-    # Actions occurring by each participant within this episode; used to model causal chains.
-    # For example, {"P_A": [Action(...)]}
-    actions: Dict[str, List[Action]] = field(default_factory=dict)
     # Financial transfers within this episode; linked to participants/instruments.
     transactions: List[Transaction] = field(default_factory=list)
-    # Messages/broadcasts within this episode; used for information diffusion analysis.
-    interactions: List[Interaction] = field(default_factory=list)
 
 
 @dataclass
