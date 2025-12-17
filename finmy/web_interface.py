@@ -25,7 +25,9 @@ from streamlit_option_menu import option_menu
 import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
+from sympy import test
 
+from lmbase.inference.api_call import LangChainAPIInference, InferInput
 from finmy.url_collector.SearchCollector.bocha_search import bochasearch_api
 from finmy.url_collector.SearchCollector.baidu_search import baidusearch_api
 from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
@@ -34,7 +36,9 @@ from finmy.url_collector.url_parser import URLParser
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 from finmy.url_collector.url_parser_clean import extract_content_from_parsed_content
+from finmy.builder.class_build.prompts.ponzi_scheme import ponzi_scheme_prompt
 from finmy.pipeline import FinmyPipeline
+from finmy.builder.class_build.simple_build import ClassLMSimpleBuild
 
 
 
@@ -484,31 +488,31 @@ class FinMyceliumWebInterface:
 
         try:
             # Construct analysis prompt
-            prompt = self.construct_analysis_prompt(inputs)
+            results = self.construct_analysis_prompt(inputs)
 
             # Call AI model
-            response = self.ai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "developer",
-                        "content": "Always respond in Chinese. You are a financial fraud analysis expert. Provide comprehensive, educational analysis of financial fraud schemes.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.7,
-                max_tokens=2048,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0,
-                seed=random.randint(1, 1000000000),
-            )
+            # response = self.ai_client.chat.completions.create(
+            #     model="gpt-4o-mini",
+            #     messages=[
+            #         {
+            #             "role": "developer",
+            #             "content": "Always respond in Chinese. You are a financial fraud analysis expert. Provide comprehensive, educational analysis of financial fraud schemes.",
+            #         },
+            #         {"role": "user", "content": prompt},
+            #     ],
+            #     temperature=0.7,
+            #     max_tokens=2048,
+            #     top_p=1,
+            #     frequency_penalty=0,
+            #     presence_penalty=0,
+            #     seed=random.randint(1, 1000000000),
+            # )
 
             # Parse and structure results
-            analysis_text = response.choices[0].message.content
-            print("================ AIHUBMIX RESPONSE ==================")
-            print(analysis_text)
-            return self.parse_analysis_results(analysis_text, inputs)
+            # analysis_text = response.choices[0].message.content
+            # print("================ AIHUBMIX RESPONSE ==================")
+            # print(analysis_text)
+            return results
 
         except Exception as e:
             st.error(f"AI analysis error: {e}")
@@ -693,7 +697,7 @@ class FinMyceliumWebInterface:
                                 row["parsed_content"] = (
                                     output.results[0]["content"] if output.results and len(output.results) > 0 else []
                                 )
-                                structure_data_urllink.append(row.to_dict())
+                                structure_data_urllink.append(row)
                             else:
                                 # Assume local file path
 
@@ -828,61 +832,81 @@ class FinMyceliumWebInterface:
         All_Text_Content_Count=0
         for item in All_Text_Content:
             All_Text_Content_Count+=len(item)
+        print(All_Text_Content_Count)
         print("============================")
+
+
 
 
 
         print("=====================================")
         print("Testing: LM_Build_Flow")
         print("=====================================")
-        output_dir=f"./examples/utest/Collector/test_files/event_output_{timestamp}"
-        pipeline = FinmyPipeline(output_dir)
-        pipeline.lm_build_pipeline_main(raw_texts=All_Text_Content, query_text=main_search_input, key_words=keywords, )
+        # output_dir=f"./examples/utest/Collector/test_files/event_output_{timestamp}"
+        # pipeline = FinmyPipeline({"output_dir": output_dir})
+        # pipeline.lm_build_pipeline_main(raw_texts=All_Text_Content, query_text=main_search_input, key_words=keywords, )
+
+        lm_name = "ARK/doubao-seed-1-6-flash-250828"
+        output_file_path = rf"./examples/utest/Collector/test_files/event_cascade_output/EventCascade_{timestamp}.json"
+        # Create and run the builder
+        builder = ClassLMSimpleBuild(
+            lm_name=lm_name,
+            all_text_content=All_Text_Content,
+            output_file_path=output_file_path,
+            query=main_search_input,
+            keywords=keywords,
+        )
+        try:
+            event_cascade = builder.build()
+            print(f"Successfully built event cascade: {event_cascade}")
+            return event_cascade
+        except Exception as e:
+            print(f"Error during ClassLMSimpleBuild: {e}")
 
 
-        prompt = f"""
-        As a financial fraud analysis expert, analyze the following financial fraud case:
+        # prompt = f"""
+        # As a financial fraud analysis expert, analyze the following financial fraud case:
         
-        CASE DESCRIPTION: {main_search_input if main_search_input else 'No natural language description provided'}
+        # CASE DESCRIPTION: {main_search_input if main_search_input else 'No natural language description provided'}
         
-        KEYWORDS: {', '.join(keywords) if keywords else 'No keywords provided'}
+        # KEYWORDS: {', '.join(keywords) if keywords else 'No keywords provided'}
         
-        STRUCTURED DATA: {structured_data if structured_data else 'Not provided'}
+        # STRUCTURED DATA: {structured_data if structured_data else 'Not provided'}
         
-        Please provide a comprehensive analysis including:
+        # Please provide a comprehensive analysis including:
         
-        1. FRAUD PATTERN IDENTIFICATION:
-           - Main fraud mechanism
-           - Recruitment methods
-           - Payment structures
-           - Exit strategies
+        # 1. FRAUD PATTERN IDENTIFICATION:
+        #    - Main fraud mechanism
+        #    - Recruitment methods
+        #    - Payment structures
+        #    - Exit strategies
         
-        2. KEY CHARACTERISTICS:
-           - Promised returns/benefits
-           - Target victims
-           - Communication channels
-           - Trust-building techniques
+        # 2. KEY CHARACTERISTICS:
+        #    - Promised returns/benefits
+        #    - Target victims
+        #    - Communication channels
+        #    - Trust-building techniques
         
-        3. TIMELINE ANALYSIS:
-           - Typical progression stages
-           - Key milestones
-           - Duration patterns
+        # 3. TIMELINE ANALYSIS:
+        #    - Typical progression stages
+        #    - Key milestones
+        #    - Duration patterns
         
-        4. IMPACT ASSESSMENT:
-           - Financial losses
-           - Number of victims
-           - Social consequences
-           - Legal implications
+        # 4. IMPACT ASSESSMENT:
+        #    - Financial losses
+        #    - Number of victims
+        #    - Social consequences
+        #    - Legal implications
         
-        5. RED FLAGS & PREVENTION:
-           - Warning signs for investors
-           - Protective measures
-           - Regulatory considerations
+        # 5. RED FLAGS & PREVENTION:
+        #    - Warning signs for investors
+        #    - Protective measures
+        #    - Regulatory considerations
         
-        Provide the analysis in a clear, educational format that helps ordinary people understand how such frauds work and how to avoid them.
-        """
+        # Provide the analysis in a clear, educational format that helps ordinary people understand how such frauds work and how to avoid them.
+        # """
 
-        return prompt
+        # return prompt
 
     def parse_analysis_results(
         self, analysis_text: str, inputs: Dict[str, Any]
@@ -967,70 +991,320 @@ class FinMyceliumWebInterface:
             "is_mock_data": True,
         }
 
-    def render_results_page(self):
-        """Render the results page with comprehensive analysis visualization."""
-        st.title("Analysis Results")
 
+    def render_results_page(self):
+        """Render the event reconstruction results with dynamic visualization for nested JSON structures."""
+        st.title("📋 Event Reconstruction Report")
+        
         if not st.session_state.analysis_results:
-            st.info("No analysis results available. Please run an analysis first.")
-            if st.button("Go to Analysis"):
+            st.info("No reconstruction results available. Please run an analysis first.")
+            if st.button("Go to Reconstruction"):
                 st.session_state.current_page = "Analysis"
                 st.rerun()
             return
-
+        
         results = st.session_state.analysis_results
+        
+        # Main container with custom styling
+        with st.container():
+            st.markdown("""
+            <style>
+            .reconstruction-header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 1.5rem;
+                border-radius: 10px;
+                color: white;
+                margin-bottom: 1rem;
+            }
+            .section-card {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 10px;
+                border-left: 4px solid #667eea;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                margin-bottom: 1rem;
+            }
+            .subsection-card {
+                background: #f8f9fa;
+                padding: 1rem;
+                border-radius: 8px;
+                border-left: 3px solid #764ba2;
+                margin-bottom: 0.5rem;
+            }
+            .metric-badge {
+                display: inline-block;
+                background: #e3f2fd;
+                color: #1976d2;
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.875rem;
+                margin: 0.25rem;
+            }
+            .timeline-item {
+                border-left: 2px solid #667eea;
+                padding-left: 1rem;
+                margin-left: 0.5rem;
+                margin-bottom: 1rem;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Reconstruction Overview
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.markdown('<div class="reconstruction-header"><h2>🎯 Event Reconstruction Complete</h2></div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.metric("Status", "RECONSTRUCTED", delta=None)
+                if results.get("is_mock_data"):
+                    st.warning("Using demonstration data")
+            
+            # Main rendering function for recursive JSON traversal
+            def render_nested_data(data, level=0, parent_key=""):
+                """Recursively render nested JSON data with appropriate formatting."""
+                
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        # Create a unique key for expander
+                        expander_key = f"{parent_key}_{key}"
+                        
+                        # Format key name for display
+                        display_key = " ".join(word.capitalize() for word in key.split("_"))
+                        
+                        if isinstance(value, (dict, list)) and value:
+                            if level == 0:  # Top-level sections
+                                with st.expander(f"### 📊 {display_key}", expanded=True):
+                                    render_nested_data(value, level + 1, expander_key)
+                            elif level == 1:  # Second-level sections
+                                st.markdown(f'<div class="section-card"><h4>{display_key}</h4></div>', unsafe_allow_html=True)
+                                render_nested_data(value, level + 1, expander_key)
+                            else:  # Nested levels
+                                with st.expander(f"**{display_key}**"):
+                                    render_nested_data(value, level + 1, expander_key)
+                        else:
+                            # Render leaf nodes
+                            if level <= 1:
+                                col1, col2 = st.columns([1, 2])
+                                with col1:
+                                    st.markdown(f"**{display_key}:**")
+                                with col2:
+                                    st.write(value if value else "N/A")
+                            else:
+                                st.markdown(f"- **{display_key}:** {value}")
+                                
+                elif isinstance(data, list):
+                    for i, item in enumerate(data):
+                        if isinstance(item, (dict, list)):
+                            # Special handling for timeline items
+                            if "timeline" in parent_key.lower() or "timeline_of" in parent_key.lower():
+                                st.markdown('<div class="timeline-item">', unsafe_allow_html=True)
+                                if isinstance(item, str):
+                                    st.markdown(f"• {item}")
+                                else:
+                                    render_nested_data(item, level + 1, f"{parent_key}_item{i}")
+                                st.markdown('</div>', unsafe_allow_html=True)
+                            else:
+                                render_nested_data(item, level + 1, f"{parent_key}_item{i}")
+                        else:
+                            st.markdown(f"• {item}")
+                else:
+                    # Simple value
+                    if "date" in parent_key.lower() or "year" in parent_key.lower():
+                        st.markdown(f'<span class="metric-badge">📅 {data}</span>', unsafe_allow_html=True)
+                    elif "amount" in parent_key.lower() or "value" in parent_key.lower():
+                        st.markdown(f'<span class="metric-badge">💰 {data}</span>', unsafe_allow_html=True)
+                    elif "count" in parent_key.lower() or "number" in parent_key.lower():
+                        st.markdown(f'<span class="metric-badge">👥 {data}</span>', unsafe_allow_html=True)
+                    else:
+                        st.write(data)
+            
+            # Render the main reconstruction data
+            render_nested_data(results)
+            
+            # Summary metrics section (extract key metrics dynamically)
+            st.markdown("---")
+            st.subheader("📈 Key Reconstruction Metrics")
+            
+            # Function to find and display key metrics from nested structure
+            def extract_and_display_metrics(data, path=""):
+                metric_keywords = ["estimate", "count", "amount", "value", "total", "percentage", "years", "currency"]
+                
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        current_path = f"{path}.{key}" if path else key
+                        if any(keyword in key.lower() for keyword in metric_keywords):
+                            if isinstance(value, (int, float, str)) and not isinstance(value, bool):
+                                # Clean up the key name for display
+                                display_name = " ".join(word.capitalize() for word in key.split("_"))
+                                col1, col2, col3 = st.columns([2, 2, 1])
+                                with col1:
+                                    st.markdown(f"**{display_name}**")
+                                with col2:
+                                    st.info(value)
+                                with col3:
+                                    # Add appropriate icon
+                                    if "percentage" in key.lower():
+                                        st.markdown("📊")
+                                    elif "currency" in key.lower():
+                                        st.markdown("💱")
+                                    else:
+                                        st.markdown("📈")
+                        elif isinstance(value, (dict, list)):
+                            extract_and_display_metrics(value, current_path)
+            
+            # Create metrics in columns
+            metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+            
+            # Find and organize metrics by category
+            def find_metrics_by_category(data, category_keywords):
+                metrics = {}
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        if any(cat in key.lower() for cat in category_keywords):
+                            if isinstance(value, (dict, list)):
+                                # Recursively search for numeric values
+                                def find_nested_values(obj):
+                                    found = []
+                                    if isinstance(obj, dict):
+                                        for k, v in obj.items():
+                                            if isinstance(v, (int, float, str)) and not isinstance(v, bool):
+                                                found.append((k, v))
+                                            elif isinstance(v, (dict, list)):
+                                                found.extend(find_nested_values(v))
+                                    elif isinstance(obj, list):
+                                        for item in obj:
+                                            found.extend(find_nested_values(item))
+                                    return found
+                                nested = find_nested_values(value)
+                                if nested:
+                                    metrics[key] = nested[:3]  # Limit to top 3
+                return metrics
+            
+            # Extract different types of metrics
+            financial_metrics = find_metrics_by_category(results, ["amount", "value", "total", "currency"])
+            demographic_metrics = find_metrics_by_category(results, ["count", "victim", "investor"])
+            temporal_metrics = find_metrics_by_category(results, ["year", "date", "duration", "timeframe"])
+            
+            # Display in columns
+            with metrics_col1:
+                st.markdown("**💰 Financial Metrics**")
+                for category, values in financial_metrics.items():
+                    with st.expander(f"Financial {category.replace('_', ' ').title()}"):
+                        for key, value in values:
+                            st.metric(key.replace('_', ' ').title(), str(value))
+            
+            with metrics_col2:
+                st.markdown("**👥 Demographic Impact**")
+                for category, values in demographic_metrics.items():
+                    with st.expander(f"Demographic {category.replace('_', ' ').title()}"):
+                        for key, value in values:
+                            st.metric(key.replace('_', ' ').title(), str(value))
+            
+            with metrics_col3:
+                st.markdown("**⏳ Temporal Metrics**")
+                for category, values in temporal_metrics.items():
+                    with st.expander(f"Temporal {category.replace('_', ' ').title()}"):
+                        for key, value in values:
+                            st.metric(key.replace('_', ' ').title(), str(value))
+            
+            # Export and navigation section
+            st.markdown("---")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if st.button("📥 Export as JSON", use_container_width=True):
+                    # Create download link for JSON
+                    import json
+                    json_str = json.dumps(results, indent=2, ensure_ascii=False)
+                    st.download_button(
+                        label="Download JSON",
+                        data=json_str,
+                        file_name="event_reconstruction.json",
+                        mime="application/json"
+                    )
+            
+            with col2:
+                if st.button("📊 View Timeline", use_container_width=True):
+                    # Extract timeline if exists
+                    timeline_data = self.extract_timeline_data(results)
+                    if timeline_data:
+                        self.render_timeline_visualization(timeline_data)
+                    else:
+                        st.info("No timeline data found in reconstruction")
+            
+            with col3:
+                if st.button("🔄 New Reconstruction", use_container_width=True):
+                    st.session_state.analysis_results = None
+                    st.session_state.current_page = "Analysis"
+                    st.rerun()
+            
+            with col4:
+                if st.button("📋 Executive Summary", use_container_width=True):
+                    self.render_executive_summary(results)
 
-        # Results overview
-        col1, col2 = st.columns([2, 1])
+    def extract_timeline_data(self, data):
+        """Extract timeline data from nested structure."""
+        timeline_items = []
+        
+        def search_for_timeline(obj, path=""):
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if "timeline" in key.lower() and isinstance(value, list):
+                        timeline_items.extend(value)
+                    elif isinstance(value, (dict, list)):
+                        search_for_timeline(value, f"{path}.{key}")
+            elif isinstance(obj, list):
+                for item in obj:
+                    search_for_timeline(item, path)
+        
+        search_for_timeline(data)
+        return timeline_items
 
-        with col1:
-            st.subheader("Fraud Analysis Results")
+    def render_timeline_visualization(self, timeline_data):
+        """Render a timeline visualization."""
+        st.subheader("⏳ Event Timeline")
+        
+        for i, item in enumerate(timeline_data):
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.markdown(f"**Step {i+1}**")
+            with col2:
+                st.markdown(f'<div class="timeline-item">{item}</div>', unsafe_allow_html=True)
 
-        with col2:
-            st.metric("Analysis Status", "Completed")
-            if results.get("is_mock_data"):
-                st.warning("Using demonstration data")
+    def render_executive_summary(self, data):
+        """Generate and render an executive summary from the reconstruction."""
+        st.subheader("📋 Executive Summary")
+        
+        # Extract key information from metadata
+        summary_points = []
+        
+        def extract_summary_info(obj, path=""):
+            if isinstance(obj, dict):
+                # Look for key summary information
+                summary_keys = ["summary", "overview", "key_findings", "conclusion", "impact"]
+                for key in summary_keys:
+                    if key in obj and isinstance(obj[key], (str, list)):
+                        summary_points.append(obj[key])
+                
+                # Recursively search for other important info
+                for key, value in obj.items():
+                    if key in ["name", "title", "description", "result", "outcome"]:
+                        if isinstance(value, str) and len(value) < 200:  # Avoid too long strings
+                            summary_points.append(f"{key}: {value}")
+                    elif isinstance(value, (dict, list)):
+                        extract_summary_info(value, f"{path}.{key}")
+        
+        extract_summary_info(data)
+        
+        # Display summary points
+        for i, point in enumerate(summary_points[:10]):  # Limit to 10 points
+            if isinstance(point, list):
+                for subpoint in point[:3]:  # Limit nested lists
+                    st.markdown(f"- {subpoint}")
+            else:
+                st.markdown(f"{i+1}. {point}")
 
-        st.markdown("---")
-
-        # Key findings
-        # st.subheader("🔍 Key Findings")
-        # for i, finding in enumerate(results["key_findings"], 1):
-        #     st.markdown(f"{i}. {finding}")
-
-        st.markdown("---")
-
-        # Detailed analysis
-        st.subheader("📊 Detailed Analysis")
-        with st.expander("View Complete Analysis", expanded=True):
-            st.write(results["summary"])
-
-        # Risk factors and prevention
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("⚠️ Risk Factors")
-            for risk in results["risk_factors"]:
-                st.markdown(f"• {risk}")
-
-        with col2:
-            st.subheader("🛡️ Prevention Tips")
-            for tip in results["prevention_tips"]:
-                st.markdown(f"• {tip}")
-
-        st.markdown("---")
-
-        # Educational insights
-        st.subheader("🎓 Educational Insights")
-        self.render_educational_insights(results)
-
-        # Action buttons
-        col1, col2, col3 = st.columns(3)
-        with col2:
-            if st.button("🔄 New Analysis", width="stretch"):
-                st.session_state.analysis_results = None
-                st.session_state.current_page = "Analysis"
-                st.rerun()
 
     def render_educational_insights(self, results: Dict[str, Any]):
         """Render educational insights section with fraud-specific information."""
