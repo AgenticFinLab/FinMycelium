@@ -19,6 +19,7 @@ from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.converter import read_text_data_from_block
 from finmy.builder.class_build.prompts import *
 from finmy.builder.utils import extract_json_response
+from finmy.builder.base import AgentState
 
 
 USER_PROMPT = """
@@ -47,7 +48,9 @@ class ClassLMBuilder(BaseBuilder):
     """
 
     def __init__(self, lm_name: str = "deepseek/deepseek-chat", config=None):
-        super().__init__(method_name="class_lm_builder", config={"lm_name": lm_name})
+        super().__init__(
+            method_name="class_lm_builder", build_config={"lm_name": lm_name}
+        )
 
         generation_config = (
             {} if "generation_config" not in config else config["generation_config"]
@@ -211,3 +214,6 @@ class ClassLMBuilder(BaseBuilder):
         else:
             print(f"Warning: Unsupported event type '{primary_type}'")
             return BuildOutput(event_cascades=[classification_output.response])
+
+    def execute_agent(self, state: AgentState) -> AgentState:
+        raise NotImplementedError("execute_agent is not implemented")

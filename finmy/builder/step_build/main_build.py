@@ -67,9 +67,7 @@ _EPISODE_SPEC = filter_dataclass_fields(
         "Participant": [],
         "ParticipantRelation": [],
         "Action": [],
-        "FinancialInstrument": [],
         "Transaction": [],
-        "Interaction": [],
         "VerifiableField": [],
         "Episode": [],
     },
@@ -242,7 +240,7 @@ class EpisodeReconstructionBuilder(BaseBuilder):
 
         # Obtain the stage
         savename = self.get_save_name(cur_name, num_executed + 1)
-        savename = f"{savename}-Stage{belong_state["index_in_event"]}-Episode{target_episode.index_in_stage}"
+        savename = f"{savename}-Stage{belong_state['index_in_event']}-Episode{target_episode.index_in_stage}"
         self.save_traces({cur_name: out.to_dict()}, savename, "json")
         self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
         state["agent_results"].append({cur_name: result})
