@@ -114,8 +114,18 @@ class ParticipantRelation:
     # Whether the relation is symmetric (e.g., 'affiliated_with').
     is_bidirectional: bool = False
     # Temporal bounds when the relation holds as mentioned in the source content.
-    start_time: Optional[VerifiableField[str]] = None
-    end_time: Optional[VerifiableField[str]] = None
+    start_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
+    end_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Arbitrary metadata for this relation (e.g., contract/jurisdiction), each value grounded in source.
     attributes: Dict[str, VerifiableField[Any]] = field(default_factory=dict)
 
@@ -225,7 +235,7 @@ class Participant:
     # Examples: 'individual', 'organization', 'social_media_platform', 'government_agency'.
     # For large cohorts, prefer a group category (e.g., 'retail_investor_group', 'marketing_bot_group')
     # and describe scope via attributes/tags (e.g., size band, region, platform).
-    participant_type: str
+    participant_type: str = "unknown due to insufficient information in source content"
 
     # Primary functional role in this event.
     # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
@@ -272,18 +282,28 @@ class Episode:
     episode_id: str
     # Name; human-readable semantic label; grounded via verifiable source content.
     name: VerifiableField[str]
+    # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
+    index_in_stage: int
     # Short description that supplements the episode name; less granular than `details`.
     description: Optional[VerifiableField[str]] = None
-    # Zero-based index within the owning stage; used for ordering and timeline reconstruction.
-    index_in_stage: int = 0
 
     # Detailed description summarizing the episode's theme and key activities.
     details: List[VerifiableField[str]] = field(default_factory=list)
 
-    # Start time; earliest evidence or activity; None if uncertain.
-    start_time: Optional[VerifiableField[str]] = None
-    # End time; latest evidence or activity; None if ongoing or boundaries are unclear.
-    end_time: Optional[VerifiableField[str]] = None
+    # Start time; earliest evidence or activity; unknown if uncertain.
+    start_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
+    # End time; latest evidence or activity; unknown if ongoing or boundaries are unclear.
+    end_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # List of entities participating in this episode; directly relevant `Participant` records.
     participants: List[Participant] = field(default_factory=list)
@@ -306,31 +326,42 @@ class EventStage:
       "description": VerifiableField[str](value="Promotions spread rapidly across channels"),
       "index_in_event": 2,
       "start_time": VerifiableField[str](value="2025-01-01T00:00:00Z"),
-      "end_time": None,
+      "end_time": "unknown due to insufficient information in source content",
       "details": [VerifiableField[str](value="Rapid spread of promotional messages")],
       "episodes": [Episode(...)]
     }
     """
 
+    # Locally unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
     stage_id: str
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
     name: VerifiableField[str]
-    # Short description that supplements the stage name; less granular than `details`.
-    description: Optional[VerifiableField[str]] = None
 
     # Zero-based index (ensures correct ordering) of this stage in
     # the event.
-    index_in_event: int = 0
+    index_in_event: int
+    # Short description that supplements the stage name; less granular than `details`.
+    description: Optional[VerifiableField[str]] = None
 
     # Detailed and concise natural-language summary of this stage’s essence.
     details: List[VerifiableField[str]] = field(default_factory=list)
 
     # Earliest timestamp of activity or evidence in this stage.
-    start_time: Optional[VerifiableField[str]] = None
+    start_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Latest timestamp (may be None for ambiguous boundaries).
-    end_time: Optional[VerifiableField[str]] = None
+    end_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Episodes nested within this stage
     episodes: List[Episode] = field(default_factory=list)
@@ -363,19 +394,30 @@ class EventCascade:
 
     # Human-readable title summarizing the event (verbatim when available).
     title: Optional[VerifiableField[str]] = None
-    # Short description that supplements the event title; less granular than `details`.
-    description: Optional[VerifiableField[str]] = None
 
     # Categorical label from domain sources (verbatim when available).
     event_type: Optional[VerifiableField[str]] = None
 
+    # Short description that supplements the event title; less granular than `details`.
+    description: Optional[VerifiableField[str]] = None
+
     details: List[VerifiableField[str]] = field(default_factory=list)
 
     # Earliest timestamp across all evidence and participant activity.
-    start_time: Optional[VerifiableField[str]] = None
+    start_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Latest timestamp (None if ongoing or unresolved).
-    end_time: Optional[VerifiableField[str]] = None
+    end_time: Optional[VerifiableField[str]] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Ordered sequence of event phases.
     stages: List[EventStage] = field(default_factory=list)
