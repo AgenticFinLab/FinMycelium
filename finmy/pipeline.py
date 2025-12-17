@@ -17,10 +17,9 @@ framework for financial data processing and knowledge extraction.
 
 import uuid
 import logging
-import pickle
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 import pytz
 
 from finmy.generic import RawData, UserQueryInput
@@ -31,28 +30,163 @@ from finmy.converter import (
     match_output_to_meta_samples,
 )
 from finmy.db_manager import DataManager
-from finmy.builder.base import BuildInput
-from finmy.builder.lm_build import LMBuilder
-from finmy.builder.class_build.main_build import ClassLMBuilder
-from finmy.matcher.base import MatchInput, SummarizedUserQuery
-from finmy.matcher.lm_match import LLMMatcher
-from finmy.matcher.summarizer import KWLMSummarizer
+from finmy.builder.base import BuildInput, BaseBuilder
+from finmy.builder import get_builder_registry
+from finmy.matcher.base import MatchInput, SummarizedUserQuery, BaseMatcher
+from finmy.matcher.summarizer import BaseSummarizer
+from finmy.matcher import get_summarizer_registry, get_matcher_registry
+from finmy.pdf_collector import PDFCollectorOutput
+from finmy.url_collector.base import URLCollectorOutput
+
+
+# ============================================================================
+# Pipeline Class
+# ============================================================================
 
 
 class FinmyPipeline:
-    """A pipeline class for FinMycelium data processing workflow."""
+    """A pipeline class for FinMycelium data processing workflow.
+
+    This class uses **Registry Factory Pattern** to enable dynamic component
+    selection without code changes. Different summarizers, matchers, and builders
+    can be selected via configuration.
+
+    The expected configuration structure is aligned with ``configs/pipline.yml``::
+
+        lm_type: "api"
+        lm_name: "deepseek/deepseek-chat"
+        save_folder: "EXPERIMENT/uTEST/Pipline"
+        output_dir: "EXPERIMENT/uTEST/Pipline/output"
+        summarizer_type: "kw_lm"      # or "kw_rule"
+        matcher_type: "llm"           # or "re", "lx_keyword", "lx_llm", "lx_vector"
+        builder_type: "class_lm"      # or "lm"
+
+    Available Component Types:
+
+    **Summarizers:**
+    - ``kw_lm``: LLM-based keyword summarizer (KWLMSummarizer)
+    - ``kw_rule``: Rule-based keyword summarizer (KWRuleSummarizer)
+
+    **Matchers:**
+    - ``llm``: LLM-based matcher (LLMMatcher)
+    - ``re``: Regex-based matcher (ReMatch)
+    - ``lx_keyword``: LlamaIndex keyword-based matcher (KWMatcher)
+    - ``lx_llm``: LlamaIndex LLM-based matcher (LMMatcher)
+    - ``lx_vector``: LlamaIndex vector-based matcher (VectorMatcher)
+
+    **Builders:**
+    - ``lm``: Single LM builder (LMBuilder)
+    - ``class_lm``: Class-based LM builder (ClassLMBuilder)
+
+    Parameters:
+    - ``output_dir``: where build outputs will be written
+    - ``summarizer_type``: which summarizer implementation to use
+    - ``matcher_type``: which matcher implementation to use
+    - ``builder_type``: which builder implementation to use
+    - ``lm_name`` / ``summarizer_lm_name`` / ``matcher_lm_name``:
+      model identifiers for different LLM components
+    - ``summarizer_config`` / ``matcher_config`` / ``builder_config``:
+      additional configuration dicts passed to respective components
+    """
 
     def __init__(self, finmy_config: dict):
-    # def __init__(self, output_dir: str):
         """
-        Initialize the pipeline with output directory.
+        Initialize the pipeline with configuration.
 
         Args:
-            output_dir: Directory where output files will be saved
+            finmy_config:
+                - A ``dict`` with configuration parameters including:
+                  - ``output_dir``: Output directory for build results
+                  - ``summarizer_type``: Type of summarizer (default: "kw_lm")
+                  - ``matcher_type``: Type of matcher (default: "llm")
+                  - ``builder_type``: Type of builder (default: "class_lm")
+                  - ``lm_name``: Default LLM name for all components
+                  - ``summarizer_lm_name``: LLM name for summarizer (overrides lm_name)
+                  - ``matcher_lm_name``: LLM name for matcher (overrides lm_name)
         """
-        self.output_dir = finmy_config["output_dir"]
-        self.logger = None
-        self.data_manager = None
+        self.config = dict(finmy_config) if finmy_config is not None else {}
+
+        # Core configuration fields
+        self.output_dir = self.config.get("output_dir", "output")
+
+        # Component type selection (using registry)
+        self.summarizer_type = self.config.get("summarizer_type", "kw_lm")
+        self.matcher_type = self.config.get("matcher_type", "llm")
+        self.builder_type = self.config.get("builder_type", "class_lm")
+
+        # Optional, more fine‑grained LLM configuration
+        self.default_lm_name = self.config.get(
+            "lm_name", "ARK/doubao-seed-1-6-flash-250828"
+        )
+        self.summarizer_lm_name = self.config.get(
+            "summarizer_lm_name", self.default_lm_name
+        )
+        self.matcher_lm_name = self.config.get("matcher_lm_name", self.default_lm_name)
+
+        self.logger: Optional[logging.Logger] = None
+        self.data_manager: Optional[DataManager] = None
+
+    # ------------------------------------------------------------------
+    # Class methods for querying available component types
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def list_available_summarizers(cls) -> List[str]:
+        """Return a list of available summarizer types."""
+        return get_summarizer_registry().list_available()
+
+    @classmethod
+    def list_available_matchers(cls) -> List[str]:
+        """Return a list of available matcher types."""
+        return get_matcher_registry().list_available()
+
+    @classmethod
+    def list_available_builders(cls) -> List[str]:
+        """Return a list of available builder types."""
+        return get_builder_registry().list_available()
+
+    # ------------------------------------------------------------------
+    # Internal helpers for configurable component selection (Registry-based)
+    # ------------------------------------------------------------------
+
+    def _create_summarizer(self) -> BaseSummarizer:
+        """
+        Factory for the summarizer component using registry pattern.
+
+        Returns:
+            A summarizer instance based on ``summarizer_type`` configuration.
+        """
+        summarizer_config = {
+            "llm_name": self.summarizer_lm_name,
+            **(self.config.get("summarizer_config", {})),
+        }
+        return get_summarizer_registry().get(self.summarizer_type, summarizer_config)
+
+    def _create_matcher(self) -> BaseMatcher:
+        """
+        Factory for the matcher component using registry pattern.
+
+        Returns:
+            A matcher instance based on ``matcher_type`` configuration.
+        """
+        matcher_config = {
+            "lm_name": self.matcher_lm_name,
+            **(self.config.get("matcher_config", {})),
+        }
+        return get_matcher_registry().get(self.matcher_type, matcher_config)
+
+    def _create_builder(self) -> BaseBuilder:
+        """
+        Factory for the builder component using registry pattern.
+
+        Returns:
+            A builder instance based on ``builder_type`` configuration.
+        """
+        builder_config = {
+            "output_dir": self.output_dir,
+            **(self.config.get("builder_config", {})),
+        }
+        return get_builder_registry().get(self.builder_type, builder_config)
 
     def setup_logging(self) -> logging.Logger:
         """
@@ -121,14 +255,85 @@ class FinmyPipeline:
             formatted_time = utc_time.strftime("%Y-%m-%d %H:%M:%S %Z")
             raw_data = RawData(
                 raw_data_id=str(uuid.uuid4()),
-                source="",
+                source="mock_text",
                 location=filename,
                 time=formatted_time,
                 data_copyright="AgenticFin Lab, All rights reserved.",
-                tag=[""],
-                method="",
+                tag="",
+                method="mock_input",
             )
             raw_data_records.append(raw_data)
+        return raw_data_records
+
+    def create_raw_data_from_pdf_output(
+        self, pdf_output: PDFCollectorOutput
+    ) -> List[RawData]:
+        """
+        Convert PDFCollectorOutput into RawData objects.
+
+        Each parsed PDF record is mapped directly to a RawData entry by
+        reusing its metadata and parsed markdown location.
+        """
+        raw_data_records: List[RawData] = []
+        for sample in pdf_output.records:
+            # sample.Location is already a markdown file path produced by PDFCollector
+            # We treat it as the storage location for the raw content.
+            time_str = sample.Time or datetime.now(pytz.UTC).strftime(
+                "%Y-%m-%d %H:%M:%S %Z"
+            )
+            raw_data = RawData(
+                raw_data_id=sample.RawDataID or str(uuid.uuid4()),
+                source=sample.Source,
+                location=sample.Location,
+                time=time_str,
+                data_copyright=sample.Copyright
+                or "AgenticFin Lab, All rights reserved.",
+                method=sample.Method or "PDFCollector",
+                tag=sample.Tag or "",
+            )
+            raw_data_records.append(raw_data)
+        return raw_data_records
+
+    def create_raw_data_from_url_output(
+        self, url_output: URLCollectorOutput
+    ) -> List[RawData]:
+        """
+        Convert URLCollectorOutput into RawData objects.
+
+        For each parsed URL, the cleaned text content is written to block storage
+        and referenced by the resulting RawData entry.
+        """
+        raw_data_records: List[RawData] = []
+
+        # url_output.parsed_contents: Dict[int, str] maps URL ID -> cleaned text
+        contents = url_output.parsed_contents
+        results = {item.get("ID"): item for item in url_output.results}
+
+        for url_id, content in contents.items():
+            result = results.get(url_id, {})
+            url = result.get("url", "")
+
+            # Skip entries without meaningful content
+            if not content:
+                continue
+
+            # Persist the cleaned content into block storage
+            filename = write_text_data_to_block(content)
+
+            utc_time = datetime.now(pytz.UTC)
+            formatted_time = utc_time.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+            raw_data = RawData(
+                raw_data_id=str(uuid.uuid4()),
+                source=url,
+                location=filename,
+                time=formatted_time,
+                data_copyright="AgenticFin Lab, All rights reserved.",
+                method="URLParser",
+                tag="url",
+            )
+            raw_data_records.append(raw_data)
+
         return raw_data_records
 
     def store_raw_data(self, raw_data_records: List[RawData]) -> None:
@@ -183,7 +388,7 @@ class FinmyPipeline:
             SummarizedUserQuery object containing the summarized query
         """
         self.logger.info("Generating summarized query using Summarizer...")
-        summarizer = KWLMSummarizer({"llm_name": "ARK/doubao-seed-1-6-flash-250828"})
+        summarizer = self._create_summarizer()
         summarized_query = summarizer.summarize(user_query_input)
         self.logger.info(f"Summarized query created: {summarized_query}")
         self.logger.info("=" * 25)
@@ -224,7 +429,7 @@ class FinmyPipeline:
             Match output from the LLM matcher
         """
         self.logger.info("Performing matching using lm_matcher...")
-        lm_matcher = LLMMatcher(lm_name="ARK/doubao-seed-1-6-flash-250828")
+        lm_matcher = self._create_matcher()
         match_output = lm_matcher.run(match_input)
         self.logger.info(f"Matching result: {match_output}")
         self.logger.info("=" * 25)
@@ -290,7 +495,10 @@ class FinmyPipeline:
         return build_input
 
     def lm_build_pipeline_main(
-        self, raw_texts: List[str], query_text: str, key_words: List[str]
+        self,
+        raw_texts: List[str],
+        query_text: str,
+        key_words: List[str],
     ):
         """
         Main function that orchestrates the complete data processing workflow.
@@ -304,6 +512,10 @@ class FinmyPipeline:
         6. Generate meta samples from match results
         7. Store meta samples
         8. Create build input for downstream processing
+        9. Run the configured builder to get the final build output.
+
+        Returns:
+            The build output object produced by the selected builder.
         """
         # Initialize logging
         self.setup_logging()
@@ -311,8 +523,7 @@ class FinmyPipeline:
         # Initialize data manager
         self.data_manager = DataManager()
 
-        # Step 1: Create raw data records from sample texts
-        raw_texts = raw_texts
+        # Step 1: Create raw data records from sample texts (mock flow, kept for backward compatibility)
         raw_data_records = self.create_raw_data_records(raw_texts)
 
         # Step 2: Store raw data records in database
@@ -327,8 +538,7 @@ class FinmyPipeline:
         # Step 4: Summarize user query
         summarized_query = self.summarize_user_query(user_query_input)
 
-            
-        meta_samples=[]
+        meta_samples = []
         for i in range(len(raw_data_records)):
             # Step 5: Create match input from raw data and summarized query
             match_input = self.match_raw_data_with_query(
@@ -353,16 +563,8 @@ class FinmyPipeline:
 
         print("Start building ...")
 
-        # Uncomment for standard LMBuilder
-        # lmbuilder = LMBuilder(
-        #     config={"output_dir": self.output_dir}  # Specify output directory
-        # )
-        # build_output = lmbuilder.build(build_input)
-
-        # Using ClassLMBuilder
-        lmbuilder = ClassLMBuilder(
-            config={"output_dir": self.output_dir}  # Specify output directory
-        )
+        # Create builder according to configuration and run build
+        lmbuilder = self._create_builder()
         build_output = lmbuilder.build(build_input)
 
         # print("build_output:", build_output)
@@ -370,3 +572,85 @@ class FinmyPipeline:
         assert build_output is not None, "BuildOutput should be created successfully"
 
         self.logger.info("Test flow completed successfully!")
+        return build_output
+
+    def lm_build_pipeline_main_with_collectors(
+        self,
+        pdf_output: Optional[PDFCollectorOutput],
+        url_output: Optional[URLCollectorOutput],
+        query_text: str,
+        key_words: List[str],
+    ):
+        """
+        Main pipeline entry that uses PDF collector and URL collector outputs
+        instead of mock text data.
+
+        Args:
+            pdf_output: Parsed and (optionally) filtered results from PDFCollector.
+            url_output: Parsed and cleaned results from URLParser/URLCollector.
+            query_text: Natural language query text.
+            key_words: List of keywords for the query.
+        Returns:
+            The build output object produced by the selected builder.
+        """
+        # Initialize logging
+        self.setup_logging()
+
+        # Initialize data manager
+        self.data_manager = DataManager()
+
+        # Step 1: Build RawData records from collectors
+        raw_data_records: List[RawData] = []
+
+        if pdf_output is not None:
+            raw_data_records.extend(self.create_raw_data_from_pdf_output(pdf_output))
+
+        if url_output is not None:
+            raw_data_records.extend(self.create_raw_data_from_url_output(url_output))
+
+        if not raw_data_records:
+            raise ValueError(
+                "No raw data records created from collectors. "
+                "Please ensure pdf_output or url_output contains data."
+            )
+
+        # Step 2: Store raw data in database
+        self.store_raw_data(raw_data_records)
+
+        # Step 3: Create and store user query input
+        user_query_input = self.create_and_store_user_query(
+            query_text=query_text,
+            key_words=key_words,
+        )
+
+        # Step 4: Summarize user query
+        summarized_query = self.summarize_user_query(user_query_input)
+
+        meta_samples = []
+        for raw_data in raw_data_records:
+            # Step 5: Create match input from raw data and summarized query
+            match_input = self.match_raw_data_with_query(raw_data, summarized_query)
+            # Step 6: Perform LLM matching
+            match_output = self.perform_llm_matching(match_input)
+
+            # Step 7: Convert match output to meta samples
+            meta_sample = self.create_meta_samples(match_output, raw_data)
+            meta_samples += meta_sample
+
+        # Step 8: Store meta samples in database
+        self.store_meta_samples(meta_samples)
+
+        # Step 9: Create build input for downstream processing
+        build_input = self.create_build_input(user_query_input, meta_samples)
+        assert build_input is not None, "BuildInput should be created successfully"
+
+        print("Start building ...")
+
+        # Create builder according to configuration and run build
+        lmbuilder = self._create_builder()
+        build_output = lmbuilder.build(build_input)
+
+        assert build_output is not None, "BuildOutput should be created successfully"
+
+        self.logger.info("Collector-based test flow completed successfully!")
+        return build_output
