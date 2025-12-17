@@ -68,25 +68,6 @@ How to output (strict, single-file JSON):
                   ├── actions: { participant_id → List[Action] }
                   ├── transactions: List[Transaction]
                   └── interactions: List[Interaction]
-            
-    Example:
-    {
-      "stages": [
-        {
-          "name": "",
-          "episodes": [
-            {
-              "participants": [{}, {}, {}],
-              "participant_relations": [{}, {}, {}],
-              "actions": { "P_A": [{}, {}] },
-              "transactions": [{}, {}, {}],
-              "interactions": [{}, {}, {}]
-            }
-          ]
-        }
-      ]
-    }
-      
 
 Extraction and validation process:
 1) Scope alignment using `Query` and `Keywords`; ignore unrelated content.
