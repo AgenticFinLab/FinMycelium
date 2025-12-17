@@ -17,7 +17,7 @@ from lmbase.inference import api_call
 
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.converter import read_text_data_from_block
-from finmy.builder.class_build import prompts
+from finmy.builder.class_build.prompts import *
 from finmy.builder.utils import extract_json_response
 
 
@@ -67,26 +67,26 @@ class ClassLMBuilder(BaseBuilder):
 
         # Map event types to their specific prompts
         self.class_prompts = {
-            "Ponzi Scheme": prompts.ponzi_scheme_prompt(),
-            "Pyramid Scheme": prompts.pyramid_scheme_prompt(),
-            "Pump and Dump": prompts.pump_and_dump_prompt(),
-            "Market Manipulation": prompts.market_manipulation_prompt(),
-            "Accounting Fraud": prompts.accounting_fraud_prompt(),
-            "Cryptocurrency / ICO Scam": prompts.cryptocurrency_ico_scam_prompt(),
-            "Forex / Binary Options Fraud": prompts.forex_binary_options_fraud_prompt(),
-            "Advance-Fee Fraud": prompts.advance_fee_fraud_prompt(),
-            "Affinity Fraud": prompts.affinity_fraud_prompt(),
-            "Embezzlement / Misappropriation of Funds": prompts.embezzlement_misappropriation_of_funds_prompt(),
-            "Bank Run": prompts.bank_run_prompt(),
-            "Short Squeeze": prompts.short_squeeze_prompt(),
-            "Sovereign Default": prompts.sovereign_default_prompt(),
-            "Liquidity Spiral": prompts.liquidity_spiral_prompt(),
-            "Regulatory Arbitrage": prompts.regulatory_arbitrage_prompt(),
-            "Credit Event": prompts.credit_event_prompt(),
-            "Systemic Shock": prompts.systemic_shock_prompt(),
-            "Leverage Cycle Collapse": prompts.leverage_cycle_collapse_prompt(),
-            "Stablecoin Depeg": prompts.stablecoin_depeg_prompt(),
-            "Other Financial Event": prompts.other_financial_event_prompt(),
+            "Ponzi Scheme": ponzi_scheme.ponzi_scheme_prompt(),
+            "Pyramid Scheme": pyramid_scheme.pyramid_scheme_prompt(),
+            "Pump and Dump": pump_and_dump.pump_and_dump_prompt(),
+            "Market Manipulation": market_manipulation.market_manipulation_prompt(),
+            "Accounting Fraud": accounting_fraud.accounting_fraud_prompt(),
+            "Cryptocurrency / ICO Scam": cryptocurrency_ico_scam.cryptocurrency_ico_scam_prompt(),
+            "Forex / Binary Options Fraud": forex_binary_options_fraud.forex_binary_options_fraud_prompt(),     
+            "Advance-Fee Fraud": advance_fee_fraud.advance_fee_fraud_prompt(),
+            "Affinity Fraud": affinity_fraud.affinity_fraud_prompt(),
+            "Embezzlement / Misappropriation of Funds": embezzlement_misappropriation_of_funds.embezzlement_misappropriation_of_funds_prompt(),
+            "Bank Run": bank_run.bank_run_prompt(),
+            "Short Squeeze": short_squeeze.short_squeeze_prompt(),
+            "Sovereign Default": sovereign_default.sovereign_default_prompt(),
+            "Liquidity Spiral": liquidity_spiral.liquidity_spiral_prompt(),
+            "Regulatory Arbitrage": regulatory_arbitrage.regulatory_arbitrage_prompt(),
+            "Credit Event": credit_event.credit_event_prompt(),
+            "Systemic Shock": systemic_shock.systemic_shock_prompt(),
+            "Leverage Cycle Collapse": leverage_cycle_collapse.leverage_cycle_collapse_prompt(),
+            "Stablecoin Depeg": stablecoin_depeg.stablecoin_depeg_prompt(),
+            "Other Financial Event": other_financial_event.other_financial_event_prompt(),
         }
 
     def save_event_cascade(
