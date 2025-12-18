@@ -184,9 +184,7 @@ def filter_dataclass_fields(
 
     Parameters:
     - code_text: Python source text containing `@dataclass` classes.
-    - include: Mapping of `ClassName -> List[field_name]` to retain. Use `None` or an empty
-      list to retain all fields for that class header (not recommended for filtering). Classes
-      not present in the mapping are omitted.
+    - include: Mapping of `ClassName -> List[field_name]` to retain. Use `None` or an empty list to retain all fields for that class header (not recommended for filtering). Classes not present in the mapping are omitted.
 
     Returns:
     - Concatenated text of filtered `@dataclass` class definitions, preserving decorators and

@@ -1,157 +1,134 @@
 def insider_trading_prompt() -> str:
     return """
-You are an expert financial forensic analyst and legal investigator specializing in market abuse and securities fraud. Your task is to comprehensively analyze and reconstruct a specific insider trading case based on provided multi-source data (e.g., SEC/regulatory filings, court documents, news reports, company announcements, wiretap transcripts, trading records).
+You are a forensic financial historian and a narrative reconstruction specialist.
 
-**Core Objective:**
-Produce a complete, factual, and logically structured reconstruction of the insider trading event. This must detail the entire lifecycle: from the origin of the material nonpublic information (MNPI), its unlawful communication or misappropriation, the subsequent trading activities, the concealment attempts, to the eventual detection, investigation, and legal outcomes. Emphasis must be placed on the information chain, trading mechanics, actors' roles and intents, market impact, and legal consequences.
+**Objective:** To reconstruct a comprehensive, deeply detailed, and historically accurate profile of a specific insider trading fraud event. Your output must capture the event's full lifecycle, from its sociocultural origins to its long-term societal impact, mirroring the detailed analysis of a cinematic historical documentary. The reconstruction must be based strictly on factual information provided by the user or retrieved from credible sources, with no speculative or fictional elements.
 
-**Data Input:**
-You will receive raw text/data extracted from various sources regarding a specific insider trading case (e.g., "Case X involving Company Y", "The [Tippee Name] Network"). This data may be fragmented, redundant, or contain legal and technical jargon. You must synthesize information from complaints, indictments, settlements, and news to build a coherent, fact-grounded narrative.
+**Output Format:** A single, extensive, and self-contained JSON object.
 
-**Output Format Requirements:**
-You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any explanatory text outside the JSON.
+**Instructions for JSON Construction:**
+1.  **Base Structure:** The JSON must follow the exact top-level key structure provided: `metadata`, followed by the six lifecycle stages (`stage_I` through `stage_VI`). Each stage must contain multiple nested objects and arrays to capture granular detail.
+2.  **Lifecycle Phases:** Populate each stage according to its sociological definition. Treat each phase as a chapter in the event's story, detailing the conditions, actions, perceptions, and consequences specific to that period.
+3.  **Granular Fields:** Every field must be populated with specific, concrete information. Avoid generalizations. Use exact names, dates, figures, quotes (where documented), legal citations, and descriptions of specific actions. Where an exact value is unknown but a detail is relevant, use a carefully qualified statement (e.g., "alleged to be," "reportedly," "estimated at").
+4.  **Integrated Explanation:** The "value" for each field should itself contain both the factual data and its explanatory context. Do not add a separate "explanation" key. Instead, write the value as a concise but informative statement that makes the field's significance clear.
+5.  **Fact-Based:** All information must be rooted in verifiable facts from the provided case materials or credible external sources. Distinguish clearly between established fact, allegation, and insider testimony. Cite the source of key facts where possible within the value string (e.g., "As stated in the SEC complaint...").
+6.  **Comprehensiveness:** Strive to create a holistic portrait. Beyond the core illegal trade, include details on the corporate environment, technological tools used, psychological states, regulatory interactions, media narrative shifts, legal strategy nuances, and the personal consequences for all involved parties (perpetrators, victims, colleagues, families).
 
-**Comprehensive JSON Schema and Field Definitions for an Insider Trading Case:**
+Here is the required JSON schema outline with exemplary field descriptions. **Populate it with exhaustive, specific data from the target insider trading case.**
 
-```json
 {
   "insider_trading_reconstruction": {
     "metadata": {
-      "case_identifier": "string: The official case name (e.g., 'SEC v. John Doe', 'DOJ Docket 1:23-cr-00456').",
-      "common_case_name": "string: The widely recognized name in media (e.g., 'The ABC Corp Earnings Leak').",
-      "primary_regulatory_jurisdiction": "string: Primary investigating authority (e.g., 'U.S. SEC', 'UK FCA', 'Hong Kong SFC').",
-      "relevant_securities_exchanges": "array: List of exchanges where the implicated securities are traded (e.g., ['NASDAQ', 'NYSE']).",
-      "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC Complaint, DOJ Indictment, Final Judgment, Company 8-K filings')."
-    },
-    "overview": {
-      "summary": "string: A concise 3-5 sentence summary of the case: who tipped/what was tipped, who traded, on what security, and the core outcome.",
-      "legal_theory_violated": "string: The specific legal doctrine (e.g., 'Classical Theory (Breach of Duty)', 'Misappropriation Theory', 'Rule 10b5-1', 'EU Market Abuse Regulation Art. 14').",
-      "total_duration_months": "number: Approximate duration from the first unlawful act (e.g., initial tip) to the last trade based on the same MNPI, in months.",
-      "is_ring_or_network": "boolean: Indicates if the case involved a coordinated ring of multiple tippers and traders.",
-      "is_cyber_hacking_based": "boolean: Indicates if MNPI was obtained via hacking/intrusion vs. human source."
-    },
-    "key_actors": {
-      "insider_tipper(s)": [
-        {
-          "name": "string",
-          "role_vis_a_vis_issuer": "string: Their official position related to the source of MNPI (e.g., 'Corporate Executive', 'Board Member', 'Lawyer on M&A deal', 'Print Shop Employee').",
-          "duty_breached": "string: The fiduciary or confidentiality duty they owed (e.g., 'Duty to company shareholders', 'Duty to law firm client', 'Confidentiality agreement').",
-          "personal_benefit_received": "string: What the tipper gained (e.g., 'Cash kickback', 'Career advice', 'Friendship/reputational benefit', 'N/A if misappropriator').",
-          "legal_status_at_termination": "string: Final outcome (e.g., 'Settled with SEC (consent decree)', 'Convicted at trial', 'Pled guilty', 'Deceased')."
-        }
-      ],
-      "trader_tippee(s)": [
-        {
-          "name": "string",
-          "relationship_to_tipper": "string (e.g., 'Friend', 'Family Member', 'Business Associate', 'Coconspirator').",
-          "knowledge_of_mnpi_status": "string: Description of evidence they knew/were reckless in not knowing info was MNPI and came from a breach.",
-          "trading_entity_used": "string: Account/vehicle used for trading (e.g., 'Personal brokerage account', 'Offshore shell company XYZ Ltd').",
-          "legal_status_at_termination": "string: Final outcome."
-        }
-      ],
-      "intermediaries_facilitators": [
-        {
-          "name_role": "string (e.g., 'Broker Peter Park', 'Courier Service')",
-          "involvement_nature": "string: How they facilitated (e.g., 'Executed large, unusual trades', 'Provided anonymous communication channels', 'Structured payments').",
-          "legal_status": "string: Any action taken against them."
-        }
-      ]
-    },
-    "material_nonpublic_information_mnpi": {
-      "issuer": "string: The public company whose securities were traded (e.g., 'Acme Inc.').",
-      "ticker_symbol": "string",
-      "nature_of_mnpi": "string: The specific confidential event (e.g., 'Upcoming quarterly earnings results (miss)', 'Pending acquisition of Target Co.', 'FDA drug approval decision', 'Major contract loss').",
-      "mnpi_origin_point": "string: Where the information was generated/held (e.g., 'CFO\'s office', 'M&A deal room at Goldman Sachs', 'Clinical trial data repository').",
-      "date_mnpi_became_public": "string: The date the information was officially announced (YYYY-MM-DD).",
-      "price_sensitivity_estimate": "string: The actual stock price movement on/after announcement (e.g., 'Stock fell 42% the day after earnings announcement')."
-    },
-    "mechanism_and_timeline": {
-      "information_transfer_chain": [
-        {
-          "step": "number: Sequential order.",
-          "from_actor": "string: Name/role of discloser.",
-          "to_actor": "string: Name/role of recipient.",
-          "date_approx": "string: Approximate date.",
-          "method": "string: How info was transferred (e.g., 'In-person meeting', 'Encrypted text message', 'Coded language phone call').",
-          "content_summary": "string: What was communicated (be specific, e.g., 'Tipper stated \"the number will be a big miss, under $1.00 per share\"')."
-        }
-      ],
-      "trading_activity_analysis": {
-        "pre_announcement_trading_window": {
-          "start_date": "string: Date of first suspicious trade linked to the MNPI.",
-          "end_date": "string: Date of last such trade before public announcement.",
-          "total_suspicious_trades_count": "number: Number of distinct trade orders placed."
-        },
-        "trading_patterns": "array: List of observed patterns (e.g., ['Unusually large options purchases', 'First-ever trade in this security', 'Liquidated other holdings to fund this trade', 'Trades across multiple accounts']).",
-        "positions_taken": "string: Type of securities traded (e.g., 'Common stock', 'Out-of-the-money call options', 'Short sales').",
-        "total_proceeds_from_sales": "number: Total $ value received from selling securities acquired based on MNPI.",
-        "total_losses_avoided": "number: Total $ value of losses avoided by selling before bad news or shorting.",
-        "estimated_illicit_gain_loss_avoided": "number: Sum of proceeds and losses avoided, representing gross illegal profit."
+      "scheme_common_name": "e.g., 'The Galleon Group Insider Trading Network' or 'Martha Stewart ImClone Case'. The colloquial or media-given name for the scandal.",
+      "official_legal_case_name": "e.g., 'United States v. Raj Rajaratnam et al., 11 Cr. 00906 (SDNY)'. The formal title of the leading criminal or regulatory proceeding.",
+      "primary_perpetrator_name": "e.g., 'Raj Rajaratnam'. The central figure who either executed the most significant trades or orchestrated the network, with their title and affiliation at the time: 'Founder and Managing Member of Galleon Management, LP'.",
+      "key_associated_entities": ["e.g., 'Galleon Group, LP', 'New Castle Funds LLC', 'Intel Corporation', 'Goldman Sachs & Co.']. A list of firms central to the scheme: the perpetrator's fund, the source companies, and facilitating institutions.",
+      "operational_timeframe": {
+        "suspected_inception_year": "e.g., 2006. The year the first identified material non-public information (MNPI) exchange and trade in this scheme occurred.",
+        "public_collapse_year": "e.g., 2009. The year the investigation became public with arrests or SEC charges.",
+        "duration_years": "e.g., 3. The span between inception and public collapse.",
+        "key_date_arrests": "YYYY-MM-DD, e.g., 2009-10-16. The date the primary perpetrator was arrested.",
+        "key_date_indictment": "YYYY-MM-DD, e.g., 2009-10-16. The date the formal indictment was unsealed."
       },
-      "concealment_obfuscation_tactics": "array: List of methods used to hide the scheme (e.g., ['Using third-party \"nominee\" accounts', 'Creating false documentation for fund transfers', 'Agreeing on false cover stories', 'Using burner phones'])."
+      "estimated_global_scale": {
+        "currency": "e.g., USD",
+        "illegal_profit_gain_avoided_loss": "e.g., 'Over $60 million in illicit profits and loss avoided'. The total monetary benefit from the illegal trades as determined by prosecutors.",
+        "victim_count_estimate": "Describes the victim class: e.g., 'The investing public and counterparties to the fraudulent trades; direct individual victims are diffuse but number in the millions of market participants'.",
+        "geographic_reach": ["e.g., 'United States', 'India', 'Sri Lanka']. Countries where crimes occurred, proceeds flowed, or investigations took place.",
+        "securities_impacted": ["e.g., 'Google Inc. (GOOG)', 'Hilton Hotels Corp. (HLT)', 'Polycom Inc. (PLCM)']. A non-exhaustive list of publicly traded companies whose stock was traded based on MNPI."
+      },
+      "core_legal_violations": ["e.g., 'Securities Fraud under 15 U.S.C. § 78j(b) and Rule 10b-5', 'Conspiracy to Commit Securities Fraud', 'Criminal Insider Trading under 15 U.S.C. § 78ff']. The specific statutes and rules violated.",
+      "investigative_agencies": ["e.g., 'U.S. Securities and Exchange Commission (SEC), Enforcement Division', 'Federal Bureau of Investigation (FBI), New York Field Office', 'U.S. Attorney's Office for the Southern District of New York (SDNY)']."
     },
-    "detection_and_investigation": {
-      "detection_trigger": "string: What initially raised flags (e.g., 'SEC\'s market surveillance analytics (CANARY)', 'Whistleblower tip', 'Unusual options activity alert from exchange', 'Parallel investigation').",
-      "investigative_techniques": "array: List of methods used by authorities (e.g., ['Analysis of trading records (blue sheets)', 'Wiretaps (Title III)', 'Forensic analysis of electronic devices', 'Cooperating witness testimony', 'Financial subpoenas'].).",
-      "key_evidence_pieces": "array: List of critical evidence that solidified the case (e.g., ['Text message: \"Sell everything before Tuesday\"', 'Testimony from tipper about personal benefit', 'Phone records placing tipper and trader together before trade', 'Surveillance footage'].)."
+    "stage_I_-_notionally_normal_starting_point": {
+      "cultural_environment": {
+        "industry_norms_circa_period": "Describes the accepted, perhaps lax, practices in the hedge fund/finance industry before the scandal. e.g., 'Era of "mosaic theory" often blurred with aggressive information gathering; expert networks were widely used and largely unscrutinized; the "Wall Street club" culture fostered discreet information sharing'.",
+        "perceived_regulatory_rigor": "The market's perception of enforcement risk. e.g., 'SEC was perceived as under-resourced post-2008 crisis, focused on larger market-structure issues; insider trading convictions were seen as difficult to prove without a clear quid pro quo'."
+      },
+      "precautionary_norms": {
+        "formal_compliance_framework": "The existing legal and internal rules. e.g., 'The Securities Exchange Act of 1934, Rule 10b-5; corporate insider trading policies; hedge fund compliance manuals prohibiting receipt of MNPI; mandatory employee training'.",
+        "informal_safeguards": "The unwritten cultural barriers. e.g., 'Professional reputation risk; understood bright lines against explicit tips on earnings or M&A; fear of wiretaps was minimal'."
+      },
+      "perpetrator_profile_initial": {
+        "professional_background": "e.g., 'A Wharton MBA, former analyst at Needham & Co., founded Galleon in 1997, built it into a multi-billion dollar hedge fund, renowned for technology stock expertise'.",
+        "reputation_pre_scandal": "e.g., 'Viewed as a savvy, hard-working, and charismatic investor; featured in positive media profiles; a prominent philanthropist in the Sri Lankan community'.",
+        "theoretical_access_to_mnpi": "Describes their legitimate channels. e.g., 'As a large fund manager, had legitimate access to company management through routine "channel checks" and analyst conferences'."
+      }
     },
-    "legal_and_regulatory_proceedings": {
-      "civil_regulatory_action": [
-        {
-          "filing_agency": "string (e.g., 'U.S. SEC')",
-          "charges": "array: List of specific civil charges (e.g., ['Violation of Securities Exchange Act Section 10(b)', 'Violation of Rule 10b-5']).",
-          "resolution": "string (e.g., 'Consent Judgment: Permanent injunction, disgorgement of $X plus interest, civil penalty of $Y').",
-          "date_resolved": "string: Approximate date."
-        }
-      ],
-      "criminal_prosecution": [
-        {
-          "filing_agency": "string (e.g., 'U.S. DOJ, SDNY')",
-          "charges": "array: List of criminal charges (e.g., ['Securities Fraud', 'Conspiracy to Commit Securities Fraud', 'Wire Fraud']).",
-          "resolution": "string (e.g., 'Pled guilty to one count of securities fraud', 'Convicted at trial on all counts', 'Case dismissed').",
-          "sentencing_details": "string: If applicable, sentence (e.g., '36 months imprisonment, 2 years supervised release, forfeiture of $Z').",
-          "date_resolved": "string: Approximate date."
-        }
-      ],
-      "related_administrative_action": [
-        {
-          "actor": "string (e.g., 'FINRA', 'Corporate Board')",
-          "action": "string (e.g., 'Barred from association with any broker-dealer', 'Clawback of executive bonuses', 'Termination of employment')."
-        }
-      ]
+    "stage_II_-_incubation_period": {
+      "initial_boundary_transgressions": {
+        "first_known_illicit_contact": "e.g., 'In 2006, a junior Intel executive, initially a legitimate source, began providing advance details on Intel's earnings to Rajaratnam beyond public guidance'.",
+        "rationalization_method": "How the perpetrator justified early actions. e.g., 'Viewed it as superior research within the "gray area" of mosaic theory; considered it a reciprocal favor within a network of contacts'.",
+        "communication_methods_early": "e.g., 'Use of personal cell phones and email from non-office locations; vague yet understood code words during calls'."
+      },
+      "network_expansion_and_routinization": {
+        "recruitment_of_tippers": "e.g., 'Leveraged his alumni network and industry stature to cultivate sources at McKinsey, IBM, and Goldman Sachs, often with implicit promises of career support or reciprocal information'.",
+        "internalization_within_organization": "How the fraud permeated the perpetrator's firm. e.g., 'Portfolio managers under Rajaratnam were encouraged to develop their own "edge"; a culture of secrecy where lucrative trades were not questioned; compliance function was bypassed or misled'.",
+        "escalation_of_stakes": "e.g., 'Trades grew in size from hundreds of thousands to millions of dollars per tip; information moved from earnings to impending mergers and acquisitions'."
+      },
+      "latent_failures_and_missed_signals": {
+        "regulatory_missed_opportunities": "e.g., 'Unusual options activity ahead of deals was noted by regulators but not aggressively pursued initially; tips to the SEC were not acted upon promptly'.",
+        "internal_red_flags_ignored": "e.g., 'A Galleon trader expressed concern about a tip's provenance but was reassured by Rajaratnam; the fund's auditor accepted vague explanations for trading patterns'.",
+        "technological_enablers": "e.g., 'Use of prepaid "burner" phones increased; encrypted messaging apps were explored; but reliance on recorded office lines for some crucial calls persisted'."
+      }
     },
-    "financial_impact_and_recovery": {
-      "disgorgement_ordered": "number: Total amount ordered to be returned (ill-gotten gains plus interest).",
-      "civil_penalties_imposed": "number: Total civil fines/penalties ordered.",
-      "criminal_forfeiture_ordered": "number: Total assets ordered forfeited to the government.",
-      "restitution_ordered_to_victims": "number: Amount, if any, ordered to be paid to identifiable victims (e.g., counterparties).",
-      "estimated_recovery_rate": "string: Estimate of percentage of ordered amounts actually collected/collected.",
-      "harm_to_market_integrity": "string: Qualitative description of damage to fair markets and investor confidence."
+    "stage_III_-_precipitating_event": {
+      "triggering_investigative_action": {
+        "origin_of_investigation": "e.g., 'A separate investigation into a boutique hedge fund, New Castle, using wiretaps for credit fraud, captured conversations about insider trading with a Galleon trader in 2008'.",
+        "key_decision_point": "e.g., 'The SDNY and FBI, led by then-U.S. Attorney Preet Bharara, made the unprecedented decision to seek and obtain court authorization for wiretaps on Rajaratnam's cell phone, applying RICO-era tools to white-collar crime'.",
+        "first_major_breakthrough": "e.g., 'A wiretapped call on March 7, 2008, where Rajaratnam is told about a $4 billion earnings write-down at Akamai Technologies by a McKinsey consultant, minutes before trading heavily'."
+      },
+      "erosion_of_secrecy": {
+        "first_cooperating_witness": "e.g., 'A junior Galleon portfolio manager, facing his own charges, agreed to wear a wire and record conversations with Rajaratnam in early 2009'.",
+        "key_evidence_gathered": "e.g., 'Over 18 months, prosecutors recorded over 2,400 phone conversations, capturing explicit discussions of earnings figures, deal negotiations, and efforts to conceal sources'.",
+        "internal_suspicion_arousal": "e.g., 'Rajaratnam began warning associates to be careful and questioned if phones were tapped, but continued the behavior, believing his prestige made him untouchable'."
+      }
     },
-    "synthesis_and_red_flags": {
-      "systemic_vulnerabilities_exposed": "array: List of systemic or process weaknesses this case revealed (e.g., ['Inadequate "wall-crossing" procedures at investment bank', 'Over-reliance on trust for printers handling sensitive documents', 'Lack of surveillance on trading by distant relatives of insiders'].).",
-      "behavioral_red_flags_observable": "array: List of behavioral patterns that were indicative (e.g., ['Trader made largest-ever investment days before news', 'Tipper and trader had sudden, unexplained financial transfers post-trade', 'Trader inquired about short-selling for first time'].).",
-      "surveillance_detection_insights": "string: Key lesson for market surveillance from this case (e.g., 'Effectiveness of correlating options volatility spikes with employee network contacts')."
+    "stage_IV_-_onset": {
+      "moment_of_collapse": {
+        "arrest_scenario": "e.g., 'At 6:00 AM on October 16, 2009, FBI agents arrested Rajaratnam at his luxury Manhattan apartment; simultaneous raids seized documents from Galleon's offices'.",
+        "public_announcement": "e.g., 'A press conference held later that day by the SEC, FBI, and SDNY announced the largest hedge fund insider trading case in history, sending shockwaves through Wall Street'.",
+        "immediate_market_reaction": "e.g., 'Galleon Group funds were frozen; investors rushed to submit redemption requests; shares of companies named in the complaint experienced volatile trading'."
+      },
+      "immediate_consequences": {
+        "perpetrator_status_change": "e.g., 'Rajaratnam resigned as Galleon chairman; released on $100 million bond with electronic monitoring; the Galleon fund began immediate wind-down'.",
+        "collateral_damage_initial": "e.g., 'Multiple other executives at Intel, McKinsey, and IBM were implicated and placed on leave or resigned; a "circle of trust" evaporated overnight'.",
+        "legal_machinery_activation": "e.g., 'The SEC filed a parallel civil suit seeking disgorgement and penalties; a grand jury returned a multi-count indictment; bail conditions restricted international travel.'"
+      },
+      "media_and_public_narrative": {
+        "initial_framing": "e.g., 'Portrayed as a tale of epic greed and corruption at the highest levels of finance; focus on wiretaps as a "game-changer"; scrutiny of the "expert network" industry model'.",
+        "victim_perception": "e.g., 'Public anger directed at the unfairness to ordinary investors; political calls for tougher enforcement; the financial industry reacted with a mix of shock and defensiveness'."
+      }
+    },
+    "stage_V_-_rescue_and_salvage": {
+      "containment_and_emergency_response": {
+        "wind_down_of_operations": "e.g., 'Galleon hired a restructuring firm to liquidate its portfolios in an orderly fashion over several months to return capital to investors, albeit without final profits'.",
+        "cooperators_and_plea_deals": "Lists key figures who flipped. e.g., 'Anil Kumar (McKinsey), Rajiv Goel (Intel), and Danielle Chiesi (New Castle) all pleaded guilty and became cooperating witnesses for the prosecution'.",
+        "regulatory_triage": "e.g., 'SEC launched a sweep of expert network firms; the Financial Industry Regulatory Authority (FINRA) issued alerts on insider trading compliance'."
+      },
+      "ad_hoc_adaptations": {
+        "industry_compliance_knee_jerk": "e.g., 'Hedge funds abruptly banned or severely restricted the use of expert networks; compliance departments demanded recordings of all trader conversations with outsiders; personal cell phone use on trading floors was restricted'.",
+        "legal_defense_strategy": "e.g., 'Rajaratnam's defense team, led by John Dowd, filed motions to suppress the wiretap evidence, arguing it was obtained improperly and its use was an overreach'.",
+        "public_relations_battles": "e.g., 'The defense painted Rajaratnam as a self-made immigrant success story being targeted unfairly; the prosecution framed him as the kingpin of a corrupt network.'"
+      }
+    },
+    "stage_VI_-_full_cultural_readjustment": {
+      "formal_inquiry_and_adjudication": {
+        "trial_highlights": "e.g., 'The eight-week trial in 2011 featured secret recordings played in court, revealing blatant tips. Key witness Anil Kumar testified tearfully about his corruption. The defense argued trades were based on public information'.",
+        "verdict_and_sentencing": "e.g., 'Found guilty on all 14 counts of conspiracy and securities fraud. On October 13, 2011, sentenced to 11 years in federal prison, then the longest sentence for insider trading. Fined $10 million and ordered to forfeit $53.8 million'.",
+        "appellate_outcomes": "e.g., 'Appeals upheld the conviction and the use of wiretaps, setting a powerful precedent for future white-collar investigations. The Supreme Court declined to hear the case in 2013'."
+      },
+      "systemic_reforms_and_new_norms": {
+        "regulatory_policy_changes": "e.g., 'The SEC's Enforcement Division increased its use of sophisticated data analytics to detect suspicious trading patterns. The "Rajaratnam precedent" made wiretaps a standard tool in complex financial crime cases'.",
+        "industry_practice_overhaul": "e.g., 'Pervasive recording of business-related cell phone calls became common at financial firms. "Information barrier" protocols between advisory and trading divisions were strengthened. Compliance budgets soared'.",
+        "legal_doctrine_evolution": "e.g., 'The case reinforced the "de facto" insider theory and the liability of remote tippees. It blurred the line between hard "quid pro quo" and the more subtle "personal benefit" test, later clarified by the Supreme Court in *Salman* and *Dirks*.'"
+      },
+      "long_term_legacy_and_assessment": {
+        "cultural_symbolism": "e.g., 'Rajaratnam became the archetype of the arrogant hedge fund titan brought low by technology and aggressive prosecution. The case marked the end of an era of perceived impunity for elite insider trading'.",
+        "enduring_impact_on_perpetrators_and_victims": "e.g., 'Rajaratnam served 7.5 years, released to home confinement in 2021 due to health issues; his fortune and reputation destroyed. The diffuse victim class saw no direct restitution, but the deterrence value was argued to strengthen market integrity'.",
+        "scholarly_and_ethical_reappraisal": "e.g., 'The case is a staple in business ethics curricula, used to discuss the slippery slope of information asymmetry. It sparked debate on the boundaries of aggressive research versus fraud, and the ethics of using intrusive surveillance methods in white-collar crime.'"
+      }
     }
   }
 }
-```
-
-**Critical Analysis Instructions:**
-
-1.  **MNPI-Centric Focus:** Every aspect of the reconstruction must be tied back to the specific piece of **Material Nonpublic Information**. Clearly establish its materiality and nonpublic status at the time of trading.
-2.  **Intent and Knowledge ("Scienter"):** For each key actor, especially tippees, deduce and state the evidence regarding their *knowledge* that the information was MNPI and that it came from a breach of duty. This is the core of the violation.
-3.  **Chronological Precision:** The `information_transfer_chain` and `trading_activity_analysis` must be placed on a clear, logical timeline relative to the `date_mnpi_became_public`.
-4.  **Quantitative Rigor:** Populate all monetary and trade-related fields with exact figures from legal documents where possible. Distinguish between *proceeds*, *gains avoided*, *disgorgement*, and *penalties*.
-5.  **Legal Theory Application:** Correctly identify and explain the applicable legal theory (`classical` vs. `misappropriation`). This dictates who qualifies as an "insider" and what duty was breached.
-6.  **Complete Chain of Evidence:** Trace the full path: **Origin of MNPI -> Breach of Duty (or Misappropriation) -> Communication (Tip) -> Trader's Knowledge -> Trading Act -> Concealment -> Detection -> Enforcement Action -> Outcome.**
-7.  **Completeness Mandate:** Strive to provide information for every field in the JSON schema. If information for a specific sub-field is absolutely not found in the provided data, use the value `"Information not available in provided sources."`.
-
-**Final Step Before Output:**
-Perform an internal consistency check.
--   Ensure the trading window (`pre_announcement_trading_window`) ends *before* the `date_mnpi_became_public`.
--   Verify that the list of actors aligns with their roles in the `information_transfer_chain`.
--   Confirm that the sum of `total_proceeds_from_sales` and `total_losses_avoided` is logically consistent with the `estimated_illicit_gain_loss_avoided`.
-
-**Now, synthesize the provided data about the specified insider trading case and output the complete JSON object.**
 """

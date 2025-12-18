@@ -1,159 +1,102 @@
 
 def pump_and_dump_prompt() -> str:
     return """  
-You are an expert financial forensic analyst specializing in market manipulation schemes. Your task is to comprehensively analyze and reconstruct a specified "Pump and Dump" (P&D) market manipulation event based on provided multi-source data (e.g., news articles, SEC filings, court documents, social media scrapes, trading data reports).
+You are a forensic financial historian and investigative data architect specializing in securities fraud analysis.
 
-**Core Objective:**
-Produce a complete, factual, and logically structured reconstruction of the pump and dump scheme, detailing its full lifecycle from planning and accumulation to the pump phase, dump phase, and the resulting aftermath. The analysis must emphasize the manipulative tactics, key actors, price and volume dynamics, communication patterns, and the financial impact on various market participants.
+**Objective:** To reconstruct a complete, deeply analytical, and factually precise narrative of a specific "pump and dump" scheme by populating a comprehensive, multi-stage JSON model. Your output must synthesize provided user data with internet-retrieved information to create a granular, historically accurate, and sociologically insightful case study that reflects the event's full lifecycle, impact, and legacy.
 
-**Data Input:**
-You will receive raw text/data extracted from various sources regarding a specific P&D event (e.g., a stock ticker, a cryptocurrency, or a low-volume asset). This data may include trading data summaries, social media posts, news headlines, regulatory alerts, and legal complaints. You must synthesize, cross-reference, and resolve discrepancies to build a coherent narrative grounded in the most reliable facts.
+**Output Format:** A single, extensive, and valid JSON object.
 
-**Output Format Requirements:**
-You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any explanatory text outside the JSON.
+**Instructions for JSON Construction:**
+1.  **Base Structure:** The JSON must follow the exact top-level key structure provided: `pump_and_dump` containing `metadata`, `stage_I_-_notionally_normal_starting_point`, `stage_II_-_incubation_period`, `stage_III_-_precipitating_event`, `stage_IV_-_onset`, `stage_V_-_rescue_and_salvage`, `stage_VI_-_full_cultural_readjustment`, and `summary_analysis`.
+2.  **Lifecycle Phases:** Populate each Stage (I-VI) meticulously. The stages are based on the "Sequence of Events Associated with a Failure of Foresight" sociological model. Interpret each stage in the context of financial fraud:
+    *   **Stage I:** Describe the environment *before* the fraud began—market conditions, regulatory norms, investor psychology, and technological landscape that made the scheme plausible.
+    *   **Stage II:** Detail the active but hidden accumulation of fraud—the specific manipulative actions, false narratives, and early warning signs that were missed or ignored by various parties.
+    *   **Stage III:** Identify the specific trigger or discovery that caused the scheme to become public or begin its irreversible collapse.
+    *   **Stage IV:** Describe the immediate aftermath of the trigger—market panic, price collapse, initial reactions from victims and perpetrators.
+    *   **Stage V:** Outline the initial crisis response—regulatory actions, law enforcement steps, temporary measures to protect markets/victims.
+    *   **Stage VI:** Analyze the long-term consequences—legal reforms, regulatory changes, shifts in market practices, investor education, and cultural perceptions of risk.
+3.  **Granular Fields:** Every field within the JSON must be populated with highly specific, detailed information. Avoid generalizations. Use precise dates, figures, names, quotations (with sources if available), and descriptive analysis. Where exact data is unknown, provide well-reasoned estimates and note them as such (e.g., "estimated_suspected_inception_year").
+4.  **Integrated Explanation:** Treat the "Explanation" in the schema as a mandatory guideline. For each field, your value should inherently contain the explanatory detail. The field's key indicates *what* the data point is, and your entered value must elaborate on the *how*, *why*, and *significance*. For example, for `primary_perpetrator_motivation`, do not just write "greed"; write "A complex motivation driven by a need to sustain a lavish lifestyle estimated at $X/month, cover losses from earlier failed ventures in [sector], and maintain a reputation as a financial wizard, which was central to their social and professional identity."
+5.  **Fact-Based:** All information must be cross-referenced for accuracy. Prioritize data from official sources (court filings, SEC releases, regulatory reports, reputable news archives). Clearly distinguish between established facts, allegations, and informed analysis.
+6.  **Comprehensiveness:** The JSON should be exhaustive. Consider all angles: perpetrators, victims, enablers (e.g., complicit brokers, negligent auditors), market mechanics, communication channels used for the "pump," liquidation strategies for the "dump," legal arguments, and societal impact. The `summary_analysis` section should provide a synthesized, high-level critique.
 
-**Comprehensive JSON Schema and Field Definitions for a Pump and Dump Scheme:**
+Here is the required JSON schema outline with exemplary field descriptions, and "Explanation" is just to help you better understand the task. **Populate it with data from the target case.**
 
-```json
 {
   "pump_and_dump_reconstruction": {
     "metadata": {
-      "asset_identifier": "string: The ticker symbol, coin name, or identifier of the manipulated asset (e.g., 'XYZ', 'BitcoinXYZ').",
-      "asset_type": "string: Type of asset manipulated (e.g., 'Penny Stock', 'Microcap Stock', 'Cryptocurrency', 'OTC Security', 'NFT').",
-      "primary_market": "string: Primary exchange or marketplace where the manipulation occurred (e.g., 'OTC Markets', 'Binance', 'NASDAQ').",
-      "data_sources_summary": "string: Brief description of the types of sources used (e.g., 'SEC litigation release, Twitter/X dump, trading volume charts, Finviz data')."
-    },
-    "overview": {
-      "summary": "string: A concise 3-5 sentence summary of the entire scheme: the asset, the core false narrative, the price impact, and the final outcome.",
-      "manipulation_type": "string: Specific classification (e.g., 'Classic Social Media Pump and Dump', 'Spoofing/Layering assisted P&D', 'Boiler Room Operation', 'Cryptocurrency 'Shill' Campaign').",
-      "scheme_duration_days": "number: Approximate operational duration from the start of the coordinated 'pump' to the conclusion of the 'dump' in days. For prolonged schemes, the core active manipulation window.",
-      "is_cross_jurisdictional": "boolean: Indicates if perpetrators, victims, or trading activities spanned multiple legal jurisdictions."
-    },
-    "perpetrators_and_coordinators": {
-      "primary_individuals": [
-        {
-          "name_or_alias": "string",
-          "role": "string (e.g., 'Organizer', 'Promoter/Shill', 'Trading Lead', 'Insider', 'Influencer')",
-          "method_of_operation": "string: How this individual participated (e.g., 'created false news blogs', 'led Telegram group coordination', 'executed manipulative trades').",
-          "holding_period": "string: When they acquired the asset relative to the pump (e.g., 'Months before pump', 'Days before pump').",
-          "legal_status_at_termination": "string: Known status at scheme conclusion (e.g., 'Charged by SEC', 'Under investigation', 'Identity unknown', 'Fled jurisdiction')."
-        }
-      ],
-      "coordinating_entities_groups": [
-        {
-          "entity_or_group_name": "string (e.g., Discord server name, Telegram channel, 'Wolf Pack')",
-          "platform": "string: Primary platform used for coordination.",
-          "size_estimate": "number: Approximate number of members in the coordinating group.",
-          "function": "string: The group's role (e.g., 'Signal distribution', 'Hype creation', 'Trade coordination')."
-        }
-      ]
-    },
-    "mechanism_and_execution": {
-      "target_asset_profile_pre_pump": {
-        "price_pre_pump": "number: Approximate price of the asset immediately before the coordinated pump began.",
-        "market_cap_pre_pump": "number: Approximate market capitalization before the pump.",
-        "average_volume_pre_pump": "number: Typical trading volume in the period before the pump.",
-        "fundamental_narrative": "string: The legitimate (or purported) business/asset fundamentals before manipulation."
+      "scheme_common_name": "The most widely recognized name for the scheme, e.g., 'The Wolf of Wall Street Boiler Room' or 'The XYZ Crypto Pump Group'. This is the colloquial, media-friendly title.",
+      "official_legal_case_name": "The formal title of the leading legal proceeding, e.g., 'Securities and Exchange Commission v. Stratton Oakmont, Inc., et al., Civil Action No. 96-CV-XXXX (S.D.N.Y.)'. Indicates the primary regulatory or criminal action.",
+      "primary_perpetrator_name": "Full name and known aliases of the key architect/ringleader. The individual(s) centrally responsible for designing, orchestrating, and/or operating the core manipulative activities.",
+      "key_associated_entities": ["A list of company names, funds, shell corporations, online forums, chat groups (e.g., Discord, Telegram channels), or social media profiles used as direct vehicles for executing the fraud, holding assets, or disseminating misinformation."],
+      "asset_class_involved": "The specific type of financial instrument targeted, e.g., 'micro-cap/pink sheet equities', 'low-market-cap cryptocurrency (altcoin)', 'penny stocks', 'special purpose acquisition company (SPAC) warrants', 'non-fungible tokens (NFTs)'. Crucial for understanding market vulnerabilities.",
+      "operational_timeframe": {
+        "suspected_inception_date": "YYYY-MM-DD (or best estimate). The date the first identifiable preparatory or manipulative act occurred, such as the secret accumulation of the asset (the 'positioning' phase) or the creation of the promoting entity.",
+        "core_pump_phase_dates": "YYYY-MM-DD to YYYY-MM-DD. The period during which the most intensive promotional and price-inflation activities were conducted.",
+        "dump_phase_dates": "YYYY-MM-DD to YYYY-MM-DD. The period during which the perpetrators systematically sold their holdings into the inflated market.",
+        "public_collapse_date": "YYYY-MM-DD. The date the scheme became publicly known, e.g., via regulatory halt, exposé article, or catastrophic price drop triggering widespread alarm.",
+        "duration_total_days": "The total lifespan from suspected inception to public collapse."
       },
-      "accumulation_phase": {
-        "estimated_perpetrator_accumulation_period": "string: Timeframe when organizers/insiders acquired their position.",
-        "estimated_perpetrator_accumulation_cost_basis": "string: Estimated average price at which perpetrators acquired their holdings.",
-        "indicators_of_stealth_accumulation": "array: List of observed tactics (e.g., ['Slow buying over weeks', 'Use of multiple broker accounts', 'Purchases during low-volume periods'])."
-      },
-      "pump_phase_operations": {
-        "core_false_narrative": "string: The central, misleading story promoted to inflate price (e.g., 'Imminent buyout', 'Groundbreaking patent approval', 'Major partnership announcement', 'Celebrity endorsement').",
-        "promotion_channels": "array: List of channels used for hype (e.g., ['Twitter/X', 'Telegram channels', 'Stock message boards (iHub, Reddit)', 'Spam newsletters', 'Fake news websites']).",
-        "promotion_tactics": "array: List of specific tactics (e.g., ['Use of bots to create trending topics', 'Paid influencer tweets', 'Coordinated 'buy' signal blasts', 'Fake screenshot generation'].",
-        "trading_manipulation_tactics": "array: List of manipulative trade tactics used during pump (e.g., ['Spoofing (large non-bona fide orders)', 'Wash trading', 'Momentum ignition', 'Painting the tape']).",
-        "duration_of_intense_pump": "number: Length in hours/days of the most aggressive promotion and price ascent."
-      },
-      "dump_phase_operations": {
-        "dump_trigger": "string: What initiated the coordinated sell-off (e.g., 'Price target hit', 'Liquidity peak reached', 'Fear of exposure', 'Pre-arranged schedule').",
-        "perpetrator_sell_method": "string: How perpetrators offloaded holdings (e.g., 'Rapid sale into rising bids', 'Use of hidden sell orders', 'Distribution across multiple accounts').",
-        "duration_of_core_dump": "number: Length in hours/days of the primary sell-off by perpetrators."
+      "estimated_global_scale": {
+        "currency_denomination": "The primary currency for valuations (e.g., USD, BTC).",
+        "peak_market_cap_manipulation": "The approximate total market valuation of the targeted asset(s) at the absolute peak of the pump, indicating the scale of the artificial inflation.",
+        "perpetrator_proceeds_estimate": "The estimated total gross profits realized by the perpetrators from selling during the dump phase. This is the direct financial gain from the fraud.",
+        "victim_losses_estimate": "The approximate total financial loss incurred by defrauded investors. This is often higher than perpetrator proceeds due to transaction costs and broader market panic.",
+        "victim_count_estimate": "Approximate number of distinct individual investors or entity accounts that purchased the asset during the pump phase and likely suffered losses.",
+        "geographic_reach_of_victims": ["List of countries or regions where a significant concentration of victim investors was located, highlighting the transnational nature of modern schemes."]
       }
     },
-    "market_impact_analysis": {
-      "price_and_volume_dynamics": {
-        "price_at_peak": "number: The maximum price achieved during the pump.",
-        "percentage_increase_from_pre_pump": "number: ((Price_at_peak - Price_pre_pump) / Price_pre_pump) * 100.",
-        "peak_volume": "number: The highest single-day or intraday trading volume recorded during the event.",
-        "volume_multiple_vs_average": "number: Peak_volume / Average_volume_pre_pump.",
-        "price_at_scheme_conclusion": "number: Price after the dump phase concluded and volatility subsided.",
-        "percentage_decline_from_peak": "number: ((Price_at_peak - Price_at_scheme_conclusion) / Price_at_peak) * 100."
-      },
-      "victim_inflow_analysis": {
-        "estimated_retail_buying_pressure_period": "string: The timeframe during which most victim (retail) buying likely occurred.",
-        "estimated_victim_entry_price_range": "string: Estimated price range at which the majority of retail buyers purchased.",
-        "indicators_of_retail_fomo": "array: List of observed signs (e.g., ['Surge in social media mentions', 'High odd-lot trades', 'Google Trends spike for ticker'])."
-      },
-      "liquidity_and_order_book_analysis": {
-        "bid_ask_spread_dynamics": "string: Description of how spreads behaved (e.g., 'Widened dramatically during dump', 'Artificially narrow during pump due to spoofing').",
-        "order_book_depth_deterioration": "string: Description of changes in market depth (e.g., 'Thin sell-side depth allowed rapid price ascent', 'Buy-side support vanished during dump')."
-      }
+    "stage_I_-_notionally_normal_starting_point": {
+      "pre_fraud_market_environment": "Description of the state of the specific asset class and broader markets before the scheme. E.g., 'A retail-driven bull market in speculative tech stocks with high liquidity and low barriers to entry via new trading apps,' or 'The early-stage, largely unregulated cryptocurrency market characterized by extreme volatility and rampant speculation on message boards.'",
+      "prevalent_investor_sentiment_and_psychology": "The dominant mindset of the target investor pool. E.g., 'Fear of missing out (FOMO) on rapid gains, combined with distrust of traditional financial institutions and a belief in 'democratized finance',' or 'Search for high-yield opportunities in a zero-interest-rate environment, leading to increased risk appetite among novice investors.'",
+      "regulatory_and_legal_backdrop": "The specific laws, regulations, enforcement priorities, and perceived gaps that existed. E.g., 'The SEC's focus on large-cap fraud post-2008, leading to relatively scant surveillance of micro-cap promotions on social media,' or 'Cryptocurrencies existing in a regulatory gray area, with unclear jurisdiction between SEC and CFTC.'",
+      "technological_and_communication_landscape": "The platforms and tools that enabled the scheme. E.g., 'The rise of encrypted messaging apps (Telegram), influencer culture on Twitter/YouTube, and zero-commission trading platforms (Robinhood) that facilitated rapid, community-driven trading.'",
+      "perpetrator_background_and_initial_position": "The biography, skills, resources, and network of the perpetrator(s) at the start. E.g., 'A former broker with a banned license, deep knowledge of high-pressure sales tactics, and a network of offshore accounts,' or 'An anonymous online influencer with a large following in crypto forums and expertise in creating memes and viral content.'"
     },
-    "key_milestones": [
-      {
-        "datetime": "string: Approximate date/time (YYYY-MM-DD or YYYY-MM-DD HH:MM if known).",
-        "event": "string: Description of the milestone.",
-        "significance": "string: Why this was critical (e.g., 'First promotional tweet from key influencer', 'Trading halt imposed by exchange', 'Price reaches predetermined dump target', 'SEC suspension order')."
-      }
-    ],
-    "termination_and_unraveling": {
-      "scheme_conclusion_trigger": "string: The immediate cause of the scheme's end (e.g., 'Perpetrators completed sell-off', 'Exchange suspended trading', 'Regulatory warning issued', 'Negative expose published').",
-      "conclusion_date": "string: Approximate date when active manipulation ceased.",
-      "market_state_at_conclusion": {
-        "liquidity_status": "string: (e.g., 'Extremely low, illiquid', 'Trading halted', 'Normalizing but volatile').",
-        "price_trend": "string: The immediate post-dump trend (e.g., 'In freefall', 'Stabilized at 90% below peak', 'Choppy with no direction').",
-        "retail_sentiment": "string: Observed sentiment among victim investors (e.g., 'Anger on social media', 'Denial and 'hold' calls', 'Silence/abandonment')."
-      }
+    "stage_II_-_incubation_period": {
+      "secret_accumulation_phase": "Detailed narrative of how perpetrators built their initial position without detection. Includes methods (e.g., through nominee accounts, dark pool orders), volumes, price range, and duration.",
+      "development_of_pump_narrative": "The construction of the false or misleading promotional story. List key themes (e.g., 'revolutionary technology,' 'exclusive government contract,' 'celebrity endorsement'), specific claims made, and fabricated evidence (fake press releases, doctored screenshots, paid 'analyst' reports).",
+      "recruitment_and_coordination_mechanics": "How the promotion was organized. Detail the structure of pump groups, compensation for promoters (e.g., pre-allotted coin, cash bounties), communication protocols, and rules for members to create artificial buying pressure at a coordinated time.",
+      "channels_of_dissemination": "Exhaustive list of platforms used to spread the narrative: specific subreddits, Twitter hashtags, YouTube channels, Discord servers, TikTok trends, paid stock-touting newsletters, and spam campaigns.",
+      "early_warning_signals_ignored": "List red flags that emerged but were overlooked by exchanges, regulators, journalists, or the investing public. E.g., 'Unusual trading volume spikes with no news from company, noted by a few analysts on Twitter but dismissed as hype,' or 'The asset's issuer had a history of regulatory violations, buried in obscure filings.'",
+      "progressive_price_inflation": "A data-rich description of the asset's price action during the pump. Include key dates of major promotional pushes, corresponding volume and price spikes, and the role of algorithmic trading or wash trading (fake transactions) in creating the illusion of demand."
     },
-    "aftermath_and_impact": {
-      "legal_and_regulatory_action": [
-        {
-          "actor": "string (e.g., 'SEC', 'FINRA', 'DOJ', 'FCA', 'CySEC')",
-          "action": "string (e.g., 'Civil fraud charges filed', 'Trading suspension order', 'Criminal indictment', 'Market ban imposed')",
-          "target": "string: Whom the action was against (individual or entity).",
-          "date": "string: Approximate date.",
-          "current_status": "string: (e.g., 'Settled', 'Pending trial', 'Guilty plea', 'Dismissed')."
-        }
-      ],
-      "perpetrator_outcomes": {
-        "financial_gain_estimate": "string: Estimated gross profit (proceeds from dump minus accumulation cost) for the core perpetrators.",
-        "legal_outcome_summary": "string: Summary of legal consequences (fines, disgorgement, imprisonment).",
-        "asset_recovery": "string: Description of any assets seized or funds ordered to be returned."
-      },
-      "victim_impact": {
-        "estimated_number_of_victims": "number: Approximate number of distinct retail investors who bought during the pump and held through the dump.",
-        "estimated_total_victim_loss": "number: Estimated total financial loss suffered by victims (nominal value). This is often approximated as the value of holdings bought at high prices and sold at low prices or still held at collapsed prices.",
-        "typical_victim_profile": "string: Description of the affected investor group (e.g., 'Inexperienced retail traders', 'Social media-driven investors', 'Cryptocurrency newcomers').",
-        "potential_recovery_avenues": "array: List of possible recovery methods (e.g., ['SEC Fair Fund distribution', 'Class action lawsuit', 'None likely'])."
-      },
-      "systemic_and_market_impacts": [
-        "string: List broader impacts (e.g., 'Increased scrutiny of microcap stocks by regulator', 'Platform policy change banning coordinated pump groups', 'Erosion of trust in specific asset class', 'Highlighted vulnerabilities in social media-driven investing')."
-      ]
+    "stage_III_-_precipitating_event": {
+      "triggering_event_type": "The category of event that broke the scheme open. E.g., 'Investigative Journalism,' 'Whistleblower Disclosure,' 'Regulatory Trading Halt,' 'Technical Analysis by Skeptics,' 'Internal Collapse (e.g., perpetrator dispute leading to leaks).'",
+      "specific_event_description": "A precise account: 'On [Date], financial blogger [Name] published a forensic report titled '[Title],' exposing the fabricated contracts and tracing the promotional network to a known felon. The report went viral on social media.'",
+      "immediate_market_reaction_to_trigger": "The first 24-72 hours after the trigger. Include price movement (e.g., '30% drop in first hour'), volume surge, social media panic, and statements (or silence) from the promoting entities.",
+      "first_public_responses": "Initial reactions from key figures: perpetrator denials (quote them), exchange announcements about 'reviewing activity,' regulatory 'we are aware' statements, and influential community leaders advising caution or exit."
     },
-    "forensic_indicators_and_red_flags": {
-      "pre_scheme_red_flags": "array: List of warnings visible before/during the pump (e.g., ['Unsolicited stock tips on social media', 'Promises of guaranteed, rapid returns', 'Asset with no fundamentals or news', 'Sudden, unexplained volume spike', 'Promotion from unknown or dubious sources']).",
-      "trading_pattern_red_flags": "array: List of anomalous trading indicators (e.g., ['Price moves on low float', 'Wash trade patterns identifiable on ledger', 'Spoofed order layers visible in L2 data', 'Extreme volatility uncorrelated to news']).",
-      "communication_pattern_red_flags": "array: List of suspicious promotional patterns (e.g., ['Use of high-pressure, urgent language', 'Coordinated identical messages across platforms', 'Misrepresentation of facts or fake documents', 'Anonymity of promoters'])."
+    "stage_IV_-_onset": {
+      "price_collapse_dynamics": "Detailed chronology of the dump and ensuing crash. Map the rapid sell-off by perpetrators, followed by panic selling by retail investors. Note key support levels broken and liquidity drying up.",
+      "victim_realization_and_reaction": "Describe the social and emotional fallout: screenshots of losses shared online, anger directed at promoters, formation of victim support groups/class action inquiries, reports to authorities.",
+      "perpetrator_actions_during_collapse": "Their behavior as the scheme unraveled: cashing out remaining holdings, shutting down websites/social media, attempting to launder proceeds, fleeing jurisdiction, or making desperate attempts to restart the pump.",
+      "immediate_systemic_impact": "Effects beyond direct victims. E.g., 'Increased volatility spilled over into related sector ETFs,' 'The trading platform experienced technical issues due to extreme order volume,' 'Reputational damage to the entire altcoin market.'",
+      "initial_law_enforcement_and_regulatory_actions": "The first concrete steps: which agency (FBI, SEC, State Attorney General) opened an investigation, issuance of subpoenas, freezing of specific bank or exchange accounts, arrests if swift."
+    },
+    "stage_V_-_rescue_and_salvage": {
+      "emergency_market_protections": "Actions taken by trading venues or regulators to stabilize the situation: formal trading halts, delisting of the asset, warnings issued to the public about similar schemes.",
+      "victim_outreach_and_support_mechanisms": "Establishment of official channels for victim claims, launch of class-action lawsuits by major law firms, setting up of information websites by regulators.",
+      "asset_tracing_and_recovery_efforts": "Early forensic work: blockchain analysis to track cryptocurrency flows, court orders to seize domestic assets, and international requests for mutual legal assistance to freeze offshore accounts.",
+      "criminal_charges_and_civil_complaints_filed": "List the initial specific charges (e.g., 'wire fraud,' 'securities fraud,' 'conspiracy') and the defendants named in the first major civil or criminal filings.",
+      "media_narrative_consolidation": "How the mainstream financial media framed the event in the weeks following—what lessons were being drawn, who was being blamed, and what it symbolized about the current market era."
+    },
+    "stage_VI_-_full_cultural_readjustment": {
+      "long_term_regulatory_reforms": "Specific new rules, legislation, or enforcement initiatives catalyzed by the event. E.g., 'SEC's increased scrutiny of social media stock promotion leading to [Rule Name],' 'CFTC guidance on treating certain crypto assets as commodities,' 'Strengthened 'Know Your Customer' requirements for crypto exchanges.'",
+      "changes_in_exchange_and_platform_policies": "How trading platforms adapted: stricter listing requirements for penny stocks or new tokens, improved market surveillance algorithms, clearer warnings to users about volatile assets.",
+      "shift_in_investor_education_and_awareness": "New educational campaigns by regulators (SEC's 'Investor.gov' alerts), media literacy efforts focused on financial misinformation, and the rise of watchdog groups and analysts specializing in debunking promotions.",
+      "legal_precedents_set": "Outcomes of the key trials: convictions, sentences, disgorgement orders, restitution amounts. Note any novel legal arguments about jurisdiction over internet-based schemes or the classification of new asset types.",
+      "lasting_impact_on_market_psychology_and_trust": "The enduring effect on how a generation of investors views certain opportunities. E.g., 'Increased skepticism towards 'community-driven' investment recommendations,' 'Long-term stigma attached to the specific altcoin sector, slowing legitimate project development,' or 'Paradoxically, a reinforced belief among some that such schemes are inevitable and the goal is to 'get in early' on the next one.'",
+      "academic_and_policy_analysis": "Key studies, books, or white papers published that use this case as a central example for understanding market manipulation in the digital age."
+    },
+    "summary_analysis": {
+      "key_innovation_or_twist": "What made this scheme notable or particularly effective for its time? E.g., 'One of the first to fully leverage TikTok's short-form video for rapid hype generation among Gen Z investors.'",
+      "primary_systemic_failures_exposed": "The top 2-3 institutional, regulatory, or technological weaknesses that the scheme successfully exploited.",
+      "effectiveness_of_response_and_recovery": "A critique: How effective were the rescue, legal, and reform efforts? Were victims made reasonably whole? Was the root cause addressed, or did manipulation simply migrate to a new venue?",
+      "broader_societal_implications": "What does this case reveal about broader themes like inequality, the democratization of finance, the power of online communities, and the challenge of governing decentralized systems?",
+      "analogy_to_historical_precedents": "Comparison to past pump-and-dump eras (e.g., 1920s bucket shops, 1990s boiler rooms). What was timeless about the fraud, and what was uniquely modern?"
     }
   }
 }
-```
-
-**Critical Analysis Instructions:**
-
-1.  **Fact-Based & Chronological:** Anchor all information in the provided source data. Reconstruct the timeline accurately, clearly separating the Accumulation, Pump, and Dump phases. Resolve data conflicts by prioritizing official documents (SEC, court) over social media claims.
-2.  **Quantitative Focus:** Populate all numerical fields related to price, volume, time, and money with the best available estimates. Derive percentages where raw data allows. Use `null` for genuinely unknown numerical fields and `"Information not available in provided sources."` for text fields.
-3.  **Narrative vs. Action Linkage:** Explicitly connect the promotional `core_false_narrative` to the observed `market_impact_analysis`. Show how hype translated into buying pressure and price movement.
-4.  **Perpetrator-Victim Dynamics:** Clearly distinguish the actions and financial outcomes of the orchestrators/insiders (`perpetrator_outcomes`) from those of the retail investors who bought in (`victim_impact`).
-5.  **Full Scheme Exposition:** The output must explicitly document: The **Setup** (target selection, accumulation), the **Catalyst** (false narrative and promotion), the **Manipulation** (trading tactics and price inflation), the **Exit** (coordinated dump), and the **Consequences** (legal, financial, market).
-6.  **Data Triangulation:** Use trading data (price/volume) to validate the timing and intensity of promotional activity mentioned in social media/text data. The `key_milestones` should reflect this synthesis.
-7.  **Completeness:** Strive to provide information for every field in the JSON schema. The schema is designed to capture the unique signature of a Pump and Dump, focusing on market mechanics and communication patterns.
-
-**Final Step Before Output:**
-Perform an internal consistency check. Ensure the timeline in `key_milestones` aligns with the `scheme_duration_days`. Verify that price points (`price_pre_pump`, `price_at_peak`, `price_at_scheme_conclusion`) follow a logical sequence consistent with a P&D pattern. Ensure the `estimated_perpetrator_accumulation_cost_basis` is logically lower than the `price_at_peak`.
-
-**Now, synthesize the provided data about the specified Pump and Dump market manipulation event and output the complete JSON object.**
 """

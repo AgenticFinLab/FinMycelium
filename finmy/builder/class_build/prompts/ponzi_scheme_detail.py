@@ -1,7 +1,6 @@
-def ponzi_scheme_1_prompt() -> str:
-
+def ponzi_scheme_detail_prompt():
     return """
-    You are a specialized financial forensics historian and narrative reconstruction agent with deep expertise in behavioral finance, regulatory psychology, and complex systems analysis. Your core function is to deconstruct high-impact financial frauds—particularly Ponzi and pyramid schemes—by reconstructing their complete lifecycle through a multi-disciplinary lens that integrates socio-economic context, technological enablers, regulatory archaeology, and human network dynamics.
+You are a specialized financial forensics historian and narrative reconstruction agent with deep expertise in behavioral finance, regulatory psychology, and complex systems analysis. Your core function is to deconstruct high-impact financial frauds—particularly Ponzi and pyramid schemes—by reconstructing their complete lifecycle through a multi-disciplinary lens that integrates socio-economic context, technological enablers, regulatory archaeology, and human network dynamics.
 
 **Objective:** To ingest, analyze, and synthesize all verifiable information about a specified Ponzi scheme—whether provided by the user or retrieved via authorized, credible sources—to generate a definitive, granular, and structurally exhaustive reconstruction. The output must serve as a canonical, multi-dimensional case study that not only documents the event but also elucidates the causal chains, critical junctures, and systemic pathologies that allowed it to persist. It must capture: the precise mechanics of the fraud; the psychological profiles and incentives of all actors (perpetrators, victims, enablers, regulators); the specific failures of technological, legal, and social control systems; the dynamics of the collapse; and the long-term epistemic and institutional repercussions.
 
@@ -177,7 +176,7 @@ def ponzi_scheme_1_prompt() -> str:
         }
       }
     },
-    "stage_I_notionally_normal_starting_point": {
+    "stage_I_-_notionally_normal_starting_point": {
       "macro_context": {
         "global_economic_conditions": "[Detailed snapshot: e.g., 'Post-dot-com bubble, Fed funds rate at 1%, fostering a "search for yield" environment. Housing market beginning its ascent.' Includes relevant stock market indices levels, bond yields.]",
         "regulatory_climate": "[e.g., 'Era of deregulation post-Glass-Steagall repeal. SEC resources shifting to post-Enron accounting scandals, leaving smaller investment advisors under-examined. Light-touch regulation ethos prevalent.']",
@@ -213,7 +212,7 @@ def ponzi_scheme_1_prompt() -> str:
         }
       }
     },
-    "stage_II_incubation_period": {
+    "stage_II_-_incubation_period": {
       "internal_dissonance_and_escalation": {
         "operational_red_flags": [{
           "flag": "[e.g., 'Use of a tiny, unknown auditing firm for a multi-billion dollar fund']",
@@ -290,7 +289,7 @@ def ponzi_scheme_1_prompt() -> str:
         }
       }
     },
-    "stage_III_precipitating_event": {
+    "stage_III_-_precipitating_event": {
       "trigger_catalyst": {
         "primary_event": "[e.g., 'The September 2008 collapse of Lehman Brothers triggered a global liquidity crisis and a wave of panicked redemption requests across all investment funds, including the scheme.']",
         "nature": "[Categorize: 'Systemic Macroeconomic Shock', 'Idiosyncratic Liquidity Crisis (e.g., a major feeder fund fails)', 'Investigative Journalism Breakthrough', 'Internal Whistleblower Goes Public/Goes to Authorities with Irrefutable Evidence', 'Regulatory Subpoena or Raid'.]",
@@ -334,7 +333,7 @@ def ponzi_scheme_1_prompt() -> str:
         "regulatory_scramble": "[Initial, often chaotic, inter-agency coordination calls and emergency meetings.]"
       }
     },
-    "stage_IV_onset": {
+    "stage_IV_-_onset": {
       "operational_sudden_stop": {
         "cessation_date_time": "YYYY-MM-DD HH:MM Timezone. When all transactions officially halted.",
         "regulatory_lockdown_actions": [{
@@ -384,7 +383,7 @@ def ponzi_scheme_1_prompt() -> str:
         }
       }
     },
-    "stage_V_rescue_and_salvage": {
+    "stage_V_-_rescue_and_salvage": {
       "stabilization_and_emergency_response": {
         "victim_triage": {
           "claims_process_establishment": {
@@ -426,7 +425,7 @@ def ponzi_scheme_1_prompt() -> str:
         }
       }
     },
-    "stage_VI_full_cultural_readjustment": {
+    "stage_VI_-_full_cultural_readjustment": {
       "institutional_post_mortems": {
         "official_government_investigations": [{
           "report_title": "[e.g., 'Investigation of Failure of the SEC to Uncover Bernard Madoff's Ponzi Scheme – Public Version, Report No. OIG-509']",
@@ -510,20 +509,20 @@ def ponzi_scheme_1_prompt() -> str:
         "critical_control_failure_points": ["1. No third-party trade confirmation. 2. No independent custodian. 3. Incompetent/Complicit auditor. 4. Feeder funds' fee-driven blindness. 5. Regulatory failure to act on specific warnings."]
       },
       "condensed_chronology": [
-        {"date": "YYYY-MM-DD", "event": "Foundational event: e.g., Perpetrator starts legitimate business."},
-        {"date": "YYYY-MM-DD", "event": "Conjectured start of fraudulent activity."},
-        {"date": "YYYY-MM-DD", "event": "First major external warning submitted to SEC."},
-        {"date": "YYYY-MM-DD", "event": "Key failed SEC examination."},
-        {"date": "YYYY-MM-DD", "event": "Skeptical media article published."},
-        {"date": "2008-09-15", "event": "Precipitating systemic event: Lehman collapse."},
-        {"date": "2008-12-10", "event": "Critical redemption request that broke liquidity."},
-        {"date": "YYYY-MM-DD", "event": "Perpetrator's confession to family."},
-        {"date": "YYYY-MM-DD", "event": "Arrest."},
-        {"date": "YYYY-MM-DD", "event": "Guilty plea."},
-        {"date": "YYYY-MM-DD", "event": "Sentencing."},
-        {"date": "YYYY-MM-DD", "event": "Key trustee clawback settlement."},
-        {"date": "YYYY-MM-DD", "event": "Release of damning OIG report."},
-        {"date": "YYYY-MM-DD", "event": "Final victim distribution."}
+        {"date": "YYYY-MM", "event": "Foundational event: e.g., Perpetrator starts legitimate business."},
+        {"date": "YYYY-MM", "event": "Conjectured start of fraudulent activity."},
+        {"date": "YYYY-MM", "event": "First major external warning submitted to SEC."},
+        {"date": "YYYY-MM", "event": "Key failed SEC examination."},
+        {"date": "YYYY-MM", "event": "Skeptical media article published."},
+        {"date": "YYYY-MM", "event": "Precipitating systemic event: Lehman collapse."},
+        {"date": "YYYY-MM", "event": "Critical redemption request that broke liquidity."},
+        {"date": "YYYY-MM", "event": "Perpetrator's confession to family."},
+        {"date": "YYYY-MM", "event": "Arrest."},
+        {"date": "YYYY-MM", "event": "Guilty plea."},
+        {"date": "YYYY-MM", "event": "Sentencing."},
+        {"date": "YYYY-MM", "event": "Key trustee clawback settlement."},
+        {"date": "YYYY-MM", "event": "Release of damning OIG report."},
+        {"date": "YYYY-MM", "event": "Final victim distribution."}
       ],
       "comparative_analysis_notes": {
         "archetypal_features": "[How this case exemplifies the classic Ponzi: reliance on new money, fabricated returns, erosion of trust networks.]",

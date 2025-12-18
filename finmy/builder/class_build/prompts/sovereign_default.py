@@ -2,179 +2,199 @@
 
 def sovereign_default_prompt() -> str:
     return """
-You are an expert sovereign debt analyst and economic historian. Your task is to comprehensively analyze and reconstruct a specified sovereign default event based on provided multi-source data (e.g., government reports, IMF/World Bank documents, central bank communications, credit rating agency reports, news archives, academic papers).
+You are a financial historian and sovereign debt crisis reconstruction specialist, equipped with deep knowledge in macroeconomics, international finance, political economy, and legal frameworks governing sovereign debt.
 
-**Core Objective:**
-Produce a complete, factual, and logically structured reconstruction of a sovereign default event, detailing its economic and political antecedents, the crisis unfolding, the default mechanics, the aftermath, and the long-term resolution process. The analysis must cover economic drivers, political decisions, legal processes, and social impacts.
+**Objective:** To meticulously reconstruct a specific sovereign default event by synthesizing provided information and/or web-retrieved data. You must produce a comprehensive, granular, and factual narrative that captures the event's full lifecycle, causes, mechanisms, consequences, and long-term implications, structured according to a prescribed sociological framework of disaster development.
 
-**Data Input:**
-You will receive raw text/data extracted from various sources regarding a specific sovereign default event (e.g., "Greece 2012 Debt Restructuring", "Argentina 2001 Default", "Russia 1998 Default"). This data may be fragmented and span technical, legal, and news domains. You must synthesize information to build a coherent narrative grounded in authoritative facts and established economic data.
+**Output Format:** A single, extensive JSON object. Do not include any explanatory text, markdown formatting, or code fences outside this JSON object. The output must be the JSON only.
 
-**Output Format Requirements:**
-You MUST output a single, well-structured JSON object. Use the exact field names as specified below. All field values should be strings, numbers, arrays, booleans, or nested objects as described. Do not include any explanatory text outside the JSON.
+**Instructions for JSON Construction:**
+1.  **Base Structure:** The JSON's root key is `"sovereign_default"`. It contains top-level sections: `"metadata"`, `"definitions_and_context"`, and the six sequential lifecycle stages (`stage_I` to `stage_VI`).
+2.  **Lifecycle Phases:** Populate each stage according to the "Sequence of Events Associated with a Failure of Foresight" model. Treat each stage as a distinct chapter in the event's narrative. Data must be chronologically and thematically placed within the correct stage.
+3.  **Granular Fields:** Every object must contain specific, detailed fields. Avoid high-level summaries. Use nested objects and arrays to capture complexity. Quantify wherever possible (dates, amounts, percentages, counts). For qualitative aspects, provide precise descriptions, quotes from key figures, or references to specific policies/actions.
+4.  **Integrated Explanation:** Each field's value must serve as its own explanation. The data you populate should be self-explanatory and illustrative. For example, instead of a field value saying "high debt," it should state "Public debt-to-GDP ratio reached 165% in the year prior to default, driven by cumulative primary fiscal deficits averaging 5% of GDP over the preceding decade."
+5.  **Fact-Based:** All information must be anchored in verified historical data, official reports, academic analyses, or reputable news sources. If certain details are ambiguous or disputed, note the discrepancy (e.g., `"reported_range": "X-Y billion"`, `"conflicting_accounts": "Description of the different viewpoints"`). Do not invent or speculate.
+6.  **Comprehensiveness:** Strive to create a multi-dimensional portrait. Cover economic indicators, political dynamics, legal processes, social impact, market reactions, institutional roles, and discursive shifts. The JSON should be exhaustive enough to serve as a primary research dossier on the event.
 
-**Comprehensive JSON Schema and Field Definitions:**
+Here is the required JSON schema outline with exemplary field descriptions, and "Explanation" is just to help you better understand the task. **Populate it with data from the target case.**
 
-```json
 {
   "sovereign_default_reconstruction": {
     "metadata": {
-      "event_identifier": "string: The common name of the event (e.g., 'Greek Government Debt Crisis 2012 Restructuring').",
-      "defaulting_country": "string: The sovereign nation that defaulted.",
-      "default_date_iso": "string: The ISO 8601 date considered the formal default/credit event (YYYY-MM-DD or YYYY-MM).",
-      "data_sources_summary": "string: Brief description of sources used (e.g., 'IMF Article IV reports, bond prospectuses, court filings, central bank bulletins')."
-    },
-    "overview": {
-      "summary": "string: A concise 3-5 sentence summary of the default: causes, key actions, and immediate outcome.",
-      "default_type": "string: Classification (e.g., 'Hard Default (Unilateral Cessation of Payments)', 'Distressed Exchange/Soft Default', 'Preemptive Restructuring').",
-      "debt_instruments_defaulted": "array: List of specific instruments (e.g., ['Euro-denominated bonds under domestic law', 'US Dollar-denominated bonds under international law']).",
-      "crisis_duration_months": "number: Approximate duration from the emergence of acute market stress to the conclusion of a restructuring deal or re-access to markets.",
-      "was_orderly": "boolean: Indicates if the default was followed by a relatively coordinated, negotiated restructuring (true) or was chaotic and litigious (false)."
-    },
-    "key_actors": {
-      "sovereign_entity": {
-        "government_at_time": "string: Ruling party/coalition/administration during the default.",
-        "central_bank": "string: Name of the central bank.",
-        "finance_minister": "string: Name of the key finance official during the crisis."
+      "event_common_name": "[The widely recognized name, e.g., 'Greek Government Debt Crisis (2012 Default/Restructuring)']",
+      "official_legal_designation": "[e.g., 'The Greek Bond Haircut under the PSI (Private Sector Involvement) program, governed by Greek Law 4050/2012']",
+      "defaulting_entity": {
+        "official_name": "[Full name of the sovereign, e.g., 'The Hellenic Republic']",
+        "government_type_at_time": "[e.g., 'Parliamentary Republic']",
+        "ruling_party_coalition": "[e.g., 'Panhellenic Socialist Movement (PASOK) led by Prime Minister George Papandreou, later coalition with New Democracy']"
       },
-      "international_institutions": [
-        {
-          "institution_name": "string (e.g., 'International Monetary Fund (IMF)')",
-          "role": "string: Primary role (e.g., 'Lender of Last Resort', 'Program Monitor', 'Negotiator')",
-          "program_exists": "boolean: Whether an official bailout/stabilization program was in place.",
-          "program_name": "string: Name of the program, if applicable."
-        }
-      ],
-      "creditor_groups": [
-        {
-          "group_name": "string (e.g., 'Private Sector Bondholders (PSI)', 'Paris Club', 'Holdout Creditors led by NML Capital')",
-          "composition": "string: Description of members (e.g., 'hedge funds, pension funds, retail investors').",
-          "representative_body": "string: Main negotiating committee, if any."
-        }
-      ],
-      "legal_venue": "string: Key jurisdiction for legal challenges (e.g., 'New York Courts (for bonds under NY law)', 'UK Courts')."
-    },
-    "antecedents_and_causes": {
-      "macroeconomic_imbalances": [
-        {
-          "factor": "string (e.g., 'Persistent Fiscal Deficit', 'High Public Debt-to-GDP Ratio', 'Large Current Account Deficit')",
-          "pre_crisis_level": "string: Quantitative level before crisis (e.g., 'Debt-to-GDP: 120% in 2009').",
-          "trend": "string: Description of the trend leading up to the crisis."
-        }
-      ],
-      "external_shocks": "array: List of triggering external events (e.g., ['Global Financial Crisis 2008', 'Commodity Price Collapse', 'Sharp rise in US Federal Reserve interest rates']).",
-      "domestic_political_factors": "array: List of contributing political factors (e.g., ['Political instability delaying reforms', 'Election-cycle spending pressures', 'Weak tax administration']).",
-      "financial_sector_linkages": "string: Description of how domestic banks were exposed to sovereign debt, creating a 'doom loop'."
-    },
-    "default_mechanics": {
-      "pre_default_actions": {
-        "market_access_lost_date": "string: Approximate date when the country could no longer borrow from international markets at sustainable rates.",
-        "last_successful_issuance": {
-          "date": "string",
-          "amount": "number",
-          "yield": "string: Interest rate at issuance."
+      "key_associated_entities": {
+        "domestic_institutions": ["e.g., 'Bank of Greece', 'Hellenic Parliament', 'Ministry of Finance'"],
+        "international_institutions": ["e.g., 'European Commission (EC)', 'European Central Bank (ECB)', 'International Monetary Fund (IMF) - collectively the Troika'"],
+        "major_creditor_groups": ["e.g., 'Private bondholders represented by the Institute of International Finance (IIF)', 'Eurosystem central banks via the Securities Markets Programme (SMP)'"]
+      },
+      "critical_timeline": {
+        "technical_default_trigger_date": "YYYY-MM-DD. The date a payment was missed or a restructuring offer was formally launched constituting a default under relevant definitions.",
+        "debt_restructuring_effective_date": "YYYY-MM-DD. The date the exchange offer settled and new bonds were issued.",
+        "pre_crisis_accumulation_period": "e.g., '2001-2009: Entry into Eurozone, period of high growth fueled by capital inflows and rising debt.'",
+        "acute_crisis_period": "e.g., 'Q4 2009 - Q1 2012: From revelation of deficit revisions to completion of PSI.'",
+        "post_default_adjustment_period": "e.g., '2012-2018: Under third economic adjustment program, involving further austerity and reforms.'"
+      },
+      "scale_and_scope": {
+        "debt_instruments_in_default": ["e.g., 'Greek government bonds issued under Greek law (approx. €177bn), bonds issued under English law (approx. €29bn), and other obligations'"],
+        "nominal_value_of_debt_affected": {
+          "currency": "EUR",
+          "amount": "XXX billion. The aggregate face value of obligations subject to the restructuring."
         },
-        "capital_controls_imposed": "boolean",
-        "bailout_program_negotiated": "boolean"
-      },
-      "default_trigger_event": "string: The specific event constituting default (e.g., 'Missed coupon payment on [Bond ISIN]', 'Announcement of moratorium on all external debt', 'Launch of exchange offer constituting a distressed exchange under ISDA definitions').",
-      "legal_definition": "string: How the default was defined contractually and by Credit Rating Agencies (e.g., 'Failure-to-Pay credit event per ISDA', 'Rating downgraded to 'SD' (Selective Default) by S&P').",
-      "restructuring_process": {
-        "exchange_offer_launch_date": "string",
-        "old_instruments_targeted": "array: List or description of bonds/debt included in the restructuring.",
-        "face_value_targeted": "number: Total face value of debt eligible for exchange.",
-        "key_terms_of_new_instruments": [
-          {
-            "feature": "string (e.g., 'Principal Haircut', 'Extended Maturities', 'Reduced Coupon (Interest Rate)', 'GDP-Linked Warrants')",
-            "description": "string: Detailed terms (e.g., 'Nominal haircut of 53.5% on face value')."
-          }
-        ],
-        "participation_rate": "number: Percentage of eligible bondholders who accepted the exchange offer.",
-        "use_of_collective_action_clauses": "boolean: Whether CACs were used to bind holdouts.",
-        "completion_date": "string: Date when the exchange was settled."
-      }
-    },
-    "financial_analysis": {
-      "debt_stock_at_default": {
-        "total_sovereign_debt": "number: Total sovereign debt (domestic + external) at time of default, in nominal value.",
-        "currency": "string: Primary currency for the total debt figure.",
-        "external_debt_portion": "number: Portion owed to foreign creditors.",
-        "domestic_debt_portion": "number: Portion owed to domestic entities (banks, pension funds, etc.).",
-        "debt_to_gdp_ratio": "number: Ratio at the time of default."
-      },
-      "haircut_and_relief": {
-        "nominal_haircut": "number: Estimated average reduction in the face value of debt for participating creditors.",
-        "net_present_value_haircut": "number: Estimated reduction in the present value of future debt payments.",
-        "estimated_debt_relief": "number: Estimated total nominal debt reduction achieved through restructuring.",
-        "post_restructuring_debt_to_gdp": "number: Projected debt-to-GDP ratio immediately after restructuring."
-      }
-    },
-    "key_milestones": [
-      {
-        "date_iso": "string: Date (YYYY-MM-DD or YYYY-MM).",
-        "event": "string: Description of the milestone.",
-        "significance": "string: Why this was critical (e.g., 'Credit rating downgraded to junk status', 'Parliament rejected austerity package, triggering political crisis', 'Formal exchange offer announced', 'Restructuring completed').",
-        "actor": "string: Main actor involved."
-      }
-    ],
-    "immediate_aftermath": {
-      "domestic_economic_impact": {
-        "gdp_contraction": "string: Peak-to-trough GDP decline following the default (e.g., 'GDP contracted by 25% over 4 years').",
-        "banking_sector_fate": "string: Description of impact on domestic banks (e.g., 'Bank recapitalization required', 'Deposit runs', 'Mergers').",
-        "unemployment_peak": "string: Peak unemployment rate after default.",
-        "currency_depreciation": "string: Depreciation against major currencies (e.g., USD, EUR) in the aftermath.",
-        "inflation_spike": "string: Surge in inflation, if applicable."
-      },
-      "international_financial_markets_impact": {
-        "contagion": "boolean: Did it trigger sell-offs in other sovereign bonds (regional/emerging markets)?",
-        "contagion_affected_countries": "array: List of countries that experienced significant market stress.",
-        "sovereign_cds_spreads": "string: Description of Credit Default Swap spread behavior for the country and peers."
-      }
-    },
-    "resolution_and_long_term_effects": {
-      "legal_battles": [
-        {
-          "case_name": "string (e.g., 'NML Capital v. Argentina')",
-          "core_issue": "string (e.g., 'Pari Passu litigation', 'Interpretation of CACs')",
-          "outcome": "string: Summary of ruling and impact on creditor payouts.",
-          "duration_years": "number"
-        }
-      ],
-      "market_reaccess": {
-        "first_post_default_issuance": {
-          "date": "string",
-          "amount": "number",
-          "yield": "string",
-          "time_to_market": "number: Years from default date to this issuance."
+        "haircut_metrics": {
+          "net_present_value_haircut": "X%. The estimated reduction in the net present value of claims as a result of the restructuring terms.",
+          "face_value_reduction": "X%. The nominal reduction applied (e.g., 53.5% on the face value of eligible bonds in the 2012 Greek PSI)."
         },
-        "credit_rating_recovery": "string: Description of rating path back to investment grade, if achieved."
-      },
-      "domestic_political_consequences": "array: List of major political changes (e.g., ['Change in government following elections', 'Rise of anti-austerity political movements', 'Constitutional amendments on fiscal rules']).",
-      "long_term_economic_scarring": "string: Description of persistent effects (e.g., 'Lost decade of growth', 'Permanently lower potential output', 'Erosion of pension system').",
-      "social_impact": "string: Description of societal costs (e.g., 'Emigration wave', 'Increased poverty rates', 'Social unrest and protests')."
+        "direct_financial_impact": {
+          "domestic_banking_sector_recapitalization_cost": "XX billion. Cost to recapitalize Greek banks that suffered massive losses on their sovereign bond holdings.",
+          "eurozone_stability_fund_exposure": "XX billion. Amounts committed by the EFSF/ESM for Greek bank recapitalization and debt buybacks."
+        },
+        "geographic_contagion_risk": ["List countries most affected by market panic, e.g., 'Portugal, Ireland, Spain, Italy (peripheral Eurozone contagion)'"]
+      }
     },
-    "synthesis_and_lessons": {
-      "root_cause_analysis": "array: List of the 2-3 most fundamental causes of this specific default.",
-      "crisis_management_assessment": "string: Brief evaluation of the government's and international community's handling of the crisis (effective/ineffective).",
-      "preventive_measures_post_crisis": "array: List of institutional changes aimed at preventing recurrence (e.g., ['Established independent fiscal council', 'Joined Eurozone fiscal compact', 'Passed law limiting foreign-law bond issuance']).",
-      "comparison_to_other_defaults": "string: Brief note on how this default was typical or unique in the history of sovereign defaults."
+    "definitions_and_context": {
+      "default_definition_applied": {
+        "standard_used": "[e.g., 'IMF Definition: A failure to meet a principal or interest payment on the due date (or within the specified grace period). Also includes distressed debt exchanges that offer less favorable terms than the original.' Includes reference to rating agency actions (e.g., 'S&P declared a selective default (SD) on specific bond series').]",
+        "specific_trigger": "[e.g., 'The retroactive insertion of Collective Action Clauses (CACs) into Greek-law bonds (Law 4050/2012) and their subsequent activation to force holdout creditors into a distressed exchange, constituting a 'restructuring default'.']"
+      },
+      "pre_default_macroeconomic_context": {
+        "fiscal_position": {
+          "debt_to_gdp_ratio_year_before_default": "X%",
+          "budget_deficit_to_gdp_ratio": "X%",
+          "primary_balance_to_gdp": "X%",
+          "structural_factors": ["e.g., 'Chronic tax evasion, large public sector wage bill, generous pension system'"]
+        },
+        "external_position": {
+          "current_account_deficit_to_gdp": "X%",
+          "net_international_investment_position": "X% of GDP",
+          "loss_of_competitiveness": "e.g., 'Unit labor costs increased by over 30% relative to Germany since Eurozone entry.'"
+        },
+        "financial_sector_health": {
+          "banking_sector_exposure_to_sovereign_debt": "X% of total assets",
+          "private_sector_credit_boom": "e.g., 'Private credit grew from 80% to 130% of GDP between 2001-2009.'",
+          "dependence_on_ecb_liquidity": "e.g., 'Reliance on ECB Emergency Liquidity Assistance (ELA) by Q4 2011.'"
+        },
+        "political_situation": "e.g., 'Fragile coalition government, frequent social unrest (e.g., the 'Aganaktismenoi' movement), declining public trust in institutions.'"
+      }
+    },
+    "stage_I_-_notionally_normal_starting_point": {
+      "dominant_economic_paradigm": "e.g., 'The 'Great Moderation' and the belief in the stability of the Eurozone as a optimal currency area, with convergence of sovereign bond yields ('Euro dividend') seen as permanent.'",
+      "accepted_beliefs_about_sovereign_risk": {
+        "market_belief": "e.g., 'Eurozone membership de-risked sovereign debt for all members; default within a monetary union was considered politically and legally inconceivable ('Euro irreversibility').'",
+        "policy_maker_belief": "e.g., 'Stability and Growth Pact (SGP) rules, though often breached, were considered a sufficient disciplinary framework. Market discipline would correct minor fiscal lapses.'",
+        "academic_consensus": "e.g., 'Emphasis on the benefits of monetary union with insufficient focus on asymmetric shock adjustment mechanisms and banking-sovereign doom loops.'"
+      },
+      "institutional_precautionary_norms": {
+        "european_treaty_provisions": "e.g., 'Article 125 TFEU (the 'no-bailout clause') explicitly prohibited assumption of liabilities of other member states.'",
+        "financial_regulations": "e.g., 'European banking regulations (Basel II) assigned zero risk weight to all Eurozone sovereign debt, encouraging concentrated bank holdings.'",
+        "market_conventions": "e.g., 'Credit Default Swaps (CDS) on sovereign debt were relatively illiquid and not seen as a primary hedging tool.'"
+      },
+      "domestic_socio_political_setting": "e.g., 'Post-2004 Olympics optimism, widespread public and political support for Euro membership, belief in sustained EU cohesion funds and cheap credit fueling growth.'"
+    },
+    "stage_II_-_incubation_period": {
+      "accumulating_divergences_from_norm": {
+        "fiscal_data_revisions": "e.g., 'October 2009: Incoming government revises 2009 budget deficit forecast from 6.7% to 12.5% of GDP (later revised to 15.1%), revealing years of misreported statistics.'",
+        "early_warning_signals_ignored": {
+          "market_signals": "e.g., 'Gradual widening of Greek bond spreads vs. German Bunds from 2008 onwards, initially dismissed as global financial crisis spillover.'",
+          "institutional_warnings": "e.g., '2004 and 2007 EU reports criticizing Greek fiscal data reliability, which elicited limited policy response.'",
+          "academic_critiques": "e.g., 'Papers by economists like Wynne Godley (1992) and others warning about the design flaws of the Eurozone without fiscal union.'"
+        },
+        "political_inaction_and_denial": {
+          "domestic": "e.g., 'Successive governments delayed meaningful structural reforms (pensions, labor market, tax administration) due to political cost.'",
+          "european": "e.g., 'Initial Eurogroup responses focused on verbal assurances and small conditional loans, avoiding discussion of deep restructuring or collective burden-sharing.'"
+        },
+        "underlying_vulnerabilities_growing": {
+          "debt_dynamics": "e.g., 'Debt-to-GDP continued rising despite austerity due to collapsing GDP (debt deflation dynamics) and high borrowing costs.'",
+          "bank_sovereign_feedback_loop": "e.g., 'Downgrades of sovereign debt led to losses for domestic banks holding that debt, weakening the banks, which then required state support, worsening the sovereign's fiscal position.'"
+        }
+      },
+      "key_events_during_incubation": [
+        "e.g., 'April 2010: First €110bn bailout package agreed with Troika, imposing severe austerity. Market relief is short-lived.'",
+        "e.g., 'May 2010: ECB begins Securities Markets Programme (SMP) to buy peripheral bonds, a first breach of the 'no-bailout' principle.'",
+        "e.g., 'July 2011: 'Voluntary' private sector involvement (PSI) proposal by Euro Summit, initially aiming for a 21% NPV haircut, is deemed insufficient by markets.'",
+        "e.g., 'October 2011: Private creditors are asked to accept a 50% nominal haircut in a new proposal. EU leaders vow to prevent 'uncontrolled default'.'"
+      ]
+    },
+    "stage_III_-_precipitating_event": {
+      "catalyst_description": "e.g., 'The failure of the October 2011 voluntary PSI deal to stabilize markets, combined with a deteriorating Greek fiscal position and rising political resistance to further austerity, forces European leaders to confront the necessity of a deep, coercive restructuring to restore debt sustainability.'",
+      "immediate_trigger": "e.g., 'Q1 2012: Negotiations between the Greek government and its private creditors, mediated by the IIF, break down. Simultaneously, the Second Economic Adjustment Programme requires a successful debt restructuring as a condition for its €130bn funding. This creates a hard deadline.'",
+      "decision_point": "e.g., 'Late February 2012: Eurogroup finance ministers officially endorse the use of Collective Action Clauses (CACs) to force participation if a high but insufficient voluntary participation rate is achieved. This is a public admission that a coercive default is now the chosen path.'",
+      "announcement_and_market_immediate_reaction": {
+        "date_of_key_announcement": "YYYY-MM-DD",
+        "content": "e.g., 'Announcement of the final PSI terms: exchange of old bonds for new bonds with a 53.5% face value reduction, longer maturities, and lower coupons, financed by EFSF notes.'",
+        "rating_agency_action": "e.g., 'S&P downgrades Greece to 'Selective Default' (SD) upon the launch of the exchange offer.'",
+        "cds_auction_trigger": "e.g., 'The ISDA Determinations Committee rules the use of CACs constitutes a 'Restructuring Credit Event', triggering a payout on Greek CDS contracts (approx. $3.2bn).'",
+        "initial_market_spillover": "e.g., 'Temporary spike in Portuguese and Italian bond yields, but contained due to ECB's SMP and anticipation of the event.'"
+      }
+    },
+    "stage_IV_-_onset": {
+      "immediate_mechanical_outcomes": {
+        "debt_exchange_result": {
+          "participation_rate": "X% of eligible bonds tendered.",
+          "cac_activation": "e.g., 'CACs were activated on Greek-law bonds where needed to achieve over 95% participation in those series.'",
+          "final_nominal_debt_reduction": "€XX billion written off."
+        },
+        "balance_sheet_impacts": {
+          "domestic_bank_losses": "e.g., 'Greek banks recorded losses exceeding €40bn from the PSI, rendering them insolvent and requiring recapitalization with EFSF funds.'",
+          "eurosystem_losses_avoided": "e.g., 'ECB and national central banks avoided the PSI haircut on their SMP holdings due to 'preferred creditor status'.'",
+          "foreign_investor_losses": "e.g., 'Major European and global financial institutions (e.g., certain hedge funds, Cypriot banks) took significant write-downs.'"
+        }
+      },
+      "domestic_economic_and_social_consequences": {
+        "deepening_recession": "e.g., 'GDP contracted by an additional 6-7% in 2012; unemployment surged to over 25%.'",
+        "banking_sector_freeze": "e.g., 'Capital controls were not yet imposed (these came in 2015), but a severe credit crunch ensued due to bank recapitalization.'",
+        "social_unrest": "e.g., 'Intensification of protests and strikes against austerity; rise of anti-austerity political parties (Syriza, Golden Dawn).'",
+        "humanitarian_impact": "e.g., 'Reports of rising poverty, homelessness, and deterioration in public health indicators.'"
+      },
+      "legal_and_contractual_fallout": {
+        "holdout_litigation": ["e.g., 'Case brought by holdout creditors (e.g., Palikot group) in Greek courts, ultimately unsuccessful due to CACs.'", "e.g., 'Litigation by some bondholders in foreign jurisdictions (e.g., UK) regarding English-law bonds.'"],
+        "sovereign_immunity_issues": "e.g., 'The use of retroactive Greek law to insert CACs raised debates about the sanctity of contract and sovereign power.'"
+      },
+      "systemic_financial_market_reaction": "e.g., 'While contained, the event led to a permanent repricing of Eurozone sovereign risk, ending the 'risk-free' illusion. It established a precedent for future restructurings within the monetary union.'"
+    },
+    "stage_V_-_rescue_and_salvage": {
+      "immediate_firefighting_measures": {
+        "bank_recapitalization_program": "e.g., '€48.2bn from the EFSF was channeled through the Hellenic Financial Stability Fund (HFSF) to recapitalize the four systemic Greek banks in 2012-2013.'",
+        "continuation_of_troika_program": "e.g., 'The second €130bn adjustment program was unlocked post-PSI, providing funding for government operations and bank recapitalization.'",
+        "ecb_liquidity_support": "e.g., 'ECB continued and expanded Emergency Liquidity Assistance (ELA) to Greek banks to prevent a total collapse of the payments system.'"
+      },
+      "debt_relief_from_official_sector": {
+        "initial_official_sector_concessions": "e.g., '2012: Euro area member states reduced interest rates on their bilateral loans from the first program, extended maturities, and passed on SMP profits to Greece.'",
+        "ongoing_negotiations": "e.g., 'Post-2012, debates continued about the need for further 'Official Sector Involvement' (OSI) to achieve debt sustainability targets.'"
+      },
+      "political_management_of_fallout": {
+        "government_stability": "e.g., 'Formation of a grand coalition government under technocrat Prime Minister Lucas Papademos to oversee the PSI and later elections.'",
+        "eurozone_crisis_management_institutions": "e.g., 'Acceleration of plans for a permanent rescue mechanism, leading to the operational launch of the European Stability Mechanism (ESM) in October 2012.'"
+      },
+      "narrative_control_and_communication": "e.g., 'Official statements framed the PSI as a 'unique' and 'exceptional' case to limit contagion, emphasizing Greece's specific failings rather than systemic Eurozone flaws.'"
+    },
+    "stage_VI_-_full_cultural_readjustment": {
+      "formal_inquiries_and_assessments": {
+        "european_level": ["e.g., 'EU task forces on strengthened economic governance (Six-Pack, Two-Pack, Fiscal Compact).'", "e.g., 'The 2015 'Five Presidents' Report' on Completing Europe's Economic and Monetary Union.'"],
+        "imf_self_critique": "e.g., 'The IMF's 2013 Independent Evaluation Office (IEO) report critically assessed its role in the Greek program, admitting to major errors in debt sustainability analysis.'"
+      },
+      "paradigm_shift_in_beliefs": {
+        "market_beliefs": "e.g., 'The 'redenomination risk' (risk of euro exit) became a permanent component of pricing for peripheral Eurozone sovereign debt.'",
+        "policy_maker_beliefs": "e.g., 'Broad acceptance that monetary union requires banking union (SSM, SRM) and some form of fiscal risk-sharing to survive.'",
+        "academic_consensus": "e.g., 'Overwhelming focus on the flaws of incomplete currency unions, the theory of Optimal Currency Areas, and the 'doom loop'.'"
+      },
+      "new_precautionary_norms_and_institutions": {
+        "european_financial_architecture": ["e.g., 'Establishment of the Single Supervisory Mechanism (SSM) and Single Resolution Mechanism (SRM).'", "e.g., 'Introduction of the Eurozone's sovereign debt restructuring framework in 2021 - a standardized, non-retroactive CAC model.'"],
+        "regulatory_changes": "e.g., 'Banking regulations (Basel III, CRD IV/CRR) introduced sovereign exposure concentration limits and more realistic risk-weighting considerations.'",
+        "contractual_innovations": "e.g., 'Standardized, aggregate CACs become mandatory for new Euro area sovereign bonds from 2013, making future restructurings more orderly.'"
+      },
+      "long_term_consequences_and_legacy": {
+        "for_the_defaulting_country": "e.g., 'A decade of depression-level output loss, deep social scars, political realignment (rise and fall of Syriza), and a legacy of very high debt despite restructuring.'",
+        "for_the_eurozone": "e.g., 'A more resilient but less trusting union; north-south divisions deepened; Germany's influence cemented; the ECB's role transformed into a de facto lender of last resort.'",
+        "for_international_finance": "e.g., 'The Greek PSI became a key case study in modern sovereign restructuring, highlighting the complexities of restructuring within a monetary union and the role of official creditors.'",
+        "historical_narrative": "e.g., 'Viewed as the largest sovereign debt restructuring in history, a pivotal moment in the Eurozone crisis that forced a fundamental, if still incomplete, evolution of the European project.'"
+      }
     }
   }
 }
-```
-
-**Critical Analysis Instructions:**
-
-1.  **Chronological & Causal Logic:** Construct a clear timeline from antecedents to resolution. Explicitly link economic causes (`antecedents_and_causes`) to the default trigger (`default_mechanics.trigger_event`) and its consequences (`immediate_aftermath`).
-2.  **Quantitative Precision:** Prioritize and clearly cite quantitative data (debt ratios, haircuts, GDP impacts). Where estimates vary, use the most widely cited figures from authoritative sources (e.g., IMF, government final reports). Differentiate between nominal and NPV haircuts.
-3.  **Multi-Actor Perspective:** Detail the distinct roles, incentives, and outcomes for all key actors: the defaulting government, domestic citizens, domestic financial institutions, private foreign creditors, official sector creditors (IMF, Paris Club), and the legal system.
-4.  **Distinguish Default Types:** Clearly classify the event. A "distressed exchange" is legally different from a unilateral payment stoppage. The analysis should reflect this nuance.
-5.  **Cover Full Lifecycle:** Ensure the output spans: i) **Build-up** (vulnerabilities), ii) **Crisis & Default** (trigger, mechanics), iii) **Resolution** (restructuring, litigation), and iv) **Long-term Aftermath** (economic scarring, market re-access).
-6.  **Legal and Financial Detail:** Sovereign defaults are as much legal as financial events. Provide specific details on the debt instruments, the legal definition of default, the use (or not) of Collective Action Clauses (CACs), and significant litigation.
-7.  **Completeness Mandate:** Strive to populate every field. If information for a specific sub-field is absolutely unavailable in the provided data, use the value: `"Information not available in provided sources."`
-
-**Final Step Before Output:**
-Perform a consistency check. Ensure dates in `key_milestones` follow a logical sequence and align with `crisis_duration_months`. Financial figures should be contextually plausible (e.g., `haircut_and_relief.estimated_debt_relief` should be a substantial portion of `debt_stock_at_default.external_debt_portion`).
-
-**Now, synthesize the provided data about the specified sovereign default event and output the complete JSON object.**
 """
