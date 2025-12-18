@@ -1,12 +1,12 @@
 """
-Minimal uTEST for StepWiseEventBuilder (Consolidated Pipeline)
+Minimal uTEST for AgentEventBuilder (Consolidated Pipeline)
 
 This script validates the integrated multi-agent pipeline for financial event reconstruction.
 It uses a synthetic "Ponzi Scheme" (Dutch Tulip Mania) scenario to test the flow.
 
 Workflow:
 1. **Setup**: Constructs a `BuildInput` with one `DataSample` and a `UserQueryInput`.
-2. **Execution**: Invokes `StepWiseEventBuilder` via LangGraph.
+2. **Execution**: Invokes `AgentEventBuilder` via LangGraph.
    - **Skeleton Phase**: Generates the event structure.
    - **Loop Phase** (per episode):
      - ParticipantReconstructor -> TransactionReconstructor -> EpisodeReconstructor
@@ -16,7 +16,7 @@ Workflow:
    - Prints status and simple validation metrics (stage/episode counts).
 
 Usage:
-    python examples/uTEST/Builder/agent_build.py -c configs/uTEST/builder/step_build.yml
+    python examples/uTEST/Builder/agent_build.py -c configs/uTEST/builder/agent_build.yml
 """
 
 import uuid
@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.base import BuildInput
 from finmy.builder.agent_build.main_build import (
-    StepWiseEventBuilder,
+    AgentEventBuilder,
 )
 from finmy.builder.agent_build.prompts import *
 
@@ -105,7 +105,7 @@ def main():
     build_input = BuildInput(user_query=uquery, samples=[data_sample])
 
     # 3. Instantiate builder with real LLM config
-    builder = StepWiseEventBuilder(
+    builder = AgentEventBuilder(
         method_name="APILMReconstruct",
         build_config=config,
     )
@@ -119,7 +119,6 @@ def main():
         if "skeleton" in name.lower():
             agent_system_msgs[name] = EventLayoutReconstructorSys
             agent_user_msgs[name] = EventLayoutReconstructorUser
-
         if "participant" in name.lower():
             agent_system_msgs[name] = ParticipantReconstructorSys
             agent_user_msgs[name] = ParticipantReconstructorUser
@@ -141,33 +140,33 @@ def main():
     }
 
     # Run build
-    # print("Starting StepWiseEventBuilder...")
-    # graph = builder.graph()
-    # final_state = graph.invoke(state)
-    # print("Build completed.")
+    print("Starting AgentEventBuilder...")
+    graph = builder.graph()
+    final_state = graph.invoke(state)
+    print("Build completed.")
 
-    # # Integrate final result
-    # final_cascade = builder.integrate_results(final_state)
+    # Integrate final result
+    final_cascade = builder.integrate_results(final_state)
 
-    # build_input = final_state.pop("build_input")
+    build_input = final_state.pop("build_input")
 
-    # # Save the final state to the json
-    # builder.save_traces(
-    #     build_input.to_dict(),
-    #     save_name="BuildInput",
-    #     file_format="json",
-    # )
-    # builder.save_traces(
-    #     final_state,
-    #     save_name="FinalState",
-    #     file_format="json",
-    # )
-    # builder.save_traces(
-    #     final_cascade,
-    #     save_name="FinalEventCascade",
-    #     file_format="json",
-    # )
-    # print("Traces saved.")
+    # Save the final state to the json
+    builder.save_traces(
+        build_input.to_dict(),
+        save_name="BuildInput",
+        file_format="json",
+    )
+    builder.save_traces(
+        final_state,
+        save_name="FinalState",
+        file_format="json",
+    )
+    builder.save_traces(
+        final_cascade,
+        save_name="FinalEventCascade",
+        file_format="json",
+    )
+    print("Traces saved.")
 
     # Test integrate_from_files
     print("\nTesting integrate_from_files...")

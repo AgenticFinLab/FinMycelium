@@ -17,7 +17,7 @@ from lmbase.inference.model_call import LLMInference
 from lmbase.utils.tools import BaseContainer
 
 from finmy.generic import UserQueryInput, DataSample
-from finmy.builder.structure import EventCascade
+from finmy.builder.agent_build.structure import EventCascade
 
 
 @dataclass

@@ -51,7 +51,7 @@ from finmy.builder.utils import (
     extract_json_response,
 )
 from finmy.builder.base import AgentState
-from finmy.builder.structure import Episode
+from finmy.builder.agent_build.structure import Episode
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -100,7 +100,7 @@ _TRANSACTION_SPEC = filter_dataclass_fields(
 )
 
 
-class StepWiseEventBuilder(BaseBuilder):
+class AgentEventBuilder(BaseBuilder):
     """Integrated builder that performs the full event reconstruction pipeline:
     1. SkeletonReconstruction: Generates the overall event structure (EventCascade).
     2. Loop over Episodes:
