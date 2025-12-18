@@ -201,48 +201,43 @@ class ClassLMSimpleBuild:
         print("Received detailed output from LLM")
         output_text = detailed_output.response.strip()
         
-    # Extract and parse JSON response
         try:
-            format_chatbot = InferInput(
-                system_msg="You are a professional JSON format expert.",
-                user_msg=output_text.replace("{", "{{").replace("}", "}}") + "\n\nPlease format the above text as a proper JSON object strictly. If there is any error in the format, please fix it. Don't add any extra text or change the content of the text. Only return the JSON object. You should ignore directly: (1) javascript:void((function(){{}})()); (2) document.open();document.domain='sogou.com';document.close(); ",
-            )
-            format_output = api_call.run(format_chatbot)
-            format_output_text = format_output.response.strip()
-            print("Format output text:", format_output_text)
-
             event_cascade_json = self.extract_json_response(format_output_text)
-            
             # Save the event cascade
             self.save_event_cascade(event_cascade_json)
-            
             return event_cascade_json
-            
+
         except:
-            try: 
-                print("Try to format the output text again...")
-                format_chatbot = InferInput(
-                    system_msg="You are a professional JSON format expert.",
-                    user_msg=output_text.replace("{", "{{").replace("}", "}}") + "\n\nPlease format the above text as a proper JSON object strictly. If there is any error in the format, please fix it. Don't add any extra text or change the content of the text. Only return the JSON object. You should ignore directly: (1) javascript:void((function(){{}})()); (2) document.open();document.domain='sogou.com';document.close(); ",
-                )
-                format_output = api_call.run(format_chatbot)
-                format_output_text = format_output.response.strip()
-                print("Format output text:", format_output_text)
-                event_cascade_json = self.extract_json_response(format_output_text)
-                # Save the event cascade
-                self.save_event_cascade(event_cascade_json)
-                return event_cascade_json
-            except Exception as e:
-                print(f"Error processing JSON response: {e}")
-                # Save raw response for debugging
-                debug_dir = "./debug_output"
-                os.makedirs(debug_dir, exist_ok=True)
-                debug_file = os.path.join(
-                    debug_dir, 
-                    f"raw_response_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.txt"
-                )
-                with open(debug_file, "w", encoding="utf-8") as f:
-                    f.write(output_text)
-                print(f"Raw response saved to: {debug_file}")
+            # Extract and parse JSON response
+            for i in range(3):
+                try:
+                    print(f"Attempt {i+1} to format response")
+                    format_chatbot = InferInput(
+                        system_msg="You are a professional JSON format expert.",
+                        user_msg=output_text.replace("{", "{{").replace("}", "}}") + "\n\nPlease format the above text as a proper JSON object strictly. If there is any error in the format, please fix it. Don't add any extra text or change the content of the text. Only return the JSON object. You should ignore directly: (1) javascript:void((function(){{}})()); (2) document.open();document.domain='sogou.com';document.close(); ",
+                    )
+                    format_output = api_call.run(format_chatbot)
+                    format_output_text = format_output.response.strip()
+                    print("Format output text:", format_output_text)
+
+                    event_cascade_json = self.extract_json_response(format_output_text)
+                    
+                    # Save the event cascade
+                    self.save_event_cascade(event_cascade_json)
+                    
+                    return event_cascade_json
                 
-                raise ValueError(f"Failed to parse JSON from LLM response: {e}") from e
+                except Exception as e:
+                    print(f"Error processing JSON response: {e}")
+                    # Save raw response for debugging
+                    debug_dir = "./debug_output"
+                    os.makedirs(debug_dir, exist_ok=True)
+                    debug_file = os.path.join(
+                        debug_dir, 
+                        f"raw_response_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.txt"
+                    )
+                    with open(debug_file, "w", encoding="utf-8") as f:
+                        f.write(output_text)
+                    print(f"Raw response saved to: {debug_file}")
+                    
+                    raise ValueError(f"Failed to parse JSON from LLM response: {e}") from e
