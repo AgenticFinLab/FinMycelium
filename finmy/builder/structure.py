@@ -81,8 +81,8 @@ class ParticipantRelation:
 
     Bidirectional example:
     {
-      "from_participant_id": "P_X",
-      "to_participant_id": "P_Y",
+      "from_participant_id": "P_2",
+      "to_participant_id": "P_4",
       "descriptions": [
         VerifiableField(value="X and Y share a common parent company (public registry verified)")
       ],
@@ -131,20 +131,35 @@ class Transaction:
     {
       "timestamp": VerifiableField(value="2025-01-01T12:00:00Z"),
       "details": [VerifiableField(value="USD 10,000 wire"), VerifiableField(value="settlement: SWIFT")],
-      "from_participant_id": "P_A",
-      "to_participant_id": "P_B",
+      "from_participant_id": "P_1",
+      "to_participant_id": "P_2",
       "instruments": [VerifiableField(value="bond", evidence_source_contents=["... bond payment ..."])]
     }
     """
 
     # Transaction occurrence time (wall-clock); provide the most credible timestamp; use UTC.
-    timestamp: Optional[VerifiableField] = None
+    timestamp: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Transaction details presented by the descriptions between two participants
     details: List[VerifiableField] = field(default_factory=list)
     # Payer participant identifier; references `Participant.participant_id`; do not use names or aliases.
-    from_participant_id: str = ""
+    from_participant_id: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Payee participant identifier; references `Participant.participant_id`.
-    to_participant_id: str = ""
+    to_participant_id: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Related instruments/tools; optional; describes the vehicle of transfer (e.g., bond payment, token transfer).
     instruments: Optional[List[VerifiableField]] = None
 
@@ -161,7 +176,12 @@ class Action:
     """
 
     # Chronological context.
-    timestamp: Optional[VerifiableField] = None
+    timestamp: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Details of one participant's action (each item grounded in source).
     details: List[VerifiableField] = field(default_factory=list)
 
@@ -175,7 +195,7 @@ class Participant:
 
     Example:
     {
-      "participant_id": "P_3f2a1c4b6d7e8f90123456789abcdeff",
+      "participant_id": "P_3",
       "name": VerifiableField(value="Credit Suisse"),
       "participant_type": "organization",
       "base_role": VerifiableField(value="issuer"),
@@ -206,20 +226,31 @@ class Participant:
     participant_id: str
 
     # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
-    name: VerifiableField = field(
-        default_factory=lambda: VerifiableField(value="unspecified")
+    name: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
     )
 
     # High-level category (string).
     # Examples: "individual", "organization", "social_media_platform", "government_agency".
     # For large cohorts, prefer a group category (e.g., "retail_investor_group", "marketing_bot_group")
     # and describe scope via attributes/tags (e.g., size band, region, platform).
-    participant_type: str = "unknown due to insufficient information in source content"
+    participant_type: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Primary functional role in this event.
     # Examples: 'victim', 'perpetrator', 'influencer', 'media', 'regulator', 'bystander'.
-    base_role: VerifiableField = field(
-        default_factory=lambda: VerifiableField(value="unknown")
+    base_role: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
     )
 
     # Static or semi-static descriptive properties grounded in source content.

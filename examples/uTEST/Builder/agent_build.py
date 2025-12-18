@@ -1,16 +1,22 @@
 """
 Minimal uTEST for StepWiseEventBuilder (Consolidated Pipeline)
 
-- Constructs a BuildInput with one DataSample and a UserQueryInput
-- Uses the real LLM API
-- Invokes the StepWiseEventBuilder which runs:
-    Skeleton -> (Participant -> Episode) Loop -> End
-- Prints the saved directory and verifies the flow.
+This script validates the integrated multi-agent pipeline for financial event reconstruction.
+It uses a synthetic "Ponzi Scheme" (Dutch Tulip Mania) scenario to test the flow.
 
-Run:
+Workflow:
+1. **Setup**: Constructs a `BuildInput` with one `DataSample` and a `UserQueryInput`.
+2. **Execution**: Invokes `StepWiseEventBuilder` via LangGraph.
+   - **Skeleton Phase**: Generates the event structure.
+   - **Loop Phase** (per episode):
+     - ParticipantReconstructor -> TransactionReconstructor -> EpisodeReconstructor
+3. **Verification**:
+   - Checks if the final `EventCascade` is correctly assembled.
+   - Tests the `integrate_from_files` functionality to ensure resume/recovery capability.
+   - Prints status and simple validation metrics (stage/episode counts).
 
-    python examples/uTEST/Builder/step_build.py -c configs/uTEST/builder/step_build.yml
-
+Usage:
+    python examples/uTEST/Builder/agent_build.py -c configs/uTEST/builder/step_build.yml
 """
 
 import uuid
@@ -20,10 +26,10 @@ from dotenv import load_dotenv
 
 from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.base import BuildInput
-from finmy.builder.step_build.main_build import (
+from finmy.builder.agent_build.main_build import (
     StepWiseEventBuilder,
 )
-from finmy.builder.step_build.prompts import *
+from finmy.builder.agent_build.prompts import *
 
 
 def _generate_ponzi_content() -> str:
@@ -135,25 +141,43 @@ def main():
     }
 
     # Run build
-    print("Starting StepWiseEventBuilder...")
-    graph = builder.graph()
-    final_state = graph.invoke(state)
-    print("Build completed.")
+    # print("Starting StepWiseEventBuilder...")
+    # graph = builder.graph()
+    # final_state = graph.invoke(state)
+    # print("Build completed.")
 
-    build_input = final_state.pop("build_input")
+    # # Integrate final result
+    # final_cascade = builder.integrate_results(final_state)
 
-    # Save the final state to the json
+    # build_input = final_state.pop("build_input")
+
+    # # Save the final state to the json
+    # builder.save_traces(
+    #     build_input.to_dict(),
+    #     save_name="BuildInput",
+    #     file_format="json",
+    # )
+    # builder.save_traces(
+    #     final_state,
+    #     save_name="FinalState",
+    #     file_format="json",
+    # )
+    # builder.save_traces(
+    #     final_cascade,
+    #     save_name="FinalEventCascade",
+    #     file_format="json",
+    # )
+    # print("Traces saved.")
+
+    # Test integrate_from_files
+    print("\nTesting integrate_from_files...")
+    restored_cascade = builder.integrate_from_files()
     builder.save_traces(
-        build_input.to_dict(),
-        save_name="BuildInput",
+        restored_cascade,
+        save_name="IntegratedEventCascade",
         file_format="json",
     )
-    builder.save_traces(
-        final_state,
-        save_name="FinalState",
-        file_format="json",
-    )
-    print("Traces saved.")
+    print("integrate_from_files test completed.")
 
 
 if __name__ == "__main__":
