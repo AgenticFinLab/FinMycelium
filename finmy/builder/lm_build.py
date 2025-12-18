@@ -32,8 +32,9 @@ Output a single raw JSON object for `EventCascade` containing the reconstructed 
 Compliance and consistency:
 - Use ONLY fields and types from the schema block in the system prompt; exact names and types.
 - ISO 8601 timestamps; ISO currency codes.
-- Participant IDs MUST be "P_" + integer (e.g., P_0, P_1).
-- Stage IDs MUST be "S" + integer (e.g., S0, S1).
+- Participant IDs MUST be "P_" + integer (e.g., P_1, P_2).
+- Stage IDs MUST be "S" + integer (e.g., S1, S2). Start from 1.
+- Episode IDs MUST be "E" + integer (e.g., E1, E2). Start from 1.
 - Attach at least one source_content to critical records.
 - Ensure logical consistency across stages and episodes.
 - `transactions` within stages/episodes MUST reference valid `participant_id` values.
