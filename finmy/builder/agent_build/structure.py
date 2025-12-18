@@ -346,15 +346,20 @@ class EventStage:
     """
 
     # Locally unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
+    # Must follow the format "S" + integer, incrementing sequentially based on the stage order.
+    # Examples:
+    # - "S0" (for the first stage)
+    # - "S1" (for the second stage)
+    # - "S2" ...
     stage_id: str
 
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
     name: VerifiableField
-
     # Zero-based index (ensures correct ordering) of this stage in the event.
     index_in_event: int
+
     # Detailed and concise information from source content presenting the stage’s essence across aspects. Provide multiple items when supported; each item is a grounded, verifiable statement.
-    descriptions: List[VerifiableField] = None
+    descriptions: List[VerifiableField]
 
     # Earliest timestamp of activity or evidence in this stage.
     # Set to "unknown" if start time is not available in the source content.
@@ -401,16 +406,34 @@ class EventCascade:
     """
 
     # Globally unique identifier (e.g., 'fraud_crypto_2025_001').
+    # A short, unique string to identify this specific event instance.
+    # It should ideally combine the event type, a key entity or location, and a year/sequence.
+    # Examples:
+    # - "ponzi_madoff_2008"
+    # - "bankrun_svb_2023"
+    # - "insider_trading_galleon_2009"
     event_id: str
 
     # Human-readable title summarizing the event (verbatim when available).
-    title: Optional[VerifiableField] = None
+    # This should be a clear, descriptive headline.
+    # Examples:
+    # - "Collapse of FTX Exchange"
+    # - "Bernie Madoff Investment Scandal"
+    # - "Silver Thursday Market Manipulation"
+    title: VerifiableField
 
     # Categorical label from domain sources (verbatim when available).
-    event_type: Optional[VerifiableField] = None
+    # Represents the primary classification of the financial event.
+    # Examples:
+    # - "Ponzi Scheme"
+    # - "Bank Run"
+    # - "Market Manipulation"
+    # - "Accounting Fraud"
+    # - "Sovereign Default"
+    event_type: VerifiableField
 
     # Detailed and concise information from source content presenting the event’s essence across aspects. Provide multiple items when supported; each item is a grounded, verifiable statement.
-    descriptions: List[VerifiableField] = None
+    descriptions: List[VerifiableField]
 
     # Earliest timestamp across all evidence and participant activity.
     # Set to "unknown" if start time is not available in the source content.

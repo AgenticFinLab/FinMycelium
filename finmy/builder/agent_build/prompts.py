@@ -3,7 +3,7 @@ Prompts of the step-wise event builder.
 """
 
 EventLayoutReconstructorSys = """
-You are a senior expert in financial‑event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Query` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the schema exactly.
+You are a senior expert in financial-event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Query` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the schema exactly.
 
 Scope:
 - Focus only on `EventCascade`, `EventStage`, and `Episode`.
@@ -16,20 +16,20 @@ EventCascade
         └── episodes: List[Episode]
 
 Required fields to output:
-- EventCascade: output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to null or omit.
-- EventStage: `stage_id`, `name`, `index_in_event`, `episodes: List[Episode]`.
+- EventCascade: output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to "unknown".
+- EventStage:  output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to "unknown".
 - Episode: `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly grounded in `Content` via `VerifiableField` and aligned with `Query` and `Keywords`.
 - The usage of `VerifiableField` must strictly follow the Schema definition.
 
 How to reconstruct:
-1) Event type identification: set `EventCascade.event_type` if supported by Content; otherwise null or omit.
+1) Event type identification: set `EventCascade.event_type` if supported by Content; otherwise "unknown".
 2) Stage skeleton reconstruction: for each stage, provide `stage_id`, `name`, `index_in_event` and the list of episodes.
-3) Episode skeleton reconstruction: for each episode, provide `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` (if insufficient evidence, set to null or omit with concise reasons).
+3) Episode skeleton reconstruction: for each episode, provide `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` (if insufficient evidence, set to "unknown" with concise reasons).
 4) Ordering: set indices by temporal/logical order; start from 0.
 
 Strict constraints:
 - Use ONLY fields and types defined by the schema; names and types must match exactly.
-- Do NOT fabricate beyond `Content`; set missing information to null or omit.
+- Do NOT fabricate beyond `Content`; set missing information to "unknown".
 - IDs must be stable and locally unique. If no canonical scheme exists, use sequential identifiers (e.g., "S1", "E1").
 
 Schema definition (must follow exactly):
@@ -49,9 +49,9 @@ Based on Query, Keywords, and Content, output a single raw JSON object for Event
 Instructions:
 - Scope: EventCascade, EventStage, Episode only; use `VerifiableField` as defined in the Schema for applicable fields.
 - Follow the types and structure exactly as defined in the Schema.
-- Event type: set `event_type` if supported by Content; otherwise null or omit.
+- Event type: set `event_type` if supported by Content; otherwise "unknown".
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, and its episodes.
-- Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to null or omit with concise reasons).
+- Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
 - Ordering: set indices by temporal/logical order starting from 0.
 - IDs: use stable locally unique IDs (e.g., "S1", "E1").
 - Output: raw JSON only; do not include explanations or code fences.
@@ -92,7 +92,7 @@ Field Requirements of the Output are strictly defined in the Schema. Additionall
 Constraints:
 - Use `VerifiableField` for all applicable fields to ensure grounding in `Content`.
 - Each participant must have clear evidence from `Content` supporting inclusion; if evidence is insufficient, omit or set fields to unknown with brief reasons.
-- Do NOT fabricate information; if evidence is missing, use "unknown" or omit.
+- Do NOT fabricate information; if evidence is missing, use "unknown".
 - Output raw JSON only.
 
 Schema:
@@ -234,7 +234,7 @@ Instructions:
 - **Descriptions & Times**: Complete `descriptions`, `start_time`, and `end_time` comprehensively from `Content`.
 - **General**:
     - Use `VerifiableField` and concise reasons.
-    - If evidence is insufficient, set `value` to null or omit.
+    - If evidence is insufficient, set `value` to "unknown".
     - Maintain chronological and contextual consistency.
 
 Output:

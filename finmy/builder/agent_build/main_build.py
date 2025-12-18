@@ -36,7 +36,6 @@ import time
 import copy
 import os
 import json
-import re
 from functools import partial
 from pathlib import Path
 
@@ -55,7 +54,7 @@ from finmy.builder.agent_build.structure import Episode
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
-    path=Path(__file__).resolve().parents[1] / "structure.py"
+    path=Path(__file__).resolve().parent / "structure.py"
 )
 # Read dataclass definitions from structure.py to embed schema text in prompts
 # Skeleton for guiding layout extraction
