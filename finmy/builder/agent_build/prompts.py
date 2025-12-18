@@ -30,7 +30,7 @@ How to reconstruct:
 Strict constraints:
 - Use ONLY fields and types defined by the schema; names and types must match exactly.
 - Do NOT fabricate beyond `Content`; set missing information to "unknown".
-- IDs must be stable and locally unique. If no canonical scheme exists, use sequential identifiers (e.g., "S1", "E1").
+- Stage and Episode IDs must be stable and unique. If no canonical scheme exists, use sequential identifiers (e.g., "S1", "E1") starting from 1.
 
 Schema definition (must follow exactly):
 === BEGIN Schema ===
@@ -53,7 +53,7 @@ Instructions:
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, and its episodes.
 - Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
 - Ordering: set indices by temporal/logical order starting from 0.
-- IDs: use stable locally unique IDs (e.g., "S1", "E1").
+-56→- Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
 - Output: raw JSON only; do not include explanations or code fences.
 
 === Query BEGIN ===
