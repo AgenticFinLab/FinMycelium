@@ -6,7 +6,6 @@ EventCascade
   └── stages: List[EventStage]
         └── episodes: List[Episode]
 
-
 2. Based on the overall structure, reconstruct the first stage' episodes:
     2.1 Reconstruct the first episode.
     2.2 ....
@@ -29,8 +28,9 @@ We do not introduce the idea of the multi-agent system, we indeed have several a
 """
 
 import time
+import copy
+from functools import partial
 from pathlib import Path
-from typing import List
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
@@ -56,15 +56,24 @@ _SKELETON_SPEC = filter_dataclass_fields(
     {
         "VerifiableField": [],
         "EventCascade": [],
-        "EventStage": ["stage_id", "name", "index_in_event", "episodes"],
-        "Episode": ["episode_id", "name", "index_in_stage"],
+        "EventStage": [],
+        "Episode": ["episode_id", "name", "index_in_stage", "start_time", "end_time"],
+    },
+)
+
+
+_PARTICIPANT_SPEC = filter_dataclass_fields(
+    _STRUCTURE_SPEC_FULL,
+    {
+        "Participant": [],
+        "Action": [],
+        "VerifiableField": [],
     },
 )
 
 _EPISODE_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
     {
-        "Participant": [],
         "ParticipantRelation": [],
         "Action": [],
         "Transaction": [],
@@ -74,94 +83,22 @@ _EPISODE_SPEC = filter_dataclass_fields(
 )
 
 
-class EventSkeletonBuilder(BaseBuilder):
-    """LangGraph-based event skeleton builder (single-node minimal implementation)
-
-    - Uses a single node `reconstruct_layout` to assemble prompts, call the model, and parse JSON
-    - Graph structure: `START → reconstruct_layout → END`
-    - Persists output to `output_dir/event_{timestamp}/event_cascade.json`
-    """
-
-    def execute_agent(self, state: AgentState) -> AgentState:
-        """Single node: reconstruct event skeleton JSON and write into state
-
-        Steps:
-        1) Get samples, that is the source content from the 'build_input'
-        2) Inject schema (skeleton-filtered) into system prompt
-        3) Escape curly braces in the system prompt to avoid `.format` conflicts
-        4) Run LLM inference and parse JSON via the centralized utility
-        5) Write the parsed result to `event_json`
-        """
-        t0 = time.time()
-        build_ipt = state["build_input"]
-        num_executed = len(state["agent_executed"])
-        execution_idx = num_executed + 1
-
-        agent_names = list(state["agent_system_msgs"])
-        cur_name = agent_names[execution_idx - 1]
-
-        # Organize the system and user prompts
-        system_msg = state["agent_system_msgs"][cur_name]
-        user_msg = state["agent_user_msgs"][cur_name]
-        system_msg = system_msg.format(STRUCTURE_SPEC=_SKELETON_SPEC)
-        # Escape curly braces
-        system_msg = system_msg.replace("{", "{{").replace("}", "}}")
-        # Execute model call
-        out: InferOutput = self.agents_lm.run(
-            infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
-            Query=build_ipt.user_query.query_text,
-            Keywords=build_ipt.user_query.key_words,
-            Content="\n".join([sample.content for sample in build_ipt.samples]),
-        )
-        result = out.response
-        savename = self.get_save_name(cur_name, len(state["agent_executed"]) + 1)
-        self.save_traces({cur_name: out.to_dict()}, savename, "json")
-        self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
-        state["agent_results"].append({cur_name: result})
-        state["cost"].append({cur_name: {"latency": time.time() - t0}})
-        state["agent_executed"].append(cur_name)
-        return {
-            "build_input": build_ipt,
-            "agent_results": state["agent_results"],
-            "agent_executed": state["agent_executed"],
-            "cost": state["cost"],
-            "agent_system_msgs": state["agent_system_msgs"],
-            "agent_user_msgs": state["agent_user_msgs"],
-        }
-
-    def graph(self) -> CompiledStateGraph[AgentState]:
-        """Build a single-node LangGraph state machine"""
-        g = StateGraph(AgentState)
-        # Nodes
-        g.add_node("reconstruct_layout", self.execute_agent)
-        # Edges: START → create_layout → END
-        g.add_edge(START, "reconstruct_layout")
-        g.add_edge("reconstruct_layout", END)
-        return g.compile()
+_TRANSACTION_SPEC = filter_dataclass_fields(
+    _STRUCTURE_SPEC_FULL,
+    {
+        "Transaction": [],
+        "VerifiableField": [],
+    },
+)
 
 
-class EpisodeReconstructionBuilder(BaseBuilder):
-    """Builder for reconstructing a single TARGET Episode using StageSkeleton and text evidence.
-
-    Responsibilities:
-    - Read the previously generated `event_skeleton` (EventCascade → stages → episodes).
-    - Select the target stage and episode stub (id, name, index, optional description).
-    - Prompt the model with `EpisodeReconstructorSys/User` to produce a complete Episode JSON per Schema.
-    - Persist outputs in memory and as JSON files for downstream consumption.
-
-    Configuration:
-    - Uses `config["episode_reconstructor"]["generation_config"]` if provided;
-      falls back to `layout_reconstructor.generation_config` when absent.
-    - Writes episode JSONs into `<output_dir>/episodes/`.
-
-    Inputs:
-    - `BuildInput.extras["event_skeleton"]`: optional direct pass of the skeleton when not in state.
-    - `BuildInput.extras["target_stage_index"]`: integer, selects the stage (default 0).
-    - `BuildInput.extras["target_episode_index"]`: integer, selects episode by `index_in_stage` (default first).
-
-    Outputs:
-    - `state["episode_responses"]["episode_reconstructions"][stage_id][episode_id]` → Episode JSON.
-    - File saved at `<output_dir>/episodes/{stage_id}_{episode_id}.json`.
+class StepWiseEventBuilder(BaseBuilder):
+    """Integrated builder that performs the full event reconstruction pipeline:
+    1. SkeletonReconstruction: Generates the overall event structure (EventCascade).
+    2. Loop over Episodes:
+        a. ParticipantReconstruction: Identifies participants for the current episode.
+        b. TransactionReconstructor: Reconstructs transactions for the current episode.
+        c. EpisodeReconstruction: Reconstructs the full episode using the skeleton, participants, and transactions.
     """
 
     def extract_latest_episode(
@@ -171,114 +108,200 @@ class EpisodeReconstructionBuilder(BaseBuilder):
     ):
         """
         Extract the latest episode from the event skeleton based on the num_episodes.
-
-        Args:
-            event_skeleton (dict): The event skeleton to extract the latest episode from.
-            num_episodes (int): The number of episodes that have been reconstructed.
-
-        Returns:
-            tuple: A tuple containing the belong_state and latest_episode.
         """
         idx = 0
         for stage in event_skeleton["stages"]:
             for episode in stage["episodes"]:
-                if idx == num_episodes + 1:
+                if idx == num_episodes:
                     return stage, episode
                 idx += 1
         return None, None
 
-    def execute_agent(self, state: AgentState) -> AgentState:
-        """
-        Single node that reconstructs the TARGET Episode.
+    def _collect_reconstructed_participants_structure(self, state: AgentState):
+        """Build a full EventCascade-shaped structure from the Skeleton result,
+        and inject already reconstructed participants into the corresponding episodes
+        in sequence order.
 
-        Steps:
-        1) Locate `event_skeleton` from state or `BuildInput.extras`.
-        2) Choose target stage and episode stub by indices (or first available).
-        3) Compose system/user prompts with Schema injection and contextual variables.
-        4) Run LLM inference and parse response as strict Episode JSON.
-        5) Persist result into `episode_responses` and save to disk.
+        Returns a deep-copied EventCascade object with participants filled.
         """
+        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+        skeleton_copy = copy.deepcopy(event_skeleton)
 
+        pr_results = [
+            e["ParticipantReconstructor"]
+            for e in state["agent_results"]
+            if "ParticipantReconstructor" in e
+        ]
+        idx = 0
+        for st in skeleton_copy["stages"]:
+            for ep in st["episodes"]:
+                if idx < len(pr_results):
+                    ep["participants"] = pr_results[idx]["participants"]
+                else:
+                    ep["participants"] = []
+                idx += 1
+        return skeleton_copy
+
+    def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
+        """Executes the specified agent (Skeleton, Participant, Transaction, or Episode)."""
         t0 = time.time()
         build_ipt = state["build_input"]
-        num_executed = len(state["agent_executed"])
 
-        cur_name = "EpisodeReconstructor"
+        # Common prompt arguments
+        prompt_kwargs = {
+            "Query": build_ipt.user_query.query_text,
+            "Keywords": build_ipt.user_query.key_words,
+            "Content": "\n".join([sample.content for sample in build_ipt.samples]),
+        }
 
-        # Read skeleton from the skeleton reconstructor
-        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+        # Retrieve templates
+        sys_msg_template = state["agent_system_msgs"][agent_name]
+        user_msg_template = state["agent_user_msgs"][agent_name]
 
-        # Get how many episodes have been reconstructed
-        num_episodes = state["agent_executed"].count(cur_name)
+        savename_suffix = ""
+        sys_msg = ""
 
-        belong_state, latest_episode = self.extract_latest_episode(
-            event_skeleton, num_episodes
-        )
+        # Logic branching based on agent_name
+        if agent_name == "SkeletonReconstructor":
+            sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
-        target_episode = Episode(**latest_episode)
-        print(target_episode)
-        # Organize the system and user prompts
-        sys_msg = state["agent_system_msgs"][cur_name]
-        user_msg = state["agent_user_msgs"][cur_name]
-        sys_msg = sys_msg.format(STRUCTURE_SPEC=_EPISODE_SPEC)
-        # Escape curly braces
+        elif agent_name in [
+            "ParticipantReconstructor",
+            "TransactionReconstructor",
+            "EpisodeReconstructor",
+        ]:
+            # Retrieve skeleton (always the first result)
+            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+
+            # Determine which episode we are on
+            current_count = state["agent_executed"].count(agent_name)
+            belong_state, latest_episode = self.extract_latest_episode(
+                event_skeleton, current_count
+            )
+
+            if not latest_episode:
+                # Should not happen if logic is correct, but good to handle
+                raise ValueError(f"Could not find episode for count {current_count}")
+
+            target_episode = Episode(**latest_episode)
+
+            savename_suffix = f"-Stage{belong_state['index_in_event']}-Episode{target_episode.index_in_stage}"
+
+            if agent_name == "ParticipantReconstructor":
+                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_PARTICIPANT_SPEC)
+                prompt_kwargs["TargetEpisode"] = target_episode
+                prompt_kwargs["ReconstructedParticipants"] = (
+                    self._collect_reconstructed_participants_structure(state)
+                )
+
+            elif agent_name == "TransactionReconstructor":
+                # Get participants from the immediately preceding step (ParticipantReconstructor)
+                last_result = state["agent_results"][-1]
+                if "ParticipantReconstructor" in last_result:
+                    participants_data = last_result["ParticipantReconstructor"]
+                    target_episode.participants = participants_data.get(
+                        "participants", []
+                    )
+
+                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
+                prompt_kwargs["TargetEpisode"] = target_episode
+
+            elif agent_name == "EpisodeReconstructor":
+                # Get transactions from the immediately preceding step (TransactionReconstructor)
+                last_result = state["agent_results"][-1]
+                if "TransactionReconstructor" in last_result:
+                    transactions_data = last_result["TransactionReconstructor"]
+                    target_episode.transactions = transactions_data.get(
+                        "transactions", []
+                    )
+
+                # Get participants from the step before that (ParticipantReconstructor)
+                second_last_result = state["agent_results"][-2]
+                if "ParticipantReconstructor" in second_last_result:
+                    participants_data = second_last_result["ParticipantReconstructor"]
+                    target_episode.participants = participants_data.get(
+                        "participants", []
+                    )
+
+                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
+                prompt_kwargs["StageSkeleton"] = belong_state
+                prompt_kwargs["TargetEpisode"] = target_episode
+
+        # Escape braces for format if needed.
+        # We escape them because the downstream inference engine (LangChain)
+        # treats the system message as a template and will try to substitute variables.
+        # Since we just injected a JSON schema containing braces, we must escape them.
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
 
-        # Execute inference with contextual variables
         out: InferOutput = self.agents_lm.run(
-            infer_input=InferInput(
-                system_msg=sys_msg,
-                user_msg=user_msg,
-            ),
-            Query=build_ipt.user_query.query_text,
-            Keywords=build_ipt.user_query.key_words,
-            Content="\n".join([sample.content for sample in build_ipt.samples]),
-            StageSkeleton=belong_state,
-            TargetEpisode=target_episode,
+            infer_input=InferInput(system_msg=sys_msg, user_msg=user_msg_template),
+            **prompt_kwargs,
         )
         result = out.response
 
-        # Obtain the stage
-        savename = self.get_save_name(cur_name, num_executed + 1)
-        savename = f"{savename}-Stage{belong_state['index_in_event']}-Episode{target_episode.index_in_stage}"
-        self.save_traces({cur_name: out.to_dict()}, savename, "json")
-        self.save_traces(extract_json_response(result), f"{savename}-Result", "json")
-        state["agent_results"].append({cur_name: result})
-        state["cost"].append({cur_name: {"latency": time.time() - t0}})
-        state["agent_executed"].append(cur_name)
-        return {
-            "build_input": build_ipt,
-            "agent_results": state["agent_results"],
-            "agent_executed": state["agent_executed"],
-            "cost": state["cost"],
-            "agent_system_msgs": state["agent_system_msgs"],
-            "agent_user_msgs": state["agent_user_msgs"],
-        }
+        # Persist traces
+        savename = (
+            self.get_save_name(agent_name, len(state["agent_executed"]) + 1)
+            + savename_suffix
+        )
+        self.save_traces({agent_name: out.to_dict()}, savename, "json")
+
+        parsed_result = extract_json_response(result)
+        self.save_traces(parsed_result, f"{savename}-Result", "json")
+
+        # Update state
+        state["agent_results"].append({agent_name: parsed_result})
+        state["cost"].append({agent_name: {"latency": time.time() - t0}})
+        state["agent_executed"].append(agent_name)
+        return state
 
     def graph(self) -> CompiledStateGraph[AgentState]:
         """
-        Compile graph with conditional loop: START → reconstruct_episode → [continue/end].
+        Compiles the state graph:
+        START -> SkeletonReconstructor ->
+        ParticipantReconstructor -> TransactionReconstructor -> EpisodeReconstructor -> (Condition) -> END
         """
         g = StateGraph(AgentState)
-        g.add_node("reconstruct_episode", self.execute_agent)
-        g.add_edge(START, "reconstruct_episode")
+
+        # Use partial to bind agent_name to execute_agent
+        g.add_node(
+            "SkeletonReconstructor",
+            partial(self.execute_agent, agent_name="SkeletonReconstructor"),
+        )
+        g.add_node(
+            "ParticipantReconstructor",
+            partial(self.execute_agent, agent_name="ParticipantReconstructor"),
+        )
+        g.add_node(
+            "TransactionReconstructor",
+            partial(self.execute_agent, agent_name="TransactionReconstructor"),
+        )
+        g.add_node(
+            "EpisodeReconstructor",
+            partial(self.execute_agent, agent_name="EpisodeReconstructor"),
+        )
+
+        g.add_edge(START, "SkeletonReconstructor")
+        g.add_edge("SkeletonReconstructor", "ParticipantReconstructor")
+        g.add_edge("ParticipantReconstructor", "TransactionReconstructor")
+        g.add_edge("TransactionReconstructor", "EpisodeReconstructor")
 
         def _route(state: AgentState) -> str:
             skeleton = state["agent_results"][0]["SkeletonReconstructor"]
-            # Count the total number of episodes in the skeleton
             total = sum([len(stage["episodes"]) for stage in skeleton["stages"]])
-            # Count the number of episode reconstruction agent executed
-            # minus 1 for the SkeletonReconstructor
-            num_processed = len(state["agent_executed"]) - 1
 
-            return "end" if num_processed >= total else "repeat"
+            # Count how many episodes have been fully processed (EpisodeReconstructor runs)
+            num_processed = state["agent_executed"].count("EpisodeReconstructor")
+
+            return "end" if num_processed >= total else "continue"
 
         g.add_conditional_edges(
-            "reconstruct_episode",
+            "EpisodeReconstructor",
             _route,
             {
-                "repeat": "reconstruct_episode",
+                "continue": "ParticipantReconstructor",
                 "end": END,
             },
         )
+
         return g.compile()

@@ -201,10 +201,8 @@ class Participant:
     # Use `participant_type` to indicate the cohort category and `attributes`/`tags` to describe
     # the group's scope, characteristics, and provenance.
 
-    # Unique, immutable identifier (e.g., UUID, hashed ID, semantic key).
-    # must be in canonical form: "P_" + 32 lowercase hex characters
-    # Regex: ^P_[a-f0-9]{32}$
-    # Example: - P_3f2a1c4b6d7e8f90123456789abcdeff
+    # Unique, immutable identifier, must be in canonical form: "P_" + integer
+    # Example: P_1
     participant_id: str
 
     # Specific, concrete financial entity name (e.g., "Credit Suisse", "瑞信").
@@ -272,10 +270,20 @@ class Episode:
     descriptions: List[VerifiableField] = None
 
     # Start time; earliest evidence or activity; unknown if uncertain.
-    start_time: Optional[VerifiableField] = None
+    start_time: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # End time; latest evidence or activity; unknown if ongoing or boundaries are unclear.
     # Set to "unknown" if end time is not available in the source content.
-    end_time: Optional[VerifiableField] = None
+    end_time: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # List of entities participating in this episode; directly relevant `Participant` records.
     participants: List[Participant] = field(default_factory=list)
@@ -319,11 +327,21 @@ class EventStage:
 
     # Earliest timestamp of activity or evidence in this stage.
     # Set to "unknown" if start time is not available in the source content.
-    start_time: Optional[VerifiableField] = None
+    start_time: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Latest timestamp (may be None for ambiguous boundaries).
     # Set to "unknown" if end time is not available in the source content.
-    end_time: Optional[VerifiableField] = None
+    end_time: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Episodes nested within this stage
     episodes: List[Episode] = field(default_factory=list)
@@ -365,11 +383,21 @@ class EventCascade:
 
     # Earliest timestamp across all evidence and participant activity.
     # Set to "unknown" if start time is not available in the source content.
-    start_time: Optional[VerifiableField] = None
+    start_time: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Latest timestamp (None if ongoing or unresolved).
     # Set to "unknown" if end time is not available in the source content.
-    end_time: Optional[VerifiableField] = None
+    end_time: Optional[VerifiableField] = field(
+        default_factory=lambda: VerifiableField(
+            value="unknown",
+            reasons=["insufficient information in source content"],
+        )
+    )
 
     # Ordered sequence of event phases.
     stages: List[EventStage] = field(default_factory=list)
