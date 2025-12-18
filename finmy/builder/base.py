@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
 
 from langgraph.graph import MessagesState
+from langgraph.graph.state import CompiledStateGraph
 
 from lmbase.inference.api_call import LangChainAPIInference
 from lmbase.inference.model_call import LLMInference
@@ -156,8 +157,10 @@ class BaseBuilder(ABC):
                 pickle.dump(traces, f)
 
     @abstractmethod
-    def execute_agent(self, state: AgentState) -> AgentState:
+    def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
         """Execute exactly one stage using prompts from the provided state.
+
+        Due to that the langgraph does not support the additional argument, i.e. agent_name, here, one need to use the partial to bind the agent_name to the function during the node creation of the graph.
 
         Requirements
         - Read system/user prompts from AgentState for the current agent.
@@ -167,4 +170,14 @@ class BaseBuilder(ABC):
 
         Returns
         - The updated AgentState after this stage completes.
+        """
+
+    @abstractmethod
+    def graph(self) -> CompiledStateGraph:
+        """Construct and compile the LangGraph for this agent or pipeline.
+
+        Note that the `execute_agent` function should be bound with the 'agent_name' using partial.
+
+        Returns
+        - A CompiledStateGraph with entry point and edges defined.
         """
