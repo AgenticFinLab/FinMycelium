@@ -2,169 +2,93 @@
 
 def bank_run_prompt() -> str:
     return """
-You are an expert financial analyst and forensic investigator specializing in systemic risk and liquidity crises. Your task is to comprehensively analyze and reconstruct a specified **Bank Run** event based on provided multi-source data (e.g., news articles, regulatory filings, financial statements, court documents, transcripts of executive communications, social media data, and central bank reports).
+You are a financial historian and forensic analyst specializing in systemic risk and institutional failure.
 
-## Core Objective
-Produce a complete, factual, and logically structured reconstruction of a bank run event. The analysis must detail the preconditions, triggers, contagion dynamics, management response, resolution, and systemic impacts. The output must distinguish between the **narrative** (public perception and communication) and the **fundamental financial reality** of the institution at each stage.
+**Objective:** To reconstruct a comprehensive, granular, and analytically profound narrative of a specified `bank_run` event by integrating user-provided data and/or retrieved information. The output must be a single, extensive JSON object that functions as a multi-dimensional case study, capturing not only the sequential timeline but also the underlying economic, regulatory, psychological, and sociological dimensions.
 
-## Data Input
-You will receive raw text/data extracted from various sources regarding a specific bank run event (e.g., "Silicon Valley Bank (2023)", "Northern Rock (2007)", "Washington Mutual (2008)"). This data may include financial metrics, news timelines, social media trends, official statements, and post-mortem analyses. You must synthesize information, identify the sequence of events, quantify financial deteriorations, and assess the roles of different actors.
+**Output Format:** A single, extensive JSON object adhering strictly to the schema provided. No preamble, no concluding text.
 
-## Output Format Requirements
-You MUST output a single, well-structured JSON object. Use the exact field names as specified in the schema below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. **Do not include any explanatory text, markdown formatting, or code fences outside the final JSON object.**
+**Instructions for JSON Construction:**
+1.  **Base Structure:** The JSON must have a root key `"bank_run_reconstruction"`. The primary substructure follows the six-stage "Sequence of Events Associated with a Failure of Foresight" model, supplemented by a detailed `metadata` section and an `integrated_analysis` section for cross-cutting themes.
+2.  **Lifecycle Phases:** Populate each of the six stages (`stage_I` to `stage_VI`) with granular, fact-based fields. Each field within a stage should represent a specific, documented event, condition, actor's decision, market datum, or communicative act relevant to that phase.
+3.  **Granular Fields:** Every field must be populated with specific, concrete information. Avoid generic statements. Use precise dates, monetary figures, percentages, document names (e.g., SEC filings, internal memos), direct quotes from key figures, social media metrics, and specific policy titles. Where exact data is unavailable, provide the best-estimate and note the uncertainty (e.g., "estimated_between_X_and_Y").
+4.  **Integrated Explanation:** Each field's value must contain its own explanation. The format should be: `"[Specific factual data or description]. Explanation: [A concise sentence explaining the significance, cause, or consequence of this data point within the context of the bank run's progression.]"`
+5.  **Fact-Based:** All information must be sourced from the provided materials or credible, verifiable public records. Do not fabricate or infer details without an evidential basis. If critical information for a suggested field is missing, you may omit that specific field or note its absence.
+6.  **Comprehensiveness:** The JSON should be exhaustive. Consider all angles: the institution's specific profile, the macroeconomic backdrop, depositor demographics and behavior, regulatory posture, media dynamics, technological channels (e.g., digital banking accelerating withdrawals), risk management failures, funding composition, asset-liability mismatch details, interbank exposures, official communication (and miscommunication), legal actions, and long-term policy impacts.
 
-## Comprehensive JSON Schema and Field Definitions
+Here is the required JSON schema outline with exemplary field descriptions, and "Explanation" is just to help you better understand the task. **Populate it with data from the target case.**
 
-```json
 {
   "bank_run_reconstruction": {
     "metadata": {
-      "event_identifier": "string: The common name of the event (e.g., 'Silicon Valley Bank Run of 2023').",
-      "financial_institution_name": "string: Legal name of the bank or institution at the center of the run.",
-      "primary_jurisdiction": "string: Country/region where the institution was primarily regulated and operated.",
-      "data_sources_summary": "string: Brief description of the types and credibility of sources used (e.g., 'FDIC reports, SEC filings, earnings call transcripts, Reuters news timeline')."
-    },
-    "overview": {
-      "primary_business_model": "string: Core business activities (e.g., 'Commercial banking for tech startups and venture capital', 'Traditional retail banking and mortgages').",
-      "key_financial_weaknesses_pre_run": {
-        "asset_liability_mismatch_description": "string: Description of the maturity/duration mismatch between assets and liabilities (e.g., 'Held long-dated HTM securities funded by short-term uninsured deposits').",
-        "concentration_risks": "array: List of critical concentrations (e.g., ['Deposit concentration in venture capital firms', 'Geographic concentration in California', 'Sector concentration in crypto-related companies']).",
-        "reliance_on_uninsured_deposits": "number: Percentage of total deposits that were uninsured (exceeding the insurance limit) immediately prior to the run.",
-        "liquidity_coverage_ratio_lcr": "number: Liquidity Coverage Ratio (%) prior to the run, if available.",
-        "reported_capital_adequacy_ratio": "number: CET1 or similar capital ratio (%) reported prior to the run.",
-        "hidden_losses": "string: Description of unrealized losses (e.g., in Held-To-Maturity/Available-For-Sale securities portfolios) not fully reflected on the income statement."
+      "event_common_name": "[e.g., 'The Collapse of Silicon Valley Bank (SVB)']. The colloquial name for the crisis.",
+      "primary_institution_name": "[Full legal name of the bank that suffered the run, e.g., 'Silicon Valley Bank, a division of SVB Financial Group'].",
+      "institution_primary_jurisdiction": "[Country and state of primary regulator, e.g., 'United States, California (OCC)']. Explanation: Identifies the key regulatory authority overseeing the bank.",
+      "key_associated_entities": ["List of critical subsidiaries, parent companies, or linked entities (e.g., 'SVB Capital', 'SVB Securities') involved or affected."],
+      "crisis_timeframe": {
+        "precipitating_event_date": "YYYY-MM-DD. The date of the specific event that triggered widespread panic.",
+        "peak_withdrawal_dates": "YYYY-MM-DD to YYYY-MM-DD. The core days of intense withdrawal activity.",
+        "regulatory_intervention_date": "YYYY-MM-DD. The date regulators seized control or announced a systemic risk exception.",
+        "resolution_announcement_date": "YYYY-MM-DD. The date a final resolution (sale, liquidation, guarantee) was announced."
       },
-      "external_macro_environment": "array: List of relevant macroeconomic factors (e.g., ['Rapidly rising interest rates', 'Downturn in the tech sector', 'General market volatility'])."
-    },
-    "run_trigger_sequence": {
-      "precipitating_event": {
-        "date": "string: Approximate date (YYYY-MM-DD) of the initial trigger.",
-        "description": "string: The specific event that started loss of confidence (e.g., 'Announcement of a significant capital raise', 'Earnings report revealing large unrealized losses', 'Downgrade by a credit rating agency', 'Failure of a similar institution').",
-        "link_to_weaknesses": "string: Explanation of how this event exposed or amplified the pre-existing financial weaknesses."
+      "scale_and_impact": {
+        "total_deposits_pre_crisis": "XX.XX billion (Currency). The total deposit base as of the last quarterly report before the run. Explanation: Establishes the bank's size and the potential exposure.",
+        "deposits_above_insurance_limit": "XX% or XX billion. The proportion/value of deposits exceeding the national deposit insurance guarantee (e.g., FDIC's $250k). Explanation: Highlights vulnerability as uninsured depositors have greater incentive to flee.",
+        "withdrawals_during_run": "XX.XX billion over X days. The quantified outflow. Explanation: Demonstrates the velocity and magnitude of the loss of confidence.",
+        "ultimate_resolution_cost": "Estimated cost to deposit insurance fund or taxpayer, if applicable.",
+        "systemic_contagion_indicators": ["List of other institutions that experienced significant stock declines, deposit outflows, or required rescue in immediate aftermath (e.g., 'Signature Bank', 'First Republic Bank', 'Credit Suisse')."]
       },
-      "amplification_channels": {
-        "social_media_dynamics": "array: List of key platforms and narrative trends (e.g., ['Rapid spread of concern on Twitter/X among VC partners', 'WhatsApp group coordination among large depositors']).",
-        "traditional_media_role": "string: Role of financial news outlets and headlines in accelerating the run.",
-        "key_influencer_actions": "array: List of actions by influential entities (e.g., ['Prominent VC firm advising portfolio companies to withdraw funds', 'Analyst report highlighting liquidity risk'])."
-      },
-      "initial_deposit_outflow": {
-        "timeframe": "string: Duration of the initial severe outflow (e.g., 'Over 48 hours following the precipitating event').",
-        "estimated_amount": "number: Estimated value of deposits withdrawn in this initial phase.",
-        "percentage_of_total_deposits": "number: Percentage of total deposits this outflow represented."
+      "asset_liability_mismatch_profile": {
+        "primary_asset_composition": "e.g., 'Heavy concentration in long-dated US Treasuries and Mortgage-Backed Securities'. Explanation: Describes the assets whose market value fell when interest rates rose.",
+        "held_to_maturity_vs_available_for_sale": "Breakdown in percentages or billions. Explanation: HTM assets hide unrealized losses from the capital ratio, but selling them to meet withdrawals crystalizes the loss.",
+        "percentage_of_uninsured_depositors": "XX%. Explanation: A high percentage indicates a depositor base more likely to run, as they bear the full loss risk.",
+        "depositor_concentration": "e.g., 'Heavily concentrated in venture capital firms and technology startups'. Explanation: Homogeneous depositor bases can act in a correlated, panicked manner based on industry signals."
       }
     },
-    "management_and_authority_response": {
-      "institution_communication_strategy": [
-        {
-          "date": "string",
-          "channel": "string (e.g., 'Press release', 'CEO statement', 'Investor call')",
-          "key_message": "string: The primary assurance or information communicated.",
-          "market_perception": "string: Brief description of how this communication was received (e.g., 'Failed to reassure depositors', 'Perceived as tone-deaf')."
-        }
-      ],
-      "liquidity_management_actions": [
-        {
-          "action": "string (e.g., 'Attempted to sell securities portfolio', 'Sought emergency borrowing from Federal Home Loan Bank', 'Approached potential buyers for the bank').",
-          "outcome": "string: Result of the action (e.g., 'Realized massive losses, worsening capital position', 'Provided insufficient liquidity')."
-        }
-      ],
-      "regulatory_and_government_intervention": [
-        {
-          "actor": "string (e.g., 'FDIC', 'Federal Reserve', 'Treasury Department', 'Central Bank')",
-          "date": "string",
-          "action": "string (e.g., 'Declared the bank insolvent and took it into receivership', 'Announced systemic risk exception for full deposit guarantees', 'Created emergency lending facility (BTFP)').",
-          "stated_rationale": "string: The official reason given for the intervention."
-        }
-      ]
+    "stage_I_-_notionally_normal_starting_point": {
+      "macroeconomic_backdrop": "[e.g., 'Period of prolonged near-zero interest rates (post-2008 through 2021)']. Explanation: This environment made long-dated fixed-income securities appear to be safe, yield-generating assets, incentivizing banks like SVB to load up on them.",
+      "industry_regulatory_orthodoxy": "[e.g., 'Post-2008 Dodd-Frank Act enhanced prudential standards, but EGRRPA (2018) raised the asset threshold for stricter oversight from $50B to $250B']. Explanation: SVB, with assets around $200B, was subject to less stringent stress testing and liquidity requirements, a culturally accepted norm at the time.",
+      "institutional_business_model_narrative": "[e.g., 'SVB was celebrated as the essential bank for the innovation economy, providing specialized services to startups and VCs']. Explanation: This successful narrative masked underlying structural risks related to deposit concentration and interest rate exposure.",
+      "perceived_strength_metrics_pre_crisis": "[e.g., 'SVB reported a CET1 capital ratio of 13.9% in Q4 2022, well above regulatory requirements']. Explanation: Standard regulatory metrics appeared healthy, reinforcing the notion of normality and solvency.",
+      "risk_management_framework_on_paper": "[e.g., 'The bank had a designated Chief Risk Officer and reported on interest rate risk in the banking book (IRRBB)']. Explanation: Formal structures existed, creating an illusion of controlled hazard avoidance."
     },
-    "contagion_and_systemic_effects": {
-      "direct_contagion_to_other_institutions": [
-        {
-          "institution_name": "string",
-          "mechanism": "string: How contagion occurred (e.g., 'Perceived similar balance sheet risks', 'Shared depositor base', 'Interbank lending exposure').",
-          "impact": "string: Description of the impact (e.g., 'Experienced significant deposit outflow', 'Stock price plummeted', 'Was forced into merger')."
-        }
-      ],
-      "market_wider_impacts": {
-        "short_term_funding_market_stress": "string: Description of stress in repo, interbank, or commercial paper markets.",
-        "sectoral_impact": "array: List of affected non-bank sectors (e.g., ['Venture capital funding freeze', 'Regional real estate market uncertainty']).",
-        "policy_response_triggered": "string: Description of any new permanent or temporary policies announced in response (e.g., 'Review of liquidity rules for midsize banks', 'Increase in FDIC insurance limit discussions')."
-      }
+    "stage_II_-_incubation_period": {
+      "accumulation_of_unhedged_risk": "[e.g., 'Between 2019 and 2022, SVB's deposit base nearly tripled from $61B to $189B, which it invested heavily in long-dated securities']. Explanation: Rapid growth and a decision not to hedge interest rate exposure created a massive, latent vulnerability.",
+      "shift_in_monetary_policy": "[e.g., 'The Federal Reserve began aggressively raising the Federal Funds rate from near 0% in March 2022 to ~4.5% by February 2023']. Explanation: This directly eroded the market value of SVB's bond portfolio, creating large unrealized losses.",
+      "unrealized_losses_mounting": "[e.g., 'By end of 2022, SVB's Available-for-Sale (AFS) securities portfolio had an unrealized loss of $2.5B, and its Held-to-Maturity (HTM) portfolio an unrealized loss of $15.2B']. Explanation: These hidden losses destroyed the economic equity of the bank, though regulatory accounting obscured this from standard capital ratios.",
+      "deposit_base_contraction": "[e.g., 'In 2022, as venture funding slowed, clients began burning through their cash, leading to a decline in SVB's total deposits']. Explanation: This forced the bank to consider selling assets to fund withdrawals, threatening to realize the hidden losses.",
+      "internal_and_external_warnings_ignored": "[e.g., 'SVB's own interest rate risk model reportedly showed significant vulnerability to rising rates, and financial analysts began questioning its securities portfolio in mid-2022']. Explanation: These signals were at odds with the accepted belief in the bank's strength and were downplayed.",
+      "communication_missteps": "[e.g., 'SVB's CEO sold $3.6M in company shares under a pre-arranged 10b5-1 plan in late February 2023']. Explanation: While potentially legal, such actions during the incubation period can later be perceived as a loss of confidence by leadership."
     },
-    "resolution_outcome": {
-      "resolution_date": "string: Date (YYYY-MM-DD) the institution was resolved or stabilized.",
-      "resolution_method": "string: The chosen resolution path (e.g., 'Purchase and Assumption by another bank', 'Bridge bank created by FDIC', 'Open bank assistance', 'Liquidation').",
-      "acquiring_entity_if_any": "string: Name of the institution that acquired assets/liabilities.",
-      "deposit_outcome": {
-        "insured_deposits_access_timeline": "string: When insured depositors regained access to funds.",
-        "uninsured_deposit_recovery": "string: Treatment of uninsured deposits (e.g., 'Made whole via systemic risk exception', 'Received receivership certificates for estimated 85% recovery').",
-        "total_deposit_outflow_final": "number: Total deposits lost by the institution from peak to resolution."
-      },
-      "asset_outcome": {
-        "estimated_loss_to_deposit_insurance_fund": "number: Estimated loss (in primary currency) to the relevant insurance fund.",
-        "recovery_estimates_for_creditors": "string: Projected recovery rates for different creditor classes."
-      }
+    "stage_III_-_precipitating_event": {
+      "catalyst_announcement": "[e.g., 'On March 8, 2023, SVB announced it had sold $21B of its Available-for-Sale securities, realizing a $1.8B after-tax loss, and launched a $2.25B capital raise']. Explanation: This action publicly crystallized the hidden losses and signaled severe financial stress, directly triggering panic.",
+      "market_reaction_immediate": "[e.g., 'SVB's stock price (SIVB) plummeted 60% on March 9, 2023']. Explanation: The equity collapse was a public, real-time signal of extreme distress, amplifying fear.",
+      "key_actor_statements": "[e.g., 'Influential venture capital firms like Peter Thiel's Founders Fund advised portfolio companies to withdraw funds from SVB on March 9']. Explanation: This coordinated action by central nodes in the bank's network transformed generalized concern into a targeted, organized run.",
+      "information_amplification_channels": "[e.g., 'Panic spread rapidly through private WhatsApp and Telegram groups among startup CEOs and CFOs, and was fueled by public anxiety on Twitter and financial news networks']. Explanation: Digital communication enabled the run to achieve viral velocity, bypassing traditional slowing mechanisms."
     },
-    "financial_timeline_quantification": {
-      "key_balance_sheet_snapshots": [
-        {
-          "period": "string (e.g., 'Quarter prior to run', 'Day before precipitating event', 'Day of receivership')",
-          "date_anchor": "string",
-          "total_deposits": "number",
-          "uninsured_deposits": "number",
-          "liquid_assets": "number",
-          "unrealized_losses_on_securities": "number",
-          "total_assets": "number"
-        }
-      ],
-      "run_velocity_metrics": {
-        "peak_withdrawal_rate": "string: Estimated rate at peak (e.g., '$1 billion per hour', '42% of deposits in 24 hours').",
-        "total_run_duration_hours": "number: Approximate hours from first trigger to resolution/freeze."
-      }
+    "stage_IV_-_onset": {
+      "operational_collapse": "[e.g., 'On March 10, 2023, depositors attempted to withdraw over $42B in a single day, leaving the bank with a negative cash balance of ~$958M']. Explanation: The scale and speed of withdrawals made the institution functionally illiquid, necessitating regulator intervention.",
+      "regulatory_seizure": "[e.g., 'The California Department of Financial Protection and Innovation closed SVB and appointed the FDIC as receiver on March 10, 2023']. Explanation: This marked the formal failure and the start of the resolution process.",
+      "immediate_systemic_spillovers": "[e.g., 'Shares of other regional banks with similar business models or balance sheet profiles crashed in after-hours and pre-market trading on March 10']. Explanation: Demonstrates the onset of contagion as the crisis moved from a single institution to a systemic threat.",
+      "depositor_lockout_and_uncertainty": "[e.g., 'As of March 11, all uninsured depositors (holding ~$150B) faced uncertainty about recovering their full funds, threatening payroll for thousands of startups']. Explanation: The immediate human and economic consequence of the collapse."
     },
-    "key_milestones": [
-      {
-        "date": "string (YYYY-MM-DD or YYYY-MM)",
-        "event": "string: Description of a critical event in the timeline.",
-        "category": "string: Categorization (e.g., 'Precondition', 'Trigger', 'Amplification', 'Response', 'Resolution').",
-        "significance": "string: Why this was a turning point for confidence or liquidity."
-      }
-    ],
-    "post_mortem_analysis": {
-      "primary_causes": "array: Ranked or listed root causes (e.g., ['Severe duration mismatch exacerbated by rapid rate hikes', 'Failure of internal liquidity risk management', 'Concentrated and networked depositor base prone to coordinated action', 'Regulatory oversights for midsize banks']).",
-      "critical_failures": {
-        "risk_management_failures": "array",
-        "communication_failures": "array",
-        "regulatory_supervisory_failures": "array"
-      },
-      "was_institution_technically_insolvent": "boolean: Based on marked-to-market/solvency valuation of assets vs. liabilities at the peak of the run.",
-      "liquidity_vs_solvency_assessment": "string: Analysis of whether the core problem was fundamentally illiquidity (solvent but cannot meet immediate demands) or insolvency (assets < liabilities even without a run)."
+    "stage_V_-_rescue_and_salvage": {
+      "systemic_risk_determination": "[e.g., 'On March 12, 2023, the US Treasury, Fed, and FDIC issued a joint statement declaring systemic risk and guaranteeing all deposits (insured and uninsured) at both SVB and Signature Bank']. Explanation: An unprecedented ad-hoc adjustment to prevent a broader financial crisis.",
+      "liquidity_facilities_created": "[e.g., 'The Federal Reserve announced the Bank Term Funding Program (BTFP), offering loans of up to one year to banks, pledging Treasuries and MBS at par value']. Explanation: A direct policy response to the root cause (unrealized losses on bonds), allowing banks to meet withdrawals without forced sales.",
+      "acquisition_process": "[e.g., 'The FDIC ran an accelerated auction process, culminating in the announcement on March 27, 2023, that First Citizens Bank would acquire SVB's deposits and loans']. Explanation: The salvage operation to resolve the failed entity.",
+      "immediate_regulatory_scrutiny": "[e.g., 'The Fed, FDIC, and GAO all launched separate investigations into the supervision and failure of SVB on March 13 and 28, 2023']. Explanation: The beginning of the formal inquiry stage."
     },
-    "synthesis_and_red_flags": {
-      "ex_ante_red_flags": "array: List of clear warning signs that were visible before the run (e.g., ['Rapid growth in uninsured deposits', 'Large unrealized losses in securities portfolio disclosed in footnotes', 'High reliance on a single volatile industry', 'Declining liquidity ratios']).",
-      "novel_aspects_of_this_run": "string: What differentiated this bank run from historical precedents (e.g., 'Speed amplified by social media and digital banking', 'Role of non-bank financial entities (VCs) as catalysts').",
-      "lessons_for_depositors_and_investors": "array",
-      "lessons_for_regulators_and_banks": "array"
+    "stage_VI_-_full_cultural_readjustment": {
+      "official_investigation_reports": "[e.g., 'The Federal Reserve's review, published April 28, 2023, cited SVB's management failures, catastrophic governance breakdown, and supervisory misjudgments by the San Francisco Fed']. Explanation: The authoritative post-mortem that assigns causes and forces a reassessment of beliefs.",
+      "legislative_and_regulatory_proposals": "[e.g., 'Proposals included reversing parts of EGRRPA to apply stricter rules to banks with $100B+ in assets, reforming deposit insurance for business accounts, and enhancing liquidity stress testing']. Explanation: Concrete attempts to adjust precautionary norms based on the new understanding.",
+      "industry_practice_changes": "[e.g., 'Banks globally accelerated efforts to hedge interest rate exposure, diversify deposit bases, and model the impact of social media-fueled runs']. Explanation: How the financial industry's internal "folkways" and "codes of practice" evolved.",
+      "long_term_narrative_shift": "[e.g., 'The episode redefined "liquidity risk" to include the velocity of digital information and the behavioral dynamics of concentrated, networked depositors, not just asset maturities']. Explanation: The deepest cultural readjustment in how financial hazards are understood."
+    },
+    "integrated_analysis": {
+      "failure_of_foresight_synthesis": "[A paragraph synthesizing how the stages linked: e.g., 'The normalcy of low rates (I) bred complacency, allowing risks to accumulate unseen (II). The capital raise announcement (III) made the invisible losses visible, triggering a networked digital run (IV) that required unprecedented state intervention (V) and a fundamental rethink of bank supervision (VI).']",
+      "key_vulnerability_triad": "1. Asset-Liability Mismatch. 2. Concentrated, Uninsured Depositor Base. 3. Digital Information Velocity. Explanation: Identifies the interdependent factors that made this run particularly severe.",
+      "analogy_to_other_historical_runs": "Comparison to, and distinctions from, runs like Northern Rock (2007) [retail, branch queues] or Washington Mutual (2008) [traditional wholesale]. Explanation: Places the event in historical context, highlighting the evolution of run dynamics."
     }
   }
 }
-```
-
-## Critical Analysis Instructions
-
-1.  **Narrative vs. Reality:** Constantly differentiate between the **public story** (what was communicated by management, media, social media) and the **underlying financial reality** (balance sheet data, liquidity metrics). The run is a crisis of confidence, so this dichotomy is central.
-2.  **Chronological Precision:** Establish a precise timeline (`key_milestones`). The sequence of triggers, communications, outflows, and responses is critical to understanding the dynamics.
-3.  **Quantitative Anchor:** Populate all financial fields with the best available numbers. Trace the deterioration quantitatively using the `financial_timeline_quantification` snapshots. Where exact numbers are unavailable, provide reasoned estimates and note the uncertainty in the `data_sources_summary` or relevant string fields.
-4.  **Contagion Mapping:** Explicitly map the channels of contagion to other institutions and the broader financial system. Explain the mechanism, not just the outcome.
-5.  **Liquidity-Solvency Diagnostic:** Your analysis must culminate in a clear assessment in `post_mortem_analysis` of whether the institution was illiquid, insolvent, or both, and at what point in the timeline.
-6.  **Role Analysis:** Clearly delineate the roles, decisions, and impacts on: **Bank Management**, **Depositors** (insured vs. uninsured, retail vs. institutional), **Regulators**, **Other Financial Institutions**, and **The Real Economy**.
-7.  **Completeness:** Strive to provide information for every field. If information for a specific sub-field is absolutely not found in the provided data, use the value: `"Not specified in provided sources."`.
-
-## Final Validation Step Before Output
-Perform an internal consistency check:
-- Ensure the timeline in `key_milestones` aligns with the total duration implied in `run_velocity_metrics`.
-- Check that financial snapshots show a logical progression (e.g., deposits decreasing, liquid assets potentially depleting).
-- Verify that the `resolution_outcome` logically follows from the `management_and_authority_response`.
-
-**Now, synthesize the provided data about the specified Bank Run event and output the complete JSON object.**
 """
