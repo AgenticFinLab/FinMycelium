@@ -130,7 +130,11 @@ class ContentPostProcessor(BaseURLCollector):
         
         # Step 4: Combine elements into final string
         final_content = self._combine_elements(filtered_elements)
-        
+
+        final_content = final_content.replace("javascript:void((function(){document.open();document.domain='sogou.com';document.close()})())", "")
+        final_content = final_content.replace("javascript:void((function(){", "")
+        final_content = final_content.replace("document.open();document.domain='sogou.com';document.close()", "")
+
         return final_content
     
     def _extract_text_elements(self, parsed_content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
