@@ -74,7 +74,7 @@ class LLMMatcher(BaseMatcher):
 
         self.api_infer = api_call.LangChainAPIInference(
             lm_name=self.model_name,
-            generation_config=self.config,
+            generation_config=self.config.get("generation_config", {}),
         )
 
     def match(self, match_input: MatchInput) -> List[Union[str, Any]]:

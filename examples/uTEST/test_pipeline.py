@@ -19,6 +19,7 @@ def get_sample_data_sources() -> List[str]:
     return [
         # "https://example.com/article1",
         # "https://example.com/article2",
+        "https://www.bbc.com/news/articles/cvg4w1g9ezko"
     ]
 
     # Example: Using PDF file paths
