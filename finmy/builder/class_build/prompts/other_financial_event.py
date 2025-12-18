@@ -1,170 +1,111 @@
 def other_financial_event_prompt() -> str:
     return """ 
-You are an expert financial forensic analyst specializing in deconstructing complex financial event. Your task is to synthesize multi-source, unstructured data (news articles, regulatory filings, court documents, investor reports, web content) to reconstruct a comprehensive, factual, and logical account of a specified "Other Financial Event".
+You are a financial historian and systems analyst tasked with reconstructing a complex financial event that falls into the 'Other Financial Event' category. Your role is to act as a meticulous chronicler and forensic investigator.
 
-**Core Objective:**
-Produce a granular reconstruction of the evnet's lifecycle, detailing its conception, deceptive mechanics, execution, sustainability tactics, collapse, and aftermath. The analysis must emphasize the unique deceptive elements that differentiate it from classic Ponzi or Pyramid schemes, while thoroughly documenting financial flows, actor motivations, and systemic impacts.
+**Objective:** To deconstruct a provided 'Other Financial Event' into a comprehensive, multi-phase narrative and analytical model. The output must capture the event's entire lifecycle, from its roots in accepted norms to its ultimate societal impact and regulatory legacy, based on either user-provided documentation or retrieved information from credible sources.
 
-**Data Input & Synthesis:**
-You will receive raw, potentially fragmented text/data pertaining to a specific financial event (e.g., "fake corporate bond issuance", "forged trade finance scheme", "boiler room stock fraud"). You must critically evaluate sources, resolve contradictions in favor of authoritative documents (e.g., court verdicts over news reports), and flag assumptions. Your output must be grounded solely in synthesized facts from the provided data.
+**Output Format:** A single, extensive JSON object. The structure is predefined; your task is to populate every field with specific, detailed, and factual data about the case.
 
-**Output Format & JSON Schema Requirements:**
-You MUST output a single, comprehensive JSON object. Do not include any markdown formatting, commentary, or text outside the JSON block. Use the exact field structure and data types defined below.
+**Instructions for JSON Construction:**
+1.  **Base Structure:** Use the exact JSON schema provided below. Do not omit any fields, sections, or nested objects. If certain information is unavailable after reasonable research, populate the field with `"Information not definitively established"` and provide context in an adjacent `"notes"` field if possible.
+2.  **Lifecycle Phases:** Organize the core narrative strictly according to the six-stage "Sequence of Events Associated with a Failure of Foresight" model. Each stage must contain multiple subsections analyzing cultural, technical, economic, and psychological dimensions.
+3.  **Granular Fields:** Every field must be populated with highly specific information. Avoid summaries. Use dates, names, figures, direct quotes (attributed), descriptions of specific mechanisms, and references to particular documents, meetings, or transactions.
+4.  **Integrated Explanation:** For each field, the "explanation" is not a separate key. Instead, the *value* you provide must itself be explanatory, detailed, and contextual. Imagine you are writing the definitive case study entry for that specific data point.
+5.  **Fact-Based:** Ground all entries in verifiable information. Distinguish between established facts, widespread reports, and allegations. Use phrasing like "According to the [Source] report..." or "The court found that..." where appropriate.
+6.  **Comprehensiveness:** The JSON must collectively paint a complete picture. Consider: the actors, the enabling environment, the flawed mechanisms, the sequence of failure, the human impact, the institutional response, the legal outcomes, and the long-term changes to thought and policy.
 
-**Comprehensive JSON Schema for "Other Financial Event":**
+Here is the required JSON schema outline with exemplary field descriptions, and "Explanation" is just to help you better understand the task. **Populate it with data from the target case.**
 
-```json
 {
   "other_financial_event_reconstruction": {
     "metadata": {
-      "event_identifier": "string: The widely recognized name of the event (e.g., 'The XYZ Forged Treasury Bill Scandal').",
-      "primary_jurisdiction": "string: Main country/region where the fraudulent activity was centered.",
-      "data_sources_used": "array: List of source types referenced, e.g., ['SEC Complaint', 'High Court Judgment', 'Financial Times Articles', 'Company Bankruptcy Filing']."
-    },
-    "overview": {
-      "executive_summary": "string: A 4-6 sentence summary capturing the event's essence, core deception, scale, and ultimate resolution.",
-      "event_type_classification": "string: Specific classification (e.g., 'Advance-Fee Fraud', 'Forged Instrument Scheme', 'Market Manipulation (Pump and Dump)', 'Asset Misappropriation Disguised as Investment').",
-      "core_deceptive_mechanism": "string: A clear description of the primary lie or fabricated reality at the heart of the event (e.g., 'Falsified bank guarantees', 'Non-existent commodity inventories', 'Spoofed trading platforms').",
-      "total_active_duration_months": "number: Estimated number of months from first fraudulent solicitation to operational collapse.",
-      "is_multi_jurisdictional": "boolean: True if the event's operations, victims, or perpetrators spanned multiple legal jurisdictions."
-    },
-    "perpetrators_and_facilitators": {
-      "masterminds_and_key_actors": [
-        {
-          "name": "string",
-          "official_role": "string: Their title within the fraudulent structure (e.g., 'Managing Director', 'Fund Advisor', 'Broker').",
-          "actual_function": "string: Their real role in the event (e.g., 'Architect of forged documents', 'Primary sales liar', 'Money launderer').",
-          "professional_background_used_for_credibility": "string: How their past legit experience was leveraged to deceive.",
-          "final_legal_status": "string: Outcome as of latest data (e.g., 'Convicted, sentenced to 15 years', 'Charges pending', 'Deceased', 'Fugitive')."
-        }
-      ],
-      "fraudulent_entities_vehicles": [
-        {
-          "entity_name": "string",
-          "jurisdiction_of_registration": "string",
-          "front_business_activity": "string: The legitimate-seeming business it purported to conduct.",
-          "actual_fraudulent_activity": "string: The illegal activity it was used for.",
-          "role_in_structure": "string: e.g., 'Solicitation vehicle', 'Money collection account holder', 'False asset holder'."
-        }
-      ],
-      "willing_or_negligent_facilitators": [
-        {
-          "facilitator_type": "string: e.g., 'Bank', 'Law Firm', 'Auditor', 'Payment Processor'.",
-          "name": "string",
-          "nature_of_facilitation": "string: e.g., 'Failed to conduct adequate KYC', 'Issued misleading comfort letter', 'Processed transactions despite red flags'.",
-          "regulatory_action_if_any": "string: Any censure or penalty faced."
-        }
-      ]
-    },
-    "deceptive_mechanics_operations": {
-      "fabricated_asset_or_opportunity": {
-        "description": "string: Detailed description of the fake investment, product, service, or financial instrument.",
-        "stated_underlying_value_driver": "string: The purported source of profits or returns (e.g., 'proprietary algo-trading', 'government infrastructure contracts', 'rare earth metal arbitrage').",
-        "falsified_documentation_examples": "array: List of types of forged/fake documents used (e.g., ['Counterfeit bank SWIFT confirmations', 'Fabricated warehouse receipts', 'Photoshopped performance reports'])."
+      "scheme_common_name": "The specific, widely-used label for the event, e.g., 'The London Whale', 'The FX Benchmark Fixing Scandal'. It is the colloquial identifier.",
+      "official_legal_case_name": "The formal title of the leading regulatory or judicial action, e.g., 'In the Matter of JPMorgan Chase & Co.', 'CFTC v. [Bank]'. Denotes its procedural identity.",
+      "primary_perpetrator_name": "The individual or core group whose actions were most central to initiating or executing the event. For corporate events, this may be a key trader, manager, or executive. For systemic failures, it may be a collective like 'Senior Management of X Firm'.",
+      "key_associated_entities": ["The primary financial institution(s), hedge fund(s), or corporate entity/entities at the heart of the event. List full legal names."],
+      "operational_timeframe": {
+        "suspected_inception_year": "The year (and month if known) when the specific practices or positions that led to the event are believed to have begun. For a failed strategy, this is its launch. For misconduct, the start of the behavior.",
+        "critical_period": "The concentrated period (e.g., 'Q4 2011 - Q1 2012') during which the risky positions were built, the deceptive practices intensified, or the conditions for collapse matured.",
+        "public_collapse_year": "The year and month when the event became public knowledge, typically through an earnings warning, regulatory filing, news leak, or market dislocation.",
+        "duration_years": "The total span from suspected inception to public collapse, expressed in years and months."
       },
-      "solicitation_and_marketing": {
-        "primary_channels": "array: e.g., ['Targeted WhatsApp messages', 'Fake professional networking profiles', 'Seminars at luxury hotels', 'Sponsored financial news articles'].",
-        "target_victim_profile": "string: Description of the demographic or psychographic profile of victims (e.g., 'High-net-worth retirees', 'Small and medium enterprise owners', 'Sophisticated hedge funds seeking yield').",
-        "key_lies_and_narratives": "array: Specific false claims made, e.g., ['Risk-free due to insured collateral', 'Exclusive access for select clients', 'Partnership with top-tier bank ABC'].", 
-        "credibility_enhancement_tactics": "array: Methods used to build trust, e.g., ['Renting prestigious office address', 'Hiring staff with prior reputable firm experience', 'Creating fake media testimonials']."
+      "estimated_global_scale": {
+        "currency": "The primary currency of the losses or exposures (e.g., USD, EUR, GBP).",
+        "peak_notional_exposure": "The maximum theoretical size of the risky positions or commitments before unwinding, often in derivatives or leveraged bets.",
+        "final_quantified_loss": "The actual monetary loss recorded by the primary entity(ies) after positions were closed, provisions made, and fines paid. Distinguish between trading losses and regulatory fines.",
+        "systemic_risk_exposure_estimate": "An assessment of the potential contagion risk to other institutions or the broader financial system at the peak of the crisis, often cited by regulators or analysts.",
+        "directly_affected_counterparties": ["List of other banks, funds, or corporations that were direct trading counterparts and suffered losses or had to manage significant exposures."],
+        "geographic_reach_of_impact": ["List countries whose markets, institutions, or investors were materially affected, indicating the event's global footprint."]
       },
-      "investment_process": {
-        "formal_investment_vehicle": "string: The legal form victims were led to believe they were engaging in (e.g., 'Subscription to limited partnership shares', 'Purchase of promissory notes', 'Margin trading account').",
-        "transaction_mechanism": "string: How funds were transferred (e.g., 'Wire to escrow account', 'Cryptocurrency to specified wallet', 'Check to nominee company').",
-        "minimum_investment_amount": "number: The lowest entry point, if defined.",
-        "contractual_documentation_provided": "string: Description of any (potentially falsified) contracts, terms sheets, or agreements given to victims."
+      "core_financial_mechanism": "A precise description of the financial instrument, strategy, or practice that was the vehicle for the event. Examples: 'Massive, mismarked credit derivative positions in the CIO's Synthetic Credit Portfolio (SCP)'; 'Collusion among spot FX traders at multiple banks to manipulate the WM/Reuters 4pm fix'.",
+      "categorization_justification": "A detailed explanation of why this event is classified as 'Other Financial Event' and not under the provided specific categories like 'Market Manipulation' or 'Accounting Fraud'. It should highlight unique or hybrid characteristics, e.g., 'Involves elements of reckless risk-taking and mismarking (not strictly fraud) within a systemically important bank, coupled with massive management failures, creating a unique hybrid of operational risk and systemic peril.'"
+    },
+    "stage_I_-_notionally_normal_starting_point": {
+      "prevailing_market_paradigm": "The dominant belief system in finance at the time. Describe the post-crisis (e.g., post-2008) regulatory mood, prevailing strategies (e.g., 'search for yield'), risk appetites, and technological trends (e.g., algorithmic trading) that formed the background.",
+      "institutional_self_perception": "How the key entity viewed itself and its role. This includes its public reputation (e.g., 'prudent risk manager'), internal culture, stated risk tolerances, and profit center mandates.",
+      "relevant_regulatory_landscape": "The specific rules, capital requirements, and reporting obligations applicable to the core activity. Mention any regulatory 'grey areas' or perceived loopholes relevant to the event.",
+      "accepted_risk_models_and_metrics": "The standard quantitative tools (e.g., Value-at-Risk models, stress tests) and limits used by the institution and the industry to measure and control the specific type of risk taken.",
+      "technological_and_infrastructure_context": "The state of relevant trading platforms, data systems, internal reporting tools, and communication channels (e.g., chat rooms) that enabled or constrained the activity."
+    },
+    "stage_II_-_incubation_period": {
+      "accumulation_of_anomalies": {
+        "initial_deviation_from_strategy": "The first documented instance where actual trading or behavior diverged from the stated, approved mandate or prudent practice. Include details of the first loss, the first mismarking, or the first collusive conversation.",
+        "risk_metric_suppression_or_gaming": "How traders or managers began to manipulate internal risk systems. Examples: shifting positions to portfolios with higher risk limits, adjusting model parameters, booking trades in ways to avoid VaR triggers.",
+        "internal_control_breakdowns": "Specific failures of internal oversight: ignored risk limit breaches, disabled automated alerts, superficial audit reviews, or the bypassing of approval chains. Name committees or individuals who failed to act.",
+        "cultural_and_psychological_factors": "The evolving group dynamics: normalization of deviance, pressure to generate profits, 'star trader' culture, us-vs-them mentality between front office and control functions, and the language used in internal communications."
       },
-      "sustainment_and_illusion_management": {
-        "communication_strategy": "string: How perpetrators maintained victim confidence (e.g., 'Regular glossy PDF newsletters', 'Frequent but shallow performance updates', 'Elaborate excuses for delays').",
-        "method_of_faking_returns_or_progress": "string: For events that paid fake 'returns' or showed fake growth, describe how (e.g., 'Used new investor funds to pay 'profits' to early victims', 'Provided access to a spoofed online portal showing fake account growth', 'Issued worthless cheques that took time to bounce').",
-        "handling_of_redemption_requests": "string: Standard procedure when a victim asked to withdraw funds (e.g., 'Delayed with administrative excuses', 'Paid out small amounts to encourage larger investments', 'Threatened legal action for breach of contract')."
+      "external_enabling_factors": {
+        "market_conditions": "The specific market dynamics (e.g., low volatility, crowded trades, illiquid assets) that allowed the risky positions to grow or the misconduct to persist without immediate detection.",
+        "regulatory_oversight_gaps": "Specific failures or limitations of external supervisors: infrequent examinations, lack of expertise in the complex products, reliance on the firm's self-reporting, or jurisdictional ambiguities."
+      },
+      "warning_signals_ignored": {
+        "internal_whispers_and_concerns": "Documented instances where employees, risk managers, or auditors raised concerns. Include dates, the content of warnings (emails, reports), to whom they were raised, and the nature of the dismissal.",
+        "external_skepticism": "Analyst reports, market rumors, or media articles that questioned the entity's reported performance or stability prior to collapse, and the entity's response to them."
       }
     },
-    "financial_forensics": {
-      "scale": {
-        "estimated_number_of_victims": "number: Best estimate of distinct individuals/entities defrauded.",
-        "estimated_total_fiat_inflow": "number: Total monetary value collected from victims, in primary currency.",
-        "primary_currency": "string: e.g., 'USD', 'CNY', 'EUR'.",
-        "geographic_spread_of_victims": "array: List of countries/regions with significant victim clusters."
-      },
-      "fund_tracing_use_of_proceeds": {
-        "for_maintaining_facade": "string: Funds spent on offices, salaries, marketing, and other costs to appear legitimate.",
-        "for_perpetrator_enrichment": "string: Funds directly diverted for personal luxury assets, real estate, lifestyles.",
-        "for_faking_returns_or_profits": "string: Funds cycled back to victims to simulate successful returns (if applicable).",
-        "for_other_investments_gambling": "string: Funds lost in speculative or side ventures by perpetrators.",
-        "evidence_of_layering_and_concealment": "string: Description of methods to obscure money trail (e.g., 'Multiple shell company transfers', 'Cryptocurrency tumblers', 'Purchase of luxury goods for resale')."
-      },
-      "sustainability_analysis": {
-        "dependency_on_new_inflows": "string: Qualitative assessment of the event's need for fresh capital to survive (e.g., 'Absolute dependency - zero genuine revenue', 'Partial dependency to cover operational shortfalls').",
-        "cash_flow_strain_indicators": [
-          {
-            "period": "string: e.g., 'Initial Phase', 'Mid-stage Growth', 'Final 6 months'.",
-            "estimated_new_inflow": "number",
-            "estimated_obligatory_outflow": "number: Includes fake returns, operational costs, and perpetrator draws.",
-            "estimated_net_cash_position": "number: New Inflow - Obligatory Outflow. Negative indicates strain."
-          }
-        ]
-      }
+    "stage_III_-_precipitating_event": {
+      "triggering_catalyst": "The specific, identifiable event that made the hidden risk or misconduct untenable and forced it into the open. Examples: 'A specific credit rating downgrade that triggered massive collateral calls on the mismarked derivatives'; 'A whistleblower's detailed email to senior management/regulators'; 'A sharp, unexpected move in a market variable (e.g., CDS spreads, currency rates) that revealed the true loss magnitude.'",
+      "immediate_internal_response": "The first, private actions within the firm upon realization: emergency meetings of the C-suite and board, frantic attempts to hedge or unwind positions, internal calculations of true losses, and initial legal consultations.",
+      "point_of_no_return": "The decisive moment when containment became impossible. This could be the decision to inform the regulator, the discovery of the issue by an external auditor, or a critical news leak."
     },
-    "key_milestones_timeline": [
-      {
-        "date_iso": "string: Approximate date in YYYY-MM-DD format. Use YYYY-MM or YYYY if less precise.",
-        "event_title": "string",
-        "detailed_description": "string: What happened.",
-        "criticality": "string: e.g., 'Inception', 'Major Deceptive Action', 'External Threat Emerged', 'Beginning of the End'."
-      }
-    ],
-    "collapse_and_exposure": {
-      "trigger_event": "string: The specific incident that precipitated the collapse (e.g., 'A major victim's redemption request could not be met and they alerted authorities', 'Investigative journalist published expose', 'Internal whistleblower provided documents to regulator', 'Bank compliance froze core accounts').",
-      "date_of_collapse": "string: Approximate date when operations ceased or were frozen.",
-      "immediate_post_collapse_state": {
-        "operational_status": "string: e.g., 'Raided by police, assets seized', 'CEO fled jurisdiction, office empty', 'Website shut down, phones disconnected'.",
-        "victim_reaction": "string: Initial collective response (e.g., 'Formed investor action group', 'Flooded regulator with complaints', 'Social media panic').",
-        "first_public_authority_statement": "string: Brief summary of the first official announcement, if any."
-      }
+    "stage_IV_-_onset": {
+      "mode_of_disclosure": "How the event became public: 'Voluntary earnings restatement and conference call', 'Forced disclosure after regulatory inquiry', 'Leak to financial media (cite specific publication and headline)'.",
+      "immediate_market_reaction": "Quantify the market impact on the relevant date(s): stock price drop of the entity, widening of its credit spreads, impact on related asset classes (e.g., CDS indices, currency pairs), and increased volatility measures.",
+      "internal_collapse": "The immediate operational and human consequences: suspension/firing of key personnel, dissolution of the trading desk or business unit, launch of internal investigation, and freezing of bonuses.",
+      "counterparty_and_client_reactions": "Documented responses from other market participants: pulling of credit lines, demands for additional collateral, termination of business relationships, and lawsuits filed in the immediate aftermath.",
+      "regulatory_storm_commences": "The initial regulatory and law enforcement response: which agencies (SEC, CFTC, DoJ, FCA, etc.) opened investigations, issued subpoenas, or sent demand letters on the first day/week."
     },
-    "aftermath_impacts_consequences": {
-      "legal_regulatory_actions": [
-        {
-          "authority": "string: Name of the regulatory body or law enforcement agency.",
-          "action_type": "string: e.g., 'Criminal Indictment', 'Civil Lawsuit', 'Asset Freeze Order', 'License Revocation', 'Administrative Penalty'.",
-          "targets": "array: Names of individuals/entities action was taken against.",
-          "outcome_status": "string: Current status or final result (e.g., 'Guilty plea entered', 'Case ongoing', 'Fined $10M')."
-        }
-      ],
-      "perpetrator_outcomes_summary": "string: Consolidated summary of the fates of key perpetrators (sentences, fines, extradition status, deceased).",
-      "victim_impact_analysis": {
-        "total_recognized_loss": "number: The aggregate financial loss acknowledged by authorities or courts.",
-        "estimated_recovery_rate": "string: Percentage of loss potentially recoverable via seized assets, settlements. Use '0%' if none expected.",
-        "recovery_mechanisms": "array: e.g., ['Court-appointed liquidator selling seized property', 'Victim compensation fund', 'Negotiated settlement with facilitator banks'].",
-        "demographic_of_most_affected": "string: Which victim subgroups suffered most severe losses (financial or otherwise).",
-        "psychosocial_societal_impact": "string: Description of non-financial harms (e.g., 'Several victim suicides reported', 'Erosion of trust in private banking sector', 'Strained diplomatic relations between Country A and B')."
+    "stage_V_-_rescue_and_salvage": {
+      "financial_triage": {
+        "position_unwind_process": "The strategy and execution of closing out the disastrous trades: whether it was a rapid fire-sale causing market impact or a slow, managed wind-down. Detail the agents involved (the firm itself, an external advisor).",
+        "loss_provisioning_and_capital_raise": "The specific accounting actions: quarterly loss announcements, loan loss provisions, and any subsequent capital raises (equity issuance, asset sales) to shore up the balance sheet.",
+        "impact_on_earnings_and_shareholder_value": "Cumulative financial impact over subsequent quarters, including dividend cuts, and the total destruction of market capitalization from peak to trough."
       },
-      "systemic_and_policy_implications": [
-        "string: List of broader changes catalyzed, e.g., ['Tightened regulations on issuance of electronic bank guarantees', 'Enhanced due diligence requirements for family offices investing in alternative assets', 'New inter-agency task force on cross-border investment fraud']."
-      ]
+      "legal_and_reputational_containment": {
+        "initial_public_relations_strategy": "The firm's first communications: press releases, CEO public statements, apologies, and framing of the event (e.g., 'isolated incident', 'failure of supervision').",
+        "cooperation_with_authorities": "The nature of the firm's cooperation: voluntary document production, self-reporting of additional issues, waiver of attorney-client privilege, or the opposite—stonewalling.",
+        "initial_settlements_or_charges": "The first regulatory settlements (consent orders) or criminal charges filed against junior employees, including the fines and admissions required."
+      },
+      "internal_reforms_announced": "The immediate, often reactive, changes promised or implemented: disbanding of the business unit, hiring of new senior risk officers, investment in new control systems, and revisions to compensation policies."
     },
-    "analysis_of_red_flags_detection_failures": {
-      "observable_red_flags": "array: List of specific warning signs that were present but ignored or missed by victims/facilitators, e.g., ['Returns promised were uncorrelated to any market index', 'Auditor was an obscure, unknown firm', 'Address of operation was a virtual office'].",
-      "failure_points_in_ecosystem": "array: Points where checks failed, e.g., ['Bank's transaction monitoring did not flag repetitive large transfers to unrelated third parties', 'Professional network platform did not verify claimed employment at major firms'].",
-      "deviation_from_legitimate_practice": "string: Summary of how this event specifically mimicked yet perverted standard financial industry practices."
+    "stage_VI_-_full_cultural_readjustment": {
+      "official_investigations_and_reports": {
+        "internal_investigation_report": "Key findings of the law firm or committee hired by the board: root cause analysis, specific control failures, and names of individuals deemed responsible. Note if it was made public.",
+        "regulatory_agency_final_orders": "The conclusive findings from each major regulator (e.g., SEC, CFTC, OCC, FCA). List the final penalty amounts, the specific rules/laws violated, and the mandated corrective actions.",
+        "parliamentary_or_congressional_hearings": "Key takeaways from legislative inquiries, including notable testimonies from CEOs and regulators, and the political narrative that emerged."
+      },
+      "final_legal_resolution": {
+        "criminal_prosecutions_outcomes": "Final verdicts or pleas for individuals: prison sentences, fines, and lifetime bans from the industry. List the most senior person held criminally liable.",
+        "total_financial_penalties": "The aggregate sum of all fines, penalties, disgorgement, and restitution paid by the entity to all global authorities.",
+        "civil_litigation_settlements": "The outcome of major class-action lawsuits from shareholders or other injured parties, including settlement amounts."
+      },
+      "enduring_industry_impact": {
+        "new_regulations_or_rule_changes": "Specific new laws, regulations (e.g., Dodd-Frank clauses, MiFID II provisions), or market practice reforms (e.g., changes to FX fix calculation methodologies) directly catalyzed by this event.",
+        "changes_in_risk_management_practices": "Industry-wide shifts: enhanced stress testing for complex portfolios, stricter limits on warehousing risk, improved model validation, and greater authority for Chief Risk Officers.",
+        "cultural_and_ethical_repercussions": "Long-term changes in industry discourse: increased focus on psychological safety for whistleblowers, ethics training, clampdown on inappropriate electronic communication, and recalibration of compensation towards long-term risk-adjusted returns."
+      },
+      "legacy_and_historical_interpretation": "How the event is now taught in business schools and referenced in policy debates. Its role as a case study for specific failure modes (e.g., 'operational risk', 'governance failure') and its lasting symbol in financial culture."
     }
   }
 }
-```
-
-**Critical Analysis Instructions:**
-
-1.  **event-Centric Focus:** Identify and elucidate the **core deceptive artifact** (forged document, fake platform, phantom asset). This is the linchpin of your reconstruction. Every operational detail should relate to creating, sustaining, or exploiting this deception.
-2.  **Factual Rigor:** Distinguish clearly between **stated facts** (what perpetrators claimed), **verified facts** (what evidence confirms), and **logical inferences**. Base all fields, especially numerical estimates, on the strongest available evidence. Use `"Information not available in provided sources."` only for genuinely absent data.
-3.  **Narrative Cohesion:** Ensure the `key_milestones_timeline` tells a coherent story that logically connects to phases in `financial_forensics.sustainability_analysis` and the eventual `collapse_and_exposure.trigger_event`.
-4.  **Actor-Centric Analysis:** Detail not just perpetrators and victims, but also the role of `willing_or_negligent_facilitators`. Their actions/inactions are often critical to the event's scale and duration.
-5.  **Quantitative Discipline:** Provide numerical estimates even if approximate. For `financial_forensics`, ensure the sum of the major `fund_tracing_use_of_proceeds` categories is logically consistent with the `estimated_total_fiat_inflow`.
-6.  **Impact Layering:** Document impacts across multiple levels: individual victim loss (`victim_impact_analysis`), legal consequences (`legal_regulatory_actions`), and broader systemic changes (`systemic_and_policy_implications`).
-7.  **Pre-Collapse Diagnostics:** The `analysis_of_red_flags_detection_failures` section must provide actionable insights by listing specific, observable warning signs and institutional failures that allowed the event to persist.
-
-**Final Validation Before Output:**
-Conduct an internal audit: Does the `executive_summary` accurately reflect the detailed JSON content? Is the timeline chronologically consistent? Are the financial figures logically plausible within the event's narrative? Does the reconstruction explain **how** the deception was created, **why** it was believable, and **what** caused it to fail?
-
-**Now, based solely on the provided multi-source data about the specified financial event, synthesize and output the complete JSON object as defined above.**
 """
