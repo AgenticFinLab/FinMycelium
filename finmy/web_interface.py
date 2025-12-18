@@ -18,7 +18,6 @@ import pandas as pd
 import datetime
 import json
 
-
 import streamlit as st
 from streamlit_input_box import input_box
 from streamlit_option_menu import option_menu
@@ -103,6 +102,8 @@ class FinMyceliumWebInterface:
             st.session_state.uploaded_files = []
         if "selected_fraud_type" not in st.session_state:
             st.session_state.selected_fraud_type = None
+        if "keywords" not in st.session_state:
+            st.session_state.keywords = None
 
     def setup_ai_client(self):
         """Initialize AI client with configuration from environment variables."""
@@ -293,12 +294,19 @@ class FinMyceliumWebInterface:
 
         # col1, col2 = st.columns([2, 1])
 
-        # with col1:
-        keywords = st.text_area(
-            "Enter relevant keywords or phrases (comma-separated):",
-            placeholder="e.g., high-yield investment, guaranteed returns, crypto mining scheme, company name, individual names...",
-            help="Provide specific terms related to the fraud case to enhance analysis",
-        )
+
+        if st.session_state.keywords is not None:
+            keywords = st.text_area(
+                "Enter relevant keywords or phrases (comma-separated):",
+                placeholder=st.session_state.keywords,
+                help="Provide specific terms related to the fraud case to enhance analysis",
+            )
+        else:
+            keywords = st.text_area(
+                "Enter relevant keywords or phrases (comma-separated):",
+                placeholder="e.g., high-yield investment, guaranteed returns, crypto mining scheme, company name, individual names...",
+                help="Provide specific terms related to the fraud case to enhance analysis",
+            )
 
         # with col2:
         #     st.markdown("**Keyword Tips:**")
@@ -316,7 +324,7 @@ class FinMyceliumWebInterface:
         # Process keyword input with flexible delimiter handling
         if keywords:  # Check if input string is not empty
             # Step 1: Normalize full-width Chinese commas to standard commas
-            unified_keywords = keywords.replace('，', ',')
+            unified_keywords = keywords.replace('，', ',').replace(";",",").replace("；","")
             
             # Step 2: Split on commas/spaces (supports multiple consecutive delimiters)
             # Regex pattern matches one or more commas (,) OR whitespace characters (\s)
@@ -411,6 +419,7 @@ class FinMyceliumWebInterface:
 
                 elif st.session_state.processing_status == "completed":
                     st.success("✅ Analysis completed! ")
+       
                 elif st.session_state.processing_status == "error":
                     st.error("❌ Analysis failed. Please try again.")
 
@@ -855,7 +864,7 @@ class FinMyceliumWebInterface:
             output_file_path=output_file_path,
             query=main_search_input,
             keywords=keywords,
-        )
+        )  
         try:
             event_cascade = builder.build()
             print(f"Successfully built event cascade: {event_cascade}")
@@ -991,6 +1000,72 @@ class FinMyceliumWebInterface:
             "is_mock_data": True,
         }
 
+    def render_results_page_1(self):
+            """Render the results page with comprehensive analysis visualization."""
+            st.title("Analysis Results")
+
+            if not st.session_state.analysis_results:
+                st.info("No analysis results available. Please run an analysis first.")
+                if st.button("Go to Analysis"):
+                    st.session_state.current_page = "Analysis"
+                    st.rerun()
+                return
+
+            results = st.session_state.analysis_results
+
+            # Results overview
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                st.subheader("Fraud Analysis Results")
+
+            with col2:
+                st.metric("Analysis Status", "Completed")
+                if results.get("is_mock_data"):
+                    st.warning("Using demonstration data")
+
+            st.markdown("---")
+
+            # Key findings
+            # st.subheader("🔍 Key Findings")
+            # for i, finding in enumerate(results["key_findings"], 1):
+            #     st.markdown(f"{i}. {finding}")
+
+            st.markdown("---")
+
+            # Detailed analysis
+            st.subheader("📊 Detailed Analysis")
+            with st.expander("View Complete Analysis", expanded=True):
+                st.write(results["summary"])
+
+            # Risk factors and prevention
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.subheader("⚠️ Risk Factors")
+                for risk in results["risk_factors"]:
+                    st.markdown(f"• {risk}")
+
+            with col2:
+                st.subheader("🛡️ Prevention Tips")
+                for tip in results["prevention_tips"]:
+                    st.markdown(f"• {tip}")
+
+            st.markdown("---")
+
+            # Educational insights
+            st.subheader("🎓 Educational Insights")
+            self.render_educational_insights(results)
+
+            # Action buttons
+            col1, col2, col3 = st.columns(3)
+            with col2:
+                if st.button("🔄 New Analysis", width="stretch"):
+                    st.session_state.analysis_results = None
+                    st.session_state.current_page = "Analysis"
+                    st.rerun()
+
+
 
     def render_results_page(self):
         """Render the event reconstruction results with dynamic visualization for nested JSON structures."""
@@ -1070,7 +1145,7 @@ class FinMyceliumWebInterface:
                         expander_key = f"{parent_key}_{key}"
                         
                         # Format key name for display
-                        display_key = " ".join(word.capitalize() for word in key.split("_"))
+                        display_key = " ".join(word.lower() for word in key.split("_"))
                         
                         if isinstance(value, (dict, list)) and value:
                             if level == 0:  # Top-level sections
