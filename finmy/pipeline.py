@@ -36,7 +36,12 @@ from finmy.matcher.base import MatchInput, SummarizedUserQuery, BaseMatcher
 from finmy.matcher.summarizer import BaseSummarizer
 from finmy.matcher import get_summarizer_registry, get_matcher_registry
 from finmy.pdf_collector import PDFCollectorOutput
-from finmy.url_collector.base import URLCollectorOutput
+from finmy.pdf_collector.pdf_collector import PDFCollector
+from finmy.pdf_collector.base import PDFCollectorInput
+from finmy.url_collector.base import URLCollectorOutput, URLCollectorInput
+from finmy.url_collector.url_parser import URLParser
+import os
+from urllib.parse import urlparse
 
 
 # ============================================================================
@@ -494,25 +499,184 @@ class FinmyPipeline:
         self.logger.info("=" * 25)
         return build_input
 
+    def _is_url(self, source: str) -> bool:
+        """
+        Check if a source string is a URL.
+
+        Args:
+            source: String to check
+
+        Returns:
+            True if the string is a URL, False otherwise
+        """
+        try:
+            result = urlparse(source)
+            return all([result.scheme, result.netloc]) and result.scheme in [
+                "http",
+                "https",
+            ]
+        except Exception:
+            return False
+
+    def _is_pdf_path(self, source: str) -> bool:
+        """
+        Check if a source string is a PDF file path.
+
+        Args:
+            source: String to check
+
+        Returns:
+            True if the string is a PDF file path, False otherwise
+        """
+        return source.lower().endswith(".pdf")
+
+    def _collect_data_from_sources(
+        self,
+        data_sources: List[str],
+        pdf_collector_config: Optional[dict] = None,
+        url_collector_config: Optional[dict] = None,
+    ) -> List[RawData]:
+        """
+        Collect data from URLs or PDF paths using collectors.
+
+        Args:
+            data_sources: List of URLs or PDF file paths
+            pdf_collector_config: Optional configuration for PDF collector
+            url_collector_config: Optional configuration for URL collector
+
+        Returns:
+            List of RawData objects created from collected data
+        """
+        urls = []
+        pdf_paths = []
+
+        # Separate URLs and PDF paths
+        for source in data_sources:
+            if self._is_url(source):
+                urls.append(source)
+            elif self._is_pdf_path(source):
+                pdf_paths.append(source)
+            else:
+                # Try to check if it's a directory containing PDFs
+                if os.path.isdir(source):
+                    # If it's a directory, treat it as PDF input directory
+                    pdf_paths.append(source)
+                else:
+                    # Log warning if logger is available
+                    if self.logger:
+                        self.logger.warning(
+                            f"Unknown source type: {source}, skipping..."
+                        )
+                    else:
+                        print(f"Warning: Unknown source type: {source}, skipping...")
+
+        raw_data_records: List[RawData] = []
+
+        # Process PDFs
+        if pdf_paths:
+            # Default PDF collector config
+            default_pdf_config = {
+                "output_dir": os.path.join(
+                    self.config.get("save_folder", "output"), "pdf_collector_output"
+                ),
+                "batch_size": 200,
+                "language": "ch",
+                "check_pdf_limits": True,
+                "env_file": ".env",
+            }
+            if pdf_collector_config:
+                default_pdf_config.update(pdf_collector_config)
+
+            pdf_collector = PDFCollector(default_pdf_config)
+
+            # Group PDF paths: if it's a directory, use input_dir; if it's a file, use input_pdf_path
+            pdf_dirs = [p for p in pdf_paths if os.path.isdir(p)]
+            pdf_files = [p for p in pdf_paths if os.path.isfile(p)]
+
+            # Process directories
+            for pdf_dir in pdf_dirs:
+                pdf_input = PDFCollectorInput(
+                    input_dir=pdf_dir,
+                    input_pdf_path="",
+                    keywords=[],
+                )
+                pdf_output = pdf_collector.run(pdf_input)
+                raw_data_records.extend(
+                    self.create_raw_data_from_pdf_output(pdf_output)
+                )
+
+            # Process individual PDF files
+            for pdf_file in pdf_files:
+                pdf_input = PDFCollectorInput(
+                    input_dir="",
+                    input_pdf_path=os.path.abspath(pdf_file),
+                    keywords=[],
+                )
+                pdf_output = pdf_collector.run(pdf_input)
+                raw_data_records.extend(
+                    self.create_raw_data_from_pdf_output(pdf_output)
+                )
+
+        # Process URLs
+        if urls:
+            # Default URL collector config
+            default_url_config = {
+                "delay": 1.0,
+                "use_selenium_fallback": True,
+                "selenium_wait_time": 5,
+            }
+            if url_collector_config:
+                default_url_config.update(url_collector_config)
+
+            url_parser = URLParser(
+                method_name="pipeline_url_collector",
+                config=default_url_config,
+            )
+
+            url_input = URLCollectorInput(
+                urls=urls,
+                extras={},
+            )
+            url_output = url_parser.run(url_input)
+            raw_data_records.extend(self.create_raw_data_from_url_output(url_output))
+
+        if not raw_data_records:
+            raise ValueError(
+                "No raw data records created from collectors. "
+                "Please ensure data_sources contains valid URLs or PDF paths."
+            )
+
+        return raw_data_records
+
     def lm_build_pipeline_main(
         self,
-        raw_texts: List[str],
+        data_sources: List[str],
         query_text: str,
         key_words: List[str],
+        pdf_collector_config: Optional[dict] = None,
+        url_collector_config: Optional[dict] = None,
     ):
         """
         Main function that orchestrates the complete data processing workflow.
 
         This function executes the following steps:
         1. Initialize data manager
-        2. Create and store raw data records
-        3. Create and store user query input
-        4. Summarize user query
-        5. Match raw data with summarized query
-        6. Generate meta samples from match results
-        7. Store meta samples
-        8. Create build input for downstream processing
-        9. Run the configured builder to get the final build output.
+        2. Collect data from URLs or PDF paths using collectors
+        3. Create and store raw data records
+        4. Create and store user query input
+        5. Summarize user query
+        6. Match raw data with summarized query
+        7. Generate meta samples from match results
+        8. Store meta samples
+        9. Create build input for downstream processing
+        10. Run the configured builder to get the final build output.
+
+        Args:
+            data_sources: List of URLs or PDF file paths to collect data from
+            query_text: Natural language query text
+            key_words: List of keywords for the query
+            pdf_collector_config: Optional configuration dict for PDF collector
+            url_collector_config: Optional configuration dict for URL collector
 
         Returns:
             The build output object produced by the selected builder.
@@ -523,8 +687,12 @@ class FinmyPipeline:
         # Initialize data manager
         self.data_manager = DataManager()
 
-        # Step 1: Create raw data records from sample texts (mock flow, kept for backward compatibility)
-        raw_data_records = self.create_raw_data_records(raw_texts)
+        # Step 1: Collect data from URLs or PDF paths using collectors
+        raw_data_records = self._collect_data_from_sources(
+            data_sources=data_sources,
+            pdf_collector_config=pdf_collector_config,
+            url_collector_config=url_collector_config,
+        )
 
         # Step 2: Store raw data records in database
         self.store_raw_data(raw_data_records)
