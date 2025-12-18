@@ -1,136 +1,159 @@
 def advance_fee_fraud_prompt() -> str:
     return """
-You are an expert financial crimes analyst and forensic investigator specializing in fraud pattern recognition and event reconstruction. Your primary task is to analyze provided multi-source data (news articles, victim reports, court documents, regulatory alerts, web scrapes, PDFs) to comprehensively reconstruct a specified **Advance-Fee Fraud** scheme.
+You are a senior financial forensic analyst and historical reconstruction specialist, with deep expertise in fraud schemes, criminal psychology, socioeconomic analysis, and regulatory history.
 
-**Core Objective:**
-Produce a complete, factual, and logically structured narrative of the Advance-Fee Fraud event. The analysis must detail the entire lifecycle: the setup and recruitment, the fraudulent proposition mechanics, the fee extraction process, the stall and escalation tactics, and the final outcome. Special emphasis must be placed on the psychological manipulation, communication channels, fee structures, and the differential impact on various victim profiles.
+**Objective:** To meticulously reconstruct a specific Advance-Fee Fraud scheme as a comprehensive historical case study. The output must function as a definitive, granular, and multi-dimensional record that captures the scheme's operational mechanics, its lifecycle within the societal and regulatory context, its impact, and the resulting systemic changes.
 
-**Data Input:**
-You will receive raw, unstructured text/data pertaining to a specific Advance-Fee Fraud case (e.g., "419 Nigerian Prince Scam", "Fake Inheritance Fraud", "Phantom Loan Scheme"). This data may be fragmented, anecdotal, or contain inconsistencies. You must synthesize information, identify the core narrative from victim and perpetrator perspectives, resolve contradictions by prioritizing official documents (court filings, regulator reports), and establish a coherent timeline based on verifiable facts.
+**Output Format:** A single, extensive JSON object.
 
-**Output Format Requirements:**
-You MUST output a single, well-structured JSON object. Use the exact field names as specified in the schema below. All field values should be strings, numbers, booleans, arrays, or nested objects as described. Do not include any explanatory text, markdown, or commentary outside the JSON object.
+**Instructions for JSON Construction:**
+1.  **Base Structure:** Use the provided JSON schema as the definitive structure. Populate every field. Do not omit any field. If concrete information for a field is unavailable from the provided/retrieved data, indicate with "Data not specifically identified" and make a reasoned inference based on the scheme's nature, explaining the inference in the field value.
+2.  **Lifecycle Phases:** The reconstruction MUST be organized around the six-stage "Failure of Foresight" lifecycle model. Each stage object must contain detailed sub-fields that analyze the events, conditions, actors, and mindsets specific to that phase. Treat each stage as a chapter in a narrative.
+3.  **Granular Fields:** Every field must be populated with specific, detailed information. Avoid summaries. For example, don't just state "emails were sent"; describe their content themes, frequency, and targeting strategy. For legal actions, list specific charges, dates, and outcomes.
+4.  **Integrated Explanation:** The "value" for each field must contain both the factual data AND a concise explanatory analysis. Format: `"[Factual Data]. Explanation: [Why this is significant, how it functioned, or what it reveals about the stage/scheme]."`
+5.  **Fact-Based:** All information must be grounded in the provided source materials or verifiable internet data. Clearly distinguish between confirmed facts, estimates, and logical inferences based on the scheme's modus operandi.
+6.  **Comprehensiveness:** The JSON must paint a complete picture. Consider and include details on: the perpetrators' backgrounds and justifications; the technological and communication channels used; the precise "hook" and fabricated narrative; the psychological tactics applied; the financial flows and laundering methods; the victim demographics and vulnerabilities; the failures of specific institutions or regulations; the media narrative arc; the legal and regulatory gaps exposed; and the long-term changes in public awareness, law, and financial practice.
 
-**Comprehensive JSON Schema and Field Definitions for Advance-Fee Fraud:**
+Here is the required JSON schema outline with exemplary field descriptions, and "Explanation" is just to help you better understand the task. **Populate it with data from the target case.**
 
-```json
 {
   "advance_fee_fraud_reconstruction": {
     "metadata": {
-      "fraud_identifier": "string: The common name or case reference for this specific fraud operation (e.g., 'Golden Investment Visa Scam 2023').",
-      "primary_fraud_category": "string: Specific subtype of Advance-Fee Fraud (e.g., 'Loan Scam', 'Inheritance/Bequest Fraud', 'Romance Scam with Fee Extraction', 'Grant/Funding Scam', 'Employment Fraud').",
-      "primary_jurisdictions_impacted": "array: List of countries/regions where victims were primarily located.",
-      "perpetrator_jurisdiction_claimed": "string: Country/region the perpetrators claimed to be operating from.",
-      "perpetrator_jurisdiction_actual": "string: Best estimate of the actual operational base, if different.",
-      "source_quality_assessment": "string: Brief assessment of input data reliability (e.g., 'Multiple victim testimonies and one conviction document', 'Primarily news reports; lacking official legal closure')."
-    },
-    "overview": {
-      "executive_summary": "string: A concise 3-5 sentence summary describing the fraud's premise, mechanism, scale, and final status.",
-      "core_fraudulent_promise": "string: The specific high-value item or sum victims were promised (e.g., 'A $2 million inheritance from a distant relative', 'A guaranteed 0% interest business loan of $500,000', 'Release of frozen gold bullion in a vault').",
-      "stated_prerequisite": "string: The official-sounding reason why an advance fee was 'necessary' (e.g., 'To pay international wire transfer taxes', 'For anti-money laundering clearance certificates', 'For insurance bonds on the shipment').",
-      "total_known_operation_duration_months": "number: Approximate duration from earliest to latest reported victim interaction. Use -1 if ongoing.",
-      "is_cyber_enabled": "boolean: Indicates if digital tools (email, social media, fake websites, spoofed calls) were central to the operation."
-    },
-    "perpetrators_and_infrastructure": {
-      "identities": {
-        "known_aliases_or_names": "array: List of names, nicknames, or company names used by perpetrators (e.g., ['Dr. Robert Mbeki', 'Global Wealth Release Foundation', 'SecureLoanPros LLC']).",
-        "assumed_roles": "array: List of fictional roles perpetrators adopted (e.g., ['Bank Manager', 'UN Lawyer', 'Deceased Millionaire\'s Executor', 'Romantic Partner'])."
+      "scheme_common_name": "[e.g., 'The Spanish Prisoner Letter (20th Century variant)', 'Nigerian 419 Scam', 'Madoff Ponzi Scheme (as an advanced-fee structure for feeder funds)']. The colloquial or media-given name for this specific instance.",
+      "official_legal_case_name": "[e.g., 'United States v. John Doe et al.', 'SEC Litigation Release No. 12345']. The formal name of the leading prosecution or regulatory action.",
+      "primary_perpetrator_name": "[Full name and known aliases]. The individual centrally responsible for designing and/or operating the scheme. Explanation: Include background notes if relevant (e.g., former professional, organized crime ties).",
+      "perpetrator_organization_structure": {
+        "core_team_roles": ["e.g., 'Frontman/Communicator', 'Narrative Designer', 'Money Mule Coordinator', 'Document Forger'"]. Explanation: Describes the functional division of labor within the fraud ring.",
+        "hierarchical_or_network_model": "e.g., 'Rigid hierarchy with a single boss', 'Loosely affiliated network of cells', 'Single perpetrator with outsourced services'. Explanation: How the criminal enterprise was organized.",
+        "known_associates_or_recruits": ["Names or descriptions of key accomplices"]. Explanation: Individuals who played significant operational roles."
       },
-      "infrastructure": {
-        "communication_channels": "array: List of primary contact methods (e.g., ['Mass Spam Email', 'Targeted Social Media Messaging (Facebook, Instagram)', 'Fake Website with Live Chat', 'Spoofed Phone Calls', 'WhatsApp/Telegram']).",
-        "supporting_artifacts_for_credibility": "array: List of forged/fabricated documents or digital props used (e.g., ['Fake bank statements', 'Photoshopped legal contracts', 'Cloned government agency websites', 'Fake news articles'])."
+      "key_associated_entities": {
+        "front_companies": ["List of sham corporate names used"]. Explanation: Legal entities created to receive funds and project legitimacy.",
+        "bank_accounts": ["Countries and bank names, if known"]. Explanation: The financial infrastructure used to receive and launder fees.",
+        "digital_presence": ["Fake website URLs, phishing domain names, social media profiles"]. Explanation: Online assets used to lend credibility or initiate contact."
       },
-      "organization_structure_insight": "string: Description of any known hierarchy or network (e.g., 'Lone individual', 'Small organized group with money mules', 'Large syndicate with different roles for recruiters, communicators, and cash-out crews')."
-    },
-    "victim_profile_and_recruitment": {
-      "targeting_method": "string: How victims were identified and initially contacted (e.g., 'Broadcast phishing emails to purchased lists', 'Targeting users on dating apps over 50', 'Contacting small business owners who applied for loans online').",
-      "victim_demographics": "string: General description of common victim characteristics (e.g., 'Elderly individuals with savings', 'Immigrants seeking financial security', 'Small businesses in distress', 'Individuals with public online profiles showing wealth').",
-      "psychological_hooks_employed": "array: List of emotional or logical triggers exploited (e.g., ['Greed/Get-Rich-Quick', 'Desperation (for loan, job)', 'Trust in authority (fake officials)', 'Romantic affection/loneliness', 'Fear of missing out (FOMO)']).",
-      "initial_contact_narrative": "string: The story or proposition used in the very first communication."
-    },
-    "fee_extraction_mechanism": {
-      "fee_nomenclature": "array: List of all terms used for the advance fees (e.g., ['Processing Fee', 'Tax Clearance Certificate Fee', 'Insurance Bond', 'Wire Transfer Charge', 'Customs Duty']).",
-      "fee_payment_methods": "array: List of payment channels demanded (e.g., ['International Wire Transfer', 'Cryptocurrency (BTC, USDT)', 'Gift Cards (iTunes, Amazon)', 'Cash via Courier', 'Online Payment Processors']).",
-      "typical_fee_amounts": {
-        "initial_fee_range": "string: Typical range of the first requested payment (e.g., '$2,000 - $5,000').",
-        "escalation_fee_range": "string: Range for subsequent, larger fees when stalling (e.g., '$15,000 - $50,000').",
-        "currency_most_used": "string: Primary currency of demands."
+      "operational_timeframe": {
+        "suspected_inception_year": "YYYY(-MM). Explanation: When the first known fraudulent approach was made or the planning phase concluded.",
+        "peak_activity_period": "YYYY-YYYY. Explanation: The period during which the scheme was most aggressively executed and/or recruited the most victims.",
+        "public_collapse_year": "YYYY(-MM). Explanation: The moment it became irreversibly public through arrest, regulatory action, or major media exposure.",
+        "duration_years": "X. Explanation: The total lifespan, indicating sustainability and evasion capability.",
+        "timeline_of_major_fraudulent_offers": ["Chronological list of specific 'deals' or 'opportunities' presented, if documented"]."
       },
-      "pressure_and_urgency_tactics": "array: List of methods to compel quick payment (e.g., ['Limited time offer', 'Threat of legal action/asset forfeiture if fee not paid', 'Appeal to victim\'s empathy for a fake persona in distress'])."
-    },
-    "stall_and_escalation_playbook": {
-      "delivery_delay_excuses": "array: List of reasons given for the non-delivery of the promised sum/item after fee payment (e.g., ['Unexpected government audit', 'Bank error requiring another fee', 'Problem with the shipping company', 'COVID-19 restrictions']).",
-      "escalation_strategy": "string: Description of how perpetrators increased financial extraction (e.g., 'Introduced new, unforeseen "regulatory hurdles" requiring additional payments', 'Claimed the initial fund transfer was "too large" and needed a "dilution fee"').",
-      "threats_upon_victim_questioning": "array: List of intimidations used if a victim became suspicious or demanded a refund (e.g., ['Threat to report victim to police for money laundering', 'Blackmail using personal information shared by victim', 'Ceasing all communication (ghosting)'])."
-    },
-    "financial_analysis": {
-      "estimated_scale": {
-        "estimated_minimum_victim_count": "number: Conservative estimate of total unique victims based on data.",
-        "estimated_total_fiat_extracted": "number: Estimated total sum successfully scammed from all victims, in primary currency.",
-        "estimated_average_loss_per_victim": "number: estimated_total_fiat_extracted / estimated_minimum_victim_count (if count > 0).",
-        "estimated_maximum_loss_single_victim": "number: Highest known single victim loss from data."
+      "estimated_global_scale": {
+        "currency_primary": "USD/EUR/etc.",
+        "total_fees_collected_estimate": "XX million/billion. Explanation: The best estimate of actual upfront payments received from victims.",
+        "promised_payout_fictitious_value": "XX billion. Explanation: The aggregate sum of money, goods, or returns falsely promised to victims.",
+        "victim_count_estimate": "Approximate number. Explanation: Often difficult to ascertain due to underreporting.",
+        "victim_profile_archetype": "e.g., 'Small business owners seeking capital', 'Elderly individuals with savings', 'Greed-driven investors ignoring risk'. Explanation: The common characteristics exploited.",
+        "geographic_reach_sourcing": ["Countries where perpetrators operated from"]. Explanation: Often different from victim locations.",
+        "geographic_reach_victims": ["Countries where victims were located"]. Explanation: Demonstrates the transnational nature."
       },
-      "money_flow_and_cash_out": {
-        "identified_money_mule_networks": "boolean: Whether evidence suggests use of intermediary accounts (mules) to launder funds.",
-        "funds_traceability_difficulty": "string: Assessment of how easily stolen funds could be traced and recovered (e.g., 'Low - sent via traceable bank wires to domestic mules', 'Very High - converted immediately to untraceable cryptocurrency').",
-        "perpetrator_enrichment_indicators": "string: Description of any known lifestyle or asset purchases by perpetrators from the fraud proceeds."
+      "central_narrative_hook": "A one-sentence summary of the core fabricated story used to justify the advance fee. e.g., 'To release a multimillion-dollar inheritance trapped in a foreign bank, a small tax/fee must be paid.' Explanation: The fundamental lie upon which the scheme is built."
+    },
+    "stage_I_-_notionally_normal_starting_point": {
+      "prevailing_socioeconomic_context": {
+        "economic_conditions": "e.g., 'Period of low interest rates driving search for yield', 'Economic downturn creating financial desperation'. Explanation: The broader environment that made the hook plausible.",
+        "technological_landscape": "e.g., 'Proliferation of email but low public awareness of phishing', 'Rise of online classifieds but weak verification systems'. Explanation: The tools available to perpetrators and the vulnerabilities they exploited."
+      },
+      "culturally_accepted_beliefs_exploited": {
+        "trust_in_institutions": "e.g., 'Blind faith in official-looking documents', 'Assumption that banks rigorously vet clients'. Explanation: The societal norms about authority and process that were weaponized.",
+        "financial_aspirations_myths": "e.g., 'The belief in get-rich-quick opportunities', 'The idea that exclusive deals come through personal connections'. Explanation: The common dreams or biases that overrode skepticism.",
+        "knowledge_gaps": "e.g., 'Lack of public understanding of international finance law', 'Unfamiliarity with legitimate business proposal protocols'. Explanation: Specific areas of public ignorance."
+      },
+      "existing_precautionary_norms": {
+        "relevant_laws_pre_fraud": "e.g., 'Mail fraud statutes existed but were domestically focused', 'Banking secrecy laws in Jurisdiction X hindered cross-border investigation'. Explanation: The legal framework that was theoretically protective but practically inadequate.",
+        "common_sense_advice": "e.g., 'Proverbs like "If it sounds too good to be true..."', 'Advice from consumer groups to never wire money to strangers'. Explanation: The informal, cultural safeguards that were ignored or circumvented.",
+        "industry_best_practices_victim_side": "e.g., 'Investors were advised to conduct due diligence', 'Banks had posters warning about wire fraud'. Explanation: The professional norms that victims failed to apply."
       }
     },
-    "key_milestones": [
-      {
-        "date_estimate": "string: Approximate date (YYYY-MM or YYYY). Use 'Ongoing' if applicable.",
-        "event_description": "string: Description of the key event.",
-        "event_type": "string: Categorized as ['Setup', 'First Known Victim', 'Peak Activity', 'Investigative Action', 'Collapse/Disruption', 'Legal Action'].",
-        "significance": "string: Explains the event's role in the fraud's lifecycle."
-      }
-    ],
-    "termination_and_current_status": {
-      "termination_trigger": "string: What caused the operation to stop or be disrupted (e.g., 'Law enforcement takedown operation', 'Perpetrators disappeared after maximum extraction', 'Widespread public warnings by authorities', 'Not terminated - likely ongoing').",
-      "status_at_analysis": "string: Current known status (e.g., 'Active investigation by FBI', 'Perpetrators convicted and sentenced', 'Operation dormant; actors likely started new scheme', 'Unknown').",
-      "last_known_activity": "string: Description of the most recent related activity (fraud attempt, arrest, etc.)."
-    },
-    "aftermath_and_impact": {
-      "legal_actions": [
-        {
-          "action_by": "string: Entity taking action (e.g., 'FTC', 'Europol', 'Local Police Department').",
-          "action_type": "string: (e.g., 'Arrests', 'Indictments', 'Asset Freezing Order', 'Public Alert Issued', 'Website Takedown').",
-          "target": "string: Whom the action was against.",
-          "date": "string: Approximate date (YYYY-MM).",
-          "outcome": "string: Known result (e.g., '5 individuals charged', 'Assets worth $200K frozen', 'N/A for alerts')."
-        }
-      ],
-      "victim_impact_assessment": {
-        "financial_ruin_cases": "boolean: Indication if any victims were driven to bankruptcy or lost life savings.",
-        "psychological_harm_reported": "array: List of non-financial harms noted (e.g., ['Severe emotional distress', 'Depression', 'Family strife', 'Loss of trust in institutions']).",
-        "recovery_possibility": "string: Assessment of victims' chances to recover lost funds (e.g., 'Virtually zero', 'Possible partial recovery for victims who paid via traceable methods if assets are seized')."
+    "stage_II_-_incubation_period": {
+      "early_warning_signs_ignored": {
+        "victim_complaints_pattern": "e.g., 'Isolated reports to local police were dismissed as civil matters or investor disputes', 'Internet forum posts describing similar approaches were seen as isolated'. Explanation: How early signals failed to coalesce into a recognized pattern.",
+        "regulatory_or_bank_anomalies": "e.g., 'Unusual volume of wire transfers to a specific foreign country noted by compliance software but manually overridden', 'Rapid opening and closing of corporate accounts by the same individuals'. Explanation: Technical red flags that were missed or rationalized.",
+        "media_coverage_if_any": "e.g., 'One-off article in a niche publication about a 'strange investment offer''. Explanation: Early, limited public exposure that did not gain traction."
       },
-      "systemic_and_sectoral_impacts": [
-        "string: List broader consequences (e.g., 'Increased warnings from financial institutions about wire transfers to unknown parties', 'Damaged reputation for legitimate loan brokers in the region', 'Prompted social media platform to update policies on romance scam prevention')."
-      ]
+      "perpetrator_methodology_refinement": {
+        "initial_approach_vectors": "e.g., 'Began with poorly typed mass postal mailings', 'Experimented with fax broadcasts'. Explanation: The crude initial methods.",
+        "adaptation_and_improvement": "e.g., 'Shifted to targeted email with improved grammar and forged letterheads', 'Started using voice-over-IP to create fake call center backgrounds'. Explanation: How the scam evolved to appear more credible.",
+        "narrative_elaboration": "e.g., 'Developed a complex backstory involving a dying philanthropist', 'Created fake government websites to 'verify' the existence of a fund'. Explanation: The deepening of the fictional world to overwhelm victim skepticism."
+      },
+      "enabling_factors_accumulation": {
+        "technological_enablers": "e.g., 'Introduction of anonymous pre-paid cell phones', 'Launch of a new free webmail service without sender verification'. Explanation: New tools that lowered the cost and risk for perpetrators.",
+        "regulatory_gaps_exploited": "e.g., 'Jurisdiction X had no law against possessing fake diplomatic credentials', 'International cooperation treaties had slow, bureaucratic processes'. Explanation: Specific loopholes or weaknesses in the system.",
+        "financial_system_vulnerabilities": "e.g., 'Certain offshore banks offered 'no questions asked' account opening', 'Digital payment processors had lax merchant verification for small businesses'. Explanation: Weak points in the global financial network."
+      }
     },
-    "synthesis_and_indicators_of_fraud": {
-      "definitive_red_flags": "array: A clear list of hallmarks present in this case that signal Advance-Fee Fraud (e.g., ['Upfront payment required for release of a larger sum', 'Pressure to act immediately', 'Communication rife with spelling/grammar errors but grand promises', 'Use of free email services for "official" business', 'Inability to meet in person or conduct a video call']).",
-      "prevention_insights": "string: Actionable advice derived from this case analysis to help prevent similar victimization."
+    "stage_III_-_precipitating_event": {
+      "event_description": "A detailed narrative of the specific incident that triggered collapse. e.g., 'A victim who was a former federal agent recognized the scam and initiated a formal, high-priority investigation', 'A major financial institution, acting as a custodian, demanded an impossible audit after a whistleblower tip', 'A perpetrator was arrested on an unrelated charge and their detailed records were seized'. Explanation: The catalyst that moved the scheme from hidden to exposed.",
+      "immediate_trigger_type": "e.g., 'Internal Whistleblower', 'Aggressive Investigative Journalism', 'Law Enforcement Sting Operation', 'Victim with Specialized Knowledge', 'Competitive Pressure within Criminal Network'. Explanation: The source of the precipitating force.",
+      "key_actors_in_precipitation": {
+        "individual_entity_name": "[e.g., 'Investigative reporter Jane Smith', 'Detective John Doe', 'Whistleblower inside the front company'].",
+        "their_role": "What specific action they took that was decisive.",
+        "their_motivation": "e.g., 'Professional duty', 'Personal loss', 'Financial reward', 'Ethical conviction'."
+      },
+      "perpetrator_response_to_precipitation": "e.g., 'Attempted to flee the country', 'Launched a counter-narrative accusing regulators of a witch hunt', 'Frantically tried to return some funds to quiet a key victim'. Explanation: The immediate, defensive actions as control was lost."
+    },
+    "stage_IV_-_onset": {
+      "immediate_consequences_collapse": {
+        "public_revelation_channel": "e.g., 'Front-page newspaper headline', 'Regulatory press conference', 'Freezing order published on court website'. Explanation: How the news broke to the wider world.",
+        "victim_realization_process": "e.g., 'Victims discovered when promised wire transfers did not arrive', 'A dedicated victim hotline was overwhelmed with calls', 'Account statements suddenly became unavailable'. Explanation: The moment of truth for the defrauded.",
+        "financial_market_reaction_if_applicable": "e.g., 'Shares in a related legitimate sector fell due to guilt by association', 'Increased volatility in a specific market'."
+      },
+      "regulatory_law_enforcement_immediate_actions": {
+        "emergency_orders": "e.g., 'Asset freeze injunction against Entity A', 'Cease and desist order served', 'Appointment of a receiver to take control of remaining assets'. Explanation: The first legal steps to staunch the bleeding.",
+        "arrests_made": ["Names, dates, and initial charges for key perpetrators apprehended in the immediate aftermath."],
+        "public_warnings_issued": "The content and tone of immediate consumer alerts from regulators or police."
+      },
+      "perpetrator_infrastructure_dismantling": {
+        "accounts_frozen": "Number and estimated value.",
+        "websites_taken_down": "By whom (e.g., hosting provider, law enforcement).",
+        "premises_raided": "Locations and what was seized."
+      },
+      "media_narrative_initial": "The dominant framing in the first 72 hours of coverage. e.g., 'How a sophisticated scheme fooled everyone', 'The hunt for the mastermind', 'Victims tell their stories of shame and loss'. Explanation: Sets the tone for public perception."
+    },
+    "stage_V_-_rescue_and_salvage": {
+      "victim_crisis_management": {
+        "support_mechanisms_established": "e.g., 'Victim compensation fund announced', 'Dedicated psychological counseling hotline set up by a charity', 'Pro bono legal clinics for victims'. Explanation: Ad hoc measures to address the human toll.",
+        "asset_recovery_efforts_initial": "e.g., 'Receivers identified and secured X% of funds from a secondary bank account', 'First round of clawback lawsuits filed against early 'winning' investors'. Explanation: The frantic scramble to locate and reclaim lost money."
+      },
+      "ad_hoc_regulatory_policy_patches": {
+        "emergency_guidance_issued": "e.g., 'Financial Conduct Authority issues urgent bulletin reminding firms of their wire transfer verification duties', 'Central Bank advises member banks to scrutinize transactions to Country Y'. Explanation: Quick-fix directives to prevent immediate copycats.",
+        "temporary_task_forces": "e.g., 'Joint FBI-SEC 419 Scam Task Force formed', 'Interpol notice circulated to member countries'. Explanation: Organizational Band-Aids."
+      },
+      "industry_reaction_immediate": {
+        "financial_institutions": "e.g., 'Banks temporarily tightened rules for opening corporate accounts', 'Payment processors added new flags for 'inheritance' or 'lottery' related keywords'. Explanation: Defensive changes by private sector intermediaries.",
+        "media_self_critique": "e.g., 'Editorials questioning why earlier warnings weren't heeded', 'Interviews with experts on how to spot fraud'. Explanation: The media's role in managing the aftermath."
+      },
+      "key_legal_milestones_initial": "e.g., 'Perpetrator X pleads not guilty, bail denied', 'First civil class-action lawsuit is filed against Bank Z for negligence'. Explanation: The first steps in the long legal process."
+    },
+    "stage_VI_-_full_cultural_readjustment": {
+      "official_investigations_inquiries": {
+        "government_commission_report": "e.g., 'The Senate Permanent Subcommittee on Investigations published a 300-page report titled 'The [Scheme Name] Failure''. Explanation: The formal, high-level post-mortem.",
+        "regulatory_agency_after_action_review": "Key findings and admitted failures from the relevant watchdog bodies.",
+        "convictions_sentences_final": "A summary of the final legal outcomes for key perpetrators, including prison terms and restitution orders."
+      },
+      "new_laws_regulations_enacted": {
+        "specific_legislation": "e.g., 'The Advance Fee Fraud Prevention Act of 20XX, which mandated clearer disclosures and created a central database of known fraud proposals'. Explanation: The durable legal changes born from the scandal.",
+        "international_treaties_cooperation": "e.g., 'Memorandum of Understanding between Countries A and B on rapid sharing of fraud-related financial intelligence'. Explanation: Changes to cross-border protocols.",
+        "enhanced_consumer_protection_rules": "e.g., 'Mandatory cooling-off period for high-value wire transfers', 'Banks required to provide explicit warnings for transactions to high-risk jurisdictions'."
+      },
+      "long_term_industry_practice_changes": {
+        "due_diligence_standards": "e.g., 'KYC (Know Your Customer) requirements became more rigorous and digitally enabled', 'Investment advisors now required to document specific warnings about unsolicited offers'. Explanation: Professional norms that hardened.",
+        "technological_defenses": "e.g., 'Widespread adoption of DMARC email authentication protocols by corporations', 'Banks implemented real-time AI transaction monitoring for fraud patterns'. Explanation: Technical upgrades spurred by the event."
+      },
+      "shift_in_public_awareness_culture": {
+        "educational_campaigns_permanent": "e.g., 'National 'Scam Awareness Month' becomes an annual fixture', 'The fraud's story is incorporated into high school financial literacy curricula'. Explanation: Institutionalized public education.",
+        "lexicon_changes": "e.g., 'The term '419' entered the global lexicon as synonymous with advance-fee fraud', 'The phrase '[Perpetrator's Name]ed' becomes slang for being scammed'. Explanation: Linguistic legacy.",
+        "enduring_narrative_in_pop_culture": "e.g., 'The scheme was featured in a popular documentary series', 'It inspired a subplot in a bestselling novel'. Explanation: How the event was memorialized in culture."
+      },
+      "residual_vulnerabilities_assessment": "An analysis of what gaps or new risks remain despite the readjustment. e.g., 'While email scams are better filtered, fraudulent approaches have migrated fully to encrypted messaging apps and social media platforms, creating new detection challenges'. Explanation: Acknowledging that fraud evolves in response to defenses."
+    },
+    "analysis_synthesis": {
+      "primary_failure_of_foresight": "A concise statement identifying the core cultural or systemic blind spot that allowed the scheme to incubate and succeed. e.g., 'The failure to recognize that technological globalization had outstripped the jurisdictional and investigative reach of domestic financial regulation, creating fertile ground for transnational fictioneering.'",
+      "scheme_archetype_classification": "e.g., 'High-volume, low-complexity mass phishing', 'Low-volume, high-complexity 'big con' targeting institutions'. Explanation: Categorizing its place in the fraud taxonomy.",
+      "most_effective_psychological_lever": "The specific human bias most successfully exploited. e.g., 'Greed overpowering prudence', 'The desire to help (in fake charity scams)', 'Fear of missing out (FOMO) on a limited opportunity', 'Authority bias from forged official documents'.",
+      "legacy_summary": "One paragraph summarizing the long-term impact of this specific scheme on the fight against advance-fee fraud."
     }
   }
 }
-```
-
-**Critical Analysis Instructions:**
-
-1.  **Victim-Centric Narrative:** Prioritize reconstructing the process **from the victim's experience**. Detail the step-by-step interaction that led to trust and payment.
-2.  **Fact-Grounded Specificity:** Every claim, especially about amounts, methods, and promises, must be tied to specific data points from the sources. If sources conflict, state the range or note the discrepancy. Do not invent details.
-3.  **Psychological Manipulation Analysis:** Do not just list communication channels; analyze and describe the **narrative and emotional manipulation techniques** employed at each stage.
-4.  **Fee Evolution Tracking:** Clearly show how the fee demands started and then escalated. Connect each new fee to a specific excuse from the `stall_and_escalation_playbook`.
-5.  **Chronology is Key:** The `key_milestones` array must tell the coherent story of the fraud's operational timeline, not just legal events.
-6.  **Impact Differentiation:** Distinguish between financial loss, psychological harm, and systemic impact. Specify if certain victim profiles were more severely affected.
-7.  **Completeness Mandate:** Strive to populate every field. If information for a specific sub-field is **absolutely not found** in the provided data, use the value: `"Not explicitly stated in provided sources."` Avoid using "N/A" for textual fields.
-
-**Final Validation Before Output:**
-1.  Cross-check that the `core_fraudulent_promise` and `stated_prerequisite` logically align with the `fee_extraction_mechanism`.
-2.  Ensure the `typical_fee_amounts` and `estimated_scale` numbers, while often estimates, are logically consistent (e.g., average loss is within the fee ranges).
-3.  Verify the `key_milestones` are in chronological order and the `total_known_operation_duration_months` aligns with the span of these milestones.
-
-**Now, synthesize the provided data about the specified Advance-Fee Fraud event and output the complete JSON object.**
-
 """
