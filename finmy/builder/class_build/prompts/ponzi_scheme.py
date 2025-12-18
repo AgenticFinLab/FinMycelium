@@ -53,7 +53,7 @@ Here is the required JSON schema outline with exemplary field descriptions, and 
         "geographic_reach": ["List of primary countries or regions where victims were located, highlighting regulatory jurisdictions involved."]
       }
     },
-    "stage_I_notionally_normal_starting_point": {
+    "stage_I_-_notionally_normal_starting_point": {
       "pre_fraud_environment": {
         "economic_backdrop": "[Macro-economic conditions at the scheme's start, e.g., low interest rates, bull market, specific asset class boom]. Explanation: The conditions that made the promised returns plausible and attractive.",
         "prevailing_investment_culture": "[e.g., 'Quest for yield,' blind trust in elite institutions, fascination with exclusive hedge funds']. Explanation: The societal and investor psychology norms.",
@@ -73,7 +73,7 @@ Here is the required JSON schema outline with exemplary field descriptions, and 
         }
       }
     },
-    "stage_II_incubation_period": {
+    "stage_II_-_incubation_period": {
       "accumulation_of_anomalies": {
         "internal_red_flags": {
           "operational_secrecy": "[Specific practices: e.g., one-person accounting, use of obscure auditor, manual statement generation]. Explanation: Internal deviations from standard practice.",
@@ -100,7 +100,7 @@ Here is the required JSON schema outline with exemplary field descriptions, and 
         "deflection_strategies": "[Standard responses to skeptics: e.g., 'proprietary strategy,' 'market inefficiencies we can't reveal']. Explanation: Narrative control to quell doubts."
       }
     },
-    "stage_III_precipitating_event": {
+    "stage_III_-_precipitating_event": {
       "trigger_event": {
         "nature_of_event": "[e.g., 'Massive wave of redemption requests due to the 2008 financial crisis,' 'A whistleblower providing undeniable evidence to authorities']. Explanation: The specific catalyst that broke the cash flow cycle or triggered intervention.",
         "date_and_immediate_context": "YYYY-MM-DD. The exact date or narrow timeframe, and the broader economic or market events surrounding it.",
@@ -112,7 +112,7 @@ Here is the required JSON schema outline with exemplary field descriptions, and 
         "immediate_reaction_of_inner_circle": "[Shock, denial, attempts to cover up, cooperation with authorities]. Explanation: The human drama at the epicenter."
       }
     },
-    "stage_IV_onset": {
+    "stage_IV_-_onset": {
       "immediate_consequences": {
         "operational_collapse": {
           "cessation_date": "YYYY-MM-DD. The date redemptions were formally halted or the entity was seized.",
@@ -131,7 +131,7 @@ Here is the required JSON schema outline with exemplary field descriptions, and 
         }
       }
     },
-    "stage_V_rescue_and_salvage": {
+    "stage_V_-_rescue_and_salvage": {
       "first_stage_adjustments": {
         "legal_and_regulatory_emergency_response": {
           "trustee_receiver_appointment": "[Name of appointed official/entity and their mandated scope of work].",
@@ -154,7 +154,7 @@ Here is the required JSON schema outline with exemplary field descriptions, and 
         "civil_lawsuits_initiated": "[Key early class-action suits filed against feeder funds, banks, or auditors]."
       }
     },
-    "stage_VI_full_cultural_readjustment": {
+    "stage_VI_-_full_cultural_readjustment": {
       "formal_inquiries_and_assessments": {
         "official_government_investigations": {
           "report_title_agency": "e.g., 'SEC Office of Inspector General Report on Madoff'.",
