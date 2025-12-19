@@ -282,6 +282,7 @@ class AgentEventBuilder(BaseBuilder):
             # The index of the stage to process is equal to the number of times this agent has already run.
 
             stage_idx = state["agent_executed"].count("StageDescriptionReconstructor")
+            savename_suffix = f"-Stage{stage_idx}"
             event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
 
             # We need to construct the "TargetStage" with all episodes filled in.
@@ -360,8 +361,7 @@ class AgentEventBuilder(BaseBuilder):
                 current_stage_idx = full_cascade["stages"].index(stage)
                 if current_stage_idx < len(sd_results):
                     sd_res = sd_results[current_stage_idx]
-                    if "descriptions" in sd_res:
-                        stage["descriptions"] = sd_res["descriptions"]
+                    stage["descriptions"] = sd_res["descriptions"]
 
             prompt_kwargs["EventCascade"] = json.dumps(
                 full_cascade, default=str, indent=2
@@ -403,9 +403,8 @@ class AgentEventBuilder(BaseBuilder):
             elif agent_name == "TransactionReconstructor":
                 # Get participants from the immediately preceding step (ParticipantReconstructor)
                 last_result = state["agent_results"][-1]
-                if "ParticipantReconstructor" in last_result:
-                    participants_data = last_result["ParticipantReconstructor"]
-                    target_episode.participants = participants_data["participants"]
+                participants_data = last_result["ParticipantReconstructor"]
+                target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
@@ -413,15 +412,13 @@ class AgentEventBuilder(BaseBuilder):
             elif agent_name == "EpisodeReconstructor":
                 # Get transactions from the immediately preceding step (TransactionReconstructor)
                 last_result = state["agent_results"][-1]
-                if "TransactionReconstructor" in last_result:
-                    transactions_data = last_result["TransactionReconstructor"]
-                    target_episode.transactions = transactions_data["transactions"]
+                transactions_data = last_result["TransactionReconstructor"]
+                target_episode.transactions = transactions_data["transactions"]
 
                 # Get participants from the step before that (ParticipantReconstructor)
                 second_last_result = state["agent_results"][-2]
-                if "ParticipantReconstructor" in second_last_result:
-                    participants_data = second_last_result["ParticipantReconstructor"]
-                    target_episode.participants = participants_data["participants"]
+                participants_data = second_last_result["ParticipantReconstructor"]
+                target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
@@ -685,9 +682,7 @@ class AgentEventBuilder(BaseBuilder):
                         episode["participants"], str
                     ):
                         if ep_idx < len(p_results):
-                            episode["participants"] = p_results[ep_idx].get(
-                                "participants", []
-                            )
+                            episode["participants"] = p_results[ep_idx]["participants"]
                 ep_idx += 1
 
         # 4. Integrate StageDescriptionReconstructor results
@@ -701,8 +696,7 @@ class AgentEventBuilder(BaseBuilder):
         for i, stage in enumerate(final_cascade["stages"]):
             if i < len(sd_results):
                 res = sd_results[i]
-                if "descriptions" in res:
-                    stage["descriptions"] = res["descriptions"]
+                stage["descriptions"] = res["descriptions"]
 
         # 5. Integrate EventDescriptionReconstructor results
         ed_results = [
@@ -714,8 +708,7 @@ class AgentEventBuilder(BaseBuilder):
         if ed_results:
             # Should be only one
             res = ed_results[-1]
-            if "descriptions" in res:
-                final_cascade["descriptions"] = res["descriptions"]
+            final_cascade["descriptions"] = res["descriptions"]
 
         return final_cascade
 
