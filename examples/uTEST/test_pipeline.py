@@ -1,5 +1,8 @@
 from datetime import datetime
 from typing import List
+import argparse
+import yaml
+from pathlib import Path
 
 from finmy.pipeline import FinmyPipeline
 
@@ -37,9 +40,45 @@ def get_sample_data_sources() -> List[str]:
 
 
 if __name__ == "__main__":
-    output_dir = f"./examples/utest/Collector/test_files/event_output_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    pipeline = FinmyPipeline({"output_dir": output_dir})
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="Run FinMycelium pipeline with YAML config."
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        default="configs/pipline.yml",
+        help="Path to YAML config file for pipeline",
+    )
+    args = parser.parse_args()
+    config_path = args.config
+
+    # Load configuration from YAML file
+    config_file = Path(config_path)
+    if not config_file.exists():
+        raise FileNotFoundError(
+            f"Configuration file not found: {config_path}. "
+            f"Please provide a valid path to the YAML config file."
+        )
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    # Override output_dir with timestamp if not specified in config
+    if "output_dir" not in config or not config["output_dir"]:
+        config["output_dir"] = (
+            f"./examples/utest/Collector/test_files/"
+            f"event_output_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        )
+
+    # Initialize pipeline with configuration
+    pipeline = FinmyPipeline(config)
+
+    # Get data sources
     data_sources = get_sample_data_sources()
+
+    # Run pipeline
     pipeline.lm_build_pipeline_main(
         data_sources=data_sources,
         query_text="识别与人工智能在金融风控与合规相关的内容",

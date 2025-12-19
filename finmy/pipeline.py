@@ -178,6 +178,7 @@ class FinmyPipeline:
             "lm_name": self.matcher_lm_name,
             **(self.config.get("matcher_config", {})),
         }
+        self.logger.info(f"Creating matcher: {self.matcher_type}")
         return get_matcher_registry().get(self.matcher_type, matcher_config)
 
     def _create_builder(self) -> BaseBuilder:
@@ -433,7 +434,6 @@ class FinmyPipeline:
         Returns:
             Match output from the LLM matcher
         """
-        self.logger.info("Performing matching using lm_matcher...")
         lm_matcher = self._create_matcher()
         match_output = lm_matcher.run(match_input)
         self.logger.info(f"Matching result: {match_output}")

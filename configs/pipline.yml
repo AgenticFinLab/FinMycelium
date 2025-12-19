@@ -53,26 +53,52 @@ output_dir: "EXPERIMENT/uTEST/Pipline/output"
 #   - "class_lm": Use classification-based language model builder
 #                 (reconstruction based on predefined categories)
 #   - "agent_build": Use multi-agent builder
-builder_type: "class_lm"
+builder_type: "agent_build"
 
 # ----------------------------------------------------------------------------
-# Agent Configuration
+# Component Type Configuration
 # ----------------------------------------------------------------------------
-# agents: Define agents participating in event reconstruction and their
-#         configurations
-#   Each agent can be independently configured with language model parameters,
-#   or reference the common configurations defined above (using * reference)
-agents:
-  # SkeletonReconstructor: Skeleton reconstructor agent
-  #   Function: Extract basic structure and framework of events from raw data
-  #   Purpose: Identify event type, timeline, main participants, and other
-  #            core elements
-  SkeletonReconstructor:
-    # Reference common language model type config
-    lm_type: *lm_type        
-    # Reference common language model name config
-    lm_name: *lm_name        
-    # Reference common inference config
-    inference_config: *infer        
-    # Reference common generation config
-    generation_config: *generation_config        
+# summarizer_type: Summarizer type
+#   - "kw_lm": LLM-based keyword summarizer (default)
+#   - "kw_rule": Rule-based keyword summarizer
+summarizer_type: "kw_lm"
+
+# matcher_type: Matcher type
+#   - "llm": LLM-based matcher (default)
+#   - "re": Regex-based matcher
+#   - "lx_keyword": LlamaIndex keyword-based matcher
+#   - "lx_llm": LlamaIndex LLM-based matcher
+#   - "lx_vector": LlamaIndex vector-based matcher
+matcher_type: "lx_vector"
+
+# ----------------------------------------------------------------------------
+# Builder Configuration
+# ----------------------------------------------------------------------------
+# builder_config: Additional configuration for builder components
+#   This configuration will be passed to the builder instance
+builder_config:
+  # Language model configuration for builder
+  lm_type: *lm_type
+  lm_name: *lm_name
+  inference_config: *infer
+  generation_config: *generation_config
+  
+  # Agent Configuration (for agent_build type)
+  # agents: Define agents participating in event reconstruction and their
+  #         configurations
+  #   Each agent can be independently configured with language model parameters,
+  #   or reference the common configurations defined above (using * reference)
+  agents:
+    # SkeletonReconstructor: Skeleton reconstructor agent
+    #   Function: Extract basic structure and framework of events from raw data
+    #   Purpose: Identify event type, timeline, main participants, and other
+    #            core elements
+    SkeletonReconstructor:
+      # Reference common language model type config
+      lm_type: *lm_type
+      # Reference common language model name config
+      lm_name: *lm_name
+      # Reference common inference config
+      inference_config: *infer
+      # Reference common generation config
+      generation_config: *generation_config
