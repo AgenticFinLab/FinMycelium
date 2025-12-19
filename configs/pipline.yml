@@ -1,20 +1,75 @@
+# ============================================================================
+# Pipeline Configuration for Financial Event Reconstruction
+# ============================================================================
+# Purpose: Configure language model and agent parameters for financial event
+#          reconstruction pipeline
+# ============================================================================
 
+# ----------------------------------------------------------------------------
+# Language Model Base Configuration
+# ----------------------------------------------------------------------------
+# lm_type: Language model type
+#   - "api": Use API calls (recommended, no local model deployment needed)
+#   - "local": Use locally deployed model
 lm_type: &lm_type "api"
+
+# lm_name: Language model name/identifier
+#   - API mode: Use model identifier provided by service provider
+#               (e.g., "deepseek/deepseek-chat")
+#   - Local mode: Use local model path
 lm_name: &lm_name "deepseek/deepseek-chat"
+
+# inference_config: Inference configuration (mainly for local models)
+#   device: Computing device, options: "cuda" (GPU), "cpu" (CPU)
 inference_config: &infer
   device: "cuda"
+
+# generation_config: Text generation configuration parameters
+#   max_new_tokens: Maximum number of tokens to generate, controls output
+#                   length upper limit (recommended: 5000-20000)
+#   temperature: Sampling temperature, controls output randomness
+#                (0.0-1.0, lower = more deterministic, higher = more random)
+#   top_p: Nucleus sampling parameter, controls probability threshold for
+#          candidate tokens (0.0-1.0, typically 0.9-0.95)
 generation_config: &generation_config
   max_new_tokens: 10000
   temperature: 0.2
   top_p: 0.95
 
+# ----------------------------------------------------------------------------
+# Output Path Configuration
+# ----------------------------------------------------------------------------
+# save_folder: Directory for saving intermediate results and logs
+#   All intermediate states, trace information, and debug outputs will be
+#   saved in this directory
 save_folder: "EXPERIMENT/uTEST/Pipline"
+
+# output_dir: Directory for saving final output results
+#   Reconstructed event cascades (EventCascade) and other final results will
+#   be saved in this directory
 output_dir: "EXPERIMENT/uTEST/Pipline/output"
+
+# builder_type: Builder type
+#   - "class_lm": Use classification-based language model builder
+#                 (reconstruction based on predefined categories)
+#   - "agent_build": Use multi-agent builder
+#                    (reconstruction based on multi-step agent collaboration)
 builder_type: "class_lm"
 
+# ----------------------------------------------------------------------------
+# Agent Configuration
+# ----------------------------------------------------------------------------
+# agents: Define agents participating in event reconstruction and their
+#         configurations
+#   Each agent can be independently configured with language model parameters,
+#   or reference the common configurations defined above (using * reference)
 agents:
+  # SkeletonReconstructor: Skeleton reconstructor agent
+  #   Function: Extract basic structure and framework of events from raw data
+  #   Purpose: Identify event type, timeline, main participants, and other
+  #            core elements
   SkeletonReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    lm_type: *lm_type        # Reference common language model type config
+    lm_name: *lm_name        # Reference common language model name config
+    inference_config: *infer # Reference common inference config
+    generation_config: *generation_config  # Reference common generation config
