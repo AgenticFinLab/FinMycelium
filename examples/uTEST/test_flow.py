@@ -35,7 +35,7 @@ from finmy.builder.base import BuildInput
 from finmy.builder.lm_build import LMBuilder
 from finmy.matcher.base import MatchInput, SummarizedUserQuery
 from finmy.matcher.lm_match import LLMMatcher
-from finmy.matcher.summarizer import KWLMSummarizer
+from finmy.summarizer.summarizer import KWLMSummarizer
 
 
 def setup_logging() -> logging.Logger:
@@ -373,7 +373,9 @@ def main():
 
     print("Start building ...")
     lmbuilder = LMBuilder(
-        config={"output_dir": "./examples/utest/Collector/test_files/event_cascade_output"}  # Specify output directory
+        config={
+            "output_dir": "./examples/utest/Collector/test_files/event_cascade_output"
+        }  # Specify output directory
     )
     # build_output = lmbuilder.build(build_input)
     build_output = lmbuilder.build_class(build_input)
