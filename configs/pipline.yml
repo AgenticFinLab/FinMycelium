@@ -36,6 +36,10 @@ generation_config: &generation_config
   temperature: 0.2
   top_p: 0.95
 
+
+db_config: &db_config
+  url: "mysql+pymysql://finmyceliumdata:LYrxcTXM5Kpz5z3S@127.0.0.1:3306/finmyceliumdata"
+
 # ----------------------------------------------------------------------------
 # Output Path Configuration
 # ----------------------------------------------------------------------------
@@ -49,35 +53,50 @@ save_folder: "EXPERIMENT/uTEST/Pipline"
 #   be saved in this directory
 output_dir: "EXPERIMENT/uTEST/Pipline/output"
 
-# builder_type: Builder type
-#   - "class_lm": Use classification-based language model builder
-#                 (reconstruction based on predefined categories)
-#   - "agent_build": Use multi-agent builder
-builder_type: "agent_build"
-
+# ----------------------------------------------------------------------------
+# Collector Configuration
+# ----------------------------------------------------------------------------
+# collector_type: Collector type
+#   - "pdf": PDF collector
+#   - "url": URL collector
+url_collector_config:
+  delay: 1.0
+  use_selenium_fallback: True
+  selenium_wait_time: 5
+pdf_collector_config:
+  output_dir: "EXPERIMENT/uTEST/Pipline/input/pdf"
+  batch_size: 10
+  language: "zh"
+  check_pdf_limits: True
+  retry_failed: True
+  env_file: ".env"
 # ----------------------------------------------------------------------------
 # Component Type Configuration
 # ----------------------------------------------------------------------------
 # summarizer_type: Summarizer type
 #   - "kw_lm": LLM-based keyword summarizer (default)
 #   - "kw_rule": Rule-based keyword summarizer
-summarizer_type: "kw_lm"
-
+summarizer_config: &summarizer_config
+  summarizer_type: "kw_lm"
+  llm_name: "deepseek/deepseek-chat"
 # matcher_type: Matcher type
 #   - "llm": LLM-based matcher (default)
 #   - "re": Regex-based matcher
 #   - "lx_keyword": LlamaIndex keyword-based matcher
 #   - "lx_llm": LlamaIndex LLM-based matcher
 #   - "lx_vector": LlamaIndex vector-based matcher
-matcher_type: "lx_vector"
 
+matcher_config: &matcher_config
+  matcher_type: "lx_vector"
 # ----------------------------------------------------------------------------
 # Builder Configuration
 # ----------------------------------------------------------------------------
 # builder_config: Additional configuration for builder components
 #   This configuration will be passed to the builder instance
+# ----------------------------------------------------------------------------
+
 builder_config:
-  # Language model configuration for builder
+  builder_type: "class_lm"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer

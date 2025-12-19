@@ -34,10 +34,11 @@ from finmy.converter import (
 )
 from finmy.db_manager import DataManager
 from finmy.builder.base import BuildInput, BaseBuilder
-from finmy.builder import get_builder_registry
+from finmy.builder.registry import get as get_builder
+from finmy.summarizer.summarizer import BaseSummarizer
+from finmy.summarizer.registry import get as get_summarizer
 from finmy.matcher.base import MatchInput, SummarizedUserQuery, BaseMatcher
-from finmy.matcher.summarizer import BaseSummarizer
-from finmy.matcher import get_summarizer_registry, get_matcher_registry
+from finmy.matcher.registry import get as get_matcher
 from finmy.pdf_collector import PDFCollectorOutput
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
@@ -116,7 +117,8 @@ class FinmyPipeline:
         self.output_dir = self.config["output_dir"]
 
         # Component configurations
-        self.collector_config = self.config["collector_config"]
+        self.url_collector_config = self.config["url_collector_config"]
+        self.pdf_collector_config = self.config["pdf_collector_config"]
         self.summarizer_config = self.config["summarizer_config"]
         self.matcher_config = self.config["matcher_config"]
         self.builder_config = self.config["builder_config"]
@@ -131,6 +133,7 @@ class FinmyPipeline:
         self.summarizer: Optional[BaseSummarizer] = None
         self.matcher: Optional[BaseMatcher] = None
         self.builder: Optional[BaseBuilder] = None
+        self.initialize()
 
     def initialize(self):
         """
@@ -143,10 +146,11 @@ class FinmyPipeline:
         self.data_manager = DataManager(self.db_config)
 
         # Initialize the Work modules
-        self.collector = PDFCollector(self.collector_config)
+        self.collector = PDFCollector(self.pdf_collector_config)
+        self.url_parser = URLParser(self.url_collector_config)
         self.summarizer = self._create_summarizer()
         self.matcher = self._create_matcher()
-        self.builder = self._create_builder()
+        # self.builder = self._create_builder()
 
     # ------------------------------------------------------------------
     # Internal helpers for configurable component selection (Registry-based)
@@ -159,9 +163,16 @@ class FinmyPipeline:
         Returns:
             A summarizer instance based on ``summarizer_type`` configuration.
         """
-        config = self.summarizer_config.copy()
-        s_type = config.pop("type")
-        return get_summarizer_registry().get(s_type, config)
+        config = self.summarizer_config
+        if "summarizer_type" not in config:
+            # Fallback to "type" if "summarizer_type" is not present
+            if "type" in config:
+                config["summarizer_type"] = config.pop("type")
+            else:
+                raise ValueError(
+                    "summarizer_config must contain 'summarizer_type' or 'type'"
+                )
+        return get_summarizer(config)
 
     def _create_matcher(self) -> BaseMatcher:
         """
@@ -170,9 +181,12 @@ class FinmyPipeline:
         Returns:
             A matcher instance based on ``matcher_type`` configuration.
         """
-        matcher_type = self.matcher_config["matcher_type"]
-        self.logger.info("Creating matcher: %s", m_type)
-        return get_matcher_registry().get(m_type, config)
+        config = self.matcher_config.copy()
+        if "matcher_type" not in config:
+            raise ValueError("matcher_config must contain 'matcher_type'")
+        matcher_type = config["matcher_type"]
+        self.logger.info("Creating matcher: %s", matcher_type)
+        return get_matcher(config)
 
     def _create_builder(self) -> BaseBuilder:
         """
@@ -182,10 +196,15 @@ class FinmyPipeline:
             A builder instance based on ``builder_type`` configuration.
         """
         config = self.builder_config.copy()
-        b_type = config.pop("type")
+        if "builder_type" not in config:
+            # Fallback to "type" if "builder_type" is not present
+            if "type" in config:
+                config["builder_type"] = config.pop("type")
+            else:
+                raise ValueError("builder_config must contain 'builder_type' or 'type'")
         if "output_dir" not in config:
             config["output_dir"] = self.output_dir
-        return get_builder_registry().get(b_type, config)
+        return get_builder(config)
 
     def setup_logging(self) -> logging.Logger:
         """
@@ -623,7 +642,7 @@ class FinmyPipeline:
         if urls:
             # Default URL collector config
             # Use collector_config from self.config as base
-            default_url_config = self.collector_config.get("url_collector", {}).copy()
+            default_url_config = self.url_collector_config
 
             # Set defaults if not present
             if "delay" not in default_url_config:
@@ -693,7 +712,7 @@ class FinmyPipeline:
         self.setup_logging()
 
         # Initialize data manager
-        self.data_manager = DataManager()
+        self.data_manager = DataManager(engine_config=self.db_config)
 
         # Step 1: Collect data from URLs or PDF paths using collectors
         raw_data_records = self._collect_data_from_sources(

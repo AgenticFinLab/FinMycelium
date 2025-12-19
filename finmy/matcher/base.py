@@ -30,7 +30,7 @@ from abc import ABC, abstractmethod
 from finmy.generic import RawData
 
 from .utils import get_paragraph_positions, PositionWisedParagraph
-from .summarizer import SummarizedUserQuery
+from ..summarizer.summarizer import SummarizedUserQuery
 
 
 @dataclass

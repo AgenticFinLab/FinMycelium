@@ -24,12 +24,16 @@ from typing import Optional, List
 import time
 import random
 import os
+from dotenv import load_dotenv
 
 from lmbase.utils.tools import BlockBasedStoreManager
 from finmy.generic import RawData, MetaSample, UserQueryInput, DataSample
 from finmy.builder.base import BuildInput
 from finmy.matcher.base import MatchOutput, MatchInput
-from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.summarizer.summarizer import SummarizedUserQuery
+
+
+load_dotenv()
 
 
 def write_text_data_to_block(text: str) -> str:
