@@ -53,7 +53,6 @@ output_dir: "EXPERIMENT/uTEST/Pipline/output"
 #   - "class_lm": Use classification-based language model builder
 #                 (reconstruction based on predefined categories)
 #   - "agent_build": Use multi-agent builder
-#                    (reconstruction based on multi-step agent collaboration)
 builder_type: "class_lm"
 
 # ----------------------------------------------------------------------------
@@ -69,7 +68,11 @@ agents:
   #   Purpose: Identify event type, timeline, main participants, and other
   #            core elements
   SkeletonReconstructor:
-    lm_type: *lm_type        # Reference common language model type config
-    lm_name: *lm_name        # Reference common language model name config
-    inference_config: *infer # Reference common inference config
-    generation_config: *generation_config  # Reference common generation config
+    # Reference common language model type config
+    lm_type: *lm_type        
+    # Reference common language model name config
+    lm_name: *lm_name        
+    # Reference common inference config
+    inference_config: *infer        
+    # Reference common generation config
+    generation_config: *generation_config        
