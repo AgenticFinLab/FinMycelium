@@ -6,7 +6,7 @@ Run:
 """
 
 from finmy.matcher.re_match import ReMatch
-from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.summarizer.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 
 

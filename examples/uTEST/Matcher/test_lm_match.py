@@ -10,7 +10,7 @@ import dotenv
 import uuid
 
 from finmy.matcher.lm_match import LLMMatcher
-from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.summarizer.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 from finmy.generic import RawData
 from finmy.converter import match_output_to_meta_samples

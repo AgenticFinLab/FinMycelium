@@ -24,7 +24,7 @@ from lmbase.inference import api_call
 from langchain_core.prompts import ChatPromptTemplate
 
 from ..generic import UserQueryInput
-from .utils import safe_parse_json
+from ..matcher.utils import safe_parse_json
 
 
 @dataclass

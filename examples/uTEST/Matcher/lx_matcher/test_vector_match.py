@@ -7,7 +7,7 @@ Run:
 
 import dotenv
 from finmy.matcher.lx_match import VectorMatcher
-from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.summarizer.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 
 dotenv.load_dotenv()

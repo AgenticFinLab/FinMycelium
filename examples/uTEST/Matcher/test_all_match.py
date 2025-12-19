@@ -24,7 +24,7 @@ from finmy.matcher.lx_match import (
 
 from finmy.matcher.lm_match import LLMMatcher
 from finmy.matcher.re_match import ReMatch
-from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.summarizer.summarizer import SummarizedUserQuery
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent

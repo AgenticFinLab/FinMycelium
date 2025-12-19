@@ -6,7 +6,7 @@ Run:
 """
 
 from finmy.matcher.lx_match import KWMatcher
-from finmy.matcher.summarizer import SummarizedUserQuery
+from finmy.summarizer.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 import dotenv
 
