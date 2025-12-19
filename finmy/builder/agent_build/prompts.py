@@ -78,7 +78,7 @@ Output a JSON object with a single key `descriptions`:
 `descriptions`: A list of `VerifiableField` objects describing the stage.
 
 Scope:
-- **Stage Description**: Synthesize the key activities, outcomes, and intended scope of the stage, aggregating insights from all its episodes and `Content`. Highlight the progression, major financial impacts, and key participant interactions within this stage.
+- **Stage Description**: Present the key activities, outcomes, and intended scope of the stage, aggregating insights from all its episodes and `Content`. Highlight the progression, major financial impacts, and key participant interactions within this stage.
 
 Constraints:
 - Use `VerifiableField` for all descriptions to ensure grounding in `Content`.
@@ -136,7 +136,7 @@ Output a JSON object with a single key `descriptions`:
 `descriptions`: A list of `VerifiableField` objects describing the entire event.
 
 Scope:
-- **Event Description**: Synthesize the entire event lifecycle across all stages. Summarize the root cause, key developments, final resolution/outcome, and total financial impact.
+- **Event Description**: Present the entire event lifecycle across all stages. Summarize the root cause, key developments, final resolution/outcome, and total financial impact.
 
 Constraints:
 - Use `VerifiableField` for all descriptions to ensure grounding in `Content`.
@@ -387,7 +387,7 @@ Instructions:
 Field Requirements:
 - `episode_id`, `name`, `index_in_stage`: Do not modify.
 - `participants`, `transactions`: Set to placeholder strings.
-- `participant_relations`: Populate based on interactions.
+- `participant_relations`: Reconstruct relationships between the *given* participants from `Content`, focusing on interactions highlighted by `Query` and `Keywords`.
 
 Output:
 - ONE raw JSON object for `Episode`; no explanations or code fences.
