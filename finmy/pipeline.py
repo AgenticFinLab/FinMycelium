@@ -129,7 +129,8 @@ class FinmyPipeline:
         self.data_manager: Optional[DataManager] = None
 
         # Work modules
-        self.collector: Optional[PDFCollector] = None
+        self.pdf_collector: Optional[PDFCollector] = None
+        self.url_collector: Optional[URLParser] = None
         self.summarizer: Optional[BaseSummarizer] = None
         self.matcher: Optional[BaseMatcher] = None
         self.builder: Optional[BaseBuilder] = None
@@ -146,11 +147,11 @@ class FinmyPipeline:
         self.data_manager = DataManager(self.db_config)
 
         # Initialize the Work modules
-        self.collector = PDFCollector(self.pdf_collector_config)
-        self.url_parser = URLParser(self.url_collector_config)
+        self.pdf_collector = PDFCollector(self.pdf_collector_config)
+        self.url_collector = URLParser(self.url_collector_config)
         self.summarizer = self._create_summarizer()
         self.matcher = self._create_matcher()
-        # self.builder = self._create_builder()
+        # self.builder = self._create_builder() # TODO: fix AttributeError: 'NoneType' object has no attribute 'build'
 
     # ------------------------------------------------------------------
     # Internal helpers for configurable component selection (Registry-based)
@@ -405,8 +406,7 @@ class FinmyPipeline:
             SummarizedUserQuery object containing the summarized query
         """
         self.logger.info("Generating summarized query using Summarizer...")
-        summarizer = self._create_summarizer()
-        summarized_query = summarizer.summarize(user_query_input)
+        summarized_query = self.summarizer.summarize(user_query_input)
         self.logger.info(f"Summarized query created: {summarized_query}")
         self.logger.info("=" * 25)
         return summarized_query
@@ -445,8 +445,7 @@ class FinmyPipeline:
         Returns:
             Match output from the LLM matcher
         """
-        lm_matcher = self._create_matcher()
-        match_output = lm_matcher.run(match_input)
+        match_output = self.matcher.run(match_input)
         self.logger.info(f"Matching result: {match_output}")
         self.logger.info("=" * 25)
         return match_output
@@ -655,16 +654,11 @@ class FinmyPipeline:
             if url_collector_config:
                 default_url_config.update(url_collector_config)
 
-            url_parser = URLParser(
-                method_name="pipeline_url_collector",
-                config=default_url_config,
-            )
-
             url_input = URLCollectorInput(
                 urls=urls,
                 extras={},
             )
-            url_output = url_parser.run(url_input)
+            url_output = self.url_collector.run(url_input)
             raw_data_records.extend(self.create_raw_data_from_url_output(url_output))
 
         if not raw_data_records:
@@ -759,8 +753,7 @@ class FinmyPipeline:
         print("Start building ...")
 
         # Create builder according to configuration and run build
-        lmbuilder = self._create_builder()
-        build_output = lmbuilder.build(build_input)
+        build_output = self.builder.build(build_input)
 
         # print("build_output:", build_output)
 
@@ -842,8 +835,7 @@ class FinmyPipeline:
         print("Start building ...")
 
         # Create builder according to configuration and run build
-        lmbuilder = self._create_builder()
-        build_output = lmbuilder.build(build_input)
+        build_output = self.builder.build(build_input)
 
         assert build_output is not None, "BuildOutput should be created successfully"
 
