@@ -275,22 +275,57 @@ def filter_dataclass_fields(
                 doc_lines = lines[ds - 1 : de]
                 filtered_doc: List[str] = []
                 in_example = False
+                # Enhanced block skipping for removed fields within Example:
+                skipping_field_block = False
+                await_bracket_start = False  # true until we see the first opening bracket after field line
+                bracket_depth = (
+                    0  # tracks nested [] and {} depth for the removed field block
+                )
                 for dl in doc_lines:
                     if not in_example and "Example:" in dl:
                         in_example = True
                         filtered_doc.append(dl)
                         continue
                     if in_example and removed_fields:
-                        drop = False
+                        # If currently skipping a removed field block, continue until bracket_depth returns to zero.
+                        if skipping_field_block:
+                            # Update bracket depth based on occurrences in the current line
+                            opens = dl.count("[") + dl.count("{")
+                            closes = dl.count("]") + dl.count("}")
+                            # If we were awaiting the bracket start, detect it here
+                            if await_bracket_start and opens > 0:
+                                await_bracket_start = False
+                            bracket_depth += opens - closes
+                            # Once depth returns to zero (or negative due to formatting), stop skipping after this line
+                            if not await_bracket_start and bracket_depth <= 0:
+                                skipping_field_block = False
+                                bracket_depth = 0
+                            # Always skip the current line while in skipping mode
+                            continue
+                        # Not currently skipping; check if this line declares a removed field
+                        field_line_match = False
                         for rf in removed_fields:
                             # match patterns like "field": or field:
                             if re.search(
                                 rf"[\"']{re.escape(rf)}[\"']\s*:", dl
                             ) or re.search(rf"\b{re.escape(rf)}\b\s*:", dl):
-                                drop = True
+                                field_line_match = True
                                 break
-                        if drop:
+                        if field_line_match:
+                            # Start skipping this removed field block
+                            opens = dl.count("[") + dl.count("{")
+                            closes = dl.count("]") + dl.count("}")
+                            bracket_depth = opens - closes
+                            # If the bracket does not start on the same line, wait for the next line to begin depth tracking
+                            await_bracket_start = bracket_depth == 0
+                            # If bracket starts immediately, ensure we are not awaiting
+                            if bracket_depth > 0:
+                                await_bracket_start = False
+                            skipping_field_block = True
+                            # Skip the current line
                             continue
+                        # If no match and not skipping, we keep the line
+                    # Default: keep the line
                     filtered_doc.append(dl)
                 header.extend(filtered_doc)
         # Deduplicate consecutive identical lines in header

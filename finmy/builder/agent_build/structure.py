@@ -83,11 +83,12 @@ class ParticipantRelation:
     {
       "from_participant_id": "P_2",
       "to_participant_id": "P_4",
+      "relation_name": VerifiableField(value="ownership affiliation"),
       "descriptions": [
         VerifiableField(value="X and Y share a common parent company (public registry verified)")
       ],
       "relation_type": VerifiableField(
-        value="affiliated_with",
+        value="affiliated with",
         evidence_source_contents=["parent company: ..."],
         reasons=["shared ownership", "Registry shows common parent entity with explicit affiliation"],
         confidence=0.85
@@ -102,9 +103,17 @@ class ParticipantRelation:
     from_participant_id: str
     # Target participant (edge destination) — references Participant.participant_id.
     to_participant_id: str
+    # Human-readable label for the relation semantics (e.g., 'ownership affiliation', 'client relationship').
+    # Use a normal phrase without underscores; must be grounded in source content.
+    relation_name: VerifiableField = field(
+        default_factory=lambda: VerifiableField(
+            value="unspecified",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Descriptions of the relation, each value grounded in source.
     descriptions: Optional[List[VerifiableField]] = None
-    # Relation label (e.g., 'member_of', 'client_of', 'counterparty'); grounded in source content.
+    # Relation type label (e.g., 'member of', 'client of', 'counterparty'); use a normal phrase without underscores; grounded in source content.
     relation_type: VerifiableField = field(
         default_factory=lambda: VerifiableField(value="unspecified")
     )
@@ -129,6 +138,8 @@ class Transaction:
 
     Example:
     {
+      "name": VerifiableField(value="wire transfer"),
+      "transaction_type": VerifiableField(value="payment"),
       "timestamp": VerifiableField(value="2025-01-01T12:00:00Z"),
       "details": [VerifiableField(value="USD 10,000 wire"), VerifiableField(value="settlement: SWIFT")],
       "from_participant_id": "P_1",
@@ -137,6 +148,17 @@ class Transaction:
     }
     """
 
+    # Transaction name (e.g., 'wire transfer', 'token swap', 'bond coupon').
+    # Use a normal, human-readable phrase without underscores; grounded in source content.
+    name: VerifiableField
+    # Transaction type (e.g., 'payment', 'settlement', 'funding transfer').
+    # Use a normal, human-readable phrase without underscores; grounded in source content.
+    transaction_type: VerifiableField = field(
+        default_factory=lambda: VerifiableField(
+            value="unspecified",
+            reasons=["insufficient information in source content"],
+        )
+    )
     # Transaction occurrence time (wall-clock); provide the most credible timestamp; use UTC.
     timestamp: Optional[VerifiableField] = field(
         default_factory=lambda: VerifiableField(
@@ -170,10 +192,14 @@ class Action:
 
     Example:
     {
+      "name": VerifiableField(value="broadcast message"),
       "timestamp": VerifiableField(value="2025-01-02T09:00:00Z"),
-      "details": [VerifiableField(value="broadcast_message"), VerifiableField(value="Guaranteed 30% monthly returns"), VerifiableField(value="channel: platform_feed")]
+      "details": [VerifiableField(value="Guaranteed 30% monthly returns"), VerifiableField(value="channel: platform_feed")]
     }
     """
+
+    # Action name (e.g., 'broadcast message', 'pitch'); grounded in source content to label the action type/style/meaning.... succinctly.
+    name: VerifiableField
 
     # Chronological context.
     timestamp: Optional[VerifiableField] = field(
@@ -206,6 +232,7 @@ class Participant:
       },
       "actions": [
         Action(
+          name=VerifiableField(value="broadcast_message"),
           timestamp=VerifiableField(value="2025-01-02T09:00:00Z"),
           details=[
             VerifiableField(value="Guaranteed 30% monthly returns"),
@@ -281,7 +308,7 @@ class Episode:
       "index_in_stage": 0,
       "descriptions": [
         VerifiableField(value="Targeted promises to select investors"),
-        VerifiableField(value="Pitch targeted to select investors in private settings")
+        VerifiableField(value="Private pitch to select investors.")
       ],
       "start_time": VerifiableField(value="2025-01-03T10:00:00Z"),
       "end_time": VerifiableField(value="2025-01-03T12:00:00Z"),

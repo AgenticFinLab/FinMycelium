@@ -3,12 +3,12 @@ Prompts of the step-wise event builder.
 """
 
 EventLayoutReconstructorSys = """
-You are a senior expert in financial-event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Query` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the schema exactly.
+You are a senior expert in financial-event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Query` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the provided Schema exactly.
 
 Scope:
-- Focus only on `EventCascade`, `EventStage`, and `Episode`.
-- Determine event type, the number of stages, and the number of episodes per stage.
-- Use `VerifiableField` as defined in the Schema for applicable fields.
+- Follow the Schema exactly for `EventCascade`, `EventStage`, and `Episode`.
+- Determine event type, the number of stages, and the number of episodes per stage from `Content`.
+- Use `VerifiableField` as defined in the Schema for applicable fields (timestamps, names, categorical labels).
 
 Target structure (reconstruction focus):
 EventCascade
@@ -16,14 +16,13 @@ EventCascade
         └── episodes: List[Episode]
 
 Required fields to output:
-- EventCascade: output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to "unknown".
-- EventStage:  output ALL fields defined in the schema. Populate strictly from Content; set unsupported fields to "unknown".
-- Episode: `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly grounded in `Content` via `VerifiableField` and aligned with `Query` and `Keywords`.
+- Conform strictly to the Schema fields for `EventCascade`, `EventStage`, and `Episode`.
+- Episode: `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly grounded in `Content` via `VerifiableField`.
 - The usage of `VerifiableField` must strictly follow the Schema definition.
 
 How to reconstruct:
 1) Event type identification: set `EventCascade.event_type` if supported by Content; otherwise "unknown".
-2) Stage skeleton reconstruction: for each stage, provide `stage_id`, `name`, `index_in_event` and the list of episodes.
+2) Stage skeleton reconstruction: for each stage, provide `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and the list of episodes.
 3) Episode skeleton reconstruction: for each episode, provide `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` (if insufficient evidence, set to "unknown" with concise reasons).
 4) Ordering: set indices by temporal/logical order; start from 0.
 
@@ -38,23 +37,139 @@ Schema definition (must follow exactly):
 === END Schema ===
 
 Output requirements:
-- Output a single raw JSON object for `EventCascade` with the reconstructed skeleton fields above.
+- Output a single raw JSON object for `EventCascade` that matches the Schema exactly.
 - Do not include explanations, code fences, or additional text.
 """
 
 
 EventLayoutReconstructorUser = """
-Based on Query, Keywords, and Content, output a single raw JSON object for EventCascade that follows the Schema definition and Target structure exactly. Focus only on event skeleton reconstruction.
+Based on Query, Keywords, and Content, output a single raw JSON object for EventCascade that follows the provided Schema and Target structure exactly. Focus only on event skeleton reconstruction.
 
 Instructions:
-- Scope: EventCascade, EventStage, Episode only; use `VerifiableField` as defined in the Schema for applicable fields.
-- Follow the types and structure exactly as defined in the Schema.
+- Scope: Use `VerifiableField` as defined in the Schema for applicable fields.
+- Follow the types and structure exactly as defined in the Schema; do not emit any field not present in the Schema.
 - Event type: set `event_type` if supported by Content; otherwise "unknown".
-- Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, and its episodes.
-- Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
+- Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and its episodes.
+- Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
 - Ordering: set indices by temporal/logical order starting from 0.
--56→- Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
+- Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
 - Output: raw JSON only; do not include explanations or code fences.
+
+=== Query BEGIN ===
+{Query}
+=== Query END ===
+
+=== KEYWORDS BEGIN ===
+{Keywords}
+=== KEYWORDS END ===
+
+=== CONTENT BEGIN ===
+{Content}
+=== CONTENT END ===
+""".strip()
+
+
+StageDescriptionReconstructorSys = """
+You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the **Target Stage** of a financial event, strictly based on the provided `Content`, guided by `Query` and `Keywords`.
+
+The `TargetStage` is provided with all its episodes fully reconstructed (Participants, Transactions, etc.). Treat these reconstructed elements as crucial reference and foundational inputs for description reconstruction; use them, together with `Query`, `Keywords`, and especially `Content`, to produce the event `descriptions`.
+
+Output a JSON object with a single key `descriptions`:
+`descriptions`: A list of `VerifiableField` objects describing the stage.
+
+Scope:
+- **Stage Description**: Synthesize the key activities, outcomes, and intended scope of the stage, aggregating insights from all its episodes and `Content`. Highlight the progression, major financial impacts, and key participant interactions within this stage.
+
+Constraints:
+- Use `VerifiableField` for all descriptions to ensure grounding in `Content`.
+- Descriptions should be professional, financial-domain specific, and narrative-driven.
+- Focus only on the most critical and core developments directly supported by `Content`; omit peripheral or generic narrative.
+- Avoid redundancy, associative speculation, and any invented details not present in `Content`.
+- Do NOT output or modify any other fields.
+- Output raw JSON only.
+
+Schema:
+=== BEGIN Schema ===
+{STRUCTURE_SPEC}
+=== END Schema ===
+"""
+
+
+StageDescriptionReconstructorUser = """
+Based on the provided TargetStage (with fully reconstructed Episodes), Query, Keywords, and Content, generate the `descriptions` for this Stage.
+
+Inputs:
+- TargetStage: The stage structure with completed episodes.
+- Query, Keywords, Content.
+
+Output:
+- A JSON object with `descriptions`.
+
+Instructions:
+- Analyze the `TargetStage` and its episodes to understand the flow and draft cohesive descriptions.
+- Ensure alignment with the user's Query and Keywords and ground everything in `Content`.
+
+=== TARGET STAGE BEGIN ===
+{TargetStage}
+=== TARGET STAGE END ===
+
+=== Query BEGIN ===
+{Query}
+=== Query END ===
+
+=== KEYWORDS BEGIN ===
+{Keywords}
+=== KEYWORDS END ===
+
+=== CONTENT BEGIN ===
+{Content}
+=== CONTENT END ===
+""".strip()
+
+
+EventDescriptionReconstructorSys = """
+You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the overall **Event Cascade**, strictly based on the provided `Content`, guided by `Query` and `Keywords`.
+
+The `EventCascade` is provided with all Stages and Episodes fully reconstructed. Treat these reconstructed elements as crucial reference and foundational inputs for description reconstruction; use them, together with `Query`, `Keywords`, and especially `Content`, to produce the event `descriptions`.
+
+Output a JSON object with a single key `descriptions`:
+`descriptions`: A list of `VerifiableField` objects describing the entire event.
+
+Scope:
+- **Event Description**: Synthesize the entire event lifecycle across all stages. Summarize the root cause, key developments, final resolution/outcome, and total financial impact.
+
+Constraints:
+- Use `VerifiableField` for all descriptions to ensure grounding in `Content`.
+- Descriptions should be professional, financial-domain specific, and narrative-driven.
+- Focus only on the most critical and core developments directly supported by `Content`; omit peripheral or generic narrative.
+- Avoid redundancy, associative speculation, and any invented details not present in `Content`.
+- Do NOT output or modify any other fields.
+- Output raw JSON only.
+
+Schema:
+=== BEGIN Schema ===
+{STRUCTURE_SPEC}
+=== END Schema ===
+"""
+
+
+EventDescriptionReconstructorUser = """
+Based on the provided EventCascade (with fully reconstructed Stages and Episodes), Query, Keywords, and Content, generate the `descriptions` for the entire Event.
+
+Inputs:
+- EventCascade: The full event structure.
+- Query, Keywords, Content.
+
+Output:
+- A JSON object with `descriptions`.
+
+Instructions:
+- Analyze the `EventCascade` to understand the full lifecycle and draft a cohesive description.
+- Ensure alignment with the user's Query and Keywords and ground everything in `Content`.
+
+=== EVENT CASCADE BEGIN ===
+{EventCascade}
+=== EVENT CASCADE END ===
 
 === Query BEGIN ===
 {Query}
@@ -93,6 +208,8 @@ Constraints:
 - Use `VerifiableField` for all applicable fields to ensure grounding in `Content`.
 - Each participant must have clear evidence from `Content` supporting inclusion; if evidence is insufficient, omit or set fields to unknown with brief reasons.
 - Do NOT fabricate information; if evidence is missing, use "unknown".
+- Reconstruct only the most critical and core participants that materially drive or are affected by the episode; omit peripheral or weakly implied entities.
+- Avoid redundancy, associative inference, and any invented participants not explicitly supported by `Content`.
 - Output raw JSON only.
 
 Schema:
@@ -160,13 +277,14 @@ Output a JSON object with a single key "transactions" containing a list of `Tran
 
 Scope:
 - Identify all financial transfers, payments, settlements, or funding flows between the identified participants in this episode.
-- Populate `timestamp`, `details`, `from_participant_id`, `to_participant_id`, and `instruments`.
+- Populate `name`, `transaction_type`, `timestamp`, `details`, `from_participant_id`, `to_participant_id`, and `instruments`.
 - Ensure transactions fall within the episode `start_time` and `end_time` or are directly relevant.
 
 Constraints:
 - Use `VerifiableField` for all applicable fields.
 - `from_participant_id` and `to_participant_id` MUST be chosen from the provided `TargetEpisode.participants`. Do not invent new IDs.
 - If a transaction involves an external party not in the participant list, you may ignore it or map it to a generic group participant if one exists in the list.
+- Reconstruct only critical, material transactions directly evidenced in `Content`; omit peripheral, redundant, or speculative flows.
 - Output raw JSON only.
 
 Schema:
@@ -230,7 +348,7 @@ Instructions:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
     - Set `transactions` to the exact string `"Results of TransactionReconstructor"`.
     - Do NOT output the full objects for these fields.
-- **Relations**: Build `participant_relations` referencing the `participant_id`s from the provided `participants` list.
+- **Relations**: Build `participant_relations` referencing the `participant_id`s from the provided `participants` list. Include only relations that are explicitly supported by `Content` and materially relevant; omit speculative or peripheral links.
 - **Descriptions & Times**: Complete `descriptions`, `start_time`, and `end_time` comprehensively from `Content`.
 - **General**:
     - Use `VerifiableField` and concise reasons.

@@ -1,35 +1,49 @@
 """
-Implementation of the financial event reconstruction using a step-by-step multi-agent approach.
+Step-wise financial event reconstruction using a multi-agent pipeline with explicit
+state management and schema-constrained prompts.
 
-The pipeline follows a specific sequence to reconstruct a financial event cascade from unstructured text:
+Overview:
+- Input: `BuildInput` containing `UserQueryInput` and a list of `DataSample`s (source text).
+- Output: Fully assembled `EventCascade` with stages, episodes, participants, transactions,
+  relations, and grounded descriptions at stage and event levels.
 
-1. **Skeleton Reconstruction**:
-   - Generates the overall `EventCascade` structure (Stages -> Episodes) based on the user query and data samples.
-   - Provides a high-level roadmap without detailed fields.
+Execution Flow:
+1) Skeleton Reconstruction
+   - Agent: `SkeletonReconstructor`
+   - Goal: Produce an `EventCascade` skeleton (Stages -> Episodes) strictly from `Content`
+     using `VerifiableField` for applicable fields.
+   - Note: Only structure fields are generated (no descriptions at this step).
 
-2. **Episode Loop (Sequential Reconstruction)**:
-   For each episode defined in the skeleton, the following agents execute in order:
+2) Episode Loop (per episode in skeleton order)
+   a) `ParticipantReconstructor`
+      - Identifies and reconstructs episode participants (including `Action`s).
+      - Reuses participant IDs across episodes via already reconstructed participants.
+   b) `TransactionReconstructor`
+      - Reconstructs financial transactions among the episode’s participants.
+      - Ensures `from_participant_id`/`to_participant_id` refer to valid participants.
+   c) `EpisodeReconstructor`
+      - Produces a complete `Episode` (relations, descriptions, timestamps).
+      - Emits placeholders for `participants` and `transactions` to avoid duplication,
+        which are later replaced during integration.
 
-   a. **ParticipantReconstructor**:
-      - Identifies participants involved in the specific episode.
-      - Inputs: Skeleton context, previous participants (for ID reuse).
-      - Outputs: List of `Participant` objects (with "P_{int}" IDs).
+3) Description Reconstruction
+   - `StageDescriptionReconstructor`: Runs once after finishing all episodes within a stage.
+     Produces grounded stage `descriptions` based on reconstructed episodes plus source content.
+   - `EventDescriptionReconstructor`: Runs once after all stages are completed.
+     Produces grounded event `descriptions` based on the full cascade plus source content.
 
-   b. **TransactionReconstructor**:
-      - Identifies financial transactions within the episode.
-      - Inputs: Episode context, participants from step (a).
-      - Outputs: List of `Transaction` objects linking the identified participants.
+4) Integration
+   - `integrate_results`: Consolidates all agent outputs into a complete `EventCascade`.
+     Replaces episode placeholders with actual participants/transactions, attaches stage
+     and event descriptions, and preserves the skeleton’s ordering.
+   - `integrate_from_files`: Reads saved `*-Result.json` artifacts, reconstructs
+     `agent_results` sequence, and delegates to `integrate_results` to assemble the final cascade.
 
-   c. **EpisodeReconstructor**:
-      - Fills in detailed episode attributes (description, time, relations).
-      - Inputs: Episode context, participants from (a), transactions from (b).
-      - Outputs: A fully populated `Episode` object.
-
-3. **Integration**:
-   - Merges the outputs of all agents into a final, complete `EventCascade`.
-   - Supports resuming or integrating from saved intermediate result files.
-
-The architecture uses a `LangGraph` state machine to manage the flow and `AgentState` to pass data between steps.
+Architecture:
+- Orchestration: `LangGraph` (`StateGraph`) with conditional routing:
+  Skeleton -> (Participant -> Transaction -> Episode)* -> StageDescription (per-stage) -> EventDescription -> END.
+- Schema text: Derived from `structure.py`, filtered per-agent scope via `filter_dataclass_fields`.
+- State: `AgentState` carries prompts, inputs, and incremental results throughout the pipeline.
 """
 
 import time
@@ -39,7 +53,7 @@ import json
 from functools import partial
 from pathlib import Path
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 
 from lmbase.inference.base import InferInput, InferOutput
@@ -62,12 +76,25 @@ _SKELETON_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
     {
         "VerifiableField": [],
-        "EventCascade": [],
-        "EventStage": [],
+        "EventCascade": [
+            "event_id",
+            "title",
+            "event_type",
+            "start_time",
+            "end_time",
+            "stages",
+        ],
+        "EventStage": [
+            "stage_id",
+            "name",
+            "index_in_event",
+            "start_time",
+            "end_time",
+            "episodes",
+        ],
         "Episode": ["episode_id", "name", "index_in_stage", "start_time", "end_time"],
     },
 )
-
 
 _PARTICIPANT_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
@@ -77,6 +104,15 @@ _PARTICIPANT_SPEC = filter_dataclass_fields(
         "VerifiableField": [],
     },
 )
+
+_TRANSACTION_SPEC = filter_dataclass_fields(
+    _STRUCTURE_SPEC_FULL,
+    {
+        "Transaction": [],
+        "VerifiableField": [],
+    },
+)
+
 
 _EPISODE_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
@@ -90,10 +126,19 @@ _EPISODE_SPEC = filter_dataclass_fields(
 )
 
 
-_TRANSACTION_SPEC = filter_dataclass_fields(
+_STAGE_DESCRIPTION_SPEC = filter_dataclass_fields(
     _STRUCTURE_SPEC_FULL,
     {
-        "Transaction": [],
+        "EventStage": [],
+        "VerifiableField": [],
+    },
+)
+
+
+_EVENT_DESCRIPTION_SPEC = filter_dataclass_fields(
+    _STRUCTURE_SPEC_FULL,
+    {
+        "EventCascade": [],
         "VerifiableField": [],
     },
 )
@@ -106,6 +151,12 @@ class AgentEventBuilder(BaseBuilder):
         a. ParticipantReconstruction: Identifies participants for the current episode.
         b. TransactionReconstructor: Reconstructs transactions for the current episode.
         c. EpisodeReconstruction: Reconstructs the full episode using the skeleton, participants, and transactions.
+    3. StageDescriptionReconstructor:
+        - Runs after completing all episodes within a stage.
+        - Produces grounded `descriptions` for the stage using reconstructed episodes plus source content.
+    4. EventDescriptionReconstructor:
+        - Runs after all stages are complete.
+        - Produces grounded `descriptions` for the entire event using the full cascade plus source content.
     """
 
     def extract_latest_episode(
@@ -123,6 +174,30 @@ class AgentEventBuilder(BaseBuilder):
                     return stage, episode
                 idx += 1
         return None, None
+
+    def get_completed_stage_index(self, state: AgentState) -> int:
+        """
+        Determines if a stage has just been completed based on the number of executed episodes.
+        Returns the index of the completed stage, or -1 if no stage boundary was just crossed.
+        """
+        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+        # Count total episodes completed so far (assuming EpisodeReconstructor is the last step per episode loop)
+        episodes_completed = state["agent_executed"].count("EpisodeReconstructor")
+
+        cumulative_episodes = 0
+        for i, stage in enumerate(event_skeleton["stages"]):
+            num_episodes_in_stage = len(stage["episodes"])
+            cumulative_episodes += num_episodes_in_stage
+
+            # If the total completed equals the cumulative count at the end of this stage,
+            # we just finished this stage.
+            # NOTE: We need to ensure we don't return True if we've already processed this stage's description.
+            # But the graph logic will handle that by routing.
+            # Here we just want to know "Are we at a boundary?"
+            if episodes_completed == cumulative_episodes:
+                return i
+
+        return -1
 
     def _collect_reconstructed_participants_structure(self, state: AgentState):
         """Build a full EventCascade-shaped structure from the Skeleton result,
@@ -198,6 +273,103 @@ class AgentEventBuilder(BaseBuilder):
         # Logic branching based on agent_name
         if agent_name == "SkeletonReconstructor":
             sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
+
+        elif agent_name == "StageDescriptionReconstructor":
+            # Identify which stage we just finished
+            # We can rely on the number of times StageDescriptionReconstructor has run?
+            # Or recalculate using get_completed_stage_index logic, but we need the exact stage index.
+            # Since the graph routes here only when a stage is done, and we process stages sequentially:
+            # The index of the stage to process is equal to the number of times this agent has already run.
+
+            stage_idx = state["agent_executed"].count("StageDescriptionReconstructor")
+            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+
+            # We need to construct the "TargetStage" with all episodes filled in.
+            # First, get the skeleton of the target stage
+            if stage_idx < len(event_skeleton["stages"]):
+                target_stage_skeleton = copy.deepcopy(
+                    event_skeleton["stages"][stage_idx]
+                )
+
+                # Now populate it with the actual reconstructed episodes
+                # We need to find the global episode indices for this stage
+                start_ep_idx = 0
+                for i in range(stage_idx):
+                    start_ep_idx += len(event_skeleton["stages"][i]["episodes"])
+
+                # Collect reconstructed episodes
+                reconstructed_episodes = []
+                for j in range(len(target_stage_skeleton["episodes"])):
+                    global_ep_idx = start_ep_idx + j
+                    # Find the result for this episode.
+                    # EpisodeReconstructor results are in state["agent_results"]
+                    # We need to filter for EpisodeReconstructor outputs
+                    ep_results = [
+                        r["EpisodeReconstructor"]
+                        for r in state["agent_results"]
+                        if "EpisodeReconstructor" in r
+                    ]
+
+                    if global_ep_idx < len(ep_results):
+                        reconstructed_episodes.append(ep_results[global_ep_idx])
+
+                # Replace episodes in skeleton with fully reconstructed ones
+                target_stage_skeleton["episodes"] = reconstructed_episodes
+
+                prompt_kwargs["TargetStage"] = json.dumps(
+                    target_stage_skeleton, default=str, indent=2
+                )
+
+            sys_msg = sys_msg_template.format(
+                STRUCTURE_SPEC=_STAGE_DESCRIPTION_SPEC,
+            )
+
+        elif agent_name == "EventDescriptionReconstructor":
+            # Construct the full EventCascade with all reconstructed data
+            # similar to integrate_results but without the final descriptions yet
+
+            # Start with skeleton
+            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            full_cascade = copy.deepcopy(event_skeleton)
+
+            # Collect all episodes
+            ep_results = [
+                r["EpisodeReconstructor"]
+                for r in state["agent_results"]
+                if "EpisodeReconstructor" in r
+            ]
+
+            # Fill them into the cascade
+            ep_cursor = 0
+            for stage in full_cascade["stages"]:
+                num_eps = len(stage["episodes"])
+                stage["episodes"] = ep_results[ep_cursor : ep_cursor + num_eps]
+                ep_cursor += num_eps
+
+                # Also potentially inject the stage descriptions if we want the event summarizer to see them?
+                # The user didn't explicitly ask for this, but it helps.
+                # Let's find StageDescriptionReconstructor results
+                sd_results = [
+                    r["StageDescriptionReconstructor"]
+                    for r in state["agent_results"]
+                    if "StageDescriptionReconstructor" in r
+                ]
+
+                # Match stage descriptions to stages
+                # Assuming sequential execution matches order
+                current_stage_idx = full_cascade["stages"].index(stage)
+                if current_stage_idx < len(sd_results):
+                    sd_res = sd_results[current_stage_idx]
+                    if "descriptions" in sd_res:
+                        stage["descriptions"] = sd_res["descriptions"]
+
+            prompt_kwargs["EventCascade"] = json.dumps(
+                full_cascade, default=str, indent=2
+            )
+
+            sys_msg = sys_msg_template.format(
+                STRUCTURE_SPEC=_EVENT_DESCRIPTION_SPEC,
+            )
 
         elif agent_name in [
             "ParticipantReconstructor",
@@ -283,41 +455,54 @@ class AgentEventBuilder(BaseBuilder):
         state["agent_executed"].append(agent_name)
         return state
 
-    def graph(self) -> CompiledStateGraph[AgentState]:
+    def graph(self) -> CompiledStateGraph:
         """
         Constructs and compiles the LangGraph state machine for the reconstruction pipeline.
 
-        Flow:
-        1. **START** -> **SkeletonReconstructor**:
-           - Initial step to generate the event structure.
+        Workflow Overview:
+        The pipeline reconstructs a financial event cascade in a hierarchical and sequential manner:
 
-        2. **SkeletonReconstructor** -> **ParticipantReconstructor**:
-           - Enters the sequential reconstruction loop.
+        1. **SkeletonReconstructor**:
+           - **Start Node**.
+           - Generates the high-level `EventCascade` structure (Stages -> Episodes) based on user query and content.
+           - Defines the roadmap for the entire reconstruction.
 
-        3. **The Loop** (Repeated for each episode):
-           - **ParticipantReconstructor** -> **TransactionReconstructor**:
-             - Participants are identified first.
-           - **TransactionReconstructor** -> **EpisodeReconstructor**:
-             - Transactions are identified using the participants.
-           - **EpisodeReconstructor** -> **(Conditional Edge)**:
-             - Checks if all episodes in the skeleton are processed.
-             - If **not done**: Loops back to **ParticipantReconstructor** for the next episode.
-             - If **done**: Goes to **END**.
+        2. **Episode Loop (Participant -> Transaction -> Episode)**:
+           - Iterates through each episode defined in the skeleton.
+           - **ParticipantReconstructor**: Identifies participants for the current episode.
+           - **TransactionReconstructor**: Identifies transactions, linking the participants.
+           - **EpisodeReconstructor**: Synthesizes full episode details (time, description, relations).
+
+        3. **Stage Description Loop**:
+           - **Trigger Condition**: After an episode is completed (`EpisodeReconstructor`), the system checks if a stage boundary is reached.
+           - **StageDescriptionReconstructor**:
+             - Runs *only* when all episodes in a specific stage are fully reconstructed.
+             - Synthesizes a high-level description for that stage based on its completed episodes.
+             - **Routing**:
+               - If more stages exist: Loops back to `ParticipantReconstructor` to start the next stage's first episode.
+               - If all stages are done: Proceeds to `EventDescriptionReconstructor`.
+
+        4. **EventDescriptionReconstructor**:
+           - **Final Node** (before END).
+           - Runs after all stages and episodes are fully reconstructed.
+           - Synthesizes the global event description based on the complete cascade.
 
         Returns:
-            CompiledStateGraph[AgentState]: The compiled graph ready for execution.
-
-        Note:
-            Since this graph executes a loop of 3 steps per episode, the default recursion limit (25) may be exceeded for events with > 8 episodes. When invoking the graph, consider
-            increasing the limit: `graph.invoke(state, {"recursion_limit": 100})`.
+            CompiledStateGraph[AgentState]: The compiled LangGraph ready for execution.
         """
         g = StateGraph(AgentState)
 
-        # Use partial to bind agent_name to execute_agent
+        # ============================================================================
+        # 1. Add Nodes
+        # ============================================================================
+
+        # Skeleton: Generates the initial structure
         g.add_node(
             "SkeletonReconstructor",
             partial(self.execute_agent, agent_name="SkeletonReconstructor"),
         )
+
+        # Episode Level Agents
         g.add_node(
             "ParticipantReconstructor",
             partial(self.execute_agent, agent_name="ParticipantReconstructor"),
@@ -331,108 +516,206 @@ class AgentEventBuilder(BaseBuilder):
             partial(self.execute_agent, agent_name="EpisodeReconstructor"),
         )
 
-        g.add_edge(START, "SkeletonReconstructor")
+        # Summarization Agents
+        g.add_node(
+            "StageDescriptionReconstructor",
+            partial(self.execute_agent, agent_name="StageDescriptionReconstructor"),
+        )
+        g.add_node(
+            "EventDescriptionReconstructor",
+            partial(self.execute_agent, agent_name="EventDescriptionReconstructor"),
+        )
+
+        # ============================================================================
+        # 2. Set Entry Point and Basic Linear Edges
+        # ============================================================================
+
+        # Start with Skeleton
+        g.set_entry_point("SkeletonReconstructor")
+
+        # Basic Flow: Skeleton -> First Episode (Participant)
         g.add_edge("SkeletonReconstructor", "ParticipantReconstructor")
+
+        # Intra-Episode Flow: Participant -> Transaction -> Episode
         g.add_edge("ParticipantReconstructor", "TransactionReconstructor")
         g.add_edge("TransactionReconstructor", "EpisodeReconstructor")
 
-        def _route(state: AgentState) -> str:
-            skeleton = state["agent_results"][0]["SkeletonReconstructor"]
-            total = sum([len(stage["episodes"]) for stage in skeleton["stages"]])
+        # ============================================================================
+        # 3. Conditional Logic (Routing)
+        # ============================================================================
 
-            # Count how many episodes have been fully processed (EpisodeReconstructor runs)
-            num_processed = state["agent_executed"].count("EpisodeReconstructor")
+        def _route(state: AgentState):
+            """
+            Determines the next step after an Episode is reconstructed.
 
-            return "end" if num_processed >= total else "continue"
+            Logic:
+            1. Check if the just-completed episode marks the end of a stage.
+            2. If yes, and we haven't generated the description for that stage yet -> Go to `StageDescriptionReconstructor`.
+            3. If no (mid-stage), or stage description already done (unlikely path but safe) -> Check if there are more episodes.
+            4. If more episodes exist -> Go to `ParticipantReconstructor` (next episode).
+            5. If all episodes done -> (Fallback) END.
+               (Note: Usually routed via StageDescriptionReconstructor -> EventDescriptionReconstructor).
+            """
+            # Check total episodes in the plan
+            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            total_episodes = sum(
+                len(stage["episodes"]) for stage in event_skeleton["stages"]
+            )
+            executed_episodes = state["agent_executed"].count("EpisodeReconstructor")
 
+            # Check if a stage was just completed
+            completed_stage_idx = self.get_completed_stage_index(state)
+
+            # Count how many stage descriptions we have already generated
+            executed_stage_descs = state["agent_executed"].count(
+                "StageDescriptionReconstructor"
+            )
+
+            # Condition 1: End of a Stage -> Generate Stage Description
+            # We check `completed_stage_idx != -1` (a stage just finished)
+            # AND `completed_stage_idx == executed_stage_descs` (we haven't done this stage's desc yet)
+            # Example: Finished Stage 0 (idx=0). executed_stage_descs=0. 0==0 -> True.
+            if (
+                completed_stage_idx != -1
+                and completed_stage_idx == executed_stage_descs
+            ):
+                return "StageDescriptionReconstructor"
+
+            # Condition 2: Not a stage boundary (or already handled), check for next episode
+            if executed_episodes < total_episodes:
+                return "ParticipantReconstructor"
+
+            # Fallback (should ideally reach EventDescription via _route_from_stage_desc)
+            return END
+
+        def _route_from_stage_desc(state: AgentState):
+            """
+            Determines the next step after a Stage Description is generated.
+
+            Logic:
+            1. Check if there are more stages remaining.
+            2. If yes -> Go to `ParticipantReconstructor` (Start first episode of next stage).
+            3. If no (all stages done) -> Go to `EventDescriptionReconstructor` (Final Summary).
+            """
+            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            total_stages = len(event_skeleton["stages"])
+            executed_stages = state["agent_executed"].count(
+                "StageDescriptionReconstructor"
+            )
+
+            if executed_stages < total_stages:
+                # Start next stage's first episode
+                return "ParticipantReconstructor"
+            else:
+                # All stages done, generate global event description
+                return "EventDescriptionReconstructor"
+
+        # Route from EpisodeReconstructor
         g.add_conditional_edges(
             "EpisodeReconstructor",
             _route,
             {
-                "continue": "ParticipantReconstructor",
-                "end": END,
+                "ParticipantReconstructor": "ParticipantReconstructor",
+                "StageDescriptionReconstructor": "StageDescriptionReconstructor",
+                END: END,
             },
         )
+
+        # Route from StageDescriptionReconstructor
+        g.add_conditional_edges(
+            "StageDescriptionReconstructor",
+            _route_from_stage_desc,
+            {
+                "ParticipantReconstructor": "ParticipantReconstructor",
+                "EventDescriptionReconstructor": "EventDescriptionReconstructor",
+            },
+        )
+
+        # Final Step: Event Description -> END
+        g.add_edge("EventDescriptionReconstructor", END)
 
         return g.compile()
 
     def integrate_results(self, state: AgentState) -> dict:
         """
-        Integrate all reconstruction results into a single EventCascade JSON structure.
-
-        Logic:
-        1. Starts with the `Skeleton` as the base structure.
-        2. Iterates through the sequential results of Participant, Transaction, and Episode agents.
-        3. Since the graph execution guarantees a strict order (P->T->E per episode),
-           we can align results by index.
-        4. Populates each episode in the skeleton with the fully reconstructed details.
-
-        Args:
-            state (AgentState): State containing `agent_results` list.
-
-        Returns:
-            dict: The final EventCascade structure.
+        Integrates all agent results into the final EventCascade structure.
         """
-        # 1. Base is the skeleton
-        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
-        final_cascade = copy.deepcopy(event_skeleton)
+        # 1. Start with the skeleton
+        final_cascade = self._collect_reconstructed_participants_structure(state)
 
-        # 2. Collect sequential results
-        # The graph execution guarantees P -> T -> E order per episode.
+        # 2. Collect Transaction results
+        tr_results = [
+            r["TransactionReconstructor"]
+            for r in state["agent_results"]
+            if "TransactionReconstructor" in r
+        ]
+
+        # Also collect Participant results to reattach after Episode update
         p_results = [
             r["ParticipantReconstructor"]
             for r in state["agent_results"]
             if "ParticipantReconstructor" in r
         ]
-        t_results = [
-            r["TransactionReconstructor"]
-            for r in state["agent_results"]
-            if "TransactionReconstructor" in r
-        ]
-        e_results = [
+
+        # 3. Collect Episode results
+        er_results = [
             r["EpisodeReconstructor"]
             for r in state["agent_results"]
             if "EpisodeReconstructor" in r
         ]
 
-        # 3. Fill in the cascade
-        idx = 0
+        # Populate episodes in order
+        ep_idx = 0
         for stage in final_cascade["stages"]:
-            new_episodes = []
-            # Iterate over the original skeleton episodes to maintain structure/count
-            for _ in stage["episodes"]:
-                # Ensure we have results for this index if execution reached this point
-                if (
-                    idx < len(e_results)
-                    and idx < len(p_results)
-                    and idx < len(t_results)
-                ):
-                    # Start with the rich episode details (descriptions, relations, times)
-                    # This dict currently has placeholders for participants/transactions
-                    rich_episode = copy.deepcopy(e_results[idx])
+            for episode in stage["episodes"]:
+                if ep_idx < len(er_results):
+                    # Replace with the fully reconstructed episode
+                    episode.update(er_results[ep_idx])
 
-                    # Inject Participants
-                    rich_episode["participants"] = p_results[idx].get(
-                        "participants", []
-                    )
+                    # Ensure transactions are attached
+                    if (
+                        "transactions" not in episode
+                        or not episode["transactions"]
+                        or isinstance(episode["transactions"], str)
+                    ):
+                        if ep_idx < len(tr_results):
+                            episode["transactions"] = tr_results[ep_idx]["transactions"]
+                    # Ensure participants are attached (EpisodeReconstructor uses placeholders)
+                    if "participants" not in episode or isinstance(
+                        episode["participants"], str
+                    ):
+                        if ep_idx < len(p_results):
+                            episode["participants"] = p_results[ep_idx].get(
+                                "participants", []
+                            )
+                ep_idx += 1
 
-                    # Inject Transactions
-                    rich_episode["transactions"] = t_results[idx].get(
-                        "transactions", []
-                    )
+        # 4. Integrate StageDescriptionReconstructor results
+        sd_results = [
+            r["StageDescriptionReconstructor"]
+            for r in state["agent_results"]
+            if "StageDescriptionReconstructor" in r
+        ]
 
-                    new_episodes.append(rich_episode)
-                else:
-                    raise RuntimeError(
-                        f"Missing reconstruction results for episode index {idx} in stage '{stage.get('name', 'unknown')}'. "
-                        f"Expected results for all episodes. "
-                        f"Current counts: Episodes={len(e_results)}, Participants={len(p_results)}, Transactions={len(t_results)}."
-                    )
+        # Map results to stages sequentially
+        for i, stage in enumerate(final_cascade["stages"]):
+            if i < len(sd_results):
+                res = sd_results[i]
+                if "descriptions" in res:
+                    stage["descriptions"] = res["descriptions"]
 
-                idx += 1
+        # 5. Integrate EventDescriptionReconstructor results
+        ed_results = [
+            r["EventDescriptionReconstructor"]
+            for r in state["agent_results"]
+            if "EventDescriptionReconstructor" in r
+        ]
 
-            # Replace the skeleton episodes with the fully constructed ones
-            stage["episodes"] = new_episodes
+        if ed_results:
+            # Should be only one
+            res = ed_results[-1]
+            if "descriptions" in res:
+                final_cascade["descriptions"] = res["descriptions"]
 
         return final_cascade
 

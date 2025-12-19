@@ -10,6 +10,9 @@ Workflow:
    - **Skeleton Phase**: Generates the event structure.
    - **Loop Phase** (per episode):
      - ParticipantReconstructor -> TransactionReconstructor -> EpisodeReconstructor
+   - **Description Phase**:
+     - StageDescriptionReconstructor runs after finishing each stage’s episodes.
+     - EventDescriptionReconstructor runs once after all stages are complete.
 3. **Verification**:
    - Checks if the final `EventCascade` is correctly assembled.
    - Tests the `integrate_from_files` functionality to ensure resume/recovery capability.
@@ -128,6 +131,12 @@ def main():
         if "episode" in name.lower():
             agent_system_msgs[name] = EpisodeReconstructorSys
             agent_user_msgs[name] = EpisodeReconstructorUser
+        if "stagedescription" in name.lower():
+            agent_system_msgs[name] = StageDescriptionReconstructorSys
+            agent_user_msgs[name] = StageDescriptionReconstructorUser
+        if "eventdescription" in name.lower():
+            agent_system_msgs[name] = EventDescriptionReconstructorSys
+            agent_user_msgs[name] = EventDescriptionReconstructorUser
 
     # Build the state
     state = {

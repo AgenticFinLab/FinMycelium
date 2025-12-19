@@ -37,3 +37,15 @@ agents:
     lm_name: *lm_name
     inference_config: *infer
     generation_config: *generation_config
+
+  StageDescriptionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  EventDescriptionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
