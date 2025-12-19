@@ -20,7 +20,6 @@ Requirements:
 """
 
 import os
-import json
 import matplotlib.pyplot as plt
 from finmy.builder.agent_build.visualizer import EventCascadeVisualizer
 
@@ -53,24 +52,19 @@ def test_visualization():
         )
         return
 
-    # --- 2. Load JSON Data ---
-    print(f"Loading event cascade data from: {json_path}")
-    with open(json_path, "r", encoding="utf-8") as f:
-        cascade_data = json.load(f)
-
-    # --- 3. Initialize Visualizer ---
+    # --- 2. Initialize Visualizer ---
     print("Initializing EventCascadeVisualizer...")
     viz = EventCascadeVisualizer()
 
-    # --- 4. Generate Visualization ---
+    # --- 3. Generate Visualization ---
 
     # Output path for the image (saved in the same directory as the input json)
     output_path = os.path.join(os.path.dirname(json_path), "test_timeline.png")
 
     print(f"Generating visualization to: {output_path}...")
     try:
-        # Call the plotting function
-        viz.plot_cascade(cascade_data, output_path)
+        # Call the plotting function with the JSON path
+        viz.plot_cascade(json_path, output_path)
 
         # Verify output generation
         if os.path.exists(output_path):

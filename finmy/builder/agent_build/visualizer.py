@@ -1,14 +1,32 @@
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import matplotlib.patches as patches
 from matplotlib.lines import Line2D
-from datetime import datetime
 import pandas as pd
+import json
 from textwrap import wrap
 
 
 class EventCascadeVisualizer:
+    """
+    Visualizer for EventCascade structures.
+
+    This class handles the rendering of hierarchical event data (Event -> Stages -> Episodes)
+    using Matplotlib. It supports:
+    1.  Hierarchical Timeline: Stages at the bottom, Episodes staggered above.
+    2.  Time Handling: Renders based on real timestamps if available, or logical steps if not.
+    3.  Participant Visualization: Distinct markers and colors for different participant types.
+    4.  Relation Mapping: Visualizes relationships between participants within episodes.
+    """
+
     def __init__(self):
+        """
+        Initialize the visualizer with color palettes and style maps.
+
+        Sets up:
+        - colors: A list of distinct hex colors (Tab20) for differentiating types.
+        - markers: A list of matplotlib markers for differentiating participants within a type.
+        - mappings: Dictionaries to track assigned styles for consistency across the plot.
+        """
         # Distinct colors for participants (Tab20 hex codes)
         self.colors = [
             "#1f77b4",
@@ -32,17 +50,30 @@ class EventCascadeVisualizer:
             "#17becf",
             "#9edae5",
         ]
-        # Distinct markers
+        # Distinct markers to differentiate participants of the same type
         self.markers = ["o", "s", "^", "D", "v", "<", ">", "p", "*", "h", "X", "d"]
+
+        # Maps participant_id -> (color, marker)
         self.participant_style_map = {}
+        # Maps participant_id -> info dict (name, type)
         self.participant_info_map = {}
 
         # New: Type-based coloring
+        # Maps participant_type -> assigned color
         self.type_color_map = {}
+        # Tracks how many participants of a certain type have been seen (for marker rotation)
         self.type_participant_count = {}
 
     def _parse_time(self, time_val):
-        """Helper to parse time strings. Returns None if unknown or invalid."""
+        """
+        Helper to parse time strings from the EventCascade JSON structure.
+
+        Args:
+            time_val (dict): A dictionary containing a 'value' key with the time string.
+
+        Returns:
+            pd.Timestamp or None: The parsed datetime object, or None if invalid/unknown.
+        """
         if not time_val or not isinstance(time_val, dict):
             return None
         val = time_val.get("value")
@@ -54,6 +85,22 @@ class EventCascadeVisualizer:
             return None
 
     def _register_participant(self, p_id, name, p_type="Participant"):
+        """
+        Registers a participant and assigns a consistent style (color + marker).
+
+        Logic:
+        1.  If participant ID is already known, return existing style.
+        2.  If new, determine color based on `p_type`. All participants of same type share a color.
+        3.  Determine marker based on count of participants within that type.
+
+        Args:
+            p_id (str): Unique participant ID.
+            name (str): Participant name.
+            p_type (str): Participant type/role (e.g., "Analyst", "Manager").
+
+        Returns:
+            tuple: (color, marker)
+        """
         if p_id not in self.participant_style_map:
             # Determine color based on Type
             if p_type not in self.type_color_map:
@@ -78,11 +125,31 @@ class EventCascadeVisualizer:
 
         return self.participant_style_map[p_id]
 
-    def plot_cascade(self, cascade_data, output_path=None):
+    def plot_cascade(self, json_path, output_path=None):
         """
         Generates a matplotlib visualization of the EventCascade.
-        Handles both real timestamps and logical ordering (if times are unknown).
+
+        This method performs three main steps:
+        1.  **Data Loading**: Reads the JSON file from the provided path.
+        2.  **Data Flattening**: Parses the hierarchical JSON structure into a flat list of
+            drawable objects (Stages, Episodes) and extracts relationships.
+        3.  **Coordinate Assignment**: Calculates the X/Y coordinates for each object.
+            -   Supports 'Real Time' mode (based on timestamps) and 'Logical' mode (sequential).
+            -   Implements a 'Waterfall' layout where episodes are staggered vertically.
+        4.  **Plotting**: Renders the objects using Matplotlib patches, lines, and text.
+
+        Args:
+            json_path (str): Path to the EventCascade JSON file.
+            output_path (str, optional): Path to save the resulting image. If None, shows plot.
         """
+        # --- 0. Load Data ---
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                cascade_data = json.load(f)
+        except Exception as e:
+            print(f"Error loading JSON from {json_path}: {e}")
+            return
+
         # Set a nice font
         try:
             plt.rcParams["font.family"] = "sans-serif"
@@ -99,20 +166,19 @@ class EventCascadeVisualizer:
             pass
 
         # --- 1. Data Parsing & Flattening ---
-
-        # We'll build a list of "Drawable Items": Event, Stages, Episodes
-        # And a set of "Participants" and "Relations"
+        # The goal here is to traverse the nested structure (Event -> Stage -> Episode)
+        # and extract all relevant information into flat lists for easier processing.
+        # We also collect all timestamps to decide between Real Time and Logical rendering.
 
         drawables = []
 
-        # A. Event
+        # A. Event Info
         evt_title = cascade_data["title"]["value"]
         evt_start = self._parse_time(cascade_data["start_time"])
         evt_end = self._parse_time(cascade_data["end_time"])
 
         # We need to determine if we are using Real Time or Logical Time
-        # Heuristic: If > 50% of items have times, use Real Time, else Logical.
-        # For now, let's collect all potential timestamps to check.
+        # Heuristic: If we have valid timestamps, we prefer Real Time.
         time_points = []
         if evt_start:
             time_points.append(evt_start)
@@ -146,26 +212,22 @@ class EventCascadeVisualizer:
                     time_points.append(e_end)
 
                 # Participants
-                # In structure.py: participants is a List[Participant] dicts
-                # We need participant_id and name
+                # Extract participant info to build the legend and style map.
+                # structure.py defines participants as a list of dictionaries.
                 parts = []
                 raw_parts = ep["participants"]
                 for p in raw_parts:
                     p_id = p["participant_id"]
                     p_name = p["name"]["value"]
-                    # Try to find role or type
-                    # Priority: participant_type > role > type
-                    # Note: We still use .get() here for optional fallback logic if strictly required,
-                    # but user asked to be explicit.
-                    # However, these fields might genuinely be optional/variable in some schemas.
-                    # Assuming strict schema: participant_type SHOULD exist.
+                    # Priority for type: participant_type > role > type
+                    # We access fields directly as per user request (no .get() default masking).
                     p_type = p["participant_type"]["value"]
 
                     if p_id:
                         parts.append({"id": p_id, "name": p_name, "type": p_type})
 
                 # Relations
-                # In structure.py: participant_relations is List[ParticipantRelation]
+                # Extract relationships to draw connecting lines between participants.
                 rels = []
                 raw_rels = ep["participant_relations"]
                 for r in raw_rels:
@@ -204,18 +266,22 @@ class EventCascadeVisualizer:
 
         # --- 2. Coordinate Assignment (Logical vs Real) ---
 
-        use_real_time = len(time_points) > 0  # Use real time if ANY valid time exists?
-        # Better: if we have enough structure. Often "unknown".
-        # If total time span is 0 or undefined, switch to logical.
+        # Strategy:
+        # If timestamps are available (use_real_time), we map them to the X-axis (hours from start).
+        # If not, we use a fixed-width logical layout where each stage/episode follows sequentially.
+
+        # Use real time if ANY valid time exists
+        use_real_time = len(time_points) > 0
 
         if use_real_time:
+            # Calculate global time bounds
             min_time = min(time_points)
             max_time = max(time_points)
             if min_time == max_time:
-                # Add a default span if single point
+                # Handle single-point edge case by adding a default 1-hour span
                 max_time = min_time + pd.Timedelta(hours=1)
 
-            # Normalize times to float (hours since start) for plotting ease
+            # Helper to convert timestamp to X-coordinate (Hours)
             def to_coord(t):
                 if t is None:
                     return None
@@ -223,49 +289,41 @@ class EventCascadeVisualizer:
 
             x_label = "Time (Hours from Start)"
         else:
-            # Logical Layout
-            # Stage i starts at i * 100
-            # Episode j starts at i*100 + j*10
+            # Logical Layout: Sequential integer coordinates
             def to_coord(t):
-                return None  # Unused
+                # Unused in logical mode
+                return None
 
             x_label = "Event Progression (Logical Steps)"
             min_time = 0
 
-        # Assign Coordinates
-        # Y-axis:
-        # Stages: Y=0 (Bottom)
-        # Episodes: Y>0, staggered upwards based on time/index.
-
-        # We'll use a logical X-axis that maps to time strings.
-        # This solves the "Unknown" time issue and the mix of real/logical.
-        # We will collect all unique start/end time strings and sort them if possible,
-        # or just use the logical flow sequence.
-
-        # Since the hierarchy is strict (Stage -> Episode), we can sequence them linearly.
-        # X-axis will be 0..N
-
-        # Flatten for X-assignment
-        # Sequence: Stage 1 Start -> Ep 1 Start -> Ep 1 End -> ... -> Stage 1 End
-
-        # Actually, simpler:
-        # Just assign X coordinates sequentially to Episodes.
-        # Stage X covers min(Ep X) to max(Ep X).
+        # Prepare for Coordinate Calculation
+        # We iterate through stages and episodes to assign (x, y, width, height).
+        # Layout Rules:
+        # - Stages: Placed at Y=0.
+        # - Episodes: Placed above stages (Y > 0).
+        #   - Staggered vertically (Y level increases) to avoid overlap and show sequence clearly.
+        #   - Box width depends on duration (Real Time) or fixed constant (Logical).
 
         final_items = []
 
-        # Configuration
+        # Layout Constants
+        # Logical width for episodes
         EPISODE_WIDTH = 4
+        # Gap between episodes in logical mode
         EPISODE_GAP = 2
+        # Gap between stages in logical mode
         STAGE_GAP = 4
 
+        # Tracking cursor for logical layout
         current_x = 0
 
-        # We need to collect tick labels
+        # Ticks for X-axis
         x_ticks = []
         x_tick_labels = []
 
         def add_tick(x, label):
+            """Adds an X-axis tick with a formatted label."""
             # Only add if we haven't added a tick nearby or same label?
             # For now, just add.
             x_ticks.append(x)
@@ -283,15 +341,15 @@ class EventCascadeVisualizer:
         max_y = 1
 
         for stage in stage_objs:
-            # Stage Start X (will be updated)
+            # 1. Determine Stage Start
             stage_start_x = current_x
 
-            # Start Tick for Stage
+            # Get raw time values for ticks
             s_start_val = stage.get("start")
             s_end_val = stage.get("end")
 
             if use_real_time:
-                # Try to use real coordinates
+                # Try to use real coordinates from stage metadata
                 sx = to_coord(s_start_val)
                 ex = to_coord(s_end_val)
                 if sx is not None:
@@ -299,14 +357,13 @@ class EventCascadeVisualizer:
                 if ex is not None:
                     stage_end_x = ex
                 else:
-                    # Fallback if end is missing?
-                    # We will update stage_end_x based on episodes if needed
+                    # Fallback if end is missing: default width if no episodes
                     stage_end_x = stage_start_x + (
                         EPISODE_WIDTH if not stage.get("episodes") else 0
                     )
             else:
-                # Logical
-                pass  # stage_start_x is already current_x
+                # Logical mode: stage starts at current cursor
+                pass
 
             episodes = stage.get("episodes", [])
 
@@ -319,9 +376,9 @@ class EventCascadeVisualizer:
                 add_tick(stage_start_x, s_start_val)
                 add_tick(stage_end_x, s_end_val)
             else:
-                # Episodes
-                # Stagger logic:
-                # Y = 1 + e_idx (within stage)
+                # 2. Process Episodes
+                # Stagger logic: Episodes are stacked vertically to show sequence.
+                # Y = 1 + e_idx * 1.5 (base height + stagger step)
 
                 min_ep_x = None
                 max_ep_x = None
@@ -331,23 +388,26 @@ class EventCascadeVisualizer:
                         esx = to_coord(ep.get("start"))
                         eex = to_coord(ep.get("end"))
 
-                        # Fallback for unknown episode times in Real Time mode?
-                        # If unknown, maybe place relative to stage start?
+                        # Fallback for unknown episode times in Real Time mode
+                        # If unknown, place relative to stage start or previous episode
                         if esx is None:
-                            esx = stage_start_x + (i * 0.5)  # Arbitrary small step?
+                            esx = stage_start_x + (i * 0.5)
                         if eex is None:
-                            eex = esx + 1.0  # Default 1 hour?
+                            # Default 1 hour duration
+                            eex = esx + 1.0
 
                         ep_start_x = esx
                         ep_end_x = eex
-                        width = max(ep_end_x - ep_start_x, 0.1)  # Ensure min width
+                        # Ensure min width for visibility
+                        width = max(ep_end_x - ep_start_x, 0.1)
                     else:
+                        # Logical mode: Fixed width, sequential placement
                         ep_start_x = current_x
                         width = EPISODE_WIDTH
                         ep_end_x = ep_start_x + width
 
-                    # Y Level
-                    ep_y = 1 + i * 1.5  # 1.5 spacing
+                    # Y Level Calculation (Staggered)
+                    ep_y = 1 + i * 1.5
 
                     ep["x"] = ep_start_x
                     ep["width"] = width
@@ -362,7 +422,7 @@ class EventCascadeVisualizer:
 
                     max_y = max(max_y, ep_y)
 
-                    # Update bounds
+                    # Update bounds for stage containment
                     if min_ep_x is None or ep_start_x < min_ep_x:
                         min_ep_x = ep_start_x
                     if max_ep_x is None or ep_end_x > max_ep_x:
@@ -371,14 +431,13 @@ class EventCascadeVisualizer:
                     if not use_real_time:
                         current_x += width + EPISODE_GAP
 
-                # Update Stage Width to cover episodes
+                # 3. Update Stage Width to cover all episodes
                 if use_real_time:
-                    # If Stage has its own times, prefer them?
-                    # Usually Stage contains episodes.
-                    # Let's union them.
+                    # Determine stage bounds based on real times or episode bounds
                     real_s_start = to_coord(s_start_val)
                     real_s_end = to_coord(s_end_val)
 
+                    # Prefer real stage times if available, otherwise use episode bounds
                     final_s_start = (
                         real_s_start if real_s_start is not None else min_ep_x
                     )
@@ -394,8 +453,8 @@ class EventCascadeVisualizer:
                         # Fallback
                         stage_end_x = stage_start_x + EPISODE_WIDTH
                 else:
-                    # Stage covers from first Ep start to last Ep end
-                    # (minus the last gap)
+                    # Logical mode: Stage covers from first Ep start to last Ep end
+                    # (current_x includes the last gap, so we subtract it)
                     stage_end_x = current_x - EPISODE_GAP
 
             stage["x"] = stage_start_x
@@ -412,44 +471,47 @@ class EventCascadeVisualizer:
                 current_x += STAGE_GAP
 
         # --- 3. Plotting ---
+        # Initialize the figure and axis
+        fig, ax = plt.subplots(figsize=(20, 12))
 
-        fig, ax = plt.subplots(figsize=(20, 12))  # Larger figure
+        # Dynamic Font Scaling & Text Wrapping Logic:
+        # To ensure text fits inside boxes, we calculate the relationship between
+        # data coordinates and physical inches.
 
-        # Calculate character wrapping factor
-        # Total X range visible
+        # Total X range visible in data units
         x_min_limit = -2
         x_max_limit = current_x + 2
         total_x_range = x_max_limit - x_min_limit
 
         # Physical width in inches (approximate, excluding margins)
-        # subplot takes most of the 20 inches, say 18 inches
         plot_width_inches = 18.0
 
         inches_per_unit = plot_width_inches / max(total_x_range, 1.0)
 
-        # Font size 9 (points) -> inches
+        # Font metrics (Points -> Inches)
         font_size_points = 9
         font_size_inches = font_size_points / 72.0
         # Average character width ratio (approx 0.6 of height)
         avg_char_width_inches = font_size_inches * 0.6
 
-        # Characters per unit of data width
+        # Result: How many characters fit in 1 unit of data width
         chars_per_unit = inches_per_unit / avg_char_width_inches
 
-        # Constants
+        # Height Constants
         STAGE_HEIGHT = 0.6
         EPISODE_HEIGHT = 1.0
 
         for item in final_items:
-            # Colors
+            # --- Render Stage ---
             if item["type"] == "Stage":
-                color = "#ADD8E6"  # Light Blue
+                # Light Blue
+                color = "#ADD8E6"
                 edgecolor = "black"
                 alpha = 0.8
                 height = STAGE_HEIGHT
                 y_pos = item["y"]
 
-                # Draw Stage Bar
+                # Draw Stage Rectangle
                 rect = patches.Rectangle(
                     (item["x"], y_pos),
                     item["width"],
@@ -461,8 +523,7 @@ class EventCascadeVisualizer:
                 )
                 ax.add_patch(rect)
 
-                # Label Stage (Inside or below?)
-                # User said: "Stage at bottom... long rectangle"
+                # Label Stage Name (Center)
                 ax.text(
                     item["x"] + item["width"] / 2,
                     y_pos + height / 2,
@@ -474,7 +535,7 @@ class EventCascadeVisualizer:
                     color="black",
                 )
 
-                # Stage ID (Bottom Center)
+                # Label Stage ID (Bottom Center)
                 ax.text(
                     item["x"] + item["width"] / 2,
                     y_pos + 0.05,
@@ -487,8 +548,8 @@ class EventCascadeVisualizer:
                     alpha=0.9,
                 )
 
-                # Vertical Dashed Lines for Stage (Start and End)
-                # User request: "stage 的框前后也应该和x轴有一个虚线连接"
+                # Visual Guides: Vertical Dashed Lines
+                # Connect stage boundaries to the X-axis for time alignment
                 # Start Line
                 ax.plot(
                     [item["x"], item["x"]],
@@ -508,14 +569,16 @@ class EventCascadeVisualizer:
                     zorder=0,
                 )
 
+            # --- Render Episode ---
             elif item["type"] == "Episode":
-                color = "#e6f5c9"  # Light green
+                # Light green
+                color = "#e6f5c9"
                 edgecolor = "black"
                 alpha = 0.9
                 height = EPISODE_HEIGHT
                 y_pos = item["y"]
 
-                # Draw Episode Bar
+                # Draw Episode Rectangle
                 rect = patches.Rectangle(
                     (item["x"], y_pos),
                     item["width"],
@@ -529,8 +592,7 @@ class EventCascadeVisualizer:
                 ax.add_patch(rect)
 
                 # Label Episode Name (Above box)
-                # Dynamic wrap width based on physical size
-                # Reduce by small margin to ensure it fits inside visual box
+                # Calculate wrap width dynamically based on box physical width
                 wrap_width = max(5, int(item["width"] * chars_per_unit * 0.9))
 
                 wrapped_title = "\n".join(wrap(item["title"], width=wrap_width))
@@ -548,8 +610,7 @@ class EventCascadeVisualizer:
                     wrap=True,
                 )
 
-                # Episode ID info (Bottom Center Inside Box)
-                # User request: "在框的内部紧邻下边地方 写 框所属的 Stage ID episode ID" -> REVISED: "Episode: ID 部分只在episode 相关的框写"
+                # Label Episode ID (Inside box, bottom)
                 ep_id_str = f"Episode: {item.get('id', '')}"
                 ax.text(
                     item["x"] + item["width"] / 2,
@@ -560,15 +621,14 @@ class EventCascadeVisualizer:
                     fontsize=9,
                     fontweight="bold",
                     color="#333333",
-                    zorder=15,  # Above participants if they overlap?
+                    zorder=15,
                 )
 
-                # Vertical Dashed Lines to X-axis
-                # User request: "episode框的前后都应该有一个虚线连接到x轴"
+                # Visual Guides: Vertical Dashed Lines
                 # Start Line
                 ax.plot(
                     [item["x"], item["x"]],
-                    [y_pos, -1],  # Drop to -1 (the bottom limit of our plot)
+                    [y_pos, -1],
                     color="gray",
                     linestyle="--",
                     linewidth=0.8,
@@ -584,12 +644,16 @@ class EventCascadeVisualizer:
                     zorder=0,
                 )
 
-                # Participants (Inside Box)
+                # --- Render Participants (Inside Box) ---
                 parts = item.get("participants", [])
                 rels = item.get("relations", [])
 
                 if parts:
-                    # Group participants by type
+                    # Strategy:
+                    # To organize participants neatly, we group them by 'Type' (e.g., Analyst, Manager).
+                    # Each type gets its own horizontal row within the episode box.
+
+                    # 1. Group participants by type
                     type_groups = {}
                     for p in parts:
                         p_type = p.get("type", "Participant")
@@ -601,10 +665,11 @@ class EventCascadeVisualizer:
                     sorted_types = sorted(type_groups.keys())
                     num_groups = len(sorted_types)
 
-                    # Calculate vertical spacing
+                    # 2. Calculate vertical spacing for rows
                     # We have 'height' available (e.g. 1.0).
                     # Use margins to avoid edge crowding.
-                    margin_v = 0.2 * height  # 10% top, 10% bottom
+                    # 10% top, 10% bottom padding
+                    margin_v = 0.2 * height
                     available_h = height - 2 * margin_v
 
                     if num_groups > 0:
@@ -612,36 +677,39 @@ class EventCascadeVisualizer:
                     else:
                         row_height = available_h
 
-                    p_coords = {}
+                    p_coords = {}  # Store coordinates for relation lines
 
                     for g_idx, p_type in enumerate(sorted_types):
                         group_parts = type_groups[p_type]
 
-                        # Y-coordinate for this row
-                        # Start from bottom or top? Let's go bottom-up
+                        # Calculate Y-coordinate for this row center
+                        # Stacking from bottom to top
                         row_cy = (
                             y_pos + margin_v + (g_idx * row_height) + (row_height / 2)
                         )
 
-                        # Distribute horizontally in this row
+                        # 3. Distribute participants horizontally in this row
+                        # Margin of 10% on each side
                         cx_start = item["x"] + (item["width"] * 0.1)
                         row_width = item["width"] * 0.8
 
                         if len(group_parts) > 1:
                             cx_step = row_width / (len(group_parts) - 1)
                         else:
-                            cx_step = 0  # Center it if only one
+                            # Center it if only one
+                            cx_step = 0
                             cx_start = item["x"] + (item["width"] / 2)
 
                         for i, p in enumerate(group_parts):
                             if len(group_parts) > 1:
                                 px = cx_start + i * cx_step
                             else:
-                                px = cx_start  # Centered
+                                # Centered
+                                px = cx_start
 
                             py = row_cy
 
-                            # Register & Get Style
+                            # Register & Get Style (Color/Marker)
                             p_color, p_marker = self._register_participant(
                                 p["id"], p["name"], p.get("type", "Participant")
                             )
@@ -652,14 +720,17 @@ class EventCascadeVisualizer:
                                 [py],
                                 color=p_color,
                                 marker=p_marker,
+                                # Marker size
                                 s=100,
+                                # Above box background
                                 zorder=10,
                                 edgecolor="white",
                             )
 
                             p_coords[p["id"]] = (px, py)
 
-                    # Relations
+                    # --- Render Relations ---
+                    # Draw lines connecting participants based on extracted relations
                     for rel in rels:
                         src_id = rel["src"]
                         dst_id = rel["dst"]
@@ -675,27 +746,30 @@ class EventCascadeVisualizer:
                                 alpha=0.6,
                                 linestyle="-",
                                 linewidth=1,
+                                # Below markers
                                 zorder=5,
                             )
 
-        # Axis Formatting
+        # --- 4. Final Formatting ---
+
+        # Set Plot Limits
         ax.set_ylim(-1, max_y + 2)
         ax.set_xlim(-2, current_x + 2)
 
-        # Set X-ticks
-        # Filter ticks to avoid overlapping?
-        # For now, show all but rotate them
+        # Configure X-axis Ticks
+        # We rotate them for better readability of long timestamps
         ax.set_xticks(x_ticks)
         ax.set_xticklabels(x_tick_labels, rotation=45, ha="right", fontsize=8)
 
-        ax.set_yticks([])  # Hide Y axis ticks
+        ax.set_yticks([])  # Hide Y axis ticks as they have no semantic meaning here
 
-        # Hide spines
+        # Hide chart spines for a cleaner look
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_visible(False)
 
-        # Legend
+        # --- 5. Legend ---
+        # Create a custom legend for participants
         handles = []
         labels = []
         for p_id, (color, marker) in self.participant_style_map.items():
@@ -721,7 +795,7 @@ class EventCascadeVisualizer:
                 labels,
                 title="Participants",
                 loc="upper left",
-                bbox_to_anchor=(1, 1),
+                bbox_to_anchor=(1, 1),  # Place outside plot area
             )
 
         plt.title(f"Event Cascade: {evt_title}", fontsize=18, fontweight="bold", pad=20)
