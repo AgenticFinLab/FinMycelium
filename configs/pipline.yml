@@ -32,7 +32,7 @@ inference_config: &infer
 #   top_p: Nucleus sampling parameter, controls probability threshold for
 #          candidate tokens (0.0-1.0, typically 0.9-0.95)
 generation_config: &generation_config
-  max_new_tokens: 10000
+  max_new_tokens: 8192
   temperature: 0.2
   top_p: 0.95
 
@@ -46,7 +46,7 @@ db_config: &db_config
 # save_folder: Directory for saving intermediate results and logs
 #   All intermediate states, trace information, and debug outputs will be
 #   saved in this directory
-save_folder: "EXPERIMENT/uTEST/Pipline"
+# save_folder: "EXPERIMENT/uTEST/Pipline"
 
 # output_dir: Directory for saving final output results
 #   Reconstructed event cascades (EventCascade) and other final results will
@@ -96,11 +96,15 @@ matcher_config: &matcher_config
 # ----------------------------------------------------------------------------
 
 builder_config:
-  builder_type: "class_lm"
+  builder_type: "agent_build"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer
   generation_config: *generation_config
+  graph_config:
+    recursion_limit: 150
+
+  save_folder: "EXPERIMENT/uTEST/Pipline"
   
   # Agent Configuration (for agent_build type)
   # agents: Define agents participating in event reconstruction and their

@@ -44,6 +44,7 @@ from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.url_collector.base import URLCollectorOutput, URLCollectorInput
 from finmy.url_collector.url_parser import URLParser
+from finmy.builder.agent_build.prompts import *
 
 
 # ============================================================================
@@ -151,7 +152,7 @@ class FinmyPipeline:
         self.url_collector = URLParser(self.url_collector_config)
         self.summarizer = self._create_summarizer()
         self.matcher = self._create_matcher()
-        # self.builder = self._create_builder() # TODO: fix AttributeError: 'NoneType' object has no attribute 'build'
+        self.builder = self._create_builder()
 
     # ------------------------------------------------------------------
     # Internal helpers for configurable component selection (Registry-based)
@@ -196,7 +197,7 @@ class FinmyPipeline:
         Returns:
             A builder instance based on ``builder_type`` configuration.
         """
-        config = self.builder_config.copy()
+        config = self.builder_config
         if "builder_type" not in config:
             # Fallback to "type" if "builder_type" is not present
             if "type" in config:
@@ -748,19 +749,86 @@ class FinmyPipeline:
         build_input = self.create_build_input(user_query_input, meta_samples)
         # Note: build_input is created for demonstration purposes and can be used
         # by downstream builders in a production workflow
-        assert build_input is not None, "BuildInput should be created successfully"
 
-        print("Start building ...")
+        # 4. Create the system and user prompts
+        agent_names = list(self.builder_config["agents"].keys())
+        agent_system_msgs = {}
+        agent_user_msgs = {}
 
-        # Create builder according to configuration and run build
-        build_output = self.builder.build(build_input)
+        for name in agent_names:
+            if "skeleton" in name.lower():
+                agent_system_msgs[name] = EventLayoutReconstructorSys
+                agent_user_msgs[name] = EventLayoutReconstructorUser
+            if "participant" in name.lower():
+                agent_system_msgs[name] = ParticipantReconstructorSys
+                agent_user_msgs[name] = ParticipantReconstructorUser
+            if "transaction" in name.lower():
+                agent_system_msgs[name] = TransactionReconstructorSys
+                agent_user_msgs[name] = TransactionReconstructorUser
+            if "episode" in name.lower():
+                agent_system_msgs[name] = EpisodeReconstructorSys
+                agent_user_msgs[name] = EpisodeReconstructorUser
+            if "stagedescription" in name.lower():
+                agent_system_msgs[name] = StageDescriptionReconstructorSys
+                agent_user_msgs[name] = StageDescriptionReconstructorUser
+            if "eventdescription" in name.lower():
+                agent_system_msgs[name] = EventDescriptionReconstructorSys
+                agent_user_msgs[name] = EventDescriptionReconstructorUser
 
-        # print("build_output:", build_output)
+        # Build the state
+        state = {
+            "build_input": build_input,
+            "agent_results": [],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": agent_system_msgs,
+            "agent_user_msgs": agent_user_msgs,
+        }
 
-        assert build_output is not None, "BuildOutput should be created successfully"
+        # Run build
+        print("Starting AgentEventBuilder...")
+        graph = self.builder.graph()
 
-        self.logger.info("Test flow completed successfully!")
-        return build_output
+        # Retrieve graph config from the loaded configuration
+        graph_config = self.builder_config["graph_config"]
+
+        final_state = graph.invoke(state, graph_config)
+        print("Build completed.")
+
+        # Integrate final result
+        final_cascade = self.builder.integrate_results(final_state)
+
+        build_input = final_state.pop("build_input")
+
+        # Save the final state to the json
+        self.builder.save_traces(
+            build_input.to_dict(),
+            save_name="BuildInput",
+            file_format="json",
+        )
+        self.builder.save_traces(
+            final_state,
+            save_name="FinalState",
+            file_format="json",
+        )
+        self.builder.save_traces(
+            final_cascade,
+            save_name="FinalEventCascade",
+            file_format="json",
+        )
+        print("Traces saved.")
+
+        # Test integrate_from_files
+        print("\nTesting integrate_from_files...")
+        restored_cascade = self.builder.integrate_from_files()
+        self.builder.save_traces(
+            restored_cascade,
+            save_name="IntegratedEventCascade",
+            file_format="json",
+        )
+        print("integrate_from_files test completed.")
+
+        return restored_cascade
 
     def lm_build_pipeline_main_with_collectors(
         self,
@@ -830,14 +898,83 @@ class FinmyPipeline:
 
         # Step 9: Create build input for downstream processing
         build_input = self.create_build_input(user_query_input, meta_samples)
-        assert build_input is not None, "BuildInput should be created successfully"
 
-        print("Start building ...")
+        # 4. Create the system and user prompts
+        agent_names = list(self.builder_config["agents"].keys())
+        agent_system_msgs = {}
+        agent_user_msgs = {}
 
-        # Create builder according to configuration and run build
-        build_output = self.builder.build(build_input)
+        for name in agent_names:
+            if "skeleton" in name.lower():
+                agent_system_msgs[name] = EventLayoutReconstructorSys
+                agent_user_msgs[name] = EventLayoutReconstructorUser
+            if "participant" in name.lower():
+                agent_system_msgs[name] = ParticipantReconstructorSys
+                agent_user_msgs[name] = ParticipantReconstructorUser
+            if "transaction" in name.lower():
+                agent_system_msgs[name] = TransactionReconstructorSys
+                agent_user_msgs[name] = TransactionReconstructorUser
+            if "episode" in name.lower():
+                agent_system_msgs[name] = EpisodeReconstructorSys
+                agent_user_msgs[name] = EpisodeReconstructorUser
+            if "stagedescription" in name.lower():
+                agent_system_msgs[name] = StageDescriptionReconstructorSys
+                agent_user_msgs[name] = StageDescriptionReconstructorUser
+            if "eventdescription" in name.lower():
+                agent_system_msgs[name] = EventDescriptionReconstructorSys
+                agent_user_msgs[name] = EventDescriptionReconstructorUser
 
-        assert build_output is not None, "BuildOutput should be created successfully"
+        # Build the state
+        state = {
+            "build_input": build_input,
+            "agent_results": [],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": agent_system_msgs,
+            "agent_user_msgs": agent_user_msgs,
+        }
 
-        self.logger.info("Collector-based test flow completed successfully!")
-        return build_output
+        # Run build
+        print("Starting AgentEventBuilder...")
+        graph = self.builder.graph()
+
+        # Retrieve graph config from the loaded configuration
+        graph_config = self.builder_config["graph_config"]
+
+        final_state = graph.invoke(state, graph_config)
+        print("Build completed.")
+
+        # Integrate final result
+        final_cascade = self.builder.integrate_results(final_state)
+
+        build_input = final_state.pop("build_input")
+
+        # Save the final state to the json
+        self.builder.save_traces(
+            build_input.to_dict(),
+            save_name="BuildInput",
+            file_format="json",
+        )
+        self.builder.save_traces(
+            final_state,
+            save_name="FinalState",
+            file_format="json",
+        )
+        self.builder.save_traces(
+            final_cascade,
+            save_name="FinalEventCascade",
+            file_format="json",
+        )
+        print("Traces saved.")
+
+        # Test integrate_from_files
+        print("\nTesting integrate_from_files...")
+        restored_cascade = self.builder.integrate_from_files()
+        self.builder.save_traces(
+            restored_cascade,
+            save_name="IntegratedEventCascade",
+            file_format="json",
+        )
+        print("integrate_from_files test completed.")
+
+        return restored_cascade
