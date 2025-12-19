@@ -14,8 +14,8 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
-from urllib.parse import urljoin, urlparse
+from typing import List, Dict, Any, Optional
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -29,7 +29,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-from finmy.url_collector.base import BaseURLCollector, URLCollectorInput, URLCollectorOutput
+from finmy.url_collector.base import (
+    BaseURLCollector,
+    URLCollectorInput,
+    URLCollectorOutput,
+)
 
 
 class URLParser(BaseURLCollector):
@@ -65,7 +69,7 @@ class URLParser(BaseURLCollector):
             chromedriver_path (Optional[str]): Path to ChromeDriver executable.
         """
         super().__init__(method_name=method_name, config=config)
-        
+
         self.user_agent = user_agent or (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -152,15 +156,16 @@ class URLParser(BaseURLCollector):
 
         # Process results to extract clean content
         from finmy.url_collector.url_parser_clean import extract_content_from_results
+
         parsed_contents = extract_content_from_results(results)
 
         output = URLCollectorOutput(
             results=results,
             parsed_contents=parsed_contents,
             logs=logs,
-            extras=input_data.extras
+            extras=input_data.extras,
         )
-        
+
         return output
 
     def parse_single_url(self, url: str, url_id: int) -> Optional[Dict[str, Any]]:
