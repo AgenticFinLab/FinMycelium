@@ -10,6 +10,9 @@ generation_config: &generation_config
 
 save_folder: "EXPERIMENT/uTEST/StepBuilder"
 
+graph_config:
+  recursion_limit: 150
+
 agents:
   SkeletonReconstructor:
     lm_type: *lm_type

@@ -233,9 +233,7 @@ class AgentEventBuilder(BaseBuilder):
                 last_result = state["agent_results"][-1]
                 if "ParticipantReconstructor" in last_result:
                     participants_data = last_result["ParticipantReconstructor"]
-                    target_episode.participants = participants_data.get(
-                        "participants", []
-                    )
+                    target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
@@ -245,17 +243,13 @@ class AgentEventBuilder(BaseBuilder):
                 last_result = state["agent_results"][-1]
                 if "TransactionReconstructor" in last_result:
                     transactions_data = last_result["TransactionReconstructor"]
-                    target_episode.transactions = transactions_data.get(
-                        "transactions", []
-                    )
+                    target_episode.transactions = transactions_data["transactions"]
 
                 # Get participants from the step before that (ParticipantReconstructor)
                 second_last_result = state["agent_results"][-2]
                 if "ParticipantReconstructor" in second_last_result:
                     participants_data = second_last_result["ParticipantReconstructor"]
-                    target_episode.participants = participants_data.get(
-                        "participants", []
-                    )
+                    target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
@@ -312,6 +306,10 @@ class AgentEventBuilder(BaseBuilder):
 
         Returns:
             CompiledStateGraph[AgentState]: The compiled graph ready for execution.
+
+        Note:
+            Since this graph executes a loop of 3 steps per episode, the default recursion limit (25) may be exceeded for events with > 8 episodes. When invoking the graph, consider
+            increasing the limit: `graph.invoke(state, {"recursion_limit": 100})`.
         """
         g = StateGraph(AgentState)
 

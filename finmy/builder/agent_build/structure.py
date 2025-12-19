@@ -293,7 +293,6 @@ class Episode:
 
     # Locally unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
     # Must follow the format "E" + integer, incrementing sequentially based on the episode order.
-    # Example: E1, E2, E3 (Start from E1)
     episode_id: str
     # Name; human-readable semantic label; grounded via verifiable source content.
     name: VerifiableField
@@ -349,7 +348,6 @@ class EventStage:
 
     # Unique identifier for referencing and storage; avoid semantic identifiers to reduce ambiguity.
     # Must follow the format "S" + integer, incrementing sequentially based on the stage order.
-    # Example: S1, S2, S3 (Start from S1)
     stage_id: str
     # Descriptive name (e.g., 'Bait Deployment', 'Amplification').
     name: VerifiableField

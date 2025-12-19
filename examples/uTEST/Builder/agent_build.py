@@ -142,7 +142,11 @@ def main():
     # Run build
     print("Starting AgentEventBuilder...")
     graph = builder.graph()
-    final_state = graph.invoke(state)
+
+    # Retrieve graph config from the loaded configuration
+    graph_config = config["graph_config"]
+
+    final_state = graph.invoke(state, graph_config)
     print("Build completed.")
 
     # Integrate final result
