@@ -13,11 +13,8 @@ The goal is to keep all DB‑specific glue code in one place while
 keeping the rest of the codebase focused on domain logic.
 """
 
-import os
-from typing import Optional, Any, Dict, List
-from pathlib import Path
-from dotenv import load_dotenv
 import uuid
+from typing import Optional, Any, Dict, List
 
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -40,84 +37,16 @@ class PDDataBaseManager:
 
     def __init__(
         self,
-        engine: Optional[Any] = None,
-        engine_config: Optional[Dict[str, Any]] = None,
-        env_path: Optional[str] = None,
+        engine_config: Dict[str, Any],
     ):
         """
         Initialize PDDataBaseManager.
 
         Args:
-            engine: Existing SQLAlchemy engine (optional)
             engine_config: Configuration for creating new engine (optional)
-            env_path: Path to .env file (defaults to root directory)
         """
-        if engine is not None:
-            # Use provided engine if available
-            self.engine = engine
-        elif engine_config is not None:
-            # Use provided configuration
-            self.engine = create_engine(**engine_config)
-        else:
-            # Load database configuration from .env file
-            self.engine = self._create_engine_from_env(env_path)
 
-    def _create_engine_from_env(self, env_path: Optional[str] = None) -> Any:
-        """
-        Create SQLAlchemy engine from .env file configuration.
-
-        Args:
-            env_path: Path to .env file (defaults to root directory)
-
-        Returns:
-            SQLAlchemy engine instance
-
-        Raises:
-            FileNotFoundError: If .env file is not found
-            ValueError: If required environment variables are missing
-        """
-        # Determine .env file path
-        if env_path is None:
-            # Try root directory by default
-            env_path = Path.cwd() / ".env"
-        else:
-            env_path = Path(env_path)
-
-        # Load environment variables
-        if not env_path.exists():
-            raise FileNotFoundError(f".env file not found at: {env_path}")
-
-        load_dotenv(dotenv_path=env_path)
-
-        # Get database configuration
-        db_host = os.getenv("DB_HOST")
-        db_port = os.getenv("DB_PORT")
-        db_name = os.getenv("DB_NAME")
-        db_user = os.getenv("DB_USER")
-        db_password = os.getenv("DB_PASSWORD")
-        db_charset = os.getenv("DB_CHARSET", "utf8")
-
-        # Validate required variables
-        required_vars = {
-            "DB_HOST": db_host,
-            "DB_PORT": db_port,
-            "DB_NAME": db_name,
-            "DB_USER": db_user,
-            "DB_PASSWORD": db_password,
-        }
-
-        missing_vars = [var for var, value in required_vars.items() if not value]
-        if missing_vars:
-            raise ValueError(
-                f"Missing required environment variables: {', '.join(missing_vars)}"
-            )
-
-        # Construct database URL
-        # Format: dialect+driver://username:password@host:port/database?charset=charset
-        db_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?charset={db_charset}"
-
-        # Create and return engine
-        return create_engine(db_url, echo=False)  # Set echo=True for debug logging
+        self.engine = create_engine(**engine_config)
 
     def test_connection(self) -> bool:
         """

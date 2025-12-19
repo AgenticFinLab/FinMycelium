@@ -5,7 +5,8 @@ This module provides a unified interface to access and manage various data table
 from the database, including table metadata and sample data retrieval.
 """
 
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
+
 import pandas as pd
 
 from finmy.db_manager import PDDataBaseManager
@@ -32,9 +33,8 @@ class DataManager:
             raise TypeError("db_manager must be an instance of PDDataBaseManager")
 
         self.db_manager = db_manager
-        self._table_info_cache = (
-            {}
-        )  # Cache for table information to avoid repeated queries
+        # Cache for table information to avoid repeated queries
+        self._table_info_cache = {}
 
     def test_connection(self) -> bool:
         """
@@ -361,26 +361,7 @@ class DataManager:
         self._table_info_cache.clear()
 
 
-# Utility functions for common operations
-def create_data_manager_from_env(env_path: Optional[str] = None) -> DataManager:
-    """
-    Create a DataManager instance using environment variables.
-
-    Args:
-        env_path: Path to .env file (defaults to root directory)
-
-    Returns:
-        DataManager instance
-
-    Raises:
-        FileNotFoundError: If .env file is not found
-        ValueError: If required environment variables are missing
-    """
-    db_manager = PDDataBaseManager(env_path=env_path)
-    return DataManager(db_manager)
-
-
-def create_data_manager_from_config(engine_config: Dict[str, Any]) -> DataManager:
+def create_data_manager(engine_config: Dict[str, Any]) -> DataManager:
     """
     Create a DataManager instance using engine configuration.
 
@@ -392,111 +373,3 @@ def create_data_manager_from_config(engine_config: Dict[str, Any]) -> DataManage
     """
     db_manager = PDDataBaseManager(engine_config=engine_config)
     return DataManager(db_manager)
-
-
-def create_data_manager_from_engine(engine: Any) -> DataManager:
-    """
-    Create a DataManager instance using an existing SQLAlchemy engine.
-
-    Args:
-        engine: SQLAlchemy engine instance
-
-    Returns:
-        DataManager instance
-    """
-    db_manager = PDDataBaseManager(engine=engine)
-    return DataManager(db_manager)
-
-
-# Example usage and demonstration
-if __name__ == "__main__":
-    """Example usage of DataManager class."""
-
-    # Example 1: Create DataManager from .env file
-    try:
-        # This assumes a .env file exists with database configuration
-        dm = create_data_manager_from_env()
-
-        # Test connection
-        if dm.test_connection():
-            print("✓ Database connection successful")
-
-            # Get database info
-            db_info = dm.get_database_info()
-            print(f"\nDatabase Information:")
-            for key, value in db_info.items():
-                print(f"  {key}: {value}")
-
-            # List all tables
-            tables = dm.list_all_tables()
-            print(f"\n📊 Available tables ({len(tables)}):")
-            for table in tables:
-                print(f"  - {table}")
-
-            # Get summary of database
-            summary = dm.summarize_database()
-            print(f"\n📈 Database Summary:")
-            print(f"  Total tables: {summary['table_count']}")
-
-            # Show details for first table (if any)
-            if tables:
-                first_table = tables[0]
-                print(f"\n🔍 Details for table '{first_table}':")
-
-                # Get schema
-                schema = dm.get_table_schema(first_table)
-                print(f"\n  Schema ({len(schema)} columns):")
-                for _, row in schema.iterrows():
-                    nullable = "NULL" if row["is_nullable"] == "YES" else "NOT NULL"
-                    default = (
-                        f"DEFAULT {row['column_default']}"
-                        if row["column_default"]
-                        else ""
-                    )
-                    print(
-                        f"    {row['column_name']}: {row['data_type']} {nullable} {default}".strip()
-                    )
-
-                # Get sample data
-                sample = dm.get_table_sample(first_table, sample_size=3)
-                print(f"\n  Sample data ({len(sample)} rows):")
-                print(sample.to_string(index=False))
-
-        else:
-            print("✗ Database connection failed")
-
-    except Exception as e:
-        print(f"Error: {str(e)}")
-
-    print("\n" + "=" * 50 + "\n")
-
-    # Example 2: Using DataManager with table info methods
-    try:
-        # Create DataManager (using default .env)
-        dm = create_data_manager_from_env()
-
-        if dm.test_connection():
-            # Get info for all tables
-            all_tables_info = dm.get_all_tables_info(
-                include_samples=True, sample_size=2
-            )
-
-            print("All Tables Information:")
-            for table_name, info in all_tables_info.items():
-                if "error" in info:
-                    print(f"\n  {table_name}: ERROR - {info['error']}")
-                else:
-                    print(f"\n  {table_name}:")
-                    print(f"    Rows: {info.get('row_count', 'N/A')}")
-                    print(f"    Columns: {', '.join(info.get('columns', []))}")
-
-                    if "sample" in info and not info["sample"].empty:
-                        print(f"    Sample (first 2 rows):")
-                        # Display sample in a readable format
-                        sample_df = info["sample"]
-                        for col in sample_df.columns:
-                            sample_values = sample_df[col].head(2).tolist()
-                            print(f"      {col}: {sample_values}")
-
-    except Exception as e:
-        print(f"Error in example 2: {str(e)}")

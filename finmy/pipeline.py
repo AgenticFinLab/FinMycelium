@@ -15,11 +15,14 @@ The script serves as both a test case and an example of how to use the FinMyceli
 framework for financial data processing and knowledge extraction.
 """
 
+import os
 import uuid
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
+
 import pytz
 
 from finmy.generic import RawData, UserQueryInput
@@ -40,8 +43,6 @@ from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.url_collector.base import URLCollectorOutput, URLCollectorInput
 from finmy.url_collector.url_parser import URLParser
-import os
-from urllib.parse import urlparse
 
 
 # ============================================================================
@@ -112,43 +113,40 @@ class FinmyPipeline:
         self.config = dict(finmy_config) if finmy_config is not None else {}
 
         # Core configuration fields
-        self.output_dir = self.config.get("output_dir", "output")
+        self.output_dir = self.config["output_dir"]
 
-        # Component type selection (using registry)
-        self.summarizer_type = self.config.get("summarizer_type", "kw_lm")
-        self.matcher_type = self.config.get("matcher_type", "llm")
-        self.builder_type = self.config.get("builder_type", "class_lm")
+        # Component configurations
+        self.collector_config = self.config["collector_config"]
+        self.summarizer_config = self.config["summarizer_config"]
+        self.matcher_config = self.config["matcher_config"]
+        self.builder_config = self.config["builder_config"]
+        self.db_config = self.config["db_config"]
 
-        # Optional, more fine‑grained LLM configuration
-        self.default_lm_name = self.config.get(
-            "lm_name", "ARK/doubao-seed-1-6-flash-250828"
-        )
-        self.summarizer_lm_name = self.config.get(
-            "summarizer_lm_name", self.default_lm_name
-        )
-        self.matcher_lm_name = self.config.get("matcher_lm_name", self.default_lm_name)
-
+        # stateful modules
         self.logger: Optional[logging.Logger] = None
         self.data_manager: Optional[DataManager] = None
 
-    # ------------------------------------------------------------------
-    # Class methods for querying available component types
-    # ------------------------------------------------------------------
+        # Work modules
+        self.collector: Optional[PDFCollector] = None
+        self.summarizer: Optional[BaseSummarizer] = None
+        self.matcher: Optional[BaseMatcher] = None
+        self.builder: Optional[BaseBuilder] = None
 
-    @classmethod
-    def list_available_summarizers(cls) -> List[str]:
-        """Return a list of available summarizer types."""
-        return get_summarizer_registry().list_available()
+    def initialize(self):
+        """
+        Initialize the pipeline components.
 
-    @classmethod
-    def list_available_matchers(cls) -> List[str]:
-        """Return a list of available matcher types."""
-        return get_matcher_registry().list_available()
+        This method sets up logging, data manager, and component factories.
+        """
+        # Initialize the Stateful modules
+        self.logger = self.setup_logging()
+        self.data_manager = DataManager(self.db_config)
 
-    @classmethod
-    def list_available_builders(cls) -> List[str]:
-        """Return a list of available builder types."""
-        return get_builder_registry().list_available()
+        # Initialize the Work modules
+        self.collector = PDFCollector(self.collector_config)
+        self.summarizer = self._create_summarizer()
+        self.matcher = self._create_matcher()
+        self.builder = self._create_builder()
 
     # ------------------------------------------------------------------
     # Internal helpers for configurable component selection (Registry-based)
@@ -161,11 +159,9 @@ class FinmyPipeline:
         Returns:
             A summarizer instance based on ``summarizer_type`` configuration.
         """
-        summarizer_config = {
-            "llm_name": self.summarizer_lm_name,
-            **(self.config.get("summarizer_config", {})),
-        }
-        return get_summarizer_registry().get(self.summarizer_type, summarizer_config)
+        config = self.summarizer_config.copy()
+        s_type = config.pop("type")
+        return get_summarizer_registry().get(s_type, config)
 
     def _create_matcher(self) -> BaseMatcher:
         """
@@ -174,12 +170,9 @@ class FinmyPipeline:
         Returns:
             A matcher instance based on ``matcher_type`` configuration.
         """
-        matcher_config = {
-            "lm_name": self.matcher_lm_name,
-            **(self.config.get("matcher_config", {})),
-        }
-        self.logger.info(f"Creating matcher: {self.matcher_type}")
-        return get_matcher_registry().get(self.matcher_type, matcher_config)
+        matcher_type = self.matcher_config["matcher_type"]
+        self.logger.info("Creating matcher: %s", m_type)
+        return get_matcher_registry().get(m_type, config)
 
     def _create_builder(self) -> BaseBuilder:
         """
@@ -188,11 +181,11 @@ class FinmyPipeline:
         Returns:
             A builder instance based on ``builder_type`` configuration.
         """
-        builder_config = {
-            "output_dir": self.output_dir,
-            **(self.config.get("builder_config", {})),
-        }
-        return get_builder_registry().get(self.builder_type, builder_config)
+        config = self.builder_config.copy()
+        b_type = config.pop("type")
+        if "output_dir" not in config:
+            config["output_dir"] = self.output_dir
+        return get_builder_registry().get(b_type, config)
 
     def setup_logging(self) -> logging.Logger:
         """
@@ -239,7 +232,6 @@ class FinmyPipeline:
         logger.addHandler(file_handler)
 
         logger.info(f"Logging initialized. Log file: {log_file}")
-        self.logger = logger
         return logger
 
     def create_raw_data_records(self, texts: List[str]) -> List[RawData]:
@@ -313,11 +305,11 @@ class FinmyPipeline:
 
         # url_output.parsed_contents: Dict[int, str] maps URL ID -> cleaned text
         contents = url_output.parsed_contents
-        results = {item.get("ID"): item for item in url_output.results}
+        results = {item["ID"]: item for item in url_output.results}
 
         for url_id, content in contents.items():
-            result = results.get(url_id, {})
-            url = result.get("url", "")
+            result = results[url_id]
+            url = result["url"]
 
             # Skip entries without meaningful content
             if not content:
@@ -575,15 +567,25 @@ class FinmyPipeline:
         # Process PDFs
         if pdf_paths:
             # Default PDF collector config
-            default_pdf_config = {
-                "output_dir": os.path.join(
-                    self.config.get("save_folder", "output"), "pdf_collector_output"
-                ),
-                "batch_size": 200,
-                "language": "ch",
-                "check_pdf_limits": True,
-                "env_file": ".env",
-            }
+            # Use collector_config from self.config as base
+            default_pdf_config = self.collector_config.get("pdf_collector", {}).copy()
+
+            # Ensure output_dir is set if not present
+            if "output_dir" not in default_pdf_config:
+                default_pdf_config["output_dir"] = os.path.join(
+                    self.config["save_folder"], "pdf_collector_output"
+                )
+
+            # Set other defaults if not present
+            if "batch_size" not in default_pdf_config:
+                default_pdf_config["batch_size"] = 200
+            if "language" not in default_pdf_config:
+                default_pdf_config["language"] = "ch"
+            if "check_pdf_limits" not in default_pdf_config:
+                default_pdf_config["check_pdf_limits"] = True
+            if "env_file" not in default_pdf_config:
+                default_pdf_config["env_file"] = ".env"
+
             if pdf_collector_config:
                 default_pdf_config.update(pdf_collector_config)
 
@@ -620,11 +622,17 @@ class FinmyPipeline:
         # Process URLs
         if urls:
             # Default URL collector config
-            default_url_config = {
-                "delay": 1.0,
-                "use_selenium_fallback": True,
-                "selenium_wait_time": 5,
-            }
+            # Use collector_config from self.config as base
+            default_url_config = self.collector_config.get("url_collector", {}).copy()
+
+            # Set defaults if not present
+            if "delay" not in default_url_config:
+                default_url_config["delay"] = 1.0
+            if "use_selenium_fallback" not in default_url_config:
+                default_url_config["use_selenium_fallback"] = True
+            if "selenium_wait_time" not in default_url_config:
+                default_url_config["selenium_wait_time"] = 5
+
             if url_collector_config:
                 default_url_config.update(url_collector_config)
 
