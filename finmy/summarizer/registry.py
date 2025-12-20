@@ -5,8 +5,8 @@ from .summarizer import BaseSummarizer, KWLMSummarizer, KWRuleSummarizer
 
 # Summarizer factory dictionary
 summarizer_factory: Dict[str, Callable] = {
-    "kw_lm": lambda config: KWLMSummarizer(config=config),
-    "kw_rule": lambda config: KWRuleSummarizer(config=config),
+    "kw_lm": KWLMSummarizer,
+    "kw_rule": KWRuleSummarizer,
 }
 
 
