@@ -1,4 +1,5 @@
 from typing import Dict, Callable
+import logging
 
 from .base import BaseMatcher
 from .lm_match import LLMMatcher
@@ -18,4 +19,7 @@ matcher_factory: Dict[str, Callable] = {
 
 def get(config: dict) -> BaseMatcher:
     """Get a matcher"""
-    return matcher_factory[config["matcher_type"]](config)
+    logging.info("Creating matcher with config: %s", config)
+    matcher = matcher_factory[config["matcher_type"]](config)
+    logging.info("Created matcher: %s", matcher)
+    return matcher

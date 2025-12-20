@@ -1,4 +1,5 @@
 from typing import Dict, Callable
+import logging
 
 from .base import BaseBuilder
 from .lm_build import LMBuilder
@@ -19,4 +20,7 @@ builder_factory: Dict[str, Callable] = {
 
 def get(config: dict) -> BaseBuilder:
     """Get a builder"""
-    return builder_factory[config["builder_type"]](build_config=config)
+    logging.info("Creating builder with config: %s", config)
+    builder = builder_factory[config["builder_type"]](build_config=config)
+    logging.info("Created builder: %s", builder)
+    return builder

@@ -1,4 +1,5 @@
 from typing import Dict, Callable
+import logging
 
 from .summarizer import BaseSummarizer, KWLMSummarizer, KWRuleSummarizer
 
@@ -12,4 +13,7 @@ summarizer_factory: Dict[str, Callable] = {
 
 def get(config: dict) -> BaseSummarizer:
     """Get a summarizer"""
-    return summarizer_factory[config["summarizer_type"]](config)
+    logging.info("Creating summarizer with config: %s", config)
+    summarizer = summarizer_factory[config["summarizer_type"]](config)
+    logging.info("Created summarizer: %s", summarizer)
+    return summarizer
