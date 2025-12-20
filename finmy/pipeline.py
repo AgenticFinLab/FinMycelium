@@ -46,7 +46,7 @@ from finmy.url_collector.base import URLCollectorOutput, URLCollectorInput
 from finmy.url_collector.url_parser import URLParser
 from finmy.matcher.base import MatchOutput, MatchItem
 from finmy.converter import read_text_data_from_block
-from finmy.builder.agent_build.prompts import *
+from finmy.builder.agent_build import prompts as agent_build_prompts
 
 
 # ============================================================================
@@ -468,7 +468,12 @@ class FinmyPipeline:
             meta_samples=meta_samples,
             extras={},
         )
-        self.logger.info("BuildInput object created: %s", build_input)
+        self.logger.info(
+            "BuildInput object created: query_text: %s, key_words: %s, use samples: %s",
+            build_input.user_query.query_text,
+            build_input.user_query.key_words,
+            len(build_input.samples),
+        )
         self.logger.info("=" * 25)
         return build_input
 
@@ -736,23 +741,37 @@ class FinmyPipeline:
 
         for name in agent_names:
             if "skeleton" in name.lower():
-                agent_system_msgs[name] = EventLayoutReconstructorSys
-                agent_user_msgs[name] = EventLayoutReconstructorUser
+                agent_system_msgs[name] = (
+                    agent_build_prompts.EventLayoutReconstructorSys
+                )
+                agent_user_msgs[name] = agent_build_prompts.EventLayoutReconstructorUser
             if "participant" in name.lower():
-                agent_system_msgs[name] = ParticipantReconstructorSys
-                agent_user_msgs[name] = ParticipantReconstructorUser
+                agent_system_msgs[name] = (
+                    agent_build_prompts.ParticipantReconstructorSys
+                )
+                agent_user_msgs[name] = agent_build_prompts.ParticipantReconstructorUser
             if "transaction" in name.lower():
-                agent_system_msgs[name] = TransactionReconstructorSys
-                agent_user_msgs[name] = TransactionReconstructorUser
+                agent_system_msgs[name] = (
+                    agent_build_prompts.TransactionReconstructorSys
+                )
+                agent_user_msgs[name] = agent_build_prompts.TransactionReconstructorUser
             if "episode" in name.lower():
-                agent_system_msgs[name] = EpisodeReconstructorSys
-                agent_user_msgs[name] = EpisodeReconstructorUser
+                agent_system_msgs[name] = agent_build_prompts.EpisodeReconstructorSys
+                agent_user_msgs[name] = agent_build_prompts.EpisodeReconstructorUser
             if "stagedescription" in name.lower():
-                agent_system_msgs[name] = StageDescriptionReconstructorSys
-                agent_user_msgs[name] = StageDescriptionReconstructorUser
+                agent_system_msgs[name] = (
+                    agent_build_prompts.StageDescriptionReconstructorSys
+                )
+                agent_user_msgs[name] = (
+                    agent_build_prompts.StageDescriptionReconstructorUser
+                )
             if "eventdescription" in name.lower():
-                agent_system_msgs[name] = EventDescriptionReconstructorSys
-                agent_user_msgs[name] = EventDescriptionReconstructorUser
+                agent_system_msgs[name] = (
+                    agent_build_prompts.EventDescriptionReconstructorSys
+                )
+                agent_user_msgs[name] = (
+                    agent_build_prompts.EventDescriptionReconstructorUser
+                )
 
         # Build the state
         state = {
@@ -880,23 +899,45 @@ class FinmyPipeline:
 
             for name in agent_names:
                 if "skeleton" in name.lower():
-                    agent_system_msgs[name] = EventLayoutReconstructorSys
-                    agent_user_msgs[name] = EventLayoutReconstructorUser
+                    agent_system_msgs[name] = (
+                        agent_build_prompts.EventLayoutReconstructorSys
+                    )
+                    agent_user_msgs[name] = (
+                        agent_build_prompts.EventLayoutReconstructorUser
+                    )
                 if "participant" in name.lower():
-                    agent_system_msgs[name] = ParticipantReconstructorSys
-                    agent_user_msgs[name] = ParticipantReconstructorUser
+                    agent_system_msgs[name] = (
+                        agent_build_prompts.ParticipantReconstructorSys
+                    )
+                    agent_user_msgs[name] = (
+                        agent_build_prompts.ParticipantReconstructorUser
+                    )
                 if "transaction" in name.lower():
-                    agent_system_msgs[name] = TransactionReconstructorSys
-                    agent_user_msgs[name] = TransactionReconstructorUser
+                    agent_system_msgs[name] = (
+                        agent_build_prompts.TransactionReconstructorSys
+                    )
+                    agent_user_msgs[name] = (
+                        agent_build_prompts.TransactionReconstructorUser
+                    )
                 if "episode" in name.lower():
-                    agent_system_msgs[name] = EpisodeReconstructorSys
-                    agent_user_msgs[name] = EpisodeReconstructorUser
+                    agent_system_msgs[name] = (
+                        agent_build_prompts.EpisodeReconstructorSys
+                    )
+                    agent_user_msgs[name] = agent_build_prompts.EpisodeReconstructorUser
                 if "stagedescription" in name.lower():
-                    agent_system_msgs[name] = StageDescriptionReconstructorSys
-                    agent_user_msgs[name] = StageDescriptionReconstructorUser
+                    agent_system_msgs[name] = (
+                        agent_build_prompts.StageDescriptionReconstructorSys
+                    )
+                    agent_user_msgs[name] = (
+                        agent_build_prompts.StageDescriptionReconstructorUser
+                    )
                 if "eventdescription" in name.lower():
-                    agent_system_msgs[name] = EventDescriptionReconstructorSys
-                    agent_user_msgs[name] = EventDescriptionReconstructorUser
+                    agent_system_msgs[name] = (
+                        agent_build_prompts.EventDescriptionReconstructorSys
+                    )
+                    agent_user_msgs[name] = (
+                        agent_build_prompts.EventDescriptionReconstructorUser
+                    )
 
             # Build the state
             state = {
