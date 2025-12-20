@@ -92,8 +92,8 @@ def main():
         sample_id=str(uuid.uuid4()),
         raw_data_id=str(uuid.uuid4()),
         content=ponzi_text,
-        category="Fraud",
-        knowledge_field="Ponzi",
+        category=None,
+        knowledge_field=None,
         tag="utest",
         method="synthetic",
     )

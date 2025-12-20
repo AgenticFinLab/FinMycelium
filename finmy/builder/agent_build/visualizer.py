@@ -1,3 +1,23 @@
+"""
+Event Cascade Visualizer
+========================
+
+This module provides the `EventCascadeVisualizer` class, which is responsible for rendering
+visual representations of financial event cascades. It transforms hierarchical event data
+(Event -> Stages -> Episodes) into a structured timeline visualization using Matplotlib.
+
+Key Features:
+- **Hierarchical Layout**: Displays Stages as the foundational layer with Episodes staggered above.
+- **Time-Aware Rendering**: Supports both real-time (timestamp-based) and logical (sequence-based) layouts.
+- **Participant Visualization**: Uses distinct markers and colors to represent different participant types.
+- **Relation Mapping**: Visualizes relationships between participants within episodes using styled connection lines.
+- **Rich Legend**: Automatically generates a legend for participant types and relation styles.
+
+Usage:
+    visualizer = EventCascadeVisualizer()
+    visualizer.plot_cascade("path/to/event_cascade.json", "output_plot.png")
+"""
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.lines import Line2D
@@ -525,7 +545,7 @@ class EventCascadeVisualizer:
         inches_per_unit = plot_width_inches / max(total_x_range, 1.0)
 
         # Font metrics (Points -> Inches)
-        font_size_points = 9
+        font_size_points = 12
         font_size_inches = font_size_points / 72.0
         # Average character width ratio (approx 0.6 of height)
         avg_char_width_inches = font_size_inches * 0.6
@@ -560,13 +580,19 @@ class EventCascadeVisualizer:
                 ax.add_patch(rect)
 
                 # Label Stage Name (Center)
+                # Calculate wrap width dynamically based on box physical width
+                # Adjust for font size difference (14 vs base 12)
+                stage_chars_per_unit = chars_per_unit * (12.0 / 14.0)
+                wrap_width = max(5, int(item["width"] * stage_chars_per_unit * 0.9))
+                wrapped_title = "\n".join(wrap(item["title"], width=wrap_width))
+
                 ax.text(
                     item["x"] + item["width"] / 2,
                     y_pos + height / 2,
-                    item["title"],
+                    wrapped_title,
                     ha="center",
                     va="center",
-                    fontsize=10,
+                    fontsize=14,
                     fontweight="bold",
                     color="black",
                 )
@@ -578,7 +604,7 @@ class EventCascadeVisualizer:
                     f"Stage: {item.get('id', '')}",
                     ha="center",
                     va="bottom",
-                    fontsize=9,
+                    fontsize=12,
                     fontweight="bold",
                     color="black",
                     alpha=0.9,
@@ -639,7 +665,7 @@ class EventCascadeVisualizer:
                     wrapped_title,
                     ha="left",
                     va="bottom",
-                    fontsize=9,
+                    fontsize=12,
                     fontweight="bold",
                     color="black",
                     rotation=0,
@@ -654,7 +680,7 @@ class EventCascadeVisualizer:
                     ep_id_str,
                     ha="center",
                     va="bottom",
-                    fontsize=9,
+                    fontsize=12,
                     fontweight="bold",
                     color="#333333",
                     zorder=15,
@@ -800,7 +826,7 @@ class EventCascadeVisualizer:
         # Configure X-axis Ticks
         # We rotate them for better readability of long timestamps
         ax.set_xticks(x_ticks)
-        ax.set_xticklabels(x_tick_labels, rotation=45, ha="right", fontsize=8)
+        ax.set_xticklabels(x_tick_labels, rotation=45, ha="right", fontsize=10)
 
         ax.set_yticks([])  # Hide Y axis ticks as they have no semantic meaning here
 
@@ -873,11 +899,19 @@ class EventCascadeVisualizer:
                 bbox_to_anchor=(1, 1),
             )
 
-        plt.title(f"Event Cascade: {evt_title}", fontsize=18, fontweight="bold", pad=20)
+        plt.title(f"Event Cascade: {evt_title}", fontsize=24, fontweight="bold", pad=20)
         plt.tight_layout()
 
         if output_path:
-            plt.savefig(output_path)
+            # Save as requested format (usually PNG)
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+            # Also save as high-res PDF
+            # Replace extension or append .pdf
+            base_name = output_path.rsplit(".", 1)[0]
+            pdf_path = f"{base_name}.pdf"
+            plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+
             plt.close()
             return output_path
         else:

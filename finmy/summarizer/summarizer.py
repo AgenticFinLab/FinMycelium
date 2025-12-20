@@ -110,8 +110,8 @@ class KWRuleSummarizer(BaseSummarizer):
     based on rule-based summarization.
     """
 
-    def __init__(self, config):
-        super().__init__(config=config, method_name="keywords_summarize")
+    def __init__(self, summarizer_config):
+        super().__init__(config=summarizer_config, method_name="keywords_summarize")
         # Download necessary NLTK data for English
         self.nlp_en = load_spacy_model("en_core_web_md")
         self.nlp_zh = load_spacy_model("zh_core_web_trf")
