@@ -58,7 +58,8 @@ class FinmyPipeline:
     """A pipeline class for FinMycelium data processing workflow.
 
     This class uses **Registry Factory Pattern** to enable dynamic component
-    selection without code changes. Different summarizers, matchers, and builders can be selected via configuration.
+    selection without code changes.
+    Different summarizers, matchers, and builders can be selected via configuration.
 
     """
 
@@ -213,7 +214,7 @@ class FinmyPipeline:
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
 
-        logger.info(f"Logging initialized. Log file: {log_file}")
+        logger.info("Logging initialized. Log file: %s", log_file)
         return logger
 
     def create_raw_data_records(self, texts: List[str]) -> List[RawData]:
@@ -348,7 +349,7 @@ class FinmyPipeline:
             query_text=query_text,
             key_words=key_words,
         )
-        self.logger.info(f"User query input object created: {user_query_input}")
+        self.logger.info("User query input object created: %s", user_query_input)
         self.logger.info("Inserting user query input object into database...")
         self.data_manager.insert_user_query(user_query_input)
         self.logger.info("User query input object inserted successfully")
@@ -369,7 +370,7 @@ class FinmyPipeline:
         """
         self.logger.info("Generating summarized query using Summarizer...")
         summarized_query = self.summarizer.summarize(user_query_input)
-        self.logger.info(f"Summarized query created: {summarized_query}")
+        self.logger.info("Summarized query created: %s", summarized_query)
         self.logger.info("=" * 25)
         return summarized_query
 
@@ -393,7 +394,7 @@ class FinmyPipeline:
             raw_data=raw_data,
             summarized_query=summarized_query,
         )
-        self.logger.info(f"MatchInput object created: {match_input}")
+        self.logger.info("MatchInput object created: %s", match_input)
         self.logger.info("=" * 25)
         return match_input
 
@@ -408,7 +409,7 @@ class FinmyPipeline:
             Match output from the LLM matcher
         """
         match_output = self.matcher.run(match_input)
-        self.logger.info(f"Matching result: {match_output}")
+        self.logger.info("Matching result: %s", match_output)
         self.logger.info("=" * 25)
         return match_output
 
@@ -467,7 +468,7 @@ class FinmyPipeline:
             meta_samples=meta_samples,
             extras={},
         )
-        self.logger.info(f"BuildInput object created: {build_input}")
+        self.logger.info("BuildInput object created: %s", build_input)
         self.logger.info("=" * 25)
         return build_input
 
@@ -537,10 +538,12 @@ class FinmyPipeline:
                     # Log warning if logger is available
                     if self.logger:
                         self.logger.warning(
-                            f"Unknown source type: {source}, skipping..."
+                            "Unknown source type: %s, skipping...", source
                         )
                     else:
-                        print(f"Warning: Unknown source type: {source}, skipping...")
+                        self.logger.warning(
+                            "Warning: Unknown source type: %s, skipping...", source
+                        )
 
         raw_data_records: List[RawData] = []
 
@@ -571,7 +574,8 @@ class FinmyPipeline:
 
             pdf_collector = PDFCollector(default_pdf_config)
 
-            # Group PDF paths: if it's a directory, use input_dir; if it's a file, use input_pdf_path
+            # Group PDF paths: if it's a directory, use input_dir;
+            # if it's a file, use input_pdf_path
             pdf_dirs = [p for p in pdf_paths if os.path.isdir(p)]
             pdf_files = [p for p in pdf_paths if os.path.isfile(p)]
 
@@ -812,7 +816,8 @@ class FinmyPipeline:
         key_words: list,
     ):
         """
-        Build the pipeline with the provided contents (list of text), query_text (query string), and key_words (list of keywords).
+        Build the pipeline with the provided contents (list of text),
+        query_text (query string), and key_words (list of keywords).
         Returns the build result.
         """
         # Initialize logging
