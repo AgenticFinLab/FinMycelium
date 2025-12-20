@@ -1,25 +1,60 @@
 """
-Class-based financial event reconstruction builder.
-
-This builder first classifies the financial event type using LM, then applies
-class-specific prompts for detailed event reconstruction.
+Class builder implementation for event cascade reconstruction using LLM.
 """
 
-import re
 import json
 import os
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, Any
+import re
+from typing import Dict, Any, List, Optional
 
-from lmbase.inference.base import InferInput, InferOutput
-from lmbase.inference import api_call
+from lmbase.inference.api_call import LangChainAPIInference, InferInput
 
-from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
-from finmy.converter import read_text_data_from_block
-from finmy.builder.class_build.prompts import *
-from finmy.builder.utils import extract_json_response
-from finmy.builder.base import AgentState
+from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput, AgentState
+from finmy.builder.agent_build.structure import EventCascade
+from finmy.generic import DataSample
+
+# Import all prompt modules
+from finmy.builder.class_build.prompts import (
+    classify,
+    ponzi_scheme,
+    pyramid_scheme,
+    pump_and_dump,
+    market_manipulation,
+    accounting_fraud,
+    cryptocurrency_ico_scam,
+    forex_binary_options_fraud,
+    advance_fee_fraud,
+    affinity_fraud,
+    embezzlement_misappropriation_of_funds,
+    bank_run,
+    short_squeeze,
+    sovereign_default,
+    liquidity_spiral,
+    regulatory_arbitrage,
+    credit_event,
+    systemic_shock,
+    leverage_cycle_collapse,
+    stablecoin_depeg,
+    other_financial_event,
+)
+
+
+def format_user_prompt(query: str, keywords: List[str], content: str) -> str:
+    """Format the user prompt with query, keywords, and content.
+    
+    Args:
+        query: User query text
+        keywords: List of keyword hints
+        content: Text content for analysis
+        
+    Returns:
+        Formatted user prompt string
+    """
+    return USER_PROMPT.format(
+        Query=query,
+        Keywords=", ".join(keywords),
+        Content=content,
+    )
 
 
 USER_PROMPT = """
@@ -41,34 +76,28 @@ Generate content in JSON format according to the SYSTEM_PROMPT schema.
 """
 
 
-class ClassLMBuilder(BaseBuilder):
+class ClassEventBuilder(BaseBuilder):
+    """Class builder for generating event cascades from text content using LLM.
+    
+    This builder implements a two-stage process:
+    1. Classify the financial event type
+    2. Generate detailed event cascade for the classified type
     """
-    Build financial event cascade using classification-first approach.
-    First classifies event type, then applies class-specific prompts.
-    """
 
-    def __init__(self, lm_name: str = "deepseek/deepseek-chat", config=None):
-        super().__init__(
-            method_name="class_lm_builder", build_config={"lm_name": lm_name}
-        )
-
-        generation_config = (
-            {} if "generation_config" not in config else config["generation_config"]
-        )
-        self.lm_api = api_call.LangChainAPIInference(
-            lm_name=lm_name,
-            generation_config=generation_config,
-        )
-
-        self.user_prompt = (
-            USER_PROMPT if "user_prompt" not in config else config["user_prompt"]
-        )
-
-        self.output_dir = config.get(
-            "output_dir", "./examples/utest/Collector/test_files/event_cascade_output"
-        )
-
-        # Map event types to their specific prompts
+    def __init__(
+        self,
+        method_name: Optional[str] = None,
+        build_config: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize the class builder.
+        
+        Args:
+            method_name: Name of the builder method
+            build_config: Configuration dictionary for the builder
+        """
+        super().__init__(method_name=method_name, build_config=build_config)
+        
+        # Initialize class prompts dictionary
         self.class_prompts = {
             "Ponzi Scheme": ponzi_scheme.ponzi_scheme_prompt(),
             "Pyramid Scheme": pyramid_scheme.pyramid_scheme_prompt(),
@@ -91,129 +120,224 @@ class ClassLMBuilder(BaseBuilder):
             "Stablecoin Depeg": stablecoin_depeg.stablecoin_depeg_prompt(),
             "Other Financial Event": other_financial_event.other_financial_event_prompt(),
         }
+        
+        self.user_prompt = USER_PROMPT
 
-    def save_event_cascade(
-        self, event_cascade: Dict[str, Any], output_path: str = None
-    ):
+    @staticmethod
+    def extract_json_response(response_text: str) -> Dict[str, Any]:
+        """Extract a JSON object/array from an LLM response text.
+        
+        Args:
+            response_text: Raw response text from LLM
+            
+        Returns:
+            Parsed JSON as dictionary
+            
+        Raises:
+            ValueError: If no valid JSON can be found
         """
-        Save event cascade data to JSON files in a structured directory.
+        clean_text = response_text.strip()
+        
+        # Remove code block markers if present
+        m = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
+        if m:
+            clean_text = m.group(1)
+            
+        try:
+            return json.loads(clean_text)
+        except json.JSONDecodeError as e:
+            # Try to find JSON objects or arrays in the text
+            matches = re.findall(r"(\{.*\}|\[.*\])", clean_text, re.DOTALL)
+            if matches:
+                longest = max(matches, key=len)
+                return json.loads(longest)
+            raise ValueError(f"Failed to parse JSON from response: {e}") from e
+
+    def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
+        """Execute exactly one stage using prompts from the provided state.
+        
+        Args:
+            state: Current agent state
+            agent_name: Name of the agent to execute
+            
+        Returns:
+            Updated agent state after execution
         """
-        if output_path is None:
-            output_path = self.output_dir
+        # This builder uses a different pattern (not using LangGraph nodes)
+        # So we implement a simplified version
+        return state
 
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        base_dir = os.path.join(output_path, f"event_cascade_{timestamp}")
-        os.makedirs(base_dir, exist_ok=True)
+    def graph(self):
+        """Construct and compile the LangGraph for this agent or pipeline.
+        
+        Returns:
+            A CompiledStateGraph with entry point and edges defined
+        """
+        # This builder doesn't use LangGraph, so return None
+        return None
 
-        print(f"Saving event cascade to: {base_dir}")
+    def save_event_cascade(self, event_cascade: Dict[str, Any], output_path: str) -> str:
+        """Save event cascade data to JSON file.
+        
+        Args:
+            event_cascade: Dictionary containing event cascade data
+            output_path: Path to save the JSON file
+            
+        Returns:
+            Path to the saved file
+        """
+        # Create directory if it doesn't exist
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        
+        print(f"Saving event cascade to: {output_path}")
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(event_cascade, f, ensure_ascii=False, indent=2)
+        
+        print(f"Successfully saved event cascade to: {output_path}")
+        return output_path
 
-        if "FinancialEventReconstruction" in event_cascade:
-            event_data = event_cascade["FinancialEventReconstruction"]
-        else:
-            event_data = event_cascade
-
-        main_file = os.path.join(base_dir, "EventCascade.json")
-        with open(main_file, "w", encoding="utf-8") as f:
-            json.dump(event_data, f, ensure_ascii=False, indent=2)
-        print(f"Saved main event cascade to: {main_file}")
-
-        if "stages" in event_data:
-            stages_dir = os.path.join(base_dir, "stages")
-            os.makedirs(stages_dir, exist_ok=True)
-
-            stages = event_data["stages"]
-            if isinstance(stages, list):
-                for idx, stage in enumerate(stages):
-                    if isinstance(stage, dict):
-                        sid = stage.get("stage_id", f"S{idx+1}")
-                        stage_file = os.path.join(stages_dir, f"{sid}.json")
-                        with open(stage_file, "w", encoding="utf-8") as f:
-                            json.dump(stage, f, ensure_ascii=False, indent=2)
-                        print(f"✓ Saved stage {sid} to: {stage_file}")
-
-        return base_dir
-
-    def load_samples(self, build_input: BuildInput) -> Any:
-        """Load the specific content of samples from the files."""
-        samples_content = "\n\n".join(
-            [
-                read_text_data_from_block(sample.location)
-                for sample in build_input.samples
-            ]
+    def test_api_connection(self) -> str:
+        """Test the API connection with a simple message.
+        
+        Returns:
+            Response from the test call
+        """
+        test_api_call = LangChainAPIInference(lm_name=self.build_config["lm_name"])
+        chatbot = InferInput(
+            system_msg="Hello",
+            user_msg="Test message",
         )
-        print(f"Loaded {len(build_input.samples)} samples")
-        return samples_content
+        result = test_api_call.run(chatbot)
+        print("Test response:", result.response)
+        return result.response
 
     def build(self, build_input: BuildInput) -> BuildOutput:
-        """Build the event cascades from the input samples."""
-        samples_content = self.load_samples(build_input)
-
-        # First step: Classify the event type
-        print("classify.classify_prompt():\n", classify.classify_prompt())
-
-        classification_output: InferOutput = self.lm_api.run(
-            infer_input=InferInput(
-                system_msg=classify.classify_prompt()
-                .replace("{", "{{")
-                .replace("}", "}}"),
-                user_msg=self.user_prompt,
-            ),
-            Query=build_input.user_query.query_text,
-            Keywords=build_input.user_query.key_words,
-            Content=samples_content,
+        """Build and process event cascade from input data.
+        
+        Args:
+            build_input: Input data container
+            
+        Returns:
+            BuildOutput containing event cascades and results
+            
+        Raises:
+            ValueError: If JSON parsing fails
+            Exception: For other errors during processing
+        """
+        print("Starting event cascade building process...")
+        
+        # Test API connection first
+        self.test_api_connection()
+        
+        # Extract query information
+        user_query = build_input.user_query
+        query_text = user_query.query_text or ""
+        keywords = user_query.key_words or []
+        
+        # Combine all sample content
+        all_content = []
+        for sample in build_input.samples:
+            all_content.append({
+                "sample_id": sample.sample_id,
+                "content": sample.content,
+                "category": sample.category,
+                "knowledge_field": sample.knowledge_field,
+            })
+        
+        # Create API call instance
+        api_call = LangChainAPIInference(lm_name=self.build_config["lm_name"])
+        
+        # Stage 1: Classify event type
+        print("Classifying event type...")
+        classify_chatbot = InferInput(
+            system_msg=classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
+            user_msg=self.user_prompt.format(
+                Query=query_text,
+                Keywords=", ".join(keywords),
+                Content=str(all_content[:200])
+            ) + "\n\nSYSTEM PROMPT:\n\n" + classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
         )
-
-        event_classify_json = extract_json_response(classification_output.response)
-        print("Classification json:\n", event_classify_json)
-
-        primary_type = event_classify_json["event_type"]["primary_type"]
-
-        if primary_type in self.class_prompts:
-            # Second step: Apply class-specific prompt for detailed reconstruction
-            detailed_output: InferOutput = self.lm_api.run(
-                infer_input=InferInput(
-                    system_msg=self.class_prompts[primary_type]
-                    .replace("{", "{{")
-                    .replace("}", "}}"),
-                    user_msg=self.user_prompt,
-                ),
-                Query=build_input.user_query.query_text,
-                Keywords=build_input.user_query.key_words,
-                Content=samples_content,
-            )
-
-            # Extract and save JSON
-            try:
-                print(detailed_output.response)
-                output_text = detailed_output.response.strip()
-
-                # Clean JSON response
-                if output_text.startswith("```json"):
-                    output_text = output_text[7:]
-                elif output_text.startswith("```"):
-                    output_text = output_text[3:]
-                if output_text.endswith("```"):
-                    output_text = output_text[:-3]
-
-                cleaned_response = output_text.strip()
-                event_cascade_json = extract_json_response(cleaned_response)
-                saved_dir = self.save_event_cascade(event_cascade_json)
-                print(f"Successfully saved event cascade to directory: {saved_dir}")
-            except Exception as e:
-                print(f"Warning: Failed to save JSON files: {e}")
-                raw_output_path = os.path.join(
-                    self.output_dir, "build_out_raw_response.json"
-                )
-                os.makedirs(self.output_dir, exist_ok=True)
-                with open(raw_output_path, "w", encoding="utf-8") as f:
-                    f.write(detailed_output.response)
-                print(f"Raw response saved to: {raw_output_path}")
-
-            return BuildOutput(event_cascades=[detailed_output.response])
-
-        else:
-            print(f"Warning: Unsupported event type '{primary_type}'")
-            return BuildOutput(event_cascades=[classification_output.response])
-
-    def execute_agent(self, state: AgentState) -> AgentState:
-        raise NotImplementedError("execute_agent is not implemented")
+        
+        classify_output = api_call.run(classify_chatbot)
+        classify_output_text = classify_output.response.strip()
+        print("Classify output text:", classify_output_text)
+        
+        classify_result = self.extract_json_response(classify_output_text)
+        classify_event_type = classify_result["event_type"]["primary_type"]
+        print(f"Classified event type: {classify_event_type}")
+        
+        # Stage 2: Generate detailed event cascade
+        print(f"Generating detailed event cascade for: {classify_event_type}")
+        event_prompt = self.class_prompts.get(
+            classify_event_type,
+            self.class_prompts["Other Financial Event"]
+        )
+        escaped_prompt = event_prompt.replace("{", "{{").replace("}", "}}")
+        
+        detailed_chatbot = InferInput(
+            system_msg=escaped_prompt,
+            user_msg=str(all_content) + "\n\n\n" + escaped_prompt,
+        )
+        
+        detailed_output = api_call.run(detailed_chatbot)
+        output_text = detailed_output.response.strip()
+        print("Received detailed output from LLM")
+        
+        # Try to parse JSON directly
+        try:
+            event_cascade_json = self.extract_json_response(output_text)
+        except json.JSONDecodeError:
+            # If direct parsing fails, try to format it
+            print("Direct JSON parsing failed, attempting to format response...")
+            
+            for i in range(3):
+                try:
+                    print(f"Format attempt {i+1}")
+                    format_chatbot = InferInput(
+                        system_msg="You are a professional JSON format expert.",
+                        user_msg=output_text.replace("{", "{{").replace("}", "}}") + 
+                                "\n\nPlease format the above text as a proper JSON object strictly. " +
+                                "If there is any error in the format, please fix it. " +
+                                "Don't add any extra text or change the content of the text. " +
+                                "Only return the JSON object. " +
+                                "You should ignore directly: " +
+                                "(1) javascript:void((function(){{}})()); " +
+                                "(2) document.open();document.domain='sogou.com';document.close();",
+                    )
+                    
+                    format_output = api_call.run(format_chatbot)
+                    format_output_text = format_output.response.strip()
+                    event_cascade_json = self.extract_json_response(format_output_text)
+                    break
+                    
+                except Exception as e:
+                    print(f"Format attempt {i+1} failed: {e}")
+                    if i == 2:
+                        raise ValueError(f"Failed to parse JSON from LLM response after 3 attempts: {e}")
+        
+        # Save the event cascade
+        output_path = os.path.join(
+            self.save_dir,
+            f"event_cascade_{classify_event_type.replace(' ', '_').replace('/', '_')}.json"
+        )
+        self.save_event_cascade(event_cascade_json, output_path)
+        
+        # Create BuildOutput
+        build_output = BuildOutput(
+            result=event_cascade_json,
+            logs=[
+                f"Classified event type: {classify_event_type}",
+                f"Output saved to: {output_path}",
+                f"Processing completed successfully",
+            ],
+            extras={
+                "classified_event_type": classify_event_type,
+                "output_file_path": output_path,
+                "num_samples_processed": len(build_input.samples),
+            }
+        )
+        
+        return build_output
