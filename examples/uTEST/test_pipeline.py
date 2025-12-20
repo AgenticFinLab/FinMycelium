@@ -1,9 +1,16 @@
+"""Test script for running FinMycelium pipeline with YAML configuration.
+
+This module provides a test interface for the FinMycelium pipeline system,
+allowing users to run the pipeline with custom configurations, data sources,
+and queries. It supports both URL-based and PDF-based data sources.
+"""
+
 from datetime import datetime
 from typing import List
 import argparse
-import yaml
 from pathlib import Path
 
+import yaml
 from finmy.pipeline import FinmyPipeline
 
 

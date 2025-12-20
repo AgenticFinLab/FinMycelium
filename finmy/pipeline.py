@@ -493,7 +493,7 @@ class FinmyPipeline:
                 "http",
                 "https",
             ]
-        except Exception:
+        except (TypeError, ValueError, AttributeError):
             return False
 
     def _is_pdf_path(self, source: str) -> bool:
