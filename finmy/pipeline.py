@@ -640,72 +640,26 @@ class FinmyPipeline:
 
         return raw_data_records
 
-    def lm_build_pipeline_main(
-        self,
-        data_sources: List[str],
-        query_text: str,
-        key_words: List[str],
-    ):
+    def _process_matching(
+        self, raw_data_records: List[RawData], summarized_query: SummarizedUserQuery
+    ) -> List:
         """
-        Main function that orchestrates the complete data processing workflow.
-
-        This function executes the following steps:
-        1. Initialize data manager
-        2. Collect data from URLs or PDF paths using collectors
-        3. Create and store raw data records
-        4. Create and store user query input
-        5. Summarize user query
-        6. Match raw data with summarized query
-        7. Generate meta samples from match results
-        8. Store meta samples
-        9. Create build input for downstream processing
-        10. Run the configured builder to get the final build output.
+        Process matching for raw data records against summarized query.
 
         Args:
-            data_sources: List of URLs or PDF file paths to collect data from
-            query_text: Natural language query text
-            key_words: List of keywords for the query
-            pdf_collector_config: Optional configuration dict for PDF collector
-            url_collector_config: Optional configuration dict for URL collector
+            raw_data_records: List of raw data records to match
+            summarized_query: Summarized user query
 
         Returns:
-            The build output object produced by the selected builder.
+            List of meta samples generated from matching
         """
-        # Initialize logging
-        self.setup_logging()
-
-        # Initialize data manager
-        self.data_manager = DataManager(engine_config=self.db_config)
-
-        # Step 1: Collect data from URLs or PDF paths using collectors
-        raw_data_records = self._collect_data_from_sources(
-            data_sources=data_sources,
-            pdf_collector_config=self.pdf_collector_config,
-            url_collector_config=self.url_collector_config,
-        )
-
-        # Step 2: Store raw data records in database
-        self.store_raw_data(raw_data_records)
-
-        # Step 3: Create and store user query input
-        user_query_input = self.create_and_store_user_query(
-            query_text=query_text,
-            key_words=key_words,
-        )
-
-        # Step 4: Summarize user query
-        summarized_query = self.summarize_user_query(user_query_input)
-
         meta_samples = []
+        use_matcher = self.matcher_config.get("use_matcher", False)
 
-        if self.matcher_config.use_matcher:
+        if use_matcher:
             for raw_data in raw_data_records:
-                # Step 5: Create match input from raw data and summarized query
                 match_input = self.match_raw_data_with_query(raw_data, summarized_query)
-                # Step 6: Perform LLM matching
                 match_output = self.perform_llm_matching(match_input)
-
-                # Step 7: Convert match output to meta samples
                 meta_sample = self.create_meta_samples(match_output, raw_data)
                 meta_samples += meta_sample
         else:
@@ -724,46 +678,47 @@ class FinmyPipeline:
                 meta_sample = self.create_meta_samples(mock_match_output, raw_data)
                 meta_samples += meta_sample
 
-        # Step 8: Store meta samples in database
-        self.store_meta_samples(meta_samples)
+        return meta_samples
 
-        # Step 9: Create build input for downstream processing
-        build_input = self.create_build_input(user_query_input, meta_samples)
-        # Note: build_input is created for demonstration purposes and can be used
-        # by downstream builders in a production workflow
+    def _prepare_agent_messages(self) -> tuple:
+        """
+        Prepare agent system and user messages based on builder configuration.
 
-        # 4. Create the system and user prompts
+        Returns:
+            Tuple of (agent_system_msgs dict, agent_user_msgs dict)
+        """
         agent_names = list(self.builder_config["agents"].keys())
         agent_system_msgs = {}
         agent_user_msgs = {}
 
         for name in agent_names:
-            if "skeleton" in name.lower():
+            name_lower = name.lower()
+            if "skeleton" in name_lower:
                 agent_system_msgs[name] = (
                     agent_build_prompts.EventLayoutReconstructorSys
                 )
                 agent_user_msgs[name] = agent_build_prompts.EventLayoutReconstructorUser
-            if "participant" in name.lower():
+            if "participant" in name_lower:
                 agent_system_msgs[name] = (
                     agent_build_prompts.ParticipantReconstructorSys
                 )
                 agent_user_msgs[name] = agent_build_prompts.ParticipantReconstructorUser
-            if "transaction" in name.lower():
+            if "transaction" in name_lower:
                 agent_system_msgs[name] = (
                     agent_build_prompts.TransactionReconstructorSys
                 )
                 agent_user_msgs[name] = agent_build_prompts.TransactionReconstructorUser
-            if "episode" in name.lower():
+            if "episode" in name_lower:
                 agent_system_msgs[name] = agent_build_prompts.EpisodeReconstructorSys
                 agent_user_msgs[name] = agent_build_prompts.EpisodeReconstructorUser
-            if "stagedescription" in name.lower():
+            if "stagedescription" in name_lower:
                 agent_system_msgs[name] = (
                     agent_build_prompts.StageDescriptionReconstructorSys
                 )
                 agent_user_msgs[name] = (
                     agent_build_prompts.StageDescriptionReconstructorUser
                 )
-            if "eventdescription" in name.lower():
+            if "eventdescription" in name_lower:
                 agent_system_msgs[name] = (
                     agent_build_prompts.EventDescriptionReconstructorSys
                 )
@@ -771,7 +726,20 @@ class FinmyPipeline:
                     agent_build_prompts.EventDescriptionReconstructorUser
                 )
 
-        # Build the state
+        return agent_system_msgs, agent_user_msgs
+
+    def _run_agent_builder(self, build_input: BuildInput):
+        """
+        Run AgentEventBuilder and return the restored cascade.
+
+        Args:
+            build_input: BuildInput object for the builder
+
+        Returns:
+            Restored cascade from the builder
+        """
+        agent_system_msgs, agent_user_msgs = self._prepare_agent_messages()
+
         state = {
             "build_input": build_input,
             "agent_results": [],
@@ -781,19 +749,13 @@ class FinmyPipeline:
             "agent_user_msgs": agent_user_msgs,
         }
 
-        # Run build
         self.logger.info("Starting AgentEventBuilder...")
         graph = self.builder.graph()
-
-        # Retrieve graph config from the loaded configuration
         graph_config = self.builder_config["graph_config"]
-
         final_state = graph.invoke(state, graph_config)
         self.logger.info("Build completed.")
 
-        # Integrate final result
         final_cascade = self.builder.integrate_results(final_state)
-
         build_input = final_state.pop("build_input")
 
         # Save the final state to the json
@@ -826,26 +788,70 @@ class FinmyPipeline:
 
         return restored_cascade
 
-    def lm_build_pipeline_with_contents(
+    def _execute_builder(self, build_input: BuildInput):
+        """
+        Execute the configured builder and return the result.
+
+        Args:
+            build_input: BuildInput object for the builder
+
+        Returns:
+            Build output from the builder
+        """
+        builder_type = self.builder_config.get("builder_type", "AgentEventBuilder")
+
+        if builder_type == "AgentEventBuilder":
+            return self._run_agent_builder(build_input)
+        elif builder_type == "ClassEventBuilder":
+            return self.builder.build(build_input)
+        else:
+            raise ValueError(f"Invalid builder type: {builder_type}")
+
+    def lm_build_pipeline_main(
         self,
-        contents: list,
+        data_sources: List[str],
         query_text: str,
-        key_words: list,
+        key_words: List[str],
     ):
         """
-        Build the pipeline with the provided contents (list of text),
-        query_text (query string), and key_words (list of keywords).
-        Returns the build result.
+        Main function that orchestrates the complete data processing workflow.
+
+        This function executes the following steps:
+        1. Initialize data manager
+        2. Collect data from URLs or PDF paths using collectors
+        3. Create and store raw data records
+        4. Create and store user query input
+        5. Summarize user query
+        6. Match raw data with summarized query
+        7. Generate meta samples from match results
+        8. Store meta samples
+        9. Create build input for downstream processing
+        10. Run the configured builder to get the final build output.
+
+        Args:
+            data_sources: List of URLs or PDF file paths to collect data from
+            query_text: Natural language query text
+            key_words: List of keywords for the query
+            pdf_collector_config: Optional configuration dict for PDF collector
+            url_collector_config: Optional configuration dict for URL collector
+
+        Returns:
+            The build output object produced by the selected builder.
         """
-        # Initialize logging
-        self.setup_logging()
+        # Ensure logging and data manager are initialized
+        if self.logger is None:
+            self.logger = self.setup_logging()
+        if self.data_manager is None:
+            self.data_manager = DataManager(engine_config=self.db_config)
 
-        # Initialize data manager
-        self.data_manager = DataManager(engine_config=self.db_config)
+        # Step 1: Collect data from URLs or PDF paths using collectors
+        raw_data_records = self._collect_data_from_sources(
+            data_sources=data_sources,
+            pdf_collector_config=self.pdf_collector_config,
+            url_collector_config=self.url_collector_config,
+        )
 
-        # 初始化原始数据
-        raw_data_records = self.create_raw_data_records(contents)
-        # 存储原始数据
+        # Step 2: Store raw data records in database
         self.store_raw_data(raw_data_records)
 
         # Step 3: Create and store user query input
@@ -857,145 +863,66 @@ class FinmyPipeline:
         # Step 4: Summarize user query
         summarized_query = self.summarize_user_query(user_query_input)
 
-        meta_samples = []
-
-        if self.matcher_config["use_matcher"]:
-            for raw_data in raw_data_records:
-                # Step 5: Create match input from raw data and summarized query
-                match_input = self.match_raw_data_with_query(raw_data, summarized_query)
-                # Step 6: Perform LLM matching
-                match_output = self.perform_llm_matching(match_input)
-
-                # Step 7: Convert match output to meta samples
-                meta_sample = self.create_meta_samples(match_output, raw_data)
-                meta_samples += meta_sample
-        else:
-            self.logger.info("not using matcher")
-            for raw_data in raw_data_records:
-                content = read_text_data_from_block(raw_data.location)
-                mock_match_output = MatchOutput(
-                    items=[
-                        MatchItem(
-                            paragraph=content,
-                            start=0,
-                            end=len(content),
-                        ),
-                    ],
-                )
-                meta_sample = self.create_meta_samples(mock_match_output, raw_data)
-                meta_samples += meta_sample
+        # Steps 5-7: Process matching and generate meta samples
+        meta_samples = self._process_matching(raw_data_records, summarized_query)
 
         # Step 8: Store meta samples in database
         self.store_meta_samples(meta_samples)
 
+        # Step 9: Create build input for downstream processing
         build_input = self.create_build_input(user_query_input, meta_samples)
 
-        if self.builder_config["builder_type"] == "AgentEventBuilder":
-            agent_names = list(self.builder_config["agents"].keys())
-            agent_system_msgs = {}
-            agent_user_msgs = {}
+        # Step 10: Execute builder and return result
+        return self._execute_builder(build_input)
 
-            for name in agent_names:
-                if "skeleton" in name.lower():
-                    agent_system_msgs[name] = (
-                        agent_build_prompts.EventLayoutReconstructorSys
-                    )
-                    agent_user_msgs[name] = (
-                        agent_build_prompts.EventLayoutReconstructorUser
-                    )
-                if "participant" in name.lower():
-                    agent_system_msgs[name] = (
-                        agent_build_prompts.ParticipantReconstructorSys
-                    )
-                    agent_user_msgs[name] = (
-                        agent_build_prompts.ParticipantReconstructorUser
-                    )
-                if "transaction" in name.lower():
-                    agent_system_msgs[name] = (
-                        agent_build_prompts.TransactionReconstructorSys
-                    )
-                    agent_user_msgs[name] = (
-                        agent_build_prompts.TransactionReconstructorUser
-                    )
-                if "episode" in name.lower():
-                    agent_system_msgs[name] = (
-                        agent_build_prompts.EpisodeReconstructorSys
-                    )
-                    agent_user_msgs[name] = agent_build_prompts.EpisodeReconstructorUser
-                if "stagedescription" in name.lower():
-                    agent_system_msgs[name] = (
-                        agent_build_prompts.StageDescriptionReconstructorSys
-                    )
-                    agent_user_msgs[name] = (
-                        agent_build_prompts.StageDescriptionReconstructorUser
-                    )
-                if "eventdescription" in name.lower():
-                    agent_system_msgs[name] = (
-                        agent_build_prompts.EventDescriptionReconstructorSys
-                    )
-                    agent_user_msgs[name] = (
-                        agent_build_prompts.EventDescriptionReconstructorUser
-                    )
+    def lm_build_pipeline_with_contents(
+        self,
+        contents: list,
+        query_text: str,
+        key_words: list,
+    ):
+        """
+        Build the pipeline with the provided contents (list of text),
+        query_text (query string), and key_words (list of keywords).
+        Returns the build result.
 
-            # Build the state
-            state = {
-                "build_input": build_input,
-                "agent_results": [],
-                "agent_executed": [],
-                "cost": [],
-                "agent_system_msgs": agent_system_msgs,
-                "agent_user_msgs": agent_user_msgs,
-            }
+        Args:
+            contents: List of text content strings
+            query_text: Natural language query text
+            key_words: List of keywords for the query
 
-            # Run build
-            self.logger.info("Starting AgentEventBuilder...")
-            graph = self.builder.graph()
+        Returns:
+            The build output object produced by the selected builder.
+        """
+        # Ensure logging and data manager are initialized
+        if self.logger is None:
+            self.logger = self.setup_logging()
+        if self.data_manager is None:
+            self.data_manager = DataManager(engine_config=self.db_config)
 
-            # Retrieve graph config from the loaded configuration
-            graph_config = self.builder_config["graph_config"]
+        # Step 1: Create raw data records from contents
+        raw_data_records = self.create_raw_data_records(contents)
 
-            final_state = graph.invoke(state, graph_config)
-            self.logger.info("Build completed.")
+        # Step 2: Store raw data records in database
+        self.store_raw_data(raw_data_records)
 
-            # Integrate final result
-            final_cascade = self.builder.integrate_results(final_state)
+        # Step 3: Create and store user query input
+        user_query_input = self.create_and_store_user_query(
+            query_text=query_text,
+            key_words=key_words,
+        )
 
-            build_input = final_state.pop("build_input")
+        # Step 4: Summarize user query
+        summarized_query = self.summarize_user_query(user_query_input)
 
-            # Save the final state to the json
-            self.builder.save_traces(
-                build_input.to_dict(),
-                save_name="BuildInput",
-                file_format="json",
-            )
-            self.builder.save_traces(
-                final_state,
-                save_name="FinalState",
-                file_format="json",
-            )
-            self.builder.save_traces(
-                final_cascade,
-                save_name="FinalEventCascade",
-                file_format="json",
-            )
-            self.logger.info("Traces saved.")
+        # Steps 5-7: Process matching and generate meta samples
+        meta_samples = self._process_matching(raw_data_records, summarized_query)
 
-            # Test integrate_from_files
-            self.logger.info("\nTesting integrate_from_files...")
-            restored_cascade = self.builder.integrate_from_files()
-            self.builder.save_traces(
-                restored_cascade,
-                save_name="IntegratedEventCascade",
-                file_format="json",
-            )
-            self.logger.info("integrate_from_files test completed.")
+        # Step 8: Store meta samples in database
+        self.store_meta_samples(meta_samples)
 
-            return restored_cascade
+        # Step 9: Create build input for downstream processing
+        build_input = self.create_build_input(user_query_input, meta_samples)
 
-        elif self.builder_config["builder_type"] == "ClassEventBuilder":
-            return self.builder.build(build_input)
-
-        else:
-            raise ValueError(
-                f"Invalid builder type: {self.builder_config['builder_type']}"
-            )
+        # Step 10: Execute builder and return result
+        return self._execute_builder(build_input)
