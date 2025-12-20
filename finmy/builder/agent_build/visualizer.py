@@ -64,6 +64,24 @@ class EventCascadeVisualizer:
         # Tracks how many participants of a certain type have been seen (for marker rotation)
         self.type_participant_count = {}
 
+        # New: Relation-based styling
+        # Maps relation_name -> (color, linestyle)
+        self.relation_style_map = {}
+        # Predefined linestyles
+        self.linestyles = ["-", "--", "-.", ":"]
+        # Predefined relation colors (using a different palette or subset)
+        self.relation_colors = [
+            "#e41a1c",
+            "#377eb8",
+            "#4daf4a",
+            "#984ea3",
+            "#ff7f00",
+            "#ffff33",
+            "#a65628",
+            "#f781bf",
+            "#999999",
+        ]
+
     def _parse_time(self, time_val):
         """
         Helper to parse time strings from the EventCascade JSON structure.
@@ -124,6 +142,24 @@ class EventCascadeVisualizer:
             self.participant_info_map[p_id] = {"name": name, "type": p_type}
 
         return self.participant_style_map[p_id]
+
+    def _get_relation_style(self, rel_name):
+        """
+        Assigns a consistent style (color + linestyle) to a relation type/name.
+
+        Args:
+            rel_name (str): The name/type of the relation.
+
+        Returns:
+            tuple: (color, linestyle)
+        """
+        if rel_name not in self.relation_style_map:
+            idx = len(self.relation_style_map)
+            color = self.relation_colors[idx % len(self.relation_colors)]
+            linestyle = self.linestyles[idx % len(self.linestyles)]
+            self.relation_style_map[rel_name] = (color, linestyle)
+
+        return self.relation_style_map[rel_name]
 
     def plot_cascade(self, json_path, output_path=None):
         """
@@ -734,18 +770,23 @@ class EventCascadeVisualizer:
                     for rel in rels:
                         src_id = rel["src"]
                         dst_id = rel["dst"]
+                        rel_name = rel.get("name", "Relation")
+
                         if src_id in p_coords and dst_id in p_coords:
                             sx, sy = p_coords[src_id]
                             dx, dy = p_coords[dst_id]
+
+                            # Get style for this relation type
+                            r_color, r_style = self._get_relation_style(rel_name)
 
                             # Draw line
                             ax.plot(
                                 [sx, dx],
                                 [sy, dy],
-                                color="red",
-                                alpha=0.6,
-                                linestyle="-",
-                                linewidth=1,
+                                color=r_color,
+                                alpha=0.8,
+                                linestyle=r_style,
+                                linewidth=1.5,
                                 # Below markers
                                 zorder=5,
                             )
@@ -772,11 +813,22 @@ class EventCascadeVisualizer:
         # Create a custom legend for participants
         handles = []
         labels = []
+
+        # Participant Legend Items
         for p_id, (color, marker) in self.participant_style_map.items():
             info = self.participant_info_map.get(
                 p_id, {"name": p_id, "type": "Unknown"}
             )
+            # Group by type to avoid duplicate entries in legend if desired?
+            # User request: "legent 后面展示的participat 种类 即括号里的应该是 participant_type 字段"
+            # Current implementation lists every participant.
+            # If we want to group by type, we would need to change logic.
+            # For now, stick to per-participant but with type info.
             label_str = f"{info['name']} ({info['type']})"
+
+            # Check if we already have this label (to avoid duplicates if multiple participants share name/type/style?)
+            # But unique participants should probably be listed.
+
             handle = Line2D(
                 [0],
                 [0],
@@ -789,13 +841,36 @@ class EventCascadeVisualizer:
             handles.append(handle)
             labels.append(label_str)
 
+        # Relation Legend Items
+        if self.relation_style_map:
+            # Add a separator or just append?
+            # Appending with a "heading" might be tricky in a single legend.
+            # We can add a proxy artist for a title, or just list them.
+
+            # Optional: Add a spacer/header
+            handles.append(Line2D([0], [0], color="none", label=""))
+            labels.append("--- Relations ---")
+
+            for rel_name, (r_color, r_style) in self.relation_style_map.items():
+                handle = Line2D(
+                    [0],
+                    [0],
+                    color=r_color,
+                    linestyle=r_style,
+                    linewidth=2,
+                    label=rel_name,
+                )
+                handles.append(handle)
+                labels.append(rel_name)
+
         if handles:
             ax.legend(
                 handles,
                 labels,
-                title="Participants",
+                title="Legend",
                 loc="upper left",
-                bbox_to_anchor=(1, 1),  # Place outside plot area
+                # Place outside plot area
+                bbox_to_anchor=(1, 1),
             )
 
         plt.title(f"Event Cascade: {evt_title}", fontsize=18, fontweight="bold", pad=20)
