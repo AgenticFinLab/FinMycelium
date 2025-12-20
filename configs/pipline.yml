@@ -97,7 +97,8 @@ matcher_config: &matcher_config
 # ----------------------------------------------------------------------------
 
 builder_config:
-  builder_type: "agent_build"
+  # builder_type: "agent_build"
+  builder_type: "class_build"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer

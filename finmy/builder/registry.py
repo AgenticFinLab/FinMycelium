@@ -3,7 +3,7 @@ import logging
 
 from .base import BaseBuilder
 from .lm_build import LMBuilder
-from .class_build.main_build import ClassLMBuilder
+from .class_build.main_build import ClassEventBuilder
 from .agent_build.main_build import AgentEventBuilder
 
 # ============================================================================
@@ -13,7 +13,7 @@ from .agent_build.main_build import AgentEventBuilder
 # Builder factory dictionary
 builder_factory: Dict[str, Callable] = {
     "lm": LMBuilder,
-    "class_lm": ClassLMBuilder,
+    "class_build": ClassEventBuilder,
     "agent_build": AgentEventBuilder,
 }
 
