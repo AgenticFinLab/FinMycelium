@@ -57,6 +57,7 @@ class LXMatcherBase(BaseMatcher):
             api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
             api_key=os.getenv("LLAMA_INDEX_EMBEDDING_API_KEY"),
             use_api=True,
+            embed_batch_size=os.getenv("LLAMA_INDEX_EMBEDDING_BATCH_SIZE", 5),
         )
 
     def _get_matches_from_lx_response(self, resp) -> List[str]:
