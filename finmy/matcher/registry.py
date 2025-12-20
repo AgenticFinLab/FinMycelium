@@ -21,10 +21,4 @@ matcher_factory: Dict[str, Callable] = {
 
 def get(config: dict) -> BaseMatcher:
     """Get a matcher"""
-    matcher_type = config["matcher_type"]
-    if matcher_type not in matcher_factory:
-        available = ", ".join(matcher_factory.keys())
-        raise ValueError(
-            f"Matcher '{matcher_type}' not found. Available options: {available}"
-        )
-    return matcher_factory[matcher_type](config)
+    return matcher_factory[config["matcher_type"]](config)

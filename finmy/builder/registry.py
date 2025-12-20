@@ -19,10 +19,4 @@ builder_factory: Dict[str, Callable] = {
 
 def get(config: dict) -> BaseBuilder:
     """Get a builder"""
-    builder_type = config["builder_type"]
-    if builder_type not in builder_factory:
-        available = ", ".join(builder_factory.keys())
-        raise ValueError(
-            f"Builder '{builder_type}' not found. Available options: {available}"
-        )
-    return builder_factory[builder_type](build_config=config)
+    return builder_factory[config["builder_type"]](build_config=config)
