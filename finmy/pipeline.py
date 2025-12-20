@@ -548,7 +548,7 @@ class FinmyPipeline:
         if pdf_paths:
             # Default PDF collector config
             # Use collector_config from self.config as base
-            default_pdf_config = self.collector_config.get("pdf_collector", {}).copy()
+            default_pdf_config = self.pdf_collector_config
 
             # Ensure output_dir is set if not present
             if "output_dir" not in default_pdf_config:
@@ -761,14 +761,14 @@ class FinmyPipeline:
         }
 
         # Run build
-        print("Starting AgentEventBuilder...")
+        self.logger.info("Starting AgentEventBuilder...")
         graph = self.builder.graph()
 
         # Retrieve graph config from the loaded configuration
         graph_config = self.builder_config["graph_config"]
 
         final_state = graph.invoke(state, graph_config)
-        print("Build completed.")
+        self.logger.info("Build completed.")
 
         # Integrate final result
         final_cascade = self.builder.integrate_results(final_state)
@@ -791,17 +791,17 @@ class FinmyPipeline:
             save_name="FinalEventCascade",
             file_format="json",
         )
-        print("Traces saved.")
+        self.logger.info("Traces saved.")
 
         # Test integrate_from_files
-        print("\nTesting integrate_from_files...")
+        self.logger.info("\nTesting integrate_from_files...")
         restored_cascade = self.builder.integrate_from_files()
         self.builder.save_traces(
             restored_cascade,
             save_name="IntegratedEventCascade",
             file_format="json",
         )
-        print("integrate_from_files test completed.")
+        self.logger.info("integrate_from_files test completed.")
 
         return restored_cascade
 
@@ -904,14 +904,14 @@ class FinmyPipeline:
             }
 
             # Run build
-            print("Starting AgentEventBuilder...")
+            self.logger.info("Starting AgentEventBuilder...")
             graph = self.builder.graph()
 
             # Retrieve graph config from the loaded configuration
             graph_config = self.builder_config["graph_config"]
 
             final_state = graph.invoke(state, graph_config)
-            print("Build completed.")
+            self.logger.info("Build completed.")
 
             # Integrate final result
             final_cascade = self.builder.integrate_results(final_state)
@@ -934,17 +934,17 @@ class FinmyPipeline:
                 save_name="FinalEventCascade",
                 file_format="json",
             )
-            print("Traces saved.")
+            self.logger.info("Traces saved.")
 
             # Test integrate_from_files
-            print("\nTesting integrate_from_files...")
+            self.logger.info("\nTesting integrate_from_files...")
             restored_cascade = self.builder.integrate_from_files()
             self.builder.save_traces(
                 restored_cascade,
                 save_name="IntegratedEventCascade",
                 file_format="json",
             )
-            print("integrate_from_files test completed.")
+            self.logger.info("integrate_from_files test completed.")
 
             return restored_cascade
 
