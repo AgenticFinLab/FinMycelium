@@ -1,50 +1,118 @@
-# test.py
+"""
+Test file for ClassLMSimpleBuild builder.
+"""
 
-import json
 import os
-import datetime
+import sys
+from pathlib import Path
+import json
+
 from dotenv import load_dotenv
 
-from finmy.builder.class_build.simple_build import ClassLMSimpleBuild
-from finmy.builder.class_build.prompts.ponzi_scheme import ponzi_scheme_prompt
 
 
-def test_class_lm_simple_build():
-    """Test the ClassLMSimpleBuild class."""
-    
-    # Load sample data
+from finmy.builder.class_build.main_build import ClassEventBuilder
+from finmy.builder.base import BuildInput
+from finmy.generic import UserQueryInput, DataSample
+
+
+def sample_content():
+    with open(r"examples\utest\Collector\test_files\All_Text_Content_20251218171844.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        data_str=print("\n\n".join(data))
+        return data_str
+        
+
+def test_class_build():
+    """Test the ClassEventBuild with a simple input."""
     load_dotenv()
-    all_text_content_path = r"examples\utest\Collector\test_files\All_Text_Content_20251217025828.json"
-    with open(all_text_content_path, "r", encoding="utf-8") as f:
-        all_text_content = json.load(f)
+
+    print("Starting ClassEventBuild test...")
     
-    # Define parameters
-    lm_name = "ARK/doubao-seed-1-6-flash-250828"
+    # Create test data samples
+    test_samples = [
+        DataSample(
+            sample_id="test_sample_001",
+            raw_data_id="raw_001",
+            content=sample_content(),
+            category = None,
+            knowledge_field = None,
+            tag="Test",
+            method="Manual Entry"
+        )
+    ]
     
-    
-    prompt_template = ponzi_scheme_prompt()
-    
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    # Define output path
-    output_file_path = rf"./examples/utest/Collector/test_files/event_cascade_output/EventCascade_{timestamp}.json"
-    
-    # Create and run the builder
-    builder = ClassLMSimpleBuild(
-        lm_name=lm_name,
-        all_text_content=all_text_content,
-        output_file_path=output_file_path,
-        query="蓝天格锐是怎么骗人的？",
-        keywords=["蓝天格锐"],
+    # Create user query input
+    user_query = UserQueryInput(
+        user_query_id="test_query_001",
+        query_text="硅谷银行是怎么回事？",
+        key_words=["scheme", "investors"],
+        time_range=None,
+        extras={"test": True}
     )
     
+    # Create build input
+    build_input = BuildInput(
+        user_query=user_query,
+        samples=test_samples
+    )
+    
+    # Create builder configuration
+    build_config = {
+        "lm_type": "api",
+        "lm_name": "ARK/doubao-seed-1-6-flash-250828",  # Replace with your preferred model
+        "generation_config": {
+            "temperature": 0.7,
+            "max_tokens": 2000,
+        },
+        "agents": {},
+        "save_folder": "./output"
+    }
+    
+    # Initialize builder
+    builder = ClassEventBuilder(
+        method_name="class_build",
+        build_config=build_config
+    )
+    
+    # Run build process
     try:
-        event_cascade = builder.build()
-        print(f"Successfully built event cascade: {event_cascade}")
-        return event_cascade
+        build_output = builder.build(build_input)
+        
+        print("\n=== Build Output ===")
+        print(f"Success: {build_output.result is not None}")
+        print(f"Logs: {build_output.logs}")
+        print(f"Extras: {build_output.extras}")
+        
+        if build_output.result:
+            print(f"\nResult type: {type(build_output.result)}")
+            print(f"Result keys: {list(build_output.result.keys())}")
+            
+            # Print first few keys of the result
+            
+            print("\nResult preview:")
+            print(json.dumps(build_output.result, indent=2)[:500] + "...")
+        
+        print("\nTest completed successfully!")
+        return True
+        
     except Exception as e:
-        print(f"Error during building: {e}")
-        raise
+        print(f"\nTest failed with error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 if __name__ == "__main__":
-    test_class_lm_simple_build()
+    # Create test output directory
+    os.makedirs("./test_output", exist_ok=True)
+    
+    # Run test
+    success = test_class_build()
+    
+    if success:
+        print("\n✓ All tests passed!")
+        sys.exit(0)
+    else:
+        print("\n✗ Tests failed!")
+        sys.exit(1)
