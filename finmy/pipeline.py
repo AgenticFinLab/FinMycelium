@@ -56,45 +56,8 @@ class FinmyPipeline:
     """A pipeline class for FinMycelium data processing workflow.
 
     This class uses **Registry Factory Pattern** to enable dynamic component
-    selection without code changes. Different summarizers, matchers, and builders
-    can be selected via configuration.
+    selection without code changes. Different summarizers, matchers, and builders can be selected via configuration.
 
-    The expected configuration structure is aligned with ``configs/pipline.yml``::
-
-        lm_type: "api"
-        lm_name: "deepseek/deepseek-chat"
-        save_folder: "EXPERIMENT/uTEST/Pipline"
-        output_dir: "EXPERIMENT/uTEST/Pipline/output"
-        summarizer_type: "kw_lm"      # or "kw_rule"
-        matcher_type: "llm"           # or "re", "lx_keyword", "lx_llm", "lx_vector"
-        builder_type: "class_lm"      # or "lm"
-
-    Available Component Types:
-
-    **Summarizers:**
-    - ``kw_lm``: LLM-based keyword summarizer (KWLMSummarizer)
-    - ``kw_rule``: Rule-based keyword summarizer (KWRuleSummarizer)
-
-    **Matchers:**
-    - ``llm``: LLM-based matcher (LLMMatcher)
-    - ``re``: Regex-based matcher (ReMatch)
-    - ``lx_keyword``: LlamaIndex keyword-based matcher (KWMatcher)
-    - ``lx_llm``: LlamaIndex LLM-based matcher (LMMatcher)
-    - ``lx_vector``: LlamaIndex vector-based matcher (VectorMatcher)
-
-    **Builders:**
-    - ``lm``: Single LM builder (LMBuilder)
-    - ``class_lm``: Class-based LM builder (ClassLMBuilder)
-
-    Parameters:
-    - ``output_dir``: where build outputs will be written
-    - ``summarizer_type``: which summarizer implementation to use
-    - ``matcher_type``: which matcher implementation to use
-    - ``builder_type``: which builder implementation to use
-    - ``lm_name`` / ``summarizer_lm_name`` / ``matcher_lm_name``:
-      model identifiers for different LLM components
-    - ``summarizer_config`` / ``matcher_config`` / ``builder_config``:
-      additional configuration dicts passed to respective components
     """
 
     def __init__(self, finmy_config: dict):
@@ -102,15 +65,7 @@ class FinmyPipeline:
         Initialize the pipeline with configuration.
 
         Args:
-            finmy_config:
-                - A ``dict`` with configuration parameters including:
-                  - ``output_dir``: Output directory for build results
-                  - ``summarizer_type``: Type of summarizer (default: "kw_lm")
-                  - ``matcher_type``: Type of matcher (default: "llm")
-                  - ``builder_type``: Type of builder (default: "class_lm")
-                  - ``lm_name``: Default LLM name for all components
-                  - ``summarizer_lm_name``: LLM name for summarizer (overrides lm_name)
-                  - ``matcher_lm_name``: LLM name for matcher (overrides lm_name)
+            finmy_config: A dict containing all configuration parameters for the pipeline.
         """
         self.config = dict(finmy_config) if finmy_config is not None else {}
 

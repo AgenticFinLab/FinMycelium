@@ -9,7 +9,7 @@ from .base import BaseMatcher, MatchInput, MatchItem
 from .utils import extract_context_with_paragraphs, split_paragraphs
 
 
-class ReMatch(BaseMatcher):
+class ReMatcher(BaseMatcher):
     """Regex-based matcher implementation.
 
     This class implements the MatchBase interface using regular expressions
