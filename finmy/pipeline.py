@@ -645,8 +645,6 @@ class FinmyPipeline:
         data_sources: List[str],
         query_text: str,
         key_words: List[str],
-        pdf_collector_config: Optional[dict] = None,
-        url_collector_config: Optional[dict] = None,
     ):
         """
         Main function that orchestrates the complete data processing workflow.
@@ -682,8 +680,8 @@ class FinmyPipeline:
         # Step 1: Collect data from URLs or PDF paths using collectors
         raw_data_records = self._collect_data_from_sources(
             data_sources=data_sources,
-            pdf_collector_config=pdf_collector_config,
-            url_collector_config=url_collector_config,
+            pdf_collector_config=self.pdf_collector_config,
+            url_collector_config=self.url_collector_config,
         )
 
         # Step 2: Store raw data records in database
