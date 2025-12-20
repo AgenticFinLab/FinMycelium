@@ -684,17 +684,14 @@ class FinmyPipeline:
         summarized_query = self.summarize_user_query(user_query_input)
 
         meta_samples = []
-        for i in range(len(raw_data_records)):
+        for raw_data in raw_data_records:
             # Step 5: Create match input from raw data and summarized query
-            match_input = self.match_raw_data_with_query(
-                raw_data_records[i], summarized_query
-            )
+            match_input = self.match_raw_data_with_query(raw_data, summarized_query)
             # Step 6: Perform LLM matching
             match_output = self.perform_llm_matching(match_input)
 
             # Step 7: Convert match output to meta samples
-            meta_sample = self.create_meta_samples(match_output, raw_data_records[i])
-
+            meta_sample = self.create_meta_samples(match_output, raw_data)
             meta_samples += meta_sample
 
         # Step 8: Store meta samples in database
@@ -807,9 +804,6 @@ class FinmyPipeline:
         # Initialize logging
         self.setup_logging()
 
-        # Initialize data manager
-        self.data_manager = DataManager()
-
         # Step 1: Build RawData records from collectors
         raw_data_records: List[RawData] = []
 
@@ -854,7 +848,6 @@ class FinmyPipeline:
         # Step 9: Create build input for downstream processing
         build_input = self.create_build_input(user_query_input, meta_samples)
 
-        # 4. Create the system and user prompts
         agent_names = list(self.builder_config["agents"].keys())
         agent_system_msgs = {}
         agent_user_msgs = {}
@@ -933,3 +926,138 @@ class FinmyPipeline:
         print("integrate_from_files test completed.")
 
         return restored_cascade
+
+    def lm_build_pipeline_main_with_contents(
+        self,
+        contents: list,
+        query_text: str,
+        key_words: list,
+        builder_type: str,
+    ):
+        """
+        Build the pipeline with the provided contents (list of text), query_text (query string), and key_words (list of keywords).
+        Returns the build result.
+        """
+        # Initialize logging
+        self.setup_logging()
+
+        # Initialize data manager
+        self.data_manager = DataManager(engine_config=self.db_config)
+
+        # 初始化原始数据
+        raw_data_records = self.create_raw_data_records(contents)
+        # 存储原始数据
+        self.store_raw_data(raw_data_records)
+
+        # Step 3: Create and store user query input
+        user_query_input = self.create_and_store_user_query(
+            query_text=query_text,
+            key_words=key_words,
+        )
+
+        # Step 4: Summarize user query
+        summarized_query = self.summarize_user_query(user_query_input)
+
+        meta_samples = []
+        for raw_data in raw_data_records:
+            # Step 5: Create match input from raw data and summarized query
+            match_input = self.match_raw_data_with_query(raw_data, summarized_query)
+            # Step 6: Perform LLM matching
+            match_output = self.perform_llm_matching(match_input)
+
+            # Step 7: Convert match output to meta samples
+            meta_sample = self.create_meta_samples(match_output, raw_data)
+            meta_samples += meta_sample
+
+        # Step 8: Store meta samples in database
+        self.store_meta_samples(meta_samples)
+
+        build_input = self.create_build_input(user_query_input, meta_samples)
+
+        if builder_type == "agent_build":
+            agent_names = list(self.builder_config["agents"].keys())
+            agent_system_msgs = {}
+            agent_user_msgs = {}
+
+            for name in agent_names:
+                if "skeleton" in name.lower():
+                    agent_system_msgs[name] = EventLayoutReconstructorSys
+                    agent_user_msgs[name] = EventLayoutReconstructorUser
+                if "participant" in name.lower():
+                    agent_system_msgs[name] = ParticipantReconstructorSys
+                    agent_user_msgs[name] = ParticipantReconstructorUser
+                if "transaction" in name.lower():
+                    agent_system_msgs[name] = TransactionReconstructorSys
+                    agent_user_msgs[name] = TransactionReconstructorUser
+                if "episode" in name.lower():
+                    agent_system_msgs[name] = EpisodeReconstructorSys
+                    agent_user_msgs[name] = EpisodeReconstructorUser
+                if "stagedescription" in name.lower():
+                    agent_system_msgs[name] = StageDescriptionReconstructorSys
+                    agent_user_msgs[name] = StageDescriptionReconstructorUser
+                if "eventdescription" in name.lower():
+                    agent_system_msgs[name] = EventDescriptionReconstructorSys
+                    agent_user_msgs[name] = EventDescriptionReconstructorUser
+
+            # Build the state
+            state = {
+                "build_input": build_input,
+                "agent_results": [],
+                "agent_executed": [],
+                "cost": [],
+                "agent_system_msgs": agent_system_msgs,
+                "agent_user_msgs": agent_user_msgs,
+            }
+
+            # Run build
+            print("Starting AgentEventBuilder...")
+            graph = self.builder.graph()
+
+            # Retrieve graph config from the loaded configuration
+            graph_config = self.builder_config["graph_config"]
+
+            final_state = graph.invoke(state, graph_config)
+            print("Build completed.")
+
+            # Integrate final result
+            final_cascade = self.builder.integrate_results(final_state)
+
+            build_input = final_state.pop("build_input")
+
+            # Save the final state to the json
+            self.builder.save_traces(
+                build_input.to_dict(),
+                save_name="BuildInput",
+                file_format="json",
+            )
+            self.builder.save_traces(
+                final_state,
+                save_name="FinalState",
+                file_format="json",
+            )
+            self.builder.save_traces(
+                final_cascade,
+                save_name="FinalEventCascade",
+                file_format="json",
+            )
+            print("Traces saved.")
+
+            # Test integrate_from_files
+            print("\nTesting integrate_from_files...")
+            restored_cascade = self.builder.integrate_from_files()
+            self.builder.save_traces(
+                restored_cascade,
+                save_name="IntegratedEventCascade",
+                file_format="json",
+            )
+            print("integrate_from_files test completed.")
+
+            return restored_cascade
+
+        elif builder_type == "class_build":
+            return self.builder.build(build_input)
+
+        else:
+            raise ValueError(
+                f"Invalid builder type: {self.builder_config['builder_type']}"
+            )
