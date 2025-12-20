@@ -36,7 +36,7 @@ from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 from finmy.url_collector.url_parser_clean import extract_content_from_parsed_content
 from finmy.builder.class_build.prompts.ponzi_scheme import ponzi_scheme_prompt
-from finmy.pipeline import FinmyPipeline
+# from finmy.pipeline import FinmyPipeline
 from finmy.builder.class_build.simple_build import ClassLMSimpleBuild
 
 
@@ -104,6 +104,8 @@ class FinMyceliumWebInterface:
             st.session_state.selected_fraud_type = None
         if "keywords" not in st.session_state:
             st.session_state.keywords = None
+        if "build_mode" not in st.session_state:
+            st.session_state.build_mode = None
 
     def setup_ai_client(self):
         """Initialize AI client with configuration from environment variables."""
@@ -285,8 +287,16 @@ class FinMyceliumWebInterface:
 
         st.markdown("---")
 
+        st.session_state.build_mode = st.radio(
+            "Build Mode",
+            options=["class_build", "agent_build"],
+            index = 0, 
+            help="Choose the build mode for the event reconstruction",
+        )
+
         # Analysis controls
         self.render_analysis_controls()
+
 
     def render_keyword_input(self):
         """Render keyword input section with validation and suggestions."""
@@ -405,8 +415,10 @@ class FinMyceliumWebInterface:
 
         with col2:
             if st.button("🚀 Start Analysis", type="primary", width="stretch"):
-                if self.validate_analysis_inputs():
+                if self.validate_analysis_inputs() and st.session_state.build_mode == "class_build":
                     self.run_analysis()
+                elif st.session_state.build_mode == "agent_build":
+                    self.render_results_page_agent
                 else:
                     st.error("Please provide required inputs before starting analysis")
 
@@ -1067,6 +1079,972 @@ class FinMyceliumWebInterface:
 
 
 
+
+    def render_results_page_agent(self):
+        """Render the agent-based event reconstruction results with vertical timeline visualization for nested tulip mania data."""
+        st.title("Event Reconstruction - Dutch Tulip Mania (1630s)")
+
+        # Load analysis results
+        with open("output/IntegratedEventCascade.json", "r") as f:
+            st.session_state.analysis_results = json.load(f)
+
+        st.session_state.processing_status == "completed"
+        
+        # Check for empty results
+        if not st.session_state.analysis_results:
+            st.info("No reconstruction results available. Please run an analysis first.")
+            if st.button("Go to Reconstruction"):
+                st.session_state.current_page = "Analysis"
+                st.rerun()
+            return
+        
+        results = st.session_state.analysis_results
+        
+        # Main container with enhanced custom styling
+        with st.container():
+            st.markdown("""
+            <style>
+            /* Base styling */
+            .reconstruction-header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 1.5rem;
+                border-radius: 10px;
+                color: white;
+                margin-bottom: 2rem;
+            }
+            .section-card {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 10px;
+                border-left: 4px solid #667eea;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                margin-bottom: 1rem;
+            }
+            .subsection-card {
+                background: #f8f9fa;
+                padding: 1rem;
+                border-radius: 8px;
+                border-left: 3px solid #764ba2;
+                margin-bottom: 0.5rem;
+            }
+            .metric-badge {
+                display: inline-block;
+                background: #e3f2fd;
+                color: #1976d2;
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.875rem;
+                margin: 0.25rem;
+            }
+            .confidence-badge {
+                display: inline-block;
+                background: #e8f5e9;
+                color: #2e7d32;
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.875rem;
+                margin: 0.25rem;
+            }
+            
+            /* Timeline styling - SIMPLIFIED: Removed the white vertical bar */
+            .timeline-container {
+                position: relative;
+                margin-left: 3.5rem; /* Reduced margin for time labels */
+                padding-bottom: 2rem;
+            }
+            .timeline-line {
+                position: absolute;
+                left: -1.75rem; /* Adjusted position */
+                top: 0;
+                bottom: 0;
+                width: 4px;
+                background: linear-gradient(to bottom, #667eea, #764ba2);
+                border-radius: 2px;
+            }
+            .timeline-item {
+                position: relative;
+                margin-bottom: 2rem;
+                padding-left: 0.5rem; /* Reduced padding */
+            }
+            .timeline-dot {
+                position: absolute;
+                left: -2rem; /* Adjusted position */
+                top: 0.5rem;
+                width: 1.5rem;
+                height: 1.5rem;
+                border-radius: 50%;
+                background: white;
+                border: 4px solid #667eea;
+                z-index: 1;
+            }
+            .timeline-dot-stage {
+                border-color: #667eea;
+                background: #667eea;
+            }
+            .timeline-dot-episode {
+                border-color: #764ba2;
+                background: #764ba2;
+            }
+            .timeline-content {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                border: 1px solid #e2e8f0; /* Light border instead of left border */
+                margin-bottom: 1.5rem;
+            }
+            
+            /* Timeline headers */
+            .timeline-stage-header {
+                color: #667eea;
+                font-weight: bold;
+                margin-bottom: 1rem;
+                font-size: 1.2rem;
+                margin-top: 0;
+                padding-top: 0;
+                border-bottom: 2px solid #667eea;
+                padding-bottom: 0.5rem;
+            }
+            .timeline-episode-header {
+                color: #764ba2;
+                font-weight: bold;
+                margin-bottom: 1rem;
+                font-size: 1.1rem;
+                margin-top: 0;
+                padding-top: 0;
+                border-bottom: 2px solid #764ba2;
+                padding-bottom: 0.5rem;
+            }
+            
+            /* FIXED: Time labels positioning - moved further left */
+            .timeline-time-label {
+                position: absolute;
+                left: -5rem; /* Moved further left */
+                top: 0.75rem;
+                font-size: 0.8rem;
+                color: #666;
+                white-space: nowrap;
+                width: 4.5rem; /* Fixed width */
+                text-align: right; /* Right align text */
+                font-weight: 600;
+            }
+            
+            /* Evidence styling */
+            .evidence-card {
+                background: #f5fafe;
+                padding: 1rem;
+                border-radius: 6px;
+                margin: 0.75rem 0;
+                font-size: 0.9rem;
+            }
+            .reasons-list {
+                margin-left: 1rem;
+                margin-top: 0.5rem;
+                font-size: 0.9rem;
+                color: #444;
+            }
+            
+            /* Expander styling */
+            div[data-testid="stExpander"] > div:first-child {
+                background-color: #f8f9fa;
+                padding: 0.5rem 1rem;
+                border-radius: 8px 8px 0 0;
+                border-left: 3px solid #667eea;
+            }
+            
+            /* ENHANCED: Field key styling - make all keys bold with color */
+            .field-key {
+                font-weight: 700 !important;
+                color: #2d3748 !important;
+            }
+            /* Specific styling for paragraphs with field keys */
+            .timeline-content p strong,
+            .subsection-card p strong,
+            .evidence-card strong {
+                font-weight: 700 !important;
+                color: #2c5282 !important;
+                background-color: #f7fafc;
+                padding: 0.1rem 0.3rem;
+                border-radius: 3px;
+            }
+            /* Style for inline field labels */
+            .field-label {
+                font-weight: 700;
+                color: #2c5282;
+                background-color: #f7fafc;
+                padding: 0.1rem 0.3rem;
+                border-radius: 3px;
+                margin-right: 0.5rem;
+                display: inline-block;
+            }
+            
+            /* Styling for all data fields */
+            .data-field {
+                margin-bottom: 0.75rem;
+            }
+            
+            /* Responsive adjustments */
+            @media (max-width: 768px) {
+                .timeline-container {
+                    margin-left: 3rem;
+                }
+                .timeline-time-label {
+                    left: -4.5rem;
+                    font-size: 0.75rem;
+                    width: 4rem;
+                }
+            }
+            
+            /* Typography */
+            h1 {
+                font-size: 1.8rem;
+                color: #2d3748;
+            }
+            h2 {
+                font-size: 1.5rem;
+                color: #2d3748;
+            }
+            h3 {
+                font-size: 1.3rem;
+                color: #2d3748;
+            }
+            h4 {
+                font-size: 1.1rem;
+                color: #2d3748;
+                margin-top: 0;
+                margin-bottom: 1rem;
+            }
+            h5 {
+                font-size: 1rem;
+                color: #2d3748;
+                margin-top: 0;
+                margin-bottom: 1rem;
+            }
+            h6 {
+                font-size: 0.9rem;
+                color: #2d3748;
+            }
+            p, li, span {
+                font-size: 0.9rem;
+                line-height: 1.6;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Reconstruction Overview
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                event_title = results.get("title", {}).get("value", "Event Reconstruction")
+                st.markdown(
+                    f'<div class="reconstruction-header"><h2>{event_title} Complete</h2></div>',
+                    unsafe_allow_html=True
+                )
+            
+            with col2:
+                st.metric("Event ID", results.get("event_id", "N/A"), delta=None)
+                st.metric("Event Type", results.get("event_type", {}).get("value", "N/A"), delta=None)
+                if results.get("is_mock_data"):
+                    st.warning("Using demonstration data")
+            
+            # Render confidence metrics for main attributes
+            st.markdown("<div style='margin-bottom: 1rem;'>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                title_conf = results.get("title", {}).get("confidence", 0)
+                st.markdown(f'<span class="confidence-badge">Title Confidence: {title_conf:.0%}</span>', unsafe_allow_html=True)
+            with col2:
+                type_conf = results.get("event_type", {}).get("confidence", 0)
+                st.markdown(f'<span class="confidence-badge">Event Type Confidence: {type_conf:.0%}</span>', unsafe_allow_html=True)
+            with col3:
+                # Calculate average confidence for descriptions
+                desc_confidences = [d.get("confidence", 0) for d in results.get("descriptions", [])]
+                avg_desc_conf = sum(desc_confidences)/len(desc_confidences) if desc_confidences else 0
+                st.markdown(f'<span class="confidence-badge">Avg Description Confidence: {avg_desc_conf:.0%}</span>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Main timeline rendering with expanders
+            
+            
+            st.markdown('<div class="timeline-container">', unsafe_allow_html=True)
+            st.markdown('<div class="timeline-line"></div>', unsafe_allow_html=True)
+            
+            # Render event-level basic info (expanded by default)
+            st.subheader("☀️  Event Basic Information")
+            with st.expander("Event Basic Information", expanded=False):
+                st.markdown('<div class="timeline-item">', unsafe_allow_html=True)
+                st.markdown('<div class="timeline-dot"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="timeline-time-label">1630s</div>', unsafe_allow_html=True)
+                
+                # Event Title Details
+                st.markdown("<h4>Event Title</h4>", unsafe_allow_html=True)
+                st.markdown(f'<div class="data-field"><span class="field-label">Value:</span> {results.get("title", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                st.markdown(f'<span class="confidence-badge">Confidence: {results.get("title", {}).get("confidence", 0):.0%}</span>', unsafe_allow_html=True)
+                
+                # Title Evidence
+                if results.get("title", {}).get("evidence_source_contents"):
+                    with st.expander("Title Evidence Source Contents", expanded=False):
+                        for evidence in results["title"]["evidence_source_contents"]:
+                            st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                
+                # Title Reasons
+                if results.get("title", {}).get("reasons"):
+                    with st.expander("Title Reasons", expanded=False):
+                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                        for reason in results["title"]["reasons"]:
+                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                        st.markdown("</ul>", unsafe_allow_html=True)
+                
+                # Event Type Details
+                st.markdown("<h4>Event Type</h4>", unsafe_allow_html=True)
+                st.markdown(f'<div class="data-field"><span class="field-label">Value:</span> {results.get("event_type", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                st.markdown(f'<span class="confidence-badge">Confidence: {results.get("event_type", {}).get("confidence", 0):.0%}</span>', unsafe_allow_html=True)
+                
+                # Event Type Evidence
+                if results.get("event_type", {}).get("evidence_source_contents"):
+                    with st.expander("Event Type Evidence Source Contents", expanded=False):
+                        for evidence in results["event_type"]["evidence_source_contents"]:
+                            st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                
+                # Event Type Reasons
+                if results.get("event_type", {}).get("reasons"):
+                    with st.expander("Event Type Reasons", expanded=False):
+                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                        for reason in results["event_type"]["reasons"]:
+                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                        st.markdown("</ul>", unsafe_allow_html=True)
+                
+                # Event Descriptions
+                st.markdown("<h4>Event Descriptions</h4>", unsafe_allow_html=True)
+                for desc in results.get("descriptions", []):
+                    st.markdown(f'<div class="data-field"><span class="field-label">Description:</span> {desc.get("value", "N/A")}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<span class="confidence-badge">Confidence: {desc.get("confidence", 0):.0%}</span>', unsafe_allow_html=True)
+                    
+                    # Description Evidence
+                    if desc.get("evidence_source_contents"):
+                        with st.expander(f"Evidence Source Contents for Description {results['descriptions'].index(desc)+1}", expanded=False):
+                            for evidence in desc["evidence_source_contents"]:
+                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                    
+                    # Description Reasons
+                    if desc.get("reasons"):
+                        with st.expander(f"Reasons for Description {results['descriptions'].index(desc)+1}", expanded=False):
+                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                            for reason in desc["reasons"]:
+                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                            st.markdown("</ul>", unsafe_allow_html=True)
+                    st.markdown("---", unsafe_allow_html=True)
+                
+                # Event Time Info
+                st.markdown("<h4>Event Time Information</h4>", unsafe_allow_html=True)
+                st.markdown(f'<div class="data-field"><span class="field-label">Start Time:</span> {results.get("start_time", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                if results.get("start_time", {}).get("reasons"):
+                    with st.expander("Start Time Reasons", expanded=False):
+                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                        for reason in results["start_time"]["reasons"]:
+                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                        st.markdown("</ul>", unsafe_allow_html=True)
+                
+                st.markdown(f'<div class="data-field"><span class="field-label">End Time:</span> {results.get("end_time", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                if results.get("end_time", {}).get("reasons"):
+                    with st.expander("End Time Reasons", expanded=False):
+                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                        for reason in results["end_time"]["reasons"]:
+                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                        st.markdown("</ul>", unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+
+
+            st.subheader("⏳ Event Timeline (Stages & Episodes)")
+            # Render stages and episodes in sequence (collapsed by default)
+            stages = results.get("stages", [])
+            for stage_idx, stage in enumerate(stages):
+                stage_id = stage.get("stage_id", f"Stage {stage_idx+1}")
+                stage_name = stage.get("name", {}).get("value", f"Stage {stage_idx+1}")
+                stage_conf = stage.get("name", {}).get("confidence", 0)
+                
+                # Stage expander (collapsed by default)
+                with st.expander(f"{stage_id}: {stage_name} (Confidence: {stage_conf:.0%})", expanded=False):
+                    st.markdown('<div class="timeline-item">', unsafe_allow_html=True)
+                    st.markdown('<div class="timeline-dot timeline-dot-stage"></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="timeline-time-label">{stage_id}</div>', unsafe_allow_html=True)
+                    
+                    # Stage header
+                    stage_index = stage.get('index_in_event', 0) + 1
+                    st.markdown(f"<h4 class='timeline-stage-header'>Stage {stage_index}: {stage_name}</h4>", unsafe_allow_html=True)
+                    
+                    # Stage Basic Info
+                    st.markdown(f'<div class="data-field"><span class="field-label">Stage ID:</span> {stage_id}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="data-field"><span class="field-label">Index in Event:</span> {stage.get("index_in_event", 0)}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<span class="confidence-badge">Confidence: {stage_conf:.0%}</span>', unsafe_allow_html=True)
+                    
+                    # Evidence
+                    if stage.get("name", {}).get("evidence_source_contents"):
+                        with st.expander("Evidence Source Contents", expanded=False):
+                            for evidence in stage["name"]["evidence_source_contents"]:
+                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                    
+                    # Reasons
+                    if stage.get("name", {}).get("reasons"):
+                        with st.expander("Reasons", expanded=False):
+                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                            for reason in stage["name"]["reasons"]:
+                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                            st.markdown("</ul>", unsafe_allow_html=True)
+                    
+                    # Stage Timeframe
+                    st.markdown("<h5>Stage Time Information</h5>", unsafe_allow_html=True)
+                    start_time = stage.get("start_time", {}).get("value", "Unknown")
+                    end_time = stage.get("end_time", {}).get("value", "Unknown")
+                    st.markdown(f'<div class="data-field"><span class="field-label">Start Time:</span> {start_time}</div>', unsafe_allow_html=True)
+                    if stage.get("start_time", {}).get("reasons"):
+                        with st.expander("Stage Start Time Reasons", expanded=False):
+                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                            for reason in stage["start_time"]["reasons"]:
+                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                            st.markdown("</ul>", unsafe_allow_html=True)
+                    
+                    st.markdown(f'<div class="data-field"><span class="field-label">End Time:</span> {end_time}</div>', unsafe_allow_html=True)
+                    if stage.get("end_time", {}).get("reasons"):
+                        with st.expander("Stage End Time Reasons", expanded=False):
+                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                            for reason in stage["end_time"]["reasons"]:
+                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                            st.markdown("</ul>", unsafe_allow_html=True)
+                    
+                    # Stage Descriptions
+                    st.markdown("<h5>Stage Descriptions</h5>", unsafe_allow_html=True)
+                    if stage.get("descriptions"):
+                        for desc_idx, desc in enumerate(stage.get("descriptions", [])):
+                            st.markdown(f'<div class="data-field"><span class="field-label">Description {desc_idx+1}:</span> {desc.get("value", "N/A")}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<span class="confidence-badge">Confidence: {desc.get("confidence", 0):.0%}</span>', unsafe_allow_html=True)
+                            
+                            # Description Evidence
+                            if desc.get("evidence_source_contents"):
+                                with st.expander(f"Evidence Source Contents for Stage Description {desc_idx+1}", expanded=False):
+                                    for evidence in desc["evidence_source_contents"]:
+                                        st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                            
+                            # Description Reasons
+                            if desc.get("reasons"):
+                                with st.expander(f"Reasons for Stage Description {desc_idx+1}", expanded=False):
+                                    st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                    for reason in desc["reasons"]:
+                                        st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                    st.markdown("</ul>", unsafe_allow_html=True)
+                            st.markdown("---", unsafe_allow_html=True)
+                    
+                    # Render episodes for this stage (collapsed by default)
+                    episodes = stage.get("episodes", [])
+                    for episode_idx, episode in enumerate(episodes):
+                        episode_id = episode.get("episode_id", f"Episode {episode_idx+1}")
+                        episode_name = episode.get("name", {}).get("value", f"Episode {episode_idx+1}")
+                        episode_conf = episode.get("name", {}).get("confidence", 0)
+                        
+                        # Episode expander (collapsed by default)
+                        with st.expander(f"{episode_id}: {episode_name} (Confidence: {episode_conf:.0%})", expanded=False):
+                            st.markdown('<div class="timeline-item" style="margin-left: 1rem;">', unsafe_allow_html=True)
+                            st.markdown('<div class="timeline-dot timeline-dot-episode"></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="timeline-time-label">{episode_id}</div>', unsafe_allow_html=True)
+                            
+                            # Episode header
+                            episode_index = episode.get('index_in_stage', 0) + 1
+                            st.markdown(f"<h5 class='timeline-episode-header'>Episode {episode_index}: {episode_name}</h5>", unsafe_allow_html=True)
+                            
+                            # Episode Basic Info
+                            st.markdown(f'<div class="data-field"><span class="field-label">Episode ID:</span> {episode_id}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="data-field"><span class="field-label">Index in Stage:</span> {episode.get("index_in_stage", 0)}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<span class="confidence-badge">Confidence: {episode_conf:.0%}</span>', unsafe_allow_html=True)
+                            
+                            # Evidence
+                            if episode.get("name", {}).get("evidence_source_contents"):
+                                with st.expander("Evidence Source Contents", expanded=False):
+                                    for evidence in episode["name"]["evidence_source_contents"]:
+                                        st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                            
+                            # Reasons
+                            if episode.get("name", {}).get("reasons"):
+                                with st.expander("Reasons", expanded=False):
+                                    st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                    for reason in episode["name"]["reasons"]:
+                                        st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                    st.markdown("</ul>", unsafe_allow_html=True)
+                            
+                            # Episode Timeframe
+                            st.markdown("<h6>Episode Time Information</h6>", unsafe_allow_html=True)
+                            ep_start = episode.get("start_time", {}).get("value", "Unknown")
+                            ep_end = episode.get("end_time", {}).get("value", "Unknown")
+                            st.markdown(f'<div class="data-field"><span class="field-label">Start Time:</span> {ep_start}</div>', unsafe_allow_html=True)
+                            if episode.get("start_time", {}).get("reasons"):
+                                with st.expander("Episode Start Time Reasons", expanded=False):
+                                    st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                    for reason in episode["start_time"]["reasons"]:
+                                        st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                    st.markdown("</ul>", unsafe_allow_html=True)
+                            
+                            st.markdown(f'<div class="data-field"><span class="field-label">End Time:</span> {ep_end}</div>', unsafe_allow_html=True)
+                            if episode.get("end_time", {}).get("reasons"):
+                                with st.expander("Episode End Time Reasons", expanded=False):
+                                    st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                    for reason in episode["end_time"]["reasons"]:
+                                        st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                    st.markdown("</ul>", unsafe_allow_html=True)
+                            
+                            # Episode Descriptions
+                            st.markdown("<h6>Episode Descriptions</h6>", unsafe_allow_html=True)
+                            if episode.get("descriptions"):
+                                for desc_idx, desc in enumerate(episode.get("descriptions", [])):
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Description {desc_idx+1}:</span> {desc.get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    st.markdown(f'<span class="confidence-badge">Confidence: {desc.get("confidence", 0):.0%}</span>', unsafe_allow_html=True)
+                                    
+                                    # Description Evidence
+                                    if desc.get("evidence_source_contents"):
+                                        with st.expander(f"Evidence Source Contents for Episode Description {desc_idx+1}", expanded=False):
+                                            for evidence in desc["evidence_source_contents"]:
+                                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                    
+                                    # Description Reasons
+                                    if desc.get("reasons"):
+                                        with st.expander(f"Reasons for Episode Description {desc_idx+1}", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in desc["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    st.markdown("---", unsafe_allow_html=True)
+                            
+                            # Render Participants
+                            st.markdown("<h6>Episode Participants</h6>", unsafe_allow_html=True)
+                            if episode.get("participants"):
+                                for participant in episode["participants"]:
+                                    # st.markdown("<div class='subsection-card'>", unsafe_allow_html=True)
+                                    # Participant Basic Info
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Participant ID:</span> {participant.get("participant_id", "N/A")}</div>', unsafe_allow_html=True)
+                                    
+                                    # Participant Name
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Name:</span> {participant.get("name", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    if participant.get("name", {}).get("evidence_source_contents"):
+                                        with st.expander(f"Evidence Source Contents for Participant {participant.get('participant_id', 'N/A')} Name", expanded=False):
+                                            for evidence in participant["name"]["evidence_source_contents"]:
+                                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                    if participant.get("name", {}).get("reasons"):
+                                        with st.expander(f"Reasons for Participant {participant.get('participant_id', 'N/A')} Name", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in participant["name"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Participant Type
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Participant Type:</span> {participant.get("participant_type", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    if participant.get("participant_type", {}).get("evidence_source_contents"):
+                                        with st.expander(f"Evidence Source Contents for Participant {participant.get('participant_id', 'N/A')} Type", expanded=False):
+                                            for evidence in participant["participant_type"]["evidence_source_contents"]:
+                                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                    if participant.get("participant_type", {}).get("reasons"):
+                                        with st.expander(f"Reasons for Participant {participant.get('participant_id', 'N/A')} Type", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in participant["participant_type"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Base Role
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Base Role:</span> {participant.get("base_role", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    if participant.get("base_role", {}).get("evidence_source_contents"):
+                                        with st.expander(f"Evidence Source Contents for Participant {participant.get('participant_id', 'N/A')} Role", expanded=False):
+                                            for evidence in participant["base_role"]["evidence_source_contents"]:
+                                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                    if participant.get("base_role", {}).get("reasons"):
+                                        with st.expander(f"Reasons for Participant {participant.get('participant_id', 'N/A')} Role", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in participant["base_role"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Participant Attributes
+                                    if participant.get("attributes"):
+                                        with st.expander(f"Attributes for Participant {participant.get('participant_id', 'N/A')}", expanded=False):
+                                            for attr_key, attr_value in participant["attributes"].items():
+                                                attr_name = attr_key.replace('_', ' ').title()
+                                                st.markdown(f'<div class="data-field"><span class="field-label">{attr_name}:</span> {attr_value.get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                                if attr_value.get("evidence_source_contents"):
+                                                    with st.expander(f"Evidence Source Contents for {attr_name}", expanded=False):
+                                                        for evidence in attr_value["evidence_source_contents"]:
+                                                            st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                                if attr_value.get("reasons"):
+                                                    with st.expander(f"Reasons for {attr_name}", expanded=False):
+                                                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                                        for reason in attr_value["reasons"]:
+                                                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                                        st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Participant Actions
+                                    if participant.get("actions"):
+                                        with st.expander(f"Actions for Participant {participant.get('participant_id', 'N/A')}", expanded=False):
+                                            for action in participant["actions"]:
+                                                # Action Timestamp
+                                                ts_value = action.get('timestamp', {}).get('value', 'Unknown')
+                                                st.markdown(f'<div class="data-field"><span class="field-label">Timestamp:</span> {ts_value}</div>', unsafe_allow_html=True)
+                                                if action.get("timestamp", {}).get("reasons"):
+                                                    with st.expander("Timestamp Reasons", expanded=False):
+                                                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                                        for reason in action["timestamp"]["reasons"]:
+                                                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                                        st.markdown("</ul>", unsafe_allow_html=True)
+                                                
+                                                # Action Details
+                                                if action.get("details"):
+                                                    st.markdown(f'<div class="data-field"><span class="field-label">Action Details:</span></div>', unsafe_allow_html=True)
+                                                    for detail in action.get("details", []):
+                                                        st.markdown(f"<p>• {detail.get('value', 'N/A')}</p>", unsafe_allow_html=True)
+                                                        if detail.get("evidence_source_contents"):
+                                                            with st.expander(f"Evidence Source Contents for Action Detail", expanded=False):
+                                                                for evidence in detail["evidence_source_contents"]:
+                                                                    st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                                        if detail.get("reasons"):
+                                                            with st.expander(f"Reasons for Action Detail", expanded=False):
+                                                                st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                                                for reason in detail["reasons"]:
+                                                                    st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                                                st.markdown("</ul>", unsafe_allow_html=True)
+                                                st.markdown("---", unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                    st.markdown("---", unsafe_allow_html=True)
+                            
+                            # Render Participant Relations
+                            st.markdown("<h6>Participant Relations</h6>", unsafe_allow_html=True)
+                            if episode.get("participant_relations"):
+                                for relation in episode["participant_relations"]:
+                                    # st.markdown("<div class='subsection-card'>", unsafe_allow_html=True)
+                                    st.markdown(f'<div class="data-field"><span class="field-label">From Participant ID:</span> {relation.get("from_participant_id", "N/A")}</div>', unsafe_allow_html=True)
+                                    st.markdown(f'<div class="data-field"><span class="field-label">To Participant ID:</span> {relation.get("to_participant_id", "N/A")}</div>', unsafe_allow_html=True)
+                                    
+                                    # Relation Type
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Relation Type:</span> {relation.get("relation_type", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    if relation.get("relation_type", {}).get("evidence_source_contents"):
+                                        with st.expander("Relation Type Evidence", expanded=False):
+                                            for evidence in relation["relation_type"]["evidence_source_contents"]:
+                                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                    if relation.get("relation_type", {}).get("reasons"):
+                                        with st.expander("Relation Type Reasons", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in relation["relation_type"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Bidirectional
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Is Bidirectional:</span> {relation.get("is_bidirectional", False)}</div>', unsafe_allow_html=True)
+                                    
+                                    # Relation Time Info
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Start Time:</span> {relation.get("start_time", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    if relation.get("start_time", {}).get("reasons"):
+                                        with st.expander("Relation Start Time Reasons", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in relation["start_time"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    st.markdown(f'<div class="data-field"><span class="field-label">End Time:</span> {relation.get("end_time", {}).get("value", "N/A")}</div>', unsafe_allow_html=True)
+                                    if relation.get("end_time", {}).get("reasons"):
+                                        with st.expander("Relation End Time Reasons", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in relation["end_time"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Relation Descriptions
+                                    if relation.get("descriptions"):
+                                        with st.expander("Relation Descriptions", expanded=False):
+                                            for desc in relation["descriptions"]:
+                                                st.markdown(f"<p>• {desc.get('value', 'N/A')}</p>", unsafe_allow_html=True)
+                                                if desc.get("evidence_source_contents"):
+                                                    with st.expander("Description Evidence", expanded=False):
+                                                        for evidence in desc["evidence_source_contents"]:
+                                                            st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                                if desc.get("reasons"):
+                                                    with st.expander("Description Reasons", expanded=False):
+                                                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                                        for reason in desc["reasons"]:
+                                                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                                        st.markdown("</ul>", unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                    st.markdown("---", unsafe_allow_html=True)
+                            
+                            # Render Transactions
+                            st.markdown("<h6>Episode Transactions</h6>", unsafe_allow_html=True)
+                            if episode.get("transactions"):
+                                for transaction in episode["transactions"]:
+                                    # st.markdown("<div class='subsection-card'>", unsafe_allow_html=True)
+                                    # Transaction Timestamp
+                                    ts_value = transaction.get('timestamp', {}).get('value', 'Unknown')
+                                    st.markdown(f'<div class="data-field"><span class="field-label">Timestamp:</span> {ts_value}</div>', unsafe_allow_html=True)
+                                    if transaction.get("timestamp", {}).get("reasons"):
+                                        with st.expander("Transaction Timestamp Reasons", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in transaction["timestamp"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Transaction Details
+                                    if transaction.get("details"):
+                                        with st.expander("Transaction Details", expanded=False):
+                                            for detail in transaction["details"]:
+                                                st.markdown(f"<p>• {detail.get('value', 'N/A')}</p>", unsafe_allow_html=True)
+                                                if detail.get("evidence_source_contents"):
+                                                    with st.expander("Detail Evidence", expanded=False):
+                                                        for evidence in detail["evidence_source_contents"]:
+                                                            st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                                if detail.get("reasons"):
+                                                    with st.expander("Detail Reasons", expanded=False):
+                                                        st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                                        for reason in detail["reasons"]:
+                                                            st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                                        st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Transaction Participants
+                                    from_id = transaction.get('from_participant_id', {})
+                                    if isinstance(from_id, dict):
+                                        from_id = from_id.get('value', 'Unknown')
+                                    st.markdown(f'<div class="data-field"><span class="field-label">From Participant ID:</span> {from_id}</div>', unsafe_allow_html=True)
+                                    if transaction.get("from_participant_id", {}).get("reasons"):
+                                        with st.expander("From Participant Reasons", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in transaction["from_participant_id"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    to_id = transaction.get('to_participant_id', {})
+                                    if isinstance(to_id, dict):
+                                        to_id = to_id.get('value', 'Unknown')
+                                    st.markdown(f'<div class="data-field"><span class="field-label">To Participant ID:</span> {to_id}</div>', unsafe_allow_html=True)
+                                    if transaction.get("to_participant_id", {}).get("reasons"):
+                                        with st.expander("To Participant Reasons", expanded=False):
+                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                            for reason in transaction["to_participant_id"]["reasons"]:
+                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                    
+                                    # Transaction Instruments
+                                    if transaction.get("instruments") and transaction["instruments"] is not None:
+                                        with st.expander("Transaction Instruments", expanded=False):
+                                            for instrument in transaction["instruments"]:
+                                                if isinstance(instrument, dict):
+                                                    st.markdown(f"<p>• {instrument.get('value', 'N/A')}</p>", unsafe_allow_html=True)
+                                                    if instrument.get("evidence_source_contents"):
+                                                        with st.expander("Instrument Evidence", expanded=False):
+                                                            for evidence in instrument["evidence_source_contents"]:
+                                                                st.markdown(f'<div class="evidence-card">• {evidence}</div>', unsafe_allow_html=True)
+                                                    if instrument.get("reasons"):
+                                                        with st.expander("Instrument Reasons", expanded=False):
+                                                            st.markdown("<ul class='reasons-list'>", unsafe_allow_html=True)
+                                                            for reason in instrument["reasons"]:
+                                                                st.markdown(f"<li>{reason}</li>", unsafe_allow_html=True)
+                                                            st.markdown("</ul>", unsafe_allow_html=True)
+                                                else:
+                                                    st.markdown(f"<p>• {instrument}</p>", unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                    st.markdown("---", unsafe_allow_html=True)
+                            
+                            st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Summary metrics section
+            st.markdown("---")
+            st.subheader("Reconstruction Summary Metrics")
+            
+            # Calculate and display summary metrics in card containers
+            col1, col2, col3 = st.columns(3)
+            
+            # Stage metrics
+            with col1:
+                st.markdown("<div class='section-card'>", unsafe_allow_html=True)
+                st.markdown("**Stage Metrics**", unsafe_allow_html=True)
+                total_stages = len(stages)
+                st.metric("Total Stages", total_stages)
+                
+                avg_stage_conf = 0
+                if stages:
+                    avg_stage_conf = sum([s.get("name", {}).get("confidence", 0) for s in stages])/len(stages)
+                st.metric("Average Stage Confidence", f"{avg_stage_conf:.0%}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Episode metrics
+            with col2:
+                st.markdown("<div class='section-card'>", unsafe_allow_html=True)
+                st.markdown("**Episode Metrics**", unsafe_allow_html=True)
+                total_episodes = sum([len(s.get("episodes", [])) for s in stages])
+                st.metric("Total Episodes", total_episodes)
+                
+                all_episodes = []
+                for stage in stages:
+                    all_episodes.extend(stage.get("episodes", []))
+                
+                avg_episode_conf = 0
+                if all_episodes:
+                    avg_episode_conf = sum([e.get("name", {}).get("confidence", 0) for e in all_episodes])/len(all_episodes)
+                st.metric("Average Episode Confidence", f"{avg_episode_conf:.0%}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Participant metrics
+            with col3:
+                st.markdown("<div class='section-card'>", unsafe_allow_html=True)
+                st.markdown("**Participant Metrics**", unsafe_allow_html=True)
+                all_participants = []
+                for stage in stages:
+                    for episode in stage.get("episodes", []):
+                        all_participants.extend(episode.get("participants", []))
+                
+                # Get unique participants
+                unique_participants = 0
+                participant_ids = [p.get("participant_id") for p in all_participants if p.get("participant_id")]
+                if participant_ids:
+                    unique_participants = len(set(participant_ids))
+                
+                st.metric("Unique Participants", unique_participants)
+                
+                # Count participant types
+                participant_types = {}
+                for p in all_participants:
+                    p_type = p.get("participant_type", {}).get("value", "unknown")
+                    participant_types[p_type] = participant_types.get(p_type, 0) + 1
+                st.metric("Participant Types", len(participant_types))
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Export and navigation section
+            st.markdown("---")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if st.button("Export Results", use_container_width=True):
+                    # Create download link for JSON
+                    json_str = json.dumps(results, indent=2, ensure_ascii=False)
+                    file_name = f"{results.get('event_id', 'event_reconstruction')}.json"
+                    st.download_button(
+                        label="Download JSON",
+                        data=json_str,
+                        file_name=file_name,
+                        mime="application/json",
+                        use_container_width=True
+                    )
+            
+            with col2:
+                if st.button("Confidence Breakdown", use_container_width=True):
+                    # Display confidence breakdown in a card
+                    st.markdown("<div class='section-card'>", unsafe_allow_html=True)
+                    st.subheader("Confidence Breakdown")
+                    
+                    # Calculate all confidence metrics
+                    title_conf = results.get("title", {}).get("confidence", 0)
+                    type_conf = results.get("event_type", {}).get("confidence", 0)
+                    desc_confidences = [d.get("confidence", 0) for d in results.get("descriptions", [])]
+                    avg_desc_conf = sum(desc_confidences)/len(desc_confidences) if desc_confidences else 0
+                    
+                    avg_stage_conf = 0
+                    if stages:
+                        avg_stage_conf = sum([s.get("name", {}).get("confidence", 0) for s in stages])/len(stages)
+                    
+                    all_episodes = []
+                    for stage in stages:
+                        all_episodes.extend(stage.get("episodes", []))
+                    avg_episode_conf = 0
+                    if all_episodes:
+                        avg_episode_conf = sum([e.get("name", {}).get("confidence", 0) for e in all_episodes])/len(all_episodes)
+                    
+                    conf_data = {
+                        "Title": title_conf,
+                        "Event Type": type_conf,
+                        "Average Description": avg_desc_conf,
+                        "Average Stage": avg_stage_conf,
+                        "Average Episode": avg_episode_conf
+                    }
+                    
+                    for key, value in conf_data.items():
+                        st.progress(value)
+                        st.markdown(f'<div class="data-field"><span class="field-label">{key}:</span> {value:.0%}</div>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            
+            with col3:
+                if st.button("New Reconstruction", use_container_width=True):
+                    st.session_state.analysis_results = None
+                    st.session_state.current_page = "Analysis"
+                    st.rerun()
+            
+            with col4:
+                if st.button("Executive Summary", use_container_width=True):
+                    # Generate executive summary in a card
+                    st.markdown("<div class='section-card'>", unsafe_allow_html=True)
+                    st.subheader("Executive Summary")
+                    
+                    # Calculate summary metrics
+                    total_stages = len(stages)
+                    total_episodes = sum([len(s.get("episodes", [])) for s in stages])
+                    
+                    all_participants = []
+                    for stage in stages:
+                        for episode in stage.get("episodes", []):
+                            all_participants.extend(episode.get("participants", []))
+                    participant_ids = [p.get("participant_id") for p in all_participants if p.get("participant_id")]
+                    unique_participants = len(set(participant_ids)) if participant_ids else 0
+                    
+                    # Calculate overall confidence
+                    title_conf = results.get("title", {}).get("confidence", 0)
+                    type_conf = results.get("event_type", {}).get("confidence", 0)
+                    desc_confidences = [d.get("confidence", 0) for d in results.get("descriptions", [])]
+                    avg_desc_conf = sum(desc_confidences)/len(desc_confidences) if desc_confidences else 0
+                    
+                    avg_stage_conf = 0
+                    if stages:
+                        avg_stage_conf = sum([s.get("name", {}).get("confidence", 0) for s in stages])/len(stages)
+                    
+                    all_episodes_list = []
+                    for stage in stages:
+                        all_episodes_list.extend(stage.get("episodes", []))
+                    avg_episode_conf = 0
+                    if all_episodes_list:
+                        avg_episode_conf = sum([e.get("name", {}).get("confidence", 0) for e in all_episodes_list])/len(all_episodes_list)
+                    
+                    confidence_values = [title_conf, type_conf, avg_desc_conf, avg_stage_conf, avg_episode_conf]
+                    valid_confidences = [c for c in confidence_values if c > 0]
+                    overall_conf = sum(valid_confidences)/len(valid_confidences) if valid_confidences else 0
+                    
+                    # Generate summary content
+                    summary = f"""
+                    ### {results.get('title', {}).get('value', 'Unknown Event')} ({results.get('event_id', 'N/A')})
+                    **Event Type:** {results.get('event_type', {}).get('value', 'N/A')}
+                    
+                    ### Key Overview
+                    This event reconstruction details the {results.get('event_type', {}).get('value', 'speculative bubble')} known as {results.get('title', {}).get('value', 'Dutch Tulip Mania')}, which occurred in the 1630s in the Netherlands.
+                    
+                    ### Key Stages
+                    """
+                    
+                    for stage in stages:
+                        stage_name = stage.get('name', {}).get('value', 'N/A')
+                        stage_conf = stage.get('name', {}).get('confidence', 0)
+                        summary += f"\n- **Stage {stage.get('index_in_event', 0)+1}:** {stage_name} (Confidence: {stage_conf:.0%})"
+                    
+                    summary += f"""
+                    ### Key Findings
+                    - <span class='field-label'>Total stages identified:</span> {total_stages}
+                    - <span class='field-label'>Total episodes documented:</span> {total_episodes}
+                    - <span class='field-label'>Unique participants involved:</span> {unique_participants}
+                    - <span class='field-label'>Overall reconstruction confidence:</span> {overall_conf:.0%}
+                    
+                    ### Critical Observations
+                    The reconstruction reveals a classic speculative bubble characterized by:
+                    1. Rapid price appreciation of tulip bulbs
+                    2. Development of derivative trading (contracts for future delivery)
+                    3. Use of bulb notes as a currency substitute
+                    4. Legal disputes and settlement failures
+                    5. Social and economic disruption
+                    """
+                    
+                    st.markdown(summary, unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+
     def render_results_page(self):
         """Render the event reconstruction results with dynamic visualization for nested JSON structures."""
         st.title("📋 Event Reconstruction Report")
@@ -1290,7 +2268,6 @@ class FinMyceliumWebInterface:
             with col1:
                 if st.button("📥 Export as JSON", use_container_width=True):
                     # Create download link for JSON
-                    import json
                     json_str = json.dumps(results, indent=2, ensure_ascii=False)
                     st.download_button(
                         label="Download JSON",
@@ -1470,7 +2447,10 @@ class FinMyceliumWebInterface:
         elif current_page == "Analysis":
             self.render_analysis_page()
         elif current_page == "Results":
-            self.render_results_page()
+            if st.session_state.build_mode == "class_build" or st.session_state.build_mode is None:
+                self.render_results_page()
+            elif st.session_state.build_mode == "agent_build":
+                self.render_results_page_agent()
         elif current_page == "About":
             self.render_about_page()
 
