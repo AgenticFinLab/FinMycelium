@@ -77,28 +77,30 @@ pdf_collector_config:
 #   - "kw_lm": LLM-based keyword summarizer (default)
 #   - "kw_rule": Rule-based keyword summarizer
 summarizer_config: &summarizer_config
-  summarizer_type: "kw_lm"
+  summarizer_type: "KWLMSummarizer"
   llm_name: "deepseek/deepseek-chat"
+
 # matcher_type: Matcher type
 #   - "llm": LLM-based matcher (default)
 #   - "re": Regex-based matcher
 #   - "lx_keyword": LlamaIndex keyword-based matcher
 #   - "lx_llm": LlamaIndex LLM-based matcher
 #   - "lx_vector": LlamaIndex vector-based matcher
-
 matcher_config: &matcher_config
-  matcher_type: "lx_vector"
+  # use_matcher: False | True # if not using matcher, the matcher_type and lm_name will be ignored
+  use_matcher: True
+  matcher_type: "LXMatcher"
   lm_name: "deepseek/deepseek-chat"
+
+
 # ----------------------------------------------------------------------------
 # Builder Configuration
 # ----------------------------------------------------------------------------
 # builder_config: Additional configuration for builder components
 #   This configuration will be passed to the builder instance
 # ----------------------------------------------------------------------------
-
 builder_config:
-  # builder_type: "agent_build"
-  builder_type: "class_build"
+  builder_type: "ClassEventBuilder"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer
