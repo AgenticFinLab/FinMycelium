@@ -44,6 +44,8 @@ from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.url_collector.base import URLCollectorOutput, URLCollectorInput
 from finmy.url_collector.url_parser import URLParser
+from finmy.matcher.base import MatchOutput, MatchItem
+from finmy.converter import read_text_data_from_block
 from finmy.builder.agent_build.prompts import *
 
 
@@ -106,7 +108,11 @@ class FinmyPipeline:
         self.pdf_collector = PDFCollector(self.pdf_collector_config)
         self.url_collector = URLParser(self.url_collector_config)
         self.summarizer = self._create_summarizer()
-        self.matcher = self._create_matcher()
+        if self.matcher_config["use_matcher"]:
+            self.matcher = self._create_matcher()
+        else:
+            self.logger.info("not using matcher")
+            self.matcher = None
         self.builder = self._create_builder()
 
     # ------------------------------------------------------------------
@@ -424,7 +430,7 @@ class FinmyPipeline:
             category="Financial Risk Control",
             knowledge_field="Artificial Intelligence",
         )
-        self.logger.info(f"Meta samples created: {meta_samples}")
+        self.logger.info("Meta samples created: %s", meta_samples)
         self.logger.info("=" * 25)
         return meta_samples
 
@@ -684,15 +690,32 @@ class FinmyPipeline:
         summarized_query = self.summarize_user_query(user_query_input)
 
         meta_samples = []
-        for raw_data in raw_data_records:
-            # Step 5: Create match input from raw data and summarized query
-            match_input = self.match_raw_data_with_query(raw_data, summarized_query)
-            # Step 6: Perform LLM matching
-            match_output = self.perform_llm_matching(match_input)
 
-            # Step 7: Convert match output to meta samples
-            meta_sample = self.create_meta_samples(match_output, raw_data)
-            meta_samples += meta_sample
+        if self.matcher_config.use_matcher:
+            for raw_data in raw_data_records:
+                # Step 5: Create match input from raw data and summarized query
+                match_input = self.match_raw_data_with_query(raw_data, summarized_query)
+                # Step 6: Perform LLM matching
+                match_output = self.perform_llm_matching(match_input)
+
+                # Step 7: Convert match output to meta samples
+                meta_sample = self.create_meta_samples(match_output, raw_data)
+                meta_samples += meta_sample
+        else:
+            self.logger.info("not using matcher")
+            for raw_data in raw_data_records:
+                content = read_text_data_from_block(raw_data.location)
+                mock_match_output = MatchOutput(
+                    items=[
+                        MatchItem(
+                            paragraph=content,
+                            start=0,
+                            end=len(content),
+                        )
+                    ],
+                )
+                meta_sample = self.create_meta_samples(mock_match_output, raw_data)
+                meta_samples += meta_sample
 
         # Step 8: Store meta samples in database
         self.store_meta_samples(meta_samples)
@@ -782,13 +805,6 @@ class FinmyPipeline:
 
         return restored_cascade
 
-    def lm_build_pipeline_main_with_collectors(
-        self,
-        pdf_output: Optional[PDFCollectorOutput],
-        url_output: Optional[URLCollectorOutput],
-        query_text: str,
-        key_words: List[str],
-    ):
         """
         Main pipeline entry that uses PDF collector and URL collector outputs
         instead of mock text data.
@@ -927,12 +943,11 @@ class FinmyPipeline:
 
         return restored_cascade
 
-    def lm_build_pipeline_main_with_contents(
+    def lm_build_pipeline_with_contents(
         self,
         contents: list,
         query_text: str,
         key_words: list,
-        builder_type: str,
     ):
         """
         Build the pipeline with the provided contents (list of text), query_text (query string), and key_words (list of keywords).
@@ -959,22 +974,39 @@ class FinmyPipeline:
         summarized_query = self.summarize_user_query(user_query_input)
 
         meta_samples = []
-        for raw_data in raw_data_records:
-            # Step 5: Create match input from raw data and summarized query
-            match_input = self.match_raw_data_with_query(raw_data, summarized_query)
-            # Step 6: Perform LLM matching
-            match_output = self.perform_llm_matching(match_input)
 
-            # Step 7: Convert match output to meta samples
-            meta_sample = self.create_meta_samples(match_output, raw_data)
-            meta_samples += meta_sample
+        if self.matcher_config["use_matcher"]:
+            for raw_data in raw_data_records:
+                # Step 5: Create match input from raw data and summarized query
+                match_input = self.match_raw_data_with_query(raw_data, summarized_query)
+                # Step 6: Perform LLM matching
+                match_output = self.perform_llm_matching(match_input)
+
+                # Step 7: Convert match output to meta samples
+                meta_sample = self.create_meta_samples(match_output, raw_data)
+                meta_samples += meta_sample
+        else:
+            self.logger.info("not using matcher")
+            for raw_data in raw_data_records:
+                content = read_text_data_from_block(raw_data.location)
+                mock_match_output = MatchOutput(
+                    items=[
+                        MatchItem(
+                            paragraph=content,
+                            start=0,
+                            end=len(content),
+                        ),
+                    ],
+                )
+                meta_sample = self.create_meta_samples(mock_match_output, raw_data)
+                meta_samples += meta_sample
 
         # Step 8: Store meta samples in database
         self.store_meta_samples(meta_samples)
 
         build_input = self.create_build_input(user_query_input, meta_samples)
 
-        if builder_type == "agent_build":
+        if self.builder_config["builder_type"] == "AgentEventBuilder":
             agent_names = list(self.builder_config["agents"].keys())
             agent_system_msgs = {}
             agent_user_msgs = {}
@@ -1054,7 +1086,7 @@ class FinmyPipeline:
 
             return restored_cascade
 
-        elif builder_type == "class_build":
+        elif self.builder_config["builder_type"] == "ClassEventBuilder":
             return self.builder.build(build_input)
 
         else:
