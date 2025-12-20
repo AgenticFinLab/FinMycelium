@@ -8,14 +8,11 @@ from .lx_match import KWMatcher, LMMatcher as LXMatcher, VectorMatcher
 
 # Matcher factory dictionary
 matcher_factory: Dict[str, Callable] = {
-    "llm": lambda config: LLMMatcher(
-        lm_name=config["lm_name"],
-        config=config,
-    ),
-    "re": lambda config: ReMatch(config=config),
-    "lx_keyword": lambda config: KWMatcher(config=config),
-    "lx_llm": lambda config: LXMatcher(config=config),
-    "lx_vector": lambda config: VectorMatcher(config=config),
+    "llm": LLMMatcher,
+    "re": ReMatch,
+    "lx_keyword": KWMatcher,
+    "lx_llm": LXMatcher,
+    "lx_vector": VectorMatcher,
 }
 
 

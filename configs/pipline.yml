@@ -88,6 +88,7 @@ summarizer_config: &summarizer_config
 
 matcher_config: &matcher_config
   matcher_type: "lx_vector"
+  lm_name: "deepseek/deepseek-chat"
 # ----------------------------------------------------------------------------
 # Builder Configuration
 # ----------------------------------------------------------------------------

@@ -64,13 +64,12 @@ class LLMMatcher(BaseMatcher):
 
     def __init__(
         self,
-        lm_name: Optional[str] = None,
         config: Optional[dict] = dict(),
     ):
 
         super().__init__(config=config, method_name="lm_match")
         # LLM model name to use for inference
-        self.model_name = lm_name
+        self.model_name = self.config["lm_name"]
 
         self.api_infer = api_call.LangChainAPIInference(
             lm_name=self.model_name,
