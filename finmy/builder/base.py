@@ -152,10 +152,10 @@ class BaseBuilder(ABC):
         # Save the traces
         if file_format == "json":
             with open(save_path, "w", encoding="utf-8") as f:
-                json.dump(traces, f, ensure_ascii=False)
+                json.dump(traces, f, ensure_ascii=False, indent=4)
         else:
             with open(save_path, "wb", encoding="utf-8") as f:
-                pickle.dump(traces, f, ensure_ascii=False)
+                pickle.dump(traces, f, ensure_ascii=False, indent=4)
 
     @abstractmethod
     def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
