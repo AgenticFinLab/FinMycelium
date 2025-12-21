@@ -654,8 +654,7 @@ class FinmyPipeline:
             List of meta samples generated from matching
         """
         meta_samples = []
-        use_matcher = self.matcher_config.get("use_matcher", False)
-
+        use_matcher = self.matcher_config["use_matcher"]
         if use_matcher:
             for raw_data in raw_data_records:
                 match_input = self.match_raw_data_with_query(raw_data, summarized_query)
@@ -798,7 +797,7 @@ class FinmyPipeline:
         Returns:
             Build output from the builder
         """
-        builder_type = self.builder_config.get("builder_type", "AgentEventBuilder")
+        builder_type = self.builder_config["builder_type"]
 
         if builder_type == "AgentEventBuilder":
             return self._run_agent_builder(build_input)
