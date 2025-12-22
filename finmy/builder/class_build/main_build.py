@@ -7,10 +7,10 @@ import os
 import re
 from typing import Dict, Any, List, Optional
 
+import logging
+
 from lmbase.inference.api_call import LangChainAPIInference, InferInput
-
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput, AgentState
-
 # Import all prompt modules
 from finmy.builder.class_build.prompts import (
     classify,
@@ -191,12 +191,12 @@ class ClassEventBuilder(BaseBuilder):
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
 
-        print(f"Saving event cascade to: {output_path}")
+        logging.info(f"Saving event cascade to: {output_path}")
 
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(event_cascade, f, ensure_ascii=False, indent=2)
 
-        print(f"Successfully saved event cascade to: {output_path}")
+        logging.info(f"Successfully saved event cascade to: {output_path}")
         return output_path
 
     def test_api_connection(self) -> str:
@@ -211,7 +211,7 @@ class ClassEventBuilder(BaseBuilder):
             user_msg="Test message",
         )
         result = test_api_call.run(chatbot)
-        print("Test response:", result.response)
+        logging.info(f"Test response: {result.response}")
         return result.response
 
     def build(self, build_input: BuildInput) -> BuildOutput:
@@ -227,7 +227,7 @@ class ClassEventBuilder(BaseBuilder):
             ValueError: If JSON parsing fails
             Exception: For other errors during processing
         """
-        print("Starting event cascade building process...")
+        logging.info("Starting event cascade building process...")
 
         # Test API connection first
         self.test_api_connection()
@@ -253,7 +253,7 @@ class ClassEventBuilder(BaseBuilder):
         api_call = LangChainAPIInference(lm_name=self.build_config["lm_name"])
 
         # Stage 1: Classify event type
-        print("Classifying event type...")
+        logging.info("Classifying event type...")
         classify_chatbot = InferInput(
             system_msg=classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
             user_msg=self.user_prompt.format(
@@ -267,14 +267,14 @@ class ClassEventBuilder(BaseBuilder):
 
         classify_output = api_call.run(classify_chatbot)
         classify_output_text = classify_output.response.strip()
-        print("Classify output text:", classify_output_text)
+        logging.info(f"Classify output text: {classify_output_text}")
 
         classify_result = self.extract_json_response(classify_output_text)
         classify_event_type = classify_result["event_type"]["primary_type"]
-        print(f"Classified event type: {classify_event_type}")
+        logging.info(f"Classified event type: {classify_event_type}")
 
         # Stage 2: Generate detailed event cascade
-        print(f"Generating detailed event cascade for: {classify_event_type}")
+        logging.info(f"Generating detailed event cascade for: {classify_event_type}")
         event_prompt = self.class_prompts.get(
             classify_event_type, self.class_prompts["Other Financial Event"]
         )
@@ -287,18 +287,18 @@ class ClassEventBuilder(BaseBuilder):
 
         detailed_output = api_call.run(detailed_chatbot)
         output_text = detailed_output.response.strip()
-        print("Received detailed output from LLM")
+        logging.info("Received detailed output from LLM")
 
         # Try to parse JSON directly
         try:
             event_cascade_json = self.extract_json_response(output_text)
         except json.JSONDecodeError:
             # If direct parsing fails, try to format it
-            print("Direct JSON parsing failed, attempting to format response...")
+            logging.info("Direct JSON parsing failed, attempting to format response...")
 
             for i in range(3):
                 try:
-                    print(f"Format attempt {i+1}")
+                    logging.info(f"Format attempt {i+1}")
                     format_chatbot = InferInput(
                         system_msg="You are a professional JSON format expert.",
                         user_msg=output_text.replace("{", "{{").replace("}", "}}")
@@ -317,7 +317,7 @@ class ClassEventBuilder(BaseBuilder):
                     break
 
                 except Exception as e:
-                    print(f"Format attempt {i+1} failed: {e}")
+                    logging.error(f"Format attempt {i+1} failed: {e}")
                     if i == 2:
                         raise ValueError(
                             f"Failed to parse JSON from LLM response after 3 attempts: {e}"
@@ -326,7 +326,7 @@ class ClassEventBuilder(BaseBuilder):
         # Save the event cascade
         output_path = os.path.join(
             self.save_dir,
-            f"event_cascade_{classify_event_type.replace(' ', '_').replace('/', '_')}.json",
+            f"Class_Build_Event_Cascade_{classify_event_type.replace(' ', '_').replace('/', '_')}.json",
         )
         self.save_event_cascade(event_cascade_json, output_path)
 
