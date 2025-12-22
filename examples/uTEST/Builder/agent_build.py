@@ -81,7 +81,7 @@ def main():
     config_path = args.config
 
     with open(config_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+        config = yaml.safe_load(f)["builder_config"]
 
     # 2. Get all the query and samples to create the
     # build input.
