@@ -176,7 +176,7 @@ class FinMyceliumWebInterface:
             st.markdown(
                 """
             - Web content collection
-            - Document processing (PDF/Word)
+            - PDF Document processing
             - Social media monitoring
             - Structured data analysis
             """
