@@ -92,8 +92,10 @@ if __name__ == "__main__":
     #     key_words=["人工智能", "AI", "风险管理", "模型合规", "透明度"],
     # )
 
-    pipeline.lm_build_pipeline_with_contents(
+    result = pipeline.lm_build_pipeline_with_contents(
         contents=["识别与人工智能在金融风控与合规相关的内容"],
         query_text="金融风控",
         key_words=["金融风控", "合规", "人工智能"],
     )
+    print("type of result", type(result))
+    print("result:\n", result)
