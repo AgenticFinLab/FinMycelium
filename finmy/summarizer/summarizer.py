@@ -21,7 +21,6 @@ from typing import List, Optional, Dict, Any
 import spacy
 from spacy.matcher import Matcher
 from lmbase.inference import api_call
-from langchain_core.prompts import ChatPromptTemplate
 
 from ..generic import UserQueryInput
 from ..matcher.utils import safe_parse_json
@@ -298,8 +297,11 @@ class KWLMSummarizer(BaseSummarizer):
             "Text:\n{content}\n\n"
             'Output strictly in JSON as an array of keywords/phrases. Example: ["market volatility", "risk management"]'
         )
-        tmpl = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
-        return tmpl.format_messages(content=content)
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": human.format(content=content)},
+        ]
+        return messages
 
     def _parse_keywords(self, raw: str) -> List[str]:
         """Normalize LLM output into a clean list of keywords.

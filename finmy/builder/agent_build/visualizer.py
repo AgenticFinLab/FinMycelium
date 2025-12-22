@@ -209,25 +209,42 @@ class EventCascadeVisualizer:
         # Set a nice font
         try:
             # Set basic parameters first
-            plt.rcParams['axes.unicode_minus'] = False
-            
+            plt.rcParams["axes.unicode_minus"] = False
+
             # Select fonts based on operating system
             import platform
+
             system = platform.system()
-            
+
             if system == "Windows":
                 # Windows system
-                font_list = ["SimHei", "Microsoft YaHei", "Arial", "DejaVu Sans", "sans-serif"]
+                font_list = [
+                    "SimHei",
+                    "Microsoft YaHei",
+                    "Arial",
+                    "DejaVu Sans",
+                    "sans-serif",
+                ]
             elif system == "Darwin":
                 # macOS system
-                font_list = ["PingFang SC", "STHeiti", "Helvetica Neue", "Arial", "DejaVu Sans", "sans-serif"]
+                font_list = [
+                    "Arial Unicode MS",
+                    "PingFang SC",
+                    "Heiti TC",
+                    "STHeiti",
+                    "SimHei",
+                    "Helvetica Neue",
+                    "Arial",
+                    "DejaVu Sans",
+                    "sans-serif",
+                ]
             else:
                 # Linux or other systems
                 font_list = ["WenQuanYi Zen Hei", "DejaVu Sans", "Arial", "sans-serif"]
-            
+
             plt.rcParams["font.family"] = "sans-serif"
             plt.rcParams["font.sans-serif"] = font_list
-            
+
         except Exception as e:
             print(f"Font configuration failed: {e}")
             # If the above configuration fails, fall back to the original settings
@@ -460,6 +477,32 @@ class EventCascadeVisualizer:
                 max_ep_x = None
 
                 for i, ep in enumerate(episodes):
+                    # Calculate content-based width
+                    # Determine how many participants are in the "densest" row
+                    parts = ep.get("participants", [])
+                    p_types = {}
+                    for p in parts:
+                        pt = p.get("type", "Participant")
+                        p_types[pt] = p_types.get(pt, 0) + 1
+
+                    max_p_col = 0
+                    if p_types:
+                        max_p_col = max(p_types.values())
+
+                    # Base width 4, add space for extra participants
+                    # Heuristic: 1.5 units per extra participant column beyond the first one
+                    recommended_width = 4.0
+                    if max_p_col > 1:
+                        recommended_width += (max_p_col - 1) * 1.5
+
+                    # Also consider title length to ensure it doesn't wrap too aggressively
+                    title_len = len(ep.get("title", ""))
+                    if title_len > 15:
+                        # Add a bit of width for long titles
+                        recommended_width = max(
+                            recommended_width, 4.0 + (title_len - 15) * 0.15
+                        )
+
                     if use_real_time:
                         esx = to_coord(ep.get("start"))
                         eex = to_coord(ep.get("end"))
@@ -468,9 +511,22 @@ class EventCascadeVisualizer:
                         # If unknown, place relative to stage start or previous episode
                         if esx is None:
                             esx = stage_start_x + (i * 0.5)
+
                         if eex is None:
-                            # Default 1 hour duration
-                            eex = esx + 1.0
+                            # Use recommended width if end time is unknown
+                            target_width = recommended_width
+
+                            # Constraint: Episode length cannot exceed Stage length IF stage has fixed time
+                            # Check if Stage has a fixed time end
+                            real_s_end_limit = to_coord(s_end_val)
+
+                            if real_s_end_limit is not None:
+                                # Max width allowed = Stage End - Ep Start
+                                # (We use max(0.5, ...) to prevent zero/negative width if start is near end)
+                                max_allowed = max(0.5, real_s_end_limit - esx)
+                                target_width = min(target_width, max_allowed)
+
+                            eex = esx + target_width
 
                         ep_start_x = esx
                         ep_end_x = eex
@@ -478,8 +534,9 @@ class EventCascadeVisualizer:
                         width = max(ep_end_x - ep_start_x, 0.1)
                     else:
                         # Logical mode: Fixed width, sequential placement
+                        # Use recommended width to fit content
                         ep_start_x = current_x
-                        width = EPISODE_WIDTH
+                        width = recommended_width
                         ep_end_x = ep_start_x + width
 
                     # Y Level Calculation (Staggered)
