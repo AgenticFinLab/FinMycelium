@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.lines import Line2D
 import pandas as pd
+import numpy as np
 
 from textwrap import wrap
 
@@ -365,21 +366,175 @@ class EventCascadeVisualizer:
         # Use real time if ANY valid time exists
         use_real_time = len(time_points) > 0
 
+        # List of X-coords where we compressed a gap (for visual indication)
+        break_marks = []
+
         if use_real_time:
-            # Calculate global time bounds
+            # --- GAP COMPRESSION LOGIC ---
+            # 1. Collect all busy intervals from Stages and Episodes
+            busy_intervals = []
+
+            # Helper to add interval
+            def add_interval(s, e):
+                if s and e:
+                    busy_intervals.append((s, e))
+                elif s:
+                    # If only start is known, assume a minimal duration
+                    busy_intervals.append((s, s + pd.Timedelta(minutes=30)))
+
+            if evt_start and evt_end:
+                busy_intervals.append((evt_start, evt_end))
+
+            for s_obj in stage_objs:
+                add_interval(s_obj["start"], s_obj["end"])
+                for e_obj in s_obj["episodes"]:
+                    add_interval(e_obj["start"], e_obj["end"])
+
+            # 2. Merge intervals
+            busy_intervals.sort(key=lambda x: x[0])
+            merged = []
+            if busy_intervals:
+                curr_s, curr_e = busy_intervals[0]
+                for next_s, next_e in busy_intervals[1:]:
+                    if next_s < curr_e:  # Overlap
+                        curr_e = max(curr_e, next_e)
+                    else:
+                        merged.append((curr_s, curr_e))
+                        curr_s, curr_e = next_s, next_e
+                merged.append((curr_s, curr_e))
+
+            # 3. Build Mapping (Time -> X)
+            # We compress gaps between merged intervals if they exceed a threshold.
+
             min_time = min(time_points)
             max_time = max(time_points)
-            if min_time == max_time:
-                # Handle single-point edge case by adding a default 1-hour span
-                max_time = min_time + pd.Timedelta(hours=1)
 
-            # Helper to convert timestamp to X-coordinate (Hours)
+            mapping_segments = []  # List of dicts describing segments
+
+            GAP_THRESHOLD_SEC = 2 * 3600  # 2 hours
+            COMPRESSED_WIDTH = 0.5  # Visual units for a compressed gap
+
+            current_x = 0.0
+            last_real = min_time
+
+            # Iterate through merged intervals to identify gaps between them
+            for ms, me in merged:
+                # If interval starts before current tracking time, skip/clip
+                if ms < last_real:
+                    ms = last_real
+
+                if me <= ms:
+                    continue
+
+                # Gap detection
+                if ms > last_real:
+                    gap_duration = (ms - last_real).total_seconds()
+                    if gap_duration > GAP_THRESHOLD_SEC:
+                        # Compress this gap
+                        mapping_segments.append(
+                            {
+                                "type": "gap",
+                                "r_start": last_real,
+                                "r_end": ms,
+                                "x_start": current_x,
+                                "width": COMPRESSED_WIDTH,
+                                "scale": COMPRESSED_WIDTH / gap_duration,
+                            }
+                        )
+                        # Add break mark at center of compressed region
+                        break_marks.append(current_x + COMPRESSED_WIDTH / 2)
+                        current_x += COMPRESSED_WIDTH
+                    else:
+                        # Normal mapping for small gap
+                        width = gap_duration / 3600.0
+                        mapping_segments.append(
+                            {
+                                "type": "normal",
+                                "r_start": last_real,
+                                "r_end": ms,
+                                "x_start": current_x,
+                                "width": width,
+                                "scale": 1.0 / 3600.0,
+                            }
+                        )
+                        current_x += width
+
+                # Add the interval itself (Normal mapping)
+                duration = (me - ms).total_seconds()
+                width = duration / 3600.0
+                mapping_segments.append(
+                    {
+                        "type": "normal",
+                        "r_start": ms,
+                        "r_end": me,
+                        "x_start": current_x,
+                        "width": width,
+                        "scale": 1.0 / 3600.0,
+                    }
+                )
+                current_x += width
+                last_real = me
+
+            # Handle tail if any (max_time > last_real)
+            if max_time > last_real:
+                duration = (max_time - last_real).total_seconds()
+                # Check if tail is a huge gap? usually we just show it.
+                # If tail is huge (e.g. event ends much later than last stage?), compress it?
+                # For now, treat tail as normal or compress if huge.
+                # Let's compress if huge to be consistent.
+                if duration > GAP_THRESHOLD_SEC:
+                    mapping_segments.append(
+                        {
+                            "type": "gap",
+                            "r_start": last_real,
+                            "r_end": max_time,
+                            "x_start": current_x,
+                            "width": COMPRESSED_WIDTH,
+                            "scale": COMPRESSED_WIDTH / duration,
+                        }
+                    )
+                    break_marks.append(current_x + COMPRESSED_WIDTH / 2)
+                    current_x += COMPRESSED_WIDTH
+                else:
+                    width = duration / 3600.0
+                    mapping_segments.append(
+                        {
+                            "type": "normal",
+                            "r_start": last_real,
+                            "r_end": max_time,
+                            "x_start": current_x,
+                            "width": width,
+                            "scale": 1.0 / 3600.0,
+                        }
+                    )
+                    current_x += width
+
+            x_label = "Time (Hours from Start, Gaps Compressed)"
+
             def to_coord(t):
                 if t is None:
                     return None
-                return (t - min_time).total_seconds() / 3600.0
 
-            x_label = "Time (Hours from Start)"
+                # Handle cases outside range (extrapolate)
+                if t < min_time:
+                    return (t - min_time).total_seconds() / 3600.0
+
+                # Find segment
+                for seg in mapping_segments:
+                    if seg["r_start"] <= t <= seg["r_end"]:
+                        delta = (t - seg["r_start"]).total_seconds()
+                        return seg["x_start"] + delta * seg["scale"]
+
+                # If beyond last segment
+                if mapping_segments:
+                    last = mapping_segments[-1]
+                    if t > last["r_end"]:
+                        delta = (t - last["r_end"]).total_seconds()
+                        # Use normal scale (1hr=1unit) for extrapolation
+                        return last["x_start"] + last["width"] + delta * (1.0 / 3600.0)
+
+                return 0  # Should not happen
+
         else:
             # Logical Layout: Sequential integer coordinates
             def to_coord(t):
@@ -614,13 +769,14 @@ class EventCascadeVisualizer:
         # To ensure text fits inside boxes, we calculate the relationship between
         # data coordinates and physical inches.
 
+        # Physical width in inches (approximate, excluding margins)
+        plot_width_inches = 20 - 2.0  # Subtract margins
+
+        # Fixed width calculation for wrapping
         # Total X range visible in data units
         x_min_limit = -2
         x_max_limit = current_x + 2
         total_x_range = x_max_limit - x_min_limit
-
-        # Physical width in inches (approximate, excluding margins)
-        plot_width_inches = 18.0
 
         inches_per_unit = plot_width_inches / max(total_x_range, 1.0)
 
@@ -977,6 +1133,20 @@ class EventCascadeVisualizer:
                 loc="upper left",
                 # Place outside plot area
                 bbox_to_anchor=(1, 1),
+            )
+
+        # Draw Break Marks on X-axis
+        for bx in break_marks:
+            ax.text(
+                bx,
+                -0.05,
+                "//",
+                ha="center",
+                va="center",
+                fontsize=14,
+                fontweight="bold",
+                color="black",
+                zorder=100,
             )
 
         plt.title(f"Event Cascade: {evt_title}", fontsize=24, fontweight="bold", pad=20)
