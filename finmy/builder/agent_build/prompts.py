@@ -20,10 +20,24 @@ Required fields to output:
 - Episode: `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly grounded in `Content` via `VerifiableField`.
 - The usage of `VerifiableField` must strictly follow the Schema definition.
 
+Time Consistency & Granularity (CRITICAL):
+1) Hierarchy Constraint:
+   - Stage Time: Must be within the Event's `start_time` and `end_time`.
+   - Episode Time: Must be within its parent Stage's `start_time` and `end_time`.
+2) Continuity Constraint (CRITICAL for Financial Events):
+   - **No Excessive Gaps**: Financial events are typically continuous processes. Avoid large, unexplained time gaps between consecutive Stages or Episodes unless explicitly supported by `Content` (e.g., a market weekend close or a regulatory waiting period).
+   - **Seamless Transition**: Ideally, the end time of one Stage/Episode should align closely with the start time of the next, reflecting the fluid nature of information flow and market reactions.
+   - **Gap Justification**: If a significant time gap exists because `Content` provides no information for the intervening period, you MUST explicitly state this in the reasoning field (if available) or ensure the "unknown" status is clear. Do not fabricate continuity if evidence is missing, but acknowledge the gap as a data limitation.
+3) Granularity Requirement:
+   - Extract timestamps with maximum precision supported by `Content` (e.g., YYYY-MM-DD HH:MM:SS).
+   - If `Content` supports hours/minutes, you MUST include them.
+   - If `Content` only provides a date (e.g., "2023-01-01") but context implies a specific start, or if granular time is missing, default the missing parts to "00:00:00" (e.g., "2023-01-01T00:00:00").
+   - Never truncate available time information.
+
 How to reconstruct:
 1) Event type identification: set `EventCascade.event_type` if supported by Content; otherwise "unknown".
-2) Stage skeleton reconstruction: for each stage, provide `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and the list of episodes.
-3) Episode skeleton reconstruction: for each episode, provide `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` (if insufficient evidence, set to "unknown" with concise reasons).
+2) Stage skeleton reconstruction: for each stage, provide `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and the list of episodes. Ensure time constraints are met.
+3) Episode skeleton reconstruction: for each episode, provide `episode_id`, `name`, `index_in_stage`, and extract `start_time` and `end_time` strictly from `Content` using `VerifiableField` (if insufficient evidence, set to "unknown" with concise reasons). Ensure time constraints are met.
 4) Ordering: set indices by temporal/logical order; start from 0.
 
 Strict constraints:
@@ -54,6 +68,18 @@ Instructions:
 - Ordering: set indices by temporal/logical order starting from 0.
 - Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
 - Output: raw JSON only; do not include explanations or code fences.
+
+CRITICAL Time Constraints:
+1. Hierarchy: Event range >= Stage range >= Episode range.
+   - Ensure Stage start/end are strictly inside Event start/end.
+   - Ensure Episode start/end are strictly inside Stage start/end.
+2. Continuity:
+   - **Avoid Gaps**: Ensure Stages and Episodes flow continuously. The end of Stage N should ideally match or immediately precede the start of Stage N+1.
+   - **Reasonable Intervals**: If a gap exists, it must be justified by `Content` (e.g., non-trading hours).
+   - **Missing Data**: If a gap is due to missing information in `Content`, explicitly note this limitation rather than fabricating times.
+3. Granularity:
+   - Use highest precision available (e.g., "2023-10-27T14:30:00").
+   - If precise time is missing but date is known, use "00:00:00" for the time component.
 
 === Query BEGIN ===
 {Query}

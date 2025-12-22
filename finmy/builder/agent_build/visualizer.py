@@ -21,9 +21,8 @@ Usage:
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.lines import Line2D
-import platform
 import pandas as pd
-import json
+
 from textwrap import wrap
 
 
@@ -425,7 +424,11 @@ class EventCascadeVisualizer:
                 label = "Unknown"
             # Format datetime if it is one
             if isinstance(label, pd.Timestamp):
-                label = label.strftime("%Y-%m-%d")
+                # Adaptive formatting: show time only if non-zero
+                if label.hour == 0 and label.minute == 0 and label.second == 0:
+                    label = label.strftime("%Y-%m-%d")
+                else:
+                    label = label.strftime("%Y-%m-%d\n%H:%M:%S")
             x_tick_labels.append(str(label))
 
         y_base_stage = 0
