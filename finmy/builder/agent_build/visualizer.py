@@ -21,6 +21,7 @@ Usage:
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.lines import Line2D
+import platform
 import pandas as pd
 import json
 from textwrap import wrap
@@ -181,7 +182,7 @@ class EventCascadeVisualizer:
 
         return self.relation_style_map[rel_name]
 
-    def plot_cascade(self, json_path, output_path=None):
+    def plot_cascade(self, jsondata, output_path=None):
         """
         Generates a matplotlib visualization of the EventCascade.
 
@@ -200,16 +201,37 @@ class EventCascadeVisualizer:
         """
         # --- 0. Load Data ---
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                cascade_data = json.load(f)
+            cascade_data = jsondata
         except Exception as e:
-            print(f"Error loading JSON from {json_path}: {e}")
+            print(f"Error processing JSON data: {e}")
             return
 
         # Set a nice font
         try:
+            # Set basic parameters first
+            plt.rcParams['axes.unicode_minus'] = False
+            
+            # Select fonts based on operating system
+            import platform
+            system = platform.system()
+            
+            if system == "Windows":
+                # Windows system
+                font_list = ["SimHei", "Microsoft YaHei", "Arial", "DejaVu Sans", "sans-serif"]
+            elif system == "Darwin":
+                # macOS system
+                font_list = ["PingFang SC", "STHeiti", "Helvetica Neue", "Arial", "DejaVu Sans", "sans-serif"]
+            else:
+                # Linux or other systems
+                font_list = ["WenQuanYi Zen Hei", "DejaVu Sans", "Arial", "sans-serif"]
+            
             plt.rcParams["font.family"] = "sans-serif"
-            # Prioritize fonts that look good on macOS/Windows/Linux
+            plt.rcParams["font.sans-serif"] = font_list
+            
+        except Exception as e:
+            print(f"Font configuration failed: {e}")
+            # If the above configuration fails, fall back to the original settings
+            plt.rcParams["font.family"] = "sans-serif"
             plt.rcParams["font.sans-serif"] = [
                 "Arial",
                 "Helvetica Neue",
@@ -218,8 +240,6 @@ class EventCascadeVisualizer:
                 "Bitstream Vera Sans",
                 "sans-serif",
             ]
-        except Exception:
-            pass
 
         # --- 1. Data Parsing & Flattening ---
         # The goal here is to traverse the nested structure (Event -> Stage -> Episode)
