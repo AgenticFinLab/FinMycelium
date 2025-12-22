@@ -59,12 +59,14 @@ def test_visualization():
     # --- 3. Generate Visualization ---
 
     # Output path for the image (saved in the same directory as the input json)
+    with open(json_path, "r", encoding="utf-8") as f:
+        cascade_data = json.load(f)
     output_path = os.path.join(os.path.dirname(json_path), "test_timeline.png")
 
     print(f"Generating visualization to: {output_path}...")
     try:
         # Call the plotting function with the JSON path
-        viz.plot_cascade(json_path, output_path)
+        viz.plot_cascade(cascade_data, output_path)
 
         # Verify output generation
         if os.path.exists(output_path):
