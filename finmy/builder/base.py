@@ -5,6 +5,7 @@ Base entities and containers for financial event reconstruction.
 import os
 import json
 import pickle
+import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
@@ -14,7 +15,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from lmbase.inference.api_call import LangChainAPIInference
 
-from lmbase.inference.model_call import LLMInference
+# from lmbase.inference.model_call import LLMInference
 from lmbase.utils.tools import BaseContainer
 
 from finmy.generic import UserQueryInput, DataSample
@@ -88,7 +89,7 @@ class BaseBuilder(ABC):
     ):
         self.build_config = build_config
         self.agents_config = build_config["agents"]
-
+ 
         self.method_name = method_name
 
         # By default, we set only one lm for agents
@@ -97,7 +98,10 @@ class BaseBuilder(ABC):
         self.agents_lm = None
 
         self.define_agent_models()
-        self.save_dir = build_config["save_folder"]
+
+        build_output = f"build_output_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        self.save_dir = os.path.join( build_config["save_folder"],build_output)
+
         os.makedirs(self.save_dir, exist_ok=True)
 
     def define_agent_models(self):
@@ -110,12 +114,12 @@ class BaseBuilder(ABC):
                 lm_name=model_name,
                 generation_config=self.build_config["generation_config"],
             )
-        else:
-            self.agents_lm = LLMInference(
-                lm_path=model_name,
-                inference_config=self.build_config["inference_config"],
-                generation_config=self.build_config["generation_config"],
-            )
+        # else:
+        #     self.agents_lm = LLMInference(
+        #         lm_path=model_name,
+        #         inference_config=self.build_config["inference_config"],
+        #         generation_config=self.build_config["generation_config"],
+        #     )
 
     def get_save_name(
         self,
