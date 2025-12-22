@@ -941,7 +941,13 @@ class FinMyceliumWebInterface:
     def render_results_page_class(self):
         """Render the class-based event reconstruction results."""
         st.title("📋 Event Reconstruction Report")
-        
+
+        # try:
+        #     with open(r"EXPERIMENT\xxxxxxxx\xxxxEventCascade.json", "r", encoding="utf-8") as f:
+        #         st.session_state.analysis_results = json.load(f)
+        # except:
+        #     st.error("Error loading reconstruction results. Please check the pipeline output file.")
+
         if not st.session_state.analysis_results:
             st.info("No reconstruction results available. Please run an analysis first.")
             if st.button("Go to Reconstruction"):
