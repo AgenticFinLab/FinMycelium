@@ -6,10 +6,9 @@ import os
 import sys
 from pathlib import Path
 import json
+import yaml
 
 from dotenv import load_dotenv
-
-
 
 from finmy.builder.class_build.main_build import ClassEventBuilder
 from finmy.builder.base import BuildInput
@@ -23,7 +22,7 @@ def sample_content():
         return data_str
         
 
-def test_class_build():
+def test_class_build(content: list, query: str, keywords: list, config_path: str):
     """Test the ClassEventBuild with a simple input."""
     load_dotenv()
 
@@ -34,8 +33,8 @@ def test_class_build():
         DataSample(
             sample_id="test_sample_001",
             raw_data_id="raw_001",
-            content=sample_content(),
-            category = None,
+            content=content,
+            category = None,  
             knowledge_field = None,
             tag="Test",
             method="Manual Entry"
@@ -45,8 +44,8 @@ def test_class_build():
     # Create user query input
     user_query = UserQueryInput(
         user_query_id="test_query_001",
-        query_text="硅谷银行是怎么回事？",
-        key_words=["scheme", "investors"],
+        query_text = query,
+        key_words = keywords,
         time_range=None,
         extras={"test": True}
     )
@@ -58,17 +57,20 @@ def test_class_build():
     )
     
     # Create builder configuration
-    build_config = {
-        "lm_type": "api",
-        "lm_name": "ARK/doubao-seed-1-6-flash-250828",  # Replace with your preferred model
-        "generation_config": {
-            "temperature": 0.7,
-            "max_tokens": 2000,
-        },
-        "agents": {},
-        "save_folder": "./output"
-    }
-    
+    # build_config = {
+    #     "lm_type": "api",
+    #     "lm_name": "ARK/doubao-seed-1-6-flash-250828",  # Replace with your preferred model
+    #     "generation_config": {
+    #         "temperature": 0.7,
+    #         "max_tokens": 2000,
+    #     },
+    #     "agents": {},
+    #     "save_folder": "./output"
+    # }
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        build_config = yaml.safe_load(f)
+
     # Initialize builder
     builder = ClassEventBuilder(
         method_name="class_build",
@@ -106,9 +108,16 @@ def test_class_build():
 if __name__ == "__main__":
     # Create test output directory
     os.makedirs("./test_output", exist_ok=True)
-    
+    query = "硅谷银行是怎么回事？"
+    keywords = ["scheme", "investors"]
+    config_path = "configs\pipline.yml"
     # Run test
-    success = test_class_build()
+    success = test_class_build(
+        content=sample_content(),
+        query=query,
+        keywords=keywords,
+        config_path=config_path
+    )
     
     if success:
         print("\n✓ All tests passed!")
