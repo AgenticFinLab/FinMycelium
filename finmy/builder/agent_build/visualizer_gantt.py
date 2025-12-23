@@ -1,15 +1,37 @@
 """
-Present the event cascade as a Gantt chart.
+Event Cascade Gantt Visualizer
+==============================
+
+This module provides the `EventCascadeGanttVisualizer` class, which generates an interactive
+Gantt chart from event cascade data. It uses Plotly for rendering and supports:
+- Hierarchical visualization of Stages and Episodes.
+- Detailed participant tracking within episodes.
+- Relation visualization between participants.
+- Adaptive time scaling and layout customization.
 """
 
+import os
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
 
 
 class EventCascadeGanttVisualizer:
+    """
+    Visualizer for Event Cascade data in a Gantt chart format.
+
+    This class handles the parsing of hierarchical event data (Stages -> Episodes -> Participants)
+    and renders a complex Gantt chart using Plotly. It includes custom logic for:
+    - Participant styling (colors/markers).
+    - Intelligent layout to avoid overlaps (staggering).
+    - Participant grouping and relation visualization.
+    """
+
     def __init__(self):
+        """
+        Initialize the visualizer with default style maps.
+        Sets up color palettes, marker types, and internal tracking dictionaries.
+        """
         # Distinct colors for participants (Tab20 hex codes) - copied from visualizer.py
         self.colors = [
             "#1f77b4",
@@ -77,6 +99,13 @@ class EventCascadeGanttVisualizer:
     def _get_participant_style(self, p_id, p_type):
         """
         Registers a participant and assigns a consistent style (color + marker).
+
+        Args:
+            p_id (str): Unique identifier for the participant.
+            p_type (str): Type of the participant (e.g., 'Person', 'Org').
+
+        Returns:
+            tuple: A tuple containing (color_hex, marker_symbol).
         """
         if p_id not in self.participant_style_map:
             # Determine color based on Type
@@ -99,6 +128,15 @@ class EventCascadeGanttVisualizer:
         return self.participant_style_map[p_id]
 
     def _get_relation_style(self, rel_name):
+        """
+        Get or assign a consistent line style for a relationship type.
+
+        Args:
+            rel_name (str): The name of the relation.
+
+        Returns:
+            tuple: A tuple containing (color_hex, dash_style).
+        """
         if rel_name not in self.relation_style_map:
             idx = len(self.relation_style_map)
             color = self.relation_colors[idx % len(self.relation_colors)]
@@ -110,18 +148,28 @@ class EventCascadeGanttVisualizer:
         """
         Generates an interactive Gantt chart from the event cascade data.
 
+        This function orchestrates the entire visualization process:
+        1.  Parses the input JSON data into a structured format suitable for plotting.
+        2.  Calculates layout parameters (time ranges, staggering, marker sizes).
+        3.  Plots Stages as the backbone of the chart.
+        4.  Plots Episodes with detailed participant information.
+        5.  Configures the interactive layout and saves the result.
+
         Args:
-            cascade_data (dict): The event cascade JSON object.
+            cascade_data (dict): The event cascade JSON object containing 'stages' and 'episodes'.
             output_path (str, optional): Path to save the output HTML file.
 
         Returns:
-            fig: The Plotly figure object.
+            plotly.graph_objects.Figure: The generated Plotly figure object.
         """
 
         # --- Helpers ---
 
         def parse_date(d_obj):
-            """Parse date from dict with 'value' or direct string; no silent defaults."""
+            """
+            Parse date from a dictionary with a 'value' key or a direct string.
+            Ensures 'unknown' values are treated as None.
+            """
             if d_obj is None:
                 return None
             if isinstance(d_obj, dict):
@@ -133,6 +181,10 @@ class EventCascadeGanttVisualizer:
             return pd.to_datetime(d_str)
 
         def gran_code_for(v):
+            """
+            Determine the granularity code (e.g., 'YMD', 'YMDHM') for a date string.
+            Used to format time labels appropriately.
+            """
             if v is None:
                 return None
             if isinstance(v, dict):
@@ -346,43 +398,47 @@ class EventCascadeGanttVisualizer:
         episode_rows.sort(key=lambda x: x["Start"] or pd.Timestamp.min)
 
         # --- Adaptive Sizing Calculation ---
-        # Calculate visual parameters based on data density
+        # This section calculates visual parameters (height, marker size) based on data density.
+        # It ensures the chart remains readable regardless of the number of episodes.
+
         max_eps_in_stage = 0
         for sid in unique_stages:
             count = len([r for r in episode_rows if r["Group"] == sid])
             if count > max_eps_in_stage:
                 max_eps_in_stage = count
 
+        # Define vertical spacing constants
         y_stage = 2.0
         episode_y_step = 1.8
         episode_y_base = y_stage + y_stage
 
-        # Estimate Y range
+        # Estimate total Y range required
         est_max_y = episode_y_base
         if max_eps_in_stage > 0:
             est_max_y += (max_eps_in_stage - 1) * episode_y_step
 
         total_y_span = est_max_y + 2.0  # Add some margin
 
-        # Calculate Plot Height
-        # Using the same formula as in layout
+        # Calculate Plot Height dynamically
+        # Ensure a minimum height of 600px, or scale up for many episodes.
         plot_height = max(600, 150 + len(episode_rows) * 25)
 
-        # Pixels per Y unit
+        # Pixels per Y unit conversion factor
         px_per_unit = plot_height / total_y_span
 
-        # Bar height in pixels (0.8 data units)
+        # Bar height in pixels (corresponding to 0.8 data units)
         bar_height_px = 0.8 * px_per_unit
 
         # Adaptive Marker Size & Line Width
-        # Aim to fit ~7 tiers vertically within the bar (reduced size)
+        # We aim to fit ~7 tiers of elements vertically within an episode bar.
+        # This prevents overcrowding of markers in dense episodes.
         calc_marker_size = bar_height_px / 7.0
         adaptive_marker_size = max(1.5, min(6, calc_marker_size))
         adaptive_line_width = max(0.5, adaptive_marker_size / 3.0)
 
         episode_y_positions_global = []
 
-        # Calculate global time range
+        # Calculate global time range for the x-axis
         valid_starts = [r["Start"] for r in rows if r["Start"] is not None]
         valid_ends = [r["Finish"] for r in rows if r["Finish"] is not None]
 
@@ -502,11 +558,13 @@ class EventCascadeGanttVisualizer:
         time_label_fmt = fmt_map.get(fmt_code, "%Y-%m-%d %H:%M")
 
         # --- Pre-calculate Time Label Tiers (Per-Episode Staggering) ---
-        # Strategy: Assign one height tier per episode (so Start/End are aligned).
-        # Check for overlap with already-placed episodes on each tier.
-        # "Overlap" means the time points (start or end) are too close.
+        # Strategy: To avoid label overlap, we assign different vertical "tiers" (height offsets)
+        # to the start/end time labels of different episodes.
+        # - Each episode gets ONE tier for both its start and end labels.
+        # - We check for spatial conflicts with already placed labels on each tier.
+        # - "Conflict" means the time points are too close (within 5% of total span).
 
-        # 7 tiers from 0.1 to 1.0
+        # 7 tiers from 0.1 to 1.0 (relative to bar bottom)
         label_tiers = [0.1 + i * 0.15 for i in range(7)]
 
         # Track occupied time points per tier: tier_index -> list of timestamps
@@ -520,7 +578,7 @@ class EventCascadeGanttVisualizer:
         # of an existing point on the same tier, it's a conflict.
         gap_thresh = pd.Timedelta(seconds=total_span_sec * 0.05)
 
-        # Sort episodes by start time to process sequentially
+        # Sort episodes by start time to process sequentially (greedy allocation)
         sorted_episodes = sorted(
             episode_rows, key=lambda x: get_viz_coords(x, min_time)[0]
         )
@@ -540,7 +598,6 @@ class EventCascadeGanttVisualizer:
                 existing_pts = tier_occupancy[t_idx]
 
                 # Check against all existing points on this tier
-                # (Optimization: could just check the last few, but N is small)
                 for pt in existing_pts:
                     # Check distance to Start
                     if abs(pt - s_val) < gap_thresh:
@@ -555,7 +612,7 @@ class EventCascadeGanttVisualizer:
                     best_tier_idx = t_idx
                     break
 
-            # Fallback if all tiers busy
+            # Fallback if all tiers busy: cycle through tiers based on index
             if best_tier_idx == -1:
                 best_tier_idx = i % len(label_tiers)
 
@@ -735,6 +792,8 @@ class EventCascadeGanttVisualizer:
                     dur_ms = dur
 
                     # 1. Build Adjacency Graph for Reordering
+                    # We treat participants as nodes and relations as edges.
+                    # This allows us to group connected participants together in the visualization.
                     rels = r.get("Relations", [])
                     adj = {p["id"]: [] for p in parts}
                     for rel in rels:
@@ -745,6 +804,8 @@ class EventCascadeGanttVisualizer:
                             adj[dst].append(src)
 
                     # 2. BFS/Connected Components Reordering
+                    # Reorder participants so that connected ones are adjacent in the list.
+                    # This minimizes the crossing of relation lines.
                     ordered_parts = []
                     visited = set()
 
@@ -773,12 +834,13 @@ class EventCascadeGanttVisualizer:
                                             queue.append(n_obj)
 
                     # 3. Layout: Zig-Zag Vertical Positioning
-                    # We have 3 tiers: -0.2, 0, +0.2 relative to y_val
-                    # This utilizes the bar height (0.8) effectively
+                    # Distribute participants horizontally across the episode bar.
+                    # Stagger them vertically (Zig-Zag) to avoid marker overlap.
+                    # We use 3 vertical tiers relative to the episode centerline.
                     y_offsets = [0.2, 0, -0.2]
 
                     for p_idx, p in enumerate(ordered_parts):
-                        # Horizontal: Even distribution
+                        # Horizontal: Even distribution across the episode duration
                         fraction = (p_idx + 1) / (num_parts + 1)
                         p_x = start_ts + pd.to_timedelta(dur_ms * fraction, unit="ms")
 
@@ -1205,6 +1267,10 @@ class EventCascadeGanttVisualizer:
         )
 
         # --- 4. Save Output ---
+        # If an output path is provided, save the figure.
+        # For HTML output, we inject custom JavaScript to add interactive controls:
+        # - A compactness slider to adjust the time window view.
+        # - A time window slider to scroll through the timeline.
         if output_path:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             if output_path.endswith(".html"):
