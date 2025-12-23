@@ -21,11 +21,15 @@ Requirements:
 
 import os
 import json
+import sys
 import matplotlib.pyplot as plt
 from finmy.builder.agent_build.visualizer import EventCascadeVisualizer
 
-# Use 'Agg' backend for matplotlib to support running in headless environments (no GUI required)
-plt.switch_backend("Agg")
+interactive = ("--interactive" in sys.argv) or (
+    os.environ.get("INTERACTIVE_VIZ") == "1"
+)
+if not interactive:
+    plt.switch_backend("Agg")
 
 
 def test_visualization():
@@ -63,18 +67,21 @@ def test_visualization():
     # Output path for the image (saved in the same directory as the input json)
     with open(json_path, "r", encoding="utf-8") as f:
         cascade_data = json.load(f)
-    output_path = os.path.join(os.path.dirname(json_path), "test_timeline.png")
+    base = os.path.splitext(os.path.basename(json_path))[0]
+    out_dir = os.path.dirname(json_path)
+    output_path = None if interactive else os.path.join(out_dir, f"{base}_timeline.png")
 
     print(f"Generating visualization to: {output_path}...")
     try:
-        # Call the plotting function with the JSON path
-        viz.plot_cascade(cascade_data, output_path)
+        ret = viz.plot_cascade(cascade_data, output_path)
 
-        # Verify output generation
-        if os.path.exists(output_path):
-            print(f"Success: Visualization successfully generated at {output_path}")
+        if interactive:
+            plt.show()
         else:
-            print("Error: Output file was not created.")
+            if os.path.exists(output_path):
+                print(f"Success: Visualization successfully generated at {output_path}")
+            else:
+                print("Error: Output file was not created.")
 
     except Exception as e:
         print(f"Exception occurred during visualization: {e}")

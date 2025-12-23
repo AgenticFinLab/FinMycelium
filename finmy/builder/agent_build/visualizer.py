@@ -21,6 +21,7 @@ Usage:
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.lines import Line2D
+from matplotlib.widgets import Slider
 import pandas as pd
 import numpy as np
 
@@ -904,7 +905,11 @@ class EventCascadeVisualizer:
 
         # Set Plot Limits
         ax.set_ylim(-1, max_y + 2)
-        ax.set_xlim(-2, current_x + 2)
+        x_min_limit = -2
+        x_max_limit = current_x + 2
+        total_x_range = x_max_limit - x_min_limit
+        view_width = max(5.0, total_x_range * 0.25)
+        ax.set_xlim(x_min_limit, min(x_min_limit + view_width, x_max_limit))
 
         # Configure X-axis Ticks
         # We rotate them for better readability of long timestamps
@@ -984,7 +989,23 @@ class EventCascadeVisualizer:
             )
 
         plt.title(f"Event Cascade: {evt_title}", fontsize=24, fontweight="bold", pad=20)
-        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.25)
+
+        start_max = max(x_min_limit, x_max_limit - view_width)
+        slider_ax = plt.axes([0.2, 0.1, 0.6, 0.03], facecolor="lightgoldenrodyellow")
+        x_slider = Slider(
+            slider_ax,
+            "Time Window Start",
+            x_min_limit,
+            start_max,
+            valinit=x_min_limit,
+        )
+
+        def _on_slide(val):
+            ax.set_xlim(val, min(val + view_width, x_max_limit))
+            fig.canvas.draw_idle()
+
+        x_slider.on_changed(_on_slide)
 
         if output_path:
             # Save as requested format (usually PNG)
@@ -996,7 +1017,6 @@ class EventCascadeVisualizer:
             pdf_path = f"{base_name}.pdf"
             plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
 
-            plt.close()
             return output_path
         else:
             return fig
