@@ -119,7 +119,11 @@ class EventCascadeVisualizer:
         if not val or not isinstance(val, str) or val.lower() == "unknown":
             return None
         try:
-            return pd.to_datetime(val)
+            datetime_obj = pd.to_datetime(val)
+            # drop timezone information
+            if datetime_obj.tzinfo:
+                return datetime_obj.tz_convert(None)
+            return datetime_obj
         except:
             return None
 
