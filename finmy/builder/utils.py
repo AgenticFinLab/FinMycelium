@@ -12,7 +12,12 @@ import ast
 from pathlib import Path
 from typing import List, Set, Dict, Any, Optional
 
-from finmy.builder.constant import OTHER_TOKEN_NUM, ESTIMATE_PER_TOKEN_TIME_COST
+from finmy.builder.constant import (
+    OTHER_TOKEN_NUM,
+    CLASS_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST,
+    AGENT_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST,
+    BuildType,
+)
 
 
 def load_python_text(path: str | Path) -> str:
@@ -414,9 +419,7 @@ def extract_json_response(response_text: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse JSON from response: {e}") from e
 
 
-def estimate_complete_time(
-    str_list: List[str],
-) -> int:
+def estimate_complete_time(str_list: List[str], build_type: BuildType) -> int:
     """Estimate the time to complete the reconstruction based on the content strings.
 
     Parameters:
@@ -444,5 +447,16 @@ def estimate_complete_time(
         else:
             last_word = i
             build_input_length += 1
-
-    return round((build_input_length + OTHER_TOKEN_NUM) * ESTIMATE_PER_TOKEN_TIME_COST)
+    if build_type == BuildType.CLASS_BUILD:
+        return round(
+            (build_input_length + OTHER_TOKEN_NUM)
+            * CLASS_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST
+        )
+    if build_type == BuildType.AGENT_BUILD:
+        return round(
+            (build_input_length + OTHER_TOKEN_NUM)
+            * AGENT_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST
+        )
+    raise ValueError(f"Invalid build type: {build_type}") from ValueError(
+        f"Invalid build type: {build_type}"
+    )
