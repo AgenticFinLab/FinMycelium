@@ -937,6 +937,7 @@ class FinMyceliumWebInterface:
         logging.info("All_Text_Content: %s", All_Text_Content)
         logging.info("Length of All_Text_Content List: %d", len(All_Text_Content))
         All_Text_Content_Count=0
+        All_Text_Content_Count_Limit = 0
         All_Text_Content_Limit = []
         for item in All_Text_Content:
             All_Text_Content_Count+=len(item)
