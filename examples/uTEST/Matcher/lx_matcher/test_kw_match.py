@@ -5,16 +5,18 @@ Run:
     python examples/Matcher/lx_matcher/test_kw_match.py
 """
 
+import dotenv
+
 from finmy.matcher.lx_match import KWMatcher
 from finmy.summarizer.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
-import dotenv
+
 
 dotenv.load_dotenv()
 
-query_text = "识别与人工智能在金融风控与合规相关的内容"
+QUERY_TEXT = "识别与人工智能在金融风控与合规相关的内容"
 key_words = ["人工智能", "AI", "风险管理", "模型合规", "透明度"]
-content = """
+CONTENT = """
 近年来，人工智能在资本市场与零售金融的应用显著增加。部分银行采用机器学习进行信用评分与反欺诈检测，这提升了风控效率与业务响应速度。然而，模型的稳定性与在极端市场情况下的表现仍需持续评估。
 
 一些机构建立了端到端的风险管理框架，包括数据治理、模型验证、监控与回溯测试。对于黑箱模型，内部与外部审计要求更高的可解释性，以满足监管对于透明度与审慎监管的原则。
@@ -26,8 +28,8 @@ content = """
 展望未来，生成式 AI 在投研、客服与运营场景的应用将更广泛。与此同时，企业需要在创新与风险之间寻找平衡，将模型合规、透明度与韧性纳入治理框架的核心指标。
 """
 
-sq = SummarizedUserQuery(summarization=query_text, key_words=key_words)
-match_input = MatchInput(match_data=content, summarized_query=sq)
+sq = SummarizedUserQuery(summarization=QUERY_TEXT, key_words=key_words)
+match_input = MatchInput(match_data=CONTENT, summarized_query=sq)
 
 matcher = KWMatcher()
 result = matcher.run(match_input)

@@ -6,8 +6,9 @@ Run:
 """
 
 import time
-import dotenv
 import uuid
+
+import dotenv
 
 from finmy.matcher.lm_match import LLMMatcher
 from finmy.summarizer.summarizer import SummarizedUserQuery
@@ -18,9 +19,9 @@ from finmy.converter import match_output_to_meta_samples
 
 dotenv.load_dotenv()
 
-query_text = "识别与人工智能在金融风控与合规相关的内容"
+QUERY_TEXT = "识别与人工智能在金融风控与合规相关的内容"
 key_words = ["人工智能", "AI", "风险管理", "模型合规", "透明度"]
-content = """
+CONTENT = """
 近年来，人工智能在资本市场与零售金融的应用显著增加。部分银行采用机器学习进行信用评分与反欺诈检测，这提升了风控效率与业务响应速度。然而，模型的稳定性与在极端市场情况下的表现仍需持续评估。
 
 一些机构建立了端到端的风险管理框架，包括数据治理、模型验证、监控与回溯测试。对于黑箱模型，内部与外部审计要求更高的可解释性，以满足监管对于透明度与审慎监管的原则。
@@ -41,10 +42,8 @@ rd = RawData(
     tag="AgenticFin",
 )
 
-sq = SummarizedUserQuery(summarization=query_text, key_words=key_words)
-match_input = MatchInput(
-    match_data=content, summarized_query=sq, db_item=rd
-)  # TODO: to be determined that removing db_item argument.
+sq = SummarizedUserQuery(summarization=QUERY_TEXT, key_words=key_words)
+match_input = MatchInput(match_data=CONTENT, summarized_query=sq, db_item=rd)
 
 matcher = LLMMatcher(config={"lm_name": "deepseek/deepseek-chat"})
 result = matcher.run(match_input)
