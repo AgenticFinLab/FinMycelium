@@ -596,7 +596,7 @@ class FinMyceliumWebInterface:
                 return
             
             # Execute reconstruction with spinner
-            with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results."):
+            with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results. This may take 30-60 minutes."):
                 results = self.perform_ai_analysis(analysis_inputs)
                 
                 if results:
