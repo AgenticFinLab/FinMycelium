@@ -46,6 +46,10 @@
 - **Database Support**: MySQL/PostgreSQL integration for data persistence
 - **Configuration-Driven**: YAML-based configuration for easy customization
 
+## Project Demonstration
+
+https://github.com/user-attachments/assets/3accaf39-98a1-47cc-a11c-9b035933c241
+
 ## 🚀 Quick Start
 
 ### Prerequisites
