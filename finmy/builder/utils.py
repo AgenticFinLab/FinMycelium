@@ -12,8 +12,6 @@ import ast
 from pathlib import Path
 from typing import List, Set, Dict, Any, Optional
 
-
-from finmy.builder.base import BuildInput
 from finmy.builder.constant import OTHER_TOKEN_NUM, ESTIMATE_PER_TOKEN_TIME_COST
 
 
@@ -417,7 +415,7 @@ def extract_json_response(response_text: str) -> Dict[str, Any]:
 
 
 def estimate_time_to_complete(
-    build_input: BuildInput,
+    str_list: List[str],
 ) -> int:
     """Estimate the time to complete the reconstruction based on the content length.
 
@@ -427,18 +425,7 @@ def estimate_time_to_complete(
     Returns:
     - The estimated time to complete the reconstruction in minutes.
     """
-    # Other tokens that are not included in the content length,
-    # such as system prompt, response format, etc.
-    all_content = (
-        build_input.user_query.query_text
-        if build_input.user_query.query_text
-        else ""
-        + " ".join(
-            build_input.user_query.key_words if build_input.user_query.key_words else ""
-        )
-        + " ".join([sample.content for sample in build_input.samples if sample.content])
-        + " ".join([sample.content for sample in build_input.samples])
-    )
+    all_content = " ".join(str_list)
 
     # Calculate the length of the build input,
     # considering the space between words and the length of the words
