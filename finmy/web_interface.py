@@ -42,6 +42,7 @@ from finmy.builder.class_build.prompts.ponzi_scheme import ponzi_scheme_prompt
 from finmy.builder.class_build.main_build import ClassEventBuilder
 import matplotlib.pyplot as plt
 from finmy.builder.agent_build.visualizer import EventCascadeVisualizer
+from finmy.builder.utils import estimate_complete_time
 from finmy.pipeline import FinmyPipeline
 from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
 
@@ -120,6 +121,8 @@ class FinMyceliumWebInterface:
             st.session_state.processing_start_time = None
         if "save_builder_dir_path" not in st.session_state:
             st.session_state.save_builder_dir_path = None
+        if "estimate_time" not in st.session_state:
+            st.session_state.estimate_time = None
     
 
     # def setup_ai_client(self):
@@ -596,9 +599,9 @@ class FinMyceliumWebInterface:
                 return
             
             # Execute reconstruction with spinner
-            with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results. This may take 30-60 minutes."):
+            with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results."):
                 results = self.perform_ai_analysis(analysis_inputs)
-                
+
                 if results:
                     # Store results with timestamp for validation
                     st.session_state.analysis_results = results
@@ -870,10 +873,7 @@ class FinMyceliumWebInterface:
                                 f"Row {index}: URL is not a string format. Skipping processing."
                             )
                     except:
-                        logging.info(
-                            "Processing error: %s",
-                            row["url"] if row["url"] else "No URL Provided",
-                        )
+                        logging.info("Processing error: %s",row["url"] if row["url"] else "No URL Provided")
 
                 
 
@@ -927,8 +927,9 @@ class FinMyceliumWebInterface:
         # info_to_analyze = cleaned and filtered data from above steps
         
         All_Text_Content = structure_data_urllink_content + structure_data_filepath_content + formatted_bocha_search_results_content + formatted_baidu_search_results_content
+        st.session_state.estimate_time = estimate_complete_time(str_list = All_Text_Content, build_type = reconstruction_config["builder_type"])
+        st.write(f"Estimated time to complete: **{st.session_state.estimate_time} minutes**")
         All_Text_Content_filepath = os.path.join(
-                    save_dir, f"All_Text_Content_{timestamp}.json"
                 )    
         with open(All_Text_Content_filepath, "w", encoding="utf-8") as f:
                     json.dump(All_Text_Content, f, ensure_ascii=False, indent=4)
@@ -943,7 +944,7 @@ class FinMyceliumWebInterface:
             if(All_Text_Content_Count<=100000):
                 All_Text_Content_Limit.append(item)
                 All_Text_Content_Count_Limit = All_Text_Content_Count
-            
+        
         logging.info("Length of All_Text_Content String: %d", All_Text_Content_Count)
         logging.info("Length of All_Text_Content_Limit String: %d", All_Text_Content_Count_Limit)   
 

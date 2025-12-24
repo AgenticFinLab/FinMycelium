@@ -38,7 +38,7 @@ generation_config: &generation_config
 
 
 db_config: &db_config
-  url: "mysql+pymysql://finmyceliumdata:LYrxcTXM5Kpz5z3S@127.0.0.1:3306/finmyceliumdata"
+  url: "mysql+pymysql://finmyceliumdata:LYrxcTXM5Kpz5z3S@10.123.4.30:3306/finmyceliumdata"
 
 # ----------------------------------------------------------------------------
 # Output Path Configuration
@@ -88,7 +88,7 @@ summarizer_config: &summarizer_config
 #   - "lx_vector": LlamaIndex vector-based matcher
 matcher_config: &matcher_config
   # use_matcher: False | True # if not using matcher, the matcher_type and lm_name will be ignored
-  use_matcher: True
+  use_matcher: False
   matcher_type: "LXMatcher"
   lm_name: "deepseek/deepseek-chat"
 

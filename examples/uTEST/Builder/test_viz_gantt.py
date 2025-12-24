@@ -11,9 +11,7 @@ from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualiz
 def test_gantt():
     """Test the visualizer-gantt."""
     json_paths = [
-        "EXPERIMENT/uTEST/StepBuilderDemo1/FinalEventCascade.json",
-        "EXPERIMENT/uTEST/StepBuilderDemo2/FinalEventCascade.json",
-        "EXPERIMENT/uTEST/StepBuilderDemo3/FinalEventCascade.json",
+        r"EXPERIMENT\uTEST\Pipline\build_output_20251222130929900932\FinalEventCascade.json"
     ]
 
     viz = EventCascadeGanttVisualizer()
