@@ -46,7 +46,7 @@ match_input = MatchInput(
     match_data=content, summarized_query=sq, db_item=rd
 )  # TODO: to be determined that removing db_item argument.
 
-matcher = LLMMatcher(lm_name="deepseek/deepseek-chat")
+matcher = LLMMatcher(config={"lm_name": "deepseek/deepseek-chat"})
 result = matcher.run(match_input)
 
 meta_samples = match_output_to_meta_samples(
