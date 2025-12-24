@@ -12,6 +12,8 @@ import ast
 from pathlib import Path
 from typing import List, Set, Dict, Any, Optional
 
+from finmy.builder.constant import OTHER_TOKEN_NUM, ESTIMATE_PER_TOKEN_TIME_COST
+
 
 def load_python_text(path: str | Path) -> str:
     """Load Python source text from a required path.
@@ -410,3 +412,37 @@ def extract_json_response(response_text: str) -> Dict[str, Any]:
             longest = max(matches, key=len)
             return json.loads(longest)
         raise ValueError(f"Failed to parse JSON from response: {e}") from e
+
+
+def estimate_complete_time(
+    str_list: List[str],
+) -> int:
+    """Estimate the time to complete the reconstruction based on the content strings.
+
+    Parameters:
+    - str_list: The list of the content in strings.
+
+    Returns:
+    - The estimated time to complete the reconstruction in minutes.
+    """
+    all_content = " ".join(str_list)
+
+    # Calculate the length of the build input,
+    # considering the space between words and the length of the words
+    # ( not precisely, just approximately)
+    build_input_length = 0
+    last_word = ""
+    for i in all_content:
+        if i.isspace():
+            if not last_word.isspace():
+                build_input_length += 1
+            last_word = i
+        elif i.isascii():
+            if not last_word.isspace():
+                continue
+            last_word = i
+        else:
+            last_word = i
+            build_input_length += 1
+
+    return round((build_input_length + OTHER_TOKEN_NUM) * ESTIMATE_PER_TOKEN_TIME_COST)
