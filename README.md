@@ -1,13 +1,43 @@
-# FinMycelium
-
 <div align="center">
-<h3>A comprehensive financial data collection and analysis platform powered by AI</h3>
 
-[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)](https://github.com/AgenticFinLab/FinMycelium)
+# 🌿 FinMycelium
+
+### A comprehensive financial data collection and analysis platform powered by AI
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-4CAF50?style=for-the-badge&logo=apache&logoColor=white)](https://opensource.org/licenses/Apache-2.0)
+[![Status](https://img.shields.io/badge/Status-Alpha-FF9800?style=for-the-badge)](https://github.com/AgenticFinLab/FinMycelium)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Enabled-00A86B?style=for-the-badge&logo=graphql&logoColor=white)](https://github.com/langchain-ai/langgraph)
+
+**Intelligent • Modular • AI-Powered**
+
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
+
+---
 
 </div>
+
+## 📑 Table of Contents
+
+- [📖 Overview](#-overview)
+- [✨ Features](#-features)
+  - [Data Collection](#data-collection)
+  - [Data Processing](#data-processing)
+  - [Architecture](#architecture)
+- [🎬 Project Demonstration](#-project-demonstration)
+- [🚀 Quick Start](#-quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Basic Usage](#basic-usage)
+- [📁 Project Structure](#-project-structure)
+- [⚙️ Configuration](#️-configuration)
+- [🔧 Environment Variables](#-environment-variables)
+- [📚 Documentation](#-documentation)
+- [🤝 Contributing](#-contributing)
+- [⚠️ Important Notes](#️-important-notes)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
+- [📮 Contact & Support](#-contact--support)
 
 ---
 
@@ -15,82 +45,136 @@
 
 **FinMycelium** is an intelligent financial data collection and analysis platform designed to extract, process, and reconstruct financial events from diverse public sources. Built with a modular architecture and powered by Large Language Models (LLMs), it enables automated collection, matching, summarization, and structured reconstruction of financial information.
 
-### Key Capabilities
+### 🎯 Key Capabilities
 
-- 🔍 **Multi-Source Data Collection**: Web URLs, PDF documents, and social media platforms
-- 🤖 **AI-Powered Processing**: LLM-based matching, summarization, and event reconstruction
-- 🔄 **Flexible Pipeline**: Configurable components using registry factory pattern
-- 📊 **Structured Output**: Reconstruct financial events into structured cascades with stages, episodes, participants, and transactions
-- 🌐 **Web Interface**: Streamlit-based interactive UI for analysis and visualization
+<table>
+<tr>
+<td width="50%">
+
+#### 🔍 Multi-Source Data Collection
+Web URLs, PDF documents, and social media platforms
+
+#### 🤖 AI-Powered Processing
+LLM-based matching, summarization, and event reconstruction
+
+</td>
+<td width="50%">
+
+#### 🔄 Flexible Pipeline
+Configurable components using registry factory pattern
+
+#### 📊 Structured Output
+Reconstruct financial events into structured cascades
+
+#### 🌐 Web Interface
+Streamlit-based interactive UI for analysis and visualization
+
+</td>
+</tr>
+</table>
+
+---
 
 ## ✨ Features
 
-### Data Collection
-- **URL Collector**: Extract content from web pages with support for multiple parsing strategies
-- **PDF Collector**: Process PDF documents with layout analysis and text extraction
-- **Media Platform Support**: Collect data from Xiaohongshu, Douyin, Kuaishou, Bilibili, Weibo, and more
-- **Search Integration**: Baidu Search and Bocha Search API support
+### 📥 Data Collection
 
-### Data Processing
-- **Intelligent Matching**: Multiple matching strategies (LLM-based, regex, vector-based)
-- **Query Summarization**: Keyword extraction and query summarization using LLMs
-- **Event Reconstruction**: Multi-agent pipeline for reconstructing financial events with:
-  - Skeleton extraction (stages and episodes)
-  - Participant identification
-  - Transaction reconstruction
-  - Timeline and relationship mapping
+| Feature | Description |
+|---------|-------------|
+| 🌐 **URL Collector** | Extract content from web pages with support for multiple parsing strategies |
+| 📄 **PDF Collector** | Process PDF documents with layout analysis and text extraction |
+| 📱 **Media Platform Support** | Collect data from Xiaohongshu, Douyin, Kuaishou, Bilibili, Weibo, and more |
+| 🔎 **Search Integration** | Baidu Search and Bocha Search API support |
 
-### Architecture
-- **Registry Pattern**: Dynamic component selection without code changes
-- **LangGraph Integration**: Multi-agent orchestration with state management
-- **Database Support**: MySQL/PostgreSQL integration for data persistence
-- **Configuration-Driven**: YAML-based configuration for easy customization
+### ⚙️ Data Processing
 
-## Project Demonstration
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Intelligent Matching** | Multiple matching strategies (LLM-based, regex, vector-based) |
+| 📝 **Query Summarization** | Keyword extraction and query summarization using LLMs |
+| 🏗️ **Event Reconstruction** | Multi-agent pipeline for reconstructing financial events |
 
-https://github.com/user-attachments/assets/3accaf39-98a1-47cc-a11c-9b035933c241
+**Event Reconstruction includes:**
+- 🔹 Skeleton extraction (stages and episodes)
+- 🔹 Participant identification
+- 🔹 Transaction reconstruction
+- 🔹 Timeline and relationship mapping
+
+### 🏛️ Architecture
+
+| Component | Description |
+|-----------|-------------|
+| 🔌 **Registry Pattern** | Dynamic component selection without code changes |
+| 🕸️ **LangGraph Integration** | Multi-agent orchestration with state management |
+| 💾 **Database Support** | MySQL/PostgreSQL integration for data persistence |
+| ⚙️ **Configuration-Driven** | YAML-based configuration for easy customization |
+
+---
+
+## 🎬 Project Demonstration
+
+<div align="center">
+
+[![Demo Video](https://img.shields.io/badge/▶️-Watch%20Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://github.com/user-attachments/assets/3accaf39-98a1-47cc-a11c-9b035933c241)
+
+</div>
+
+---
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### 📋 Prerequisites
 
-- Python 3.11 or higher
-- MySQL or PostgreSQL database (optional)
-- API keys for LLM services (OpenAI, DeepSeek, etc.)
+Before you begin, ensure you have the following installed:
 
-### Installation
+- ✅ **Python 3.11+** - [Download Python](https://www.python.org/downloads/)
+- ✅ **MySQL or PostgreSQL** (optional) - For data persistence
+- ✅ **API Keys** - For LLM services (OpenAI, DeepSeek, etc.)
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/AgenticFinLab/FinMycelium.git
-   cd FinMycelium
-   ```
+### 📦 Installation
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+#### Step 1: Clone the repository
 
-   Or install as a package:
-   ```bash
-   pip install -e .
-   ```
+```bash
+git clone https://github.com/AgenticFinLab/FinMycelium.git
+cd FinMycelium
+```
 
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` with your configuration:
-   - Database credentials (MySQL/PostgreSQL)
-   - API keys for LLM services
-   - Search API keys (Baidu, Bocha)
-   - Redis configuration (optional)
-   - Proxy settings (optional)
+#### Step 2: Install dependencies
 
-### Basic Usage
+**Option A: Install from requirements.txt**
+```bash
+pip install -r requirements.txt
+```
 
-#### Using the Pipeline
+**Option B: Install as a package**
+```bash
+pip install -e .
+```
+
+#### Step 3: Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your configuration:
+
+| Category | Variables |
+|----------|-----------|
+| 🗄️ **Database** | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` |
+| 🤖 **LLM APIs** | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, etc. |
+| 🔎 **Search APIs** | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY` |
+| ⚡ **Redis** (optional) | `REDIS_HOST`, `REDIS_PORT` |
+| 🔀 **Proxy** (optional) | `PROXY_URL` |
+
+> 💡 **Tip**: See `.env.example` for a complete list of required variables.
+
+---
+
+### 💻 Basic Usage
+
+#### 🔄 Using the Pipeline
 
 ```python
 from finmy.pipeline import FinmyPipeline
@@ -116,7 +200,7 @@ pipeline.lm_build_pipeline_main(
 )
 ```
 
-#### Using Individual Components
+#### 🧩 Using Individual Components
 
 ```python
 from finmy.url_collector.url_parser import URLParser
@@ -141,7 +225,7 @@ matcher = get_matcher("LXMatcher", config={"lm_name": "deepseek/deepseek-chat"})
 matches = matcher.match(match_input)
 ```
 
-### Web Interface
+### 🌐 Web Interface
 
 Launch the Streamlit web interface:
 
@@ -149,43 +233,47 @@ Launch the Streamlit web interface:
 streamlit run finmy/web_interface.py
 ```
 
+---
+
 ## 📁 Project Structure
 
 ```
 FinMycelium/
-├── README.md                 # Project overview
-├── requirements.txt          # Python dependencies
-├── setup.py                  # Package setup configuration
-├── configs/                  # Configuration files
-│   ├── pipline.yml          # Main pipeline configuration
-│   └── uTEST/               # Test configurations
-├── finmy/                   # Main package
+├── 📄 README.md                 # Project overview
+├── 📋 requirements.txt          # Python dependencies
+├── ⚙️ setup.py                  # Package setup configuration
+├── 📁 configs/                  # Configuration files
+│   ├── pipline.yml             # Main pipeline configuration
+│   └── uTEST/                  # Test configurations
+├── 📦 finmy/                   # Main package
 │   ├── __init__.py
-│   ├── pipeline.py          # Main pipeline orchestration
-│   ├── converter.py         # Data format converters
-│   ├── db_manager.py        # Database management
-│   ├── generic.py           # Core data structures
-│   ├── web_interface.py     # Streamlit web UI
-│   ├── builder/             # Event reconstruction builders
-│   │   ├── agent_build/     # Multi-agent builder
-│   │   ├── class_build/     # Class-based builder
-│   │   └── lm_build.py      # LLM-based builder
-│   ├── matcher/             # Data matching modules
-│   │   ├── lm_match.py      # LLM-based matcher
-│   │   ├── re_match.py      # Regex matcher
-│   │   └── lx_match.py      # LlamaIndex matcher
-│   ├── summarizer/          # Query summarization
-│   ├── url_collector/       # URL collection modules
-│   │   ├── MediaCollector/  # Social media collectors
-│   │   └── SearchCollector/ # Search API collectors
-│   └── pdf_collector/       # PDF processing modules
-├── examples/                 # Example scripts and demos
-│   └── uTEST/               # Test examples
-├── docs/                    # Documentation
-│   ├── Progress-record.md   # Development progress
-│   └── reference.md         # References
-└── EXPERIMENT/              # Experimental results (git-ignored)
+│   ├── pipeline.py             # Main pipeline orchestration
+│   ├── converter.py            # Data format converters
+│   ├── db_manager.py           # Database management
+│   ├── generic.py              # Core data structures
+│   ├── web_interface.py        # Streamlit web UI
+│   ├── 📁 builder/             # Event reconstruction builders
+│   │   ├── agent_build/        # Multi-agent builder
+│   │   ├── class_build/        # Class-based builder
+│   │   └── lm_build.py         # LLM-based builder
+│   ├── 📁 matcher/             # Data matching modules
+│   │   ├── lm_match.py         # LLM-based matcher
+│   │   ├── re_match.py         # Regex matcher
+│   │   └── lx_match.py         # LlamaIndex matcher
+│   ├── 📁 summarizer/          # Query summarization
+│   ├── 📁 url_collector/       # URL collection modules
+│   │   ├── MediaCollector/     # Social media collectors
+│   │   └── SearchCollector/    # Search API collectors
+│   └── 📁 pdf_collector/       # PDF processing modules
+├── 📁 examples/                # Example scripts and demos
+│   └── uTEST/                  # Test examples
+├── 📁 docs/                    # Documentation
+│   ├── Progress-record.md      # Development progress
+│   └── reference.md            # References
+└── 📁 EXPERIMENT/              # Experimental results (git-ignored)
 ```
+
+---
 
 ## ⚙️ Configuration
 
@@ -197,7 +285,7 @@ FinMycelium uses YAML configuration files to define pipeline components and para
 - **Component Selection**: Summarizer, matcher, and builder types
 - **Agent Configuration**: Multi-agent pipeline agent settings
 
-### Example Configuration
+### 📝 Example Configuration
 
 ```yaml
 lm_type: "api"
@@ -223,61 +311,91 @@ builder_config:
   lm_name: "deepseek/deepseek-chat"
 ```
 
+---
+
 ## 🔧 Environment Variables
 
 The project uses environment variables for sensitive configuration. Key variables include:
 
-- **Database**: `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`
-- **LLM APIs**: `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, etc.
-- **Search APIs**: `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY`
-- **Redis**: `REDIS_HOST`, `REDIS_PORT` (optional)
-- **Proxy**: `PROXY_URL` (optional)
+| Category | Variables | Required |
+|----------|-----------|----------|
+| 🗄️ **Database** | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` | Optional |
+| 🤖 **LLM APIs** | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` | Required |
+| 🔎 **Search APIs** | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY` | Optional |
+| ⚡ **Redis** | `REDIS_HOST`, `REDIS_PORT` | Optional |
+| 🔀 **Proxy** | `PROXY_URL` | Optional |
 
-See `.env.example` for a complete list of required variables.
+> 📖 See `.env.example` for a complete list of required variables.
+
+---
 
 ## 📚 Documentation
 
-- [Progress Record](docs/Progress-record.md) - Development progress and findings
-- [Reference](docs/reference.md) - Related references and resources
-- [Examples](examples/) - Example scripts and usage patterns
+- 📊 [Progress Record](docs/Progress-record.md) - Development progress and findings
+- 📖 [Reference](docs/reference.md) - Related references and resources
+- 💡 [Examples](examples/) - Example scripts and usage patterns
+
+---
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+### 🛠️ Contribution Steps
+
+1. 🍴 **Fork the repository**
+2. 🌿 **Create your feature branch** (`git checkout -b feature/AmazingFeature`)
+3. 💾 **Commit your changes** (`git commit -m 'Add some AmazingFeature'`)
+4. 📤 **Push to the branch** (`git push origin feature/AmazingFeature`)
+5. 🔄 **Open a Pull Request**
+
+---
 
 ## ⚠️ Important Notes
 
-- The `EXPERIMENT/` folder is ignored by git by default. Place experimental results there.
-- Never commit your `.env` file to version control.
-- Ensure you have proper API keys and database access before running the pipeline.
+> ⚠️ **Security Reminders**
+> 
+> - The `EXPERIMENT/` folder is ignored by git by default. Place experimental results there.
+> - ❌ **Never commit your `.env` file** to version control.
+> - 🔑 Ensure you have proper API keys and database access before running the pipeline.
+
+---
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-4CAF50?style=flat-square&logo=apache&logoColor=white)](LICENSE)
+
+---
 
 ## 🙏 Acknowledgments
 
-- Built with [LangGraph](https://github.com/langchain-ai/langgraph) for multi-agent orchestration
-- Uses [Streamlit](https://streamlit.io/) for web interface
-- Integrates with various LLM providers and search APIs
+We would like to thank the following projects and communities:
+
+- 🕸️ [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
+- 🎨 [Streamlit](https://streamlit.io/) - Web interface framework
+- 🤖 Various LLM providers and search APIs for their excellent services
+
+---
 
 ## 📮 Contact & Support
 
-- **Repository**: [https://github.com/AgenticFinLab/FinMycelium](https://github.com/AgenticFinLab/FinMycelium)
-- **Issues**: [GitHub Issues](https://github.com/AgenticFinLab/FinMycelium/issues)
+<div align="center">
+
+| Resource | Link |
+|----------|------|
+| 🏠 **Repository** | [GitHub](https://github.com/AgenticFinLab/FinMycelium) |
+| 🐛 **Issues** | [GitHub Issues](https://github.com/AgenticFinLab/FinMycelium/issues) |
+
+</div>
 
 ---
 
 <div align="center">
 
-**Made with ❤️ by AgenticFin Lab**
+### Made with ❤️ by [AgenticFin Lab](https://github.com/AgenticFinLab)
+
+[⬆ Back to Top](#-finmycelium)
 
 </div>
-
-
