@@ -214,6 +214,12 @@ class ClassEventBuilder(BaseBuilder):
         logging.info(f"Test response: {result.response}")
         return result.response
 
+    def get_save_dir_path(self) -> str:
+            """
+            Generates a standardized path for saving agent results.
+            """
+            return self.save_dir
+
     def build(self, build_input: BuildInput) -> BuildOutput:
         """Build and process event cascade from input data.
 

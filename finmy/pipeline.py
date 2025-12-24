@@ -82,6 +82,7 @@ class FinmyPipeline:
         self.matcher_config = self.config["matcher_config"]
         self.builder_config = self.config["builder_config"]
         self.db_config = self.config["db_config"]
+        self.save_builder_dir_path = None
 
         # stateful modules
         self.logger: Optional[logging.Logger] = None
@@ -783,6 +784,7 @@ class FinmyPipeline:
             save_name="IntegratedEventCascade",
             file_format="json",
         )
+        
         self.logger.info("integrate_from_files test completed.")
 
         return restored_cascade
@@ -800,12 +802,17 @@ class FinmyPipeline:
         builder_type = self.builder_config["builder_type"]
 
         if builder_type == "AgentEventBuilder":
+            self.save_builder_dir_path = self.builder.get_save_dir_path()
             return self._run_agent_builder(build_input)
         elif builder_type == "ClassEventBuilder":
+            self.save_builder_dir_path = self.builder.get_save_dir_path()
             return self.builder.build(build_input)
         else:
             raise ValueError(f"Invalid builder type: {builder_type}")
 
+    def get_save_builder_dir_path(self):
+        return self.save_builder_dir_path
+        
     def lm_build_pipeline_main(
         self,
         data_sources: List[str],

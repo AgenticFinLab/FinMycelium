@@ -711,6 +711,13 @@ class AgentEventBuilder(BaseBuilder):
             final_cascade["descriptions"] = res["descriptions"]
 
         return final_cascade
+        
+
+    def get_save_dir_path(self) -> str:
+        """
+        Generates a standardized path for saving agent results.
+        """
+        return self.save_dir
 
     def integrate_from_files(self) -> dict:
         """
