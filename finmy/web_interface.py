@@ -811,7 +811,6 @@ class FinMyceliumWebInterface:
                 )
                 for index, row in st.session_state.structured_data.iterrows():
                     try:
-                        title = row["title"] if row["title"] else "No Title"
                         url = row["url"] if row["url"] else "No URL"
                         # Check if URL is a web link or local file path
                         if isinstance(url, str):
@@ -854,7 +853,7 @@ class FinMyceliumWebInterface:
                             
                                     # Collect the parsed and filtered results
                                     collect_results = parser_instance.collect(pdf_collector_input)
-                                    filter_results = parser_instance.filter(pdf_collector_input,collect_results)
+                                    # filter_results = parser_instance.filter(pdf_collector_input,collect_results)
 
                                     # Print final results summary
                                     logging.info(
@@ -2382,7 +2381,6 @@ class FinMyceliumWebInterface:
         
         # Extract key information from metadata
         summary_points = []
-        
         def extract_summary_info(obj, path=""):
             if isinstance(obj, dict):
                 # Look for key summary information
@@ -2390,7 +2388,6 @@ class FinMyceliumWebInterface:
                 for key in summary_keys:
                     if key in obj and isinstance(obj[key], (str, list)):
                         summary_points.append(obj[key])
-                
                 # Recursively search for other important info
                 for key, value in obj.items():
                     if key in ["name", "title", "description", "result", "outcome"]:
@@ -2400,7 +2397,6 @@ class FinMyceliumWebInterface:
                         extract_summary_info(value, f"{path}.{key}")
         
         extract_summary_info(data)
-        
         # Display summary points
         for i, point in enumerate(summary_points[:10]):  # Limit to 10 points
             if isinstance(point, list):
@@ -2494,7 +2490,6 @@ class FinMyceliumWebInterface:
     def run(self):
         self.render_sidebar()
         current_page = st.session_state.get("current_page", "Home")
-        
         if st.session_state.get("processing_status") == "processing":
             st.session_state.current_page = "Pipeline"
         if st.session_state.current_page == "Home":
