@@ -96,6 +96,29 @@ class EventCascadeGanttVisualizer:
             "#999999",
         ]
 
+    def _adjust_color_lightness(self, hex_color, factor):
+        """
+        Adjusts the lightness of a hex color by a given factor.
+        factor > 1 brightens, factor < 1 darkens.
+        """
+        if not isinstance(hex_color, str) or not hex_color.startswith("#"):
+            return hex_color
+
+        hex_c = hex_color.lstrip("#")
+        if len(hex_c) != 6:
+            return hex_color
+
+        rgb = [int(hex_c[i : i + 2], 16) for i in (0, 2, 4)]
+        new_rgb = []
+        for c in rgb:
+            # Simple RGB scaling
+            nc = int(c * factor)
+            # Clamp to 0-255
+            nc = max(0, min(255, nc))
+            new_rgb.append(nc)
+
+        return "#{:02x}{:02x}{:02x}".format(*new_rgb)
+
     def _get_participant_style(self, p_id, p_type):
         """
         Registers a participant and assigns a consistent style (color + marker).
@@ -113,7 +136,7 @@ class EventCascadeGanttVisualizer:
                 type_idx = len(self.type_color_map)
                 self.type_color_map[p_type] = self.colors[type_idx % len(self.colors)]
 
-            color = self.type_color_map[p_type]
+            base_color = self.type_color_map[p_type]
 
             # Determine marker based on count within this Type
             if p_type not in self.type_participant_count:
@@ -121,9 +144,17 @@ class EventCascadeGanttVisualizer:
 
             count = self.type_participant_count[p_type]
             marker = self.markers[count % len(self.markers)]
+
+            # Diversify color lightness to distinguish individuals of same type
+            # Use a prime number length for factors to maximize unique (marker, color) combinations
+            # LCM(14 markers, 5 factors) = 70 unique styles
+            factors = [1.0, 1.25, 0.75, 1.15, 0.85]
+            factor = factors[count % len(factors)]
+            final_color = self._adjust_color_lightness(base_color, factor)
+
             self.type_participant_count[p_type] += 1
 
-            self.participant_style_map[p_id] = (color, marker)
+            self.participant_style_map[p_id] = (final_color, marker)
 
         return self.participant_style_map[p_id]
 
@@ -179,6 +210,16 @@ class EventCascadeGanttVisualizer:
             if isinstance(d_str, str) and d_str.lower() == "unknown":
                 return None
             return pd.to_datetime(d_str)
+
+        def is_unknown(v):
+            """
+            Check if a raw time value represents an unknown or non-specific time.
+            """
+            if v is None:
+                return False
+            if isinstance(v, dict):
+                v = v.get("value", v)
+            return isinstance(v, str) and v.strip().lower() == "unknown"
 
         def gran_code_for(v):
             """
@@ -245,6 +286,10 @@ class EventCascadeGanttVisualizer:
                     "Task": stage_label,
                     "Start": stage_start,
                     "Finish": stage_end,
+                    "StartRaw": stage_start_raw,
+                    "FinishRaw": stage_end_raw,
+                    "StartUnknown": is_unknown(stage_start_raw),
+                    "FinishUnknown": is_unknown(stage_end_raw),
                     "Type": "Stage",
                     "Group": stage_id,
                     "StageName": stage_name,
@@ -364,6 +409,10 @@ class EventCascadeGanttVisualizer:
                         "Task": ep_label,
                         "Start": ep_start,
                         "Finish": ep_end,
+                        "StartRaw": ep_start_raw,
+                        "FinishRaw": ep_end_raw,
+                        "StartUnknown": is_unknown(ep_start_raw),
+                        "FinishUnknown": is_unknown(ep_end_raw),
                         "Type": "Episode",
                         "Group": stage_id,
                         "ID": ep_id,
@@ -441,13 +490,45 @@ class EventCascadeGanttVisualizer:
         # Calculate global time range for the x-axis
         valid_starts = [r["Start"] for r in rows if r["Start"] is not None]
         valid_ends = [r["Finish"] for r in rows if r["Finish"] is not None]
+        all_unknown_time = len(valid_starts) == 0 and len(valid_ends) == 0
 
         default_start = pd.Timestamp.now()
         default_end = default_start + pd.Timedelta(days=1)
 
-        if valid_starts and valid_ends:
-            min_time = min(valid_starts)
-            max_time = max(valid_ends)
+        if valid_starts or valid_ends:
+            if valid_starts:
+                min_time = min(valid_starts)
+            else:
+                min_time = min(valid_ends) - pd.Timedelta(hours=1)
+
+            # Determine max_time safely
+            # 1. Use known ends
+            potential_ends = list(valid_ends)
+
+            # 2. Use starts + estimated duration (for unknown ends)
+            if valid_starts:
+                max_start = max(valid_starts)
+                # Calculate a rough span to estimate duration
+                if valid_ends:
+                    current_span = max(valid_ends) - min_time
+                else:
+                    current_span = max_start - min_time
+
+                if current_span.total_seconds() <= 0:
+                    est_duration = pd.Timedelta(hours=1)
+                else:
+                    # Use 10% of span as default duration for "dangling" starts
+                    est_duration = current_span * 0.1
+                    # Clamp between 1 hour and 30 days
+                    if est_duration < pd.Timedelta(hours=1):
+                        est_duration = pd.Timedelta(hours=1)
+                    if est_duration > pd.Timedelta(days=30):
+                        est_duration = pd.Timedelta(days=30)
+
+                potential_ends.append(max_start + est_duration)
+
+            max_time = max(potential_ends)
+
             duration = max_time - min_time
             if duration.total_seconds() == 0:
                 duration = pd.Timedelta(hours=1)
@@ -463,7 +544,13 @@ class EventCascadeGanttVisualizer:
         if span_total.total_seconds() <= 0:
             span_total = pd.Timedelta(hours=1)
         default_dur_sec = max(span_total.total_seconds(), 3600) / 20.0
+        has_unknown = any(r.get("StartUnknown") or r.get("FinishUnknown") for r in rows)
+        # Buffer used for both ends
         end_buffer = min(span_total * 0.05, pd.Timedelta(hours=1))
+        # Limit unknown left extension: keep within the same buffer as right side
+        unknown_anchor = min_time - end_buffer
+        if has_unknown:
+            range_x[0] = min(range_x[0], unknown_anchor)
         ep_durations_sec = []
         for r in episode_rows:
             s = r["Start"]
@@ -510,32 +597,107 @@ class EventCascadeGanttVisualizer:
             if initial_start < min_time:
                 initial_start = min_time
         range_x_initial = [initial_start, initial_end]
+        if has_unknown and unknown_anchor < range_x_initial[0]:
+            range_x_initial[0] = unknown_anchor
 
         # Coordinate Helper
         def get_viz_coords(row, ref_min_time):
             start = row["Start"]
             finish = row["Finish"]
+            start_unknown = row.get("StartUnknown")
+            finish_unknown = row.get("FinishUnknown")
+            rtype = row.get("Type")
 
             total_span = (max_time - min_time).total_seconds()
             if total_span <= 0:
                 total_span = 3600  # 1 hour fallback
             default_dur_sec = total_span / 20.0
+            target_dur_ms = None
 
-            if start is None:
-                start_val = ref_min_time
+            # Special sizing for unknown cases
+            both_unknown = (start is None and finish is None) and (
+                start_unknown or finish_unknown
+            )
+            one_unknown = ((start is None) ^ (finish is None)) and (
+                start_unknown or finish_unknown
+            )
+
+            if rtype == "Stage" and both_unknown:
+                lbl = row.get("StageName", "")
+                L = len(str(lbl))
+                target_chars = max(10, (L + 1) // 2)
+                total_span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
+                bar_frac = max(0.05, min(0.95, target_chars / 70.0))
+                target_dur_ms = int(total_span_ms * bar_frac)
+                start_val = unknown_anchor
+                finish_val = start_val + pd.to_timedelta(target_dur_ms, unit="ms")
+                is_imputed = True
+            elif rtype == "Stage" and one_unknown:
+                lbl = row.get("StageName", "")
+                L = len(str(lbl))
+                target_chars = max(10, (L + 1) // 2)
+                total_span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
+                bar_frac = max(0.05, min(0.95, target_chars / 70.0))
+                target_dur_ms = int(total_span_ms * bar_frac)
+                if start is None and finish is not None:
+                    finish_val = finish
+                    start_val = finish_val - pd.to_timedelta(target_dur_ms, unit="ms")
+                elif start is not None and finish is None:
+                    start_val = start
+                    finish_val = start_val + pd.to_timedelta(target_dur_ms, unit="ms")
+                else:
+                    start_val = start if start is not None else ref_min_time
+                    finish_val = (
+                        finish
+                        if finish is not None
+                        else start_val + pd.to_timedelta(target_dur_ms, unit="ms")
+                    )
+                is_imputed = True
+            elif rtype == "Episode" and (both_unknown or one_unknown):
+                num_parts = len(row.get("Participants", []))
+                rel_count = len(row.get("Relations", []))
+                scale = max(2.0, num_parts * 0.9 + rel_count * 0.5)
+                target_dur_ms = int(default_dur_sec * 1000 * scale)
+                if start is None and finish is None:
+                    start_val = unknown_anchor
+                    finish_val = start_val + pd.to_timedelta(target_dur_ms, unit="ms")
+                elif start is None and finish is not None:
+                    finish_val = finish
+                    start_val = finish_val - pd.to_timedelta(target_dur_ms, unit="ms")
+                elif start is not None and finish is None:
+                    # Adjust duration to fit the Title exactly into two lines
+                    # Estimate desired characters per line based on label length
+                    lbl = str(row.get("Title", ""))
+                    L = len(lbl)
+                    desired_chars_per_line = max(10, (L + 1) // 2)
+                    total_span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
+                    bar_frac = max(0.05, min(0.95, desired_chars_per_line / 70.0))
+                    target_dur_ms = int(total_span_ms * bar_frac)
+                    start_val = start
+                    finish_val = start_val + pd.to_timedelta(target_dur_ms, unit="ms")
+                else:
+                    start_val = start
+                    finish_val = finish
                 is_imputed = True
             else:
-                start_val = start
-                is_imputed = False
-
-            if finish is None:
-                finish_val = start_val + pd.Timedelta(seconds=default_dur_sec)
-            else:
-                finish_val = finish
+                if start is None:
+                    start_val = ref_min_time
+                    is_imputed = True
+                else:
+                    start_val = start
+                    is_imputed = False
+                if finish is None:
+                    finish_val = start_val + pd.Timedelta(seconds=default_dur_sec)
+                else:
+                    finish_val = finish
 
             duration_ms = (finish_val - start_val).total_seconds() * 1000
             if duration_ms <= 0:
-                duration_ms = default_dur_sec * 1000
+                duration_ms = (
+                    target_dur_ms
+                    if target_dur_ms is not None
+                    else default_dur_sec * 1000
+                )
 
             return start_val, duration_ms, is_imputed
 
@@ -625,6 +787,17 @@ class EventCascadeGanttVisualizer:
             tier_occupancy[best_tier_idx].append(s_val)
             tier_occupancy[best_tier_idx].append(e_val)
 
+        stage_pairs_nonnull = [
+            (r["Start"], r["Finish"])
+            for r in stage_rows
+            if r["Start"] is not None and r["Finish"] is not None
+        ]
+        same_times = len(stage_pairs_nonnull) > 0 and len(set(stage_pairs_nonnull)) == 1
+        stage_offset_map = {}
+        display_max_end = None
+        cumulative_offset = pd.Timedelta(0)
+        placed_last_end = None
+        gap_td = end_buffer
         # --- Plot Stages (Y=0) ---
         for sid in unique_stages:
             s_group_rows = [r for r in stage_rows if r["Group"] == sid]
@@ -635,16 +808,83 @@ class EventCascadeGanttVisualizer:
 
             total_span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
 
+            # Collect raw starts and durations
+            raw_starts = []
+            raw_durs = []
+            local_max_dur_ms = 0
+
+            # Pre-fetch episodes for this stage to check bounds
+            stage_eps = [e for e in episode_rows if e["Group"] == sid]
+
             for r in s_group_rows:
                 s_val, dur, _ = get_viz_coords(r, min_time)
-                x_starts.append(s_val)
-                x_durs.append(dur)
+
+                # If Stage end is unknown, extend to cover the last episode
+                if r.get("FinishUnknown") and r["Finish"] is None and stage_eps:
+                    ep_ends = []
+                    for ep in stage_eps:
+                        es, ed, _ = get_viz_coords(ep, min_time)
+                        ep_ends.append(es + pd.to_timedelta(ed, unit="ms"))
+
+                    if ep_ends:
+                        max_ep_end = max(ep_ends)
+                        current_end = s_val + pd.to_timedelta(dur, unit="ms")
+                        if max_ep_end > current_end:
+                            new_dur_ms = (max_ep_end - s_val).total_seconds() * 1000
+                            if new_dur_ms > 0:
+                                dur = new_dur_ms
+
+                raw_starts.append(s_val)
+                raw_durs.append(dur)
+                if dur > local_max_dur_ms:
+                    local_max_dur_ms = dur
                 hovers.append(r["Description"])
+            # Compute offset to ensure non-overlap in all-unknown case
+            if all_unknown_time:
+                if placed_last_end is not None:
+                    required_start = placed_last_end + gap_td
+                    min_raw_start = min(raw_starts)
+                    offset_td = (
+                        required_start - min_raw_start
+                        if required_start > min_raw_start
+                        else pd.Timedelta(0)
+                    )
+                else:
+                    offset_td = pd.Timedelta(0)
+            elif same_times:
+                if placed_last_end is not None:
+                    required_start = placed_last_end + gap_td
+                    min_raw_start = min(raw_starts)
+                    offset_td = (
+                        required_start - min_raw_start
+                        if required_start > min_raw_start
+                        else pd.Timedelta(0)
+                    )
+                else:
+                    offset_td = pd.Timedelta(0)
+            else:
+                offset_td = pd.Timedelta(0)
+            stage_offset_map[sid] = offset_td
+            # Apply offset
+            for s_val, dur in zip(raw_starts, raw_durs):
+                x_starts.append(s_val + offset_td)
+                x_durs.append(dur)
 
                 # Wrap Stage Text
                 lbl = r["StageName"]
-                bar_frac = min(max(dur / total_span_ms, 0.0), 1.0)
-                max_chars = max(10, int(70 * bar_frac))
+                # For both-unknown times, force exactly two lines split
+                both_unknown = (
+                    r.get("StartUnknown")
+                    and r.get("FinishUnknown")
+                    and r["Start"] is None
+                    and r["Finish"] is None
+                )
+                if both_unknown:
+                    L = len(str(lbl))
+                    max_chars = max(10, (L + 1) // 2)
+                else:
+                    bar_frac = min(max(dur / total_span_ms, 0.0), 1.0)
+                    max_chars = max(10, int(70 * bar_frac))
 
                 words = str(lbl).split(" ")
                 lines = []
@@ -687,6 +927,22 @@ class EventCascadeGanttVisualizer:
                     width=1.4,
                 )
             )
+            if all_unknown_time or same_times:
+                placed_last_end = max(
+                    (s + pd.to_timedelta(d, unit="ms"))
+                    for s, d in zip(x_starts, x_durs)
+                )
+            # Track rightmost end for display if global ends are unknown
+            if x_starts and x_durs:
+                local_max_end = max(
+                    (s + pd.to_timedelta(d, unit="ms"))
+                    for s, d in zip(x_starts, x_durs)
+                )
+                display_max_end = (
+                    local_max_end
+                    if display_max_end is None or local_max_end > display_max_end
+                    else display_max_end
+                )
             for i in range(len(x_starts)):
                 start_ts = x_starts[i]
                 dur_ms = x_durs[i]
@@ -701,6 +957,20 @@ class EventCascadeGanttVisualizer:
                     yref="y",
                     line=dict(color="#ADD8E6", width=1, dash="dash"),
                 )
+                # If start unknown, annotate at vertical line endpoint
+                if (
+                    s_group_rows[i].get("StartUnknown")
+                    and s_group_rows[i]["Start"] is None
+                ):
+                    fig.add_annotation(
+                        x=start_ts,
+                        y=y_stage,
+                        text="Unknown",
+                        showarrow=False,
+                        align="center",
+                        yanchor="top",
+                        font=dict(size=10, color="#555"),
+                    )
                 fig.add_shape(
                     type="line",
                     x0=end_ts,
@@ -711,7 +981,21 @@ class EventCascadeGanttVisualizer:
                     yref="y",
                     line=dict(color="#ADD8E6", width=1, dash="dash"),
                 )
-                mid_x = start_ts + pd.to_timedelta(dur_ms / 2.0, unit="ms")
+                # If end unknown, annotate at vertical line endpoint
+                if (
+                    s_group_rows[i].get("FinishUnknown")
+                    and s_group_rows[i]["Finish"] is None
+                ):
+                    fig.add_annotation(
+                        x=end_ts,
+                        y=y_stage,
+                        text="Unknown",
+                        showarrow=False,
+                        align="center",
+                        yanchor="top",
+                        font=dict(size=10, color="#555"),
+                    )
+                mid_x = start_ts + pd.to_timedelta(int(round(dur_ms / 2.0)), unit="ms")
                 bottom_y = y_stage - (1.4 / 2.0) - 0.10
                 fig.add_annotation(
                     x=mid_x,
@@ -757,6 +1041,17 @@ class EventCascadeGanttVisualizer:
                 continue
 
             x_durs, x_starts, y_pos, hovers, texts = [], [], [], [], []
+            axis_start_points = []
+            axis_end_points = []
+            axis_inc = 0.03
+            dot_base = 0.04
+            text_base = 0.06
+            axis_label_gap = pd.Timedelta(seconds=total_span_sec * 0.02)
+            axis_start_meta = []
+            axis_end_meta = []
+            label_char_px = 5.0
+            label_margin_px = 4.0
+            axis_margin_px = 2.0
 
             # For participant markers
             part_xs = []
@@ -770,6 +1065,7 @@ class EventCascadeGanttVisualizer:
 
             for j, r in enumerate(local_eps):
                 s_val, dur, is_imp = get_viz_coords(r, min_time)
+                s_val = s_val + stage_offset_map.get(sid, pd.Timedelta(0))
                 x_starts.append(s_val)
                 x_durs.append(dur)
                 y_val = episode_y_base + j * episode_y_step
@@ -777,8 +1073,8 @@ class EventCascadeGanttVisualizer:
                 episode_y_positions_global.append(y_val)
                 hovers.append(r["Description"])
                 lbl = r["Title"]
-                if is_imp:
-                    lbl += " (?)"
+                # if is_imp:
+                #     lbl += " (?)"
                 texts.append(lbl)
 
                 # --- Participants ---
@@ -842,7 +1138,9 @@ class EventCascadeGanttVisualizer:
                     for p_idx, p in enumerate(ordered_parts):
                         # Horizontal: Even distribution across the episode duration
                         fraction = (p_idx + 1) / (num_parts + 1)
-                        p_x = start_ts + pd.to_timedelta(dur_ms * fraction, unit="ms")
+                        p_x = start_ts + pd.to_timedelta(
+                            int(round(dur_ms * fraction)), unit="ms"
+                        )
 
                         # Vertical: Zig-zag based on reordered index
                         y_offset = y_offsets[p_idx % len(y_offsets)]
@@ -868,24 +1166,81 @@ class EventCascadeGanttVisualizer:
 
                 # --- Relations ---
                 rels = r.get("Relations", [])
+
+                # Group relations by pair to handle multiples (avoid overlap)
+                pair_groups = {}
                 for rel in rels:
                     src_id = rel.get("src")
                     dst_id = rel.get("dst")
-                    rel_name = rel.get("name", "Relation")
-
                     if src_id in local_p_coords and dst_id in local_p_coords:
+                        # Sort to group (A, B) and (B, A) together
+                        pair_key = tuple(sorted((src_id, dst_id)))
+                        if pair_key not in pair_groups:
+                            pair_groups[pair_key] = []
+                        pair_groups[pair_key].append(rel)
+
+                for pair_key, group_rels in pair_groups.items():
+                    count = len(group_rels)
+                    # Base step size for arc height.
+                    # Increased to ensure visual separation.
+                    arc_step = 0.15
+
+                    for idx, rel in enumerate(group_rels):
+                        src_id = rel.get("src")
+                        dst_id = rel.get("dst")
                         sx, sy = local_p_coords[src_id]
                         dx, dy = local_p_coords[dst_id]
 
+                        rel_name = rel.get("name", "Relation")
                         r_color, r_dash = self._get_relation_style(rel_name)
-                        key = (r_color, r_dash, rel_name)
+                        style_key = (r_color, r_dash, rel_name)
 
-                        if key not in relation_segments:
-                            relation_segments[key] = {"x": [], "y": []}
+                        if style_key not in relation_segments:
+                            relation_segments[style_key] = {"x": [], "y": []}
 
-                        # Add segment with None separator
-                        relation_segments[key]["x"].extend([sx, dx, None])
-                        relation_segments[key]["y"].extend([sy, dy, None])
+                        # Calculate curvature
+                        # If there are multiple relations between the same pair, curve them.
+                        if count == 1:
+                            curvature = 0.0
+                        else:
+                            # shift index to center: e.g. 0,1 -> -0.5, 0.5
+                            center_idx = idx - (count - 1) / 2.0
+                            # Adjust curvature based on step.
+                            curvature = center_idx * arc_step
+
+                        # Generate points
+                        if abs(curvature) < 0.001:
+                            # Straight line
+                            xs = [
+                                pd.Timestamp(sx).round("ms"),
+                                pd.Timestamp(dx).round("ms"),
+                                None,
+                            ]
+                            ys = [sy, dy, None]
+                        else:
+                            # Quadratic Bezier (Parabolic) approximation
+                            num_points = 20
+                            xs = []
+                            ys = []
+
+                            delta_t = dx - sx
+                            delta_y = dy - sy
+
+                            for k in range(num_points + 1):
+                                t = k / num_points
+                                cur_x = pd.Timestamp(sx + delta_t * t).round("ms")
+                                linear_y = sy + delta_y * t
+                                # Parabolic offset
+                                arc_y = curvature * 4 * t * (1 - t)
+                                cur_y = linear_y + arc_y
+                                xs.append(cur_x)
+                                ys.append(cur_y)
+
+                            xs.append(None)
+                            ys.append(None)
+
+                        relation_segments[style_key]["x"].extend(xs)
+                        relation_segments[style_key]["y"].extend(ys)
 
             # Draw Episode Bars
             # Use fixed height 0.8 as defined in previous logic
@@ -953,7 +1308,7 @@ class EventCascadeGanttVisualizer:
                 start_ts = x_starts[j]
                 dur_ms = x_durs[j]
                 end_ts = start_ts + pd.to_timedelta(dur_ms, unit="ms")
-                mid_x = start_ts + pd.to_timedelta(dur_ms / 2.0, unit="ms")
+                mid_x = start_ts + pd.to_timedelta(int(round(dur_ms / 2.0)), unit="ms")
                 total_span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
                 bar_frac = min(max(dur_ms / total_span_ms, 0.0), 1.0)
                 max_chars = max(10, int(70 * bar_frac))
@@ -1003,12 +1358,31 @@ class EventCascadeGanttVisualizer:
                     else str(end_ts)
                 )
 
-                # --- Start Time Line & Label ---
+                start_label_len = len(str(start_label))
+                start_width_px = max(1, start_label_len) * label_char_px
+                start_overlaps = [
+                    m
+                    for m in axis_start_meta
+                    if abs((start_ts - m["x"])) <= axis_label_gap
+                ]
+                start_raise_y = (
+                    sum(m["stack_y"] for m in start_overlaps) if start_overlaps else 0
+                )
+                start_unknown = (
+                    local_eps[j].get("StartUnknown") and local_eps[j]["Start"] is None
+                )
+                start_dot_font_px = 9 if start_unknown else 11
+                start_text_font_px = 9
+                start_base_y = (axis_margin_px + start_dot_font_px) / px_per_unit
+                start_y0 = start_base_y + start_raise_y
+                start_text_y = (
+                    start_y0 + (axis_margin_px + start_text_font_px) / px_per_unit
+                )
                 fig.add_shape(
                     type="line",
                     x0=start_ts,
                     x1=start_ts,
-                    y0=start_label_y,
+                    y0=start_y0,
                     y1=y_pos[j],
                     xref="x",
                     yref="y",
@@ -1016,29 +1390,71 @@ class EventCascadeGanttVisualizer:
                 )
                 fig.add_annotation(
                     x=start_ts,
-                    y=start_label_y,
-                    text="●",
+                    y=start_y0,
+                    text=(
+                        "Unknown"
+                        if local_eps[j].get("StartUnknown")
+                        and local_eps[j]["Start"] is None
+                        else "●"
+                    ),
                     showarrow=False,
                     align="center",
                     yanchor="middle",
-                    font=dict(size=7, color="#e6f5c9"),
+                    font=dict(
+                        size=(
+                            9
+                            if local_eps[j].get("StartUnknown")
+                            and local_eps[j]["Start"] is None
+                            else 11
+                        ),
+                        color="#e6f5c9",
+                    ),
                 )
                 fig.add_annotation(
                     x=start_ts,
-                    y=start_label_y,
-                    text=start_label,
+                    y=start_text_y,
+                    text=(
+                        "Unknown"
+                        if local_eps[j].get("StartUnknown")
+                        and local_eps[j]["Start"] is None
+                        else start_label
+                    ),
                     showarrow=False,
                     align="center",
                     yanchor="top",
                     font=dict(size=9, color="#222222"),
                 )
+                axis_start_points.append(start_ts)
+                axis_start_meta.append(
+                    {
+                        "x": start_ts,
+                        "width_px": start_width_px,
+                        "stack_y": (start_width_px + label_margin_px) / px_per_unit,
+                    }
+                )
 
                 # --- End Time Line & Label ---
+                end_label_len = len(str(end_label))
+                end_width_px = max(1, end_label_len) * label_char_px
+                end_overlaps = [
+                    m for m in axis_end_meta if abs((end_ts - m["x"])) <= axis_label_gap
+                ]
+                end_raise_y = (
+                    sum(m["stack_y"] for m in end_overlaps) if end_overlaps else 0
+                )
+                end_unknown = (
+                    local_eps[j].get("FinishUnknown") and local_eps[j]["Finish"] is None
+                )
+                end_dot_font_px = 9 if end_unknown else 11
+                end_text_font_px = 9
+                end_base_y = (axis_margin_px + end_dot_font_px) / px_per_unit
+                end_y0 = end_base_y + end_raise_y
+                end_text_y = end_y0 + (axis_margin_px + end_text_font_px) / px_per_unit
                 fig.add_shape(
                     type="line",
                     x0=end_ts,
                     x1=end_ts,
-                    y0=end_label_y,
+                    y0=end_y0,
                     y1=y_pos[j],
                     xref="x",
                     yref="y",
@@ -1046,21 +1462,47 @@ class EventCascadeGanttVisualizer:
                 )
                 fig.add_annotation(
                     x=end_ts,
-                    y=end_label_y,
-                    text="●",
+                    y=end_y0,
+                    text=(
+                        "Unknown"
+                        if local_eps[j].get("FinishUnknown")
+                        and local_eps[j]["Finish"] is None
+                        else "●"
+                    ),
                     showarrow=False,
                     align="center",
                     yanchor="middle",
-                    font=dict(size=7, color="#e6f5c9"),
+                    font=dict(
+                        size=(
+                            9
+                            if local_eps[j].get("FinishUnknown")
+                            and local_eps[j]["Finish"] is None
+                            else 11
+                        ),
+                        color="#e6f5c9",
+                    ),
                 )
                 fig.add_annotation(
                     x=end_ts,
-                    y=end_label_y,
-                    text=end_label,
+                    y=end_text_y,
+                    text=(
+                        "Unknown"
+                        if local_eps[j].get("FinishUnknown")
+                        and local_eps[j]["Finish"] is None
+                        else end_label
+                    ),
                     showarrow=False,
                     align="center",
                     yanchor="top",
                     font=dict(size=9, color="#222222"),
+                )
+                axis_end_points.append(end_ts)
+                axis_end_meta.append(
+                    {
+                        "x": end_ts,
+                        "width_px": end_width_px,
+                        "stack_y": (end_width_px + label_margin_px) / px_per_unit,
+                    }
                 )
 
                 if j + 1 < len(y_pos):
@@ -1137,6 +1579,9 @@ class EventCascadeGanttVisualizer:
                 )
 
         # --- 3. Configure Layout ---
+        # If no concrete end times exist, extend right bound to cover imputed stage ends
+        if not valid_ends and display_max_end is not None:
+            range_x_initial[1] = display_max_end
         chart_title = cascade_data["title"]["value"]
         gran_levels_clean = [g for g in gran_levels if g is not None]
         order_map = {"Y": 0, "YM": 1, "YMD": 2, "YMDH": 3, "YMDHM": 4, "YMDHMS": 5}
@@ -1231,6 +1676,7 @@ class EventCascadeGanttVisualizer:
                 title="Time",
                 tickformat=tickformat_str,
                 hoverformat=tickformat_str,
+                showticklabels=False if all_unknown_time else True,
             ),
             yaxis=dict(
                 title="Episodes (Staggered)",
@@ -1291,9 +1737,17 @@ class EventCascadeGanttVisualizer:
                         ],
                     },
                 )
-                dataset_min_ms = int(pd.Timestamp(min_time).value // 1_000_000)
+                dataset_min_ms = int(
+                    pd.Timestamp(unknown_anchor if all_unknown_time else min_time).value
+                    // 1_000_000
+                )
+                effective_max_right = (
+                    display_max_end
+                    if (not valid_ends and display_max_end is not None)
+                    else (max_time + end_buffer)
+                )
                 dataset_max_ms = int(
-                    pd.Timestamp(max_time + end_buffer).value // 1_000_000
+                    pd.Timestamp(effective_max_right).value // 1_000_000
                 )
                 window_ms = int(window_sec * 1000)
                 min_window_ms = int(slider_min_sec * 1000)
@@ -1351,9 +1805,8 @@ function updateCompactLabel() {{
 function setRangeFromSlider() {{
   var frac = parseFloat(slider.value) / 1000.0;
   var dsSpan = maxMs - minMs;
-  var overflow = Math.max(0, winMs - dsSpan);
-  var startMin = minMs - overflow;
-  var moveSpan = dsSpan + overflow;
+  var startMin = minMs;
+  var moveSpan = dsSpan;
   if (moveSpan < 1) moveSpan = 1;
   var startMs = Math.round(startMin + frac * moveSpan);
   var endMs = startMs + winMs;
@@ -1369,9 +1822,8 @@ compact.addEventListener('input', function() {{
   var r = gd.layout.xaxis && gd.layout.xaxis.range ? gd.layout.xaxis.range : null;
   var currentStart = r ? new Date(r[0]).getTime() : minMs;
   var dsSpan = maxMs - minMs;
-  var overflow = Math.max(0, winMs - dsSpan);
-  var startMin = minMs - overflow;
-  var moveSpan = dsSpan + overflow;
+  var startMin = minMs;
+  var moveSpan = dsSpan;
   if (moveSpan < 1) moveSpan = 1;
   if (currentStart < startMin) currentStart = startMin;
   var startMax = startMin + moveSpan;
@@ -1396,9 +1848,8 @@ gd.on('plotly_relayout', function(e) {{
   if (!r) return;
   var r0ms = new Date(r[0]).getTime();
   var dsSpan = maxMs - minMs;
-  var overflow = Math.max(0, winMs - dsSpan);
-  var startMin = minMs - overflow;
-  var moveSpan = dsSpan + overflow;
+  var startMin = minMs;
+  var moveSpan = dsSpan;
   if (moveSpan < 1) moveSpan = 1;
   var frac = (r0ms - startMin) / moveSpan;
   if (isFinite(frac)) {{
