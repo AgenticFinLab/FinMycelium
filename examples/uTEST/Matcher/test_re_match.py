@@ -5,7 +5,7 @@ Run:
     python examples/Matcher/test_re_match.py
 """
 
-from finmy.matcher.re_match import ReMatch
+from finmy.matcher.re_match import ReMatcher
 from finmy.summarizer.summarizer import SummarizedUserQuery
 from finmy.matcher.base import MatchInput
 
@@ -27,7 +27,7 @@ content = """
 sq = SummarizedUserQuery(summarization=query_text, key_words=key_words)
 match_input = MatchInput(match_data=content, summarized_query=sq)
 
-matcher = ReMatch(method_name="regex_demo")
+matcher = ReMatcher(method_name="regex_demo")
 result = matcher.run(match_input)
 
 print(f"Method: {result.method}")
