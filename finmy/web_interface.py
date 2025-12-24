@@ -43,6 +43,8 @@ from finmy.builder.class_build.main_build import ClassEventBuilder
 import matplotlib.pyplot as plt
 from finmy.builder.agent_build.visualizer import EventCascadeVisualizer
 from finmy.pipeline import FinmyPipeline
+from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+
 
 
 # Load environment variables
@@ -116,6 +118,9 @@ class FinMyceliumWebInterface:
             st.session_state.is_processing_blocked = False
         if "processing_start_time" not in st.session_state:
             st.session_state.processing_start_time = None
+        if "save_builder_dir_path" not in st.session_state:
+            st.session_state.save_builder_dir_path = None
+    
 
     # def setup_ai_client(self):
     #     """Initialize AI client with configuration from environment variables."""
@@ -955,6 +960,8 @@ class FinMyceliumWebInterface:
                 query_text=main_search_input,
                 key_words=keywords,
             )
+            st.session_state.save_builder_dir_path = pipeline.get_save_builder_dir_path()
+            
             logging.info("type of pipeline_result: %s", type(pipeline_result))
             logging.info("pipeline_result:\n %s", pipeline_result)
 
@@ -1066,8 +1073,10 @@ class FinMyceliumWebInterface:
         st.title("📋 Event Reconstruction Report")
 
         # try:
-        #     with open(r"EXPERIMENT\uTEST\Pipline\build_output_20251222140845970261\FinalEventCascade.json", "r", encoding="utf-8") as f:
+        #     builder_dir_path = r"EXPERIMENT\uTEST\Pipline\build_output_20251222130929900932"
+        #     with open(os.path.join(builder_dir_path, "FinalEventCascade.json"), "r", encoding="utf-8") as f:
         #          st.session_state.analysis_results = json.load(f)
+        #     st.session_state.save_builder_dir_path = builder_dir_path
         # except:
         #     st.error("Error loading reconstruction results. Please check the pipeline output file.")
 
@@ -1080,32 +1089,19 @@ class FinMyceliumWebInterface:
             return
         
         results = st.session_state.analysis_results
-        
+
+        st.success(f"Success: Builder Files are saved to {st.session_state.save_builder_dir_path}")
+
         # --- 2. Initialize Visualizer ---
         logging.info("Initializing EventCascadeVisualizer...")
-        viz = EventCascadeVisualizer()
-
-        # --- 3. Generate Visualization ---
-        # Output path for the image (saved in the same directory as the input json)
-        output_path = os.path.join(st.session_state.config["output_dir"], "timeline.png")
-
-        logging.info(f"Generating visualization to: {output_path}...")
-        try:
-            # Call the plotting function with the JSON path
-            viz.plot_cascade(st.session_state.analysis_results, output_path)
-
-            # Verify output generation
-            if os.path.exists(output_path):
-                logging.info(f"Success: Visualization successfully generated at {output_path}")
-            else:
-                logging.info("Error: Output file was not created.")
-
-        except Exception as e:
-            logging.info(f"Exception occurred during visualization: {e}")
-            traceback.print_exc()
-
-        plt.switch_backend("Agg")
         
+        viz = EventCascadeGanttVisualizer()
+        viz_output_dir = st.session_state.save_builder_dir_path
+        viz_output_path = os.path.join(viz_output_dir, "FinalEventCascade_gantt.html")
+
+        logging.info(f"Generating Gantt Chart to {viz_output_path}...")
+        viz.plot_cascade(results, viz_output_path)
+
         
         
         
@@ -1372,15 +1368,59 @@ class FinMyceliumWebInterface:
                 st.markdown(f'<span class="confidence-badge">Avg Description Confidence: {avg_desc_conf:.0%}</span>', unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
             
+
             # Main timeline rendering with expanders
-            
-            st.image(output_path, caption="Event Timeline Visualization")
-            
+            # Display the visualization section
+
+            # Display the visualization section
+
+            st.subheader("📅 Event Timeline Visualization")
+            if os.path.exists(viz_output_path):
+                logging.info("Success: HTML file generated.")
+                
+                # Get relative path from current working directory
+                try:
+                    logging.info(f"Success: HTML file is saved to {os.path.abspath(viz_output_path)}")    
+                    # Display with clear instructions
+                    st.markdown(f"""
+                    #### View Instructions:
+                    
+                    1. **Download the file** using the button below
+                    2. **Open it directly** from your file explorer
+                    3. **Or access it at:** `{os.path.abspath(viz_output_path)}`
+                    """)
+                    
+                    # Download button as primary action
+                    with open(viz_output_path, "rb") as file:
+                        if st.download_button(
+                            label="📥 Download & Open Timeline HTML",
+                            data=file,
+                            file_name="event_timeline.html",
+                            mime="text/html",
+                            key="timeline_download"
+                        ):
+                            st.info("File downloaded. Please open it from your downloads folder.")
+                            
+                except ValueError:
+                    # Fallback if paths are on different drives
+                    st.success(f"Success: HTML file is saved to {viz_output_path}")
+                    
+                    with open(viz_output_path, "rb") as file:
+                        st.download_button(
+                            label="📥 Download Timeline HTML",
+                            data=file,
+                            file_name="event_timeline.html",
+                            mime="text/html"
+                        )
+            else:
+                logging.info("Error: HTML file not found.")
+                st.error("HTML file not found. Please generate the visualization first.")
+
             st.markdown('<div class="timeline-container">', unsafe_allow_html=True)
             st.markdown('<div class="timeline-line"></div>', unsafe_allow_html=True)
             
             # Render event-level basic info (expanded by default)
-            st.subheader("☀️  Event Basic Information")
+            st.subheader("☀️ Event Basic Information")
             with st.expander("Event Basic Information", expanded=False):
                 st.markdown('<div class="timeline-item">', unsafe_allow_html=True)
                 st.markdown('<div class="timeline-dot"></div>', unsafe_allow_html=True)
