@@ -419,7 +419,7 @@ def extract_json_response(response_text: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse JSON from response: {e}") from e
 
 
-def estimate_complete_time(str_list: List[str], build_type: BuildType) -> int:
+def estimate_complete_time(str_list: List[str], build_type: str | BuildType) -> int:
     """Estimate the time to complete the reconstruction based on the content strings.
 
     Parameters:
