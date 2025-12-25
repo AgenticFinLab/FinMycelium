@@ -4,8 +4,8 @@ from enum import Enum
 OTHER_TOKEN_NUM = 3000
 
 # Estimate the time to complete the reconstruction per token in minutes
-CLASS_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST = 1e-4
-AGENT_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST = 3e-4
+CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST = 1e-4
+AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST = 3e-4
 
 
 class BuildType(Enum):
@@ -15,5 +15,5 @@ class BuildType(Enum):
     - AGENT_BUILD: Used for reconstructing agent or workflow logic.
     """
 
-    CLASS_BUILD = "class_build"
-    AGENT_BUILD = "agent_build"
+    CLASS_BUILD = "ClassEventBuilder"
+    AGENT_BUILD = "AgentEventBuilder"

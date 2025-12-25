@@ -25,4 +25,5 @@ fastapi==0.110.2
 uvicorn==0.29.0
 llama-index==0.14.10
 llama-index-llms-openai-like==0.5.3
+httpx[socks]
 openpyxl
