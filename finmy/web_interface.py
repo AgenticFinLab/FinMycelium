@@ -123,6 +123,8 @@ class FinMyceliumWebInterface:
             st.session_state.save_builder_dir_path = None
         if "estimate_time" not in st.session_state:
             st.session_state.estimate_time = None
+        if "structured_data" not in st.session_state:
+            st.session_state.structured_data = None
     
 
     # def setup_ai_client(self):
@@ -600,8 +602,9 @@ class FinMyceliumWebInterface:
             
             # Execute reconstruction with spinner
             with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results."):
+                st.write("Starting reconstruction...")
                 results = self.perform_ai_analysis(analysis_inputs)
-
+                st.write("Reconstruction completed.")
                 if results:
                     # Store results with timestamp for validation
                     st.session_state.analysis_results = results
@@ -646,7 +649,7 @@ class FinMyceliumWebInterface:
             return results
         except Exception as e:
             st.error(f"AI analysis error: {e}")
-            return self.get_mock_analysis_results(inputs)
+            return None
 
     def event_reconstruction(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Construct detailed prompt for event reconstruction."""
@@ -655,12 +658,13 @@ class FinMyceliumWebInterface:
         keywords = inputs["keywords"]
         structured_data = inputs["structured_data"] is not None
         search_query_content=main_search_input+" \n\nkeywords: "+" ".join(keywords)
-        
+        st.write("Input has been processed.")
         # main_search_input -> summarizer -> refined description and keywords
 
         # keywords -> MediaCollector (Get media info) -> filter -> clean data
         # Test Platform Crawler Manager
         # There is still something wrong currently
+        # st.write("Testing: PlatformCrawler")
         # try:
         #     print("=====================================")
         #     print("Testing: PlatformCrawler")
@@ -671,7 +675,7 @@ class FinMyceliumWebInterface:
         #     logger.info("Platform Crawler Manager test completed!")
         # except:
         #     print("PlatformCrawler: Error!")
-
+        # st.write("PlatformCrawler: Finished.")
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
         # Bocha Search API test
         parser = URLParser(delay=2.0, use_selenium_fallback=True, selenium_wait_time=5)
@@ -682,8 +686,10 @@ class FinMyceliumWebInterface:
 
 
         logging.info("=====================================")
-        logging.info("Testing: Bocha Search")
+        logging.info("Bocha Search")
+        st.write("Start: Bocha Search")
         logging.info("=====================================")
+        
         formatted_bocha_search_results_content=[]
         try:
             
@@ -735,13 +741,17 @@ class FinMyceliumWebInterface:
                 json.dump(
                     formatted_bocha_search_results, f, ensure_ascii=False, indent=4
                 )
+            st.write("Success: Bocha Search")
             # print(formatted_bocha_search_results)
         except:
             logging.error("- ERROR - Bocha Search: Error!")
+            st.write("Error: Bocha Search")
 
+        
 
         logging.info("=====================================")
-        logging.info("Testing: Baidu Search")
+        logging.info("Baidu Search")
+        st.write("Start: Baidu Search")
         logging.info("=====================================")
         formatted_baidu_search_results_content=[]
         try:
@@ -792,16 +802,19 @@ class FinMyceliumWebInterface:
                 json.dump(
                     formatted_baidu_search_results, f, ensure_ascii=False, indent=4
                 )
+            st.write("Success: Baidu Search")
             # print(formatted_baidu_search_results)
         except:
             logging.error("- ERROR - Baidu Search: Error!")
+            st.write("Error: Baidu Search")
 
 
 
         # structured_data 
 
         logging.info("=====================================")
-        logging.info("Testing: structure data processing")
+        logging.info("Structure Data Processing")
+        st.write("Start: Structure Data Processing")
         logging.info("=====================================")
         structure_data_urllink = []
         structure_data_filepath = []
@@ -809,11 +822,14 @@ class FinMyceliumWebInterface:
         structure_data_filepath_content=[]
         try:  
             if st.session_state.structured_data is not None:
+                
                 parser = URLParser(
                 delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
                 )
                 for index, row in st.session_state.structured_data.iterrows():
+                    logging.info("Processing row %d: %s", index, row["url"] if row["url"] else "No URL")
                     try:
+                        title = row["title"] if row["title"] else "No Title"
                         url = row["url"] if row["url"] else "No URL"
                         # Check if URL is a web link or local file path
                         if isinstance(url, str):
@@ -869,13 +885,12 @@ class FinMyceliumWebInterface:
                                     )
                                     structure_data_filepath.append(row.to_dict())
                         else:
-                            st.warning(
-                                f"Row {index}: URL is not a string format. Skipping processing."
-                            )
+                            logging.info("Error: %s", row["url"] if row["url"] else "No URL Provided")
+                    
                     except:
                         logging.info("Processing error: %s",row["url"] if row["url"] else "No URL Provided")
 
-                
+                logging.info("Total rows processed: %d", len(st.session_state.structured_data))
 
                 logging.info("=====================================")
                 logging.info("===== Structured Data URL Link =====")
@@ -895,7 +910,6 @@ class FinMyceliumWebInterface:
                     item_content += "content:\n"
                     item_content += extract_content_from_parsed_content(item["parsed_content"])
                     structure_data_urllink_content.append(item_content)
-
 
                 logging.info("=====================================")
                 logging.info("===== Structured Data Filepath =====")
@@ -927,7 +941,7 @@ class FinMyceliumWebInterface:
         # info_to_analyze = cleaned and filtered data from above steps
         
         All_Text_Content = structure_data_urllink_content + structure_data_filepath_content + formatted_bocha_search_results_content + formatted_baidu_search_results_content
-        st.session_state.estimate_time = estimate_complete_time(str_list = All_Text_Content, build_type = reconstruction_config["builder_type"])
+        st.session_state.estimate_time = estimate_complete_time(str_list = All_Text_Content, build_type = reconstruction_config["builder_config"]["builder_type"])
         st.write(f"Estimated time to complete: **{st.session_state.estimate_time} minutes**")
         All_Text_Content_filepath = os.path.join(
                 )    
