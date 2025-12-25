@@ -32,7 +32,6 @@ from finmy.builder.base import BuildInput
 from finmy.builder.agent_build.main_build import (
     AgentEventBuilder,
 )
-from finmy.builder.agent_build.prompts import *
 
 
 def _generate_ponzi_content() -> str:
@@ -113,57 +112,15 @@ def main():
         build_config=config,
     )
 
-    # 4. Create the system and user prompts
-    agent_names = list(config["agents"].keys())
-    agent_system_msgs = {}
-    agent_user_msgs = {}
-
-    for name in agent_names:
-        if "skeleton" in name.lower():
-            if "checker" in name.lower():
-                agent_system_msgs[name] = SkeletonCheckerSys
-                agent_user_msgs[name] = SkeletonCheckerUser
-            else:
-                agent_system_msgs[name] = EventLayoutReconstructorSys
-                agent_user_msgs[name] = EventLayoutReconstructorUser
-        if "participant" in name.lower():
-            agent_system_msgs[name] = ParticipantReconstructorSys
-            agent_user_msgs[name] = ParticipantReconstructorUser
-        if "transaction" in name.lower():
-            agent_system_msgs[name] = TransactionReconstructorSys
-            agent_user_msgs[name] = TransactionReconstructorUser
-        if "episode" in name.lower():
-            agent_system_msgs[name] = EpisodeReconstructorSys
-            agent_user_msgs[name] = EpisodeReconstructorUser
-        if "stagedescription" in name.lower():
-            agent_system_msgs[name] = StageDescriptionReconstructorSys
-            agent_user_msgs[name] = StageDescriptionReconstructorUser
-        if "eventdescription" in name.lower():
-            agent_system_msgs[name] = EventDescriptionReconstructorSys
-            agent_user_msgs[name] = EventDescriptionReconstructorUser
-
-    # Build the state
-    state = {
-        "build_input": build_input,
-        "agent_results": [],
-        "agent_executed": [],
-        "cost": [],
-        "agent_system_msgs": agent_system_msgs,
-        "agent_user_msgs": agent_user_msgs,
-    }
-
     # Run build
     print("Starting AgentEventBuilder...")
-    graph = builder.graph()
 
-    # Retrieve graph config from the loaded configuration
-    graph_config = config["graph_config"]
-
-    final_state = graph.invoke(state, graph_config)
+    build_output = builder.run(build_input)
     print("Build completed.")
 
-    # Integrate final result
-    final_cascade = builder.integrate_results(final_state)
+    final_state = build_output.result
+    # final_cascade is in build_output.event_cascades[0] if present
+    final_cascade = build_output.event_cascades[0]
 
     build_input = final_state.pop("build_input")
 

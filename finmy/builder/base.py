@@ -89,7 +89,7 @@ class BaseBuilder(ABC):
     ):
         self.build_config = build_config
         self.agents_config = build_config["agents"]
- 
+
         self.method_name = method_name
 
         # By default, we set only one lm for agents
@@ -99,8 +99,10 @@ class BaseBuilder(ABC):
 
         self.define_agent_models()
 
-        build_output = f"build_output_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-        self.save_dir = os.path.join( build_config["save_folder"],build_output)
+        build_output = (
+            f"build_output_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        )
+        self.save_dir = os.path.join(build_config["save_folder"], build_output)
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -131,7 +133,7 @@ class BaseBuilder(ABC):
 
         Parameters
         - agent_name: The logical name of the agent/stage.
-        - count: The per-agent execution count used for disambiguation.
+        - execution_idx: The per-agent execution count used for disambiguation.
         - **kwargs: Optional naming options (e.g., dir, ext, prefix, suffix, timestamp).
 
         Returns
@@ -186,3 +188,23 @@ class BaseBuilder(ABC):
         Returns
         - A CompiledStateGraph with entry point and edges defined.
         """
+
+    @abstractmethod
+    def run(self, build_input: BuildInput):
+        """Run the builder pipeline.
+
+        This abstract method defines the interface for executing the complete event reconstruction process.
+        Concrete implementations should:
+        1. Initialize necessary resources (e.g., prompts, models).
+        2. Construct the execution graph via `self.graph()`.
+        3. Prepare the initial state with `build_input`.
+        4. Invoke the graph to process the input.
+        5. Integrate and format the results into a `BuildOutput` object.
+
+        Args:
+            build_input (BuildInput): The structured input containing user query and data samples.
+
+        Returns:
+            BuildOutput: The final output containing the reconstructed event cascades and execution logs.
+        """
+        pass

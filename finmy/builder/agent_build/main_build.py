@@ -64,7 +64,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 
 from lmbase.inference.base import InferInput, InferOutput
-from finmy.builder.base import BaseBuilder
+from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput
 from finmy.builder.utils import (
     load_python_text,
     filter_dataclass_fields,
@@ -72,6 +72,7 @@ from finmy.builder.utils import (
 )
 from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
+from finmy.builder.agent_build.prompts import *
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -167,6 +168,48 @@ class AgentEventBuilder(BaseBuilder):
         - Produces grounded `descriptions` for the entire event using the full cascade plus source content.
     """
 
+    def _get_agent_prompts(self):
+        """Initialize system and user prompts for all agents."""
+        agent_system_msgs = {}
+        agent_user_msgs = {}
+
+        # Skeleton
+        agent_system_msgs["SkeletonReconstructor"] = EventLayoutReconstructorSys
+        agent_user_msgs["SkeletonReconstructor"] = EventLayoutReconstructorUser
+
+        agent_system_msgs["SkeletonChecker"] = SkeletonCheckerSys
+        agent_user_msgs["SkeletonChecker"] = SkeletonCheckerUser
+
+        # Participant
+        agent_system_msgs["ParticipantReconstructor"] = ParticipantReconstructorSys
+        agent_user_msgs["ParticipantReconstructor"] = ParticipantReconstructorUser
+
+        # Transaction
+        agent_system_msgs["TransactionReconstructor"] = TransactionReconstructorSys
+        agent_user_msgs["TransactionReconstructor"] = TransactionReconstructorUser
+
+        # Episode
+        agent_system_msgs["EpisodeReconstructor"] = EpisodeReconstructorSys
+        agent_user_msgs["EpisodeReconstructor"] = EpisodeReconstructorUser
+
+        # Stage Description
+        agent_system_msgs["StageDescriptionReconstructor"] = (
+            StageDescriptionReconstructorSys
+        )
+        agent_user_msgs["StageDescriptionReconstructor"] = (
+            StageDescriptionReconstructorUser
+        )
+
+        # Event Description
+        agent_system_msgs["EventDescriptionReconstructor"] = (
+            EventDescriptionReconstructorSys
+        )
+        agent_user_msgs["EventDescriptionReconstructor"] = (
+            EventDescriptionReconstructorUser
+        )
+
+        return agent_system_msgs, agent_user_msgs
+
     def _get_event_skeleton(self, state: AgentState) -> dict:
         """
         Retrieves the definitive event skeleton.
@@ -226,6 +269,8 @@ class AgentEventBuilder(BaseBuilder):
         in sequence order.
 
         Returns a deep-copied EventCascade object with participants filled.
+        Note: This creates a fresh copy of the skeleton. For episodes not yet processed,
+        participants will be empty (as initialized in the skeleton), ensuring safety.
         """
         event_skeleton = self._get_event_skeleton(state)
         skeleton_copy = copy.deepcopy(event_skeleton)
@@ -807,3 +852,40 @@ class AgentEventBuilder(BaseBuilder):
         dummy_state = {"agent_results": agent_results}
 
         return self.integrate_results(dummy_state)
+
+    def run(self, build_input: BuildInput) -> BuildOutput:
+        """Run the builder pipeline."""
+        # 1. Get prompts
+        agent_system_msgs, agent_user_msgs = self._get_agent_prompts()
+
+        # 2. Build initial state
+        state = {
+            "build_input": build_input,
+            "agent_results": [],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": agent_system_msgs,
+            "agent_user_msgs": agent_user_msgs,
+        }
+
+        # 3. Compile graph
+        app = self.graph()
+
+        # 4. Run graph
+        # Increase recursion limit if needed, though default is usually 25
+        # For long events, we might need more.
+        config = self.build_config["graph_config"]
+        final_state = app.invoke(state, config=config)
+
+        # 5. Integrate results
+        cascade_dict = self.integrate_results(final_state)
+
+        # 6. Construct BuildOutput
+        # We wrap the result in BuildOutput.
+        # Note: cascade_dict is a dictionary matching EventCascade structure.
+        return BuildOutput(
+            event_cascades=[cascade_dict],
+            result=final_state,
+            logs=final_state["agent_executed"],
+            extras=None,
+        )
