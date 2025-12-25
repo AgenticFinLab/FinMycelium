@@ -346,6 +346,7 @@ class FinMyceliumWebInterface:
                             "Please upload a valid configuration file with all required sections."
                         )
                 except Exception as e:
+                    traceback.print_exc()
                     st.error(f"❌ Error processing configuration: {str(e)}")
                     st.info("Please ensure the file is properly formatted.")
 
@@ -547,6 +548,7 @@ class FinMyceliumWebInterface:
                 st.session_state.uploaded_file_name = uploaded_file.name
 
             except Exception as e:
+                traceback.print_exc()
                 st.error(f"Error processing file: {e}")
 
     def render_analysis_controls(self):
@@ -675,6 +677,7 @@ class FinMyceliumWebInterface:
                     st.session_state.processing_status = "error"
 
         except Exception as e:
+            traceback.print_exc()
             st.error(f"❌ Reconstruction failed: {str(e)}")
             st.session_state.processing_status = "error"
             if hasattr(self, "log_error"):
@@ -706,6 +709,7 @@ class FinMyceliumWebInterface:
             results = self.event_reconstruction(inputs)
             return results
         except Exception as e:
+            traceback.print_exc()
             st.error(f"AI analysis error: {e}")
             logging.error("AI analysis error: %s", traceback.format_exc())
             return None
@@ -839,6 +843,7 @@ class FinMyceliumWebInterface:
             )
             # print(formatted_bocha_search_results)
         except:
+            traceback.print_exc()
             logging.error("- ERROR - Bocha Search: Error!")
             st.write(
                 "**"
@@ -932,6 +937,7 @@ class FinMyceliumWebInterface:
             )
             # print(formatted_baidu_search_results)
         except:
+            traceback.print_exc()
             logging.error("- ERROR - Baidu Search: Error!")
             st.write(
                 "**"
@@ -1054,6 +1060,7 @@ class FinMyceliumWebInterface:
                             )
 
                     except:
+                        traceback.print_exc()
                         logging.info(
                             "Processing error: %s",
                             row["url"] if row["url"] else "No URL Provided",
@@ -1121,6 +1128,7 @@ class FinMyceliumWebInterface:
                             # print(item_content)
                         structure_data_filepath_content.append(item_content)
         except:
+            traceback.print_exc()
             logging.info("There is something wrong with structured data processing!")
 
         # info_to_analyze = cleaned and filtered data from above steps
@@ -1235,6 +1243,7 @@ class FinMyceliumWebInterface:
                     return pipeline_result
 
         except Exception as e:
+            traceback.print_exc()
             st.error(f"Error during EventBuilder: {e}")
             logging.info(f"Error during EventBuilder: {e}")
             return None
@@ -1685,6 +1694,7 @@ class FinMyceliumWebInterface:
                             )
 
                 except ValueError:
+                    traceback.print_exc()
                     # Fallback if paths are on different drives
                     st.success(f"Success: HTML file is saved to {viz_output_path}")
 
@@ -3465,6 +3475,7 @@ def main():
         app = FinMyceliumWebInterface()
         app.run()
     except Exception as e:
+        traceback.print_exc()
         st.error(f"Application error: {e}")
         st.info("Please refresh the page and try again.")
 
