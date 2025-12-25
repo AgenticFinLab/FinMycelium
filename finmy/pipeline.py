@@ -680,139 +680,6 @@ class FinmyPipeline:
 
         return meta_samples
 
-    def _prepare_agent_messages(self) -> tuple:
-        """
-        Prepare agent system and user messages based on builder configuration.
-
-        Returns:
-            Tuple of (agent_system_msgs dict, agent_user_msgs dict)
-        """
-        agent_names = list(self.builder_config["agents"].keys())
-        agent_system_msgs = {}
-        agent_user_msgs = {}
-
-        for name in agent_names:
-            name_lower = name.lower()
-            if "skeleton" in name_lower:
-                agent_system_msgs[name] = (
-                    agent_build_prompts.EventLayoutReconstructorSys
-                )
-                agent_user_msgs[name] = agent_build_prompts.EventLayoutReconstructorUser
-            if "participant" in name_lower:
-                agent_system_msgs[name] = (
-                    agent_build_prompts.ParticipantReconstructorSys
-                )
-                agent_user_msgs[name] = agent_build_prompts.ParticipantReconstructorUser
-            if "transaction" in name_lower:
-                agent_system_msgs[name] = (
-                    agent_build_prompts.TransactionReconstructorSys
-                )
-                agent_user_msgs[name] = agent_build_prompts.TransactionReconstructorUser
-            if "episode" in name_lower:
-                agent_system_msgs[name] = agent_build_prompts.EpisodeReconstructorSys
-                agent_user_msgs[name] = agent_build_prompts.EpisodeReconstructorUser
-            if "stagedescription" in name_lower:
-                agent_system_msgs[name] = (
-                    agent_build_prompts.StageDescriptionReconstructorSys
-                )
-                agent_user_msgs[name] = (
-                    agent_build_prompts.StageDescriptionReconstructorUser
-                )
-            if "eventdescription" in name_lower:
-                agent_system_msgs[name] = (
-                    agent_build_prompts.EventDescriptionReconstructorSys
-                )
-                agent_user_msgs[name] = (
-                    agent_build_prompts.EventDescriptionReconstructorUser
-                )
-
-        return agent_system_msgs, agent_user_msgs
-
-    def _run_agent_builder(self, build_input: BuildInput):
-        """
-        Run AgentEventBuilder and return the restored cascade.
-
-        Args:
-            build_input: BuildInput object for the builder
-
-        Returns:
-            Restored cascade from the builder
-        """
-        agent_system_msgs, agent_user_msgs = self._prepare_agent_messages()
-
-        state = {
-            "build_input": build_input,
-            "agent_results": [],
-            "agent_executed": [],
-            "cost": [],
-            "agent_system_msgs": agent_system_msgs,
-            "agent_user_msgs": agent_user_msgs,
-        }
-
-        self.logger.info("Starting AgentEventBuilder...")
-        graph = self.builder.graph()
-        graph_config = self.builder_config["graph_config"]
-        final_state = graph.invoke(state, graph_config)
-        self.logger.info("Build completed.")
-
-        final_cascade = self.builder.integrate_results(final_state)
-        build_input = final_state.pop("build_input")
-
-        # Save the final state to the json
-        self.builder.save_traces(
-            build_input.to_dict(),
-            save_name="BuildInput",
-            file_format="json",
-        )
-        self.builder.save_traces(
-            final_state,
-            save_name="FinalState",
-            file_format="json",
-        )
-        self.builder.save_traces(
-            final_cascade,
-            save_name="FinalEventCascade",
-            file_format="json",
-        )
-        self.logger.info("Traces saved.")
-
-        # Test integrate_from_files
-        self.logger.info("\nTesting integrate_from_files...")
-        restored_cascade = self.builder.integrate_from_files()
-        self.builder.save_traces(
-            restored_cascade,
-            save_name="IntegratedEventCascade",
-            file_format="json",
-        )
-        
-        self.logger.info("integrate_from_files test completed.")
-
-        return restored_cascade
-
-    def _execute_builder(self, build_input: BuildInput):
-        """
-        Execute the configured builder and return the result.
-
-        Args:
-            build_input: BuildInput object for the builder
-
-        Returns:
-            Build output from the builder
-        """
-        builder_type = self.builder_config["builder_type"]
-
-        if builder_type == "AgentEventBuilder":
-            self.save_builder_dir_path = self.builder.get_save_dir_path()
-            return self._run_agent_builder(build_input)
-        elif builder_type == "ClassEventBuilder":
-            self.save_builder_dir_path = self.builder.get_save_dir_path()
-            return self.builder.build(build_input)
-        else:
-            raise ValueError(f"Invalid builder type: {builder_type}")
-
-    def get_save_builder_dir_path(self):
-        return self.save_builder_dir_path
-        
     def lm_build_pipeline_main(
         self,
         data_sources: List[str],
@@ -879,7 +746,7 @@ class FinmyPipeline:
         build_input = self.create_build_input(user_query_input, meta_samples)
 
         # Step 10: Execute builder and return result
-        return self._execute_builder(build_input)
+        return self.builder.run(build_input)
 
     def lm_build_pipeline_with_contents(
         self,
@@ -931,4 +798,4 @@ class FinmyPipeline:
         build_input = self.create_build_input(user_query_input, meta_samples)
 
         # Step 10: Execute builder and return result
-        return self._execute_builder(build_input)
+        return self.builder.run(build_input)

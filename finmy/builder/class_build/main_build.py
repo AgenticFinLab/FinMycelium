@@ -11,6 +11,7 @@ import logging
 
 from lmbase.inference.api_call import LangChainAPIInference, InferInput
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput, AgentState
+
 # Import all prompt modules
 from finmy.builder.class_build.prompts import (
     classify,
@@ -215,12 +216,12 @@ class ClassEventBuilder(BaseBuilder):
         return result.response
 
     def get_save_dir_path(self) -> str:
-            """
-            Generates a standardized path for saving agent results.
-            """
-            return self.save_dir
+        """
+        Generates a standardized path for saving agent results.
+        """
+        return self.save_dir
 
-    def build(self, build_input: BuildInput) -> BuildOutput:
+    def run(self, build_input: BuildInput) -> BuildOutput:
         """Build and process event cascade from input data.
 
         Args:
