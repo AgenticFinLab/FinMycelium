@@ -398,8 +398,8 @@ class AgentEventBuilder(BaseBuilder):
             "TransactionReconstructor",
             "EpisodeReconstructor",
         ]:
-            # Retrieve skeleton (always the first result)
-            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            # Retrieve definitive skeleton (prioritizing Checker result)
+            event_skeleton = self._get_event_skeleton(state)
 
             # Determine which episode we are on
             current_count = state["agent_executed"].count(agent_name)
@@ -556,8 +556,9 @@ class AgentEventBuilder(BaseBuilder):
         # Start with Skeleton
         g.set_entry_point("SkeletonReconstructor")
 
-        # Basic Flow: Skeleton -> First Episode (Participant)
-        g.add_edge("SkeletonReconstructor", "ParticipantReconstructor")
+        # Basic Flow: Skeleton -> SkeletonChecker -> First Episode (Participant)
+        g.add_edge("SkeletonReconstructor", "SkeletonChecker")
+        g.add_edge("SkeletonChecker", "ParticipantReconstructor")
 
         # Intra-Episode Flow: Participant -> Transaction -> Episode
         g.add_edge("ParticipantReconstructor", "TransactionReconstructor")
@@ -580,7 +581,7 @@ class AgentEventBuilder(BaseBuilder):
                (Note: Usually routed via StageDescriptionReconstructor -> EventDescriptionReconstructor).
             """
             # Check total episodes in the plan
-            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            event_skeleton = self._get_event_skeleton(state)
             total_episodes = sum(
                 len(stage["episodes"]) for stage in event_skeleton["stages"]
             )
@@ -620,7 +621,7 @@ class AgentEventBuilder(BaseBuilder):
             2. If yes -> Go to `ParticipantReconstructor` (Start first episode of next stage).
             3. If no (all stages done) -> Go to `EventDescriptionReconstructor` (Final Summary).
             """
-            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            event_skeleton = self._get_event_skeleton(state)
             total_stages = len(event_skeleton["stages"])
             executed_stages = state["agent_executed"].count(
                 "StageDescriptionReconstructor"

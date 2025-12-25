@@ -128,6 +128,7 @@ Action:
 - If the input Skeleton is correct, return it as is.
 - If errors are found (e.g., time violations, missing stages, incorrect indices), YOU MUST CORRECT THEM.
 - **Correction Rules**:
+   - **Structure Preservation**: The output JSON must maintain the EXACT structure of the `ProposedSkeleton`. Do not add, remove, or rename any keys. Only values should be corrected.
    - All modifications must be strictly grounded in `Content`.
    - **Time Hierarchy Correction**: If a parent entity's `start_time` or `end_time` (e.g., Event or Stage) does not encompass its children (e.g., Stages or Episodes), **expand the parent's `start_time`/`end_time`** to cover the children, provided this is supported by `Content`.
      - Example (Event vs Stage): If Event `start_time` is 2024-02-01 but Stage 1 `start_time` is 2024-01-15, change Event `start_time` to 2024-01-15 (or earlier if content supports it).
@@ -152,6 +153,7 @@ Based on the Query, Keywords, Content, and the Proposed Skeleton, perform a comp
 Instructions:
 - Review the Proposed Skeleton against the Content and the Validation Checklist.
 - Correct any errors in hierarchy, timing, indexing, or naming.
+- **IMPORTANT**: Maintain the EXACT structure of the Proposed Skeleton. Do not add/remove fields.
 - Ensure the final output is a valid JSON object matching the Schema.
 
 === Query BEGIN ===
