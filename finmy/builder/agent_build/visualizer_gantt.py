@@ -690,6 +690,19 @@ class EventCascadeGanttVisualizer:
                     finish_val = start_val + pd.Timedelta(seconds=default_dur_sec)
                 else:
                     finish_val = finish
+                # Special case: Episode with start == finish (instant)
+                if (
+                    rtype == "Episode"
+                    and start is not None
+                    and finish is not None
+                    and start == finish
+                ):
+                    span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
+                    inst_ms = int(max(span_ms * 0.005, default_dur_sec * 1000 * 0.5))
+                    half = pd.to_timedelta(inst_ms // 2, unit="ms")
+                    start_val = start - half
+                    finish_val = start + half
+                    target_dur_ms = inst_ms
 
             duration_ms = (finish_val - start_val).total_seconds() * 1000
             if duration_ms <= 0:
@@ -918,6 +931,8 @@ class EventCascadeGanttVisualizer:
                     name=f"Stage: {sid}",
                     marker=dict(color="#ADD8E6", line=dict(color="black", width=1)),
                     hovertext=hovers,
+                    hoverinfo="text",
+                    hovertemplate="%{hovertext}<extra></extra>",
                     text=texts,
                     textposition="inside",
                     insidetextanchor="middle",
@@ -1031,6 +1046,28 @@ class EventCascadeGanttVisualizer:
                     line=dict(color="#ADD8E6", width=1, dash="dash"),
                 )
 
+        # Global label positions for overlap avoidance
+        global_label_positions = []
+        global_axis_label_gap = pd.Timedelta(seconds=total_span_sec * 0.02)
+
+        def get_label_y_with_overlap_check(x_val, base_y_units, step_y_units):
+            current_y = base_y_units
+            # Safety limit to avoid infinite loops
+            for _ in range(20):
+                collision = False
+                for entry in global_label_positions:
+                    # Check horizontal overlap
+                    if abs(x_val - entry["x"]) <= global_axis_label_gap:
+                        # Check vertical overlap (if current_y is close to entry['y'])
+                        if abs(current_y - entry["y"]) < step_y_units * 0.9:
+                            collision = True
+                            break
+                if not collision:
+                    global_label_positions.append({"x": x_val, "y": current_y})
+                    return current_y
+                current_y += step_y_units
+            return current_y
+
         # --- Plot Episodes (Y > 0) ---
         for sid in unique_stages:
             local_eps = sorted(
@@ -1041,14 +1078,14 @@ class EventCascadeGanttVisualizer:
                 continue
 
             x_durs, x_starts, y_pos, hovers, texts = [], [], [], [], []
+            bar_x_durs, bar_x_starts, bar_y_pos, bar_hovers = [], [], [], []
+            inst_x_durs, inst_x_starts, inst_y_pos, inst_hovers = [], [], [], []
             axis_start_points = []
             axis_end_points = []
             axis_inc = 0.03
             dot_base = 0.04
             text_base = 0.06
             axis_label_gap = pd.Timedelta(seconds=total_span_sec * 0.02)
-            axis_start_meta = []
-            axis_end_meta = []
             label_char_px = 5.0
             label_margin_px = 4.0
             axis_margin_px = 2.0
@@ -1076,6 +1113,23 @@ class EventCascadeGanttVisualizer:
                 # if is_imp:
                 #     lbl += " (?)"
                 texts.append(lbl)
+                is_inst = (
+                    r["Start"] is not None
+                    and r["Finish"] is not None
+                    and r["Start"] == r["Finish"]
+                )
+                if not is_inst:
+                    bar_x_starts.append(s_val)
+                    bar_x_durs.append(dur)
+                    bar_y_pos.append(y_val)
+                    bar_hovers.append(r["Description"])
+                else:
+                    margin_ms = int(max(1, round(dur * 0.08)))
+                    margin_td = pd.to_timedelta(margin_ms, unit="ms")
+                    inst_x_starts.append(s_val - margin_td)
+                    inst_x_durs.append(dur + 2 * margin_ms)
+                    inst_y_pos.append(y_val)
+                    inst_hovers.append(r["Description"])
 
                 # --- Participants ---
                 parts = r.get("Participants", [])
@@ -1246,23 +1300,48 @@ class EventCascadeGanttVisualizer:
             # Use fixed height 0.8 as defined in previous logic
             bar_height = 0.8
 
-            fig.add_trace(
-                go.Bar(
-                    x=x_durs,
-                    y=y_pos,
-                    base=x_starts,
-                    orientation="h",
-                    name=f"Episodes ({sid})",
-                    marker=dict(
-                        color="#e6f5c9", line=dict(color="black", width=1), opacity=0.9
-                    ),
-                    hovertext=hovers,
-                    text=None,
-                    legendgroup=sid,
-                    showlegend=False,
-                    width=bar_height,
+            if bar_x_durs:
+                fig.add_trace(
+                    go.Bar(
+                        x=bar_x_durs,
+                        y=bar_y_pos,
+                        base=bar_x_starts,
+                        orientation="h",
+                        name=f"Episodes ({sid})",
+                        marker=dict(
+                            color="#e6f5c9",
+                            line=dict(color="black", width=1),
+                            opacity=0.9,
+                        ),
+                        hovertext=bar_hovers,
+                        hoverinfo="text",
+                        hovertemplate="%{hovertext}<extra></extra>",
+                        text=None,
+                        legendgroup=sid,
+                        showlegend=False,
+                        width=bar_height,
+                    )
                 )
-            )
+            if inst_x_durs:
+                fig.add_trace(
+                    go.Bar(
+                        x=inst_x_durs,
+                        y=inst_y_pos,
+                        base=inst_x_starts,
+                        orientation="h",
+                        name=f"Episodes ({sid})",
+                        marker=dict(
+                            color="rgba(0,0,0,0)", line=dict(width=0), opacity=1.0
+                        ),
+                        hovertext=inst_hovers,
+                        hoverinfo="text",
+                        hovertemplate="%{hovertext}<extra></extra>",
+                        text=None,
+                        legendgroup=sid,
+                        showlegend=False,
+                        width=bar_height,
+                    )
+                )
 
             # Draw Relations (BEFORE Participants so lines are below dots)
             for (r_color, r_dash, r_name), segs in relation_segments.items():
@@ -1359,151 +1438,214 @@ class EventCascadeGanttVisualizer:
                 )
 
                 start_label_len = len(str(start_label))
-                start_width_px = max(1, start_label_len) * label_char_px
-                start_overlaps = [
-                    m
-                    for m in axis_start_meta
-                    if abs((start_ts - m["x"])) <= axis_label_gap
-                ]
-                start_raise_y = (
-                    sum(m["stack_y"] for m in start_overlaps) if start_overlaps else 0
-                )
                 start_unknown = (
-                    local_eps[j].get("StartUnknown") and local_eps[j]["Start"] is None
+                    local_eps[j]["StartUnknown"] and local_eps[j]["Start"] is None
                 )
                 start_dot_font_px = 9 if start_unknown else 11
                 start_text_font_px = 9
                 start_base_y = (axis_margin_px + start_dot_font_px) / px_per_unit
-                start_y0 = start_base_y + start_raise_y
+
+                # Calculate step height (dot + text + margins)
+                step_px = (
+                    axis_margin_px
+                    + start_dot_font_px
+                    + axis_margin_px
+                    + start_text_font_px
+                    + 8.0
+                )
+                step_y_units = step_px / px_per_unit
+
+                start_y0 = get_label_y_with_overlap_check(
+                    start_ts, start_base_y, step_y_units
+                )
                 start_text_y = (
                     start_y0 + (axis_margin_px + start_text_font_px) / px_per_unit
                 )
-                fig.add_shape(
-                    type="line",
-                    x0=start_ts,
-                    x1=start_ts,
-                    y0=start_y0,
-                    y1=y_pos[j],
-                    xref="x",
-                    yref="y",
-                    line=dict(color="#e6f5c9", width=1, dash="dash"),
+                is_instant = (
+                    local_eps[j]["Start"] is not None
+                    and local_eps[j]["Finish"] is not None
+                    and local_eps[j]["Start"] == local_eps[j]["Finish"]
                 )
-                fig.add_annotation(
-                    x=start_ts,
-                    y=start_y0,
-                    text=(
-                        "Unknown"
-                        if local_eps[j].get("StartUnknown")
-                        and local_eps[j]["Start"] is None
-                        else "●"
-                    ),
-                    showarrow=False,
-                    align="center",
-                    yanchor="middle",
-                    font=dict(
-                        size=(
-                            9
+                if is_instant:
+                    fig.add_shape(
+                        type="line",
+                        x0=mid_x,
+                        x1=mid_x,
+                        y0=start_y0,
+                        y1=y_pos[j],
+                        xref="x",
+                        yref="y",
+                        line=dict(color="#e6f5c9", width=1, dash="dash"),
+                        layer="above",
+                    )
+                    fig.add_annotation(
+                        x=mid_x,
+                        y=start_y0,
+                        text="●",
+                        showarrow=False,
+                        align="center",
+                        yanchor="middle",
+                        font=dict(size=11, color="#e6f5c9"),
+                    )
+                    dur_ms = x_durs[j]
+                    margin_td = pd.to_timedelta(
+                        int(max(1, round(dur_ms * 0.08))), unit="ms"
+                    )
+                    fig.add_shape(
+                        type="circle",
+                        x0=start_ts - margin_td,
+                        x1=end_ts + margin_td,
+                        y0=y_pos[j] - (0.8 / 2.0) - 0.06,
+                        y1=y_pos[j] + (0.8 / 2.0) + 0.06,
+                        xref="x",
+                        yref="y",
+                        line=dict(width=0),
+                        fillcolor="rgba(230,245,201,0.6)",
+                        layer="below",
+                    )
+                    fig.add_shape(
+                        type="circle",
+                        x0=start_ts - margin_td,
+                        x1=end_ts + margin_td,
+                        y0=y_pos[j] - (0.8 / 2.0) - 0.06,
+                        y1=y_pos[j] + (0.8 / 2.0) + 0.06,
+                        xref="x",
+                        yref="y",
+                        line=dict(color="#e6f5c9", width=1.5, dash="dash"),
+                        fillcolor="rgba(0,0,0,0)",
+                        layer="above",
+                    )
+                    center_label = (
+                        pd.Timestamp(mid_x).strftime(time_label_fmt)
+                        if isinstance(mid_x, (pd.Timestamp,))
+                        else str(mid_x)
+                    )
+                    fig.add_annotation(
+                        x=mid_x,
+                        y=start_text_y,
+                        text=center_label,
+                        showarrow=False,
+                        align="center",
+                        yanchor="top",
+                        font=dict(size=9, color="#222222"),
+                    )
+                else:
+                    fig.add_shape(
+                        type="line",
+                        x0=start_ts,
+                        x1=start_ts,
+                        y0=start_y0,
+                        y1=y_pos[j],
+                        xref="x",
+                        yref="y",
+                        line=dict(color="#e6f5c9", width=1, dash="dash"),
+                    )
+                    fig.add_annotation(
+                        x=start_ts,
+                        y=start_y0,
+                        text=(
+                            "Unknown"
                             if local_eps[j].get("StartUnknown")
                             and local_eps[j]["Start"] is None
-                            else 11
+                            else "●"
                         ),
-                        color="#e6f5c9",
-                    ),
-                )
-                fig.add_annotation(
-                    x=start_ts,
-                    y=start_text_y,
-                    text=(
-                        "Unknown"
-                        if local_eps[j].get("StartUnknown")
-                        and local_eps[j]["Start"] is None
-                        else start_label
-                    ),
-                    showarrow=False,
-                    align="center",
-                    yanchor="top",
-                    font=dict(size=9, color="#222222"),
-                )
-                axis_start_points.append(start_ts)
-                axis_start_meta.append(
-                    {
-                        "x": start_ts,
-                        "width_px": start_width_px,
-                        "stack_y": (start_width_px + label_margin_px) / px_per_unit,
-                    }
-                )
+                        showarrow=False,
+                        align="center",
+                        yanchor="middle",
+                        font=dict(
+                            size=(
+                                9
+                                if local_eps[j].get("StartUnknown")
+                                and local_eps[j]["Start"] is None
+                                else 11
+                            ),
+                            color="#e6f5c9",
+                        ),
+                    )
+                    fig.add_annotation(
+                        x=start_ts,
+                        y=start_text_y,
+                        text=(
+                            "Unknown"
+                            if local_eps[j].get("StartUnknown")
+                            and local_eps[j]["Start"] is None
+                            else start_label
+                        ),
+                        showarrow=False,
+                        align="center",
+                        yanchor="top",
+                        font=dict(size=9, color="#222222"),
+                    )
 
                 # --- End Time Line & Label ---
-                end_label_len = len(str(end_label))
-                end_width_px = max(1, end_label_len) * label_char_px
-                end_overlaps = [
-                    m for m in axis_end_meta if abs((end_ts - m["x"])) <= axis_label_gap
-                ]
-                end_raise_y = (
-                    sum(m["stack_y"] for m in end_overlaps) if end_overlaps else 0
-                )
                 end_unknown = (
-                    local_eps[j].get("FinishUnknown") and local_eps[j]["Finish"] is None
+                    local_eps[j]["FinishUnknown"] and local_eps[j]["Finish"] is None
                 )
                 end_dot_font_px = 9 if end_unknown else 11
                 end_text_font_px = 9
                 end_base_y = (axis_margin_px + end_dot_font_px) / px_per_unit
-                end_y0 = end_base_y + end_raise_y
-                end_text_y = end_y0 + (axis_margin_px + end_text_font_px) / px_per_unit
-                fig.add_shape(
-                    type="line",
-                    x0=end_ts,
-                    x1=end_ts,
-                    y0=end_y0,
-                    y1=y_pos[j],
-                    xref="x",
-                    yref="y",
-                    line=dict(color="#e6f5c9", width=1, dash="dash"),
+
+                # Calculate step height (dot + text + margins)
+                step_px = (
+                    axis_margin_px
+                    + end_dot_font_px
+                    + axis_margin_px
+                    + end_text_font_px
+                    + 8.0
                 )
-                fig.add_annotation(
-                    x=end_ts,
-                    y=end_y0,
-                    text=(
-                        "Unknown"
-                        if local_eps[j].get("FinishUnknown")
-                        and local_eps[j]["Finish"] is None
-                        else "●"
-                    ),
-                    showarrow=False,
-                    align="center",
-                    yanchor="middle",
-                    font=dict(
-                        size=(
-                            9
+                step_y_units = step_px / px_per_unit
+
+                end_y0 = get_label_y_with_overlap_check(
+                    end_ts, end_base_y, step_y_units
+                )
+                end_text_y = end_y0 + (axis_margin_px + end_text_font_px) / px_per_unit
+                if not is_instant:
+                    fig.add_shape(
+                        type="line",
+                        x0=end_ts,
+                        x1=end_ts,
+                        y0=end_y0,
+                        y1=y_pos[j],
+                        xref="x",
+                        yref="y",
+                        line=dict(color="#e6f5c9", width=1, dash="dash"),
+                    )
+                    fig.add_annotation(
+                        x=end_ts,
+                        y=end_y0,
+                        text=(
+                            "Unknown"
                             if local_eps[j].get("FinishUnknown")
                             and local_eps[j]["Finish"] is None
-                            else 11
+                            else "●"
                         ),
-                        color="#e6f5c9",
-                    ),
-                )
-                fig.add_annotation(
-                    x=end_ts,
-                    y=end_text_y,
-                    text=(
-                        "Unknown"
-                        if local_eps[j].get("FinishUnknown")
-                        and local_eps[j]["Finish"] is None
-                        else end_label
-                    ),
-                    showarrow=False,
-                    align="center",
-                    yanchor="top",
-                    font=dict(size=9, color="#222222"),
-                )
-                axis_end_points.append(end_ts)
-                axis_end_meta.append(
-                    {
-                        "x": end_ts,
-                        "width_px": end_width_px,
-                        "stack_y": (end_width_px + label_margin_px) / px_per_unit,
-                    }
-                )
+                        showarrow=False,
+                        align="center",
+                        yanchor="middle",
+                        font=dict(
+                            size=(
+                                9
+                                if local_eps[j].get("FinishUnknown")
+                                and local_eps[j]["Finish"] is None
+                                else 11
+                            ),
+                            color="#e6f5c9",
+                        ),
+                    )
+                    fig.add_annotation(
+                        x=end_ts,
+                        y=end_text_y,
+                        text=(
+                            "Unknown"
+                            if local_eps[j].get("FinishUnknown")
+                            and local_eps[j]["Finish"] is None
+                            else end_label
+                        ),
+                        showarrow=False,
+                        align="center",
+                        yanchor="top",
+                        font=dict(size=9, color="#222222"),
+                    )
 
                 if j + 1 < len(y_pos):
                     next_bottom = y_pos[j + 1] - (0.8 / 2.0)
