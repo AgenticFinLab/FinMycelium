@@ -14,8 +14,8 @@ from typing import List, Set, Dict, Any, Optional
 
 from finmy.builder.constant import (
     OTHER_TOKEN_NUM,
-    CLASS_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST,
-    AGENT_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST,
+    CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST,
+    AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST,
     BuildType,
 )
 
@@ -450,12 +450,12 @@ def estimate_complete_time(str_list: List[str], build_type: BuildType) -> int:
     if build_type == BuildType.CLASS_BUILD:
         return round(
             (build_input_length + OTHER_TOKEN_NUM)
-            * CLASS_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST
+            * CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
     if build_type == BuildType.AGENT_BUILD:
         return round(
             (build_input_length + OTHER_TOKEN_NUM)
-            * AGENT_BUILDE_ESTIMATE_PER_TOKEN_TIME_COST
+            * AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
     raise ValueError(f"Invalid build type: {build_type}") from ValueError(
         f"Invalid build type: {build_type}"
