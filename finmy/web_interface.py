@@ -45,6 +45,8 @@ from finmy.builder.agent_build.visualizer import EventCascadeVisualizer
 from finmy.builder.utils import estimate_complete_time
 from finmy.pipeline import FinmyPipeline
 from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+from finmy.builder.constant import BuildType
+
 
 
 
@@ -602,9 +604,9 @@ class FinMyceliumWebInterface:
             
             # Execute reconstruction with spinner
             with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results."):
-                st.write("Starting reconstruction...")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Starting reconstruction...")
                 results = self.perform_ai_analysis(analysis_inputs)
-                st.write("Reconstruction completed.")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Reconstruction completed.")
                 if results:
                     # Store results with timestamp for validation
                     st.session_state.analysis_results = results
@@ -649,22 +651,23 @@ class FinMyceliumWebInterface:
             return results
         except Exception as e:
             st.error(f"AI analysis error: {e}")
+            logging.error("AI analysis error: %s",traceback.format_exc())
             return None
 
     def event_reconstruction(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Construct detailed prompt for event reconstruction."""
         reconstruction_config = st.session_state.config
         main_search_input = inputs["main_input"]
-        keywords = inputs["keywords"]
+        keywords = inputs["keywords"] 
         structured_data = inputs["structured_data"] is not None
         search_query_content=main_search_input+" \n\nkeywords: "+" ".join(keywords)
-        st.write("Input has been processed.")
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Input has been processed.")
         # main_search_input -> summarizer -> refined description and keywords
 
         # keywords -> MediaCollector (Get media info) -> filter -> clean data
         # Test Platform Crawler Manager
         # There is still something wrong currently
-        # st.write("Testing: PlatformCrawler")
+        # st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Testing: PlatformCrawler")
         # try:
         #     print("=====================================")
         #     print("Testing: PlatformCrawler")
@@ -675,7 +678,7 @@ class FinMyceliumWebInterface:
         #     logger.info("Platform Crawler Manager test completed!")
         # except:
         #     print("PlatformCrawler: Error!")
-        # st.write("PlatformCrawler: Finished.")
+        # st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - PlatformCrawler: Finished.")
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
         # Bocha Search API test
         parser = URLParser(delay=2.0, use_selenium_fallback=True, selenium_wait_time=5)
@@ -687,19 +690,21 @@ class FinMyceliumWebInterface:
 
         logging.info("=====================================")
         logging.info("Bocha Search")
-        st.write("Start: Bocha Search")
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Start: Bocha Search")
         logging.info("=====================================")
         
         formatted_bocha_search_results_content=[]
         try:
-            
-            
             bocha_search_results = bochasearch_api(
                 search_query_content, summary=True, count=10
             )
+            logging.info(f"Bocha Search: Get {len(bocha_search_results['data']['webPages']['value'])} search results.")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Bocha Search: Get {len(bocha_search_results['data']['webPages']['value'])} search results.")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Bocha Search: Parsing...")
             # Print the search results to console for verification
             formatted_bocha_search_results = []
             for item in bocha_search_results["data"]["webPages"]["value"]:
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Bocha Search: Parsing {item['url']}")
                 formatted_item = {
                     "title": item["name"],
                     "url": item["url"],
@@ -741,25 +746,29 @@ class FinMyceliumWebInterface:
                 json.dump(
                     formatted_bocha_search_results, f, ensure_ascii=False, indent=4
                 )
-            st.write("Success: Bocha Search")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Success: Bocha Search")
             # print(formatted_bocha_search_results)
         except:
             logging.error("- ERROR - Bocha Search: Error!")
-            st.write("Error: Bocha Search")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Error: Bocha Search")
 
         
 
         logging.info("=====================================")
         logging.info("Baidu Search")
-        st.write("Start: Baidu Search")
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Start: Baidu Search")
         logging.info("=====================================")
         formatted_baidu_search_results_content=[]
         try:
             
             baidu_search_results = baidusearch_api(search_query_content)
+            logging.info(f"Baidu Search: Get {len(baidu_search_results['references'])} search results.")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Baidu Search: Get {len(baidu_search_results['references'])} search results.")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Baidu Search: Parsing...")
             formatted_baidu_search_results = []
             if "references" in baidu_search_results:
                 for item in baidu_search_results["references"]:
+                    st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Baidu Search: Parsing {item['url']}")
                     formatted_item = {
                         "title": item["title"],
                         "url": item["url"],
@@ -802,11 +811,11 @@ class FinMyceliumWebInterface:
                 json.dump(
                     formatted_baidu_search_results, f, ensure_ascii=False, indent=4
                 )
-            st.write("Success: Baidu Search")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Success: Baidu Search")
             # print(formatted_baidu_search_results)
         except:
             logging.error("- ERROR - Baidu Search: Error!")
-            st.write("Error: Baidu Search")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Error: Baidu Search")
 
 
 
@@ -814,7 +823,7 @@ class FinMyceliumWebInterface:
 
         logging.info("=====================================")
         logging.info("Structure Data Processing")
-        st.write("Start: Structure Data Processing")
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Start: Structure Data Processing")
         logging.info("=====================================")
         structure_data_urllink = []
         structure_data_filepath = []
@@ -826,8 +835,12 @@ class FinMyceliumWebInterface:
                 parser = URLParser(
                 delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
                 )
+                logging.info(f"Structure Data: Get {len(st.session_state.structured_data)} rows.")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Structure Data: Get {len(st.session_state.structured_data)} rows.")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Structure Data: Parsing...")
                 for index, row in st.session_state.structured_data.iterrows():
                     logging.info("Processing row %d: %s", index, row["url"] if row["url"] else "No URL")
+                    st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Structure Data: Parsing {row['url']}")
                     try:
                         title = row["title"] if row["title"] else "No Title"
                         url = row["url"] if row["url"] else "No URL"
@@ -891,9 +904,10 @@ class FinMyceliumWebInterface:
                         logging.info("Processing error: %s",row["url"] if row["url"] else "No URL Provided")
 
                 logging.info("Total rows processed: %d", len(st.session_state.structured_data))
-
+               
                 logging.info("=====================================")
                 logging.info("===== Structured Data URL Link =====")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Processing: Structured Data URL Link")
                 logging.info("=====================================")
                 # print(structure_data_urllink)
                 filepath = os.path.join(
@@ -913,6 +927,7 @@ class FinMyceliumWebInterface:
 
                 logging.info("=====================================")
                 logging.info("===== Structured Data Filepath =====")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Processing: Structured Data Filepath")
                 logging.info("=====================================")
                 # print(structure_data_filepath)
                 filepath = os.path.join(
@@ -933,21 +948,19 @@ class FinMyceliumWebInterface:
                             item_content += f.read()
                             # print(item_content)
                         structure_data_filepath_content.append(item_content)
-
-        
         except:
             logging.info("There is something wrong with structured data processing!")
 
         # info_to_analyze = cleaned and filtered data from above steps
         
         All_Text_Content = structure_data_urllink_content + structure_data_filepath_content + formatted_bocha_search_results_content + formatted_baidu_search_results_content
-        st.session_state.estimate_time = estimate_complete_time(str_list = All_Text_Content, build_type = reconstruction_config["builder_config"]["builder_type"])
-        st.write(f"Estimated time to complete: **{st.session_state.estimate_time} minutes**")
         All_Text_Content_filepath = os.path.join(
-                )    
+                save_dir, f"All_Text_Content_{timestamp}.json"
+            )
         with open(All_Text_Content_filepath, "w", encoding="utf-8") as f:
                     json.dump(All_Text_Content, f, ensure_ascii=False, indent=4)
    
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Processing: All_Text_Content")
         logging.info("All_Text_Content: %s", All_Text_Content)
         logging.info("Length of All_Text_Content List: %d", len(All_Text_Content))
         All_Text_Content_Count=0
@@ -963,13 +976,21 @@ class FinMyceliumWebInterface:
         logging.info("Length of All_Text_Content_Limit String: %d", All_Text_Content_Count_Limit)   
 
         logging.info("Builder_Pipeline")
-        
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Processing: Builder_Pipeline")
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Builder Type: **{st.session_state.config['builder_config']['builder_type']}**")
+
+        st.session_state.estimate_time = estimate_complete_time(str_list = All_Text_Content, build_type = st.session_state.config["builder_config"]["builder_type"])
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Estimated time to complete: **{st.session_state.estimate_time} minutes**")
         try:
             # Check the type of pipeline_result and return appropriate value based on the type
             logging.info("pipeline initialization ...")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - pipeline initialization ...")
             logging.info("config: %s", reconstruction_config)
             pipeline = FinmyPipeline(reconstruction_config)
             logging.info("pipeline is initialized")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - pipeline is initialized")
+            logging.info("Building......")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Building......")
             pipeline_result = pipeline.lm_build_pipeline_with_contents(
                 contents=All_Text_Content_Limit,
                 query_text=main_search_input,
@@ -981,7 +1002,8 @@ class FinMyceliumWebInterface:
             logging.info("pipeline_result:\n %s", pipeline_result)
 
             if pipeline_result:
-                
+                logging.info("Building completed.")
+                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Building completed.")
                 # If pipeline_result is a dictionary, return it directly
                 # If pipeline_result is a BuildOutput object, return its result attribute
                 if isinstance(pipeline_result, dict):
@@ -994,6 +1016,7 @@ class FinMyceliumWebInterface:
                     return pipeline_result
 
         except Exception as e:
+            st.error(f"Error during EventBuilder: {e}")
             logging.info(f"Error during EventBuilder: {e}")
             return None
 
