@@ -2,7 +2,20 @@
 Web interface for FinMycelium - Financial Event Reconstruction System
 Provides a user-friendly interface for reconstructing financial events
 through multiple data sources and AI-powered analysis.
+
+NOTE: This file has been refactored. The new implementation is in finmy/web_ui/.
+This file now imports from the refactored module for backward compatibility.
 """
+
+# Backward compatibility: Import from refactored module
+from finmy.web_ui.main import FinMyceliumWebInterface
+
+# Re-export for backward compatibility
+__all__ = ["FinMyceliumWebInterface"]
+
+
+# Legacy code below - kept for reference but not used
+# The actual implementation is now in finmy/web_ui/
 
 import os
 import re
@@ -39,8 +52,6 @@ from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualiz
 # Load environment variables
 load_dotenv()
 
-# Import project modules (with fallbacks for missing modules)
-
 
 class FinMyceliumWebInterface:
     """
@@ -52,31 +63,6 @@ class FinMyceliumWebInterface:
         """Initialize the web interface with configuration and state management."""
         self.setup_page_config()
         self.initialize_session_state()
-        # self.ai_client = None
-        # self.setup_ai_client()
-
-    # def setup_page_config(self):
-    #     """Configure Streamlit page settings for optimal user experience."""
-    #     st.set_page_config(
-    #         page_title="FinMycelium - Financial Event Reconstruction System",
-    #         page_icon="🕵️",
-    #         layout="wide",
-    #         initial_sidebar_state="expanded",
-    #         menu_items={
-    #             "Get Help": None,
-    #             "Report a bug": None,
-    #             "About": None,
-    #         },
-    #     )
-    #     hide_st_style = """
-    #         <style>
-    #         #MainMenu {visibility: hidden;}
-    #         footer {visibility: hidden;}
-    #         header {visibility: hidden;}
-    #         .stDeployButton {display: none;}
-    #         </style>
-    #         """
-    #     st.markdown(hide_st_style, unsafe_allow_html=True)
 
     def setup_page_config(self):
         """Configure Streamlit page settings for optimal user experience."""
@@ -118,17 +104,6 @@ class FinMyceliumWebInterface:
             st.session_state.estimate_time = None
         if "structured_data" not in st.session_state:
             st.session_state.structured_data = None
-
-    # def setup_ai_client(self):
-    #     """Initialize AI client with configuration from environment variables."""
-    #     try:
-    #         self.ai_client = OpenAI(
-    #             base_url="https://aihubmix.com/v1",
-    #             api_key=os.getenv("AIHUBMIX_API_KEY"),
-    #         )
-    #     except Exception as e:
-    #         st.error(f"Failed to initialize AI client: {e}")
-    #         self.ai_client = None
 
     def render_sidebar(self):
         """Render the sidebar with navigation and system information."""
@@ -729,22 +704,6 @@ class FinMyceliumWebInterface:
             + "** - Input has been processed."
         )
         # main_search_input -> summarizer -> refined description and keywords
-
-        # keywords -> MediaCollector (Get media info) -> filter -> clean data
-        # Test Platform Crawler Manager
-        # There is still something wrong currently
-        # st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Testing: PlatformCrawler")
-        # try:
-        #     print("=====================================")
-        #     print("Testing: PlatformCrawler")
-        #     print("=====================================")
-        #     platformcrawler = PlatformCrawler()
-        #     result = platformcrawler.run_crawler("wb", keywords, max_notes=5)
-        #     logger.info(f"Test result: {result}")
-        #     logger.info("Platform Crawler Manager test completed!")
-        # except:
-        #     print("PlatformCrawler: Error!")
-        # st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - PlatformCrawler: Finished.")
         # keywords -> SearchCollector+url_parser (Get web info) -> filter -> clean data
         # Bocha Search API test
         parser = URLParser(delay=2.0, use_selenium_fallback=True, selenium_wait_time=5)
@@ -786,7 +745,7 @@ class FinMyceliumWebInterface:
             )
             # Print the search results to console for verification
             formatted_bocha_search_results = []
-            for item in bocha_search_results["data"]["webPages"]["value"]:
+            for item in bocha_search_results["data"]["webPages"]["value"][:2]:
                 st.write(
                     "**"
                     + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1334,14 +1293,6 @@ class FinMyceliumWebInterface:
     def render_results_page_agent(self):
         """Render the agent-based event reconstruction results with vertical timeline visualization."""
         st.title("📋 Event Reconstruction Report")
-
-        # try:
-        #     builder_dir_path = r"EXPERIMENT\uTEST\Pipline\build_output_20251222130929900932"
-        #     with open(os.path.join(builder_dir_path, "FinalEventCascade.json"), "r", encoding="utf-8") as f:
-        #          st.session_state.analysis_results = json.load(f)
-        #     st.session_state.save_builder_dir_path = builder_dir_path
-        # except:
-        #     st.error("Error loading reconstruction results. Please check the pipeline output file.")
 
         # Check for empty results
         if not st.session_state.analysis_results:
@@ -3469,15 +3420,12 @@ class FinMyceliumWebInterface:
             self.render_about_page()
 
 
+# Legacy main function - now delegates to refactored version
 def main():
     """Main entry point for the FinMycelium web interface."""
-    try:
-        app = FinMyceliumWebInterface()
-        app.run()
-    except Exception as e:
-        traceback.print_exc()
-        st.error(f"Application error: {e}")
-        st.info("Please refresh the page and try again.")
+    from finmy.web_ui.main import main as refactored_main
+
+    refactored_main()
 
 
 if __name__ == "__main__":
