@@ -980,15 +980,15 @@ class FinMyceliumWebInterface:
         st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Builder Type: **{st.session_state.config['builder_config']['builder_type']}**")
 
         st.session_state.estimate_time = estimate_complete_time(str_list = All_Text_Content, build_type = st.session_state.config["builder_config"]["builder_type"])
-        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Estimated time to complete: **{st.session_state.estimate_time} minutes**")
+        st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + f"** - Estimated time to complete building: **{st.session_state.estimate_time} minutes**")
         try:
             # Check the type of pipeline_result and return appropriate value based on the type
-            logging.info("pipeline initialization ...")
-            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - pipeline initialization ...")
+            logging.info("Pipeline initialization ...")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Builing pipeline initialization ...")
             logging.info("config: %s", reconstruction_config)
             pipeline = FinmyPipeline(reconstruction_config)
-            logging.info("pipeline is initialized")
-            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - pipeline is initialized")
+            logging.info("Pipeline is initialized")
+            st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Building pipeline is initialized")
             logging.info("Building......")
             st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Building......")
             pipeline_result = pipeline.lm_build_pipeline_with_contents(
