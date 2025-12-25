@@ -2,11 +2,11 @@
 Input form components for data collection.
 """
 
-import streamlit as st
-import pandas as pd
-import traceback
 import logging
-from typing import Optional
+import traceback
+
+import pandas as pd
+import streamlit as st
 
 from finmy.web_ui.utils.validators import parse_keywords
 
@@ -100,7 +100,12 @@ class StructuredDataUpload:
 
                 st.session_state.structured_data = df
                 st.session_state.uploaded_file_name = uploaded_file.name
-            except Exception as e:
+            except (
+                ValueError,
+                pd.errors.EmptyDataError,
+                pd.errors.ParserError,
+                UnicodeDecodeError,
+            ) as e:
                 error_type = type(e).__name__
                 error_msg = str(e)
                 error_traceback = traceback.format_exc()
@@ -115,7 +120,8 @@ class StructuredDataUpload:
                 traceback.print_exc()
 
                 st.error(
-                    f"❌ Error processing file '{uploaded_file.name}': {error_type}: {error_msg}"
+                    f"❌ Error processing file '{uploaded_file.name}': "
+                    f"{error_type}: {error_msg}"
                 )
                 st.info("Please ensure the file format is correct and try again.")
 
@@ -125,22 +131,24 @@ class StructuredDataUpload:
         if uploaded_file.name.endswith(".csv"):
             try:
                 return pd.read_csv(uploaded_file, encoding="utf-8")
-            except UnicodeDecodeError as e1:
+            except UnicodeDecodeError:
                 try:
                     return pd.read_csv(uploaded_file, encoding="latin-1")
-                except UnicodeDecodeError as e2:
+                except UnicodeDecodeError:
                     try:
                         return pd.read_csv(uploaded_file, encoding="gbk")
                     except Exception as e3:
                         error_type_name = type(e3).__name__
                         logging.error(
-                            "Failed to decode CSV file with multiple encodings. Last error: %s: %s",
+                            "Failed to decode CSV file with multiple encodings. "
+                            "Last error: %s: %s",
                             error_type_name,
                             e3,
                         )
                         raise ValueError(
-                            f"Unable to decode CSV file with supported encodings (utf-8, latin-1, gbk): {e3}"
-                        )
+                            f"Unable to decode CSV file with supported encodings "
+                            f"(utf-8, latin-1, gbk): {e3}"
+                        ) from e3
             except Exception as e:
                 error_type = type(e).__name__
                 error_msg = str(e)
@@ -163,7 +171,7 @@ class StructuredDataUpload:
                     error_type,
                     error_msg,
                 )
-                raise ValueError(f"Failed to read Excel file: {error_msg}")
+                raise ValueError(f"Failed to read Excel file: {error_msg}") from e
         elif uploaded_file.name.endswith(".json"):
             try:
                 return pd.read_json(uploaded_file)
@@ -176,7 +184,7 @@ class StructuredDataUpload:
                     error_type,
                     error_msg,
                 )
-                raise ValueError(f"Failed to read JSON file: {error_msg}")
+                raise ValueError(f"Failed to read JSON file: {error_msg}") from e
         else:
             raise ValueError(f"Unsupported file type: {uploaded_file.name}")
 

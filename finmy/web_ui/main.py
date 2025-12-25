@@ -3,9 +3,10 @@ Main entry point for FinMycelium web interface.
 Refactored version with modular architecture.
 """
 
-import streamlit as st
-import traceback
 import logging
+import traceback
+
+import streamlit as st
 
 from finmy.web_ui.state import SessionStateManager
 from finmy.web_ui.components.sidebar import Sidebar
@@ -70,7 +71,7 @@ class FinMyceliumWebInterface:
                         ResultsPage.render()
             elif current_page == "About":
                 AboutPage.render()
-        except Exception as e:
+        except (AttributeError, KeyError, ValueError, RuntimeError) as e:
             error_type = type(e).__name__
             error_msg = str(e)
             error_traceback = traceback.format_exc()
@@ -92,7 +93,7 @@ def main():
     try:
         app = FinMyceliumWebInterface()
         app.run()
-    except Exception as e:
+    except (AttributeError, KeyError, ValueError, RuntimeError) as e:
         error_type = type(e).__name__
         error_msg = str(e)
         error_traceback = traceback.format_exc()

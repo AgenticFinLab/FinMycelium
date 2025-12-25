@@ -110,7 +110,13 @@ class DataCollectorService:
                 formatted_content.append(item_content)
 
             st.write(f"**{format_timestamp()}** - Success: Bocha Search")
-        except Exception as e:
+        except (
+            KeyError,
+            ValueError,
+            AttributeError,
+            ConnectionError,
+            TimeoutError,
+        ) as e:
             error_type = type(e).__name__
             error_msg = str(e)
             error_traceback = traceback.format_exc()
@@ -120,7 +126,8 @@ class DataCollectorService:
             traceback.print_exc()
 
             st.write(
-                f"**{format_timestamp()}** - Error: Bocha Search - {error_type}: {error_msg}"
+                f"**{format_timestamp()}** - Error: Bocha Search - "
+                f"{error_type}: {error_msg}"
             )
 
         return formatted_content
@@ -198,7 +205,13 @@ class DataCollectorService:
                 formatted_content.append(item_content)
 
             st.write(f"**{format_timestamp()}** - Success: Baidu Search")
-        except Exception as e:
+        except (
+            KeyError,
+            ValueError,
+            AttributeError,
+            ConnectionError,
+            TimeoutError,
+        ) as e:
             error_type = type(e).__name__
             error_msg = str(e)
             error_traceback = traceback.format_exc()
@@ -208,7 +221,8 @@ class DataCollectorService:
             traceback.print_exc()
 
             st.write(
-                f"**{format_timestamp()}** - Error: Baidu Search - {error_type}: {error_msg}"
+                f"**{format_timestamp()}** - Error: Baidu Search - "
+                f"{error_type}: {error_msg}"
             )
 
         return formatted_content
@@ -297,7 +311,13 @@ class DataCollectorService:
                             else {}
                         )
                         structure_data_filepath.append(row_dict)
-                except Exception as e:
+                except (
+                    KeyError,
+                    ValueError,
+                    AttributeError,
+                    FileNotFoundError,
+                    PermissionError,
+                ) as e:
                     error_type = type(e).__name__
                     error_msg = str(e)
                     error_traceback = traceback.format_exc()
@@ -355,7 +375,13 @@ class DataCollectorService:
                                 f"content:\n{f.read()}"
                             )
                             filepath_content.append(item_content)
-        except Exception as e:
+        except (
+            KeyError,
+            ValueError,
+            AttributeError,
+            FileNotFoundError,
+            PermissionError,
+        ) as e:
             error_type = type(e).__name__
             error_msg = str(e)
             error_traceback = traceback.format_exc()
@@ -367,7 +393,8 @@ class DataCollectorService:
             traceback.print_exc()
 
             st.write(
-                f"**{format_timestamp()}** - Error: Structured data processing failed - {error_type}: {error_msg}"
+                f"**{format_timestamp()}** - Error: Structured data processing "
+                f"failed - {error_type}: {error_msg}"
             )
 
         return url_link_content, filepath_content
