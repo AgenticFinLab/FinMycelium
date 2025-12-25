@@ -419,11 +419,12 @@ def extract_json_response(response_text: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse JSON from response: {e}") from e
 
 
-def estimate_complete_time(str_list: List[str], build_type: str | BuildType) -> int:
+def estimate_complete_time(str_list: List[str], build_type: str) -> int:
     """Estimate the time to complete the reconstruction based on the content strings.
 
     Parameters:
     - str_list: The list of the content in strings.
+    - build_type: The type of build, either "ClassEventBuilder" or "AgentEventBuilder".
 
     Returns:
     - The estimated time to complete the reconstruction in minutes.
@@ -447,14 +448,14 @@ def estimate_complete_time(str_list: List[str], build_type: str | BuildType) -> 
         else:
             last_word = i
             build_input_length += 1
-    if build_type == BuildType.CLASS_BUILD:
+    if build_type == BuildType.CLASS_BUILD.value:
         return round(
             (build_input_length + OTHER_TOKEN_NUM)
             * CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
-    if build_type == BuildType.AGENT_BUILD:
+    if build_type == BuildType.AGENT_BUILD.value:
         return round(
-            (build_input_length + OTHER_TOKEN_NUM)
+            (build_input_length + OTHER_TOKEN_NUM)  
             * AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
     raise ValueError(f"Invalid build type: {build_type}") from ValueError(
