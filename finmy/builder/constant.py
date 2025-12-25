@@ -4,8 +4,8 @@ from enum import Enum
 OTHER_TOKEN_NUM = 3000
 
 # Estimate the time to complete the reconstruction per token in minutes
-CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST = 1e-4
-AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST = 3e-4
+CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST = 1.5e-4
+AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST = 4e-4
 
 
 class BuildType(Enum):
