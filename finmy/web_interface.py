@@ -6,46 +6,32 @@ through multiple data sources and AI-powered analysis.
 
 import os
 import re
-import sys
-import asyncio
-import random
-import tempfile
-from pathlib import Path
-from loguru import logger
 import logging
-from typing import List, Dict, Any, Optional
-import pandas as pd
+from typing import List, Dict, Any
 import datetime
 import json
 import yaml
 import traceback
 
 import streamlit as st
-from streamlit_input_box import input_box
+# from streamlit_input_box import input_box
 from streamlit_option_menu import option_menu
 import pandas as pd
-from openai import OpenAI
 from dotenv import load_dotenv
-from sympy import test
 
-from lmbase.inference.api_call import LangChainAPIInference, InferInput
 from finmy.url_collector.SearchCollector.bocha_search import bochasearch_api
 from finmy.url_collector.SearchCollector.baidu_search import baidusearch_api
-from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
+# from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
 from finmy.url_collector.base import URLCollectorInput
 from finmy.url_collector.url_parser import URLParser
-from finmy.pdf_collector.pdf_collector import PDFCollector
-from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
 from finmy.url_collector.url_parser_clean import extract_content_from_parsed_content
-from finmy.builder.class_build.prompts.ponzi_scheme import ponzi_scheme_prompt
-# from finmy.pipeline import FinmyPipeline
-from finmy.builder.class_build.main_build import ClassEventBuilder
-import matplotlib.pyplot as plt
-from finmy.builder.agent_build.visualizer import EventCascadeVisualizer
-from finmy.builder.utils import estimate_complete_time
+from finmy.pdf_collector.pdf_collector import PDFCollector
+from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.pipeline import FinmyPipeline
+# from finmy.pipeline import FinmyPipeline
+from finmy.builder.utils import estimate_complete_time
 from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
-from finmy.builder.constant import BuildType
+
 
 
 
@@ -54,15 +40,8 @@ from finmy.builder.constant import BuildType
 load_dotenv()
 
 # Import project modules (with fallbacks for missing modules)
-try:
-    from db_manager import PDDataBaseManager
-except ImportError:
-    PDDataBaseManager = None
 
-try:
-    from generic import UserQueryInput,RawData,MetaSample,DataSample
-except ImportError:
-    GenericProcessor = None
+
 
 
 class FinMyceliumWebInterface:
@@ -259,13 +238,11 @@ class FinMyceliumWebInterface:
         """
         Render the analysis page with event type selection and data input options.
         Includes configuration file validation before proceeding to analysis inputs.
-        """
-        
+        """        
         # Configuration validation section - must pass before showing analysis inputs
         if "config_validated" not in st.session_state:
             st.session_state.config_validated = False
             st.session_state.config = None
-        
         # Display configuration section if not yet validated
         if not st.session_state.config_validated:
             st.title("Configuration Setup")
@@ -327,7 +304,6 @@ class FinMyceliumWebInterface:
                                     st.session_state.build_mode= "class_build"
                                 st.session_state.config_validated = True
                                 st.session_state.config_file_name = config_file_path.name
-                                
                                 # Clear file uploader and reload page
                                 st.rerun()
                     else:
@@ -336,10 +312,6 @@ class FinMyceliumWebInterface:
                             st.error(f"- {error}")
                         
                         st.warning("Please upload a valid configuration file with all required sections.")
-                        
-                except yaml.YAMLError as e:
-                    st.error(f"❌ Invalid YAML format: {str(e)}")
-                    st.info("Please check your YAML syntax and try again.")
                 except Exception as e:
                     st.error(f"❌ Error processing configuration: {str(e)}")
                     st.info("Please ensure the file is properly formatted.")
@@ -1039,7 +1011,6 @@ class FinMyceliumWebInterface:
             logging.info(f"Error during EventBuilder: {e}")
             return None
 
-
     def parse_analysis_results(
         self, analysis_text: str, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -1100,7 +1071,7 @@ class FinMyceliumWebInterface:
             ]
         )
 
-    def get_mock_analysis_results(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def get_mock_analysis_results(self) -> Dict[str, Any]:
         """Provide mock analysis results when AI service is unavailable."""
         return {
             "summary": "This is a mock analysis based on the provided inputs. In a real scenario, this would contain comprehensive AI-generated insights about the event, mechanisms, and prevention strategies.",
@@ -1147,7 +1118,8 @@ class FinMyceliumWebInterface:
         
         results = st.session_state.analysis_results
 
-        st.success(f"Success: Builder Files are saved to {st.session_state.save_builder_dir_path}")
+        unified_path= str(st.session_state.save_builder_dir_path).replace('\\','/')
+        st.success(f"Success: Builder Files are saved to {unified_path}")
 
         # --- 2. Initialize Visualizer ---
         logging.info("Initializing EventCascadeVisualizer...")

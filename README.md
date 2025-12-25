@@ -79,20 +79,20 @@ Streamlit-based interactive UI for analysis and visualization
 
 ### 📥 Data Collection
 
-| Feature | Description |
-|---------|-------------|
-| 🌐 **URL Collector** | Extract content from web pages with support for multiple parsing strategies |
-| 📄 **PDF Collector** | Process PDF documents with layout analysis and text extraction |
-| 📱 **Media Platform Support** | Collect data from Xiaohongshu, Douyin, Kuaishou, Bilibili, Weibo, and more |
-| 🔎 **Search Integration** | Baidu Search and Bocha Search API support |
+| Feature                      | Description                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| 🌐 **URL Collector**          | Extract content from web pages with support for multiple parsing strategies |
+| 📄 **PDF Collector**          | Process PDF documents with layout analysis and text extraction              |
+| 📱 **Media Platform Support** | Collect data from Xiaohongshu, Douyin, Kuaishou, Bilibili, Weibo, and more  |
+| 🔎 **Search Integration**     | Baidu Search and Bocha Search API support                                   |
 
 ### ⚙️ Data Processing
 
-| Feature | Description |
-|---------|-------------|
+| Feature                    | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
 | 🧠 **Intelligent Matching** | Multiple matching strategies (LLM-based, regex, vector-based) |
-| 📝 **Query Summarization** | Keyword extraction and query summarization using LLMs |
-| 🏗️ **Event Reconstruction** | Multi-agent pipeline for reconstructing financial events |
+| 📝 **Query Summarization**  | Keyword extraction and query summarization using LLMs         |
+| 🏗️ **Event Reconstruction** | Multi-agent pipeline for reconstructing financial events      |
 
 **Event Reconstruction includes:**
 - 🔹 Skeleton extraction (stages and episodes)
@@ -102,12 +102,12 @@ Streamlit-based interactive UI for analysis and visualization
 
 ### 🏛️ Architecture
 
-| Component | Description |
-|-----------|-------------|
-| 🔌 **Registry Pattern** | Dynamic component selection without code changes |
-| 🕸️ **LangGraph Integration** | Multi-agent orchestration with state management |
-| 💾 **Database Support** | MySQL/PostgreSQL integration for data persistence |
-| ⚙️ **Configuration-Driven** | YAML-based configuration for easy customization |
+| Component                   | Description                                       |
+| --------------------------- | ------------------------------------------------- |
+| 🔌 **Registry Pattern**      | Dynamic component selection without code changes  |
+| 🕸️ **LangGraph Integration** | Multi-agent orchestration with state management   |
+| 💾 **Database Support**      | MySQL/PostgreSQL integration for data persistence |
+| ⚙️ **Configuration-Driven**  | YAML-based configuration for easy customization   |
 
 ---
 
@@ -160,13 +160,13 @@ cp .env.example .env
 
 Edit `.env` with your configuration:
 
-| Category | Variables |
-|----------|-----------|
-| 🗄️ **Database** | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` |
-| 🤖 **LLM APIs** | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, etc. |
-| 🔎 **Search APIs** | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY` |
-| ⚡ **Redis** (optional) | `REDIS_HOST`, `REDIS_PORT` |
-| 🔀 **Proxy** (optional) | `PROXY_URL` |
+| Category               | Variables                                                |
+| ---------------------- | -------------------------------------------------------- |
+| 🗄️ **Database**         | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` |
+| 🤖 **LLM APIs**         | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, etc.               |
+| 🔎 **Search APIs**      | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY`           |
+| ⚡ **Redis** (optional) | `REDIS_HOST`, `REDIS_PORT`                               |
+| 🔀 **Proxy** (optional) | `PROXY_URL`                                              |
 
 > 💡 **Tip**: See `.env.example` for a complete list of required variables.
 
@@ -225,13 +225,77 @@ matcher = get_matcher("LXMatcher", config={"lm_name": "deepseek/deepseek-chat"})
 matches = matcher.match(match_input)
 ```
 
+
 ### 🌐 Web Interface
 
-Launch the Streamlit web interface:
+The FinMycelium web interface provides an intuitive, browser-based environment for financial event reconstruction through a user-friendly Streamlit application.
 
+#### 🚀 Quick Start Guide
+
+#### **Launch the Interface**
 ```bash
 streamlit run finmy/web_interface.py
 ```
+
+##### **Step-by-Step Workflow**
+
+1. **Navigation** → Click on **"Pipeline"** in the left sidebar
+2. **Configuration** → Upload and validate your YAML configuration file
+3. **Input Setup** → Provide:
+   - Event description in natural language
+   - Relevant keywords (comma-separated)
+   - Optional structured data files
+4. **Start Processing** → Click **"🚀 Start Reconstructing"** button
+5. **Wait for Completion** → Monitor progress on the same page
+6. **View Results** → Navigate to **"Results"** page after processing completes
+
+#### 📋 Data Requirements
+
+##### **Structured Data Files**
+- **Accepted Formats**: CSV, Excel (XLSX), JSON
+- **Required Columns**: Must include `title` and `url` columns
+- **URL Support**: Can be web URLs or local file paths (PDFs)
+
+##### **Keyword Input**
+- **Separators**: Use commas, semicolons, or spaces
+- **Example**: `financial fraud, ponzi scheme, investment scam`
+- **Language**: Supports both English and Chinese keywords
+
+##### **Configuration File**
+- **Format**: YAML (.yml or .yaml)
+- **Validation**: System checks for required sections before proceeding
+- **Template**: Use provided example configurations as reference
+
+#### ⚠️ Critical Usage Notes
+
+##### **Processing Restrictions**
+> **DO NOT navigate away** from the **Pipeline** page during reconstruction!
+- Page navigation or refresh will interrupt the process
+- Progress indicators will show timestamped updates
+- After interruption, you must **refresh the entire webpage** and restart
+
+##### **Timing Considerations**
+- Processing time varies with content volume (typically 5-30 minutes)
+- Estimated completion time will be displayed before processing starts
+- Large documents or multiple sources will increase processing time
+
+##### **System Requirements**
+- Stable internet connection for search API integration
+- Sufficient system memory for document processing
+- Modern web browser with JavaScript enabled
+
+##### **Output Management**
+- Results are automatically saved to timestamped directories
+- Download options available for both JSON data and visualizations
+- HTML timeline charts can be opened directly in browsers
+
+##### **Error Handling**
+- Invalid configurations will prevent processing start
+- Missing required data will trigger validation errors
+- Network errors will display clear notification messages
+
+> **Tip**: Start with a small test case to verify your setup before processing large datasets.
+
 
 ---
 
@@ -317,13 +381,13 @@ builder_config:
 
 The project uses environment variables for sensitive configuration. Key variables include:
 
-| Category | Variables | Required |
-|----------|-----------|----------|
-| 🗄️ **Database** | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` | Optional |
-| 🤖 **LLM APIs** | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` | Required |
-| 🔎 **Search APIs** | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY` | Optional |
-| ⚡ **Redis** | `REDIS_HOST`, `REDIS_PORT` | Optional |
-| 🔀 **Proxy** | `PROXY_URL` | Optional |
+| Category          | Variables                                                | Required |
+| ----------------- | -------------------------------------------------------- | -------- |
+| 🗄️ **Database**    | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` | Optional |
+| 🤖 **LLM APIs**    | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`                     | Required |
+| 🔎 **Search APIs** | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY`           | Optional |
+| ⚡ **Redis**       | `REDIS_HOST`, `REDIS_PORT`                               | Optional |
+| 🔀 **Proxy**       | `PROXY_URL`                                              | Optional |
 
 > 📖 See `.env.example` for a complete list of required variables.
 
@@ -383,10 +447,10 @@ We would like to thank the following projects and communities:
 
 <div align="center">
 
-| Resource | Link |
-|----------|------|
-| 🏠 **Repository** | [GitHub](https://github.com/AgenticFinLab/FinMycelium) |
-| 🐛 **Issues** | [GitHub Issues](https://github.com/AgenticFinLab/FinMycelium/issues) |
+| Resource         | Link                                                                 |
+| ---------------- | -------------------------------------------------------------------- |
+| 🏠 **Repository** | [GitHub](https://github.com/AgenticFinLab/FinMycelium)               |
+| 🐛 **Issues**     | [GitHub Issues](https://github.com/AgenticFinLab/FinMycelium/issues) |
 
 </div>
 

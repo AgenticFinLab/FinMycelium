@@ -104,7 +104,7 @@ matcher_config: &matcher_config
 #   This configuration will be passed to the builder instance
 # ----------------------------------------------------------------------------
 builder_config:
-  builder_type: "AgentEventBuilder"
+  builder_type: "ClassEventBuilder"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer
@@ -120,38 +120,44 @@ builder_config:
   #   Each agent can be independently configured with language model parameters,
   #   or reference the common configurations defined above (using * reference)
   agents:
-    SkeletonReconstructor:
-      lm_type: *lm_type
-      lm_name: *lm_name
-      inference_config: *infer
-      generation_config: *generation_config
+  SkeletonReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
 
-    ParticipantReconstructor:
-      lm_type: *lm_type
-      lm_name: *lm_name
-      inference_config: *infer
-      generation_config: *generation_config
+  SkeletonChecker:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
 
-    TransactionReconstructor:
-      lm_type: *lm_type
-      lm_name: *lm_name
-      inference_config: *infer
-      generation_config: *generation_config
+  ParticipantReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
 
-    EpisodeReconstructor:
-      lm_type: *lm_type
-      lm_name: *lm_name
-      inference_config: *infer
-      generation_config: *generation_config
+  TransactionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
 
-    StageDescriptionReconstructor:
-      lm_type: *lm_type
-      lm_name: *lm_name
-      inference_config: *infer
-      generation_config: *generation_config
+  EpisodeReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
 
-    EventDescriptionReconstructor:
-      lm_type: *lm_type
-      lm_name: *lm_name
-      inference_config: *infer
-      generation_config: *generation_config
+  StageDescriptionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  EventDescriptionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
