@@ -624,10 +624,11 @@ class FinMyceliumWebInterface:
             with st.spinner("🔄 Reconstruction in progress... Please do not navigate away from the **Pipeline** page. During this process, clicking on other menu bars or pages is invalid. Once the processing is complete, you can click on the **Results** page to view the final results."):
                 st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Starting reconstruction...")
                 results = self.perform_ai_analysis(analysis_inputs)
-                st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Reconstruction completed.")
+                
                 if results:
                     # Store results with timestamp for validation
                     st.session_state.analysis_results = results
+                    st.write("**"+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "** - Reconstruction completed.")
                     st.session_state.processing_status = "completed"
                     st.session_state.is_processing_blocked = False
                     # Use callback or flag to trigger page navigation
@@ -986,7 +987,7 @@ class FinMyceliumWebInterface:
         All_Text_Content_Limit = []
         for item in All_Text_Content:
             All_Text_Content_Count+=len(item)
-            if(All_Text_Content_Count<=100000):
+            if(All_Text_Content_Count<=st.session_state.config["all_content_config"]["max_content_length"]):
                 All_Text_Content_Limit.append(item)
                 All_Text_Content_Count_Limit = All_Text_Content_Count
         
