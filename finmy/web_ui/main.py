@@ -5,6 +5,7 @@ Refactored version with modular architecture.
 
 import streamlit as st
 import traceback
+import logging
 
 from finmy.web_ui.state import SessionStateManager
 from finmy.web_ui.components.sidebar import Sidebar
@@ -19,12 +20,12 @@ class FinMyceliumWebInterface:
     Main web interface class for FinMycelium financial event reconstruction system.
     Refactored with modular architecture for better maintainability.
     """
-    
+
     def __init__(self):
         """Initialize the web interface with configuration and state management."""
         self.setup_page_config()
         SessionStateManager.initialize()
-    
+
     def setup_page_config(self):
         """Configure Streamlit page settings for optimal user experience."""
         st.set_page_config(
@@ -38,20 +39,20 @@ class FinMyceliumWebInterface:
                 "About": None,
             },
         )
-    
+
     def run(self):
         """Main run method that handles routing and page rendering."""
         # Render sidebar
         Sidebar.render()
-        
+
         # Get current page
         current_page = st.session_state.get("current_page", "Home")
-        
+
         # Force Pipeline page if processing
         if st.session_state.get("processing_status") == "processing":
             current_page = "Pipeline"
             st.session_state.current_page = current_page
-        
+
         # Route to appropriate page
         try:
             if current_page == "Home":
@@ -70,8 +71,19 @@ class FinMyceliumWebInterface:
             elif current_page == "About":
                 AboutPage.render()
         except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+
+            logging.error(
+                "Error rendering page '%s': %s: %s", current_page, error_type, error_msg
+            )
+            logging.error("Traceback:\n%s", error_traceback)
             traceback.print_exc()
-            st.error(f"Error rendering page: {e}")
+
+            st.error(
+                f"Error rendering page '{current_page}': {error_type}: {error_msg}"
+            )
             st.info("Please refresh the page and try again.")
 
 
@@ -81,11 +93,17 @@ def main():
         app = FinMyceliumWebInterface()
         app.run()
     except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        error_traceback = traceback.format_exc()
+
+        logging.error("Application error: %s: %s", error_type, error_msg)
+        logging.error("Traceback:\n%s", error_traceback)
         traceback.print_exc()
-        st.error(f"Application error: {e}")
+
+        st.error(f"Application error: {error_type}: {error_msg}")
         st.info("Please refresh the page and try again.")
 
 
 if __name__ == "__main__":
     main()
-

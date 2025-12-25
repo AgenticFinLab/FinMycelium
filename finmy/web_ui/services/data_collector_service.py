@@ -7,7 +7,7 @@ import logging
 import datetime
 import json
 import traceback
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import streamlit as st
 
 from finmy.url_collector.SearchCollector.bocha_search import bochasearch_api
@@ -60,7 +60,7 @@ class DataCollectorService:
         try:
             bocha_search_results = bochasearch_api(search_query, summary=True, count=10)
             results_count = len(bocha_search_results["data"]["webPages"]["value"])
-            logging.info(f"Bocha Search: Get {results_count} search results.")
+            logging.info("Bocha Search: Get %d search results.", results_count)
             st.write(
                 f"**{format_timestamp()}** - Bocha Search: Get {results_count} search results."
             )
@@ -111,9 +111,17 @@ class DataCollectorService:
 
             st.write(f"**{format_timestamp()}** - Success: Bocha Search")
         except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+
+            logging.error("ERROR - Bocha Search failed: %s: %s", error_type, error_msg)
+            logging.error("Traceback:\n%s", error_traceback)
             traceback.print_exc()
-            logging.error("- ERROR - Bocha Search: Error!")
-            st.write(f"**{format_timestamp()}** - Error: Bocha Search")
+
+            st.write(
+                f"**{format_timestamp()}** - Error: Bocha Search - {error_type}: {error_msg}"
+            )
 
         return formatted_content
 
@@ -139,7 +147,7 @@ class DataCollectorService:
         try:
             baidu_search_results = baidusearch_api(search_query)
             results_count = len(baidu_search_results.get("references", []))
-            logging.info(f"Baidu Search: Get {results_count} search results.")
+            logging.info("Baidu Search: Get %d search results.", results_count)
             st.write(
                 f"**{format_timestamp()}** - Baidu Search: Get {results_count} search results."
             )
@@ -191,9 +199,17 @@ class DataCollectorService:
 
             st.write(f"**{format_timestamp()}** - Success: Baidu Search")
         except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+
+            logging.error("ERROR - Baidu Search failed: %s: %s", error_type, error_msg)
+            logging.error("Traceback:\n%s", error_traceback)
             traceback.print_exc()
-            logging.error("- ERROR - Baidu Search: Error!")
-            st.write(f"**{format_timestamp()}** - Error: Baidu Search")
+
+            st.write(
+                f"**{format_timestamp()}** - Error: Baidu Search - {error_type}: {error_msg}"
+            )
 
         return formatted_content
 
@@ -224,7 +240,7 @@ class DataCollectorService:
             if structured_data is None:
                 return url_link_content, filepath_content
 
-            logging.info(f"Structure Data: Get {len(structured_data)} rows.")
+            logging.info("Structure Data: Get %d rows.", len(structured_data))
             st.write(
                 f"**{format_timestamp()}** - Structure Data: Get {len(structured_data)} rows."
             )
@@ -234,14 +250,13 @@ class DataCollectorService:
                 logging.info(
                     "Processing row %d: %s",
                     index,
-                    row["url"] if row["url"] else "No URL",
+                    row.get("url", "No URL") if row.get("url") else "No URL",
                 )
                 st.write(
                     f"**{format_timestamp()}** - Structure Data: Parsing {row['url']}"
                 )
 
                 try:
-                    title = row["title"] if row["title"] else "No Title"
                     url = row["url"] if row["url"] else "No URL"
 
                     if not isinstance(url, str):
@@ -283,11 +298,20 @@ class DataCollectorService:
                         )
                         structure_data_filepath.append(row_dict)
                 except Exception as e:
-                    traceback.print_exc()
-                    logging.info(
-                        "Processing error: %s",
-                        row["url"] if row["url"] else "No URL Provided",
+                    error_type = type(e).__name__
+                    error_msg = str(e)
+                    error_traceback = traceback.format_exc()
+                    row_url = row["url"] if row["url"] else "No URL Provided"
+
+                    logging.error(
+                        "Processing error for row %d (URL: %s): %s: %s",
+                        index,
+                        row_url,
+                        error_type,
+                        error_msg,
                     )
+                    logging.error("Traceback:\n%s", error_traceback)
+                    traceback.print_exc()
 
             # Save and format URL link data
             if structure_data_urllink:
@@ -332,7 +356,18 @@ class DataCollectorService:
                             )
                             filepath_content.append(item_content)
         except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+
+            logging.error(
+                "Error in structured data processing: %s: %s", error_type, error_msg
+            )
+            logging.error("Traceback:\n%s", error_traceback)
             traceback.print_exc()
-            logging.info("There is something wrong with structured data processing!")
+
+            st.write(
+                f"**{format_timestamp()}** - Error: Structured data processing failed - {error_type}: {error_msg}"
+            )
 
         return url_link_content, filepath_content

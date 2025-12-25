@@ -4,6 +4,7 @@ Event reconstruction service.
 
 import os
 import logging
+import traceback
 import datetime
 import json
 from typing import Dict, Any, List
@@ -173,9 +174,14 @@ class ReconstructionService:
             
             return None
         except Exception as e:
-            import traceback
+            error_type = type(e).__name__
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+            
+            logging.error("Error during EventBuilder: %s: %s", error_type, error_msg)
+            logging.error("Traceback:\n%s", error_traceback)
             traceback.print_exc()
-            st.error(f"Error during EventBuilder: {e}")
-            logging.info(f"Error during EventBuilder: {e}")
+            
+            st.error(f"❌ Error during EventBuilder: {error_type}: {error_msg}")
             return None
 

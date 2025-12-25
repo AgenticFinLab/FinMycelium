@@ -5,6 +5,7 @@ Configuration file uploader component.
 import streamlit as st
 import yaml
 import traceback
+import logging
 from typing import Dict, Any, Optional, Tuple
 
 from finmy.web_ui.utils.validators import validate_config
@@ -80,9 +81,16 @@ class ConfigUploader:
                             "Please upload a valid configuration file with all required sections."
                         )
                 except Exception as e:
+                    error_type = type(e).__name__
+                    error_msg = str(e)
+                    error_traceback = traceback.format_exc()
+                    
+                    logging.error("Error processing configuration file: %s: %s", error_type, error_msg)
+                    logging.error("Traceback:\n%s", error_traceback)
                     traceback.print_exc()
-                    st.error(f"❌ Error processing configuration: {str(e)}")
-                    st.info("Please ensure the file is properly formatted.")
+                    
+                    st.error(f"❌ Error processing configuration: {error_type}: {error_msg}")
+                    st.info("Please ensure the file is properly formatted YAML.")
             
             if config_file_path is None:
                 st.info("Please upload a configuration file to proceed.")

@@ -4,6 +4,7 @@ Pipeline/analysis page renderer.
 
 import streamlit as st
 import traceback
+import logging
 import datetime
 
 from finmy.web_ui.components.config_uploader import ConfigUploader
@@ -176,8 +177,15 @@ class PipelinePage:
                     st.session_state.processing_status = "error"
         
         except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+            
+            logging.error("Reconstruction failed: %s: %s", error_type, error_msg)
+            logging.error("Traceback:\n%s", error_traceback)
             traceback.print_exc()
-            st.error(f"❌ Reconstruction failed: {str(e)}")
+            
+            st.error(f"❌ Reconstruction failed: {error_type}: {error_msg}")
             st.session_state.processing_status = "error"
         
         finally:
