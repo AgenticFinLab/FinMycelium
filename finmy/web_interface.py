@@ -1209,8 +1209,8 @@ class FinMyceliumWebInterface:
                 query_text=main_search_input,
                 key_words=keywords,
             )
-            st.session_state.save_builder_dir_path = pipeline.save_dir
-            
+            st.session_state.save_builder_dir_path = pipeline.builder.save_dir
+
             logging.info("type of pipeline_result: %s", type(pipeline_result))
             logging.info("pipeline_result:\n %s", pipeline_result)
 
