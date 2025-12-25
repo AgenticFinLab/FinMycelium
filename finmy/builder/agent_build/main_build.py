@@ -14,7 +14,14 @@ Execution Flow:
      using `VerifiableField` for applicable fields.
    - Note: Only structure fields are generated (no descriptions at this step).
 
-2) Episode Loop (per episode in skeleton order)
+2) Skeleton Verification
+   - Agent: `SkeletonChecker`
+   - Goal: Audit and correct the initial skeleton.
+   - Input: `ProposedSkeleton` from step 1, plus `Content`, `Query`, `Keywords`.
+   - Action: Validates time hierarchy, consistency, and completeness. Corrects errors while strictly maintaining JSON structure.
+   - Critical: The output of this agent becomes the definitive skeleton for all subsequent steps.
+
+3) Episode Loop (per episode in CORRECTED skeleton order)
    a) `ParticipantReconstructor`
       - Identifies and reconstructs episode participants (including `Action`s).
       - Reuses participant IDs across episodes via already reconstructed participants.
@@ -26,13 +33,13 @@ Execution Flow:
       - Emits placeholders for `participants` and `transactions` to avoid duplication,
         which are later replaced during integration.
 
-3) Description Reconstruction
+4) Description Reconstruction
    - `StageDescriptionReconstructor`: Runs once after finishing all episodes within a stage.
      Produces grounded stage `descriptions` based on reconstructed episodes plus source content.
    - `EventDescriptionReconstructor`: Runs once after all stages are completed.
      Produces grounded event `descriptions` based on the full cascade plus source content.
 
-4) Integration
+5) Integration
    - `integrate_results`: Consolidates all agent outputs into a complete `EventCascade`.
      Replaces episode placeholders with actual participants/transactions, attaches stage
      and event descriptions, and preserves the skeleton’s ordering.
@@ -41,7 +48,7 @@ Execution Flow:
 
 Architecture:
 - Orchestration: `LangGraph` (`StateGraph`) with conditional routing:
-  Skeleton -> (Participant -> Transaction -> Episode)* -> StageDescription (per-stage) -> EventDescription -> END.
+  Skeleton -> SkeletonChecker -> (Participant -> Transaction -> Episode)* -> StageDescription (per-stage) -> EventDescription -> END.
 - Schema text: Derived from `structure.py`, filtered per-agent scope via `filter_dataclass_fields`.
 - State: `AgentState` carries prompts, inputs, and incremental results throughout the pipeline.
 """
@@ -147,14 +154,15 @@ _EVENT_DESCRIPTION_SPEC = filter_dataclass_fields(
 class AgentEventBuilder(BaseBuilder):
     """Integrated builder that performs the full event reconstruction pipeline:
     1. SkeletonReconstruction: Generates the overall event structure (EventCascade).
-    2. Loop over Episodes:
+    2. SkeletonChecker: Validates and corrects the skeleton structure and timeline.
+    3. Loop over Episodes (based on Checked Skeleton):
         a. ParticipantReconstruction: Identifies participants for the current episode.
         b. TransactionReconstructor: Reconstructs transactions for the current episode.
         c. EpisodeReconstruction: Reconstructs the full episode using the skeleton, participants, and transactions.
-    3. StageDescriptionReconstructor:
+    4. StageDescriptionReconstructor:
         - Runs after completing all episodes within a stage.
         - Produces grounded `descriptions` for the stage using reconstructed episodes plus source content.
-    4. EventDescriptionReconstructor:
+    5. EventDescriptionReconstructor:
         - Runs after all stages are complete.
         - Produces grounded `descriptions` for the entire event using the full cascade plus source content.
     """
@@ -486,13 +494,19 @@ class AgentEventBuilder(BaseBuilder):
            - Generates the high-level `EventCascade` structure (Stages -> Episodes) based on user query and content.
            - Defines the roadmap for the entire reconstruction.
 
-        2. **Episode Loop (Participant -> Transaction -> Episode)**:
-           - Iterates through each episode defined in the skeleton.
+        2. **SkeletonChecker**:
+           - Runs immediately after SkeletonReconstructor.
+           - Audits the proposed skeleton against Content and Schema.
+           - Corrects time inconsistencies, hierarchy issues, and completeness.
+           - **Crucial**: Its output serves as the authoritative ground truth for all downstream agents.
+
+        3. **Episode Loop (Participant -> Transaction -> Episode)**:
+           - Iterates through each episode defined in the **verified** skeleton.
            - **ParticipantReconstructor**: Identifies participants for the current episode.
            - **TransactionReconstructor**: Identifies transactions, linking the participants.
            - **EpisodeReconstructor**: Synthesizes full episode details (time, description, relations).
 
-        3. **Stage Description Loop**:
+        4. **StageDescription Loop**:
            - **Trigger Condition**: After an episode is completed (`EpisodeReconstructor`), the system checks if a stage boundary is reached.
            - **StageDescriptionReconstructor**:
              - Runs *only* when all episodes in a specific stage are fully reconstructed.
@@ -501,7 +515,7 @@ class AgentEventBuilder(BaseBuilder):
                - If more stages exist: Loops back to `ParticipantReconstructor` to start the next stage's first episode.
                - If all stages are done: Proceeds to `EventDescriptionReconstructor`.
 
-        4. **EventDescriptionReconstructor**:
+        5. **EventDescriptionReconstructor**:
            - **Final Node** (before END).
            - Runs after all stages and episodes are fully reconstructed.
            - Synthesizes the global event description based on the complete cascade.
