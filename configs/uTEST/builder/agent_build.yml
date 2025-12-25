@@ -20,6 +20,12 @@ agents:
     inference_config: *infer
     generation_config: *generation_config
 
+  SkeletonChecker:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
   ParticipantReconstructor:
     lm_type: *lm_type
     lm_name: *lm_name

@@ -99,6 +99,79 @@ CRITICAL Time Constraints:
 """.strip()
 
 
+SkeletonCheckerSys = """
+You are a senior expert in financial event verification and data quality assurance. Your task is to audit and correct the Skeleton of a financial event (EventCascade) strictly based on Query, Keywords, and Content.
+
+Scope:
+- Verify the logical consistency and correctness of the Event, Stages, and Episodes structure.
+- Ensure strict adherence to the provided Schema.
+- Focus heavily on **Time Consistency**, **Hierarchy**, and **Completeness** based on the provided `Query`, `Keywords`, and `Content`.
+
+Validation Checklist:
+1. **Hierarchy & Containment**:
+   - Event start_time/end_time must encompass all Stage start_time/end_time.
+   - Stage start_time/end_time must encompass all Episode start_time/end_time within that stage.
+   - Indices (index_in_event, index_in_stage) must be sequential (0, 1, 2...) and correspond to chronological order.
+   - IDs (stage_id, episode_id) must be unique and stable.
+
+2. **Time Accuracy & Logic**:
+   - Timestamps must be grounded in `Content`.
+   - start_time <= end_time for all entities.
+   - No illogical overlaps (e.g., Stage 2 starting before Stage 1 ends, unless parallel logic is explicitly supported by content).
+   - Format must be ISO 8601 (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`).
+
+3. **Completeness & Alignment**:
+   - The breakdown of Stages and Episodes must fully cover the key phases described in `Content` and requested by `Query`/`Keywords`.
+   - Names should be descriptive and relevant.
+
+Action:
+- If the input Skeleton is correct, return it as is.
+- If errors are found (e.g., time violations, missing stages, incorrect indices), YOU MUST CORRECT THEM.
+- **Correction Rules**:
+   - All modifications must be strictly grounded in `Content`.
+   - **Time Hierarchy Correction**: If a parent entity's `start_time` or `end_time` (e.g., Event or Stage) does not encompass its children (e.g., Stages or Episodes), **expand the parent's `start_time`/`end_time`** to cover the children, provided this is supported by `Content`.
+     - Example (Event vs Stage): If Event `start_time` is 2024-02-01 but Stage 1 `start_time` is 2024-01-15, change Event `start_time` to 2024-01-15 (or earlier if content supports it).
+     - Example (Stage vs Episode): If Stage 1 `end_time` is 2024-03-01 but its last Episode `end_time` is 2024-03-05, change Stage 1 `end_time` to 2024-03-05.
+   - If data is missing in `Content` to verify a field, ensure it is marked as "unknown" rather than fabricated.
+
+Schema definition (must follow exactly):
+=== BEGIN Schema ===
+{STRUCTURE_SPEC}
+=== END Schema ===
+
+Output requirements:
+- Output a single raw JSON object for `EventCascade` (the corrected version) that matches the Schema exactly.
+- **Structure Maintenance**: The output JSON structure must be IDENTICAL to the `ProposedSkeleton`. Do not add or remove fields.
+- **Content Integrity**: Only modify field values in the `ProposedSkeleton` where corrections are necessary based on `Content`, `Query`, `Keywords`. Keep correct parts unchanged.
+- Do not include explanations, code fences, or additional text.
+"""
+
+SkeletonCheckerUser = """
+Based on the Query, Keywords, Content, and the Proposed Skeleton, perform a comprehensive check and correction.
+
+Instructions:
+- Review the Proposed Skeleton against the Content and the Validation Checklist.
+- Correct any errors in hierarchy, timing, indexing, or naming.
+- Ensure the final output is a valid JSON object matching the Schema.
+
+=== Query BEGIN ===
+{Query}
+=== Query END ===
+
+=== KEYWORDS BEGIN ===
+{Keywords}
+=== KEYWORDS END ===
+
+=== CONTENT BEGIN ===
+{Content}
+=== CONTENT END ===
+
+=== PROPOSED SKELETON BEGIN ===
+{ProposedSkeleton}
+=== PROPOSED SKELETON END ===
+""".strip()
+
+
 StageDescriptionReconstructorSys = """
 You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the **Target Stage** of a financial event, strictly based on the provided `Content`, guided by `Query` and `Keywords`.
 
@@ -126,18 +199,19 @@ Schema:
 
 
 StageDescriptionReconstructorUser = """
-Based on the provided TargetStage (with fully reconstructed Episodes), Query, Keywords, and Content, generate the `descriptions` for this Stage.
+Based on the provided TargetStage (with fully reconstructed Episodes), Query, Keywords, and Content, generate the `descriptions` for the stage.
 
 Inputs:
-- TargetStage: The stage structure with completed episodes.
+- TargetStage: The stage structure with its episodes populated (participants, transactions).
 - Query, Keywords, Content.
 
 Output:
-- A JSON object with `descriptions`.
+- A JSON object with a single key `descriptions` containing a list of `VerifiableField` objects.
 
 Instructions:
-- Analyze the `TargetStage` and its episodes to understand the flow and draft cohesive descriptions.
-- Ensure alignment with the user's Query and Keywords and ground everything in `Content`.
+- Analyze the `TargetStage` episodes to understand what happened.
+- Synthesize a high-level description for the stage itself.
+- Ensure alignment with the user's Query and Keywords.
 
 === TARGET STAGE BEGIN ===
 {TargetStage}
@@ -158,15 +232,16 @@ Instructions:
 
 
 EventDescriptionReconstructorSys = """
-You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the overall **Event Cascade**, strictly based on the provided `Content`, guided by `Query` and `Keywords`.
+You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the **Entire Event** strictly based on the provided `Content`, guided by `Query` and `Keywords`.
 
-The `EventCascade` is provided with all Stages and Episodes fully reconstructed. Treat these reconstructed elements as crucial reference and foundational inputs for description reconstruction; use them, together with `Query`, `Keywords`, and especially `Content`, to produce the event `descriptions`.
+The `EventCascade` is provided with all its stages and episodes fully reconstructed. Treat these as the foundational structure.
 
 Output a JSON object with a single key `descriptions`:
-`descriptions`: A list of `VerifiableField` objects describing the entire event.
+`descriptions`: A list of `VerifiableField` objects describing the overall event.
 
 Scope:
-- **Event Description**: Present the entire event lifecycle across all stages. Summarize the root cause, key developments, final resolution/outcome, and total financial impact.
+- **Event Description**: Summarize the entire event's lifecycle, key turning points, major participants, and financial impact.
+- Synthesize insights from all stages to form a cohesive narrative.
 
 Constraints:
 - Use `VerifiableField` for all descriptions to ensure grounding in `Content`.

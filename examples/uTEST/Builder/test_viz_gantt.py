@@ -17,6 +17,7 @@ def test_gantt():
         "EXPERIMENT/uTEST/StepBuilderDemo1/FinalEventCascade.json",
         "EXPERIMENT/uTEST/StepBuilderDemo2/FinalEventCascade.json",
         "EXPERIMENT/uTEST/StepBuilderDemo3/FinalEventCascade.json",
+        "EXPERIMENT/uTEST/StepBuilderDemo4/FinalEventCascade.json",
     ]
     viz = EventCascadeGanttVisualizer()
 

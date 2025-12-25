@@ -120,8 +120,12 @@ def main():
 
     for name in agent_names:
         if "skeleton" in name.lower():
-            agent_system_msgs[name] = EventLayoutReconstructorSys
-            agent_user_msgs[name] = EventLayoutReconstructorUser
+            if "checker" in name.lower():
+                agent_system_msgs[name] = SkeletonCheckerSys
+                agent_user_msgs[name] = SkeletonCheckerUser
+            else:
+                agent_system_msgs[name] = EventLayoutReconstructorSys
+                agent_user_msgs[name] = EventLayoutReconstructorUser
         if "participant" in name.lower():
             agent_system_msgs[name] = ParticipantReconstructorSys
             agent_user_msgs[name] = ParticipantReconstructorUser

@@ -159,6 +159,19 @@ class AgentEventBuilder(BaseBuilder):
         - Produces grounded `descriptions` for the entire event using the full cascade plus source content.
     """
 
+    def _get_event_skeleton(self, state: AgentState) -> dict:
+        """
+        Retrieves the definitive event skeleton.
+        Prioritizes SkeletonChecker result if available, otherwise SkeletonReconstructor.
+        """
+        # Search for SkeletonChecker result in agent_results
+        for res in state["agent_results"]:
+            if "SkeletonChecker" in res:
+                return res["SkeletonChecker"]
+
+        # Fallback to SkeletonReconstructor (should be at index 0)
+        return state["agent_results"][0]["SkeletonReconstructor"]
+
     def extract_latest_episode(
         self,
         event_skeleton: dict,
@@ -180,7 +193,7 @@ class AgentEventBuilder(BaseBuilder):
         Determines if a stage has just been completed based on the number of executed episodes.
         Returns the index of the completed stage, or -1 if no stage boundary was just crossed.
         """
-        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+        event_skeleton = self._get_event_skeleton(state)
         # Count total episodes completed so far (assuming EpisodeReconstructor is the last step per episode loop)
         episodes_completed = state["agent_executed"].count("EpisodeReconstructor")
 
@@ -206,7 +219,7 @@ class AgentEventBuilder(BaseBuilder):
 
         Returns a deep-copied EventCascade object with participants filled.
         """
-        event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+        event_skeleton = self._get_event_skeleton(state)
         skeleton_copy = copy.deepcopy(event_skeleton)
 
         pr_results = [
@@ -274,6 +287,15 @@ class AgentEventBuilder(BaseBuilder):
         if agent_name == "SkeletonReconstructor":
             sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
+        elif agent_name == "SkeletonChecker":
+            # Pass the previous Skeleton as context
+            # It should be the first result
+            skeleton_result = state["agent_results"][0]["SkeletonReconstructor"]
+            prompt_kwargs["ProposedSkeleton"] = json.dumps(
+                skeleton_result, default=str, indent=2
+            )
+            sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
+
         elif agent_name == "StageDescriptionReconstructor":
             # Identify which stage we just finished
             # We can rely on the number of times StageDescriptionReconstructor has run?
@@ -283,7 +305,7 @@ class AgentEventBuilder(BaseBuilder):
 
             stage_idx = state["agent_executed"].count("StageDescriptionReconstructor")
             savename_suffix = f"-Stage{stage_idx}"
-            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            event_skeleton = self._get_event_skeleton(state)
 
             # We need to construct the "TargetStage" with all episodes filled in.
             # First, get the skeleton of the target stage
@@ -330,7 +352,7 @@ class AgentEventBuilder(BaseBuilder):
             # similar to integrate_results but without the final descriptions yet
 
             # Start with skeleton
-            event_skeleton = state["agent_results"][0]["SkeletonReconstructor"]
+            event_skeleton = self._get_event_skeleton(state)
             full_cascade = copy.deepcopy(event_skeleton)
 
             # Collect all episodes
@@ -497,6 +519,10 @@ class AgentEventBuilder(BaseBuilder):
         g.add_node(
             "SkeletonReconstructor",
             partial(self.execute_agent, agent_name="SkeletonReconstructor"),
+        )
+        g.add_node(
+            "SkeletonChecker",
+            partial(self.execute_agent, agent_name="SkeletonChecker"),
         )
 
         # Episode Level Agents
@@ -711,7 +737,6 @@ class AgentEventBuilder(BaseBuilder):
             final_cascade["descriptions"] = res["descriptions"]
 
         return final_cascade
-        
 
     def get_save_dir_path(self) -> str:
         """
