@@ -70,6 +70,10 @@ pdf_collector_config:
   check_pdf_limits: True
   retry_failed: True
   env_file: ".env"
+
+all_content_config:
+  max_content_length: 60000
+
 # ----------------------------------------------------------------------------
 # Component Type Configuration
 # ----------------------------------------------------------------------------
@@ -100,7 +104,7 @@ matcher_config: &matcher_config
 #   This configuration will be passed to the builder instance
 # ----------------------------------------------------------------------------
 builder_config:
-  builder_type: "ClassEventBuilder"
+  builder_type: "AgentEventBuilder"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer
