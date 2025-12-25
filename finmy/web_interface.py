@@ -78,6 +78,30 @@ class FinMyceliumWebInterface:
         # self.ai_client = None
         # self.setup_ai_client()
 
+    # def setup_page_config(self):
+    #     """Configure Streamlit page settings for optimal user experience."""
+    #     st.set_page_config(
+    #         page_title="FinMycelium - Financial Event Reconstruction System",
+    #         page_icon="🕵️",
+    #         layout="wide",
+    #         initial_sidebar_state="expanded",
+    #         menu_items={
+    #             "Get Help": None,
+    #             "Report a bug": None,
+    #             "About": None,
+    #         },
+    #     )
+    #     hide_st_style = """
+    #         <style>
+    #         #MainMenu {visibility: hidden;}
+    #         footer {visibility: hidden;}
+    #         header {visibility: hidden;}
+    #         .stDeployButton {display: none;}
+    #         </style>
+    #         """
+    #     st.markdown(hide_st_style, unsafe_allow_html=True)
+
+
     def setup_page_config(self):
         """Configure Streamlit page settings for optimal user experience."""
         st.set_page_config(
@@ -91,15 +115,7 @@ class FinMyceliumWebInterface:
                 "About": None,
             },
         )
-        hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            .stDeployButton {display: none;}
-            </style>
-            """
-        st.markdown(hide_st_style, unsafe_allow_html=True)
+
 
     def initialize_session_state(self):
         """Initialize session state variables for maintaining state across interactions."""
@@ -275,7 +291,7 @@ class FinMyceliumWebInterface:
                         st.code(config_content, language="yaml")
                     
                     # Parse and validate configuration
-                    import yaml
+                    
                     config_data = yaml.safe_load(config_content)
                     
                     # Basic validation checks
@@ -304,6 +320,7 @@ class FinMyceliumWebInterface:
                             if st.button("Confirm Configuration", type="primary", use_container_width=True):
                                 # Store validated configuration in session state
                                 st.session_state.config = config_data
+                                st.session_state.processing_status = "idle"
                                 if (st.session_state.config["builder_config"]["builder_type"]=="AgentEventBuilder"):
                                     st.session_state.build_mode= "agent_build"
                                 elif (st.session_state.config["builder_config"]["builder_type"]=="ClassEventBuilder"):
@@ -412,6 +429,7 @@ class FinMyceliumWebInterface:
             if st.button("Reset Configuration", type="secondary", disabled=st.session_state.is_processing_blocked):
                 st.session_state.config_validated = False
                 st.session_state.config = None
+                st.session_state.processing_status = "idle"
                 st.session_state.config_file_name = None
                 st.rerun()
 
