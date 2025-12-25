@@ -429,6 +429,9 @@ def estimate_complete_time(str_list: List[str], build_type: str) -> int:
     Returns:
     - The estimated time to complete the reconstruction in minutes.
     """
+    if isinstance(build_type, str):
+        build_type = BuildType(build_type)
+
     all_content = " ".join(str_list)
 
     # Calculate the length of the build input,
@@ -448,14 +451,14 @@ def estimate_complete_time(str_list: List[str], build_type: str) -> int:
         else:
             last_word = i
             build_input_length += 1
-    if build_type == BuildType.CLASS_BUILD.value:
+    if build_type == BuildType.CLASS_BUILD:
         return round(
             (build_input_length + OTHER_TOKEN_NUM)
             * CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
-    if build_type == BuildType.AGENT_BUILD.value:
+    if build_type == BuildType.AGENT_BUILD:
         return round(
-            (build_input_length + OTHER_TOKEN_NUM)  
+            (build_input_length + OTHER_TOKEN_NUM)
             * AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
     raise ValueError(f"Invalid build type: {build_type}") from ValueError(
