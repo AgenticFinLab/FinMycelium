@@ -165,9 +165,9 @@ class ReconstructionService:
                 # Return appropriate result format
                 if isinstance(pipeline_result, dict):
                     return pipeline_result
-                elif hasattr(pipeline_result, "result"):
-                    logging.info("pipeline_result json: %s", pipeline_result.result)
-                    return pipeline_result.result
+                elif hasattr(pipeline_result, "event_cascades"):
+                    logging.info("pipeline_result json: %s", pipeline_result.event_cascades)
+                    return pipeline_result.event_cascades
                 else:
                     logging.warning(
                         "Unexpected pipeline_result type: %s", type(pipeline_result)
