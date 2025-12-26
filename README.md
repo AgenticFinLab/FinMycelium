@@ -2,14 +2,14 @@
 
 # 🌿 FinMycelium
 
-### A comprehensive financial data collection and analysis platform powered by AI
+### A comprehensive **Multi-Agent Financial Event Reconstruction** platform powered by AI
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-4CAF50?style=for-the-badge&logo=apache&logoColor=white)](https://opensource.org/licenses/Apache-2.0)
 [![Status](https://img.shields.io/badge/Status-Alpha-FF9800?style=for-the-badge)](https://github.com/AgenticFinLab/FinMycelium)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Enabled-00A86B?style=for-the-badge&logo=graphql&logoColor=white)](https://github.com/langchain-ai/langgraph)
 
-**Intelligent • Modular • AI-Powered**
+**Financial Event Reconstruction • Multi-Agent • Intelligent • Modular • AI-Powered**
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
@@ -43,7 +43,7 @@
 
 ## 📖 Overview
 
-**FinMycelium** is an intelligent financial data collection and analysis platform designed to extract, process, and reconstruct financial events from diverse public sources. Built with a modular architecture and powered by Large Language Models (LLMs), it enables automated collection, matching, summarization, and structured reconstruction of financial information.
+**FinMycelium** is a cutting-edge **Financial Event Reconstruction Platform** built on a Multi-Agent Framework, designed to extract, process, and reconstruct complete financial events from diverse public sources. Built with a modular architecture and powered by Large Language Models (LLMs), its multi-agent system specializes in automated collection, matching, summarization, and structured reconstruction of financial events, transforming unstructured financial data into actionable intelligence.
 
 ### 🎯 Key Capabilities
 
@@ -52,22 +52,22 @@
 <td width="50%">
 
 #### 🔍 Multi-Source Data Collection
-Web URLs, PDF documents, and social media platforms
+Web URLs, PDF documents, and social media platforms for comprehensive financial information gathering
 
-#### 🤖 AI-Powered Processing
-LLM-based matching, summarization, and event reconstruction
+#### 🤖 **Multi-Agent Event Processing**
+Coordinated agent system specialized for LLM-based financial event matching, summarization, and reconstruction
 
 </td>
 <td width="50%">
 
-#### 🔄 Flexible Pipeline
-Configurable components using registry factory pattern
+#### 🔄 **Event Reconstruction Pipeline**
+End-to-end configurable pipeline for financial event extraction and reconstruction
 
-#### 📊 Structured Output
-Reconstruct financial events into structured cascades
+#### 📊 **Structured Financial Events**
+Transform unstructured data into structured financial event cascades with clear relationships and timelines
 
 #### 🌐 Web Interface
-Streamlit-based interactive UI for analysis and visualization
+Streamlit-based interactive UI for financial event analysis and visualization
 
 </td>
 </tr>
@@ -88,11 +88,11 @@ Streamlit-based interactive UI for analysis and visualization
 
 ### ⚙️ Data Processing
 
-| Feature                    | Description                                                   |
-| -------------------------- | ------------------------------------------------------------- |
-| 🧠 **Intelligent Matching** | Multiple matching strategies (LLM-based, regex, vector-based) |
-| 📝 **Query Summarization**  | Keyword extraction and query summarization using LLMs         |
-| 🏗️ **Event Reconstruction** | Multi-agent pipeline for reconstructing financial events      |
+| Feature                              | Description                                                                                     |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| 🧠 **Intelligent Matching**           | Multiple matching strategies (LLM-based, regex, vector-based) for financial event components    |
+| 📝 **Query Summarization**            | Keyword extraction and query summarization focused on financial event contexts                  |
+| 🏗️ **Financial Event Reconstruction** | Core multi-agent pipeline for reconstructing complete financial events with structured cascades |
 
 **Event Reconstruction includes:**
 - 🔹 Skeleton extraction (stages and episodes)
@@ -102,12 +102,13 @@ Streamlit-based interactive UI for analysis and visualization
 
 ### 🏛️ Architecture
 
-| Component                   | Description                                       |
-| --------------------------- | ------------------------------------------------- |
-| 🔌 **Registry Pattern**      | Dynamic component selection without code changes  |
-| 🕸️ **LangGraph Integration** | Multi-agent orchestration with state management   |
-| 💾 **Database Support**      | MySQL/PostgreSQL integration for data persistence |
-| ⚙️ **Configuration-Driven**  | YAML-based configuration for easy customization   |
+| Component                   | Description                                              |
+| --------------------------- | -------------------------------------------------------- |
+| 🤖 **Multi-Agent Core**      | Centralized agent coordination and communication         |
+| 🔌 **Registry Pattern**      | Dynamic agent and component selection                    |
+| 🕸️ **LangGraph Integration** | Advanced multi-agent orchestration with state management |
+| 💾 **Database Support**      | MySQL/PostgreSQL integration for data persistence        |
+| ⚙️ **Configuration-Driven**  | YAML-based agent and pipeline customization              |
 
 ---
 
@@ -295,6 +296,10 @@ streamlit run finmy/web_interface.py
 - Network errors will display clear notification messages
 
 > **Tip**: Start with a small test case to verify your setup before processing large datasets.
+
+
+
+
 
 
 ---
