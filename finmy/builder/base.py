@@ -207,4 +207,3 @@ class BaseBuilder(ABC):
         Returns:
             BuildOutput: The final output containing the reconstructed event cascades and execution logs.
         """
-        pass

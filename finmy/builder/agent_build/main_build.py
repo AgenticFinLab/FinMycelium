@@ -873,7 +873,17 @@ class AgentEventBuilder(BaseBuilder):
 
         # 5. Integrate results
         cascade_dict = self.integrate_results(final_state)
-
+        self.save_traces(
+            cascade_dict,
+            save_name="FinalEventCascade",
+            file_format="json",
+        )
+        restored_cascade = self.integrate_from_files()
+        self.save_traces(
+            restored_cascade,
+            save_name="IntegratedEventCascade",
+            file_format="json",
+        )
         # 6. Construct BuildOutput
         # We wrap the result in BuildOutput.
         # Note: cascade_dict is a dictionary matching EventCascade structure.
