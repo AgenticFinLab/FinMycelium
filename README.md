@@ -37,11 +37,11 @@
 ## Features
 
 ### Core Capabilities
-- ** Multi-Source Data Collection**: Web URLs, PDF documents, and social media platforms
-- ** Multi-Agent Event Processing**: Coordinated agent system for LLM-based financial event matching and reconstruction
-- ** Event Reconstruction Pipeline**: End-to-end configurable pipeline for financial event extraction
-- ** Structured Financial Events**: Transform unstructured data into structured event cascades with clear relationships and timelines
-- ** Web Interface**: Streamlit-based interactive UI for financial event analysis and visualization
+- **Multi-Source Data Collection**: Web URLs, PDF documents, and social media platforms
+- **Multi-Agent Event Processing**: Coordinated agent system for LLM-based financial event matching and reconstruction
+- **Event Reconstruction Pipeline**: End-to-end configurable pipeline for financial event extraction
+- **Structured Financial Events**: Transform unstructured data into structured event cascades with clear relationships and timelines
+- **Web Interface**: Streamlit-based interactive UI for financial event analysis and visualization
 
 
 ---
