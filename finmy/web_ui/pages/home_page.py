@@ -14,10 +14,12 @@ class HomePage:
         st.title("Welcome to FinMycelium")
         st.markdown(
             """
-            ### Comprehensive Financial Event Reconstruction Platform
+            ### 🌿 Multi-Agent Financial Event Reconstruction Platform
             
-            FinMycelium helps you analyze and understand financial event schemes 
-            through advanced AI-powered analysis of multiple data sources.
+            **FinMycelium** is a cutting-edge **multi-agent system** designed specifically for 
+            reconstructing and analyzing complex financial events. Powered by intelligent agents 
+            working in coordination, it transforms diverse financial data sources into structured 
+            event cascades with unparalleled accuracy and efficiency.
             """
         )
         
@@ -25,35 +27,35 @@ class HomePage:
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.subheader("🔍 Multi-Source Analysis")
+            st.subheader("🤖 Multi-Agent System")
             st.markdown(
                 """
-            - Web content collection
-            - PDF Document processing
-            - Social media monitoring
-            - Structured data analysis
+            - Coordinated agent pipeline
+            - Specialized agent roles
+            - Intelligent task allocation
+            - Autonomous decision making
             """
             )
         
         with col2:
-            st.subheader("🤖 AI-Powered Insights")
+            st.subheader("🔍 Financial Event Reconstruction")
             st.markdown(
                 """
             - Event type recognition
             - Timeline reconstruction
-            - Impact assessment
-            - Educational insights
+            - Multi-source event matching
+            - Causal relationship analysis
             """
             )
         
         with col3:
-            st.subheader("📊 Comprehensive Reporting")
+            st.subheader("📊 Advanced Analytics")
             st.markdown(
                 """
-            - Visual analytics
-            - Key findings summary
+            - Visual event cascades
+            - Key insights extraction
             - Risk assessment
-            - Prevention recommendations
+            - Structured reporting
             """
             )
         
@@ -62,13 +64,13 @@ class HomePage:
         col1, col2, col3 = st.columns([1, 1, 1])
         
         with col2:
-            st.subheader("Get Started")
+            st.subheader("Get Started with Multi-Agent Analysis")
             st.markdown(
                 """
-            **Start your analysis in 3 simple steps:**
-            1. **Input** the event related information you want to analyze
-            2. **Provide** data through keywords or structured file
-            3. **Analyze** with our AI-powered event reconstruction system
+            **Start your financial event reconstruction in 3 simple steps:**
+            1. **Input** event-related information or keywords
+            2. **Provide** data sources (Web URLs, PDFs, structured files)
+            3. **Analyze** with our Multi-Agent Financial Event Reconstruction system
             """
             )
 
