@@ -59,6 +59,7 @@ class DataCollectorService:
         formatted_content = []
         try:
             bocha_search_results = bochasearch_api(search_query, summary=True, count=10)
+            logging.info("Bocha Search: %s", bocha_search_results)
             results_count = len(bocha_search_results["data"]["webPages"]["value"])
             logging.info("Bocha Search: Get %d search results.", results_count)
             st.write(
