@@ -169,7 +169,10 @@ class FinmyPipeline:
                 raise ValueError("builder_config must contain 'builder_type' or 'type'")
         if "output_dir" not in config:
             config["output_dir"] = self.output_dir
-        return get_builder(config)
+        
+        builder = get_builder(config)
+        self.save_builder_dir_path = builder.save_dir
+        return builder
 
     def setup_logging(self) -> logging.Logger:
         """
