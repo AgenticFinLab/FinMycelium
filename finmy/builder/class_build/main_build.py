@@ -333,7 +333,7 @@ class ClassEventBuilder(BaseBuilder):
 
         # Create BuildOutput
         build_output = BuildOutput(
-            result=event_cascade_json,
+            event_cascades=event_cascade_json,
             logs=[
                 f"Classified event type: {classify_event_type}",
                 f"Output saved to: {output_path}",
