@@ -1665,13 +1665,15 @@ class EventCascadeGanttVisualizer:
                         font=dict(size=9, color="#222222"),
                     )
 
+                next_bottom = None
+                nearest_upper = None
+                for uy in episode_y_positions_global:
+                    if uy > y_pos[j]:
+                        if nearest_upper is None or uy < nearest_upper:
+                            nearest_upper = uy
+
                 if j + 1 < len(y_pos):
                     next_bottom = y_pos[j + 1] - (0.8 / 2.0)
-                    nearest_upper = None
-                    for uy in episode_y_positions_global:
-                        if uy > y_pos[j]:
-                            if nearest_upper is None or uy < nearest_upper:
-                                nearest_upper = uy
                 upper_bar_bottom = None
                 if nearest_upper is not None:
                     upper_bar_bottom = nearest_upper - (0.8 / 2.0)
