@@ -441,7 +441,7 @@ This project is licensed under the **Apache License 2.0** - see the [LICENSE](LI
 ## 🙏 Acknowledgments
 
 We would like to thank the following projects and communities:
-
+- 🦙 [LlamaIndex](https://github.com/jerryjliu/llama_index) - Data framework for LLM applications
 - 🕸️ [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
 - 🎨 [Streamlit](https://streamlit.io/) - Web interface framework
 - 🤖 Various LLM providers and search APIs for their excellent services
