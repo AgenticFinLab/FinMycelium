@@ -15,10 +15,11 @@ class AboutPage:
         
         st.markdown(
             """
-            ### Financial Event Reconstruction and Education Platform
+            ### Multi-Agent Financial Event Reconstruction System
             
-            FinMycelium is an advanced AI-powered system designed to analyze financial event 
-            and provide comprehensive educational insights to help protect consumers and investors.
+            FinMycelium leverages a sophisticated **multi-agent architecture** to reconstruct 
+            and analyze complex financial events from diverse data sources, providing in-depth 
+            insights for educational and research purposes.
             """
         )
         
@@ -27,26 +28,26 @@ class AboutPage:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("System Capabilities")
+            st.subheader("Multi-Agent System Capabilities")
             st.markdown(
                 """
-            - **Multi-source Data Analysis**: Process keywords, documents, and structured data
-            - **AI-Powered Pattern Recognition**: Identify event mechanisms and characteristics
-            - **Comprehensive Reporting**: Generate detailed analysis with risk assessments
-            - **Educational Content**: Provide prevention tips and warning signs
-            - **User-Friendly Interface**: Intuitive workflow for all user levels
+            - **Distributed Agent Architecture**: Specialized agents working in coordinated pipelines
+            - **Advanced Event Reconstruction**: Multi-agent collaboration for timeline and relationship mapping
+            - **Intelligent Data Processing**: LLM-powered agents for context-aware analysis
+            - **Adaptive Learning**: Agents continuously improve through collective knowledge
+            - **Scalable Design**: Modular architecture for easy extension and customization
             """
             )
         
         with col2:
-            st.subheader("Methodology")
+            st.subheader("Multi-Agent Methodology")
             st.markdown(
                 """
-            - **Data Collection**: Aggregate information from multiple sources
-            - **Pattern Analysis**: Identify common event characteristics
-            - **Risk Assessment**: Evaluate potential impacts and warning signs
-            - **Educational Synthesis**: Create understandable prevention guidance
-            - **Continuous Learning**: Adapt to new event patterns and techniques
+            - **Specialized Agent Deployment**: Task-specific agents activated for different stages
+            - **Coordinated Event Processing**: Agents collaborate through defined communication protocols
+            - **Contextual Knowledge Sharing**: Shared knowledge base for consistent analysis
+            - **AI-Driven Decision Making**: LLM-powered agents for complex pattern recognition
+            - **Structured Event Reconstruction**: Systematic assembly of event components into cascades
             """
             )
         
@@ -55,11 +56,11 @@ class AboutPage:
         st.subheader("Usage Guidelines")
         st.markdown(
             """
-        - **For Educational Purposes**: This tool is designed for educational and research purposes
+        - **For Educational Purposes**: This multi-agent system is designed for educational and research purposes
         - **Consult Professionals**: Always consult licensed financial advisors for investment decisions
-        - **Verify Information**: Cross-check findings with official regulatory sources
+        - **Verify Information**: Cross-check multi-agent findings with official regulatory sources
         - **Report Suspected Event**: Report potential event to relevant authorities
-        - **Continuous Learning**: Financial event patterns evolve constantly - stay informed
+        - **Leverage Multi-Agent Insights**: Use comprehensive event reconstructions for deeper understanding
         """
         )
         
@@ -67,7 +68,7 @@ class AboutPage:
         
         st.caption(
             """
-        FinMycelium v1.0 | Financial Event Reconstruction System | 
+        FinMycelium v1.0 | Multi-Agent Financial Event Reconstruction System | 
         For educational and research purposes only.
         """
         )
