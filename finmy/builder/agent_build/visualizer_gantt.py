@@ -218,9 +218,11 @@ class EventCascadeGanttVisualizer:
                 # e.g. "2025-11-17 (scheduled)" -> "2025-11-17"
                 # e.g. "2025-11-17 23:10 (est)" -> "2025-11-17 23:10"
                 if isinstance(d_str, str):
-                    # Match YYYY-MM-DD, optionally followed by HH:MM or HH:MM:SS
+                    # Match YYYY-MM-DD, optionally followed by T/space + HH:MM[:SS[.micros]][Z/offset]
+                    # This avoids matching partial times like "2025-11-17 00" (without colon)
                     match = re.search(
-                        r"(\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)", d_str
+                        r"(\d{4}-\d{2}-\d{2}(?:[T\s]+\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?)",
+                        d_str,
                     )
                     if match:
                         try:
