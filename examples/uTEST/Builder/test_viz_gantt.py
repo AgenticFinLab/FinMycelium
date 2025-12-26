@@ -14,11 +14,7 @@ def test_gantt():
     #     r"EXPERIMENT\uTEST\Pipline\build_output_20251222130929900932\FinalEventCascade.json"
     # ]
     json_paths = [
-        "EXPERIMENT/uTEST/StepBuilderDemo1/FinalEventCascade.json",
-        "EXPERIMENT/uTEST/StepBuilderDemo2/FinalEventCascade.json",
-        "EXPERIMENT/uTEST/StepBuilderDemo3/FinalEventCascade.json",
-        "EXPERIMENT/uTEST/StepBuilderDemo4/FinalEventCascade.json",
-        "EXPERIMENT/uTEST/StepBuilderDemo5/FinalEventCascade.json",
+        r"EXPERIMENT\uTEST\Pipline\FinalEventCascade.json",
     ]
     viz = EventCascadeGanttVisualizer()
 

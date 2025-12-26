@@ -104,7 +104,7 @@ matcher_config: &matcher_config
 #   This configuration will be passed to the builder instance
 # ----------------------------------------------------------------------------
 builder_config:
-  builder_type: "ClassEventBuilder"
+  builder_type: "AgentEventBuilder"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer

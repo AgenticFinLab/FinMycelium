@@ -1,21 +1,17 @@
 """
-xxxxxxxxxxxxxxx
+Web interface for FinMycelium - Financial Event Reconstruction System
+Provides a user-friendly interface for reconstructing financial events
+through multiple data sources and AI-powered analysis.
 
-
-Run:
-streamlit run examples/utest/test_web_interface.py
-
+NOTE: This file has been refactored. The new implementation is in finmy/web_ui/.
+This file now imports from the refactored module for backward compatibility.
 """
 
-import streamlit as st
+from dotenv import load_dotenv
 
-from finmy.web_interface import FinMyceliumWebInterface
+from finmy.web_ui.main import main as refactored_main
 
+load_dotenv()
 
 if __name__ == "__main__":
-    try:
-        app = FinMyceliumWebInterface()
-        app.run()
-    except Exception as e:
-        st.error(f"Application error: {e}")
-        st.info("Please refresh the page and try again.")
+    refactored_main()
