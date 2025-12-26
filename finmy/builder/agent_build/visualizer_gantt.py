@@ -201,6 +201,8 @@ class EventCascadeGanttVisualizer:
             Parse date from a dictionary with a 'value' key or a direct string.
             Ensures 'unknown' values are treated as None.
             """
+            import re
+
             if d_obj is None:
                 return None
             if isinstance(d_obj, dict):
@@ -209,7 +211,23 @@ class EventCascadeGanttVisualizer:
                 d_str = d_obj
             if isinstance(d_str, str) and d_str.lower() == "unknown":
                 return None
-            return pd.to_datetime(d_str)
+            try:
+                return pd.to_datetime(d_str)
+            except (ValueError, TypeError, pd.errors.ParserError):
+                # Try to extract date pattern if simple parse fails
+                # e.g. "2025-11-17 (scheduled)" -> "2025-11-17"
+                # e.g. "2025-11-17 23:10 (est)" -> "2025-11-17 23:10"
+                if isinstance(d_str, str):
+                    # Match YYYY-MM-DD, optionally followed by HH:MM or HH:MM:SS
+                    match = re.search(
+                        r"(\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)", d_str
+                    )
+                    if match:
+                        try:
+                            return pd.to_datetime(match.group(1))
+                        except Exception:
+                            pass
+                return None
 
         def is_unknown(v):
             """
