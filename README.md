@@ -11,8 +11,6 @@
 
 **Financial Event Reconstruction • Multi-Agent • Intelligent • Modular • AI-Powered**
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
-
 ---
 
 </div>
@@ -20,95 +18,45 @@
 ## 📑 Table of Contents
 
 - [📖 Overview](#-overview)
+- [📋 To Do List](#-to-do-list)
 - [✨ Features](#-features)
-  - [Data Collection](#data-collection)
-  - [Data Processing](#data-processing)
-  - [Architecture](#architecture)
 - [🎬 Project Demonstration](#-project-demonstration)
 - [🚀 Quick Start](#-quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Basic Usage](#basic-usage)
-- [📁 Project Structure](#-project-structure)
-- [⚙️ Configuration](#️-configuration)
-- [🔧 Environment Variables](#-environment-variables)
-- [📚 Documentation](#-documentation)
-- [🤝 Contributing](#-contributing)
-- [⚠️ Important Notes](#️-important-notes)
-- [📄 License](#-license)
-- [🙏 Acknowledgments](#-acknowledgments)
-- [📮 Contact & Support](#-contact--support)
+
 
 ---
+
+</div>
 
 ## 📖 Overview
 
 **FinMycelium** is a cutting-edge **Financial Event Reconstruction Platform** built on a Multi-Agent Framework, designed to extract, process, and reconstruct complete financial events from diverse public sources. Built with a modular architecture and powered by Large Language Models (LLMs), its multi-agent system specializes in automated collection, matching, summarization, and structured reconstruction of financial events, transforming unstructured financial data into actionable intelligence.
 
-### 🎯 Key Capabilities
-
-<table>
-<tr>
-<td width="50%">
-
-#### 🔍 Multi-Source Data Collection
-Web URLs, PDF documents, and social media platforms for comprehensive financial information gathering
-
-#### 🤖 **Multi-Agent Event Processing**
-Coordinated agent system specialized for LLM-based financial event matching, summarization, and reconstruction
-
-</td>
-<td width="50%">
-
-#### 🔄 **Event Reconstruction Pipeline**
-End-to-end configurable pipeline for financial event extraction and reconstruction
-
-#### 📊 **Structured Financial Events**
-Transform unstructured data into structured financial event cascades with clear relationships and timelines
-
-#### 🌐 Web Interface
-Streamlit-based interactive UI for financial event analysis and visualization
-
-</td>
-</tr>
-</table>
-
 ---
 
 ## ✨ Features
 
-### 📥 Data Collection
+### Core Capabilities
+- **🔍 Multi-Source Data Collection**: Web URLs, PDF documents, and social media platforms
+- **🤖 Multi-Agent Event Processing**: Coordinated agent system for LLM-based financial event matching and reconstruction
+- **🔄 Event Reconstruction Pipeline**: End-to-end configurable pipeline for financial event extraction
+- **📊 Structured Financial Events**: Transform unstructured data into structured event cascades with clear relationships and timelines
+- **🌐 Web Interface**: Streamlit-based interactive UI for financial event analysis and visualization
 
-| Feature                      | Description                                                                 |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| 🌐 **URL Collector**          | Extract content from web pages with support for multiple parsing strategies |
-| 📄 **PDF Collector**          | Process PDF documents with layout analysis and text extraction              |
-| 📱 **Media Platform Support** | Collect data from Xiaohongshu, Douyin, Kuaishou, Bilibili, Weibo, and more  |
-| 🔎 **Search Integration**     | Baidu Search and Bocha Search API support                                   |
 
-### ⚙️ Data Processing
+---
 
-| Feature                              | Description                                                                                     |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| 🧠 **Intelligent Matching**           | Multiple matching strategies (LLM-based, regex, vector-based) for financial event components    |
-| 📝 **Query Summarization**            | Keyword extraction and query summarization focused on financial event contexts                  |
-| 🏗️ **Financial Event Reconstruction** | Core multi-agent pipeline for reconstructing complete financial events with structured cascades |
+## 📋 To Do List
 
-**Event Reconstruction includes:**
-- 🔹 Skeleton extraction (stages and episodes)
-- 🔹 Participant identification
-- 🔹 Transaction reconstruction
-- 🔹 Timeline and relationship mapping
+- [ ] Enhance multi-agent coordination for complex event reconstruction
+- [ ] Add support for real-time financial data sources
+- [ ] Improve event timeline visualization in web interface
+- [ ] Optimize performance for large-scale event processing
+- [ ] Expand media platform support for data collection
+- [ ] Add documentation for agent development and customization
+- [ ] Create more comprehensive test cases
+- [ ] Add multi-language support for the web interface
 
-### 🏛️ Architecture
-
-| Component                   | Description                                              |
-| --------------------------- | -------------------------------------------------------- |
-| 🤖 **Multi-Agent Core**      | Centralized agent coordination and communication         |
-| 🔌 **Registry Pattern**      | Dynamic agent and component selection                    |
-| 🕸️ **LangGraph Integration** | Advanced multi-agent orchestration with state management |
-| 💾 **Database Support**      | MySQL/PostgreSQL integration for data persistence        |
-| ⚙️ **Configuration-Driven**  | YAML-based agent and pipeline customization              |
 
 ---
 
@@ -124,59 +72,23 @@ Streamlit-based interactive UI for financial event analysis and visualization
 
 ## 🚀 Quick Start
 
-### 📋 Prerequisites
+### Prerequisites
+- Python 3.11+
+- API Keys for LLM services (OpenAI, DeepSeek, etc.)
 
-Before you begin, ensure you have the following installed:
-
-- ✅ **Python 3.11+** - [Download Python](https://www.python.org/downloads/)
-- ✅ **MySQL or PostgreSQL** (optional) - For data persistence
-- ✅ **API Keys** - For LLM services (OpenAI, DeepSeek, etc.)
-
-### 📦 Installation
-
-#### Step 1: Clone the repository
-
+### Installation
 ```bash
 git clone https://github.com/AgenticFinLab/FinMycelium.git
 cd FinMycelium
-```
-
-#### Step 2: Install dependencies
-
-**Option A: Install from requirements.txt**
-```bash
 pip install -r requirements.txt
-```
-
-**Option B: Install as a package**
-```bash
-pip install -e .
-```
-
-#### Step 3: Configure environment variables
-
-```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
+Edit `.env` with your API keys and configuration settings.
 
-| Category               | Variables                                                |
-| ---------------------- | -------------------------------------------------------- |
-| 🗄️ **Database**         | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` |
-| 🤖 **LLM APIs**         | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, etc.               |
-| 🔎 **Search APIs**      | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY`           |
-| ⚡ **Redis** (optional) | `REDIS_HOST`, `REDIS_PORT`                               |
-| 🔀 **Proxy** (optional) | `PROXY_URL`                                              |
+### Basic Usage
 
-> 💡 **Tip**: See `.env.example` for a complete list of required variables.
-
----
-
-### 💻 Basic Usage
-
-#### 🔄 Using the Pipeline
-
+#### Using the Pipeline
 ```python
 from finmy.pipeline import FinmyPipeline
 import yaml
@@ -185,248 +97,45 @@ import yaml
 with open("configs/pipline.yml", "r") as f:
     config = yaml.safe_load(f)
 
-# Initialize pipeline
+# Initialize and run pipeline
 pipeline = FinmyPipeline(config)
-
-# Run pipeline with data sources
-data_sources = [
-    "https://example.com/financial-news",
-    "/path/to/document.pdf"
-]
-
 pipeline.lm_build_pipeline_main(
-    data_sources=data_sources,
+    data_sources=["https://example.com/financial-news"],
     query_text="金融风控",
-    key_words=["金融风控", "合规", "人工智能"]
+    key_words=["金融风控", "合规"]
 )
 ```
 
-#### 🧩 Using Individual Components
-
-```python
-from finmy.url_collector.url_parser import URLParser
-from finmy.pdf_collector.pdf_collector import PDFCollector
-from finmy.matcher.registry import get as get_matcher
-from finmy.summarizer.registry import get as get_summarizer
-
-# URL collection
-url_collector = URLParser(config={"delay": 1.0})
-result = url_collector.collect(["https://example.com"])
-
-# PDF collection
-pdf_collector = PDFCollector(config={"output_dir": "./output"})
-result = pdf_collector.collect(["/path/to/document.pdf"])
-
-# Summarization
-summarizer = get_summarizer("KWLMSummarizer", config={"llm_name": "deepseek/deepseek-chat"})
-summary = summarizer.summarize(query_text, key_words)
-
-# Matching
-matcher = get_matcher("LXMatcher", config={"lm_name": "deepseek/deepseek-chat"})
-matches = matcher.match(match_input)
-```
-
-
-### 🌐 Web Interface
-
-The FinMycelium web interface provides an intuitive, browser-based environment for financial event reconstruction through a user-friendly Streamlit application.
-
-#### 🚀 Quick Start Guide
-
-#### **Launch the Interface**
+#### Web Interface
 ```bash
-streamlit run finmy/web_interface.py
-```
-
-##### **Step-by-Step Workflow**
-
-1. **Navigation** → Click on **"Pipeline"** in the left sidebar
-2. **Configuration** → Upload and validate your YAML configuration file
-3. **Input Setup** → Provide:
-   - Event description in natural language
-   - Relevant keywords (comma-separated)
-   - Optional structured data files
-4. **Start Processing** → Click **"🚀 Start Reconstructing"** button
-5. **Wait for Completion** → Monitor progress on the same page
-6. **View Results** → Navigate to **"Results"** page after processing completes
-
-#### 📋 Data Requirements
-
-##### **Structured Data Files**
-- **Accepted Formats**: CSV, Excel (XLSX), JSON
-- **Required Columns**: Must include `title` and `url` columns
-- **URL Support**: Can be web URLs or local file paths (PDFs)
-
-##### **Keyword Input**
-- **Separators**: Use commas, semicolons, or spaces
-- **Example**: `financial fraud, ponzi scheme, investment scam`
-- **Language**: Supports both English and Chinese keywords
-
-##### **Configuration File**
-- **Format**: YAML (.yml or .yaml)
-- **Validation**: System checks for required sections before proceeding
-- **Template**: Use provided example configurations as reference
-
-#### ⚠️ Critical Usage Notes
-
-##### **Processing Restrictions**
-> **DO NOT navigate away** from the **Pipeline** page during reconstruction!
-- Page navigation or refresh will interrupt the process
-- Progress indicators will show timestamped updates
-- After interruption, you must **refresh the entire webpage** and restart
-
-##### **Timing Considerations**
-- Processing time varies with content volume (typically 5-30 minutes)
-- Estimated completion time will be displayed before processing starts
-- Large documents or multiple sources will increase processing time
-
-##### **System Requirements**
-- Stable internet connection for search API integration
-- Sufficient system memory for document processing
-- Modern web browser with JavaScript enabled
-
-##### **Output Management**
-- Results are automatically saved to timestamped directories
-- Download options available for both JSON data and visualizations
-- HTML timeline charts can be opened directly in browsers
-
-##### **Error Handling**
-- Invalid configurations will prevent processing start
-- Missing required data will trigger validation errors
-- Network errors will display clear notification messages
-
-> **Tip**: Start with a small test case to verify your setup before processing large datasets.
-
-
-
-
-
-
----
-
-## 📁 Project Structure
-
-```
-FinMycelium/
-├── 📄 README.md                 # Project overview
-├── 📋 requirements.txt          # Python dependencies
-├── ⚙️ setup.py                  # Package setup configuration
-├── 📁 configs/                  # Configuration files
-│   ├── pipline.yml             # Main pipeline configuration
-│   └── uTEST/                  # Test configurations
-├── 📦 finmy/                   # Main package
-│   ├── __init__.py
-│   ├── pipeline.py             # Main pipeline orchestration
-│   ├── converter.py            # Data format converters
-│   ├── db_manager.py           # Database management
-│   ├── generic.py              # Core data structures
-│   ├── web_interface.py        # Streamlit web UI
-│   ├── 📁 builder/             # Event reconstruction builders
-│   │   ├── agent_build/        # Multi-agent builder
-│   │   ├── class_build/        # Class-based builder
-│   │   └── lm_build.py         # LLM-based builder
-│   ├── 📁 matcher/             # Data matching modules
-│   │   ├── lm_match.py         # LLM-based matcher
-│   │   ├── re_match.py         # Regex matcher
-│   │   └── lx_match.py         # LlamaIndex matcher
-│   ├── 📁 summarizer/          # Query summarization
-│   ├── 📁 url_collector/       # URL collection modules
-│   │   ├── MediaCollector/     # Social media collectors
-│   │   └── SearchCollector/    # Search API collectors
-│   └── 📁 pdf_collector/       # PDF processing modules
-├── 📁 examples/                # Example scripts and demos
-│   └── uTEST/                  # Test examples
-├── 📁 docs/                    # Documentation
-│   ├── Progress-record.md      # Development progress
-│   └── reference.md            # References
-└── 📁 EXPERIMENT/              # Experimental results (git-ignored)
+streamlit run examples/utest/test_web_interface.py
 ```
 
 ---
 
-## ⚙️ Configuration
 
-FinMycelium uses YAML configuration files to define pipeline components and parameters. The main configuration file (`configs/pipline.yml`) includes:
+#### Detailed Guidance
+- [Usage Guidance](celium/docs/usage_guidance.md) - Comprehensive guide on using FinMycelium
 
-- **Language Model Settings**: Model type, name, and generation parameters
-- **Database Configuration**: Connection strings and settings
-- **Collector Settings**: URL and PDF collector parameters
-- **Component Selection**: Summarizer, matcher, and builder types
-- **Agent Configuration**: Multi-agent pipeline agent settings
-
-### 📝 Example Configuration
-
-```yaml
-lm_type: "api"
-lm_name: "deepseek/deepseek-chat"
-
-generation_config:
-  max_new_tokens: 8192
-  temperature: 0.2
-  top_p: 0.95
-
-summarizer_config:
-  summarizer_type: "KWLMSummarizer"
-  llm_name: "deepseek/deepseek-chat"
-
-matcher_config:
-  use_matcher: True
-  matcher_type: "LXMatcher"
-  lm_name: "deepseek/deepseek-chat"
-
-builder_config:
-  builder_type: "AgentEventBuilder"
-  lm_type: "api"
-  lm_name: "deepseek/deepseek-chat"
-```
 
 ---
 
-## 🔧 Environment Variables
 
-The project uses environment variables for sensitive configuration. Key variables include:
+#### Reconstruction Result Examples
 
-| Category          | Variables                                                | Required |
-| ----------------- | -------------------------------------------------------- | -------- |
-| 🗄️ **Database**    | `DB_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` | Optional |
-| 🤖 **LLM APIs**    | `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`                     | Required |
-| 🔎 **Search APIs** | `BAIDU_SEARCH_API_KEY`, `BOCHA_SEARCH_API_KEY`           | Optional |
-| ⚡ **Redis**       | `REDIS_HOST`, `REDIS_PORT`                               | Optional |
-| 🔀 **Proxy**       | `PROXY_URL`                                              | Optional |
+Below are examples of financial event reconstruction results generated by different builders, including JSON-formatted event cascade data and visualized Gantt charts:
 
-> 📖 See `.env.example` for a complete list of required variables.
+**AgentEventBuilder Example**:
 
----
+- **Lan Tian Ge Rui Fraud Case (2014-2025)**:
+  - [Event Cascade Data](EXPERIMENT/uTEST/Pipline/build_output_20251226184418346270/FinalEventCascade.json)
+  - [Gantt Chart Visualization](EXPERIMENT/uTEST/Pipline/build_output_20251226184418346270/FinalEventCascade_gantt.html)
 
-## 📚 Documentation
+**ClassEventBuilder Example**:
 
-- 📊 [Progress Record](docs/Progress-record.md) - Development progress and findings
-- 📖 [Reference](docs/reference.md) - Related references and resources
-- 💡 [Examples](examples/) - Example scripts and usage patterns
+- **Blue Sky Ge Rui Illegal Fundraising Case / Qian Zhimin Bitcoin Money Laundering Case**:
+  - [Event Cascade Data](EXPERIMENT/uTEST/Pipline/build_output_20251226185858769291/Class_Build_Event_Cascade_Ponzi_Scheme.json)
 
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### 🛠️ Contribution Steps
-
-1. 🍴 **Fork the repository**
-2. 🌿 **Create your feature branch** (`git checkout -b feature/AmazingFeature`)
-3. 💾 **Commit your changes** (`git commit -m 'Add some AmazingFeature'`)
-4. 📤 **Push to the branch** (`git push origin feature/AmazingFeature`)
-5. 🔄 **Open a Pull Request**
-
----
-
-## ⚠️ Important Notes
-
-> ⚠️ **Security Reminders**
-> 
-> - The `EXPERIMENT/` folder is ignored by git by default. Place experimental results there.
-> - ❌ **Never commit your `.env` file** to version control.
-> - 🔑 Ensure you have proper API keys and database access before running the pipeline.
 
 ---
 
@@ -442,9 +151,10 @@ This project is licensed under the **Apache License 2.0** - see the [LICENSE](LI
 
 We would like to thank the following projects and communities:
 
-- 🕸️ [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
-- 🎨 [Streamlit](https://streamlit.io/) - Web interface framework
-- 🤖 Various LLM providers and search APIs for their excellent services
+- [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
+- [Streamlit](https://streamlit.io/) - Web interface framework
+- [Bettafish](https://github.com/666ghj/BettaFish) - Media crawler framework
+- Various LLM providers and search APIs for their excellent services
 
 ---
 
