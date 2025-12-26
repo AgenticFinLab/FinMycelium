@@ -34,7 +34,7 @@ class BuildInput(BaseContainer):
 class BuildOutput(BaseContainer):
     """Output format of the pipeline builder."""
 
-    event_cascades: List[EventCascade] = field(default_factory=list)
+    event_cascades: Dict[str, Any] = None
     result: Optional[Any] = None
     logs: List[str] = field(default_factory=list)
     extras: Dict[str, Any] = field(default_factory=dict)
