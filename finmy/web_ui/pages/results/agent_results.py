@@ -30,6 +30,8 @@ class AgentResultsRenderer:
             unified_path = str(st.session_state.save_builder_dir_path).replace(
                 "\\", "/"
             )
+            logging.info("unified_path: %s", unified_path)
+
             st.success(f"Success: Builder Files are saved to {unified_path}")
 
         # Generate visualization
@@ -55,6 +57,7 @@ class AgentResultsRenderer:
         try:
             viz = EventCascadeGanttVisualizer()
             viz_output_dir = st.session_state.save_builder_dir_path
+            
             viz_output_path = os.path.join(
                 viz_output_dir, "FinalEventCascade_gantt.html"
             )

@@ -151,7 +151,9 @@ class ReconstructionService:
                 contents=contents, query_text=query_text, key_words=keywords
             )
             
-            st.session_state.save_builder_dir_path = pipeline.builder.save_dir
+            st.session_state.save_builder_dir_path = pipeline.save_builder_dir_path
+            logging.info("pipeline save_builder_dir_path: %s", pipeline.save_builder_dir_path)
+            logging.info("st.session_state.save_builder_dir_path: %s", st.session_state.save_builder_dir_path)
             
             logging.info("type of pipeline_result: %s", type(pipeline_result))
             logging.info("pipeline_result:\n %s", pipeline_result)

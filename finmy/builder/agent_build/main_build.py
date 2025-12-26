@@ -889,7 +889,7 @@ class AgentEventBuilder(BaseBuilder):
         # Note: cascade_dict is a dictionary matching EventCascade structure.
         return BuildOutput(
             event_cascades=[cascade_dict],
-            result=final_state,
+            result=cascade_dict,
             logs=final_state["agent_executed"],
             extras=None,
         )
