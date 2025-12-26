@@ -262,8 +262,16 @@ class EventCascadeGanttVisualizer:
                 return "YMDHMS"
             if col == 1:
                 return "YMDHM"
-            if " " in s and s.split(" ", 1)[1] and s.split(" ", 1)[1].count(":") == 0:
-                return "YMDH"
+            if " " in s:
+                # Check if the part after space looks like a time component (starts with digit)
+                # This prevents "2025-11-17 (scheduled)" from being treated as YMDH
+                after_space = s.split(" ", 1)[1].strip()
+                if (
+                    after_space
+                    and after_space[0].isdigit()
+                    and after_space.count(":") == 0
+                ):
+                    return "YMDH"
             dash = s.count("-")
             if dash >= 2:
                 return "YMD"
