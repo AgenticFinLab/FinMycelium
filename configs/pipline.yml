@@ -74,6 +74,7 @@ pdf_collector_config:
 all_content_config:
   max_content_length: 60000
 
+
 # ----------------------------------------------------------------------------
 # Component Type Configuration
 # ----------------------------------------------------------------------------
@@ -84,14 +85,18 @@ summarizer_config: &summarizer_config
   summarizer_type: "KWLMSummarizer"
   llm_name: "deepseek/deepseek-chat"
 
+
+# ----------------------------------------------------------------------------
+# Matcher Configuration
+# ----------------------------------------------------------------------------
 # matcher_type: Matcher type
 #   - "llm": LLM-based matcher (default)
 #   - "re": Regex-based matcher
 #   - "lx_keyword": LlamaIndex keyword-based matcher
 #   - "lx_llm": LlamaIndex LLM-based matcher
 #   - "lx_vector": LlamaIndex vector-based matcher
+# use_matcher: False | True # if not using matcher, the matcher_type and lm_name will be ignored
 matcher_config: &matcher_config
-  # use_matcher: False | True # if not using matcher, the matcher_type and lm_name will be ignored
   use_matcher: False
   matcher_type: "LXMatcher"
   lm_name: "deepseek/deepseek-chat"
@@ -100,8 +105,15 @@ matcher_config: &matcher_config
 # ----------------------------------------------------------------------------
 # Builder Configuration
 # ----------------------------------------------------------------------------
-# builder_config: Additional configuration for builder components
-#   This configuration will be passed to the builder instance
+# builder_config: Configuration for builder components.
+#   These settings will be passed to the builder instance responsible for constructing event representations.
+#   - builder_type: Specifies the type of builder to use (e.g., "AgentEventBuilder", "ClassEventBuilder").
+#   - lm_type/lm_name: Indicates the language model type and name if LLM-based building is needed.
+#   - inference_config/generation_config: Provides inference and generation settings for LLMs used by the builder.
+#   - graph_config: Configures parameters such as recursion limits for building graph structures.
+#   - save_folder: Directory path where intermediate or final builder outputs will be saved.
+#   - agents: Detailed configurations for each agent involved in event reconstruction.
+#       Each agent can have individual LLM, inference, and generation parameters, or use shared defaults.
 # ----------------------------------------------------------------------------
 builder_config:
   builder_type: "AgentEventBuilder"
@@ -114,7 +126,7 @@ builder_config:
 
   save_folder: "EXPERIMENT/uTEST/Pipline"
   
-  # Agent Configuration (for agent_build type)
+  # Agent Configuration (for AgentEventBuilder type)
   # agents: Define agents participating in event reconstruction and their
   #         configurations
   #   Each agent can be independently configured with language model parameters,

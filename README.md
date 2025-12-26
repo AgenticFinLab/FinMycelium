@@ -100,9 +100,13 @@ with open("configs/pipline.yml", "r") as f:
 # Initialize and run pipeline
 pipeline = FinmyPipeline(config)
 pipeline.lm_build_pipeline_main(
-    data_sources=["https://example.com/financial-news"],
-    query_text="金融风控",
-    key_words=["金融风控", "合规"]
+    data_sources=[
+      "https://edition.cnn.com/2025/11/11/uk/zhimin-qian-cryptocurrency-fraud-scheme-jailed-uk-intl-hnk",
+      "https://www.theguardian.com/uk-news/2025/nov/11/fraudster-who-hid-in-london-is-jailed-over-bitcoin-scam",
+      "https://www.cps.gov.uk/cps/news/two-people-imprisoned-their-key-roles-largescale-money-laundering-case"
+    ],
+    query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+    key_words=["fraud", " money laundering"]
 )
 ```
 
