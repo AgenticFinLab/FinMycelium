@@ -4,6 +4,8 @@
 
 > The content below presents all papers involved in the project implementation.
 
+> Share to [paper appraisal](https://github.com/AgenticFinLab/paper-appraisal)
+
 
 1. Sijia Chen
 
@@ -75,3 +77,6 @@
     - DTELS: Towards Dynamic Granularity of Timeline Summarization, NAACL 2025.
 
     - Embrace Divergence for Richer Insights: A Multi-document Summarization Benchmark and a Case Study on Summarizing Diverse Information from News Articles, NAACL 2025.
+
+
+
