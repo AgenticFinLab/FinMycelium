@@ -125,6 +125,7 @@ streamlit run examples/utest/test_web_interface.py
 
 | Builder Type        | Result                                                                                                                                                                  |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| AgentEventBuilder   | 📦 [Reconstructed Result](docs/assets/builder_results/hainan_real_estate_foam/FinalEventCascade.json)<br>🗓️ [Gantt Chart Visualization](docs/assets/builder_results/hainan_real_estate_foam/FinalEventCascade_gantt.html)                              |
 | ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/hainan_real_estate_foam/Class_Build_Event_Cascade_Other_Financial_Event.json)                                                                                        |
 
 
