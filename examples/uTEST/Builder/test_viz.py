@@ -11,12 +11,6 @@ Usage:
 
     Run:
     python examples/uTEST/Builder/test_viz.py
-
-Requirements:
-    - matplotlib
-    - pandas
-    - numpy
-    - The project environment must be set up correctly (finmy package accessible).
 """
 
 import os

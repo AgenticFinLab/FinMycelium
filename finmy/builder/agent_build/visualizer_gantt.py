@@ -2,15 +2,41 @@
 Event Cascade Gantt Visualizer
 ==============================
 
-This module provides the `EventCascadeGanttVisualizer` class, which generates an interactive
-Gantt chart from event cascade data. It uses Plotly for rendering and supports:
-- Hierarchical visualization of Stages and Episodes.
-- Detailed participant tracking within episodes.
-- Relation visualization between participants.
-- Adaptive time scaling and layout customization.
+This module provides the `EventCascadeGanttVisualizer` class, designed to generate high-fidelity,
+interactive Gantt charts for financial event cascades. It utilizes Plotly for rendering and implements
+advanced graph visualization techniques to handle complex participant relationships within temporal events.
+
+Key Features:
+-------------
+1.  **Hierarchical Timeline**:
+    - Visualizes high-level **Stages** and granular **Episodes**.
+    - Supports "Unknown" time handling with visual cues (dotted lines/annotations).
+    - Adaptive time scaling (handling milliseconds to years).
+
+2.  **Participant Visualization**:
+    - **Sine Wave Layout**: Uses a non-linear sine wave distribution (`y = A * sin(idx * k)`) for participant markers
+      within an episode. This prevents visual collinearity (three points forming a straight line), which is crucial
+      for avoiding edge overlap in dense graphs.
+    - **BFS Reordering**: Reorders participants based on connectivity (BFS traversal) to minimize edge crossing length.
+    - **Consistent Styling**: Assigns unique, consistent colors and shapes to participants based on their Type and ID.
+
+3.  **Relation Visualization (Arc Diagrams)**:
+    - **Arc Diagram Routing**: Implements an "Arc Diagram" style for participant relationships.
+    - **Horizontal Edge Detection**: Automatically detects co-linear (horizontal) connections between participants.
+    - **Layered Arcs**: Assigns different curvature heights to horizontal edges based on their span length. Short connections
+      get low arcs, long connections get high arcs, creating a nested "rainbow" effect that eliminates overlaps.
+    - **Multi-Edge Support**: Handles multiple relations between the same pair of entities by offsetting them slightly
+      around a base curvature.
+    - **Bezier Curves**: Renders all connections as Quadratic Bezier curves for smoothness.
+
+4.  **Interactivity**:
+    - **Detailed Hover Info**: Shows rich metadata for Stages, Episodes, Participants, and Relations.
+    - **Dynamic Legend**: Automatically scans and generates a legend for all relation types present in the data.
+    - **Custom Controls**: Injects JavaScript for "Compactness" and "Time Window" sliders in the HTML output.
 """
 
 import os
+import math
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -1170,8 +1196,11 @@ class EventCascadeGanttVisualizer:
                     dur_ms = dur
 
                     # 1. Build Adjacency Graph for Reordering
-                    # We treat participants as nodes and relations as edges.
-                    # This allows us to group connected participants together in the visualization.
+                    # ---------------------------------------
+                    # To optimize the visual layout, we treat participants as nodes and relations as edges.
+                    # By building an adjacency graph, we can reorder participants so that connected entities
+                    # are placed closer together in the sequence. This minimizes the length of connection lines
+                    # and reduces visual clutter (edge crossings).
                     rels = r.get("Relations", [])
                     adj = {p["id"]: [] for p in parts}
                     for rel in rels:
@@ -1182,8 +1211,10 @@ class EventCascadeGanttVisualizer:
                             adj[dst].append(src)
 
                     # 2. BFS/Connected Components Reordering
-                    # Reorder participants so that connected ones are adjacent in the list.
-                    # This minimizes the crossing of relation lines.
+                    # --------------------------------------
+                    # We iterate through the participants using Breadth-First Search (BFS).
+                    # This ensures that a node is immediately followed by its neighbors in the ordered list,
+                    # creating clusters of interacting participants.
                     ordered_parts = []
                     visited = set()
 
@@ -1192,7 +1223,7 @@ class EventCascadeGanttVisualizer:
 
                     for p in parts_sorted_by_id:
                         if p["id"] not in visited:
-                            # Start BFS for this component
+                            # Start BFS for this connected component
                             queue = [p]
                             visited.add(p["id"])
                             while queue:
@@ -1211,11 +1242,18 @@ class EventCascadeGanttVisualizer:
                                             visited.add(n_id)
                                             queue.append(n_obj)
 
-                    # 3. Layout: Zig-Zag Vertical Positioning
-                    # Distribute participants horizontally across the episode bar.
-                    # Stagger them vertically (Zig-Zag) to avoid marker overlap.
-                    # We use 3 vertical tiers relative to the episode centerline.
-                    y_offsets = [0.2, 0, -0.2]
+                    # 3. Layout: Sine Wave Vertical Positioning
+                    # -----------------------------------------
+                    # Instead of a simple linear or zig-zag layout, we use a Sine Wave function
+                    # to determine the vertical offset of each participant marker.
+                    #
+                    # Why Sine Wave?
+                    # - **Avoids Collinearity**: In a linear or grid layout, it's common for 3 points
+                    #   (e.g., A, B, C) to fall on a straight line. If A connects to C, the line passes
+                    #   through B, causing overlap and confusion. A sine wave with a non-integer frequency
+                    #   distributes points such that they almost never align linearly.
+                    # - **Organic Look**: It gives the graph a more organic "force-directed" feel within
+                    #   the constraints of the Gantt time bar.
 
                     for p_idx, p in enumerate(ordered_parts):
                         # Horizontal: Even distribution across the episode duration
@@ -1224,8 +1262,12 @@ class EventCascadeGanttVisualizer:
                             int(round(dur_ms * fraction)), unit="ms"
                         )
 
-                        # Vertical: Zig-zag based on reordered index
-                        y_offset = y_offsets[p_idx % len(y_offsets)]
+                        # Vertical: Sine wave based on index
+                        # Formula: y = Amplitude * sin(index * frequency)
+                        # - Amplitude (0.25): Keeps markers within the bar height (0.8) but distinct.
+                        # - Frequency (2.3): A non-integer prime-ish number to avoid repeating patterns
+                        #   for small N (e.g., preventing idx 0 and idx 3 from having same Y).
+                        y_offset = 0.25 * math.sin(p_idx * 2.3)
                         p_y = y_val + y_offset
 
                         color, marker = self._get_participant_style(p["id"], p["type"])
@@ -1249,23 +1291,78 @@ class EventCascadeGanttVisualizer:
                 # --- Relations ---
                 rels = r.get("Relations", [])
 
+                # 4. Relation Grouping & Arc Diagram Routing
+                # ------------------------------------------
+                # This section handles the complex logic of drawing connection lines between participants.
+                # Key challenges addressed:
+                # - **Overlapping Lines**: Multiple relations between the same pair must be visually distinct.
+                # - **Co-linear Overlaps**: Relations connecting participants on the same horizontal plane (same Y)
+                #   would overlap perfectly if drawn straight. We use "Arc Diagrams" to resolve this.
+
                 # Group relations by pair to handle multiples (avoid overlap)
                 pair_groups = {}
+
+                # Also track horizontal edges to assign different heights
+                # key: y_coord (approx), value: list of (pair_key, span_length)
+                horizontal_edges_by_y = {}
+
                 for rel in rels:
                     src_id = rel.get("src")
                     dst_id = rel.get("dst")
                     if src_id in local_p_coords and dst_id in local_p_coords:
                         # Sort to group (A, B) and (B, A) together
-                        pair_key = tuple(sorted((src_id, dst_id)))
+                        # Use str() for sorting to ensure consistency across types
+                        pair_key = tuple(sorted((str(src_id), str(dst_id))))
                         if pair_key not in pair_groups:
                             pair_groups[pair_key] = []
                         pair_groups[pair_key].append(rel)
+
+                        # Check for horizontal collinearity
+                        # If start Y and end Y are nearly identical, this is a horizontal edge.
+                        sx, sy = local_p_coords[src_id]
+                        dx, dy = local_p_coords[dst_id]
+                        if abs(sy - dy) < 0.001:
+                            y_key = round(sy, 4)
+                            if y_key not in horizontal_edges_by_y:
+                                horizontal_edges_by_y[y_key] = []
+                            # Avoid duplicates for multi-edges (we assign base curve per pair)
+                            # Only add if not already tracked for this pair
+                            existing_pairs = [
+                                x[0] for x in horizontal_edges_by_y[y_key]
+                            ]
+                            if pair_key not in existing_pairs:
+                                span = abs(
+                                    (
+                                        pd.Timestamp(dx) - pd.Timestamp(sx)
+                                    ).total_seconds()
+                                )
+                                horizontal_edges_by_y[y_key].append((pair_key, span))
+
+                # Assign base curvature ranks for horizontal edges
+                # Logic:
+                # - Short connections get small arcs (inner).
+                # - Long connections get large arcs (outer).
+                # - This nesting prevents crossing.
+                pair_base_curve = {}
+                for y_key, edge_list in horizontal_edges_by_y.items():
+                    # Sort by span length (shortest first -> inner arcs)
+                    # Use pair_key as secondary sort key for determinism
+                    edge_list.sort(key=lambda x: (x[1], x[0]))
+
+                    for rank, (p_key, span) in enumerate(edge_list):
+                        # Base curve starts at 0.2 and increases
+                        # Rank 0 (shortest): 0.2
+                        # Rank 1: 0.35, etc.
+                        pair_base_curve[p_key] = 0.2 + rank * 0.15
 
                 for pair_key, group_rels in pair_groups.items():
                     count = len(group_rels)
                     # Base step size for arc height.
                     # Increased to ensure visual separation.
-                    arc_step = 0.15
+                    arc_step = 0.25
+
+                    # Get pre-calculated base curvature for horizontal edges
+                    base_curvature = pair_base_curve.get(pair_key, 0.0)
 
                     for idx, rel in enumerate(group_rels):
                         src_id = rel.get("src")
@@ -1278,51 +1375,76 @@ class EventCascadeGanttVisualizer:
                         style_key = (r_color, r_dash, rel_name)
 
                         if style_key not in relation_segments:
-                            relation_segments[style_key] = {"x": [], "y": []}
+                            relation_segments[style_key] = {
+                                "x": [],
+                                "y": [],
+                                "text": [],
+                            }
+
+                        # Prepare hover text
+                        src_obj = next((p for p in parts if p["id"] == src_id), None)
+                        dst_obj = next((p for p in parts if p["id"] == dst_id), None)
+                        src_name = src_obj["name"] if src_obj else src_id
+                        dst_name = dst_obj["name"] if dst_obj else dst_id
+                        hover_txt = f"Relation: {rel_name}<br>{src_name} -> {dst_name}"
 
                         # Calculate curvature
                         # If there are multiple relations between the same pair, curve them.
-                        if count == 1:
-                            curvature = 0.0
+                        # If it's a horizontal edge, use the base curvature (Arc Diagram style)
+                        if base_curvature > 0.001:
+                            # Horizontal edge: always curve upwards (positive base)
+                            # Distribute multiple edges around the base curve
+                            if count == 1:
+                                curvature = base_curvature
+                            else:
+                                # For multiple edges, center them around the base curve
+                                # e.g. base=0.5, edges at 0.4, 0.6
+                                # or simply stack them above? Let's center.
+                                center_idx = idx - (count - 1) / 2.0
+                                # Use a smaller step for multi-edge separation to keep them grouped
+                                curvature = base_curvature + center_idx * (
+                                    arc_step * 0.6
+                                )
                         else:
-                            # shift index to center: e.g. 0,1 -> -0.5, 0.5
-                            center_idx = idx - (count - 1) / 2.0
-                            # Adjust curvature based on step.
-                            curvature = center_idx * arc_step
+                            # Non-horizontal (diagonal) edge
+                            if count == 1:
+                                curvature = 0.0
+                            else:
+                                # shift index to center: e.g. 0,1 -> -0.5, 0.5
+                                center_idx = idx - (count - 1) / 2.0
+                                # Adjust curvature based on step.
+                                curvature = center_idx * arc_step
 
-                        # Generate points
-                        if abs(curvature) < 0.001:
-                            # Straight line
-                            xs = [
-                                pd.Timestamp(sx).round("ms"),
-                                pd.Timestamp(dx).round("ms"),
-                                None,
-                            ]
-                            ys = [sy, dy, None]
-                        else:
-                            # Quadratic Bezier (Parabolic) approximation
-                            num_points = 20
-                            xs = []
-                            ys = []
+                        # Generate points (Uniform sampling for both lines and curves to ensure hover works)
+                        # Quadratic Bezier (Parabolic) approximation
+                        # We use 20 points to ensure the curve is smooth and hover detection works reliably
+                        # across the entire length of the line.
+                        num_points = 20
+                        xs = []
+                        ys = []
 
-                            delta_t = dx - sx
-                            delta_y = dy - sy
+                        delta_t = dx - sx
+                        delta_y = dy - sy
 
-                            for k in range(num_points + 1):
-                                t = k / num_points
-                                cur_x = pd.Timestamp(sx + delta_t * t).round("ms")
-                                linear_y = sy + delta_y * t
-                                # Parabolic offset
-                                arc_y = curvature * 4 * t * (1 - t)
-                                cur_y = linear_y + arc_y
-                                xs.append(cur_x)
-                                ys.append(cur_y)
+                        for k in range(num_points + 1):
+                            t = k / num_points
+                            cur_x = pd.Timestamp(sx + delta_t * t).round("ms")
+                            linear_y = sy + delta_y * t
+                            # Parabolic offset
+                            arc_y = curvature * 4 * t * (1 - t)
+                            cur_y = linear_y + arc_y
+                            xs.append(cur_x)
+                            ys.append(cur_y)
 
-                            xs.append(None)
-                            ys.append(None)
+                        xs.append(None)
+                        ys.append(None)
+
+                        # Create text list matching the points (including None)
+                        ts = [hover_txt] * len(xs)
 
                         relation_segments[style_key]["x"].extend(xs)
                         relation_segments[style_key]["y"].extend(ys)
+                        relation_segments[style_key]["text"].extend(ts)
 
             # Draw Episode Bars
             # Use fixed height 0.8 as defined in previous logic
@@ -1384,7 +1506,9 @@ class EventCascadeGanttVisualizer:
                         name=r_name,
                         legendgroup="Relations",
                         showlegend=False,  # We will add a manual legend entry later
-                        hoverinfo="name",
+                        text=segs["text"],
+                        hoverinfo="text",
+                        hovertemplate="%{text}<extra></extra>",
                     )
                 )
 
@@ -1808,9 +1932,22 @@ class EventCascadeGanttVisualizer:
                 )
 
         # --- Relations Legend ---
+        # 5. Dynamic Legend Generation
+        # ----------------------------
+        # Instead of a static legend, we scan the data to find which relation types are actually present.
+        # This ensures the legend is accurate and complete without showing unused types.
+
+        # Collect all unique relations actually present in the data
+        present_relations = set()
+        for row in episode_rows:
+            rels = row.get("Relations", [])
+            for rel in rels:
+                rel_name = rel.get("name")
+                if rel_name:
+                    present_relations.add(rel_name)
+
         if self.relation_style_map:
-            # Add a header for relations (using a dummy empty trace with text or just separator)
-            # Plotly legend doesn't support headers natively, but we can add a trace with name "--- Relations ---"
+            # Add a header for relations
             fig.add_trace(
                 go.Scatter(
                     x=[None],
@@ -1824,7 +1961,17 @@ class EventCascadeGanttVisualizer:
                 )
             )
 
-            for rel_name, (r_color, r_dash) in self.relation_style_map.items():
+            # Sort relations for consistent legend order
+            sorted_rel_names = sorted(present_relations)
+
+            for rel_name in sorted_rel_names:
+                # Get style if exists, otherwise generate/default
+                if rel_name in self.relation_style_map:
+                    r_color, r_dash = self.relation_style_map[rel_name]
+                else:
+                    # Fallback if not in map (should be rare if map is complete)
+                    r_color, r_dash = self._get_relation_style(rel_name)
+
                 fig.add_trace(
                     go.Scatter(
                         x=[None],
