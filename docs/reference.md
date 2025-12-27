@@ -52,3 +52,5 @@ vs. Full-Text Approaches, NAACL 2025.
 - Open event causality extraction by the assistance of llm in task annotation, dataset, and method, ACL 2024
 
 - SummEdits: Measuring LLM ability at factual reasoning through the lens of summarization, ACL 2023
+
+- From single to multi: How llms hallucinate in multi-document summarization, ACL 2025 Findings
