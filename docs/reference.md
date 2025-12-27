@@ -54,3 +54,5 @@ vs. Full-Text Approaches, NAACL 2025.
 - SummEdits: Measuring LLM ability at factual reasoning through the lens of summarization, ACL 2023
 
 - From single to multi: How llms hallucinate in multi-document summarization, ACL 2025 Findings
+
+- Auto-summarization of the texts of construction dispute precedents, Advanced Engineering Informatics 2025.
