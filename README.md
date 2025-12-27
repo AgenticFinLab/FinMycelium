@@ -121,7 +121,7 @@ streamlit run examples/utest/test_web_interface.py
 | AgentEventBuilder   | 📦 [Reconstructed Result](docs/assets/builder_results/lan_tian_ge_rui_fraud_case/FinalEventCascade.json)<br>🗓️ [Gantt Chart Visualization](docs/assets/builder_results/lan_tian_ge_rui_fraud_case/FinalEventCascade_gantt.html)                              |
 | ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/lan_tian_ge_rui_fraud_case/Class_Build_Event_Cascade_Ponzi_Scheme.json)                                                                                        |
 
-2. Hainan Real Estate Foam
+2. Hainan Real Estate Foam (海南房地产泡沫): 
 
 | Builder Type        | Result                                                                                                                                                                  |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -129,14 +129,14 @@ streamlit run examples/utest/test_web_interface.py
 | ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/hainan_real_estate_foam/Class_Build_Event_Cascade_Other_Financial_Event.json)                                                                                        |
 
 
-3. Tulip Bubble
+3. Tulip Bubble (郁金香泡沫): 
 
 | Builder Type        | Result                                                                                                                                                                  |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/tulip_bubble/Class_Build_Event_Cascade_Other_Financial_Event.json)                                                                                        |
 
 
-4. FTX Crypto Exchange Collapse
+4. FTX Crypto Exchange Collapse (交易所FTX崩盘): 
 
 | Builder Type        | Result                                                                                                                                                                  |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
