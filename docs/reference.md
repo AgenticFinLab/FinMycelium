@@ -48,3 +48,5 @@ vs. Full-Text Approaches, NAACL 2025.
 - Natural event summarization, 2011.
 
 - Hello again! llm-powered personalized agent for long-term dialogue, ACL 2025.
+
+- Open event causality extraction by the assistance of llm in task annotation, dataset, and method, ACL 2024
