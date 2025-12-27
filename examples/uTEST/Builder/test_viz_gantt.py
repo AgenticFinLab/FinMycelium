@@ -45,6 +45,9 @@ def test_gantt():
         "EXPERIMENT/uTEST/StepBuilderDemo3/FinalEventCascade.json",
         "EXPERIMENT/uTEST/StepBuilderDemo4/FinalEventCascade.json",
         "EXPERIMENT/uTEST/StepBuilderDemo5/FinalEventCascade.json",
+        "EXPERIMENT/uTEST/StepBuilderDemo6/FinalEventCascade.json",
+        "EXPERIMENT/uTEST/StepBuilderDemo7/FinalEventCascade.json",
+        "EXPERIMENT/uTEST/StepBuilderDemo8/FinalEventCascade.json",
     ]
 
     # Initialize the visualizer instance
