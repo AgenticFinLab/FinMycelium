@@ -30,7 +30,7 @@
 - **Multi-Source Data Collection**: Gather relevant data from diverse sources, including news articles, social media, official reports, and other public documents.
 - **Data Matching and Summarization**: Identify, align, and condense useful information across heterogeneous sources to directly support financial event reconstruction.
 - **Event Reconstruction**: Leverage a large model–based multi-agent system to autonomously integrate, connect, and reconstruct coherent event narratives from fragmented financial data.
-- **Structured Presentation**: Visualize the reconstructed timeline using Gantt charts and ???? to deliver a clear, structured overview of the event.
+- **Structured Presentation**: Visualize the reconstructed timeline using Gantt charts and [Event Developmental Sequence](docs/reference/the_organizational_and_interorganizational_development_of_disasters.pdf) to deliver a clear, structured overview of the event.
 - **Web Interface**: Provide an intuitive, Streamlit-based interactive UI for real-time financial event analysis, exploration, and visualization.
 
 ---
