@@ -30,7 +30,7 @@
 - **Multi-Source Data Collection**: Gather relevant data from diverse sources, including news articles, social media, official reports, and other public documents.
 - **Data Matching and Summarization**: Identify, align, and condense useful information across heterogeneous sources to directly support financial event reconstruction.
 - **Event Reconstruction**: Leverage a large model–based multi-agent system to autonomously integrate, connect, and reconstruct coherent event narratives from fragmented financial data.
-- **Structured Presentation**: Visualize the reconstructed timeline using Gantt charts and ???? to deliver a clear, structured overview of the event.
+- **Structured Presentation**: Visualize the reconstructed timeline using Gantt charts and [Event Developmental Sequence](docs/reference/the_organizational_and_interorganizational_development_of_disasters.pdf) to deliver a clear, structured overview of the event.
 - **Web Interface**: Provide an intuitive, Streamlit-based interactive UI for real-time financial event analysis, exploration, and visualization.
 
 ---
@@ -115,7 +115,7 @@ streamlit run examples/utest/test_web_interface.py
 
 1. Lan Tian Ge Rui Fraud Case (天津蓝天格锐特大非法集资案): 
   - 📦 [Reconstructed Result](docs/assets/FinalEventCascade.json)
-  - 🗓️ [Gantt Chart Visualization](EXPERIMENT/uTEST/Pipline/build_output_20251226184418346270/FinalEventCascade_gantt.html)
+  - 🗓️ [Gantt Chart Visualization](docs/assets/FinalEventCascade_gantt.html)
 
 2. 
 
