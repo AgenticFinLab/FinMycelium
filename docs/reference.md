@@ -6,28 +6,28 @@
 
 - EventSum: A Large-Scale Event-Centric Summarization Dataset for Chinese Multi-News Documents, AAAI 2025.
 
-- From Information to Insight: Leveraging LLMs for Open Aspect-Based Educational Summarization
+- From Information to Insight: Leveraging LLMs for Open Aspect-Based Educational Summarization, ACL 2025.
 
-- uMedSum: A Unified Framework for Advancing Medical Abstractive Summarization
+- uMedSum: A Unified Framework for Advancing Medical Abstractive Summarization, ACL 2025.
 
-- NEXUSSUM: Hierarchical LLM Agents for Long-Form Narrative Summarization
+- NEXUSSUM: Hierarchical LLM Agents for Long-Form Narrative Summarization, ACL 2025.
 
 
-- DTCRS: Dynamic Tree Construction for Recursive Summarization
+- DTCRS: Dynamic Tree Construction for Recursive Summarization, ACL 2025.
 
-- Improving Fairness of Large Language Models in Multi-document Summarization
+- Improving Fairness of Large Language Models in Multi-document Summarization, ACL 2025.
 
-- Principled Content Selection to Generate Diverse and Personalized Multi-Document Summaries
+- Principled Content Selection to Generate Diverse and Personalized Multi-Document Summaries, ACL 2025.
 
-- Adverse Event Extraction from Discharge Summaries: A New Dataset, Annotation Scheme, and Initial Findings
+- Adverse Event Extraction from Discharge Summaries: A New Dataset, Annotation Scheme, and Initial Findings, ACL 2025.
 
-- Temporal reasoning for timeline summarisation in social media
+- Temporal reasoning for timeline summarisation in social media, ACL 2025.
 
-- Graph of Records: Boosting Retrieval Augmented Generation for Long-context Summarization with Graphs
+- Graph of Records: Boosting Retrieval Augmented Generation for Long-context Summarization with Graphs, ACL 2025.
 
-- SARA: Salience-Aware Reinforced Adaptive Decoding for Large Language Models in Abstractive Summarization
+- SARA: Salience-Aware Reinforced Adaptive Decoding for Large Language Models in Abstractive Summarization, ACL 2025.
 
-- Enhancing Event-centric News Cluster Summarization via Data Sharpening and Localization Insights
+- Enhancing Event-centric News Cluster Summarization via Data Sharpening and Localization Insights, ACL 2025.
 
 
 - Background Summarization of Event Timelines, EMNLP 2023.
@@ -43,3 +43,5 @@ vs. Full-Text Approaches, NAACL 2025.
 - Complex Event Summarization Using Multi-Social Attribute Correlation, IEEE Transactions on Knowledge and Data Engineering (IKDE) 2023.
 
 - Using LLM for improving key event discovery: Temporal-guided news stream clustering with event summaries, ACL23-findings
+  
+- Natural event summarization, 2011.
