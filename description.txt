@@ -1,1 +1,1 @@
-finmy: A codebase used to collect target finance data from different sources.
+finmy: A codebase used to reconstruct target finance event from different sources.
