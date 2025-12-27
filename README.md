@@ -112,6 +112,7 @@ streamlit run examples/utest/test_web_interface.py
 
 
 ## Reconstructed Events
+**Guidance:** Please only double-click the `.html` file in the Gantt Chart Visualization to view the detailed reconstructed event.
 
 1. Lan Tian Ge Rui Fraud Case (天津蓝天格锐特大非法集资案): 
 
