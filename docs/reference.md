@@ -30,3 +30,4 @@
 11. Enhancing Event-centric News Cluster Summarization via Data Sharpening and Localization Insights
 
 
+12. Background Summarization of Event Timelines, EMNLP 2023.
