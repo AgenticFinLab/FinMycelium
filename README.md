@@ -115,7 +115,7 @@ streamlit run examples/utest/test_web_interface.py
 
 1. Lan Tian Ge Rui Fraud Case (天津蓝天格锐特大非法集资案): 
   - 📦 [Reconstructed Result](docs/assets/FinalEventCascade.json)
-  - 🗓️ [Gantt Chart Visualization](EXPERIMENT/uTEST/Pipline/build_output_20251226184418346270/FinalEventCascade_gantt.html)
+  - 🗓️ [Gantt Chart Visualization](docs/assets/FinalEventCascade_gantt.html)
 
 2. 
 
