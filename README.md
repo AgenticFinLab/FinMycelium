@@ -141,6 +141,7 @@ streamlit run examples/utest/test_web_interface.py
 | Builder Type        | Result                                                                                                                                                                  |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | AgentEventBuilder   | 📦 [Reconstructed Result](docs/assets/builder_results/ftx_crypto_exchange_collapse/FinalEventCascade.json)<br>🗓️ [Gantt Chart Visualization](docs/assets/builder_results/ftx_crypto_exchange_collapse/FinalEventCascade_gantt.html)                              |     
+| ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/ftx_crypto_exchange_collapse/Class_Build_Event_Cascade_Embezzlement___Misappropriation_of_Funds.json)                       
 
 ---
 
