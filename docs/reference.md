@@ -56,3 +56,5 @@ vs. Full-Text Approaches, NAACL 2025.
 - From single to multi: How llms hallucinate in multi-document summarization, ACL 2025 Findings
 
 - Auto-summarization of the texts of construction dispute precedents, Advanced Engineering Informatics 2025.
+
+- Language models can improve event prediction by few-shot abductive reasoning, NeurIPS 2023
