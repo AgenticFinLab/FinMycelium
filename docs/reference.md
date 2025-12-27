@@ -31,3 +31,6 @@
 
 
 12. Background Summarization of Event Timelines, EMNLP 2023.
+
+13. Scaling Multi-Document Event Summarization: Evaluating Compression
+vs. Full-Text Approaches, NAACL 2025.
