@@ -11,6 +11,8 @@
 
 **Financial Event Reconstruction • Multi-Agent • Intelligent • Modular • AI-Powered**
 
+</div>
+
 ---
 
 > How can the complete chronological process of a specific event, particularly a financial event, be reconstructed as a structured timeline such as a Gantt chart from large-scale, heterogeneous, and noisy real-world data?
@@ -25,7 +27,7 @@
 ## Features
 
 ### Core Capabilities
-- **Multi-Source Data Collection**: Gather relevant data from diverse sources, including news articles, social media, official reports, regulatory filings, and other public documents.
+- **Multi-Source Data Collection**: Gather relevant data from diverse sources, including news articles, social media, official reports, and other public documents.
 - **Data Matching and Summarization**: Identify, align, and condense useful information across heterogeneous sources to directly support financial event reconstruction.
 - **Event Reconstruction**: Leverage a large model–based multi-agent system to autonomously integrate, connect, and reconstruct coherent event narratives from fragmented financial data.
 - **Structured Presentation**: Visualize the reconstructed timeline using Gantt charts and ???? to deliver a clear, structured overview of the event.
@@ -35,7 +37,7 @@
 
 ## To Do List
 
-> - [ ] Address the issue of exceeding context *length limits* in both prompts and model-generated outputs.
+> - [ ] Address the "exceeding length limits" issue in both prompts and generations.
 > - [ ] Re-architect FinMycelium as a *fully agent-based* platform.
 > - [ ] Optimize the event reconstruction pipeline to improve processing *speed*.
 > - [ ] Expand the *range of data sources* for data collection.
@@ -142,6 +144,7 @@ We would like to thank the following projects and communities:
 - [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
 - [Streamlit](https://streamlit.io/) - Web interface framework
 - [Bettafish](https://github.com/666ghj/BettaFish) - Media crawler framework
+- [LlamaIndex](https://github.com/run-llama/llama_index) - Indexing and retrieval
 - Various LLM providers and search APIs for their excellent services
 
 ---
