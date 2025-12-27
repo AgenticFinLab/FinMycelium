@@ -114,13 +114,25 @@ streamlit run examples/utest/test_web_interface.py
 ## Reconstructed Events
 
 1. Lan Tian Ge Rui Fraud Case (天津蓝天格锐特大非法集资案): 
-  - 📦 [Reconstructed Result](docs/assets/FinalEventCascade.json)
-  - 🗓️ [Gantt Chart Visualization](docs/assets/FinalEventCascade_gantt.html)
 
-2. 
 
-- **Blue Sky Ge Rui Illegal Fundraising Case / Qian Zhimin Bitcoin Money Laundering Case**:
-  - [Event Cascade Data](docs/assets/Class_Build_Event_Cascade_Ponzi_Scheme.json)
+| Builder Type        | Result                                                                                                                                                                  |
+|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| AgentEventBuilder   | 📦 [Reconstructed Result](docs/assets/builder_results/lan_tian_ge_rui_fraud_case/FinalEventCascade.json)<br>🗓️ [Gantt Chart Visualization](docs/assets/builder_results/lan_tian_ge_rui_fraud_case/FinalEventCascade_gantt.html)                              |
+| ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/lan_tian_ge_rui_fraud_case/Class_Build_Event_Cascade_Ponzi_Scheme.json)                                                                                        |
+
+2. Hainan Real Estate Foam
+
+| Builder Type        | Result                                                                                                                                                                  |
+|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/hainan_real_estate_foam/Class_Build_Event_Cascade_Other_Financial_Event.json)                                                                                        |
+
+
+3. Tulip Bubble
+
+| Builder Type        | Result                                                                                                                                                                  |
+|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/tulip_bubble/Class_Build_Event_Cascade_Other_Financial_Event.json)                                                                                        |
 
 
 ---
