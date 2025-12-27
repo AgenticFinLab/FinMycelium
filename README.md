@@ -13,49 +13,33 @@
 
 ---
 
-</div>
+> How can the complete chronological process of a specific event, particularly a financial event, be reconstructed as a structured timeline such as a Gantt chart from large-scale, heterogeneous, and noisy real-world data?
 
-## Table of Contents
+> **FinMycelium**, a name borrowed from "finance" and "mycelium" is a **Financial Event Reconstruction Platform** that reconstructs the complete financial event process as a structured timeline from multi-source, diverse public documents. Our platform is built on a large model–based multi-agent system, in which agents cooperate to collect, match, and summarize large-scale, heterogeneous, and noisy real-world data, ultimately building a comprehensive and structured reconstruction of the event.
 
-- [Overview](#-overview)
-- [To Do List](#-to-do-list)
-- [Features](#-features)
-- [Project Demonstration](#-project-demonstration)
-- [Quick Start](#-quick-start)
+> Finance Mycelium (菌丝体)：一个如菌丝体般在异构金融事件碎片中自主延伸、连接并重构真相的动态网络.
 
-
----
-
-</div>
-
-## Overview
-
-**FinMycelium** is a cutting-edge **Financial Event Reconstruction Platform** built on a Multi-Agent Framework, designed to extract, process, and reconstruct complete financial events from diverse public sources. Built with a modular architecture and powered by Large Language Models (LLMs), its multi-agent system specializes in automated collection, matching, summarization, and structured reconstruction of financial events, transforming unstructured financial data into actionable intelligence.
 
 ---
 
 ## Features
 
 ### Core Capabilities
-- **Multi-Source Data Collection**: Web URLs, PDF documents, and social media platforms
-- **Multi-Agent Event Processing**: Coordinated agent system for LLM-based financial event matching and reconstruction
-- **Event Reconstruction Pipeline**: End-to-end configurable pipeline for financial event extraction
-- **Structured Financial Events**: Transform unstructured data into structured event cascades with clear relationships and timelines
-- **Web Interface**: Streamlit-based interactive UI for financial event analysis and visualization
-
+- **Multi-Source Data Collection**: Gather relevant data from diverse sources, including news articles, social media, official reports, regulatory filings, and other public documents.
+- **Data Matching and Summarization**: Identify, align, and condense useful information across heterogeneous sources to directly support financial event reconstruction.
+- **Event Reconstruction**: Leverage a large model–based multi-agent system to autonomously integrate, connect, and reconstruct coherent event narratives from fragmented financial data.
+- **Structured Presentation**: Visualize the reconstructed timeline using Gantt charts and ???? to deliver a clear, structured overview of the event.
+- **Web Interface**: Provide an intuitive, Streamlit-based interactive UI for real-time financial event analysis, exploration, and visualization.
 
 ---
 
 ## To Do List
 
-- [ ] Enhance multi-agent coordination for complex event reconstruction
-- [ ] Add support for real-time financial data sources
-- [ ] Improve event timeline visualization in web interface
-- [ ] Optimize performance for large-scale event processing
-- [ ] Expand media platform support for data collection
-- [ ] Add documentation for agent development and customization
-- [ ] Create more comprehensive test cases
-- [ ] Add multi-language support for the web interface
+> - [ ] Address the issue of exceeding context *length limits* in both prompts and model-generated outputs.
+> - [ ] Re-architect FinMycelium as a *fully agent-based* platform.
+> - [ ] Optimize the event reconstruction pipeline to improve processing *speed*.
+> - [ ] Expand the *range of data sources* for data collection.
+> - [ ] Implement *multi-language support* in the web interface.
 
 
 ---
@@ -167,7 +151,7 @@ We would like to thank the following projects and communities:
 <div align="center">
 
 | Resource       | Link                                                                 |
-| -------------- | -------------------------------------------------------------------- |
+|----------------|----------------------------------------------------------------------|
 | **Repository** | [GitHub](https://github.com/AgenticFinLab/FinMycelium)               |
 | **Issues**     | [GitHub Issues](https://github.com/AgenticFinLab/FinMycelium/issues) |
 
