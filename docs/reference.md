@@ -62,3 +62,8 @@ vs. Full-Text Approaches, NAACL 2025.
 - From News to Forecast: Integrating Event Analysis in LLM-Based Time Series Forecasting with Reflection, Advances in Neural Information Processing Systems, 2024
 
 - BEMEAE: Moving Beyond Exact Span Match for Event Argument Extraction, Proceedings of ACL, 2025. 
+- Unfolding the Headline: Iterative Self-Questioning for News Retrieval and Timeline Summarization, NAACL 2025.
+
+- DTELS: Towards Dynamic Granularity of Timeline Summarization, NAACL 2025.
+
+- Embrace Divergence for Richer Insights: A Multi-document Summarization Benchmark and a Case Study on Summarizing Diverse Information from News Articles, NAACL 2025.
