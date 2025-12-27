@@ -136,6 +136,12 @@ streamlit run examples/utest/test_web_interface.py
 | ClassEventBuilder   | 📊 [Event Cascade Data](docs/assets/builder_results/tulip_bubble/Class_Build_Event_Cascade_Other_Financial_Event.json)                                                                                        |
 
 
+4. FTX Crypto Exchange Collapse
+
+| Builder Type        | Result                                                                                                                                                                  |
+|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| AgentEventBuilder   | 📦 [Reconstructed Result](docs/assets/builder_results/ftx_crypto_exchange_collapse/FinalEventCascade.json)<br>🗓️ [Gantt Chart Visualization](docs/assets/builder_results/ftx_crypto_exchange_collapse/FinalEventCascade_gantt.html)                              |     
+
 ---
 
 ## License

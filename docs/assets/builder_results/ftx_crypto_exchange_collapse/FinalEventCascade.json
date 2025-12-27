@@ -1,0 +1,2938 @@
+{
+    "event_id": "exchange_collapse_ftx_2022",
+    "title": {
+        "value": "FTX Crypto Exchange Collapse",
+        "evidence_source_contents": [
+            "FTX's collapse in November 2022",
+            "Collapsed cryptocurrency exchange FTX",
+            "FTX's downfall and Binance's consolidation: The fragility of centralised digital finance"
+        ],
+        "reasons": [
+            "Direct keyword match: 'FTX collapse'",
+            "Multiple sources refer to the event as a collapse",
+            "Title constructed from query and consistent content references"
+        ],
+        "confidence": 1.0
+    },
+    "event_type": {
+        "value": "Exchange Collapse",
+        "evidence_source_contents": [
+            "FTX's collapse in November 2022",
+            "Collapsed cryptocurrency exchange FTX",
+            "FTX's downfall and Binance's consolidation"
+        ],
+        "reasons": [
+            "Direct description: 'collapse' used multiple times",
+            "Event involves failure of cryptocurrency exchange",
+            "Content consistently refers to collapse/downfall"
+        ],
+        "confidence": 1.0
+    },
+    "start_time": {
+        "value": "2022-11-01",
+        "evidence_source_contents": [
+            "FTX's collapse in November 2022",
+            "affected by November 2022's sudden shutdown",
+            "the collapse of crypto exchange FTX in late 2022"
+        ],
+        "reasons": [
+            "Multiple sources specify November 2022 as timeframe",
+            "No specific day mentioned, only month",
+            "Month-level precision supported by content"
+        ],
+        "confidence": 1.0
+    },
+    "end_time": {
+        "value": "unknown",
+        "evidence_source_contents": [],
+        "reasons": [
+            "Content does not provide clear end date for the collapse event",
+            "Bankruptcy proceedings ongoing as of January 2024",
+            "Insufficient information to determine definitive end"
+        ],
+        "confidence": 0.0
+    },
+    "stages": [
+        {
+            "stage_id": "S1",
+            "name": {
+                "value": "Liquidity Crisis and Shutdown",
+                "evidence_source_contents": [
+                    "November 2022's sudden shutdown amid a liquidity crisis",
+                    "FTX continues to scramble this week to cover a liquidity shortfall",
+                    "triggered a significant decrease in the exchange's liquidity"
+                ],
+                "reasons": [
+                    "Direct mention of 'liquidity crisis'",
+                    "Content describes scramble to cover shortfall",
+                    "Shutdown occurred amid liquidity issues"
+                ],
+                "confidence": 0.9
+            },
+            "index_in_event": 0,
+            "start_time": {
+                "value": "2022-11-01",
+                "evidence_source_contents": [
+                    "FTX's collapse in November 2022",
+                    "November 2022's sudden shutdown"
+                ],
+                "reasons": [
+                    "Event occurred in November 2022",
+                    "No specific start day mentioned",
+                    "Month-level precision consistent with event start"
+                ],
+                "confidence": 1.0
+            },
+            "end_time": {
+                "value": "2022-11-10",
+                "evidence_source_contents": [
+                    "November 10, 2022, 4:55 PM ET",
+                    "With Binance's deal to acquire FTX dead in the water"
+                ],
+                "reasons": [
+                    "Fortune article dated November 10, 2022 describes crisis",
+                    "Binance deal collapse reported on this date",
+                    "Specific date with time available in content"
+                ],
+                "confidence": 0.9
+            },
+            "episodes": [
+                {
+                    "episode_id": "E1",
+                    "name": {
+                        "value": "Binance Acquisition Deal Collapse",
+                        "evidence_source_contents": [
+                            "With Binance's deal to acquire FTX dead in the water",
+                            "News that Binance was to take over FTX in 2022"
+                        ],
+                        "reasons": [
+                            "Direct mention of Binance acquisition deal failing",
+                            "Key event in the collapse timeline",
+                            "Content describes deal as 'dead in the water'"
+                        ],
+                        "confidence": 0.9
+                    },
+                    "index_in_stage": 0,
+                    "start_time": {
+                        "value": "2022-11-10",
+                        "evidence_source_contents": [
+                            "November 10, 2022, 4:55 PM ET",
+                            "With Binance's deal to acquire FTX dead in the water"
+                        ],
+                        "reasons": [
+                            "Article timestamp provides specific date",
+                            "Deal collapse reported on November 10, 2022",
+                            "Time component (4:55 PM ET) available but using date-only for consistency"
+                        ],
+                        "confidence": 1.0
+                    },
+                    "end_time": {
+                        "value": "2022-11-10",
+                        "evidence_source_contents": [
+                            "November 10, 2022, 4:55 PM ET"
+                        ],
+                        "reasons": [
+                            "Same day event based on article timestamp",
+                            "No evidence of extended duration for this episode",
+                            "Episode likely concluded on same day"
+                        ],
+                        "confidence": 0.8
+                    },
+                    "participants": [
+                        {
+                            "participant_id": "P_1",
+                            "name": {
+                                "value": "FTX",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "FTX's collapse in November 2022",
+                                    "With Binance's deal to acquire FTX dead in the water",
+                                    "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall"
+                                ],
+                                "reasons": [
+                                    "Direct named entity: 'FTX' appears multiple times as the collapsing exchange",
+                                    "Explicitly described as 'collapsed cryptocurrency exchange'",
+                                    "Subject of the acquisition deal that collapsed"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "organization",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "Cryptocurrency exchange FTX"
+                                ],
+                                "reasons": [
+                                    "Explicitly described as a cryptocurrency exchange",
+                                    "Organization type clearly indicated"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "base_role": {
+                                "value": "counterparty",
+                                "evidence_source_contents": [
+                                    "With Binance's deal to acquire FTX dead in the water",
+                                    "News that Binance was to take over FTX in 2022"
+                                ],
+                                "reasons": [
+                                    "FTX was the target of the acquisition deal that collapsed",
+                                    "Central entity in the episode as the exchange being acquired"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "attributes": {
+                                "status": {
+                                    "value": "collapsing",
+                                    "evidence_source_contents": [
+                                        "FTX's collapse in November 2022",
+                                        "With FTX on the verge of collapse",
+                                        "Collapsed cryptocurrency exchange FTX"
+                                    ],
+                                    "reasons": [
+                                        "Multiple sources describe FTX as collapsing or collapsed",
+                                        "Direct keyword match: 'collapse'"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "liquidity_situation": {
+                                    "value": "liquidity shortfall of as much as $8 billion",
+                                    "evidence_source_contents": [
+                                        "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall of as much as $8 billion"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative description of liquidity shortfall",
+                                        "Specific dollar amount mentioned"
+                                    ],
+                                    "confidence": 0.9
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "faced acquisition deal collapse",
+                                        "evidence_source_contents": [
+                                            "With Binance's deal to acquire FTX dead in the water"
+                                        ],
+                                        "reasons": [
+                                            "Direct description of acquisition deal failing",
+                                            "FTX is the entity whose acquisition deal collapsed"
+                                        ],
+                                        "confidence": 0.9
+                                    },
+                                    "timestamp": {
+                                        "value": "2022-11-10",
+                                        "evidence_source_contents": [
+                                            "November 10, 2022, 4:55 PM ET"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides specific date for deal collapse report",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "Binance walked away from potential fire-sale deal",
+                                            "evidence_source_contents": [
+                                                "Binance walked away from a potential fire-sale deal"
+                                            ],
+                                            "reasons": [
+                                                "Direct description of Binance's action that caused deal collapse",
+                                                "Key detail about the acquisition deal failure"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_2",
+                            "name": {
+                                "value": "Binance",
+                                "evidence_source_contents": [
+                                    "With Binance's deal to acquire FTX dead in the water",
+                                    "News that Binance was to take over FTX in 2022",
+                                    "Binance walked away from a potential fire-sale deal",
+                                    "Binance's consolidation"
+                                ],
+                                "reasons": [
+                                    "Direct named entity: 'Binance' appears multiple times",
+                                    "Explicitly mentioned as the acquirer in the failed deal",
+                                    "Key actor in the acquisition episode"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "organization",
+                                "evidence_source_contents": [
+                                    "Binance's deal to acquire FTX",
+                                    "Binance walked away from a potential fire-sale deal"
+                                ],
+                                "reasons": [
+                                    "Described as making acquisition deals",
+                                    "Implied to be a cryptocurrency exchange organization"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "base_role": {
+                                "value": "acquirer",
+                                "evidence_source_contents": [
+                                    "With Binance's deal to acquire FTX dead in the water",
+                                    "News that Binance was to take over FTX in 2022"
+                                ],
+                                "reasons": [
+                                    "Explicitly described as the entity that was to acquire FTX",
+                                    "Primary role in the acquisition deal"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "attributes": {
+                                "market_position": {
+                                    "value": "leading crypto exchange",
+                                    "evidence_source_contents": [
+                                        "FTX's collapse in November 2022 meant that the market share of Binance and other leading crypto exchanges changed significantly",
+                                        "Binance's consolidation"
+                                    ],
+                                    "reasons": [
+                                        "Described as a leading crypto exchange",
+                                        "Mentioned in context of market share changes"
+                                    ],
+                                    "confidence": 0.8
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "walked away from acquisition deal",
+                                        "evidence_source_contents": [
+                                            "Binance walked away from a potential fire-sale deal"
+                                        ],
+                                        "reasons": [
+                                            "Direct action description: 'walked away'",
+                                            "Key action that caused the deal collapse"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "2022-11-10",
+                                        "evidence_source_contents": [
+                                            "November 10, 2022, 4:55 PM ET"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides specific date for deal collapse report",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "deal described as 'dead in the water'",
+                                            "evidence_source_contents": [
+                                                "With Binance's deal to acquire FTX dead in the water"
+                                            ],
+                                            "reasons": [
+                                                "Direct quote describing the state of the deal",
+                                                "Key detail about the outcome of Binance's action"
+                                            ],
+                                            "confidence": 1.0
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_3",
+                            "name": {
+                                "value": "Sam Bankman-Fried",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried",
+                                    "Bankman-Fried subtly acknowledged",
+                                    "Bankman-Fried tweeted Monday that FTX client assets were fine",
+                                    "Bankman-Fried quietly deleted that claim as of Wednesday"
+                                ],
+                                "reasons": [
+                                    "Direct named entity: 'Sam Bankman-Fried' appears multiple times",
+                                    "Identified as CEO of FTX",
+                                    "Key individual involved in the episode"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "individual",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried"
+                                ],
+                                "reasons": [
+                                    "Identified as an individual holding CEO position",
+                                    "Personal name indicates individual participant"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "base_role": {
+                                "value": "executive",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried",
+                                    "it's becoming more and more unlikely that CEO Sam Bankman-Fried will find backers"
+                                ],
+                                "reasons": [
+                                    "Explicitly identified as CEO of FTX",
+                                    "Executive role in the organization"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "attributes": {
+                                "position": {
+                                    "value": "CEO",
+                                    "evidence_source_contents": [
+                                        "CEO Sam Bankman-Fried"
+                                    ],
+                                    "reasons": [
+                                        "Direct title attribution: 'CEO'",
+                                        "Explicit position mentioned"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "scrambled to find backers",
+                                        "evidence_source_contents": [
+                                            "it's becoming more and more unlikely that CEO Sam Bankman-Fried will find backers"
+                                        ],
+                                        "reasons": [
+                                            "Direct description of action: 'find backers'",
+                                            "Implied effort to secure funding after deal collapse"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "timestamp": {
+                                        "value": "2022-11-10",
+                                        "evidence_source_contents": [
+                                            "November 10, 2022, 4:55 PM ET"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides context for the timeframe",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "details": []
+                                },
+                                {
+                                    "name": {
+                                        "value": "deleted claim about client assets",
+                                        "evidence_source_contents": [
+                                            "Bankman-Fried quietly deleted that claim as of Wednesday"
+                                        ],
+                                        "reasons": [
+                                            "Direct action description: 'deleted that claim'",
+                                            "Specific action taken regarding public statements"
+                                        ],
+                                        "confidence": 0.9
+                                    },
+                                    "timestamp": {
+                                        "value": "2022-11-09",
+                                        "evidence_source_contents": [
+                                            "as of Wednesday"
+                                        ],
+                                        "reasons": [
+                                            "Implied to be Wednesday before November 10 article",
+                                            "Logical timeframe within episode context"
+                                        ],
+                                        "confidence": 0.7
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "previously tweeted FTX client assets were fine",
+                                            "evidence_source_contents": [
+                                                "Bankman-Fried tweeted Monday that FTX client assets were fine"
+                                            ],
+                                            "reasons": [
+                                                "Direct description of previous action that was reversed",
+                                                "Context for the deletion action"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_4",
+                            "name": {
+                                "value": "FTX customers",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "customers have already pulled out more than $6 billion from the exchange",
+                                    "International customers have seen withdrawals paused this week",
+                                    "affected by November 2022's sudden shutdown"
+                                ],
+                                "reasons": [
+                                    "Multiple references to customers of FTX",
+                                    "Collective group affected by the collapse and deal failure",
+                                    "Key stakeholders in the episode"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "retail_investor_group",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "individual investors",
+                                    "retail and institutional investors used FTX"
+                                ],
+                                "reasons": [
+                                    "Described as customers/investors using the exchange",
+                                    "Large cohort affected by the events",
+                                    "Group participant appropriate for collective reference"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "base_role": {
+                                "value": "victim",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "affected by November 2022's sudden shutdown",
+                                    "There are going to be big victims here"
+                                ],
+                                "reasons": [
+                                    "Described as affected by shutdown",
+                                    "Explicitly referred to as potential victims",
+                                    "Primary group harmed by the collapse"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "attributes": {
+                                "withdrawal_activity": {
+                                    "value": "pulled out more than $6 billion",
+                                    "evidence_source_contents": [
+                                        "customers have already pulled out more than $6 billion from the exchange"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative description of customer actions",
+                                        "Specific dollar amount mentioned"
+                                    ],
+                                    "confidence": 0.9
+                                },
+                                "withdrawal_status": {
+                                    "value": "withdrawals paused for international customers",
+                                    "evidence_source_contents": [
+                                        "International customers have seen withdrawals paused this week"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of withdrawal restrictions",
+                                        "Key attribute affecting customer group"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "scope": {
+                                    "value": "international and U.S. customers",
+                                    "evidence_source_contents": [
+                                        "International customers have seen withdrawals paused this week",
+                                        "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                                    ],
+                                    "reasons": [
+                                        "Different treatment mentioned for international vs U.S. customers",
+                                        "Geographic scope indicated in content"
+                                    ],
+                                    "confidence": 0.9
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "withdrew funds",
+                                        "evidence_source_contents": [
+                                            "customers have already pulled out more than $6 billion from the exchange"
+                                        ],
+                                        "reasons": [
+                                            "Direct action description: 'pulled out' funds",
+                                            "Collective action by customer group"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "2022-11-10",
+                                        "evidence_source_contents": [
+                                            "November 10, 2022, 4:55 PM ET"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides context for the timeframe",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "more than $6 billion withdrawn",
+                                            "evidence_source_contents": [
+                                                "customers have already pulled out more than $6 billion from the exchange"
+                                            ],
+                                            "reasons": [
+                                                "Direct quantitative detail of withdrawal amount",
+                                                "Specific financial scale mentioned"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "descriptions": [
+                        {
+                            "value": "Binance walked away from a potential fire-sale deal to acquire FTX, leaving the deal 'dead in the water'.",
+                            "evidence_source_contents": [
+                                "Binance walked away from a potential fire-sale deal",
+                                "With Binance's deal to acquire FTX dead in the water"
+                            ],
+                            "reasons": [
+                                "Direct description of Binance's action causing deal collapse",
+                                "Explicit statement on the deal's status"
+                            ],
+                            "confidence": 1.0
+                        },
+                        {
+                            "value": "The collapse of the acquisition deal occurred amid FTX scrambling to cover a liquidity shortfall of as much as $8 billion.",
+                            "evidence_source_contents": [
+                                "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall of as much as $8 billion"
+                            ],
+                            "reasons": [
+                                "Direct link between deal collapse and FTX's liquidity crisis",
+                                "Quantitative context for the financial situation"
+                            ],
+                            "confidence": 0.9
+                        },
+                        {
+                            "value": "The deal failure made it increasingly unlikely for FTX CEO Sam Bankman-Fried to find other backers.",
+                            "evidence_source_contents": [
+                                "it's becoming more and more unlikely that CEO Sam Bankman-Fried will find backers after Binance walked away from a potential fire-sale deal"
+                            ],
+                            "reasons": [
+                                "Direct causal link between deal collapse and difficulty finding alternative funding",
+                                "Explicit mention of CEO's diminished prospects"
+                            ],
+                            "confidence": 0.9
+                        },
+                        {
+                            "value": "The event triggered significant customer withdrawals, with over $6 billion pulled out from FTX.",
+                            "evidence_source_contents": [
+                                "customers have already pulled out more than $6 billion from the exchange"
+                            ],
+                            "reasons": [
+                                "Direct quantitative evidence of customer reaction to the crisis",
+                                "Link between deal collapse and financial outflows"
+                            ],
+                            "confidence": 0.9
+                        }
+                    ],
+                    "participant_relations": [
+                        {
+                            "from_participant_id": "P_2",
+                            "to_participant_id": "P_1",
+                            "relation_name": {
+                                "value": "failed acquisition attempt",
+                                "evidence_source_contents": [
+                                    "With Binance's deal to acquire FTX dead in the water",
+                                    "News that Binance was to take over FTX in 2022"
+                                ],
+                                "reasons": [
+                                    "Direct description of Binance's attempted acquisition of FTX",
+                                    "Explicit mention of deal failure"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "Binance walked away from a potential fire-sale deal to acquire FTX.",
+                                    "evidence_source_contents": [
+                                        "Binance walked away from a potential fire-sale deal"
+                                    ],
+                                    "reasons": [
+                                        "Direct action description establishing the failed acquisition relationship"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "acquirer of",
+                                "evidence_source_contents": [
+                                    "With Binance's deal to acquire FTX dead in the water",
+                                    "News that Binance was to take over FTX in 2022"
+                                ],
+                                "reasons": [
+                                    "Binance explicitly described as the entity that was to acquire FTX",
+                                    "Acquisition relationship clearly stated"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "is_bidirectional": false,
+                            "start_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No specific start time for the acquisition attempt mentioned in content"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "end_time": {
+                                "value": "2022-11-10",
+                                "evidence_source_contents": [
+                                    "November 10, 2022, 4:55 PM ET",
+                                    "With Binance's deal to acquire FTX dead in the water"
+                                ],
+                                "reasons": [
+                                    "Deal collapse reported on November 10, 2022",
+                                    "Article timestamp provides end date for the acquisition attempt"
+                                ],
+                                "confidence": 0.9
+                            }
+                        },
+                        {
+                            "from_participant_id": "P_3",
+                            "to_participant_id": "P_1",
+                            "relation_name": {
+                                "value": "executive leadership",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried"
+                                ],
+                                "reasons": [
+                                    "Direct title attribution establishing executive relationship",
+                                    "Explicit position mentioned"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "Sam Bankman-Fried is the CEO of FTX.",
+                                    "evidence_source_contents": [
+                                        "CEO Sam Bankman-Fried"
+                                    ],
+                                    "reasons": [
+                                        "Direct statement of executive position"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "CEO of",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried"
+                                ],
+                                "reasons": [
+                                    "Explicit title 'CEO' indicates leadership relationship"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "is_bidirectional": false,
+                            "start_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No specific start time for CEO role mentioned in content"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No information on when CEO role ended in the context of this episode"
+                                ],
+                                "confidence": 0.0
+                            }
+                        },
+                        {
+                            "from_participant_id": "P_4",
+                            "to_participant_id": "P_1",
+                            "relation_name": {
+                                "value": "customer relationship",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "Multiple references to customers of FTX",
+                                    "Direct evidence of financial interaction"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "FTX customers withdrew more than $6 billion from the exchange amid the crisis.",
+                                    "evidence_source_contents": [
+                                        "customers have already pulled out more than $6 billion from the exchange"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative description of customer actions establishing relationship"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "client of",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "retail and institutional investors used FTX"
+                                ],
+                                "reasons": [
+                                    "Customers explicitly described as users of the FTX exchange",
+                                    "Client relationship implied by service usage"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "is_bidirectional": false,
+                            "start_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No specific start time for customer relationships mentioned"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No information on when customer relationships ended"
+                                ],
+                                "confidence": 0.0
+                            }
+                        }
+                    ],
+                    "transactions": [
+                        {
+                            "name": {
+                                "value": "customer withdrawals",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "Direct description of financial outflow from FTX to customers",
+                                    "Keyword match: 'pulled out' indicating withdrawal action"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "transaction_type": {
+                                "value": "withdrawal",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "Direct description of customers withdrawing funds from the exchange",
+                                    "Financial transfer from exchange to customers"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "timestamp": {
+                                "value": "2022-11-10",
+                                "evidence_source_contents": [
+                                    "November 10, 2022, 4:55 PM ET"
+                                ],
+                                "reasons": [
+                                    "Article timestamp provides context for the timeframe of customer withdrawals",
+                                    "Episode timeframe aligns with this date"
+                                ],
+                                "confidence": 0.8
+                            },
+                            "details": [
+                                {
+                                    "value": "more than $6 billion withdrawn by customers",
+                                    "evidence_source_contents": [
+                                        "customers have already pulled out more than $6 billion from the exchange"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative description of withdrawal amount",
+                                        "Specific financial scale mentioned"
+                                    ],
+                                    "confidence": 0.9
+                                }
+                            ],
+                            "from_participant_id": {
+                                "value": "P_1",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange",
+                                    "Cryptocurrency exchange FTX"
+                                ],
+                                "reasons": [
+                                    "FTX (P_1) is the exchange from which funds are being withdrawn",
+                                    "Direct relationship between FTX and customer withdrawals"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "to_participant_id": {
+                                "value": "P_4",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange",
+                                    "customers are wondering what happens to their crypto"
+                                ],
+                                "reasons": [
+                                    "FTX customers (P_4) are the recipients of the withdrawn funds",
+                                    "Direct description of customers pulling funds from FTX"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "instruments": [
+                                {
+                                    "value": "cryptocurrency",
+                                    "evidence_source_contents": [
+                                        "customers are wondering what happens to their crypto",
+                                        "customers have already pulled out more than $6 billion from the exchange"
+                                    ],
+                                    "reasons": [
+                                        "Context involves cryptocurrency exchange",
+                                        "Withdrawals likely involve crypto assets"
+                                    ],
+                                    "confidence": 0.8
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "episode_id": "E2",
+                    "name": {
+                        "value": "Withdrawals Paused and Customer Panic",
+                        "evidence_source_contents": [
+                            "International customers have seen withdrawals paused this week",
+                            "customers have already pulled out more than $6 billion from the exchange"
+                        ],
+                        "reasons": [
+                            "Direct mention of withdrawals being paused",
+                            "Content describes massive customer withdrawals",
+                            "Key aspect of liquidity crisis"
+                        ],
+                        "confidence": 0.9
+                    },
+                    "index_in_stage": 1,
+                    "start_time": {
+                        "value": "unknown",
+                        "evidence_source_contents": [],
+                        "reasons": [
+                            "Content mentions withdrawals paused 'this week' but no specific date",
+                            "Insufficient temporal information to assign precise start"
+                        ],
+                        "confidence": 0.0
+                    },
+                    "end_time": {
+                        "value": "unknown",
+                        "evidence_source_contents": [],
+                        "reasons": [
+                            "No information on when withdrawals resumed or were permanently halted",
+                            "Insufficient temporal information in content"
+                        ],
+                        "confidence": 0.0
+                    },
+                    "participants": [
+                        {
+                            "participant_id": "P_1",
+                            "name": {
+                                "value": "FTX",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall of as much as $8 billion",
+                                    "FTX's collapse in November 2022"
+                                ],
+                                "reasons": [
+                                    "Direct named entity 'FTX' appears multiple times as the collapsing exchange",
+                                    "Explicitly described as 'collapsed cryptocurrency exchange'",
+                                    "Central entity in the episode as the exchange where withdrawals are paused"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "organization",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "Cryptocurrency exchange FTX"
+                                ],
+                                "reasons": [
+                                    "Explicitly described as a cryptocurrency exchange",
+                                    "Organization type clearly indicated"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "base_role": {
+                                "value": "counterparty",
+                                "evidence_source_contents": [
+                                    "International customers have seen withdrawals paused this week",
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "FTX is the platform where customer withdrawals are paused and massive withdrawals occur",
+                                    "Central entity in the withdrawal panic episode"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "attributes": {
+                                "status": {
+                                    "value": "collapsing",
+                                    "evidence_source_contents": [
+                                        "FTX's collapse in November 2022",
+                                        "With FTX on the verge of collapse"
+                                    ],
+                                    "reasons": [
+                                        "Multiple sources describe FTX as collapsing or on the verge of collapse",
+                                        "Direct keyword match: 'collapse'"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "liquidity_situation": {
+                                    "value": "liquidity shortfall of as much as $8 billion",
+                                    "evidence_source_contents": [
+                                        "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall of as much as $8 billion"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative description of liquidity shortfall",
+                                        "Specific dollar amount mentioned"
+                                    ],
+                                    "confidence": 0.9
+                                },
+                                "withdrawal_status": {
+                                    "value": "withdrawals paused for international customers",
+                                    "evidence_source_contents": [
+                                        "International customers have seen withdrawals paused this week"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of withdrawal restrictions",
+                                        "Key attribute relevant to the episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_1",
+                                        "Reusing participant_id P_1 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "paused withdrawals for international customers",
+                                        "evidence_source_contents": [
+                                            "International customers have seen withdrawals paused this week"
+                                        ],
+                                        "reasons": [
+                                            "Direct action description: 'withdrawals paused'",
+                                            "Key action by FTX that defines the episode"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "unknown",
+                                        "evidence_source_contents": [],
+                                        "reasons": [
+                                            "Content mentions 'this week' but no specific date",
+                                            "Insufficient temporal information to assign precise timestamp"
+                                        ],
+                                        "confidence": 0.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "working through backlog of withdrawal requests",
+                                            "evidence_source_contents": [
+                                                "the team has said it's working through the backlog of requests"
+                                            ],
+                                            "reasons": [
+                                                "Direct detail about FTX's response to withdrawal pause",
+                                                "Provides context for the action"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": {
+                                        "value": "faced massive customer withdrawals",
+                                        "evidence_source_contents": [
+                                            "customers have already pulled out more than $6 billion from the exchange"
+                                        ],
+                                        "reasons": [
+                                            "Direct description of customer action affecting FTX",
+                                            "FTX is the entity from which funds are withdrawn"
+                                        ],
+                                        "confidence": 0.9
+                                    },
+                                    "timestamp": {
+                                        "value": "unknown",
+                                        "evidence_source_contents": [],
+                                        "reasons": [
+                                            "Content mentions 'in recent days' but no specific date",
+                                            "Insufficient temporal information to assign precise timestamp"
+                                        ],
+                                        "confidence": 0.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "more than $6 billion withdrawn by customers",
+                                            "evidence_source_contents": [
+                                                "customers have already pulled out more than $6 billion from the exchange"
+                                            ],
+                                            "reasons": [
+                                                "Direct quantitative detail of withdrawal amount",
+                                                "Specific financial scale mentioned"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_4",
+                            "name": {
+                                "value": "FTX customers",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "customers have already pulled out more than $6 billion from the exchange",
+                                    "International customers have seen withdrawals paused this week"
+                                ],
+                                "reasons": [
+                                    "Multiple references to customers of FTX",
+                                    "Collective group affected by withdrawal pause and panic",
+                                    "Key stakeholders in the episode"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "retail_investor_group",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "individual investors",
+                                    "retail and institutional investors used FTX"
+                                ],
+                                "reasons": [
+                                    "Described as customers/investors using the exchange",
+                                    "Large cohort affected by the events",
+                                    "Group participant appropriate for collective reference"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "base_role": {
+                                "value": "victim",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "There are going to be big victims here"
+                                ],
+                                "reasons": [
+                                    "Described as affected by withdrawal pause and potential collapse",
+                                    "Explicitly referred to as potential victims",
+                                    "Primary group harmed by the liquidity crisis"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "attributes": {
+                                "withdrawal_activity": {
+                                    "value": "pulled out more than $6 billion",
+                                    "evidence_source_contents": [
+                                        "customers have already pulled out more than $6 billion from the exchange"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative description of customer actions",
+                                        "Specific dollar amount mentioned"
+                                    ],
+                                    "confidence": 0.9
+                                },
+                                "withdrawal_status": {
+                                    "value": "withdrawals paused for international customers",
+                                    "evidence_source_contents": [
+                                        "International customers have seen withdrawals paused this week"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of withdrawal restrictions affecting customer group",
+                                        "Key attribute relevant to the episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "scope": {
+                                    "value": "international and U.S. customers",
+                                    "evidence_source_contents": [
+                                        "International customers have seen withdrawals paused this week",
+                                        "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                                    ],
+                                    "reasons": [
+                                        "Different treatment mentioned for international vs U.S. customers",
+                                        "Geographic scope indicated in content"
+                                    ],
+                                    "confidence": 0.9
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_4",
+                                        "Reusing participant_id P_4 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "withdrew funds massively",
+                                        "evidence_source_contents": [
+                                            "customers have already pulled out more than $6 billion from the exchange"
+                                        ],
+                                        "reasons": [
+                                            "Direct action description: 'pulled out' funds",
+                                            "Collective action by customer group"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "unknown",
+                                        "evidence_source_contents": [],
+                                        "reasons": [
+                                            "Content mentions 'in recent days' but no specific date",
+                                            "Insufficient temporal information to assign precise timestamp"
+                                        ],
+                                        "confidence": 0.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "more than $6 billion withdrawn",
+                                            "evidence_source_contents": [
+                                                "customers have already pulled out more than $6 billion from the exchange"
+                                            ],
+                                            "reasons": [
+                                                "Direct quantitative detail of withdrawal amount",
+                                                "Specific financial scale mentioned"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": {
+                                        "value": "faced withdrawal restrictions",
+                                        "evidence_source_contents": [
+                                            "International customers have seen withdrawals paused this week"
+                                        ],
+                                        "reasons": [
+                                            "Direct description of action affecting customer group",
+                                            "Customers are the recipients of FTX's withdrawal pause action"
+                                        ],
+                                        "confidence": 0.9
+                                    },
+                                    "timestamp": {
+                                        "value": "unknown",
+                                        "evidence_source_contents": [],
+                                        "reasons": [
+                                            "Content mentions 'this week' but no specific date",
+                                            "Insufficient temporal information to assign precise timestamp"
+                                        ],
+                                        "confidence": 0.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "international customers affected, U.S. customers told they can withdraw",
+                                            "evidence_source_contents": [
+                                                "International customers have seen withdrawals paused this week",
+                                                "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                                            ],
+                                            "reasons": [
+                                                "Direct detail about differential treatment",
+                                                "Provides context for the action's impact"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_3",
+                            "name": {
+                                "value": "Sam Bankman-Fried",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried",
+                                    "Bankman-Fried tweeted Monday that FTX client assets were fine",
+                                    "Bankman-Fried quietly deleted that claim as of Wednesday"
+                                ],
+                                "reasons": [
+                                    "Direct named entity: 'Sam Bankman-Fried' appears multiple times",
+                                    "Identified as CEO of FTX",
+                                    "Key individual involved in the episode"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "individual",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried"
+                                ],
+                                "reasons": [
+                                    "Identified as an individual holding CEO position",
+                                    "Personal name indicates individual participant"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "base_role": {
+                                "value": "executive",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried",
+                                    "it's becoming more and more unlikely that CEO Sam Bankman-Fried will find backers"
+                                ],
+                                "reasons": [
+                                    "Explicitly identified as CEO of FTX",
+                                    "Executive role in the organization"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "attributes": {
+                                "position": {
+                                    "value": "CEO",
+                                    "evidence_source_contents": [
+                                        "CEO Sam Bankman-Fried"
+                                    ],
+                                    "reasons": [
+                                        "Direct title attribution: 'CEO'",
+                                        "Explicit position mentioned"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_3",
+                                        "Reusing participant_id P_3 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "communicated about withdrawal status",
+                                        "evidence_source_contents": [
+                                            "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                                        ],
+                                        "reasons": [
+                                            "Direct action description: 'has said' regarding withdrawal ability",
+                                            "Key communication action relevant to the episode"
+                                        ],
+                                        "confidence": 0.9
+                                    },
+                                    "timestamp": {
+                                        "value": "unknown",
+                                        "evidence_source_contents": [],
+                                        "reasons": [
+                                            "No specific timestamp provided for this statement",
+                                            "Insufficient temporal information in content"
+                                        ],
+                                        "confidence": 0.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "stated U.S. customers should be able to fully withdraw funds",
+                                            "evidence_source_contents": [
+                                                "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                                            ],
+                                            "reasons": [
+                                                "Direct quote/claim about withdrawal ability",
+                                                "Key detail about differential treatment"
+                                            ],
+                                            "confidence": 0.9
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "descriptions": [
+                        {
+                            "value": "International customers of FTX had their withdrawals paused during the week of the liquidity crisis.",
+                            "evidence_source_contents": [
+                                "International customers have seen withdrawals paused this week"
+                            ],
+                            "reasons": [
+                                "Direct statement about withdrawal pause for international customers",
+                                "Key event defining the episode"
+                            ],
+                            "confidence": 1.0
+                        },
+                        {
+                            "value": "Customers withdrew more than $6 billion from FTX in recent days, exacerbating the liquidity shortfall.",
+                            "evidence_source_contents": [
+                                "customers have already pulled out more than $6 billion from the exchange"
+                            ],
+                            "reasons": [
+                                "Direct quantitative description of massive customer withdrawals",
+                                "Specific financial scale mentioned"
+                            ],
+                            "confidence": 0.9
+                        },
+                        {
+                            "value": "FTX's team was working through a backlog of withdrawal requests while the pause was in effect.",
+                            "evidence_source_contents": [
+                                "the team has said it's working through the backlog of requests"
+                            ],
+                            "reasons": [
+                                "Direct detail about FTX's response to the withdrawal pause",
+                                "Provides context for the episode's dynamics"
+                            ],
+                            "confidence": 0.9
+                        },
+                        {
+                            "value": "CEO Sam Bankman-Fried communicated that U.S. customers should be able to fully withdraw their funds, indicating differential treatment.",
+                            "evidence_source_contents": [
+                                "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                            ],
+                            "reasons": [
+                                "Direct quote/claim about withdrawal ability for U.S. customers",
+                                "Highlights executive communication during the panic"
+                            ],
+                            "confidence": 0.9
+                        }
+                    ],
+                    "participant_relations": [
+                        {
+                            "from_participant_id": "P_3",
+                            "to_participant_id": "P_1",
+                            "relation_name": {
+                                "value": "executive leadership",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried"
+                                ],
+                                "reasons": [
+                                    "Sam Bankman-Fried is explicitly identified as the CEO of FTX",
+                                    "Direct organizational hierarchy mentioned"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "Sam Bankman-Fried is the CEO of FTX, making executive decisions during the liquidity crisis.",
+                                    "evidence_source_contents": [
+                                        "CEO Sam Bankman-Fried",
+                                        "For U.S. customers, Bankman-Fried has said they should be able to fully withdraw their funds"
+                                    ],
+                                    "reasons": [
+                                        "Direct title attribution and action description",
+                                        "CEO role is central to the episode's events"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "executive of",
+                                "evidence_source_contents": [
+                                    "CEO Sam Bankman-Fried"
+                                ],
+                                "reasons": [
+                                    "Explicit position indicates executive relationship to the organization",
+                                    "Direct organizational link"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "start_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No specific start time for the executive role provided in the content",
+                                    "Insufficient temporal information"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No end time for the executive role provided in the content",
+                                    "Insufficient temporal information"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "is_bidirectional": false
+                        },
+                        {
+                            "from_participant_id": "P_4",
+                            "to_participant_id": "P_1",
+                            "relation_name": {
+                                "value": "customer relationship",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange",
+                                    "International customers have seen withdrawals paused this week"
+                                ],
+                                "reasons": [
+                                    "Direct references to customers of FTX and their actions",
+                                    "Explicit customer-exchange relationship described"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "FTX customers were using the exchange to hold and withdraw funds, and were directly affected by the withdrawal pause.",
+                                    "evidence_source_contents": [
+                                        "customers have already pulled out more than $6 billion from the exchange",
+                                        "International customers have seen withdrawals paused this week"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of customer actions and impact",
+                                        "Central relationship in the episode"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "client of",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "Customers are described as users of the exchange service",
+                                    "Direct client-service relationship implied"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "start_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No specific start time for the customer relationship provided",
+                                    "Insufficient temporal information"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "No end time for the customer relationship provided",
+                                    "Insufficient temporal information"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "is_bidirectional": false
+                        }
+                    ],
+                    "transactions": [
+                        {
+                            "name": {
+                                "value": "customer withdrawals",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "Direct description of financial movement: 'pulled out' funds from the exchange",
+                                    "Specific quantitative detail of withdrawal amount"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "transaction_type": {
+                                "value": "withdrawal",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "Direct keyword match: 'pulled out' indicates withdrawal of funds",
+                                    "Action described as customers removing funds from the exchange"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "timestamp": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "Content mentions 'in recent days' but no specific date or time",
+                                    "Insufficient temporal information to assign precise timestamp"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "details": [
+                                {
+                                    "value": "more than $6 billion withdrawn by customers",
+                                    "evidence_source_contents": [
+                                        "customers have already pulled out more than $6 billion from the exchange"
+                                    ],
+                                    "reasons": [
+                                        "Direct quantitative detail of withdrawal amount",
+                                        "Specific financial scale mentioned"
+                                    ],
+                                    "confidence": 0.9
+                                }
+                            ],
+                            "from_participant_id": {
+                                "value": "P_1",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "FTX (P_1) is the exchange from which funds are being withdrawn",
+                                    "Direct relationship: customers withdraw from FTX exchange"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "to_participant_id": {
+                                "value": "P_4",
+                                "evidence_source_contents": [
+                                    "customers have already pulled out more than $6 billion from the exchange"
+                                ],
+                                "reasons": [
+                                    "FTX customers (P_4) are the ones withdrawing the funds",
+                                    "Direct relationship: customers receive withdrawn funds from FTX"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "instruments": null
+                        }
+                    ]
+                }
+            ],
+            "descriptions": [
+                {
+                    "value": "The stage was defined by a severe liquidity crisis at FTX, with the exchange scrambling to cover a shortfall of as much as $8 billion, which culminated in its sudden shutdown in November 2022.",
+                    "evidence_source_contents": [
+                        "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall of as much as $8 billion",
+                        "November 2022’s sudden shutdown amid a liquidity crisis"
+                    ],
+                    "reasons": [
+                        "Direct quantitative statement of the liquidity shortfall scale",
+                        "Explicit link between the shutdown and the liquidity crisis"
+                    ],
+                    "confidence": 1.0
+                },
+                {
+                    "value": "A pivotal event was the collapse of Binance's deal to acquire FTX, which was described as 'dead in the water,' eliminating a potential rescue path and making it unlikely for CEO Sam Bankman-Fried to find other backers.",
+                    "evidence_source_contents": [
+                        "With Binance's deal to acquire FTX dead in the water",
+                        "it’s becoming more and more unlikely that CEO Sam Bankman-Fried will find backers after Binance walked away from a potential fire-sale deal"
+                    ],
+                    "reasons": [
+                        "Direct statement on the status of the acquisition deal",
+                        "Explicit causal link between the deal's failure and the difficulty in securing alternative funding"
+                    ],
+                    "confidence": 1.0
+                },
+                {
+                    "value": "The crisis triggered massive customer panic and withdrawals, with over $6 billion pulled from the exchange in recent days, while international customers faced a pause on withdrawals.",
+                    "evidence_source_contents": [
+                        "customers have already pulled out more than $6 billion from the exchange",
+                        "International customers have seen withdrawals paused this week"
+                    ],
+                    "reasons": [
+                        "Direct quantitative evidence of customer fund outflows",
+                        "Explicit statement about the withdrawal pause for a key customer segment"
+                    ],
+                    "confidence": 1.0
+                },
+                {
+                    "value": "The collapse had significant market consequences, triggering a decrease in FTX's liquidity and altering the market share landscape among leading crypto exchanges, with Binance regaining dominance.",
+                    "evidence_source_contents": [
+                        "triggered a significant decrease in the exchange's liquidity",
+                        "FTX's collapse in November 2022 meant that the market share of Binance and other leading crypto exchanges changed significantly"
+                    ],
+                    "reasons": [
+                        "Direct statement on the causal impact on FTX's liquidity",
+                        "Explicit description of the broader market share consequences following the collapse"
+                    ],
+                    "confidence": 0.9
+                }
+            ]
+        },
+        {
+            "stage_id": "S2",
+            "name": {
+                "value": "Bankruptcy Proceedings",
+                "evidence_source_contents": [
+                    "the firm's bankruptcy lawyers said Wednesday in a court hearing",
+                    "Bankruptcy seems to be on the table",
+                    "FTX customers would likely become unsecured creditors"
+                ],
+                "reasons": [
+                    "Direct mention of bankruptcy lawyers and court hearing",
+                    "Content discusses bankruptcy as likely outcome",
+                    "Multiple references to bankruptcy proceedings"
+                ],
+                "confidence": 1.0
+            },
+            "index_in_event": 1,
+            "start_time": {
+                "value": "2022-11-11",
+                "evidence_source_contents": [
+                    "the firm's bankruptcy lawyers said Wednesday in a court hearing"
+                ],
+                "reasons": [
+                    "Logical continuation after November 10 liquidity crisis",
+                    "Bankruptcy proceedings would follow initial collapse",
+                    "No specific start date provided, using next logical day"
+                ],
+                "confidence": 0.7
+            },
+            "end_time": {
+                "value": "unknown",
+                "evidence_source_contents": [],
+                "reasons": [
+                    "Bankruptcy proceedings ongoing as of January 2024 article",
+                    "No end date provided in content",
+                    "Insufficient information to determine conclusion"
+                ],
+                "confidence": 0.0
+            },
+            "episodes": [
+                {
+                    "episode_id": "E1",
+                    "name": {
+                        "value": "Court Hearing on Exchange Restart",
+                        "evidence_source_contents": [
+                            "the firm's bankruptcy lawyers said Wednesday in a court hearing",
+                            "FTX will not be restarted, the firm's bankruptcy lawyers said Wednesday in a court hearing"
+                        ],
+                        "reasons": [
+                            "Direct description of court hearing",
+                            "Key bankruptcy proceeding event",
+                            "Decision not to restart exchange made in court"
+                        ],
+                        "confidence": 1.0
+                    },
+                    "index_in_stage": 0,
+                    "start_time": {
+                        "value": "2024-01-31",
+                        "evidence_source_contents": [
+                            "31 January 2024 13:40, UTC"
+                        ],
+                        "reasons": [
+                            "Article timestamp provides specific date for the court hearing and announcements",
+                            "Episode is defined by this single-day event"
+                        ],
+                        "confidence": 1.0
+                    },
+                    "end_time": {
+                        "value": "2024-01-31",
+                        "evidence_source_contents": [
+                            "31 January 2024 13:40, UTC"
+                        ],
+                        "reasons": [
+                            "Same day event based on article timestamp",
+                            "Court hearing and announcements likely concluded on the same day",
+                            "No evidence of extended duration in the content"
+                        ],
+                        "confidence": 0.8
+                    },
+                    "participants": [
+                        {
+                            "participant_id": "P_1",
+                            "name": {
+                                "value": "FTX",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown"
+                                ],
+                                "reasons": [
+                                    "Direct named entity 'FTX' appears multiple times as the subject of the court hearing and repayment announcement",
+                                    "Explicitly described as 'collapsed cryptocurrency exchange'",
+                                    "Central entity in the episode as the exchange being discussed in bankruptcy proceedings"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "organization",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "the company said that it expects to fully repay customers"
+                                ],
+                                "reasons": [
+                                    "Explicitly described as a cryptocurrency exchange",
+                                    "Referred to as 'the company' indicating organizational entity"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "base_role": {
+                                "value": "debtor",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "Collapsed cryptocurrency exchange FTX will not be restarted"
+                                ],
+                                "reasons": [
+                                    "Entity making repayment promises to creditors and customers",
+                                    "Subject of bankruptcy proceedings and court hearing regarding restart decision"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "attributes": {
+                                "status": {
+                                    "value": "collapsed",
+                                    "evidence_source_contents": [
+                                        "Collapsed cryptocurrency exchange FTX",
+                                        "affected by November 2022’s sudden shutdown"
+                                    ],
+                                    "reasons": [
+                                        "Direct description as 'collapsed'",
+                                        "Reference to past shutdown event"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "restart_decision": {
+                                    "value": "will not be restarted",
+                                    "evidence_source_contents": [
+                                        "FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                    ],
+                                    "reasons": [
+                                        "Direct quote from bankruptcy lawyers in court hearing",
+                                        "Key decision relevant to the episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "repayment_plan": {
+                                    "value": "expects to fully repay customers and general unsecured creditors",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                    ],
+                                    "reasons": [
+                                        "Direct statement about repayment expectations",
+                                        "Key financial outcome announced in the episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse) and Stage S1, Episode E2 (Withdrawals Paused and Customer Panic)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_1",
+                                        "Reusing participant_id P_1 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "announced repayment plan",
+                                        "evidence_source_contents": [
+                                            "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                        ],
+                                        "reasons": [
+                                            "Direct action of making a public statement about repayment",
+                                            "Key development in bankruptcy proceedings"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "2024-01-31",
+                                        "evidence_source_contents": [
+                                            "31 January 2024 13:40, UTC"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides specific date for the announcement",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "full repayment expected for customers and general unsecured creditors",
+                                            "evidence_source_contents": [
+                                                "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                            ],
+                                            "reasons": [
+                                                "Direct detail about the scope of repayment",
+                                                "Specific financial commitment mentioned"
+                                            ],
+                                            "confidence": 1.0
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": {
+                                        "value": "received court decision on restart",
+                                        "evidence_source_contents": [
+                                            "FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                        ],
+                                        "reasons": [
+                                            "Action of having bankruptcy lawyers communicate court decision",
+                                            "FTX is the entity affected by the restart decision"
+                                        ],
+                                        "confidence": 0.9
+                                    },
+                                    "timestamp": {
+                                        "value": "2024-01-31",
+                                        "evidence_source_contents": [
+                                            "31 January 2024 13:40, UTC"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides specific date for court hearing",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "decision due to lack of interest from buyers",
+                                            "evidence_source_contents": [
+                                                "due to a lack of interest from buyers"
+                                            ],
+                                            "reasons": [
+                                                "Direct reason provided for the restart decision",
+                                                "Key contextual detail"
+                                            ],
+                                            "confidence": 1.0
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_4",
+                            "name": {
+                                "value": "FTX customers",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown",
+                                    "customers are wondering what happens to their crypto"
+                                ],
+                                "reasons": [
+                                    "Multiple references to customers of FTX",
+                                    "Explicitly mentioned as recipients of repayment plan",
+                                    "Collective group affected by the bankruptcy proceedings"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "retail_investor_group",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "individual investors",
+                                    "retail and institutional investors used FTX"
+                                ],
+                                "reasons": [
+                                    "Described as customers/investors using the exchange",
+                                    "Large cohort affected by the bankruptcy and repayment announcement",
+                                    "Group participant appropriate for collective reference"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "base_role": {
+                                "value": "creditor",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "FTX customers would likely become unsecured creditors"
+                                ],
+                                "reasons": [
+                                    "Explicitly identified as creditors in bankruptcy context",
+                                    "Recipients of promised repayment"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "attributes": {
+                                "affected_period": {
+                                    "value": "November 2022 shutdown",
+                                    "evidence_source_contents": [
+                                        "affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of when customers were affected",
+                                        "Specific timeframe mentioned"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "repayment_status": {
+                                    "value": "expected to be fully repaid",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers"
+                                    ],
+                                    "reasons": [
+                                        "Direct statement about repayment expectations",
+                                        "Key attribute relevant to customer group in this episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "creditor_type": {
+                                    "value": "general unsecured creditors",
+                                    "evidence_source_contents": [
+                                        "\"general unsecured creditors\" affected by November 2022’s sudden shutdown"
+                                    ],
+                                    "reasons": [
+                                        "Explicit classification in bankruptcy context",
+                                        "Legal status mentioned in repayment announcement"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse) and Stage S1, Episode E2 (Withdrawals Paused and Customer Panic)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_4",
+                                        "Reusing participant_id P_4 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "awaiting repayment",
+                                        "evidence_source_contents": [
+                                            "customers are wondering what happens to their crypto",
+                                            "the company said that it expects to fully repay customers"
+                                        ],
+                                        "reasons": [
+                                            "Implied action of waiting for resolution",
+                                            "Direct context of customer uncertainty and promised repayment"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "timestamp": {
+                                        "value": "2024-01-31",
+                                        "evidence_source_contents": [
+                                            "31 January 2024 13:40, UTC"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides context for the timeframe",
+                                            "Episode timeframe aligns with repayment announcement date"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "details": []
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_5",
+                            "name": {
+                                "value": "FTX bankruptcy lawyers",
+                                "evidence_source_contents": [
+                                    "the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                    "FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                ],
+                                "reasons": [
+                                    "Direct reference to bankruptcy lawyers representing FTX",
+                                    "Key actors communicating court decisions",
+                                    "Distinct from FTX organization itself as legal representatives"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "professional_service",
+                                "evidence_source_contents": [
+                                    "the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                ],
+                                "reasons": [
+                                    "Described as lawyers providing bankruptcy legal services",
+                                    "Professional service provider category appropriate"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "base_role": {
+                                "value": "legal_representative",
+                                "evidence_source_contents": [
+                                    "the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                ],
+                                "reasons": [
+                                    "Explicitly identified as legal representatives in court proceedings",
+                                    "Primary role in communicating legal decisions"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "attributes": {
+                                "client": {
+                                    "value": "FTX",
+                                    "evidence_source_contents": [
+                                        "the firm’s bankruptcy lawyers",
+                                        "FTX will not be restarted, the firm’s bankruptcy lawyers said"
+                                    ],
+                                    "reasons": [
+                                        "Direct attribution to FTX as their client",
+                                        "Clear relationship indicated"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "forum": {
+                                    "value": "court hearing",
+                                    "evidence_source_contents": [
+                                        "said Wednesday in a court hearing"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of where they made statements",
+                                        "Specific legal forum mentioned"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "announced court decision",
+                                        "evidence_source_contents": [
+                                            "the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                            "FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                        ],
+                                        "reasons": [
+                                            "Direct action of making statements in court hearing",
+                                            "Key communication of legal decision"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "2024-01-31",
+                                        "evidence_source_contents": [
+                                            "31 January 2024 13:40, UTC"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides specific date for court hearing",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "FTX will not be restarted due to lack of buyer interest",
+                                            "evidence_source_contents": [
+                                                "FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing , due to a lack of interest from buyers"
+                                            ],
+                                            "reasons": [
+                                                "Direct quote/statement made by the lawyers",
+                                                "Key content of their announcement"
+                                            ],
+                                            "confidence": 1.0
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "descriptions": [
+                        {
+                            "value": "Bankruptcy lawyers for FTX announced in a court hearing that the collapsed cryptocurrency exchange will not be restarted due to a lack of interest from buyers.",
+                            "evidence_source_contents": [
+                                "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing , due to a lack of interest from buyers."
+                            ],
+                            "reasons": [
+                                "Direct quote from the content describing the key announcement of the court hearing",
+                                "Captures the central decision and its reason"
+                            ],
+                            "confidence": 1.0
+                        },
+                        {
+                            "value": "The company (FTX) announced it expects to fully repay customers and general unsecured creditors affected by the November 2022 shutdown.",
+                            "evidence_source_contents": [
+                                "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis."
+                            ],
+                            "reasons": [
+                                "Direct statement of the repayment plan announced in the same context as the court hearing",
+                                "Key financial outcome for creditors and customers"
+                            ],
+                            "confidence": 1.0
+                        },
+                        {
+                            "value": "The court hearing and repayment announcement occurred on January 31, 2024, as reported in a news article.",
+                            "evidence_source_contents": [
+                                "31 January 2024 13:40, UTC"
+                            ],
+                            "reasons": [
+                                "Article timestamp provides specific date and time for the reported events",
+                                "Establishes the temporal context for the episode"
+                            ],
+                            "confidence": 1.0
+                        }
+                    ],
+                    "participant_relations": [
+                        {
+                            "from_participant_id": "P_5",
+                            "to_participant_id": "P_1",
+                            "relation_name": {
+                                "value": "legal representation",
+                                "evidence_source_contents": [
+                                    "the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                    "FTX will not be restarted, the firm’s bankruptcy lawyers said"
+                                ],
+                                "reasons": [
+                                    "Direct attribution of bankruptcy lawyers to FTX as 'the firm's' lawyers",
+                                    "Explicit client-representative relationship indicated in the content"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "FTX bankruptcy lawyers represented FTX in a court hearing, announcing the decision not to restart the exchange.",
+                                    "evidence_source_contents": [
+                                        "the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                        "FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of lawyers acting on behalf of FTX in a legal forum",
+                                        "Specific action of making a court announcement establishes the representation"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "representative of",
+                                "evidence_source_contents": [
+                                    "the firm’s bankruptcy lawyers said Wednesday in a court hearing"
+                                ],
+                                "reasons": [
+                                    "Lawyers are described as belonging to the firm (FTX)",
+                                    "Implies a formal representative role in legal proceedings"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "is_bidirectional": false,
+                            "start_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "Content does not specify when the legal representation began",
+                                    "Insufficient information in source content"
+                                ],
+                                "confidence": 0.0
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "Content does not specify if or when the representation ended",
+                                    "Insufficient information in source content"
+                                ],
+                                "confidence": 0.0
+                            }
+                        },
+                        {
+                            "from_participant_id": "P_1",
+                            "to_participant_id": "P_4",
+                            "relation_name": {
+                                "value": "debtor to creditor",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "FTX customers would likely become unsecured creditors"
+                                ],
+                                "reasons": [
+                                    "FTX (debtor) explicitly states repayment obligation to customers/creditors",
+                                    "Content frames customers as creditors in bankruptcy context"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "FTX announced it expects to fully repay its customers and general unsecured creditors, establishing a debtor-creditor relationship.",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis."
+                                    ],
+                                    "reasons": [
+                                        "Direct statement of financial obligation from FTX to its customers/creditors",
+                                        "Key relationship highlighted by the repayment announcement"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "owes repayment to",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                ],
+                                "reasons": [
+                                    "Explicit statement of expectation to repay",
+                                    "Indicates a directional financial obligation"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "is_bidirectional": false,
+                            "start_time": {
+                                "value": "2022-11",
+                                "evidence_source_contents": [
+                                    "affected by November 2022’s sudden shutdown"
+                                ],
+                                "reasons": [
+                                    "The debt relationship originated from the November 2022 shutdown and liquidity crisis",
+                                    "Content specifies the period when customers were affected"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "Repayment is expected but not completed; no end date provided",
+                                    "Insufficient information in source content"
+                                ],
+                                "confidence": 0.0
+                            }
+                        }
+                    ],
+                    "transactions": [
+                        {
+                            "name": {
+                                "value": "repayment commitment to customers and creditors",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                ],
+                                "reasons": [
+                                    "Direct statement about financial obligation to repay customers and creditors",
+                                    "Explicit mention of repayment as a key financial outcome"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "transaction_type": {
+                                "value": "repayment commitment",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                ],
+                                "reasons": [
+                                    "Direct description of financial obligation to repay",
+                                    "Transaction involves commitment to transfer value to creditors"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "timestamp": {
+                                "value": "2024-01-31",
+                                "evidence_source_contents": [
+                                    "31 January 2024 13:40, UTC"
+                                ],
+                                "reasons": [
+                                    "Article timestamp provides specific date for the announcement",
+                                    "Episode timeframe aligns with this date",
+                                    "Court hearing and repayment announcement occurred on same day"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "details": [
+                                {
+                                    "value": "full repayment expected for customers and general unsecured creditors affected by November 2022 shutdown",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                    ],
+                                    "reasons": [
+                                        "Direct detail about the scope and beneficiaries of repayment",
+                                        "Specific financial commitment mentioned with context"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "from_participant_id": {
+                                "value": "P_1",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "Collapsed cryptocurrency exchange FTX"
+                                ],
+                                "reasons": [
+                                    "FTX (P_1) is the entity making the repayment commitment",
+                                    "Direct attribution to FTX as the debtor/organization"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "to_participant_id": {
+                                "value": "P_4",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "FTX customers would likely become unsecured creditors"
+                                ],
+                                "reasons": [
+                                    "FTX customers (P_4) are explicitly identified as recipients of repayment",
+                                    "Customers are classified as general unsecured creditors in bankruptcy context"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "instruments": [
+                                {
+                                    "value": "bankruptcy repayment plan",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                    ],
+                                    "reasons": [
+                                        "Repayment is part of bankruptcy proceedings",
+                                        "Instrument is the formal repayment plan announced in court"
+                                    ],
+                                    "confidence": 0.9
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "episode_id": "E2",
+                    "name": {
+                        "value": "Customer Repayment Announcement",
+                        "evidence_source_contents": [
+                            "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                        ],
+                        "reasons": [
+                            "Direct mention of repayment plan to customers",
+                            "Key development in bankruptcy proceedings",
+                            "Important outcome for affected parties"
+                        ],
+                        "confidence": 1.0
+                    },
+                    "index_in_stage": 1,
+                    "start_time": {
+                        "value": "2024-01-31",
+                        "evidence_source_contents": [
+                            "31 January 2024 13:40, UTC"
+                        ],
+                        "reasons": [
+                            "Article timestamp provides specific date for the repayment announcement",
+                            "Episode timeframe aligns with this date"
+                        ],
+                        "confidence": 1.0
+                    },
+                    "end_time": {
+                        "value": "unknown",
+                        "evidence_source_contents": [],
+                        "reasons": [
+                            "Repayment process likely ongoing",
+                            "No end date provided for repayment completion",
+                            "Insufficient temporal information in content"
+                        ],
+                        "confidence": 0.0
+                    },
+                    "participants": [
+                        {
+                            "participant_id": "P_1",
+                            "name": {
+                                "value": "FTX",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis",
+                                    "Collapsed cryptocurrency exchange FTX"
+                                ],
+                                "reasons": [
+                                    "Direct named entity 'FTX' appears multiple times as the subject of the repayment announcement",
+                                    "Explicitly described as 'collapsed cryptocurrency exchange'",
+                                    "Central entity in the episode as the exchange making the repayment announcement"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "organization",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX",
+                                    "the company said that it expects to fully repay customers"
+                                ],
+                                "reasons": [
+                                    "Explicitly described as a cryptocurrency exchange",
+                                    "Referred to as 'the company' indicating organizational entity"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "base_role": {
+                                "value": "debtor",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                ],
+                                "reasons": [
+                                    "Entity making repayment promises to creditors and customers",
+                                    "Subject of bankruptcy proceedings and repayment announcement"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "attributes": {
+                                "status": {
+                                    "value": "collapsed",
+                                    "evidence_source_contents": [
+                                        "Collapsed cryptocurrency exchange FTX",
+                                        "affected by November 2022’s sudden shutdown"
+                                    ],
+                                    "reasons": [
+                                        "Direct description as 'collapsed'",
+                                        "Reference to past shutdown event"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "repayment_plan": {
+                                    "value": "expects to fully repay customers and general unsecured creditors",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                    ],
+                                    "reasons": [
+                                        "Direct statement about repayment expectations",
+                                        "Key financial outcome announced in the episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse) and Stage S1, Episode E2 (Withdrawals Paused and Customer Panic) and Stage S2, Episode E1 (Court Hearing on Exchange Restart)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_1",
+                                        "Reusing participant_id P_1 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "announced repayment plan",
+                                        "evidence_source_contents": [
+                                            "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                        ],
+                                        "reasons": [
+                                            "Direct action of making a public statement about repayment",
+                                            "Key development in bankruptcy proceedings"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "timestamp": {
+                                        "value": "2024-01-31",
+                                        "evidence_source_contents": [
+                                            "31 January 2024 13:40, UTC"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides specific date for the announcement",
+                                            "Episode timeframe aligns with this date"
+                                        ],
+                                        "confidence": 1.0
+                                    },
+                                    "details": [
+                                        {
+                                            "value": "full repayment expected for customers and general unsecured creditors",
+                                            "evidence_source_contents": [
+                                                "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                            ],
+                                            "reasons": [
+                                                "Direct detail about the scope of repayment",
+                                                "Specific financial commitment mentioned"
+                                            ],
+                                            "confidence": 1.0
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "participant_id": "P_4",
+                            "name": {
+                                "value": "FTX customers",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis",
+                                    "customers are wondering what happens to their crypto"
+                                ],
+                                "reasons": [
+                                    "Multiple references to customers of FTX",
+                                    "Explicitly mentioned as recipients of repayment plan",
+                                    "Collective group affected by the bankruptcy proceedings"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "participant_type": {
+                                "value": "retail_investor_group",
+                                "evidence_source_contents": [
+                                    "customers are wondering what happens to their crypto",
+                                    "individual investors",
+                                    "retail and institutional investors used FTX"
+                                ],
+                                "reasons": [
+                                    "Described as customers/investors using the exchange",
+                                    "Large cohort affected by the bankruptcy and repayment announcement",
+                                    "Group participant appropriate for collective reference"
+                                ],
+                                "confidence": 0.9
+                            },
+                            "base_role": {
+                                "value": "creditor",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "FTX customers would likely become unsecured creditors"
+                                ],
+                                "reasons": [
+                                    "Explicitly identified as creditors in bankruptcy context",
+                                    "Recipients of promised repayment"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "attributes": {
+                                "affected_period": {
+                                    "value": "November 2022 shutdown",
+                                    "evidence_source_contents": [
+                                        "affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                    ],
+                                    "reasons": [
+                                        "Direct description of when customers were affected",
+                                        "Specific timeframe mentioned"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "repayment_status": {
+                                    "value": "expected to be fully repaid",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers"
+                                    ],
+                                    "reasons": [
+                                        "Direct statement about repayment expectations",
+                                        "Key attribute relevant to customer group in this episode"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "creditor_type": {
+                                    "value": "general unsecured creditors",
+                                    "evidence_source_contents": [
+                                        "\"general unsecured creditors\" affected by November 2022’s sudden shutdown"
+                                    ],
+                                    "reasons": [
+                                        "Explicit classification in bankruptcy context",
+                                        "Legal status mentioned in repayment announcement"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                "reused_from": {
+                                    "value": "Stage S1, Episode E1 (Binance Acquisition Deal Collapse) and Stage S1, Episode E2 (Withdrawals Paused and Customer Panic) and Stage S2, Episode E1 (Court Hearing on Exchange Restart)",
+                                    "evidence_source_contents": [],
+                                    "reasons": [
+                                        "Same entity as previously reconstructed participant P_4",
+                                        "Reusing participant_id P_4 to maintain consistency across episodes"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "name": {
+                                        "value": "awaiting repayment",
+                                        "evidence_source_contents": [
+                                            "customers are wondering what happens to their crypto",
+                                            "the company said that it expects to fully repay customers"
+                                        ],
+                                        "reasons": [
+                                            "Implied action of waiting for resolution",
+                                            "Direct context of customer uncertainty and promised repayment"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "timestamp": {
+                                        "value": "2024-01-31",
+                                        "evidence_source_contents": [
+                                            "31 January 2024 13:40, UTC"
+                                        ],
+                                        "reasons": [
+                                            "Article timestamp provides context for the timeframe",
+                                            "Episode timeframe aligns with repayment announcement date"
+                                        ],
+                                        "confidence": 0.8
+                                    },
+                                    "details": []
+                                }
+                            ]
+                        }
+                    ],
+                    "descriptions": [
+                        {
+                            "value": "FTX announced it expects to fully repay customers and general unsecured creditors affected by the November 2022 shutdown.",
+                            "evidence_source_contents": [
+                                "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                            ],
+                            "reasons": [
+                                "Direct statement of repayment expectation and affected parties",
+                                "Specific reference to the November 2022 shutdown event"
+                            ],
+                            "confidence": 1.0
+                        },
+                        {
+                            "value": "The repayment announcement was made in the context of bankruptcy proceedings where FTX will not be restarted.",
+                            "evidence_source_contents": [
+                                "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                            ],
+                            "reasons": [
+                                "Repayment announcement follows court hearing on exchange restart",
+                                "Bankruptcy context is explicitly mentioned"
+                            ],
+                            "confidence": 1.0
+                        },
+                        {
+                            "value": "Customers, who became unsecured creditors due to the collapse, are awaiting repayment.",
+                            "evidence_source_contents": [
+                                "FTX customers would likely become unsecured creditors",
+                                "customers are wondering what happens to their crypto"
+                            ],
+                            "reasons": [
+                                "Explicit classification of customers as unsecured creditors",
+                                "Implied state of uncertainty and waiting for repayment"
+                            ],
+                            "confidence": 0.9
+                        }
+                    ],
+                    "participant_relations": [
+                        {
+                            "from_participant_id": "P_1",
+                            "to_participant_id": "P_4",
+                            "relation_name": {
+                                "value": "debtor to creditor",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "FTX customers would likely become unsecured creditors"
+                                ],
+                                "reasons": [
+                                    "FTX (P_1) is the debtor making repayment promises",
+                                    "FTX customers (P_4) are explicitly identified as creditors"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "descriptions": [
+                                {
+                                    "value": "FTX owes repayment to its customers who are unsecured creditors due to the November 2022 collapse.",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown",
+                                        "FTX customers would likely become unsecured creditors"
+                                    ],
+                                    "reasons": [
+                                        "Direct statement of financial obligation from FTX to customers",
+                                        "Context of bankruptcy and creditor status provided"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "relation_type": {
+                                "value": "obligated to repay",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                ],
+                                "reasons": [
+                                    "Explicit commitment to repay establishes a directional financial obligation"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "start_time": {
+                                "value": "2024-01-31",
+                                "evidence_source_contents": [
+                                    "31 January 2024 13:40, UTC"
+                                ],
+                                "reasons": [
+                                    "Relation is established at the time of the repayment announcement",
+                                    "Article timestamp provides the date"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "end_time": {
+                                "value": "unknown",
+                                "evidence_source_contents": [],
+                                "reasons": [
+                                    "Repayment process ongoing; relation persists until fulfillment",
+                                    "No end date provided in content"
+                                ],
+                                "confidence": 0.0
+                            }
+                        }
+                    ],
+                    "transactions": [
+                        {
+                            "name": {
+                                "value": "repayment announcement to customers",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                ],
+                                "reasons": [
+                                    "Direct statement about repayment expectations from FTX to customers",
+                                    "Key financial commitment announced in the episode"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "transaction_type": {
+                                "value": "repayment commitment",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                ],
+                                "reasons": [
+                                    "Explicit mention of repayment to creditors and customers",
+                                    "Financial obligation announced in bankruptcy context"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "timestamp": {
+                                "value": "2024-01-31",
+                                "evidence_source_contents": [
+                                    "31 January 2024 13:40, UTC"
+                                ],
+                                "reasons": [
+                                    "Article timestamp provides specific date for the repayment announcement",
+                                    "Episode timeframe aligns with this date"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "details": [
+                                {
+                                    "value": "full repayment expected for customers and general unsecured creditors",
+                                    "evidence_source_contents": [
+                                        "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                    ],
+                                    "reasons": [
+                                        "Direct detail about the scope of repayment",
+                                        "Specific financial commitment mentioned"
+                                    ],
+                                    "confidence": 1.0
+                                },
+                                {
+                                    "value": "related to November 2022 shutdown and liquidity crisis",
+                                    "evidence_source_contents": [
+                                        "affected by November 2022’s sudden shutdown amid a liquidity crisis"
+                                    ],
+                                    "reasons": [
+                                        "Context for why repayment is needed",
+                                        "Historical event triggering the financial obligations"
+                                    ],
+                                    "confidence": 1.0
+                                }
+                            ],
+                            "from_participant_id": {
+                                "value": "P_1",
+                                "evidence_source_contents": [
+                                    "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                                ],
+                                "reasons": [
+                                    "FTX (P_1) is explicitly stated as the entity making the repayment announcement",
+                                    "FTX is the debtor in bankruptcy proceedings making commitments to creditors"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "to_participant_id": {
+                                "value": "P_4",
+                                "evidence_source_contents": [
+                                    "the company said that it expects to fully repay customers and \"general unsecured creditors\"",
+                                    "customers are wondering what happens to their crypto"
+                                ],
+                                "reasons": [
+                                    "FTX customers (P_4) are explicitly mentioned as recipients of the repayment",
+                                    "Customers are identified as creditors in the bankruptcy context"
+                                ],
+                                "confidence": 1.0
+                            },
+                            "instruments": [
+                                {
+                                    "value": "bankruptcy proceedings",
+                                    "evidence_source_contents": [
+                                        "the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                                        "FTX customers would likely become unsecured creditors"
+                                    ],
+                                    "reasons": [
+                                        "Repayment announcement made in bankruptcy court context",
+                                        "Legal framework for the financial transaction"
+                                    ],
+                                    "confidence": 0.9
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "descriptions": [
+                {
+                    "value": "The bankruptcy proceedings stage involved a formal court hearing where FTX's bankruptcy lawyers announced the definitive decision not to restart the collapsed cryptocurrency exchange due to a lack of buyer interest.",
+                    "evidence_source_contents": [
+                        "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing , due to a lack of interest from buyers."
+                    ],
+                    "reasons": [
+                        "Direct quote from content describing the key legal action and its outcome.",
+                        "Identifies the central decision made within the bankruptcy process."
+                    ],
+                    "confidence": 1.0
+                },
+                {
+                    "value": "A major financial outcome of this stage was FTX's announcement that it expects to fully repay customers and general unsecured creditors affected by the November 2022 shutdown and liquidity crisis.",
+                    "evidence_source_contents": [
+                        "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis."
+                    ],
+                    "reasons": [
+                        "Direct statement of the repayment plan, a core financial development in bankruptcy.",
+                        "Specifies the affected parties and links the obligation to the initial collapse event."
+                    ],
+                    "confidence": 1.0
+                },
+                {
+                    "value": "The proceedings formalized the status of FTX customers as unsecured creditors within the bankruptcy, placing them in line for potential repayment but behind secured creditors.",
+                    "evidence_source_contents": [
+                        "FTX customers would likely become unsecured creditors",
+                        "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                    ],
+                    "reasons": [
+                        "Explicit classification of customer status from content discussing bankruptcy implications.",
+                        "Repayment announcement confirms their treatment as creditors."
+                    ],
+                    "confidence": 0.9
+                },
+                {
+                    "value": "Key activities included legal representation by bankruptcy lawyers in court and the company's communication of its repayment plan, marking a shift from crisis management to structured legal and financial resolution.",
+                    "evidence_source_contents": [
+                        "the firm’s bankruptcy lawyers said Wednesday in a court hearing",
+                        "the company said that it expects to fully repay customers and \"general unsecured creditors\""
+                    ],
+                    "reasons": [
+                        "Describes the primary actors (lawyers) and forum (court) for the stage.",
+                        "Highlights the two interconnected core activities: legal adjudication and financial commitment."
+                    ],
+                    "confidence": 1.0
+                }
+            ]
+        }
+    ],
+    "descriptions": [
+        {
+            "value": "The FTX crypto exchange collapsed in November 2022 amid a severe liquidity crisis, triggered by a scramble to cover a shortfall of as much as $8 billion, which culminated in its sudden shutdown.",
+            "evidence_source_contents": [
+                "FTX's collapse in November 2022",
+                "November 2022’s sudden shutdown amid a liquidity crisis",
+                "Cryptocurrency exchange FTX continues to scramble this week to cover a liquidity shortfall of as much as $8 billion"
+            ],
+            "reasons": [
+                "Direct statement of the collapse timeframe and cause",
+                "Explicit link between the shutdown and the liquidity crisis",
+                "Quantitative evidence of the financial shortfall scale"
+            ],
+            "confidence": 1.0
+        },
+        {
+            "value": "A pivotal turning point was the failure of Binance's fire-sale deal to acquire FTX, which was described as 'dead in the water,' eliminating a potential rescue path and making it unlikely for CEO Sam Bankman-Fried to find other backers.",
+            "evidence_source_contents": [
+                "With Binance's deal to acquire FTX dead in the water",
+                "it’s becoming more and more unlikely that CEO Sam Bankman-Fried will find backers after Binance walked away from a potential fire-sale deal"
+            ],
+            "reasons": [
+                "Direct description of the acquisition deal's status",
+                "Explicit causal link between the deal's failure and the difficulty in securing alternative funding"
+            ],
+            "confidence": 1.0
+        },
+        {
+            "value": "The crisis triggered massive customer panic and withdrawals, with over $6 billion pulled from the exchange in recent days, while international customers faced a pause on withdrawals, exacerbating the liquidity shortfall.",
+            "evidence_source_contents": [
+                "customers have already pulled out more than $6 billion from the exchange",
+                "International customers have seen withdrawals paused this week"
+            ],
+            "reasons": [
+                "Direct quantitative evidence of customer fund outflows",
+                "Explicit statement about the withdrawal pause for a key customer segment"
+            ],
+            "confidence": 1.0
+        },
+        {
+            "value": "The collapse had significant market consequences, triggering a decrease in FTX's liquidity and altering the market share landscape among leading crypto exchanges, with Binance regaining dominance.",
+            "evidence_source_contents": [
+                "triggered a significant decrease in the exchange's liquidity",
+                "FTX's collapse in November 2022 meant that the market share of Binance and other leading crypto exchanges changed significantly"
+            ],
+            "reasons": [
+                "Direct statement on the causal impact on FTX's liquidity",
+                "Explicit description of the broader market share consequences following the collapse"
+            ],
+            "confidence": 0.9
+        },
+        {
+            "value": "The event led to protracted bankruptcy proceedings, where FTX's bankruptcy lawyers announced in a January 2024 court hearing that the exchange would not be restarted due to a lack of buyer interest.",
+            "evidence_source_contents": [
+                "Collapsed cryptocurrency exchange FTX will not be restarted, the firm’s bankruptcy lawyers said Wednesday in a court hearing , due to a lack of interest from buyers."
+            ],
+            "reasons": [
+                "Direct quote from content describing the key legal decision in the bankruptcy stage",
+                "Specifies the reason for not restarting the exchange"
+            ],
+            "confidence": 1.0
+        },
+        {
+            "value": "A major financial outcome of the bankruptcy was FTX's announcement that it expects to fully repay customers and general unsecured creditors affected by the November 2022 shutdown, formalizing their status as unsecured creditors.",
+            "evidence_source_contents": [
+                "the company said that it expects to fully repay customers and \"general unsecured creditors\" affected by November 2022’s sudden shutdown amid a liquidity crisis.",
+                "FTX customers would likely become unsecured creditors"
+            ],
+            "reasons": [
+                "Direct statement of the repayment plan, a core financial development",
+                "Explicit classification of customer status in the bankruptcy context"
+            ],
+            "confidence": 1.0
+        }
+    ]
+}
