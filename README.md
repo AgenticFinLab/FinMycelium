@@ -48,11 +48,10 @@
 
 ## Project Demonstration
 
-<div align="center">
 
-[![Demo Video](https://img.shields.io/badge/▶️-Watch%20Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://github.com/user-attachments/assets/3accaf39-98a1-47cc-a11c-9b035933c241)
 
-</div>
+https://github.com/user-attachments/assets/edd7d0f4-4c0f-4429-96b3-9a8846e2c270
+
 
 ---
 
