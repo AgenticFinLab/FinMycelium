@@ -35,13 +35,16 @@
 - Scaling Multi-Document Event Summarization: Evaluating Compression
 vs. Full-Text Approaches, NAACL 2025.
 
-- Memorybank: Enhancing large language models with long-term memory - AAAI24
+- Memorybank: Enhancing large language models with long-term memory - AAAI2024
+  
 - Event-Based Extractive Summarization, 2004.
 
 - Twitter Event Summarization by Exploiting Semantic Terms and Graph Network, AAAI 2021.
 
 - Complex Event Summarization Using Multi-Social Attribute Correlation, IEEE Transactions on Knowledge and Data Engineering (IKDE) 2023.
 
-- Using LLM for improving key event discovery: Temporal-guided news stream clustering with event summaries, ACL23-findings
+- Using LLM for improving key event discovery: Temporal-guided news stream clustering with event summaries, ACL2023-findings
   
 - Natural event summarization, 2011.
+
+- Hello again! llm-powered personalized agent for long-term dialogue, ACL 2025.
