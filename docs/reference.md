@@ -34,3 +34,5 @@
 
 13. Scaling Multi-Document Event Summarization: Evaluating Compression
 vs. Full-Text Approaches, NAACL 2025.
+
+14. Memorybank: Enhancing large language models with long-term memory - AAAI24
