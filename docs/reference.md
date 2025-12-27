@@ -60,3 +60,5 @@ vs. Full-Text Approaches, NAACL 2025.
 - Language models can improve event prediction by few-shot abductive reasoning, NeurIPS 2023
 
 - From News to Forecast: Integrating Event Analysis in LLM-Based Time Series Forecasting with Reflection, Advances in Neural Information Processing Systems, 2024
+
+- BEMEAE: Moving Beyond Exact Span Match for Event Argument Extraction, Proceedings of ACL, 2025. 
