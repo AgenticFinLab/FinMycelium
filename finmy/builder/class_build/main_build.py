@@ -327,7 +327,7 @@ class ClassEventBuilder(BaseBuilder):
         # Save the event cascade
         output_path = os.path.join(
             self.save_dir,
-            f"Class_Build_Event_Cascade_{classify_event_type.replace(' ', '_').replace('/', '_')}.json",
+            f"Event_Developmental_Sequence_{classify_event_type.replace(' ', '_').replace('/', '_')}.json",
         )
         self.save_event_cascade(event_cascade_json, output_path)
 
