@@ -2029,6 +2029,9 @@ class EventCascadeGanttVisualizer:
                 xanchor="left",
                 x=1.02,
             ),
+            hoverlabel=dict(
+                align="left",
+            ),
         )
 
         # --- 4. Save Output ---
