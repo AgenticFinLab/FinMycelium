@@ -76,6 +76,7 @@ cp .env.example .env
 ```
 
 Edit `.env` with your API keys and configuration settings.
+FinMycelium relies on the [lmbase](https://github.com/AgenticFinLab/lmbase) repository for core LLM inference and utility components.
 
 ### Basic Usage
 
