@@ -211,18 +211,66 @@ class AgentEventBuilder(BaseBuilder):
 
         return agent_system_msgs, agent_user_msgs
 
-    def _get_event_skeleton(self, state: AgentState) -> dict:
-        """
-        Retrieves the definitive event skeleton.
-        Prioritizes SkeletonChecker result if available, otherwise SkeletonReconstructor.
-        """
-        # Search for SkeletonChecker result in agent_results
-        for res in state["agent_results"]:
-            if "SkeletonChecker" in res:
-                return res["SkeletonChecker"]
+    def _latest_agent_result(self, state: AgentState, agent_name: str):
+        for res in reversed(state["agent_results"]):
+            if agent_name in res:
+                return res[agent_name]
+        return None
 
-        # Fallback to SkeletonReconstructor (should be at index 0)
-        return state["agent_results"][0]["SkeletonReconstructor"]
+    def _get_event_skeleton(self, state: AgentState) -> dict:
+        skeleton = self._latest_agent_result(state, "SkeletonChecker")
+        if skeleton is not None:
+            return skeleton
+        skeleton = self._latest_agent_result(state, "SkeletonReconstructor")
+        if skeleton is not None:
+            return skeleton
+        raise ValueError("No skeleton result found in builder state")
+
+    def _is_unknown_value(self, value: str) -> bool:
+        return not isinstance(value, str) or value.strip().lower() == "unknown"
+
+    def _field_value(self, field) -> str:
+        if isinstance(field, dict):
+            return field.get("value", "unknown")
+        return "unknown"
+
+    def _validate_event_skeleton(self, skeleton: dict) -> tuple[bool, str]:
+        stages = skeleton.get("stages", [])
+        if len(stages) < 1:
+            return False, "no_stages"
+        if self._is_unknown_value(self._field_value(skeleton.get("title"))):
+            return False, "unknown_event_title"
+        total_episodes = sum(len(stage.get("episodes", [])) for stage in stages)
+        if total_episodes < 1:
+            return False, "no_episodes"
+        if any(len(stage.get("episodes", [])) < 1 for stage in stages):
+            return False, "empty_stage_detected"
+        stage_has_signal = any(
+            not all(
+                self._is_unknown_value(self._field_value(stage.get(key)))
+                for key in ("name", "start_time", "end_time")
+            )
+            for stage in stages
+        )
+        if not stage_has_signal:
+            return False, "unknown_stage_fields"
+        episode_has_signal = any(
+            not all(
+                self._is_unknown_value(self._field_value(episode.get(key)))
+                for key in ("name", "start_time", "end_time")
+            )
+            for stage in stages
+            for episode in stage.get("episodes", [])
+        )
+        if not episode_has_signal:
+            return False, "unknown_episode_fields"
+        return True, ""
+
+    def _content_has_signal(self, build_input: BuildInput) -> bool:
+        return any(
+            isinstance(sample.content, str) and sample.content.strip()
+            for sample in build_input.samples
+        )
 
     def extract_latest_episode(
         self,
@@ -862,6 +910,8 @@ class AgentEventBuilder(BaseBuilder):
             "cost": [],
             "agent_system_msgs": agent_system_msgs,
             "agent_user_msgs": agent_user_msgs,
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
         }
 
         # 3. Compile graph

@@ -74,6 +74,9 @@ class AgentState(MessagesState):
     agent_system_msgs: Dict[str, str]
     # Per-agent user prompts (agent_name -> user_prompt)
     agent_user_msgs: Dict[str, str]
+    # Local retry metadata for skeleton validation/routing decisions
+    skeleton_retry_count: int
+    skeleton_validation_reason: str
 
     # LangGraph runtime messages envelope (optional; may be unused depending on node implementations)
     messages: List[Any] = None
