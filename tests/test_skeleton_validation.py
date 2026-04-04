@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from finmy.builder.agent_build.main_build import AgentEventBuilder
 
@@ -44,6 +45,12 @@ def _skeleton(title="Demo Event", stages=None):
     }
 
 
+def _build_input(sample_contents):
+    return SimpleNamespace(
+        samples=[SimpleNamespace(content=content) for content in sample_contents]
+    )
+
+
 class SkeletonValidationTest(unittest.TestCase):
     def setUp(self):
         self.builder = AgentEventBuilder.__new__(AgentEventBuilder)
@@ -67,7 +74,7 @@ class SkeletonValidationTest(unittest.TestCase):
         self.assertFalse(valid)
         self.assertEqual(reason, "unknown_event_title")
 
-    def test_validate_skeleton_rejects_semantically_empty_stage_and_episode_fields(self):
+    def test_validate_skeleton_rejects_semantically_empty_stage_fields(self):
         valid, reason = self.builder._validate_event_skeleton(
             _skeleton(
                 stages=[
@@ -75,13 +82,28 @@ class SkeletonValidationTest(unittest.TestCase):
                         name="unknown",
                         start="unknown",
                         end="unknown",
-                        episodes=[_episode(name="unknown", start="unknown", end="unknown")],
+                        episodes=[_episode()],
                     )
                 ]
             )
         )
         self.assertFalse(valid)
         self.assertEqual(reason, "unknown_stage_fields")
+
+    def test_validate_skeleton_rejects_semantically_empty_episode_fields(self):
+        valid, reason = self.builder._validate_event_skeleton(
+            _skeleton(
+                stages=[
+                    _stage(
+                        episodes=[
+                            _episode(name="unknown", start="unknown", end="unknown")
+                        ]
+                    )
+                ]
+            )
+        )
+        self.assertFalse(valid)
+        self.assertEqual(reason, "unknown_episode_fields")
 
     def test_validate_skeleton_accepts_minimal_meaningful_structure(self):
         valid, reason = self.builder._validate_event_skeleton(_skeleton())
@@ -100,9 +122,19 @@ class SkeletonValidationTest(unittest.TestCase):
         result = self.builder._get_event_skeleton(state)
         self.assertEqual(result["title"]["value"], "second checker")
 
+    def test_get_event_skeleton_falls_back_to_latest_reconstructor_result(self):
+        state = {
+            "agent_results": [
+                {"SkeletonReconstructor": _skeleton(title="first recon")},
+                {"SkeletonReconstructor": _skeleton(title="second recon")},
+            ]
+        }
+        result = self.builder._get_event_skeleton(state)
+        self.assertEqual(result["title"]["value"], "second recon")
+
     def test_route_after_checker_retries_once_for_non_empty_content(self):
         state = {
-            "build_input": type("BI", (), {"samples": [type("S", (), {"content": "real content"})()]})(),
+            "build_input": _build_input(["real content"]),
             "agent_results": [{"SkeletonChecker": _skeleton(stages=[])}],
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
@@ -113,7 +145,7 @@ class SkeletonValidationTest(unittest.TestCase):
 
     def test_route_after_checker_fails_early_for_empty_content(self):
         state = {
-            "build_input": type("BI", (), {"samples": [type("S", (), {"content": ""})()]})(),
+            "build_input": _build_input([""]),
             "agent_results": [{"SkeletonChecker": _skeleton(stages=[])}],
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
