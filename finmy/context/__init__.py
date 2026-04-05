@@ -6,6 +6,11 @@ from finmy.context.assets import (
     build_evidence_assets,
     summarize_context_assets,
 )
+from finmy.context.local_context_builder import (
+    LocalContextBuilder,
+    LocalContextPackage,
+    LocalContextRequest,
+)
 from finmy.context.indexing import (
     build_global_token_counts,
     count_tokens,
@@ -29,6 +34,9 @@ __all__ = [
     "EvidenceRetrievalPolicy",
     "build_evidence_assets",
     "summarize_context_assets",
+    "LocalContextBuilder",
+    "LocalContextPackage",
+    "LocalContextRequest",
     "build_global_token_counts",
     "count_tokens",
     "score_token_overlap",
