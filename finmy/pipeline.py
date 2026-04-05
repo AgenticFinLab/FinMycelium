@@ -456,7 +456,7 @@ class FinmyPipeline:
         self,
         user_query_input: UserQueryInput,
         meta_samples,
-        attach_context_assets: bool = True,
+        attach_context_assets: bool = False,
     ) -> BuildInput:
         """
         Create BuildInput object from user query and meta samples.
