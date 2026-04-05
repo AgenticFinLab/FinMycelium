@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from finmy.context.assets import EvidenceAssetBundle
 from finmy.generic import MetaSample, UserQueryInput
@@ -43,7 +43,7 @@ class PipelineContextAssetsTest(unittest.TestCase):
         self.assertIs(build_input.context_assets, expected_bundle)
         build_assets.assert_called_once_with(user_query, build_input.samples)
 
-    def test_create_build_input_leaves_context_assets_empty_when_disabled(self):
+    def test_create_build_input_defaults_to_disabled_context_assets(self):
         pipeline = FinmyPipeline.__new__(FinmyPipeline)
         pipeline.logger = SimpleNamespace(info=lambda *args, **kwargs: None)
 
@@ -65,15 +65,65 @@ class PipelineContextAssetsTest(unittest.TestCase):
             "finmy.converter.read_text_data_from_block",
             return_value="alpha excerpt",
         ):
-            build_input = pipeline.create_build_input(
-                user_query,
-                meta_samples,
-                attach_context_assets=False,
-            )
+            build_input = pipeline.create_build_input(user_query, meta_samples)
 
         self.assertEqual(build_input.context_assets.evidence_cards, [])
         self.assertEqual(build_input.context_assets.index.token_counts, {})
         build_assets.assert_not_called()
+
+    def test_lm_build_pipeline_with_contents_leaves_context_assets_empty(self):
+        pipeline = FinmyPipeline.__new__(FinmyPipeline)
+        pipeline.logger = SimpleNamespace(info=lambda *args, **kwargs: None)
+        pipeline.data_manager = SimpleNamespace()
+        pipeline.builder = SimpleNamespace(run=Mock(return_value="ok"))
+        pipeline.db_config = {}
+        pipeline.pdf_collector_config = {}
+        pipeline.url_collector_config = {}
+        pipeline.summarizer_config = {}
+        pipeline.matcher_config = {"use_matcher": False}
+
+        raw_data_records = [SimpleNamespace(location="raw-1")]
+        user_query = UserQueryInput(query_text="alpha risk", key_words=["alpha"])
+        meta_samples = [
+            MetaSample(
+                sample_id="sample-1",
+                raw_data_id="raw-1",
+                location="meta-1",
+                time="2025-01-01 00:00:00 UTC",
+                category="risk",
+                knowledge_field="finance",
+                tag="tag-1",
+                method="method-1",
+            )
+        ]
+
+        with patch.object(
+            pipeline, "create_raw_data_records", return_value=raw_data_records
+        ), patch.object(pipeline, "store_raw_data"), patch.object(
+            pipeline, "create_and_store_user_query", return_value=user_query
+        ), patch.object(
+            pipeline, "summarize_user_query", return_value=SimpleNamespace()
+        ), patch.object(
+            pipeline, "_process_matching", return_value=meta_samples
+        ), patch.object(
+            pipeline, "store_meta_samples"
+        ), patch(
+            "finmy.pipeline.build_evidence_assets"
+        ) as build_assets, patch(
+            "finmy.converter.read_text_data_from_block",
+            return_value="alpha excerpt",
+        ):
+            result = pipeline.lm_build_pipeline_with_contents(
+                contents=["alpha excerpt"],
+                query_text="alpha risk",
+                key_words=["alpha"],
+            )
+
+        self.assertEqual(result, "ok")
+        build_assets.assert_not_called()
+        build_input = pipeline.builder.run.call_args.args[0]
+        self.assertEqual(build_input.context_assets.evidence_cards, [])
+        self.assertEqual(build_input.context_assets.index.token_counts, {})
 
 
 if __name__ == "__main__":
