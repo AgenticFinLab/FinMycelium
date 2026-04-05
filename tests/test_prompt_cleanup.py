@@ -6,7 +6,7 @@ from finmy.context.renderers import (
     render_context_asset_summary,
 )
 from finmy.generic import DataSample, UserQueryInput
-from finmy.pipeline import summarize_context_assets
+from finmy.context.assets import summarize_context_assets
 
 
 class PromptCleanupTest(unittest.TestCase):

@@ -1,8 +1,7 @@
 import unittest
 
-from finmy.context.assets import build_evidence_assets
+from finmy.context.assets import build_evidence_assets, summarize_context_assets
 from finmy.generic import DataSample, UserQueryInput
-from finmy.pipeline import summarize_context_assets
 
 
 class ContextMetricsTest(unittest.TestCase):

@@ -2,7 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from finmy.context.assets import EvidenceAssetBundle
+from finmy.context.assets import EvidenceAssetBundle, summarize_context_assets
+from finmy.context.renderers import render_context_asset_summary
 from finmy.generic import MetaSample, UserQueryInput
 from finmy.pipeline import FinmyPipeline
 
@@ -10,7 +11,7 @@ from finmy.pipeline import FinmyPipeline
 class PipelineContextAssetsTest(unittest.TestCase):
     def test_create_build_input_attaches_built_evidence_assets_when_enabled(self):
         pipeline = FinmyPipeline.__new__(FinmyPipeline)
-        pipeline.logger = SimpleNamespace(info=lambda *args, **kwargs: None)
+        pipeline.logger = Mock()
 
         user_query = UserQueryInput(query_text="alpha risk", key_words=["alpha"])
         meta_samples = [
@@ -42,6 +43,10 @@ class PipelineContextAssetsTest(unittest.TestCase):
 
         self.assertIs(build_input.context_assets, expected_bundle)
         build_assets.assert_called_once_with(user_query, build_input.samples)
+        pipeline.logger.info.assert_any_call(
+            "Passive context assets attached: %s",
+            render_context_asset_summary(summarize_context_assets(expected_bundle)),
+        )
 
     def test_create_build_input_defaults_to_disabled_context_assets(self):
         pipeline = FinmyPipeline.__new__(FinmyPipeline)

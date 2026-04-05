@@ -58,6 +58,25 @@ class EvidenceAssetBundle:
         )
 
 
+def summarize_context_assets(bundle: EvidenceAssetBundle | None) -> dict[str, int]:
+    """Return a compact, passive-only summary of attached context assets."""
+
+    if bundle is None:
+        return {
+            "evidence_card_count": 0,
+            "sample_id_count": 0,
+            "global_token_count": 0,
+            "query_token_count": 0,
+        }
+
+    return {
+        "evidence_card_count": len(bundle.evidence_cards),
+        "sample_id_count": len(bundle.index.sample_ids),
+        "global_token_count": sum(bundle.index.token_counts.values()),
+        "query_token_count": sum(bundle.index.query_token_counts.values()),
+    }
+
+
 def _shorten_excerpt(text: str, char_limit: int) -> str:
     if len(text) <= char_limit:
         return text
