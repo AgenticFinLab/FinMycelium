@@ -453,7 +453,10 @@ class FinmyPipeline:
         self.logger.info("=" * 25)
 
     def create_build_input(
-        self, user_query_input: UserQueryInput, meta_samples
+        self,
+        user_query_input: UserQueryInput,
+        meta_samples,
+        attach_context_assets: bool = True,
     ) -> BuildInput:
         """
         Create BuildInput object from user query and meta samples.
@@ -473,9 +476,10 @@ class FinmyPipeline:
             meta_samples=meta_samples,
             extras={},
         )
-        build_input.context_assets = build_evidence_assets(
-            user_query_input, build_input.samples
-        )
+        if attach_context_assets:
+            build_input.context_assets = build_evidence_assets(
+                user_query_input, build_input.samples
+            )
         self.logger.info(
             "BuildInput object created: query_text: %s, key_words: %s, use samples: %s",
             build_input.user_query.query_text,
@@ -750,7 +754,9 @@ class FinmyPipeline:
         self.store_meta_samples(meta_samples)
 
         # Step 9: Create build input for downstream processing
-        build_input = self.create_build_input(user_query_input, meta_samples)
+        build_input = self.create_build_input(
+            user_query_input, meta_samples, attach_context_assets=True
+        )
 
         # Step 10: Execute builder and return result
         return self.builder.run(build_input)
@@ -802,7 +808,9 @@ class FinmyPipeline:
         self.store_meta_samples(meta_samples)
 
         # Step 9: Create build input for downstream processing
-        build_input = self.create_build_input(user_query_input, meta_samples)
+        build_input = self.create_build_input(
+            user_query_input, meta_samples, attach_context_assets=False
+        )
 
         # Step 10: Execute builder and return result
         return self.builder.run(build_input)
