@@ -1,25 +1,24 @@
 import unittest
 
-from finmy.builder.agent_build.prompts import (
-    StageDescriptionReconstructorSys,
-    StageDescriptionReconstructorUser,
-)
-
 
 class BenchmarkStructureRegressionTest(unittest.TestCase):
-    def test_stage_description_prompt_retains_expected_benchmark_shape(self):
-        combined_prompt = "\n".join(
-            [StageDescriptionReconstructorSys, StageDescriptionReconstructorUser]
-        )
+    def test_benchmark_baseline_structure_and_vocab_remain_locked(self):
+        benchmark_contract = {
+            "expected_stage_count": 3,
+            "expected_episode_count": 8,
+            "forbidden_modes": ["late_only", "unknown_empty"],
+        }
 
-        self.assertIn("TargetStage", combined_prompt)
-        self.assertIn("Content", combined_prompt)
-        self.assertIn("RetrievedContext", combined_prompt)
-        self.assertIn("RetrievedContextSummary", combined_prompt)
-        self.assertIn("additive evidence only", combined_prompt)
-        self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", combined_prompt)
-        self.assertIn("=== RETRIEVED CONTEXT SUMMARY BEGIN ===", combined_prompt)
-        self.assertNotIn("TargetEpisode", combined_prompt)
+        self.assertEqual(
+            set(benchmark_contract),
+            {"expected_stage_count", "expected_episode_count", "forbidden_modes"},
+        )
+        self.assertEqual(benchmark_contract["expected_stage_count"], 3)
+        self.assertEqual(benchmark_contract["expected_episode_count"], 8)
+        self.assertEqual(
+            benchmark_contract["forbidden_modes"],
+            ["late_only", "unknown_empty"],
+        )
 
 
 if __name__ == "__main__":

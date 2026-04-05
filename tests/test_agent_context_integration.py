@@ -610,23 +610,23 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_executed": ["SkeletonChecker", "EpisodeReconstructor"],
             "cost": [],
             "agent_system_msgs": {"StageDescriptionReconstructor": "sys"},
-            "agent_user_msgs": {"StageDescriptionReconstructor": "user"},
+            "agent_user_msgs": {
+                "StageDescriptionReconstructor": main_build_module.StageDescriptionReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
 
         self.builder.execute_agent(state, "StageDescriptionReconstructor")
 
-        rendered_prompt = main_build_module.StageDescriptionReconstructorUser.format(
-            **captured["prompt_kwargs"]
-        )
+        infer_input = captured["infer_input"]
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertIn(
             "alpha stage excerpt", captured["prompt_kwargs"]["RetrievedContext"]
         )
-        self.assertIn("alpha stage excerpt", rendered_prompt)
-        self.assertIn("TargetStage", rendered_prompt)
-        self.assertIn("Content", rendered_prompt)
+        self.assertIn("RetrievedContext", infer_input.user_msg)
+        self.assertIn("TargetStage", infer_input.user_msg)
+        self.assertIn("Stage 1", captured["prompt_kwargs"]["TargetStage"])
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextSummary"],
             json.dumps({"selected_count": 1}, ensure_ascii=False),
