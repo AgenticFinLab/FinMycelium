@@ -234,12 +234,12 @@ class AgentEventBuilder(BaseBuilder):
         raise ValueError("No skeleton result found in builder state")
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
-        """Build participant-local episode context for Task 2 only.
+        """Build episode-local context for the participant and transaction paths.
 
-        This helper intentionally supports the participant reconstructor path and
-        should not be treated as a generic context builder for other agents yet.
+        This helper stays intentionally narrow and only serves the current episode
+        reconstruction steps that already work with local evidence.
         """
-        if agent_name != "ParticipantReconstructor":
+        if agent_name not in {"ParticipantReconstructor", "TransactionReconstructor"}:
             return None
 
         bundle = state["build_input"].context_assets
@@ -623,6 +623,15 @@ class AgentEventBuilder(BaseBuilder):
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
+                local_context = self._build_local_context_package(state, agent_name)
+                prompt_kwargs["RetrievedContext"] = (
+                    local_context.rendered_context if local_context else ""
+                )
+                prompt_kwargs["RetrievedContextSummary"] = (
+                    json.dumps(local_context.summary, ensure_ascii=False)
+                    if local_context
+                    else "{}"
+                )
 
             elif agent_name == "EpisodeReconstructor":
                 # Get transactions from the immediately preceding step (TransactionReconstructor)

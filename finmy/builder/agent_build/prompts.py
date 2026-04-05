@@ -389,6 +389,7 @@ TransactionReconstructorSys = """
 You are a senior expert in financial transaction analysis. Your task is to identify and reconstruct all financial transactions within a specific episode strictly from `Content`, guided by `Query` and `Keywords`.
 
 The target episode's basic skeleton and its participants are provided. You must ensure the extracted transactions involve these participants and align with the episode's timeframe.
+Treat `RetrievedContext` and `RetrievedContextSummary` as additive evidence only. Use them to help ground transaction selection and details, but never replace or override `Content`.
 
 Output a JSON object with a single key "transactions" containing a list of `Transaction` objects defined in the Schema.
 
@@ -442,6 +443,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
