@@ -57,6 +57,7 @@ import time
 import copy
 import os
 import json
+import logging
 from functools import partial
 from pathlib import Path
 
@@ -74,6 +75,8 @@ from finmy.builder.utils import (
 from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
 from finmy.builder.agent_build.prompts import *
+
+logger = logging.getLogger(__name__)
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -285,29 +288,31 @@ class AgentEventBuilder(BaseBuilder):
         }
         return mapping.get(reason, f"Invalid event skeleton: {reason}")
 
+    def _raise_validation_error(self, reason: str, has_content: bool) -> None:
+        message = self._validation_error_message(reason, has_content=has_content)
+        logger.error(message)
+        raise ValueError(message)
+
     def _route_after_skeleton_reconstructor(self, state: AgentState):
         skeleton = self._get_event_skeleton(state)
         is_valid, reason = self._validate_event_skeleton(skeleton)
-        state["skeleton_validation_reason"] = reason
         if is_valid:
             return "SkeletonChecker"
         if not self._content_has_signal(state["build_input"]):
-            raise ValueError(self._validation_error_message(reason, has_content=False))
+            self._raise_validation_error(reason, has_content=False)
         return "SkeletonChecker"
 
     def _route_after_skeleton_checker(self, state: AgentState):
         skeleton = self._get_event_skeleton(state)
         is_valid, reason = self._validate_event_skeleton(skeleton)
-        state["skeleton_validation_reason"] = reason
         if is_valid:
             return "ParticipantReconstructor"
         has_content = self._content_has_signal(state["build_input"])
-        if has_content and state["skeleton_retry_count"] < 1:
-            state["skeleton_retry_count"] += 1
+        # The checker node persists each failed attempt, so a count of 1 still
+        # leaves one retry available for the graph to take.
+        if has_content and state.get("skeleton_retry_count", 0) < 2:
             return "SkeletonReconstructor"
-        raise ValueError(
-            self._validation_error_message(reason, has_content=has_content)
-        )
+        self._raise_validation_error(reason, has_content=has_content)
 
     def extract_latest_episode(
         self,
@@ -407,6 +412,8 @@ class AgentEventBuilder(BaseBuilder):
         """
         t0 = time.time()
         build_ipt = state["build_input"]
+        state.setdefault("skeleton_retry_count", 0)
+        state.setdefault("skeleton_validation_reason", "")
 
         # Common prompt arguments
         prompt_kwargs = {
@@ -616,6 +623,16 @@ class AgentEventBuilder(BaseBuilder):
         state["agent_results"].append({agent_name: parsed_result})
         state["cost"].append({agent_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(agent_name)
+
+        if agent_name in {"SkeletonReconstructor", "SkeletonChecker"}:
+            is_valid, reason = self._validate_event_skeleton(parsed_result)
+            state["skeleton_validation_reason"] = reason
+            if agent_name == "SkeletonChecker" and not is_valid:
+                has_content = self._content_has_signal(state["build_input"])
+                if has_content:
+                    # Persist the consumed attempt on the node return path so
+                    # conditional routing reads stable state instead of mutating it.
+                    state["skeleton_retry_count"] += 1
         return state
 
     def graph(self) -> CompiledStateGraph:
