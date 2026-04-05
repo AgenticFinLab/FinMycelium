@@ -32,7 +32,8 @@ from finmy.converter import (
     convert_to_build_input,
     match_output_to_meta_samples,
 )
-from finmy.context.assets import build_evidence_assets
+from finmy.context.assets import EvidenceAssetBundle, build_evidence_assets
+from finmy.context.renderers import render_context_asset_summary
 from finmy.db_manager import DataManager
 from finmy.builder.base import BuildInput, BaseBuilder
 from finmy.builder.registry import get as get_builder
@@ -53,6 +54,25 @@ from finmy.builder.agent_build import prompts as agent_build_prompts
 # ============================================================================
 # Pipeline Class
 # ============================================================================
+
+
+def summarize_context_assets(bundle: EvidenceAssetBundle) -> dict[str, int]:
+    """Return a compact, passive-only summary of attached context assets."""
+
+    if bundle is None:
+        return {
+            "evidence_card_count": 0,
+            "sample_id_count": 0,
+            "global_token_count": 0,
+            "query_token_count": 0,
+        }
+
+    return {
+        "evidence_card_count": len(bundle.evidence_cards),
+        "sample_id_count": len(bundle.index.sample_ids),
+        "global_token_count": sum(bundle.index.token_counts.values()),
+        "query_token_count": sum(bundle.index.query_token_counts.values()),
+    }
 
 
 class FinmyPipeline:
@@ -479,6 +499,11 @@ class FinmyPipeline:
         if attach_context_assets:
             build_input.context_assets = build_evidence_assets(
                 user_query_input, build_input.samples
+            )
+            context_summary = summarize_context_assets(build_input.context_assets)
+            self.logger.info(
+                "Passive context assets attached: %s",
+                render_context_asset_summary(context_summary),
             )
         self.logger.info(
             "BuildInput object created: query_text: %s, key_words: %s, use samples: %s",

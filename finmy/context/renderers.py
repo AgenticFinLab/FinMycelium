@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Mapping
 
 from finmy.context.assets import EvidenceAssetBundle, EvidenceCard, EvidenceIndex, EvidenceRetrievalPolicy
 
@@ -48,3 +48,28 @@ def render_evidence_bundle(bundle: EvidenceAssetBundle) -> str:
     """Alias for rendering a bundle of passive evidence assets."""
 
     return render_evidence_asset_bundle(bundle)
+
+
+def render_context_asset_summary(summary: Mapping[str, int]) -> str:
+    """Render passive context metrics for logs or prompt-cleanup injection."""
+
+    ordered_keys = [
+        "evidence_card_count",
+        "sample_id_count",
+        "global_token_count",
+        "query_token_count",
+    ]
+    lines = ["context_asset_summary:"]
+    lines.extend(f"  {key}={summary.get(key, 0)}" for key in ordered_keys)
+    return "\n".join(lines)
+
+
+def render_context_asset_bundle(bundle: EvidenceAssetBundle) -> str:
+    """Render the full passive context bundle in a compact observability format."""
+
+    return "\n".join(
+        [
+            "context_asset_bundle:",
+            render_evidence_asset_bundle(bundle),
+        ]
+    )
