@@ -29,6 +29,7 @@ from dotenv import load_dotenv
 from lmbase.utils.tools import BlockBasedStoreManager
 from finmy.generic import RawData, MetaSample, UserQueryInput, DataSample
 from finmy.builder.base import BuildInput
+from finmy.context.assets import EvidenceAssetBundle
 from finmy.matcher.base import MatchOutput, MatchInput
 from finmy.summarizer.summarizer import SummarizedUserQuery
 
@@ -165,6 +166,7 @@ def convert_to_build_input(
     user_query: UserQueryInput,
     meta_samples: List[MetaSample],
     extras: dict = None,
+    context_assets: Optional[EvidenceAssetBundle] = None,
 ) -> BuildInput:
     """
     Construct a BuildInput object for use with event reconstruction builders.
@@ -173,12 +175,15 @@ def convert_to_build_input(
         user_query: UserQueryInput instance describing the user query.
         meta_samples: List of MetaSample objects to be included.
         extras: Optional dictionary with additional information.
+        context_assets: Optional evidence asset bundle to preserve on the build input.
 
     Returns:
         BuildInput instance populated with provided fields.
     """
     if extras is None:
         extras = {}
+    if context_assets is None:
+        context_assets = EvidenceAssetBundle.empty()
     data_samples: List[DataSample] = []
     for meta_sample in meta_samples:
         data_samples.append(
@@ -192,4 +197,8 @@ def convert_to_build_input(
                 method=meta_sample.method,
             )
         )
-    return BuildInput(user_query=user_query, samples=data_samples)
+    return BuildInput(
+        user_query=user_query,
+        samples=data_samples,
+        context_assets=context_assets,
+    )

@@ -20,6 +20,7 @@ from lmbase.utils.tools import BaseContainer
 
 from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.agent_build.structure import EventCascade
+from finmy.context.assets import EvidenceAssetBundle
 
 
 @dataclass
@@ -28,6 +29,7 @@ class BuildInput(BaseContainer):
 
     user_query: UserQueryInput
     samples: List[DataSample]
+    context_assets: EvidenceAssetBundle = field(default_factory=EvidenceAssetBundle.empty)
 
 
 @dataclass

@@ -32,6 +32,7 @@ from finmy.converter import (
     convert_to_build_input,
     match_output_to_meta_samples,
 )
+from finmy.context.assets import build_evidence_assets
 from finmy.db_manager import DataManager
 from finmy.builder.base import BuildInput, BaseBuilder
 from finmy.builder.registry import get as get_builder
@@ -471,6 +472,9 @@ class FinmyPipeline:
             user_query=user_query_input,
             meta_samples=meta_samples,
             extras={},
+        )
+        build_input.context_assets = build_evidence_assets(
+            user_query_input, build_input.samples
         )
         self.logger.info(
             "BuildInput object created: query_text: %s, key_words: %s, use samples: %s",
