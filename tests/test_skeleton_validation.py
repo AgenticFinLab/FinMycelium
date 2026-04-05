@@ -239,3 +239,23 @@ class SkeletonValidationTest(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "Insufficient source content"):
             self.builder._route_after_skeleton_checker(state)
+
+    def test_route_after_checker_stops_after_retry_budget_is_exhausted(self):
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [{"SkeletonChecker": _skeleton(stages=[])}],
+            "skeleton_retry_count": 1,
+            "skeleton_validation_reason": "",
+        }
+        with self.assertRaisesRegex(ValueError, "Invalid event skeleton"):
+            self.builder._route_after_skeleton_checker(state)
+
+    def test_route_after_reconstructor_fails_early_when_content_is_empty(self):
+        state = {
+            "build_input": _build_input([""]),
+            "agent_results": [{"SkeletonReconstructor": _skeleton(stages=[])}],
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+        with self.assertRaisesRegex(ValueError, "Insufficient source content"):
+            self.builder._route_after_skeleton_reconstructor(state)

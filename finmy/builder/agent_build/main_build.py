@@ -272,6 +272,43 @@ class AgentEventBuilder(BaseBuilder):
             for sample in build_input.samples
         )
 
+    def _validation_error_message(self, reason: str, has_content: bool) -> str:
+        if not has_content:
+            return "Insufficient source content to reconstruct a valid event skeleton"
+        mapping = {
+            "no_stages": "Invalid event skeleton: no stages or episodes reconstructed",
+            "no_episodes": "Invalid event skeleton: no stages or episodes reconstructed",
+            "empty_stage_detected": "Invalid event skeleton: a stage contains no episodes",
+            "unknown_event_title": "Invalid event skeleton: event title is unknown",
+            "unknown_stage_fields": "Invalid event skeleton: stage key fields are semantically empty",
+            "unknown_episode_fields": "Invalid event skeleton: episode key fields are semantically empty",
+        }
+        return mapping.get(reason, f"Invalid event skeleton: {reason}")
+
+    def _route_after_skeleton_reconstructor(self, state: AgentState):
+        skeleton = self._get_event_skeleton(state)
+        is_valid, reason = self._validate_event_skeleton(skeleton)
+        state["skeleton_validation_reason"] = reason
+        if is_valid:
+            return "SkeletonChecker"
+        if not self._content_has_signal(state["build_input"]):
+            raise ValueError(self._validation_error_message(reason, has_content=False))
+        return "SkeletonChecker"
+
+    def _route_after_skeleton_checker(self, state: AgentState):
+        skeleton = self._get_event_skeleton(state)
+        is_valid, reason = self._validate_event_skeleton(skeleton)
+        state["skeleton_validation_reason"] = reason
+        if is_valid:
+            return "ParticipantReconstructor"
+        has_content = self._content_has_signal(state["build_input"])
+        if has_content and state["skeleton_retry_count"] < 1:
+            state["skeleton_retry_count"] += 1
+            return "SkeletonReconstructor"
+        raise ValueError(
+            self._validation_error_message(reason, has_content=has_content)
+        )
+
     def extract_latest_episode(
         self,
         event_skeleton: dict,
@@ -666,12 +703,24 @@ class AgentEventBuilder(BaseBuilder):
         # 2. Set Entry Point and Basic Linear Edges
         # ============================================================================
 
-        # Start with Skeleton
         g.set_entry_point("SkeletonReconstructor")
 
-        # Basic Flow: Skeleton -> SkeletonChecker -> First Episode (Participant)
-        g.add_edge("SkeletonReconstructor", "SkeletonChecker")
-        g.add_edge("SkeletonChecker", "ParticipantReconstructor")
+        g.add_conditional_edges(
+            "SkeletonReconstructor",
+            self._route_after_skeleton_reconstructor,
+            {
+                "SkeletonChecker": "SkeletonChecker",
+            },
+        )
+
+        g.add_conditional_edges(
+            "SkeletonChecker",
+            self._route_after_skeleton_checker,
+            {
+                "SkeletonReconstructor": "SkeletonReconstructor",
+                "ParticipantReconstructor": "ParticipantReconstructor",
+            },
+        )
 
         # Intra-Episode Flow: Participant -> Transaction -> Episode
         g.add_edge("ParticipantReconstructor", "TransactionReconstructor")
