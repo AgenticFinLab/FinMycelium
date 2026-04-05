@@ -35,6 +35,12 @@ class LocalContextPackage:
 class LocalContextBuilder:
     """Build a local context package from passive evidence assets."""
 
+    _SCOPE_BY_AGENT_NAME = {
+        "episodereconstructor": "episode",
+        "stagedescriptionreconstructor": "stage",
+        "eventdescriptionreconstructor": "global",
+    }
+
     def build(
         self,
         request: LocalContextRequest,
@@ -63,20 +69,21 @@ class LocalContextBuilder:
         bundle: EvidenceAssetBundle,
         query_tokens: List[str],
     ) -> List[EvidenceCard]:
+        ranked_cards = []
+        for index, card in enumerate(bundle.evidence_cards):
+            overlap = score_token_overlap(card.tokens, query_tokens)
+            if overlap <= 0:
+                continue
+            ranked_cards.append((max(card.score, overlap), index, card))
+
         selected_cards = [
             card
-            for card in bundle.evidence_cards
-            if score_token_overlap(card.tokens, query_tokens) > 0
+            for _, _, card in sorted(ranked_cards, key=lambda item: (-item[0], item[1]))
         ]
-
         if bundle.retrieval_policy.max_cards is not None:
             selected_cards = selected_cards[: bundle.retrieval_policy.max_cards]
         return selected_cards
 
     def _derive_scope(self, request: LocalContextRequest) -> str:
-        agent_name = (request.agent_name or "").lower()
-        if request.target_episode or "episode" in agent_name:
-            return "episode"
-        if request.target_stage or "stage" in agent_name:
-            return "stage"
-        return "global"
+        agent_name = (request.agent_name or "").strip().lower()
+        return self._SCOPE_BY_AGENT_NAME.get(agent_name, "global")
