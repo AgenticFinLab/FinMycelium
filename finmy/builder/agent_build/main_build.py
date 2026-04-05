@@ -234,6 +234,14 @@ class AgentEventBuilder(BaseBuilder):
         raise ValueError("No skeleton result found in builder state")
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
+        """Build participant-local episode context for Task 2 only.
+
+        This helper intentionally supports the participant reconstructor path and
+        should not be treated as a generic context builder for other agents yet.
+        """
+        if agent_name != "ParticipantReconstructor":
+            return None
+
         bundle = state["build_input"].context_assets
         if bundle is None or not bundle.evidence_cards:
             return None

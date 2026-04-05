@@ -352,6 +352,8 @@ Instructions:
 - When a participant already appears in ReconstructedParticipants (same real-world entity), reuse the same `participant_id` and add a brief explanation in `attributes` to state which stage/episode it is reused from.
 - Ensure `participant_id` follows the format "P_" + integer for any new participant created in this episode.
 - If a participant represents a group, specify this in `participant_type` and details in `attributes`.
+- Treat `RetrievedContext` as additive evidence only. Use it to ground participant selection and actions, but do not remove or replace `Content`.
+- If `RetrievedContextSummary` is provided, use it as a compact signal about what was retrieved for this episode.
 
 === RECONSTRUCTED PARTICIPANTS BEGIN ===
 {ReconstructedParticipants}
@@ -372,6 +374,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
