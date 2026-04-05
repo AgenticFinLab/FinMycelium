@@ -227,7 +227,7 @@ class AgentEventBuilder(BaseBuilder):
         raise ValueError("No skeleton result found in builder state")
 
     def _is_unknown_value(self, value: str) -> bool:
-        return not isinstance(value, str) or value.strip().lower() == "unknown"
+        return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
 
     def _field_value(self, field) -> str:
         if isinstance(field, dict):
@@ -390,9 +390,13 @@ class AgentEventBuilder(BaseBuilder):
             sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
         elif agent_name == "SkeletonChecker":
-            # Pass the previous Skeleton as context
-            # It should be the first result
-            skeleton_result = state["agent_results"][0]["SkeletonReconstructor"]
+            skeleton_result = self._latest_agent_result(
+                state, "SkeletonReconstructor"
+            )
+            if skeleton_result is None:
+                raise ValueError(
+                    "SkeletonChecker requires a prior SkeletonReconstructor result"
+                )
             prompt_kwargs["ProposedSkeleton"] = json.dumps(
                 skeleton_result, default=str, indent=2
             )
