@@ -19,7 +19,7 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertTrue(LocalContextPackage)
         self.assertTrue(LocalContextRequest)
 
-    def test_build_selects_overlapping_cards_and_renders_selected_context(self):
+    def test_episode_request_prefers_episode_scope(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
             index=EvidenceIndex(),
@@ -27,44 +27,28 @@ class LocalContextBuilderTest(unittest.TestCase):
                 EvidenceCard(
                     sample_id="sample-1",
                     title="sample-1",
-                    excerpt="alpha risk excerpt",
-                    tokens=["alpha", "risk"],
-                ),
-                EvidenceCard(
-                    sample_id="sample-2",
-                    title="sample-2",
-                    excerpt="beta unrelated excerpt",
-                    tokens=["beta"],
-                ),
-                EvidenceCard(
-                    sample_id="sample-3",
-                    title="sample-3",
-                    excerpt="alpha signal excerpt",
-                    tokens=["alpha", "signal"],
+                    excerpt="alpha episode excerpt",
+                    tokens=["alpha", "episode"],
                 ),
             ],
         )
         request = LocalContextRequest(
-            agent_name="agent-alpha",
-            query_text="alpha risk",
+            agent_name="episode-agent",
+            query_text="alpha episode",
             key_words=["alpha"],
-            context_assets=bundle,
+            target_stage="stage-1",
+            target_episode="episode-1",
         )
 
-        package = LocalContextBuilder().build(request)
+        package = LocalContextBuilder().build(request, bundle)
 
-        self.assertEqual(package.scope, "agent-alpha")
+        self.assertEqual(package.scope, "episode")
         self.assertEqual(package.retrieval_status, "sufficient")
-        self.assertEqual(package.summary["selected_count"], 2)
-        self.assertEqual(
-            [card.sample_id for card in package.selected_cards],
-            ["sample-1", "sample-3"],
-        )
-        self.assertIn("alpha risk excerpt", package.rendered_context)
-        self.assertIn("alpha signal excerpt", package.rendered_context)
-        self.assertNotIn("beta unrelated excerpt", package.rendered_context)
+        self.assertEqual(package.summary["selected_count"], 1)
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+        self.assertIn("alpha episode excerpt", package.rendered_context)
 
-    def test_build_falls_back_when_no_cards_overlap(self):
+    def test_global_request_falls_back_when_no_cards_overlap(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
             index=EvidenceIndex(),
@@ -78,17 +62,16 @@ class LocalContextBuilderTest(unittest.TestCase):
             ],
         )
         request = LocalContextRequest(
-            agent_name="agent-beta",
+            agent_name="global-agent",
             query_text="alpha risk",
             key_words=["alpha"],
-            context_assets=bundle,
         )
 
-        package = LocalContextBuilder().build(request)
+        package = LocalContextBuilder().build(request, bundle)
 
         self.assertEqual(package.retrieval_status, "fallback_fulltext")
         self.assertEqual(package.summary["selected_count"], 0)
-        self.assertEqual(package.selected_cards, [])
+        self.assertEqual(package.selected_sample_ids, [])
         self.assertEqual(package.rendered_context, "")
 
 
