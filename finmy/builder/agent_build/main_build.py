@@ -74,6 +74,10 @@ from finmy.builder.utils import (
 )
 from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
+from finmy.context.local_context_builder import (
+    LocalContextBuilder,
+    LocalContextRequest,
+)
 from finmy.builder.agent_build.prompts import *
 
 logger = logging.getLogger(__name__)
@@ -228,6 +232,28 @@ class AgentEventBuilder(BaseBuilder):
         if skeleton is not None:
             return skeleton
         raise ValueError("No skeleton result found in builder state")
+
+    def _build_local_context_package(self, state: AgentState, agent_name: str):
+        bundle = state["build_input"].context_assets
+        if bundle is None or not bundle.evidence_cards:
+            return None
+
+        event_skeleton = self._get_event_skeleton(state)
+        current_count = state["agent_executed"].count(agent_name)
+        target_stage, latest_episode = self.extract_latest_episode(
+            event_skeleton, current_count
+        )
+        if not latest_episode:
+            return None
+
+        request = LocalContextRequest(
+            agent_name=agent_name,
+            query_text=state["build_input"].user_query.query_text,
+            key_words=state["build_input"].user_query.key_words,
+            target_stage=self._field_value(target_stage.get("name")) if target_stage else "",
+            target_episode=self._field_value(latest_episode.get("name")),
+        )
+        return LocalContextBuilder().build(request, bundle)
 
     def _is_unknown_value(self, value: str) -> bool:
         return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
@@ -570,6 +596,15 @@ class AgentEventBuilder(BaseBuilder):
                 prompt_kwargs["TargetEpisode"] = target_episode
                 prompt_kwargs["ReconstructedParticipants"] = (
                     self._collect_reconstructed_participants_structure(state)
+                )
+                local_context = self._build_local_context_package(state, agent_name)
+                prompt_kwargs["RetrievedContext"] = (
+                    local_context.rendered_context if local_context else ""
+                )
+                prompt_kwargs["RetrievedContextSummary"] = (
+                    json.dumps(local_context.summary, ensure_ascii=False)
+                    if local_context
+                    else "{}"
                 )
 
             elif agent_name == "TransactionReconstructor":

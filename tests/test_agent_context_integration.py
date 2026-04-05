@@ -1,0 +1,143 @@
+import json
+import unittest
+from types import SimpleNamespace
+
+import finmy.builder.agent_build.main_build as main_build_module
+from finmy.builder.agent_build.main_build import AgentEventBuilder
+from finmy.context.assets import (
+    EvidenceAssetBundle,
+    EvidenceCard,
+    EvidenceIndex,
+    EvidenceRetrievalPolicy,
+)
+
+
+def _vf(value):
+    return {
+        "value": value,
+        "evidence_source_contents": [],
+        "reasons": [],
+        "confidence": 1.0,
+    }
+
+
+def _skeleton():
+    return {
+        "event_id": "demo_event",
+        "title": _vf("Demo Event"),
+        "event_type": _vf("demo"),
+        "start_time": _vf("2025-01-01"),
+        "end_time": _vf("2025-01-02"),
+        "stages": [
+            {
+                "stage_id": "S1",
+                "name": _vf("Stage 1"),
+                "index_in_event": 0,
+                "start_time": _vf("2025-01-01"),
+                "end_time": _vf("2025-01-02"),
+                "episodes": [
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _participant():
+    return {
+        "participant_id": "P_1",
+        "name": _vf("Participant 1"),
+        "participant_type": "organization",
+        "base_role": _vf("counterparty"),
+        "attributes": {},
+        "actions": [],
+    }
+
+
+def _build_input():
+    bundle = EvidenceAssetBundle(
+        retrieval_policy=EvidenceRetrievalPolicy(),
+        index=EvidenceIndex(),
+        evidence_cards=[
+            EvidenceCard(
+                sample_id="sample-1",
+                title="sample-1",
+                excerpt="alpha episode excerpt",
+                tokens=["alpha", "episode"],
+            )
+        ],
+    )
+    return SimpleNamespace(
+        user_query=SimpleNamespace(query_text="alpha episode", key_words=["alpha"]),
+        samples=[SimpleNamespace(content="real content")],
+        context_assets=bundle,
+    )
+
+
+class AgentContextIntegrationTest(unittest.TestCase):
+    def setUp(self):
+        self.builder = AgentEventBuilder.__new__(AgentEventBuilder)
+
+    def test_participant_reconstructor_receives_retrieved_context(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps({"participants": [_participant()]}),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [{"SkeletonChecker": _skeleton()}],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {"ParticipantReconstructor": "sys"},
+            "agent_user_msgs": {"ParticipantReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "ParticipantReconstructor")
+
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertIn("alpha episode excerpt", captured["prompt_kwargs"]["RetrievedContext"])
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
