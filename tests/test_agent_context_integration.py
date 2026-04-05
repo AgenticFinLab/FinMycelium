@@ -539,6 +539,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         captured = {}
 
         def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            infer_input.input = infer_input.user_msg.format(**prompt_kwargs)
             captured["infer_input"] = infer_input
             captured["prompt_kwargs"] = prompt_kwargs
             return SimpleNamespace(
@@ -624,9 +625,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn(
             "alpha stage excerpt", captured["prompt_kwargs"]["RetrievedContext"]
         )
-        self.assertIn("RetrievedContext", infer_input.user_msg)
-        self.assertIn("TargetStage", infer_input.user_msg)
-        self.assertIn("Stage 1", captured["prompt_kwargs"]["TargetStage"])
+        self.assertIn("RetrievedContext", infer_input.input)
+        self.assertIn("alpha stage excerpt", infer_input.input)
+        self.assertIn("Stage 1", infer_input.input)
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextSummary"],
             json.dumps({"selected_count": 1}, ensure_ascii=False),
