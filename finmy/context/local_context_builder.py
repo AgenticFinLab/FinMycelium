@@ -74,7 +74,7 @@ class LocalContextBuilder:
             overlap = score_token_overlap(card.tokens, query_tokens)
             if overlap <= 0:
                 continue
-            ranked_cards.append((max(card.score, overlap), index, card))
+            ranked_cards.append((overlap, index, card))
 
         selected_cards = [
             card
@@ -86,4 +86,11 @@ class LocalContextBuilder:
 
     def _derive_scope(self, request: LocalContextRequest) -> str:
         agent_name = (request.agent_name or "").strip().lower()
-        return self._SCOPE_BY_AGENT_NAME.get(agent_name, "global")
+        mapped_scope = self._SCOPE_BY_AGENT_NAME.get(agent_name)
+        if mapped_scope is not None:
+            return mapped_scope
+        if request.target_episode:
+            return "episode"
+        if request.target_stage:
+            return "stage"
+        return "global"

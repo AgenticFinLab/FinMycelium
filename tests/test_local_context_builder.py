@@ -47,6 +47,36 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(builder.build(stage_request, bundle).scope, "stage")
         self.assertEqual(builder.build(global_request, bundle).scope, "global")
 
+    def test_unknown_agent_name_uses_target_scope_hints(self):
+        builder = LocalContextBuilder()
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[],
+        )
+
+        episode_request = LocalContextRequest(
+            agent_name="CustomAgent",
+            query_text="alpha episode",
+            key_words=["alpha"],
+            target_episode="episode-9",
+        )
+        stage_request = LocalContextRequest(
+            agent_name="CustomAgent",
+            query_text="alpha stage",
+            key_words=["alpha"],
+            target_stage="stage-9",
+        )
+        global_request = LocalContextRequest(
+            agent_name="CustomAgent",
+            query_text="alpha global",
+            key_words=["alpha"],
+        )
+
+        self.assertEqual(builder.build(episode_request, bundle).scope, "episode")
+        self.assertEqual(builder.build(stage_request, bundle).scope, "stage")
+        self.assertEqual(builder.build(global_request, bundle).scope, "global")
+
     def test_episode_request_prefers_episode_scope(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
@@ -82,29 +112,22 @@ class LocalContextBuilderTest(unittest.TestCase):
                 EvidenceCard(
                     sample_id="sample-1",
                     title="sample-1",
-                    excerpt="alpha first excerpt",
+                    excerpt="alpha stale score excerpt",
                     tokens=["alpha"],
-                    score=1,
+                    score=999,
                 ),
                 EvidenceCard(
                     sample_id="sample-2",
                     title="sample-2",
-                    excerpt="alpha strongest excerpt",
-                    tokens=["alpha"],
-                    score=5,
-                ),
-                EvidenceCard(
-                    sample_id="sample-3",
-                    title="sample-3",
-                    excerpt="alpha middle excerpt",
-                    tokens=["alpha"],
-                    score=3,
+                    excerpt="alpha beta strongest excerpt",
+                    tokens=["alpha", "beta"],
+                    score=1,
                 ),
             ],
         )
         request = LocalContextRequest(
             agent_name="StageDescriptionReconstructor",
-            query_text="alpha",
+            query_text="alpha beta",
             key_words=[],
         )
 
@@ -113,9 +136,8 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.scope, "stage")
         self.assertEqual(package.summary["selected_count"], 1)
         self.assertEqual(package.selected_sample_ids, ["sample-2"])
-        self.assertIn("alpha strongest excerpt", package.rendered_context)
-        self.assertNotIn("alpha first excerpt", package.rendered_context)
-        self.assertNotIn("alpha middle excerpt", package.rendered_context)
+        self.assertIn("alpha beta strongest excerpt", package.rendered_context)
+        self.assertNotIn("alpha stale score excerpt", package.rendered_context)
 
     def test_global_request_falls_back_when_no_cards_overlap(self):
         bundle = EvidenceAssetBundle(
