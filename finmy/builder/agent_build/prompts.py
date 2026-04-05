@@ -178,6 +178,7 @@ StageDescriptionReconstructorSys = """
 You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the **Target Stage** of a financial event, strictly based on the provided `Content`, guided by `Query` and `Keywords`.
 
 The `TargetStage` is provided with all its episodes fully reconstructed (Participants, Transactions, etc.). Treat these reconstructed elements as crucial reference and foundational inputs for description reconstruction; use them, together with `Query`, `Keywords`, and especially `Content`, to produce the event `descriptions`.
+Treat `RetrievedContext` and `RetrievedContextSummary` as additive evidence only. Use them to ground the stage description, but never remove, replace, or dilute `TargetStage` or `Content`.
 
 Output a JSON object with a single key `descriptions`:
 `descriptions`: A list of `VerifiableField` objects describing the stage.
@@ -206,6 +207,7 @@ Based on the provided TargetStage (with fully reconstructed Episodes), Query, Ke
 Inputs:
 - TargetStage: The stage structure with its episodes populated (participants, transactions).
 - Query, Keywords, Content.
+- RetrievedContext, RetrievedContextSummary: additive retrieval signals for this stage only.
 
 Output:
 - A JSON object with a single key `descriptions` containing a list of `VerifiableField` objects.
@@ -214,6 +216,8 @@ Instructions:
 - Analyze the `TargetStage` episodes to understand what happened.
 - Synthesize a high-level description for the stage itself.
 - Ensure alignment with the user's Query and Keywords.
+- Use `RetrievedContext` as supporting evidence when it matches the current stage.
+- Keep `TargetStage` and `Content` intact as the primary inputs.
 
 === TARGET STAGE BEGIN ===
 {TargetStage}
@@ -230,6 +234,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 

@@ -234,15 +234,16 @@ class AgentEventBuilder(BaseBuilder):
         raise ValueError("No skeleton result found in builder state")
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
-        """Build episode-local context for the participant and transaction paths.
+        """Build local context for episode- and stage-scoped reconstruction paths.
 
-        This helper stays intentionally narrow and only serves the current episode
-        reconstruction steps that already work with local evidence.
+        This helper stays intentionally narrow and only serves reconstruction steps
+        that already work with additive local evidence.
         """
         if agent_name not in {
             "ParticipantReconstructor",
             "TransactionReconstructor",
             "EpisodeReconstructor",
+            "StageDescriptionReconstructor",
         }:
             return None
 
@@ -251,6 +252,19 @@ class AgentEventBuilder(BaseBuilder):
             return None
 
         event_skeleton = self._get_event_skeleton(state)
+        if agent_name == "StageDescriptionReconstructor":
+            stage_idx = state["agent_executed"].count(agent_name)
+            if stage_idx >= len(event_skeleton["stages"]):
+                return None
+            target_stage = event_skeleton["stages"][stage_idx]
+            request = LocalContextRequest(
+                agent_name=agent_name,
+                query_text=state["build_input"].user_query.query_text,
+                key_words=state["build_input"].user_query.key_words,
+                target_stage=self._field_value(target_stage.get("name")),
+            )
+            return LocalContextBuilder().build(request, bundle)
+
         current_count = state["agent_executed"].count(agent_name)
         target_stage, latest_episode = self.extract_latest_episode(
             event_skeleton, current_count
@@ -529,6 +543,16 @@ class AgentEventBuilder(BaseBuilder):
 
                 prompt_kwargs["TargetStage"] = json.dumps(
                     target_stage_skeleton, default=str, indent=2
+                )
+
+                local_context = self._build_local_context_package(state, agent_name)
+                prompt_kwargs["RetrievedContext"] = (
+                    local_context.rendered_context if local_context else ""
+                )
+                prompt_kwargs["RetrievedContextSummary"] = (
+                    json.dumps(local_context.summary, ensure_ascii=False)
+                    if local_context
+                    else "{}"
                 )
 
             sys_msg = sys_msg_template.format(
