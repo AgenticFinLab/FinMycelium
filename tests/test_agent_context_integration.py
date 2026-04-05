@@ -427,19 +427,26 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 "TransactionReconstructor",
             ],
             "cost": [],
-            "agent_system_msgs": {"EpisodeReconstructor": "sys"},
-            "agent_user_msgs": {"EpisodeReconstructor": "user"},
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
 
         self.builder.execute_agent(state, "EpisodeReconstructor")
 
-        rendered_prompt = main_build_module.EpisodeReconstructorUser.format(
-            **captured["prompt_kwargs"]
-        )
-        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        infer_input = captured["infer_input"]
+        rendered_prompt = infer_input.user_msg.format(**captured["prompt_kwargs"])
+        self.assertIn("RetrievedContext", infer_input.user_msg)
+        self.assertIn("Content", infer_input.user_msg)
+        self.assertIn("RETRIEVED CONTEXT BEGIN", infer_input.user_msg)
         self.assertIn("alpha episode excerpt", captured["prompt_kwargs"]["RetrievedContext"])
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        self.assertIn("real content", captured["prompt_kwargs"]["Content"])
         self.assertIn("alpha episode excerpt", rendered_prompt)
         self.assertIn("RETRIEVED CONTEXT BEGIN", rendered_prompt)
         self.assertIn("Content", rendered_prompt)
