@@ -239,7 +239,11 @@ class AgentEventBuilder(BaseBuilder):
         This helper stays intentionally narrow and only serves the current episode
         reconstruction steps that already work with local evidence.
         """
-        if agent_name not in {"ParticipantReconstructor", "TransactionReconstructor"}:
+        if agent_name not in {
+            "ParticipantReconstructor",
+            "TransactionReconstructor",
+            "EpisodeReconstructor",
+        }:
             return None
 
         bundle = state["build_input"].context_assets
@@ -647,6 +651,15 @@ class AgentEventBuilder(BaseBuilder):
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
                 prompt_kwargs["TargetEpisode"] = target_episode
+                local_context = self._build_local_context_package(state, agent_name)
+                prompt_kwargs["RetrievedContext"] = (
+                    local_context.rendered_context if local_context else ""
+                )
+                prompt_kwargs["RetrievedContextSummary"] = (
+                    json.dumps(local_context.summary, ensure_ascii=False)
+                    if local_context
+                    else "{}"
+                )
 
         # Escape braces for format if needed.
         # We escape them because the downstream inference engine (LangChain)

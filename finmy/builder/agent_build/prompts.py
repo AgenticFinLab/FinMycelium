@@ -470,6 +470,8 @@ Constraints:
 
 Instructions:
 - **Participants & Transactions Reference**: The `participants` and `transactions` lists in TargetEpisode are already fully reconstructed. Use them as context.
+- Treat `RetrievedContext` as additive evidence only. Use it to ground episode relations and timestamps, but do not remove or replace `Content`.
+- If `RetrievedContextSummary` is provided, use it as a compact signal about what was retrieved for this episode.
 - **Output Placeholders**: In your output JSON:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
     - Set `transactions` to the exact string `"Results of TransactionReconstructor"`.
@@ -537,4 +539,12 @@ Output:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()

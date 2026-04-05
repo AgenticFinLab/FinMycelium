@@ -111,6 +111,23 @@ def _transaction_participants():
     }
 
 
+def _episode_transactions():
+    return {
+        "transactions": [
+            {
+                "transaction_id": "T_1",
+                "name": _vf("Transaction 1"),
+                "transaction_type": _vf("transfer"),
+                "timestamp": _vf("2025-01-01"),
+                "details": _vf("Episode-level transaction"),
+                "from_participant_id": "P_1",
+                "to_participant_id": "P_2",
+                "instruments": [],
+            }
+        ]
+    }
+
+
 class AgentContextIntegrationTest(unittest.TestCase):
     def setUp(self):
         self.builder = AgentEventBuilder.__new__(AgentEventBuilder)
@@ -347,6 +364,166 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
         self.assertEqual(captured["prompt_kwargs"]["RetrievedContextSummary"], "{}")
+        self.assertIn("TARGET EPISODE BEGIN", rendered_prompt)
+        self.assertIn("real content", rendered_prompt)
+        self.assertNotIn("alpha episode excerpt", rendered_prompt)
+
+    def test_episode_reconstructor_receives_retrieved_context_without_clearing_content(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {"EpisodeReconstructor": "sys"},
+            "agent_user_msgs": {"EpisodeReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        rendered_prompt = main_build_module.EpisodeReconstructorUser.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertIn("alpha episode excerpt", captured["prompt_kwargs"]["RetrievedContext"])
+        self.assertIn("alpha episode excerpt", rendered_prompt)
+        self.assertIn("RETRIEVED CONTEXT BEGIN", rendered_prompt)
+        self.assertIn("Content", rendered_prompt)
+        self.assertIn("StageSkeleton", rendered_prompt)
+        self.assertIn("TargetEpisode", rendered_prompt)
+        self.assertIn("Episode 1", rendered_prompt)
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+
+    def test_episode_reconstructor_uses_empty_retrieved_context_when_no_matches(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_empty_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {"EpisodeReconstructor": "sys"},
+            "agent_user_msgs": {"EpisodeReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        rendered_prompt = main_build_module.EpisodeReconstructorUser.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
+        self.assertEqual(captured["prompt_kwargs"]["RetrievedContextSummary"], "{}")
+        self.assertIn("STAGE SKELETON BEGIN", rendered_prompt.upper())
         self.assertIn("TARGET EPISODE BEGIN", rendered_prompt)
         self.assertIn("real content", rendered_prompt)
         self.assertNotIn("alpha episode excerpt", rendered_prompt)
