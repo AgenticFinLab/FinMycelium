@@ -539,11 +539,6 @@ class AgentContextIntegrationTest(unittest.TestCase):
         captured = {}
 
         def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
-            infer_input.input = (
-                f"{infer_input.user_msg}\n"
-                f"RetrievedContext={prompt_kwargs['RetrievedContext']}\n"
-                "Stage 1"
-            )
             captured["infer_input"] = infer_input
             captured["prompt_kwargs"] = prompt_kwargs
             return SimpleNamespace(
@@ -629,9 +624,14 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn(
             "alpha stage excerpt", captured["prompt_kwargs"]["RetrievedContext"]
         )
-        self.assertIn("RetrievedContext=", infer_input.input)
-        self.assertIn("alpha stage excerpt", infer_input.input)
-        self.assertIn("Stage 1", infer_input.input)
+        self.assertIn("=== TARGET STAGE BEGIN ===", infer_input.user_msg)
+        self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", infer_input.user_msg)
+        rendered_prompt = main_build_module.StageDescriptionReconstructorUser.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertIn("alpha stage excerpt", rendered_prompt)
+        self.assertIn("Stage 1", rendered_prompt)
+        self.assertIn("real content", rendered_prompt)
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextSummary"],
             json.dumps({"selected_count": 1}, ensure_ascii=False),
