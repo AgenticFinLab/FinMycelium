@@ -180,12 +180,30 @@ class LocalContextBuilder:
         r"(?:cnn values your feedback|video player was slow to load|cnn analysis)\b"
     )
     _GLOBAL_MIN_INFORMATION_BODY_TOKENS = 4
+    _EPISODE_ACTION_TOKENS = {
+        "arrest",
+        "buy",
+        "charge",
+        "convert",
+        "flee",
+        "investigate",
+        "launder",
+        "laundering",
+        "plead",
+        "reconcile",
+        "seize",
+        "sell",
+        "trace",
+        "transfer",
+        "unfold",
+    }
 
     def build(
         self,
         request: LocalContextRequest,
         bundle: EvidenceAssetBundle | None = None,
     ) -> LocalContextPackage:
+        assets_provided = bundle is not None or request.context_assets is not None
         bundle = bundle or request.context_assets or EvidenceAssetBundle.empty()
         query_tokens = tokenize_text(
             f"{request.query_text or ''} {' '.join(request.key_words or [])}".strip()
@@ -198,7 +216,10 @@ class LocalContextBuilder:
             selected_cards = []
         selected_sample_ids = [card.sample_id for card in selected_cards]
 
-        retrieval_status = "sufficient" if selected_sample_ids else "fallback_fulltext"
+        if not assets_provided:
+            retrieval_status = "missing_context_assets"
+        else:
+            retrieval_status = "sufficient" if selected_sample_ids else "fallback_fulltext"
         rendered_context = "\n\n".join(render_evidence_card(card) for card in selected_cards)
 
         return LocalContextPackage(
@@ -208,8 +229,8 @@ class LocalContextBuilder:
             rendered_context=rendered_context,
             summary={"selected_count": len(selected_sample_ids)},
             query_bundle=query_bundle,
-            memory=self._build_memory(selected_cards, bundle),
-            budget_summary=self._build_budget_summary(selected_cards, bundle),
+            memory=self._build_memory(selected_cards, bundle, assets_provided),
+            budget_summary=self._build_budget_summary(selected_cards, bundle, assets_provided),
         )
 
     def build_query_bundle(self, request: LocalContextRequest) -> dict[str, object]:
@@ -225,8 +246,7 @@ class LocalContextBuilder:
             query_bundle["global_phase_hints"] = self._collect_global_phase_hints(request)
             return query_bundle
 
-        if request.target_stage:
-            query_bundle["stage_name"] = request.target_stage
+        query_bundle["stage_name"] = request.target_stage
 
         if scope == "stage":
             query_bundle["stage_hints"] = self._collect_stage_hints(request)
@@ -416,7 +436,7 @@ class LocalContextBuilder:
         for phase_name, phase_terms in self._GLOBAL_PHASE_BUCKET_TERMS.items():
             if set(query_tokens) & phase_terms:
                 phase_hints.append(phase_name)
-        return phase_hints or ["early", "middle"]
+        return phase_hints
 
     def _collect_stage_hints(self, request: LocalContextRequest) -> List[str]:
         return self._dedupe_tokens(
@@ -436,35 +456,45 @@ class LocalContextBuilder:
         )
 
     def _collect_episode_action_hints(self, request: LocalContextRequest) -> List[str]:
-        action_hints = [
+        return [
             token
             for token in self._collect_keyword_hints(request)
-            if token not in self._GLOBAL_LOW_SIGNAL_TOKENS and len(token) >= 4
+            if token in self._EPISODE_ACTION_TOKENS
         ]
-        return action_hints[:4] or ["reconstruct"]
 
     def _collect_episode_time_hints(self, request: LocalContextRequest) -> List[str]:
         time_hints = [
-            token for token in tokenize_text(request.query_text) if token.isdigit() and len(token) == 4
+            token
+            for token in tokenize_text(
+                " ".join(
+                    [
+                        request.query_text or "",
+                        request.target_stage or "",
+                        request.target_episode or "",
+                    ]
+                )
+            )
+            if token.isdigit() and len(token) == 4
         ]
-        return self._dedupe_tokens(time_hints) or ["timeline"]
+        return self._dedupe_tokens(time_hints)
 
     def _build_memory(
         self,
         selected_cards: List[EvidenceCard],
         bundle: EvidenceAssetBundle,
+        assets_provided: bool,
     ) -> dict[str, object]:
         selected_sample_ids = [card.sample_id for card in selected_cards]
-        selected_signal_counts = {
+        selected_hint_counts = {
             "time_hints": sum(len(card.time_hints) for card in selected_cards),
             "entity_hints": sum(len(card.entity_hints) for card in selected_cards),
             "action_hints": sum(len(card.action_hints) for card in selected_cards),
             "money_hints": sum(len(card.money_hints) for card in selected_cards),
-            "quality_flags": sum(len(card.quality_flags) for card in selected_cards),
         }
         return {
+            "asset_status": "provided" if assets_provided else "missing",
             "selected_sample_ids": selected_sample_ids,
-            "selected_signal_counts": selected_signal_counts,
+            "selected_hint_counts": selected_hint_counts,
             "available_card_count": len(bundle.evidence_cards),
         }
 
@@ -472,12 +502,14 @@ class LocalContextBuilder:
         self,
         selected_cards: List[EvidenceCard],
         bundle: EvidenceAssetBundle,
+        assets_provided: bool,
     ) -> dict[str, int]:
         max_cards = bundle.retrieval_policy.max_cards
         return {
             "used_card_count": len(selected_cards),
             "available_card_count": len(bundle.evidence_cards),
             "remaining_card_budget": max((max_cards or len(bundle.evidence_cards)) - len(selected_cards), 0),
+            "asset_bundle_count": 1 if assets_provided else 0,
         }
 
     def _dedupe_tokens(self, values: List[str]) -> List[str]:

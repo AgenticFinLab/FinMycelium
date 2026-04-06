@@ -87,11 +87,60 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertIn("entity_hints", query_bundle)
         self.assertIn("action_hints", query_bundle)
         self.assertIn("time_hints", query_bundle)
-        self.assertTrue(query_bundle["entity_hints"])
-        self.assertTrue(query_bundle["action_hints"])
-        self.assertTrue(query_bundle["time_hints"])
+        self.assertIsInstance(query_bundle["entity_hints"], list)
+        self.assertIsInstance(query_bundle["action_hints"], list)
+        self.assertIsInstance(query_bundle["time_hints"], list)
         self.assertNotIn("global_phase_hints", query_bundle)
         self.assertNotIn("stage_hints", query_bundle)
+
+    def test_stage_and_episode_query_bundle_keep_stable_name_fields_when_targets_are_missing(self):
+        builder = LocalContextBuilder()
+
+        stage_bundle = builder.build_query_bundle(
+            LocalContextRequest(
+                agent_name="StageDescriptionReconstructor",
+                query_text="alpha stage",
+                key_words=["alpha"],
+            )
+        )
+        episode_bundle = builder.build_query_bundle(
+            LocalContextRequest(
+                agent_name="EpisodeReconstructor",
+                query_text="alpha episode",
+                key_words=["alpha"],
+            )
+        )
+
+        self.assertEqual(stage_bundle["scope"], "stage")
+        self.assertIn("stage_name", stage_bundle)
+        self.assertEqual(stage_bundle["stage_name"], "")
+        self.assertEqual(episode_bundle["scope"], "episode")
+        self.assertIn("stage_name", episode_bundle)
+        self.assertIn("episode_name", episode_bundle)
+        self.assertEqual(episode_bundle["stage_name"], "")
+        self.assertEqual(episode_bundle["episode_name"], "")
+
+    def test_query_bundle_uses_empty_hint_lists_when_no_real_scope_hints_exist(self):
+        builder = LocalContextBuilder()
+
+        global_bundle = builder.build_query_bundle(
+            LocalContextRequest(
+                agent_name="EventDescriptionReconstructor",
+                query_text="alpha topic",
+                key_words=["alpha"],
+            )
+        )
+        episode_bundle = builder.build_query_bundle(
+            LocalContextRequest(
+                agent_name="EpisodeReconstructor",
+                query_text="alpha episode",
+                key_words=["alpha"],
+            )
+        )
+
+        self.assertEqual(global_bundle["global_phase_hints"], [])
+        self.assertEqual(episode_bundle["action_hints"], [])
+        self.assertEqual(episode_bundle["time_hints"], [])
 
     def test_local_context_package_exposes_task_facing_metadata_from_request_assets(self):
         builder = LocalContextBuilder()
@@ -129,10 +178,25 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.query_bundle["scope"], "episode")
         self.assertEqual(package.query_bundle["episode_name"], "Large-Scale Blue Sky Ponzi Scheme")
         self.assertTrue(package.query_bundle["keyword_hints"])
-        self.assertTrue(package.memory["selected_signal_counts"])
+        self.assertTrue(package.memory["selected_hint_counts"])
         self.assertEqual(package.memory["selected_sample_ids"], ["sample-1"])
         self.assertIn("used_card_count", package.budget_summary)
         self.assertGreater(package.budget_summary["used_card_count"], 0)
+
+    def test_build_without_assets_reports_missing_context_assets_explicitly(self):
+        package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="StageDescriptionReconstructor",
+                query_text="alpha stage",
+                key_words=["alpha"],
+            )
+        )
+
+        self.assertEqual(package.retrieval_status, "missing_context_assets")
+        self.assertEqual(package.selected_sample_ids, [])
+        self.assertEqual(package.budget_summary["available_card_count"], 0)
+        self.assertEqual(package.budget_summary["used_card_count"], 0)
+        self.assertEqual(package.memory["asset_status"], "missing")
 
     def test_scope_mapping_is_explicit_for_known_agent_names(self):
         builder = LocalContextBuilder()
