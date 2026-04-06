@@ -1,3 +1,8 @@
+import importlib.util
+import json
+import os
+import tempfile
+from pathlib import Path
 import unittest
 
 from finmy.context import (
@@ -10,6 +15,24 @@ from finmy.context.assets import (
     EvidenceIndex,
     EvidenceRetrievalPolicy,
 )
+
+
+HELPER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "examples"
+    / "uTEST"
+    / "replay_skeleton_shadow_checkpoint.py"
+)
+
+_helper_spec = importlib.util.spec_from_file_location(
+    "replay_skeleton_shadow_checkpoint",
+    HELPER_PATH,
+)
+if _helper_spec is None or _helper_spec.loader is None:
+    raise RuntimeError(f"Unable to load helper module at {HELPER_PATH}")
+_helper_module = importlib.util.module_from_spec(_helper_spec)
+_helper_spec.loader.exec_module(_helper_module)
+summarize_latest_builder_output = _helper_module.summarize_latest_builder_output
 
 
 QUERY_TEXT = "What is the case involving fraud and money laundering by Qian Zhimin?"
@@ -180,6 +203,70 @@ class GlobalShadowReplayTest(unittest.TestCase):
         self.assertEqual(package.summary["selected_count"], 0)
         self.assertEqual(package.selected_sample_ids, [])
         self.assertEqual(package.rendered_context, "")
+
+    def test_summarize_latest_builder_output_counts_latest_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            older_dir = root / "build_output_20240101010101000000"
+            newer_dir = root / "build_output_20240202020202000000"
+            older_dir.mkdir()
+            newer_dir.mkdir()
+
+            older_skeleton = older_dir / "SkeletonReconstructor-1-Result.json"
+            older_skeleton.write_text(
+                json.dumps({"stages": [{"episodes": [{}]}]}),
+                encoding="utf-8",
+            )
+            older_final = older_dir / "FinalEventCascade.json"
+            older_final.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}]}]}),
+                encoding="utf-8",
+            )
+
+            newer_skeleton = newer_dir / "SkeletonReconstructor-2-Result.json"
+            newer_skeleton.write_text(
+                json.dumps(
+                    {
+                        "stages": [
+                            {"episodes": [{}, {}]},
+                            {"episodes": [{}]},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            newer_final = newer_dir / "FinalEventCascade.json"
+            newer_final.write_text(
+                json.dumps(
+                    {
+                        "stages": [
+                            {"episodes": [{}, {}, {}]},
+                            {"episodes": [{}]},
+                            {"episodes": [{}, {}]},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            older_mtime = 1_700_000_000
+            newer_mtime = 1_800_000_000
+            for path in (older_dir, older_skeleton, older_final):
+                os.utime(path, (older_mtime, older_mtime))
+            for path in (newer_dir, newer_skeleton, newer_final):
+                os.utime(path, (newer_mtime, newer_mtime))
+
+            summary = summarize_latest_builder_output(root)
+
+            self.assertEqual(summary["builder_output_count"], 2)
+            self.assertEqual(summary["latest_builder_dir"], str(newer_dir))
+            self.assertEqual(summary["skeleton"]["path"], str(newer_skeleton))
+            self.assertEqual(summary["skeleton"]["stage_count"], 2)
+            self.assertEqual(summary["skeleton"]["episode_count"], 3)
+            self.assertEqual(summary["final"]["path"], str(newer_final))
+            self.assertEqual(summary["final"]["stage_count"], 3)
+            self.assertEqual(summary["final"]["episode_count"], 6)
+
 
 
 if __name__ == "__main__":
