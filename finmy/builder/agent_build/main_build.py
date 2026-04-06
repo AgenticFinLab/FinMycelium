@@ -395,9 +395,48 @@ class AgentEventBuilder(BaseBuilder):
         prompt_kwargs["TargetEpisodeContext"] = self._render_target_episode_context(
             target_episode
         )
-        # Heavy-agent prompts still bind through `Content`, so point that slot at the
-        # compact rendering without removing the additive compact fields.
-        prompt_kwargs["Content"] = prompt_kwargs["CompactContent"]
+
+    def _render_compact_stage_context(self, stage: dict) -> str:
+        """Serialize the stage skeleton into a compact episode-summary form."""
+        episode_ids = []
+        episode_names = []
+        for episode in stage.get("episodes", []) or []:
+            if isinstance(episode, dict):
+                episode_id = episode.get("episode_id")
+                episode_name = self._scalar_value(episode.get("name", "unknown"))
+            else:
+                episode_id = getattr(episode, "episode_id", None)
+                episode_name = self._scalar_value(getattr(episode, "name", "unknown"))
+            if episode_id:
+                episode_ids.append(episode_id)
+            if episode_name:
+                episode_names.append(episode_name)
+
+        compact_context = {
+            "stage_id": stage.get("stage_id", "unknown"),
+            "name": self._scalar_value(stage.get("name", "unknown")),
+            "index_in_event": stage.get("index_in_event", "unknown"),
+            "start_time": self._scalar_value(stage.get("start_time", "unknown")),
+            "end_time": self._scalar_value(stage.get("end_time", "unknown")),
+            "episode_ids": episode_ids,
+            "episode_names": episode_names,
+        }
+        return json.dumps(
+            compact_context,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    def _rewrite_heavy_agent_user_msg_template(
+        self, agent_name: str, user_msg_template: str
+    ) -> str:
+        """Swap bulky prompt placeholders for compact ones without changing kwargs."""
+        rewritten = user_msg_template.replace("{Content}", "{CompactContent}")
+        rewritten = rewritten.replace("{TargetEpisode}", "{TargetEpisodeContext}")
+        if agent_name == "EpisodeReconstructor":
+            rewritten = rewritten.replace("{StageSkeleton}", "{StageSkeletonContext}")
+        return rewritten
 
     def _is_unknown_value(self, value: str) -> bool:
         return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
@@ -612,6 +651,14 @@ class AgentEventBuilder(BaseBuilder):
         # Retrieve templates
         sys_msg_template = state["agent_system_msgs"][agent_name]
         user_msg_template = state["agent_user_msgs"][agent_name]
+        if agent_name in {
+            "ParticipantReconstructor",
+            "TransactionReconstructor",
+            "EpisodeReconstructor",
+        }:
+            user_msg_template = self._rewrite_heavy_agent_user_msg_template(
+                agent_name, user_msg_template
+            )
 
         savename_suffix = ""
         sys_msg = ""
@@ -798,6 +845,9 @@ class AgentEventBuilder(BaseBuilder):
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
+                prompt_kwargs["StageSkeletonContext"] = self._render_compact_stage_context(
+                    belong_state
+                )
                 prompt_kwargs["TargetEpisode"] = target_episode
                 self._attach_compact_heavy_agent_prompt_kwargs(
                     prompt_kwargs,

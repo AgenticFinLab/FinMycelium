@@ -803,7 +803,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_executed": [],
             "cost": [],
             "agent_system_msgs": {"ParticipantReconstructor": "sys"},
-            "agent_user_msgs": {"ParticipantReconstructor": "user"},
+            "agent_user_msgs": {
+                "ParticipantReconstructor": main_build_module.ParticipantReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -879,7 +881,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_executed": [],
             "cost": [],
             "agent_system_msgs": {"ParticipantReconstructor": "sys"},
-            "agent_user_msgs": {"ParticipantReconstructor": "user"},
+            "agent_user_msgs": {
+                "ParticipantReconstructor": main_build_module.ParticipantReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -904,8 +908,14 @@ class AgentContextIntegrationTest(unittest.TestCase):
         ):
             self.builder.execute_agent(state, "ParticipantReconstructor")
 
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
         expected_compact_content = "real content\nsecondary content line"
-        self.assertEqual(captured["prompt_kwargs"]["Content"], expected_compact_content)
+        self.assertEqual(
+            captured["prompt_kwargs"]["Content"],
+            "  real content  \n\nsecondary content line\n",
+        )
         self.assertEqual(
             captured["prompt_kwargs"]["CompactContent"], expected_compact_content
         )
@@ -923,6 +933,11 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 "transaction_ids": [],
             },
         )
+        self.assertIn(expected_compact_content, rendered_prompt)
+        self.assertIn('"participant_ids":[]', rendered_prompt)
+        self.assertNotIn('"participants": [', rendered_prompt)
+        self.assertNotIn('"transactions": [', rendered_prompt)
+        self.assertNotIn("  real content  ", rendered_prompt)
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContext"],
             "RICH_PARTICIPANT_CONTEXT",
@@ -1030,7 +1045,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
             "cost": [],
             "agent_system_msgs": {"TransactionReconstructor": "sys"},
-            "agent_user_msgs": {"TransactionReconstructor": "user"},
+            "agent_user_msgs": {
+                "TransactionReconstructor": main_build_module.TransactionReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -1113,7 +1130,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
             "cost": [],
             "agent_system_msgs": {"TransactionReconstructor": "sys"},
-            "agent_user_msgs": {"TransactionReconstructor": "user"},
+            "agent_user_msgs": {
+                "TransactionReconstructor": main_build_module.TransactionReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -1172,7 +1191,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
             "cost": [],
             "agent_system_msgs": {"TransactionReconstructor": "sys"},
-            "agent_user_msgs": {"TransactionReconstructor": "user"},
+            "agent_user_msgs": {
+                "TransactionReconstructor": main_build_module.TransactionReconstructorUser
+            },
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -1197,6 +1218,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
         ):
             self.builder.execute_agent(state, "TransactionReconstructor")
 
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertIn("CompactContent", captured["prompt_kwargs"])
         self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
@@ -1230,12 +1254,16 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(
             captured["prompt_kwargs"]["Content"],
-            "real content\nsecondary content line",
+            "  real content  \n\nsecondary content line\n",
         )
         self.assertEqual(
             captured["prompt_kwargs"]["CompactContent"],
             "real content\nsecondary content line",
         )
+        self.assertIn('"participant_ids":["P_1","P_2"]', rendered_prompt)
+        self.assertNotIn('"participants": [', rendered_prompt)
+        self.assertNotIn('"transactions": [', rendered_prompt)
+        self.assertIn("real content\nsecondary content line", rendered_prompt)
 
     def test_episode_reconstructor_receives_retrieved_context_without_clearing_content(self):
         captured = {}
@@ -1493,6 +1521,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
         ):
             self.builder.execute_agent(state, "EpisodeReconstructor")
 
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
         self.assertEqual(captured["prompt_kwargs"]["RetrievedContext"], "RICH_EPISODE_CONTEXT")
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextSummary"],
@@ -1526,6 +1557,21 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 sort_keys=True,
             ),
         )
+        self.assertEqual(
+            captured["prompt_kwargs"]["Content"],
+            "  real content  \n\nsecondary content line\n",
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["CompactContent"],
+            "real content\nsecondary content line",
+        )
+        self.assertIn("real content\nsecondary content line", rendered_prompt)
+        self.assertIn('"episode_ids":["E1"]', rendered_prompt)
+        self.assertIn('"participant_ids":["P_1","P_2"]', rendered_prompt)
+        self.assertIn('"stage_id":"S1"', rendered_prompt)
+        self.assertNotIn('"participants": [', rendered_prompt)
+        self.assertNotIn('"transactions": [', rendered_prompt)
+        self.assertNotIn('"episodes": [', rendered_prompt)
 
     def test_episode_reconstructor_exposes_compact_payload_contract_additively(self):
         captured = {}
@@ -1616,9 +1662,13 @@ class AgentContextIntegrationTest(unittest.TestCase):
         ):
             self.builder.execute_agent(state, "EpisodeReconstructor")
 
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertIn("CompactContent", captured["prompt_kwargs"])
         self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        self.assertIn("StageSkeletonContext", captured["prompt_kwargs"])
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextQueryBundle"],
             json.dumps(
@@ -1649,7 +1699,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(
             captured["prompt_kwargs"]["Content"],
-            "real content\nsecondary content line",
+            "  real content  \n\nsecondary content line\n",
         )
         self.assertEqual(
             captured["prompt_kwargs"]["CompactContent"],
@@ -1667,6 +1717,24 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 "transaction_ids": ["T_1"],
             },
         )
+        self.assertEqual(
+            json.loads(captured["prompt_kwargs"]["StageSkeletonContext"]),
+            {
+                "stage_id": "S1",
+                "name": "Stage 1",
+                "index_in_event": 0,
+                "start_time": "2025-01-01",
+                "end_time": "2025-01-02",
+                "episode_ids": ["E1"],
+                "episode_names": ["Episode 1"],
+            },
+        )
+        self.assertIn('"stage_id":"S1"', rendered_prompt)
+        self.assertIn('"episode_ids":["E1"]', rendered_prompt)
+        self.assertNotIn('"episodes": [', rendered_prompt)
+        self.assertNotIn('"participants": [', rendered_prompt)
+        self.assertNotIn('"transactions": [', rendered_prompt)
+        self.assertIn("real content\nsecondary content line", rendered_prompt)
 
     def test_stage_description_reconstructor_receives_stage_scoped_context(self):
         captured = {}
