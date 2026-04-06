@@ -468,21 +468,21 @@ class FinmyPipeline:
         self.logger.info(
             "Creating BuildInput object from user_query and meta_samples..."
         )
-        merged_key_words = list(user_query_input.key_words)
+        build_user_query_input = user_query_input
         if summarized_query is not None:
             summarized_key_words = getattr(summarized_query, "key_words", [])
             merged_key_words = self._merge_keywords(
                 user_query_input.key_words, summarized_key_words
             )
-        merged_user_query_input = UserQueryInput(
-            user_query_id=user_query_input.user_query_id,
-            query_text=user_query_input.query_text,
-            key_words=merged_key_words,
-            time_range=user_query_input.time_range,
-            extras=dict(user_query_input.extras),
-        )
+            build_user_query_input = UserQueryInput(
+                user_query_id=user_query_input.user_query_id,
+                query_text=user_query_input.query_text,
+                key_words=merged_key_words,
+                time_range=user_query_input.time_range,
+                extras=dict(user_query_input.extras),
+            )
         build_input = convert_to_build_input(
-            user_query=merged_user_query_input,
+            user_query=build_user_query_input,
             meta_samples=meta_samples,
             extras={},
         )
@@ -505,7 +505,9 @@ class FinmyPipeline:
         return build_input
 
     @staticmethod
-    def _merge_keywords(raw_keywords: List[str], summarized_keywords: List[str]) -> List[str]:
+    def _merge_keywords(
+        raw_keywords: List[str], summarized_keywords: List[str]
+    ) -> List[str]:
         merged_keywords: List[str] = []
         seen = set()
         for keyword in list(raw_keywords) + list(summarized_keywords):

@@ -84,6 +84,42 @@ class PipelineContextAssetsTest(unittest.TestCase):
         self.assertEqual(build_input.context_assets.index.token_counts, {})
         build_assets.assert_not_called()
 
+    def test_create_build_input_preserves_original_query_without_summary(self):
+        pipeline = FinmyPipeline.__new__(FinmyPipeline)
+        pipeline.logger = Mock()
+
+        user_query = UserQueryInput(query_text="alpha risk", key_words=["alpha"])
+        meta_samples = [
+            MetaSample(
+                sample_id="sample-1",
+                raw_data_id="raw-1",
+                location="meta-1",
+                time="2025-01-01 00:00:00 UTC",
+                category="risk",
+                knowledge_field="finance",
+                tag="tag-1",
+                method="method-1",
+            )
+        ]
+        expected_bundle = EvidenceAssetBundle.empty()
+
+        with patch(
+            "finmy.pipeline.build_evidence_assets",
+            return_value=expected_bundle,
+        ) as build_assets, patch(
+            "finmy.converter.read_text_data_from_block",
+            return_value="alpha excerpt",
+        ):
+            build_input = pipeline.create_build_input(
+                user_query,
+                meta_samples,
+                attach_context_assets=True,
+            )
+
+        self.assertIs(build_input.user_query, user_query)
+        self.assertIs(build_assets.call_args.args[0], user_query)
+        self.assertEqual(build_input.user_query.key_words, ["alpha"])
+
     def test_lm_build_pipeline_with_contents_leaves_context_assets_empty(self):
         pipeline = FinmyPipeline.__new__(FinmyPipeline)
         pipeline.logger = SimpleNamespace(info=lambda *args, **kwargs: None)
