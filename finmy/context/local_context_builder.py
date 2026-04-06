@@ -96,6 +96,31 @@ class LocalContextBuilder:
         "you",
         "your",
     }
+    _GLOBAL_TEMPLATE_TOKENS = {
+        "about",
+        "article",
+        "back",
+        "careers",
+        "contact",
+        "content",
+        "edition",
+        "headlines",
+        "home",
+        "international",
+        "latest",
+        "main",
+        "menu",
+        "newsletters",
+        "page",
+        "related",
+        "search",
+        "site",
+        "stories",
+        "skip",
+        "sign",
+        "up",
+        "us",
+    }
     _GLOBAL_CASE_SIGNAL_TOKENS = {
         "blue",
         "fraud",
@@ -177,7 +202,10 @@ class LocalContextBuilder:
             token for token in query_tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
         ]
         case_signal_tokens = self._extract_global_case_signal_tokens(query_content_tokens)
-        if not case_signal_tokens:
+        query_information_tokens = self._extract_global_high_information_tokens(
+            query_content_tokens
+        )
+        if not case_signal_tokens and not query_information_tokens:
             return []
 
         ranked_cards = []
@@ -185,18 +213,19 @@ class LocalContextBuilder:
             if self._is_global_noise_card(card):
                 continue
 
-            card_content_tokens = [
-                token for token in card.tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
-            ]
-            card_case_tokens = self._extract_global_case_signal_tokens(card_content_tokens)
-            overlap = score_token_overlap(card_case_tokens, case_signal_tokens)
+            overlap, match_kind = self._classify_global_card_match(
+                card.tokens,
+                case_signal_tokens,
+                query_information_tokens,
+            )
             if overlap <= 0:
                 continue
-            ranked_cards.append((overlap, index, card))
+            match_priority = 0 if match_kind == "strong" else 1
+            ranked_cards.append((match_priority, -overlap, index, card))
 
         selected_cards = [
             card
-            for _, _, card in sorted(ranked_cards, key=lambda item: (-item[0], item[1]))
+            for _, _, _, card in sorted(ranked_cards, key=lambda item: (item[0], item[1], item[2]))
         ]
         if bundle.retrieval_policy.max_cards is not None:
             selected_cards = selected_cards[: bundle.retrieval_policy.max_cards]
@@ -204,6 +233,36 @@ class LocalContextBuilder:
 
     def _extract_global_case_signal_tokens(self, tokens: List[str]) -> List[str]:
         return [token for token in tokens if token in self._GLOBAL_CASE_SIGNAL_TOKENS]
+
+    def _extract_global_high_information_tokens(self, tokens: List[str]) -> List[str]:
+        return [
+            token
+            for token in tokens
+            if token not in self._GLOBAL_CASE_SIGNAL_TOKENS
+            and token not in self._GLOBAL_LOW_SIGNAL_TOKENS
+            and token not in self._GLOBAL_TEMPLATE_TOKENS
+            and len(token) >= 7
+        ]
+
+    def _classify_global_card_match(
+        self,
+        card_tokens: List[str],
+        case_signal_tokens: List[str],
+        query_information_tokens: List[str],
+    ) -> tuple[int, str]:
+        card_case_tokens = self._extract_global_case_signal_tokens(card_tokens)
+        strong_overlap = score_token_overlap(card_case_tokens, case_signal_tokens)
+        if strong_overlap > 0:
+            return strong_overlap, "strong"
+
+        card_information_tokens = self._extract_global_high_information_tokens(card_tokens)
+        backstop_overlap_tokens = set(card_information_tokens) & set(query_information_tokens)
+        backstop_overlap = len(backstop_overlap_tokens)
+        if backstop_overlap >= 2 and sum(
+            1 for token in backstop_overlap_tokens if len(token) >= 8
+        ) >= 2:
+            return backstop_overlap, "backstop"
+        return 0, ""
 
     def _is_global_noise_card(self, card: EvidenceCard) -> bool:
         haystack = f"{card.title} {card.excerpt}".strip().lower()
