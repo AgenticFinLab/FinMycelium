@@ -80,6 +80,31 @@ def _build_input():
     )
 
 
+def _build_shadow_mode_input():
+    bundle = EvidenceAssetBundle(
+        retrieval_policy=EvidenceRetrievalPolicy(),
+        index=EvidenceIndex(),
+        evidence_cards=[
+            EvidenceCard(
+                sample_id="sample-1",
+                title="sample-1",
+                excerpt="fraud and money laundering excerpt",
+                tokens=["fraud", "money", "laundering"],
+            )
+        ],
+    )
+    return SimpleNamespace(
+        user_query=SimpleNamespace(
+            query_text="fraud and money laundering",
+            key_words=["fraud", "money laundering"],
+        ),
+        samples=[
+            SimpleNamespace(content="fraud and money laundering"),
+        ],
+        context_assets=bundle,
+    )
+
+
 def _build_empty_input():
     return SimpleNamespace(
         user_query=SimpleNamespace(query_text="alpha episode", key_words=["alpha"]),
@@ -167,7 +192,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
 
         state = {
-            "build_input": _build_input(),
+            "build_input": _build_shadow_mode_input(),
             "agent_results": [],
             "agent_executed": [],
             "cost": [],
@@ -190,8 +215,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("=== CONTENT BEGIN ===", captured["infer_input"].user_msg)
         self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", rendered_prompt)
         self.assertIn("=== CONTENT BEGIN ===", rendered_prompt)
-        self.assertIn("alpha episode excerpt", rendered_prompt)
-        self.assertIn("real content", rendered_prompt)
+        self.assertIn("fraud and money laundering excerpt", rendered_prompt)
+        self.assertIn("fraud and money laundering", rendered_prompt)
         self.assertTrue(captured["prompt_kwargs"]["Content"].strip())
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
@@ -199,6 +224,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
             captured["prompt_kwargs"]["RetrievedContextSummary"],
             json.dumps({"selected_count": 1}, ensure_ascii=False),
         )
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "fraud and money laundering")
 
     def test_skeleton_checker_shadow_mode_keeps_full_content(self):
         captured = {}
