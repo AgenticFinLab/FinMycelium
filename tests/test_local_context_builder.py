@@ -147,6 +147,24 @@ class LocalContextBuilderTest(unittest.TestCase):
                 EvidenceCard(
                     sample_id="sample-1",
                     title="sample-1",
+                    excerpt=(
+                        "Authorities traced cryptocurrency to London property purchases "
+                        "and shell transfers."
+                    ),
+                    tokens=[
+                        "authorities",
+                        "traced",
+                        "cryptocurrency",
+                        "london",
+                        "property",
+                        "purchases",
+                        "shell",
+                        "transfers",
+                    ],
+                ),
+                EvidenceCard(
+                    sample_id="sample-2",
+                    title="sample-2",
                     excerpt="Qian Zhimin used bitcoin to launder proceeds from Blue Sky.",
                     tokens=[
                         "qian",
@@ -156,25 +174,6 @@ class LocalContextBuilderTest(unittest.TestCase):
                         "proceeds",
                         "blue",
                         "sky",
-                    ],
-                ),
-                EvidenceCard(
-                    sample_id="sample-2",
-                    title="sample-2",
-                    excerpt=(
-                        "Authorities traced cryptocurrency proceeds to London property purchases "
-                        "and shell transfers."
-                    ),
-                    tokens=[
-                        "authorities",
-                        "traced",
-                        "cryptocurrency",
-                        "proceeds",
-                        "london",
-                        "property",
-                        "purchases",
-                        "shell",
-                        "transfers",
                     ],
                 ),
             ],
@@ -189,7 +188,7 @@ class LocalContextBuilderTest(unittest.TestCase):
 
         self.assertEqual(package.scope, "global")
         self.assertEqual(package.retrieval_status, "sufficient")
-        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+        self.assertEqual(package.selected_sample_ids, ["sample-2"])
 
     def test_global_request_falls_back_when_no_cards_overlap(self):
         bundle = EvidenceAssetBundle(
@@ -333,14 +332,13 @@ class LocalContextBuilderTest(unittest.TestCase):
                     sample_id="sample-1",
                     title="sample-1",
                     excerpt=(
-                        "Authorities traced cryptocurrency proceeds to London property purchases "
+                        "Authorities traced cryptocurrency to London property purchases "
                         "and shell transfers."
                     ),
                     tokens=[
                         "authorities",
                         "traced",
                         "cryptocurrency",
-                        "proceeds",
                         "london",
                         "property",
                         "purchases",
@@ -352,7 +350,7 @@ class LocalContextBuilderTest(unittest.TestCase):
         )
         request = LocalContextRequest(
             agent_name="EventDescriptionReconstructor",
-            query_text="How were cryptocurrency proceeds used in London property purchases?",
+            query_text="How were cryptocurrency assets used in London property purchases?",
             key_words=["cryptocurrency", "London property"],
         )
 
@@ -361,6 +359,31 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.scope, "global")
         self.assertEqual(package.retrieval_status, "sufficient")
         self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
+    def test_global_request_falls_back_when_only_one_incidental_long_token_overlaps(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Cryptocurrency market update and outlook.",
+                    tokens=["cryptocurrency", "market", "update", "outlook"],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "fallback_fulltext")
+        self.assertEqual(package.selected_sample_ids, [])
 
     def test_global_request_keeps_signal_card_with_noisy_prefix_when_body_has_case_terms(self):
         bundle = EvidenceAssetBundle(
