@@ -20,6 +20,7 @@ class LocalContextRequest:
     key_words: List[str] = field(default_factory=list)
     target_stage: str = ""
     target_episode: str = ""
+    context_assets: EvidenceAssetBundle | None = None
 
 
 @dataclass
@@ -31,6 +32,9 @@ class LocalContextPackage:
     selected_sample_ids: List[str] = field(default_factory=list)
     rendered_context: str = ""
     summary: dict[str, int] = field(default_factory=dict)
+    query_bundle: dict[str, object] = field(default_factory=dict)
+    memory: dict[str, object] = field(default_factory=dict)
+    budget_summary: dict[str, int] = field(default_factory=dict)
 
 
 class LocalContextBuilder:
@@ -180,12 +184,14 @@ class LocalContextBuilder:
     def build(
         self,
         request: LocalContextRequest,
-        bundle: EvidenceAssetBundle,
+        bundle: EvidenceAssetBundle | None = None,
     ) -> LocalContextPackage:
+        bundle = bundle or request.context_assets or EvidenceAssetBundle.empty()
         query_tokens = tokenize_text(
             f"{request.query_text or ''} {' '.join(request.key_words or [])}".strip()
         )
         scope = self._derive_scope(request)
+        query_bundle = self.build_query_bundle(request)
 
         selected_cards = self._select_cards(bundle, query_tokens, scope)
         if scope == "global" and self._assess_global_status(selected_cards) != "sufficient":
@@ -201,7 +207,36 @@ class LocalContextBuilder:
             selected_sample_ids=selected_sample_ids,
             rendered_context=rendered_context,
             summary={"selected_count": len(selected_sample_ids)},
+            query_bundle=query_bundle,
+            memory=self._build_memory(selected_cards, bundle),
+            budget_summary=self._build_budget_summary(selected_cards, bundle),
         )
+
+    def build_query_bundle(self, request: LocalContextRequest) -> dict[str, object]:
+        scope = self._derive_scope(request)
+        query_bundle: dict[str, object] = {
+            "scope": scope,
+            "agent_name": request.agent_name,
+            "query_text": request.query_text,
+            "keyword_hints": self._collect_keyword_hints(request),
+        }
+
+        if scope == "global":
+            query_bundle["global_phase_hints"] = self._collect_global_phase_hints(request)
+            return query_bundle
+
+        if request.target_stage:
+            query_bundle["stage_name"] = request.target_stage
+
+        if scope == "stage":
+            query_bundle["stage_hints"] = self._collect_stage_hints(request)
+            return query_bundle
+
+        query_bundle["episode_name"] = request.target_episode
+        query_bundle["entity_hints"] = self._collect_episode_entity_hints(request)
+        query_bundle["action_hints"] = self._collect_episode_action_hints(request)
+        query_bundle["time_hints"] = self._collect_episode_time_hints(request)
+        return query_bundle
 
     def _select_cards(
         self,
@@ -366,3 +401,87 @@ class LocalContextBuilder:
         if request.target_stage:
             return "stage"
         return "global"
+
+    def _collect_keyword_hints(self, request: LocalContextRequest) -> List[str]:
+        return self._dedupe_tokens(
+            [
+                *tokenize_text(" ".join(request.key_words or [])),
+                *tokenize_text(request.query_text),
+            ]
+        )
+
+    def _collect_global_phase_hints(self, request: LocalContextRequest) -> List[str]:
+        query_tokens = self._collect_keyword_hints(request)
+        phase_hints = []
+        for phase_name, phase_terms in self._GLOBAL_PHASE_BUCKET_TERMS.items():
+            if set(query_tokens) & phase_terms:
+                phase_hints.append(phase_name)
+        return phase_hints or ["early", "middle"]
+
+    def _collect_stage_hints(self, request: LocalContextRequest) -> List[str]:
+        return self._dedupe_tokens(
+            [
+                *tokenize_text(request.target_stage),
+                *self._collect_keyword_hints(request),
+            ]
+        )
+
+    def _collect_episode_entity_hints(self, request: LocalContextRequest) -> List[str]:
+        return self._take_non_empty(
+            [
+                request.target_episode,
+                request.target_stage,
+                *request.key_words,
+            ]
+        )
+
+    def _collect_episode_action_hints(self, request: LocalContextRequest) -> List[str]:
+        action_hints = [
+            token
+            for token in self._collect_keyword_hints(request)
+            if token not in self._GLOBAL_LOW_SIGNAL_TOKENS and len(token) >= 4
+        ]
+        return action_hints[:4] or ["reconstruct"]
+
+    def _collect_episode_time_hints(self, request: LocalContextRequest) -> List[str]:
+        time_hints = [
+            token for token in tokenize_text(request.query_text) if token.isdigit() and len(token) == 4
+        ]
+        return self._dedupe_tokens(time_hints) or ["timeline"]
+
+    def _build_memory(
+        self,
+        selected_cards: List[EvidenceCard],
+        bundle: EvidenceAssetBundle,
+    ) -> dict[str, object]:
+        selected_sample_ids = [card.sample_id for card in selected_cards]
+        selected_signal_counts = {
+            "time_hints": sum(len(card.time_hints) for card in selected_cards),
+            "entity_hints": sum(len(card.entity_hints) for card in selected_cards),
+            "action_hints": sum(len(card.action_hints) for card in selected_cards),
+            "money_hints": sum(len(card.money_hints) for card in selected_cards),
+            "quality_flags": sum(len(card.quality_flags) for card in selected_cards),
+        }
+        return {
+            "selected_sample_ids": selected_sample_ids,
+            "selected_signal_counts": selected_signal_counts,
+            "available_card_count": len(bundle.evidence_cards),
+        }
+
+    def _build_budget_summary(
+        self,
+        selected_cards: List[EvidenceCard],
+        bundle: EvidenceAssetBundle,
+    ) -> dict[str, int]:
+        max_cards = bundle.retrieval_policy.max_cards
+        return {
+            "used_card_count": len(selected_cards),
+            "available_card_count": len(bundle.evidence_cards),
+            "remaining_card_budget": max((max_cards or len(bundle.evidence_cards)) - len(selected_cards), 0),
+        }
+
+    def _dedupe_tokens(self, values: List[str]) -> List[str]:
+        return list(dict.fromkeys(value for value in values if value))
+
+    def _take_non_empty(self, values: List[str]) -> List[str]:
+        return [value for value in dict.fromkeys(values) if value]
