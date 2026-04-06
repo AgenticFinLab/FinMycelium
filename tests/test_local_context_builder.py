@@ -194,6 +194,121 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertNotEqual(package.rendered_context.strip(), "")
         self.assertIn("alpha global excerpt", package.rendered_context)
 
+    def test_global_request_falls_back_when_overlap_is_only_stopwords(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="What the Crown Prosecution Service is and how it works.",
+                    tokens=[
+                        "what",
+                        "the",
+                        "crown",
+                        "prosecution",
+                        "service",
+                        "is",
+                        "and",
+                        "how",
+                        "it",
+                        "works",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "fallback_fulltext")
+        self.assertEqual(package.selected_sample_ids, [])
+        self.assertEqual(package.rendered_context, "")
+
+    def test_global_request_is_sufficient_when_case_terms_overlap(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Qian Zhimin used bitcoin to launder proceeds from Blue Sky.",
+                    tokens=[
+                        "qian",
+                        "zhimin",
+                        "bitcoin",
+                        "launder",
+                        "proceeds",
+                        "blue",
+                        "sky",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+        self.assertIn("Qian Zhimin", package.rendered_context)
+
+    def test_global_request_falls_back_when_selected_cards_are_navigation_noise(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt=(
+                        "Skip to main content Search for Careers Contact About us "
+                        "Qian Zhimin ran the Blue Sky Ponzi scheme."
+                    ),
+                    tokens=[
+                        "skip",
+                        "to",
+                        "main",
+                        "content",
+                        "search",
+                        "for",
+                        "careers",
+                        "contact",
+                        "about",
+                        "us",
+                        "qian",
+                        "zhimin",
+                        "blue",
+                        "sky",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "fallback_fulltext")
+        self.assertEqual(package.selected_sample_ids, [])
+        self.assertEqual(package.rendered_context, "")
+
 
 if __name__ == "__main__":
     unittest.main()
