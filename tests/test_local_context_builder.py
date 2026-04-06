@@ -19,6 +19,121 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertTrue(LocalContextPackage)
         self.assertTrue(LocalContextRequest)
 
+    def test_build_query_bundle_for_global_agent_defines_bundle_shape(self):
+        builder = LocalContextBuilder()
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        query_bundle = builder.build_query_bundle(request)
+
+        self.assertEqual(query_bundle["scope"], "global")
+        self.assertEqual(query_bundle["agent_name"], "EventDescriptionReconstructor")
+        self.assertEqual(
+            query_bundle["query_text"],
+            "What is the case involving fraud and money laundering by Qian Zhimin?",
+        )
+        self.assertIn("keyword_hints", query_bundle)
+        self.assertIn("global_phase_hints", query_bundle)
+        self.assertTrue(query_bundle["keyword_hints"])
+        self.assertTrue(query_bundle["global_phase_hints"])
+        self.assertNotIn("stage_name", query_bundle)
+        self.assertNotIn("episode_name", query_bundle)
+        self.assertNotIn("entity_hints", query_bundle)
+        self.assertNotIn("action_hints", query_bundle)
+        self.assertNotIn("time_hints", query_bundle)
+
+    def test_build_query_bundle_for_stage_agent_defines_stage_specific_fields(self):
+        builder = LocalContextBuilder()
+        request = LocalContextRequest(
+            agent_name="StageDescriptionReconstructor",
+            query_text="What happened during the fraud operation stage?",
+            key_words=["fraud"],
+            target_stage="Fraud Operation in China",
+        )
+
+        query_bundle = builder.build_query_bundle(request)
+
+        self.assertEqual(query_bundle["scope"], "stage")
+        self.assertEqual(query_bundle["agent_name"], "StageDescriptionReconstructor")
+        self.assertEqual(query_bundle["stage_name"], "Fraud Operation in China")
+        self.assertIn("keyword_hints", query_bundle)
+        self.assertIn("stage_hints", query_bundle)
+        self.assertTrue(query_bundle["keyword_hints"])
+        self.assertTrue(query_bundle["stage_hints"])
+        self.assertNotIn("episode_name", query_bundle)
+        self.assertNotIn("entity_hints", query_bundle)
+        self.assertNotIn("action_hints", query_bundle)
+        self.assertNotIn("time_hints", query_bundle)
+
+    def test_build_query_bundle_for_episode_agent_defines_episode_specific_fields(self):
+        builder = LocalContextBuilder()
+        request = LocalContextRequest(
+            agent_name="EpisodeReconstructor",
+            query_text="How did the Blue Sky episode unfold?",
+            key_words=["Blue Sky"],
+            target_stage="Fraud Operation in China",
+            target_episode="Large-Scale Blue Sky Ponzi Scheme",
+        )
+
+        query_bundle = builder.build_query_bundle(request)
+
+        self.assertEqual(query_bundle["scope"], "episode")
+        self.assertEqual(query_bundle["agent_name"], "EpisodeReconstructor")
+        self.assertEqual(query_bundle["stage_name"], "Fraud Operation in China")
+        self.assertEqual(query_bundle["episode_name"], "Large-Scale Blue Sky Ponzi Scheme")
+        self.assertIn("entity_hints", query_bundle)
+        self.assertIn("action_hints", query_bundle)
+        self.assertIn("time_hints", query_bundle)
+        self.assertTrue(query_bundle["entity_hints"])
+        self.assertTrue(query_bundle["action_hints"])
+        self.assertTrue(query_bundle["time_hints"])
+        self.assertNotIn("global_phase_hints", query_bundle)
+        self.assertNotIn("stage_hints", query_bundle)
+
+    def test_local_context_package_exposes_task_facing_metadata_from_request_assets(self):
+        builder = LocalContextBuilder()
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Qian Zhimin used bitcoin to launder proceeds from Blue Sky.",
+                    tokens=[
+                        "qian",
+                        "zhimin",
+                        "bitcoin",
+                        "launder",
+                        "proceeds",
+                        "blue",
+                        "sky",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EpisodeReconstructor",
+            query_text="How did the Blue Sky episode unfold?",
+            key_words=["Blue Sky"],
+            target_stage="Fraud Operation in China",
+            target_episode="Large-Scale Blue Sky Ponzi Scheme",
+            context_assets=bundle,
+        )
+
+        package = builder.build(request)
+
+        self.assertEqual(package.query_bundle["scope"], "episode")
+        self.assertEqual(package.query_bundle["episode_name"], "Large-Scale Blue Sky Ponzi Scheme")
+        self.assertTrue(package.query_bundle["keyword_hints"])
+        self.assertTrue(package.memory["selected_signal_counts"])
+        self.assertEqual(package.memory["selected_sample_ids"], ["sample-1"])
+        self.assertIn("used_card_count", package.budget_summary)
+        self.assertGreater(package.budget_summary["used_card_count"], 0)
+
     def test_scope_mapping_is_explicit_for_known_agent_names(self):
         builder = LocalContextBuilder()
 
