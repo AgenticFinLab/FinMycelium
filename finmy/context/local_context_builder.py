@@ -218,6 +218,7 @@ class LocalContextBuilder:
         "wire",
         "wires",
     }
+    _TRANSACTION_STAGE_NOISE_TOKENS = _EPISODE_ACTION_TOKENS | _TRANSACTION_MONEY_TOKENS
     _TARGET_CARD_BUDGET_BY_SCOPE = {
         "global": 3,
         "stage": 2,
@@ -330,6 +331,33 @@ class LocalContextBuilder:
         agent_name: str,
         target_card_budget: int,
     ) -> tuple[List[EvidenceCard], List[dict[str, object]], int]:
+        if (agent_name or "").strip().lower() == "transactionreconstructor":
+            ranked_cards = []
+            for index, card in enumerate(bundle.evidence_cards):
+                stage_score, total_score, matched_fields = self._score_transaction_scope_card(
+                    card,
+                    query_tokens,
+                    query_bundle,
+                )
+                if stage_score <= 0 and total_score <= 0:
+                    continue
+                ranked_cards.append((stage_score, total_score, index, card, matched_fields))
+
+            selected_entries = sorted(
+                ranked_cards,
+                key=lambda item: (-item[0], -item[1], item[2]),
+            )
+            selected_entries = selected_entries[:target_card_budget]
+            selected_cards = [card for _, _, _, card, _ in selected_entries]
+            selection_rationale = [
+                {
+                    "sample_id": card.sample_id,
+                    "matched_fields": matched_fields,
+                }
+                for _, _, _, card, matched_fields in selected_entries
+            ]
+            return selected_cards, selection_rationale, len(ranked_cards)
+
         if scope == "global":
             selected_cards, selection_rationale, candidate_card_count = self._select_global_cards(
                 bundle,
@@ -574,6 +602,13 @@ class LocalContextBuilder:
         ]
 
     def _collect_transaction_stage_hints(self, request: LocalContextRequest) -> List[str]:
+        stage_tokens = [
+            token
+            for token in tokenize_text(request.target_stage)
+            if token not in self._TRANSACTION_STAGE_NOISE_TOKENS
+        ]
+        if stage_tokens:
+            return self._dedupe_tokens(stage_tokens)
         return self._dedupe_tokens(tokenize_text(request.target_stage))
 
     def _collect_stage_hints(self, request: LocalContextRequest) -> List[str]:
@@ -832,15 +867,44 @@ class LocalContextBuilder:
         card: EvidenceCard,
         query_bundle: dict[str, object],
     ) -> int:
-        stage_name_tokens = tokenize_text(str(query_bundle.get("stage_name", "")))
+        stage_name_tokens = [
+            token
+            for token in tokenize_text(str(query_bundle.get("stage_name", "")))
+            if token not in self._TRANSACTION_STAGE_NOISE_TOKENS
+        ]
         stage_hint_tokens = [
             str(token)
             for token in query_bundle.get("stage_hints", [])
-            if isinstance(token, str)
+            if isinstance(token, str) and token not in self._TRANSACTION_STAGE_NOISE_TOKENS
         ]
-        stage_name_overlap = score_token_overlap(card.tokens, stage_name_tokens)
-        stage_hint_overlap = score_token_overlap(card.tokens, stage_hint_tokens)
-        return (stage_name_overlap * 200) + (stage_hint_overlap * 100)
+        stage_tokens = self._dedupe_tokens([*stage_name_tokens, *stage_hint_tokens])
+        if not stage_tokens:
+            stage_tokens = self._dedupe_tokens(tokenize_text(str(query_bundle.get("stage_name", ""))))
+        return score_token_overlap(card.tokens, stage_tokens)
+
+    def _score_transaction_scope_card(
+        self,
+        card: EvidenceCard,
+        query_tokens: List[str],
+        query_bundle: dict[str, object],
+    ) -> tuple[int, int, List[str]]:
+        query_overlap = score_token_overlap(card.tokens, query_tokens)
+        if query_overlap <= 0:
+            return 0, 0, []
+
+        matched_fields = ["query_tokens"]
+        total_score = query_overlap * 100
+
+        stage_score = self._score_transaction_stage_alignment(card, query_bundle)
+        if stage_score > 0:
+            matched_fields.extend(["stage_name", "stage_hints"])
+            total_score += stage_score * 200
+
+        bonus_score, bonus_fields = self._score_transaction_bonus(card, query_bundle)
+        for field in bonus_fields:
+            if field not in matched_fields:
+                matched_fields.append(field)
+        return stage_score, total_score + bonus_score, matched_fields
 
     def _score_exact_hint_overlap(
         self,

@@ -562,6 +562,46 @@ class LocalContextBuilderTest(unittest.TestCase):
             package.memory["selection_rationale"][0]["matched_fields"],
         )
 
+    def test_transaction_reconstructor_keeps_partial_stage_alignment_ahead_of_off_stage_money_bonus(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="myanmar-card",
+                    title="myanmar-card",
+                    excerpt="The Myanmar Network Stage tracked the transfer.",
+                    tokens=["myanmar", "network", "stage", "transfer"],
+                ),
+                EvidenceCard(
+                    sample_id="china-money-card",
+                    title="china-money-card",
+                    excerpt="China account bitcoin transfer moved proceeds through a laundering chain.",
+                    tokens=["china", "bitcoin", "transfer", "proceeds", "laundering", "chain"],
+                    money_hints=["bitcoin"],
+                    action_hints=["transfer", "launder"],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="TransactionReconstructor",
+            query_text="How was the transfer handled?",
+            key_words=["transfer"],
+            target_stage="Myanmar laundering",
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.selected_sample_ids, ["myanmar-card"])
+        self.assertIn(
+            "stage_name",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+        self.assertIn(
+            "stage_hints",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+
     def test_participant_reconstructor_uses_its_own_budget_tier_before_scope_defaults(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),
