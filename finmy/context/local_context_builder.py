@@ -218,7 +218,10 @@ class LocalContextBuilder:
         "wire",
         "wires",
     }
-    _TRANSACTION_STAGE_NOISE_TOKENS = _EPISODE_ACTION_TOKENS | _TRANSACTION_MONEY_TOKENS
+    _TRANSACTION_STAGE_NOISE_TOKENS = _EPISODE_ACTION_TOKENS | _TRANSACTION_MONEY_TOKENS | {
+        "launder",
+        "laundering",
+    }
     _TARGET_CARD_BUDGET_BY_SCOPE = {
         "global": 3,
         "stage": 2,
@@ -602,13 +605,6 @@ class LocalContextBuilder:
         ]
 
     def _collect_transaction_stage_hints(self, request: LocalContextRequest) -> List[str]:
-        stage_tokens = [
-            token
-            for token in tokenize_text(request.target_stage)
-            if token not in self._TRANSACTION_STAGE_NOISE_TOKENS
-        ]
-        if stage_tokens:
-            return self._dedupe_tokens(stage_tokens)
         return self._dedupe_tokens(tokenize_text(request.target_stage))
 
     def _collect_stage_hints(self, request: LocalContextRequest) -> List[str]:
@@ -867,20 +863,36 @@ class LocalContextBuilder:
         card: EvidenceCard,
         query_bundle: dict[str, object],
     ) -> int:
-        stage_name_tokens = [
-            token
-            for token in tokenize_text(str(query_bundle.get("stage_name", "")))
-            if token not in self._TRANSACTION_STAGE_NOISE_TOKENS
-        ]
+        stage_tokens = self._collect_transaction_stage_signal_tokens(query_bundle)
+        return score_token_overlap(card.tokens, stage_tokens)
+
+    def _collect_transaction_stage_tokens(
+        self,
+        query_bundle: dict[str, object],
+    ) -> List[str]:
+        stage_name_tokens = tokenize_text(str(query_bundle.get("stage_name", "")))
         stage_hint_tokens = [
             str(token)
             for token in query_bundle.get("stage_hints", [])
-            if isinstance(token, str) and token not in self._TRANSACTION_STAGE_NOISE_TOKENS
+            if isinstance(token, str)
         ]
         stage_tokens = self._dedupe_tokens([*stage_name_tokens, *stage_hint_tokens])
-        if not stage_tokens:
-            stage_tokens = self._dedupe_tokens(tokenize_text(str(query_bundle.get("stage_name", ""))))
-        return score_token_overlap(card.tokens, stage_tokens)
+        if stage_tokens:
+            return stage_tokens
+        return self._dedupe_tokens(tokenize_text(str(query_bundle.get("stage_name", ""))))
+
+    def _collect_transaction_stage_signal_tokens(
+        self,
+        query_bundle: dict[str, object],
+    ) -> List[str]:
+        stage_tokens = [
+            token
+            for token in self._collect_transaction_stage_tokens(query_bundle)
+            if token not in self._TRANSACTION_STAGE_NOISE_TOKENS
+        ]
+        if stage_tokens:
+            return stage_tokens
+        return self._collect_transaction_stage_tokens(query_bundle)
 
     def _score_transaction_scope_card(
         self,
