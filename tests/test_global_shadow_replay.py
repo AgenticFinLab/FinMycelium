@@ -13,6 +13,7 @@ from finmy.context.assets import (
 
 
 QUERY_TEXT = "What is the case involving fraud and money laundering by Qian Zhimin?"
+KEY_WORDS = ["fraud", "money laundering", "investigators property purchases"]
 
 MIXED_BUNDLE = EvidenceAssetBundle(
     retrieval_policy=EvidenceRetrievalPolicy(),
@@ -38,19 +39,19 @@ MIXED_BUNDLE = EvidenceAssetBundle(
             sample_id="signal-2",
             title="signal-2",
             excerpt=(
-                "Investigators linked laundering attempts and luxury property purchases to "
-                "the same fraud."
+                "Investigators traced luxury property purchases and offshore transfers "
+                "involving the same network."
             ),
             tokens=[
                 "investigators",
-                "linked",
-                "laundering",
-                "attempts",
+                "traced",
                 "luxury",
                 "property",
                 "purchases",
-                "same",
-                "fraud",
+                "offshore",
+                "transfers",
+                "involving",
+                "network",
             ],
         ),
         EvidenceCard(
@@ -101,6 +102,27 @@ NOISE_BUNDLE = EvidenceAssetBundle(
         EvidenceCard(
             sample_id="noise-2",
             title="noise-2",
+            excerpt=(
+                "Ad Feedback CNN values your feedback Video player was slow to load"
+            ),
+            tokens=[
+                "ad",
+                "feedback",
+                "cnn",
+                "values",
+                "your",
+                "feedback",
+                "video",
+                "player",
+                "was",
+                "slow",
+                "to",
+                "load",
+            ],
+        ),
+        EvidenceCard(
+            sample_id="noise-3",
+            title="noise-3",
             excerpt="Latest headlines Related stories Sign up for newsletters",
             tokens=[
                 "latest",
@@ -124,7 +146,7 @@ class GlobalShadowReplayTest(unittest.TestCase):
         cls.request = LocalContextRequest(
             agent_name="EventDescriptionReconstructor",
             query_text=QUERY_TEXT,
-            key_words=["fraud", "money laundering"],
+            key_words=KEY_WORDS,
         )
 
     def test_mixed_bundle_selects_small_signal_set_and_excludes_chrome(self):
@@ -137,7 +159,17 @@ class GlobalShadowReplayTest(unittest.TestCase):
         self.assertIn("signal-1", package.selected_sample_ids)
         self.assertIn("signal-2", package.selected_sample_ids)
         self.assertNotIn("chrome-1", package.selected_sample_ids)
+        self.assertEqual(
+            self.builder._extract_global_case_signal_tokens(
+                MIXED_BUNDLE.evidence_cards[1].tokens
+            ),
+            [],
+        )
         self.assertIn("Qian Zhimin ran the Blue Sky scheme", package.rendered_context)
+        self.assertIn(
+            "Investigators traced luxury property purchases",
+            package.rendered_context,
+        )
         self.assertNotIn("Skip to main content", package.rendered_context)
 
     def test_all_noise_bundle_falls_back_to_fulltext(self):
