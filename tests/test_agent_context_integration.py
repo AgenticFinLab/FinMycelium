@@ -105,6 +105,31 @@ def _build_shadow_mode_input():
     )
 
 
+def _build_checker_shadow_mode_input():
+    bundle = EvidenceAssetBundle(
+        retrieval_policy=EvidenceRetrievalPolicy(),
+        index=EvidenceIndex(),
+        evidence_cards=[
+            EvidenceCard(
+                sample_id="sample-1",
+                title="sample-1",
+                excerpt="CHECKER_RETRIEVED_CONTEXT_SENTINEL_77 reconciliation evidence",
+                tokens=["reconciliation", "evidence"],
+            )
+        ],
+    )
+    return SimpleNamespace(
+        user_query=SimpleNamespace(
+            query_text="reconciliation evidence",
+            key_words=["reconciliation", "evidence"],
+        ),
+        samples=[
+            SimpleNamespace(content="CHECKER_CONTENT_SENTINEL_55"),
+        ],
+        context_assets=bundle,
+    )
+
+
 def _build_empty_input():
     return SimpleNamespace(
         user_query=SimpleNamespace(query_text="alpha episode", key_words=["alpha"]),
@@ -261,7 +286,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
 
         state = {
-            "build_input": _build_input(),
+            "build_input": _build_checker_shadow_mode_input(),
             "agent_results": [{"SkeletonReconstructor": _skeleton()}],
             "agent_executed": ["SkeletonReconstructor"],
             "cost": [],
@@ -284,11 +309,16 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("=== CONTENT BEGIN ===", captured["infer_input"].user_msg)
         self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", rendered_prompt)
         self.assertIn("=== CONTENT BEGIN ===", rendered_prompt)
-        self.assertIn("alpha episode excerpt", rendered_prompt)
-        self.assertIn("real content", rendered_prompt)
+        self.assertIn("CHECKER_RETRIEVED_CONTEXT_SENTINEL_77", rendered_prompt)
+        self.assertIn("CHECKER_CONTENT_SENTINEL_55", rendered_prompt)
         self.assertTrue(captured["prompt_kwargs"]["Content"].strip())
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "CHECKER_CONTENT_SENTINEL_55")
+        self.assertIn(
+            "CHECKER_RETRIEVED_CONTEXT_SENTINEL_77",
+            captured["prompt_kwargs"]["RetrievedContext"],
+        )
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextSummary"],
             json.dumps({"selected_count": 1}, ensure_ascii=False),

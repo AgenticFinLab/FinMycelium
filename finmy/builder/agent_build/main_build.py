@@ -176,6 +176,8 @@ class AgentEventBuilder(BaseBuilder):
         - Produces grounded `descriptions` for the entire event using the full cascade plus source content.
     """
 
+    _SHADOW_LOCAL_CONTEXT_AGENTS = {"SkeletonReconstructor", "SkeletonChecker"}
+
     def _get_agent_prompts(self):
         """Initialize system and user prompts for all agents."""
         agent_system_msgs = {}
@@ -292,7 +294,7 @@ class AgentEventBuilder(BaseBuilder):
         return LocalContextBuilder().build(request, bundle)
 
     def _should_use_shadow_local_context(self, agent_name: str) -> bool:
-        return agent_name in {"SkeletonReconstructor", "SkeletonChecker"}
+        return agent_name in self._SHADOW_LOCAL_CONTEXT_AGENTS
 
     def _is_unknown_value(self, value: str) -> bool:
         return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
