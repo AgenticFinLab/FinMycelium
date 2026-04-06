@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import List
 
 from finmy.context.assets import EvidenceAssetBundle, EvidenceCard
@@ -137,12 +138,15 @@ class LocalContextBuilder:
         "zhimin",
         "bitcoin",
     }
-    _GLOBAL_NOISE_PHRASES = (
+    _GLOBAL_NOISE_PREFIXES = (
         "skip to main content",
-        "ad feedback",
         "search for careers contact about us",
         "cnn values your feedback",
         "video player was slow to load",
+    )
+    _GLOBAL_AD_FEEDBACK_NOISE_PATTERN = re.compile(
+        r"^ad feedback(?:\s*->\s*|[\s\.,:;!?]+)+"
+        r"(?:cnn values your feedback|video player was slow to load|cnn analysis)\b"
     )
     _GLOBAL_MIN_INFORMATION_BODY_TOKENS = 4
 
@@ -295,9 +299,12 @@ class LocalContextBuilder:
         return not has_information_signal
 
     def _strip_global_noise_prefix(self, excerpt: str) -> str:
-        for prefix in sorted(self._GLOBAL_NOISE_PHRASES, key=len, reverse=True):
+        for prefix in sorted(self._GLOBAL_NOISE_PREFIXES, key=len, reverse=True):
             if excerpt.startswith(prefix):
                 return excerpt[len(prefix) :].lstrip(" \t\r\n-:;,.!?")
+        ad_feedback_match = self._GLOBAL_AD_FEEDBACK_NOISE_PATTERN.match(excerpt)
+        if ad_feedback_match:
+            return excerpt[ad_feedback_match.end() :].lstrip(" \t\r\n-:;,.!?")
         return excerpt
 
     def _derive_scope(self, request: LocalContextRequest) -> str:

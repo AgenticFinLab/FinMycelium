@@ -512,6 +512,81 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.retrieval_status, "fallback_fulltext")
         self.assertEqual(package.selected_sample_ids, [])
 
+    def test_global_request_keeps_leading_chrome_card_with_high_information_only_body(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt=(
+                        "Skip to main content Authorities traced cryptocurrency assets to "
+                        "London property purchases and shell transfers."
+                    ),
+                    tokens=[
+                        "skip",
+                        "to",
+                        "main",
+                        "content",
+                        "authorities",
+                        "traced",
+                        "cryptocurrency",
+                        "assets",
+                        "london",
+                        "property",
+                        "purchases",
+                        "shell",
+                        "transfers",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="How were cryptocurrency assets used in London property purchases?",
+            key_words=["cryptocurrency assets", "london property purchases"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
+    def test_global_request_keeps_legitimate_ad_feedback_prose_when_it_is_informative(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt=(
+                        "Ad Feedback improved attribution analysis."
+                    ),
+                    tokens=[
+                        "ad",
+                        "feedback",
+                        "improved",
+                        "attribution",
+                        "analysis",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What role did ad feedback play in improved attribution analysis?",
+            key_words=["ad feedback", "improved attribution analysis"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
     def test_global_request_keeps_signal_card_in_mixed_bundle_and_rejects_chrome(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
