@@ -234,6 +234,55 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         excerpt = bundle.evidence_cards[0].excerpt
         self.assertEqual(excerpt, "Qian Zhimin text")
 
+    def test_build_evidence_assets_adds_structured_signal_fields(self):
+        user_query = UserQueryInput(
+            query_text="What happened in Qian Zhimin's bitcoin laundering case?",
+            key_words=["Qian Zhimin", "bitcoin", "money laundering"],
+        )
+        samples = [
+            DataSample(
+                sample_id="sample-1",
+                raw_data_id="raw-1",
+                content=(
+                    "In July 2017, Zhimin Qian fled China. "
+                    "She later tried to buy a £23.5 million London property "
+                    "and police investigated the bitcoin proceeds."
+                ),
+                category="risk",
+                knowledge_field="finance",
+            )
+        ]
+
+        bundle = build_evidence_assets(user_query, samples)
+        card = bundle.evidence_cards[0]
+
+        self.assertTrue({"2017", "july 2017"}.issubset(set(card.time_hints)))
+        self.assertIn("zhimin qian", card.entity_hints)
+        self.assertIn("buy", card.action_hints)
+        self.assertIn("£23.5 million", card.money_hints)
+        self.assertIn("has_money_signal", card.quality_flags)
+
+    def test_build_evidence_assets_populates_signal_counts_on_index(self):
+        user_query = UserQueryInput(
+            query_text="Track bitcoin laundering activity",
+            key_words=["bitcoin", "laundering"],
+        )
+        samples = [
+            DataSample(
+                sample_id="sample-1",
+                raw_data_id="raw-1",
+                content="Police seized bitcoin in 2024 after a money laundering probe.",
+                category="risk",
+                knowledge_field="finance",
+            )
+        ]
+
+        bundle = build_evidence_assets(user_query, samples)
+
+        self.assertIn("sample-1", bundle.index.sample_signal_counts)
+        self.assertEqual(bundle.index.sample_signal_counts["sample-1"]["money_hints"], 1)
+        self.assertEqual(bundle.index.sample_signal_counts["sample-1"]["time_hints"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
