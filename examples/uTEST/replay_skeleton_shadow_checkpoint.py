@@ -80,7 +80,13 @@ def _has_usable_checkpoint(directory: Path) -> bool:
         directory,
         ("FinalEventCascade.json", "IntegratedEventCascade.json"),
     )
-    return skeleton_file is not None and final_file is not None
+    if skeleton_file is None or final_file is None:
+        return False
+
+    return (
+        _load_json_counts(skeleton_file)["stage_count"] is not None
+        and _load_json_counts(final_file)["stage_count"] is not None
+    )
 
 
 def _latest_valid_build_output_dir(root: Path) -> Path | None:
@@ -98,8 +104,11 @@ def _load_json_counts(path: Path | None) -> dict[str, object]:
     if path is None or not path.exists():
         return {"path": None, "stage_count": None, "episode_count": None}
 
-    with path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (FileNotFoundError, OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return {"path": str(path), "stage_count": None, "episode_count": None}
 
     counts = _count_stages_and_episodes(payload if isinstance(payload, dict) else {})
     return {
