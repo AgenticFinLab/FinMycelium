@@ -283,6 +283,111 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.selected_sample_ids, ["sample-1"])
         self.assertIn("alpha episode excerpt", package.rendered_context)
 
+    def test_scope_specific_query_bundle_fields_can_change_selected_card_from_same_bundle(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-stage",
+                    title="sample-stage",
+                    excerpt="Myanmar Network Stage moved alpha transfer funds.",
+                    tokens=["alpha", "transfer", "myanmar", "network", "stage"],
+                    entity_hints=["myanmar network stage"],
+                    action_hints=["transfer"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-episode",
+                    title="sample-episode",
+                    excerpt="Large-Scale Blue Sky Ponzi Scheme used alpha transfer funds.",
+                    tokens=["alpha", "transfer", "blue", "sky", "scheme"],
+                    entity_hints=["Large-Scale Blue Sky Ponzi Scheme"],
+                    action_hints=["launder"],
+                    time_hints=["2019"],
+                ),
+            ],
+        )
+        stage_request = LocalContextRequest(
+            agent_name="StageDescriptionReconstructor",
+            query_text="alpha transfer",
+            key_words=["alpha"],
+            target_stage="Myanmar Network Stage",
+        )
+        episode_request = LocalContextRequest(
+            agent_name="EpisodeReconstructor",
+            query_text="alpha transfer",
+            key_words=["alpha"],
+            target_stage="Myanmar Network Stage",
+            target_episode="Large-Scale Blue Sky Ponzi Scheme",
+        )
+
+        stage_package = LocalContextBuilder().build(stage_request, bundle)
+        episode_package = LocalContextBuilder().build(episode_request, bundle)
+
+        self.assertEqual(stage_package.selected_sample_ids, ["sample-stage"])
+        self.assertEqual(episode_package.selected_sample_ids, ["sample-episode"])
+
+    def test_scope_specific_budget_and_rationale_are_exposed(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-stage",
+                    title="sample-stage",
+                    excerpt="Myanmar Network Stage moved alpha transfer funds.",
+                    tokens=["alpha", "transfer", "myanmar", "network", "stage"],
+                    entity_hints=["myanmar network stage"],
+                    action_hints=["transfer"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-episode",
+                    title="sample-episode",
+                    excerpt="Large-Scale Blue Sky Ponzi Scheme laundered alpha transfer funds in 2019.",
+                    tokens=["alpha", "transfer", "blue", "sky", "scheme", "2019"],
+                    entity_hints=["Large-Scale Blue Sky Ponzi Scheme"],
+                    action_hints=["launder"],
+                    time_hints=["2019"],
+                ),
+            ],
+        )
+        stage_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="StageDescriptionReconstructor",
+                query_text="alpha transfer",
+                key_words=["alpha"],
+                target_stage="Myanmar Network Stage",
+            ),
+            bundle,
+        )
+        episode_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="EpisodeReconstructor",
+                query_text="alpha transfer",
+                key_words=["alpha"],
+                target_stage="Myanmar Network Stage",
+                target_episode="Large-Scale Blue Sky Ponzi Scheme",
+            ),
+            bundle,
+        )
+
+        self.assertNotEqual(
+            stage_package.budget_summary["target_card_budget"],
+            episode_package.budget_summary["target_card_budget"],
+        )
+        self.assertEqual(
+            stage_package.memory["selection_rationale"][0]["matched_fields"],
+            ["query_tokens", "stage_name", "stage_hints"],
+        )
+        self.assertIn(
+            "episode_name",
+            episode_package.memory["selection_rationale"][0]["matched_fields"],
+        )
+        self.assertIn(
+            "entity_hints",
+            episode_package.memory["selection_rationale"][0]["matched_fields"],
+        )
+
     def test_max_cards_keeps_the_most_relevant_matches(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),

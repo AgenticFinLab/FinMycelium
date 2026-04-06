@@ -197,6 +197,11 @@ class LocalContextBuilder:
         "transfer",
         "unfold",
     }
+    _TARGET_CARD_BUDGET_BY_SCOPE = {
+        "global": 3,
+        "stage": 2,
+        "episode": 1,
+    }
 
     def build(
         self,
@@ -211,9 +216,15 @@ class LocalContextBuilder:
         scope = self._derive_scope(request)
         query_bundle = self.build_query_bundle(request)
 
-        selected_cards = self._select_cards(bundle, query_tokens, scope)
+        selected_cards, selection_rationale = self._select_cards(
+            bundle,
+            query_tokens,
+            scope,
+            query_bundle,
+        )
         if scope == "global" and self._assess_global_status(selected_cards) != "sufficient":
             selected_cards = []
+            selection_rationale = []
         selected_sample_ids = [card.sample_id for card in selected_cards]
 
         if not assets_provided:
@@ -229,8 +240,19 @@ class LocalContextBuilder:
             rendered_context=rendered_context,
             summary={"selected_count": len(selected_sample_ids)},
             query_bundle=query_bundle,
-            memory=self._build_memory(selected_cards, bundle, assets_provided),
-            budget_summary=self._build_budget_summary(selected_cards, bundle, assets_provided),
+            memory=self._build_memory(
+                selected_cards,
+                bundle,
+                assets_provided,
+                selection_rationale,
+            ),
+            budget_summary=self._build_budget_summary(
+                selected_cards,
+                bundle,
+                assets_provided,
+                scope,
+                selection_rationale,
+            ),
         )
 
     def build_query_bundle(self, request: LocalContextRequest) -> dict[str, object]:
@@ -263,24 +285,49 @@ class LocalContextBuilder:
         bundle: EvidenceAssetBundle,
         query_tokens: List[str],
         scope: str,
-    ) -> List[EvidenceCard]:
+        query_bundle: dict[str, object],
+    ) -> tuple[List[EvidenceCard], List[dict[str, object]]]:
         if scope == "global":
-            return self._select_global_cards(bundle, query_tokens)
+            selected_cards = self._select_global_cards(bundle, query_tokens)
+            selection_rationale = [
+                {
+                    "sample_id": card.sample_id,
+                    "matched_fields": ["query_tokens"],
+                }
+                for card in selected_cards
+            ]
+            return selected_cards, selection_rationale
 
         ranked_cards = []
         for index, card in enumerate(bundle.evidence_cards):
-            overlap = score_token_overlap(card.tokens, query_tokens)
-            if overlap <= 0:
+            score, matched_fields = self._score_scope_card(
+                card,
+                query_tokens,
+                scope,
+                query_bundle,
+            )
+            if score <= 0:
                 continue
-            ranked_cards.append((overlap, index, card))
+            ranked_cards.append((score, index, card, matched_fields))
 
-        selected_cards = [
-            card
-            for _, _, card in sorted(ranked_cards, key=lambda item: (-item[0], item[1]))
+        selected_entries = sorted(
+            ranked_cards,
+            key=lambda item: (-item[0], item[1]),
+        )
+        selected_entries = [
+            (card, matched_fields)
+            for _, _, card, matched_fields in selected_entries
         ]
-        if bundle.retrieval_policy.max_cards is not None:
-            selected_cards = selected_cards[: bundle.retrieval_policy.max_cards]
-        return selected_cards
+        selected_entries = selected_entries[: self._resolve_card_budget(bundle, scope)]
+        selected_cards = [card for card, _ in selected_entries]
+        selection_rationale = [
+            {
+                "sample_id": card.sample_id,
+                "matched_fields": matched_fields,
+            }
+            for card, matched_fields in selected_entries
+        ]
+        return selected_cards, selection_rationale
 
     def _select_global_cards(
         self,
@@ -483,6 +530,7 @@ class LocalContextBuilder:
         selected_cards: List[EvidenceCard],
         bundle: EvidenceAssetBundle,
         assets_provided: bool,
+        selection_rationale: List[dict[str, object]],
     ) -> dict[str, object]:
         selected_sample_ids = [card.sample_id for card in selected_cards]
         selected_hint_counts = {
@@ -495,6 +543,7 @@ class LocalContextBuilder:
             "asset_status": "provided" if assets_provided else "missing",
             "selected_sample_ids": selected_sample_ids,
             "selected_hint_counts": selected_hint_counts,
+            "selection_rationale": selection_rationale,
             "available_card_count": len(bundle.evidence_cards),
         }
 
@@ -503,14 +552,103 @@ class LocalContextBuilder:
         selected_cards: List[EvidenceCard],
         bundle: EvidenceAssetBundle,
         assets_provided: bool,
+        scope: str,
+        selection_rationale: List[dict[str, object]],
     ) -> dict[str, int]:
-        max_cards = bundle.retrieval_policy.max_cards
+        target_card_budget = self._resolve_card_budget(bundle, scope)
         return {
             "used_card_count": len(selected_cards),
+            "target_card_budget": target_card_budget,
             "available_card_count": len(bundle.evidence_cards),
-            "remaining_card_budget": max((max_cards or len(bundle.evidence_cards)) - len(selected_cards), 0),
+            "remaining_card_budget": max(target_card_budget - len(selected_cards), 0),
             "asset_bundle_count": 1 if assets_provided else 0,
+            "selection_rationale_count": len(selection_rationale),
         }
+
+    def _resolve_card_budget(self, bundle: EvidenceAssetBundle, scope: str) -> int:
+        scope_budget = self._TARGET_CARD_BUDGET_BY_SCOPE.get(scope, len(bundle.evidence_cards))
+        if bundle.retrieval_policy.max_cards is None:
+            return scope_budget
+        return min(scope_budget, bundle.retrieval_policy.max_cards)
+
+    def _score_scope_card(
+        self,
+        card: EvidenceCard,
+        query_tokens: List[str],
+        scope: str,
+        query_bundle: dict[str, object],
+    ) -> tuple[int, List[str]]:
+        query_overlap = score_token_overlap(card.tokens, query_tokens)
+        if query_overlap <= 0:
+            return 0, []
+
+        matched_fields = ["query_tokens"]
+        score = query_overlap * 100
+
+        if scope == "stage":
+            stage_name_tokens = tokenize_text(str(query_bundle.get("stage_name", "")))
+            stage_hint_tokens = [
+                str(token)
+                for token in query_bundle.get("stage_hints", [])
+                if isinstance(token, str)
+            ]
+            stage_name_overlap = score_token_overlap(card.tokens, stage_name_tokens)
+            stage_hint_overlap = score_token_overlap(card.tokens, stage_hint_tokens)
+            if stage_name_overlap > 0:
+                matched_fields.append("stage_name")
+                score += stage_name_overlap * 25
+            if stage_hint_overlap > 0:
+                matched_fields.append("stage_hints")
+                score += stage_hint_overlap * 10
+            return score, matched_fields
+
+        stage_name_tokens = tokenize_text(str(query_bundle.get("stage_name", "")))
+        episode_name_tokens = tokenize_text(str(query_bundle.get("episode_name", "")))
+        entity_overlap = self._score_exact_hint_overlap(
+            card.entity_hints,
+            query_bundle.get("entity_hints", []),
+        )
+        action_overlap = self._score_exact_hint_overlap(
+            card.action_hints,
+            query_bundle.get("action_hints", []),
+        )
+        time_overlap = self._score_exact_hint_overlap(
+            card.time_hints,
+            query_bundle.get("time_hints", []),
+        )
+        stage_name_overlap = score_token_overlap(card.tokens, stage_name_tokens)
+        episode_name_overlap = score_token_overlap(card.tokens, episode_name_tokens)
+        if stage_name_overlap > 0:
+            matched_fields.append("stage_name")
+            score += stage_name_overlap * 10
+        if episode_name_overlap > 0:
+            matched_fields.append("episode_name")
+            score += episode_name_overlap * 30
+        if entity_overlap > 0:
+            matched_fields.append("entity_hints")
+            score += entity_overlap * 40
+        if action_overlap > 0:
+            matched_fields.append("action_hints")
+            score += action_overlap * 20
+        if time_overlap > 0:
+            matched_fields.append("time_hints")
+            score += time_overlap * 20
+        return score, matched_fields
+
+    def _score_exact_hint_overlap(
+        self,
+        left_values: List[str],
+        right_values: object,
+    ) -> int:
+        if not isinstance(right_values, list):
+            return 0
+        left_normalized = {value.strip().lower() for value in left_values if value}
+        right_normalized = {
+            str(value).strip().lower()
+            for value in right_values
+            if str(value).strip()
+        }
+        return len(left_normalized & right_normalized)
 
     def _dedupe_tokens(self, values: List[str]) -> List[str]:
         return list(dict.fromkeys(value for value in values if value))
