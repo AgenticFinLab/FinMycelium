@@ -99,19 +99,21 @@ _NOISE_PREFIX_PATTERNS = tuple(
 
 
 def _strip_noise_prefix(text: str) -> str:
-    normalized = " ".join(text.strip().split())
+    working = text.lstrip()
+    stripped_any = False
 
-    while normalized:
+    while working:
         for pattern in _NOISE_PREFIX_PATTERNS:
-            match = pattern.match(normalized)
+            match = pattern.match(working)
             if not match:
                 continue
-            normalized = normalized[match.end() :].lstrip()
+            working = working[match.end() :].lstrip()
+            stripped_any = True
             break
         else:
-            return normalized
+            return working if stripped_any else text
 
-    return normalized
+    return working if stripped_any else text
 
 
 def _clean_excerpt_source(text: str) -> str:
