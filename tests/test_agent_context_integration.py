@@ -409,6 +409,101 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertEqual(captured["prompt_kwargs"]["Content"], "CONTENT_ONLY_SENTINEL_42")
         self.assertIn("FALLBACK_RETRIEVED_CONTEXT", rendered_prompt)
 
+    def test_skeleton_reconstructor_exposes_richer_local_context_metadata_additively(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(_skeleton()),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        rich_context = SimpleNamespace(
+            rendered_context="RICH_GLOBAL_CONTEXT",
+            summary={"selected_count": 1},
+            retrieval_status="fallback_fulltext",
+            query_bundle={"scope": "global", "global_phase_hints": ["early", "middle"]},
+            budget_summary={"target_card_budget": 3, "used_card_count": 1},
+            memory={"selection_rationale": [{"sample_id": "sample-1", "match_kind": "strong"}]},
+        )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_shadow_mode_input(),
+            "agent_results": [],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {
+                "SkeletonReconstructor": main_build_module.EventLayoutReconstructorSys
+            },
+            "agent_user_msgs": {
+                "SkeletonReconstructor": main_build_module.EventLayoutReconstructorUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=rich_context,
+        ):
+            self.builder.execute_agent(state, "SkeletonReconstructor")
+
+        self.assertEqual(captured["prompt_kwargs"]["RetrievedContext"], "RICH_GLOBAL_CONTEXT")
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextQueryBundle"],
+            json.dumps(
+                {"scope": "global", "global_phase_hints": ["early", "middle"]},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextBudgetSummary"],
+            json.dumps(
+                {"target_card_budget": 3, "used_card_count": 1},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextMemory"],
+            json.dumps(
+                {"selection_rationale": [{"sample_id": "sample-1", "match_kind": "strong"}]},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+
     def test_skeleton_checker_shadow_mode_keeps_full_content(self):
         captured = {}
 
@@ -1047,6 +1142,129 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("TARGET EPISODE BEGIN", rendered_prompt)
         self.assertIn("real content", rendered_prompt)
         self.assertNotIn("alpha episode excerpt", rendered_prompt)
+
+    def test_episode_reconstructor_exposes_richer_local_context_metadata_additively(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        rich_context = SimpleNamespace(
+            rendered_context="RICH_EPISODE_CONTEXT",
+            summary={"selected_count": 1},
+            retrieval_status="sufficient",
+            query_bundle={
+                "scope": "episode",
+                "stage_name": "Stage 1",
+                "episode_name": "Episode 1",
+            },
+            budget_summary={"target_card_budget": 1, "used_card_count": 1},
+            memory={"selection_rationale": [{"matched_fields": ["episode_name", "entity_hints"]}]},
+        )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=rich_context,
+        ):
+            self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        self.assertEqual(captured["prompt_kwargs"]["RetrievedContext"], "RICH_EPISODE_CONTEXT")
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextQueryBundle"],
+            json.dumps(
+                {
+                    "scope": "episode",
+                    "stage_name": "Stage 1",
+                    "episode_name": "Episode 1",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextBudgetSummary"],
+            json.dumps(
+                {"target_card_budget": 1, "used_card_count": 1},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextMemory"],
+            json.dumps(
+                {"selection_rationale": [{"matched_fields": ["episode_name", "entity_hints"]}]},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
 
     def test_stage_description_reconstructor_receives_stage_scoped_context(self):
         captured = {}

@@ -296,6 +296,43 @@ class AgentEventBuilder(BaseBuilder):
     def _should_use_shadow_local_context(self, agent_name: str) -> bool:
         return agent_name in self._SHADOW_LOCAL_CONTEXT_AGENTS
 
+    def _attach_local_context_prompt_kwargs(self, prompt_kwargs: dict, local_context) -> None:
+        prompt_kwargs["RetrievedContext"] = (
+            local_context.rendered_context if local_context else ""
+        )
+        prompt_kwargs["RetrievedContextSummary"] = (
+            json.dumps(local_context.summary, ensure_ascii=False)
+            if local_context
+            else "{}"
+        )
+        prompt_kwargs["RetrievedContextQueryBundle"] = (
+            json.dumps(
+                getattr(local_context, "query_bundle", {}) or {},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            if local_context
+            else "{}"
+        )
+        prompt_kwargs["RetrievedContextBudgetSummary"] = (
+            json.dumps(
+                getattr(local_context, "budget_summary", {}) or {},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            if local_context
+            else "{}"
+        )
+        prompt_kwargs["RetrievedContextMemory"] = (
+            json.dumps(
+                getattr(local_context, "memory", {}) or {},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            if local_context
+            else "{}"
+        )
+
     def _is_unknown_value(self, value: str) -> bool:
         return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
 
@@ -492,14 +529,7 @@ class AgentEventBuilder(BaseBuilder):
         shadow_local_context = None
         if self._should_use_shadow_local_context(agent_name):
             shadow_local_context = self._build_local_context_package(state, agent_name)
-            prompt_kwargs["RetrievedContext"] = (
-                shadow_local_context.rendered_context if shadow_local_context else ""
-            )
-            prompt_kwargs["RetrievedContextSummary"] = (
-                json.dumps(shadow_local_context.summary, ensure_ascii=False)
-                if shadow_local_context
-                else "{}"
-            )
+            self._attach_local_context_prompt_kwargs(prompt_kwargs, shadow_local_context)
             if (
                 agent_name == "SkeletonReconstructor"
                 and shadow_local_context is not None
@@ -585,14 +615,7 @@ class AgentEventBuilder(BaseBuilder):
                 )
 
                 local_context = self._build_local_context_package(state, agent_name)
-                prompt_kwargs["RetrievedContext"] = (
-                    local_context.rendered_context if local_context else ""
-                )
-                prompt_kwargs["RetrievedContextSummary"] = (
-                    json.dumps(local_context.summary, ensure_ascii=False)
-                    if local_context
-                    else "{}"
-                )
+                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             sys_msg = sys_msg_template.format(
                 STRUCTURE_SPEC=_STAGE_DESCRIPTION_SPEC,
@@ -673,14 +696,7 @@ class AgentEventBuilder(BaseBuilder):
                     self._collect_reconstructed_participants_structure(state)
                 )
                 local_context = self._build_local_context_package(state, agent_name)
-                prompt_kwargs["RetrievedContext"] = (
-                    local_context.rendered_context if local_context else ""
-                )
-                prompt_kwargs["RetrievedContextSummary"] = (
-                    json.dumps(local_context.summary, ensure_ascii=False)
-                    if local_context
-                    else "{}"
-                )
+                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             elif agent_name == "TransactionReconstructor":
                 # Get participants from the immediately preceding step (ParticipantReconstructor)
@@ -691,14 +707,7 @@ class AgentEventBuilder(BaseBuilder):
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
                 local_context = self._build_local_context_package(state, agent_name)
-                prompt_kwargs["RetrievedContext"] = (
-                    local_context.rendered_context if local_context else ""
-                )
-                prompt_kwargs["RetrievedContextSummary"] = (
-                    json.dumps(local_context.summary, ensure_ascii=False)
-                    if local_context
-                    else "{}"
-                )
+                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             elif agent_name == "EpisodeReconstructor":
                 # Get transactions from the immediately preceding step (TransactionReconstructor)
@@ -715,14 +724,7 @@ class AgentEventBuilder(BaseBuilder):
                 prompt_kwargs["StageSkeleton"] = belong_state
                 prompt_kwargs["TargetEpisode"] = target_episode
                 local_context = self._build_local_context_package(state, agent_name)
-                prompt_kwargs["RetrievedContext"] = (
-                    local_context.rendered_context if local_context else ""
-                )
-                prompt_kwargs["RetrievedContextSummary"] = (
-                    json.dumps(local_context.summary, ensure_ascii=False)
-                    if local_context
-                    else "{}"
-                )
+                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
         # Escape braces for format if needed.
         # We escape them because the downstream inference engine (LangChain)
