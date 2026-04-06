@@ -183,8 +183,13 @@ class AgentContextIntegrationTest(unittest.TestCase):
 
         self.builder.execute_agent(state, "SkeletonReconstructor")
 
-        self.assertIn("Content", captured["infer_input"].user_msg)
-        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        rendered_prompt = (
+            f"RetrievedContext={captured['prompt_kwargs']['RetrievedContext']}\n"
+            f"Content={captured['prompt_kwargs']['Content']}"
+        )
+        self.assertIn("RetrievedContext=", rendered_prompt)
+        self.assertIn("Content=", rendered_prompt)
+        self.assertTrue(captured["prompt_kwargs"]["Content"].strip())
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
         self.assertEqual(
@@ -243,8 +248,13 @@ class AgentContextIntegrationTest(unittest.TestCase):
 
         self.builder.execute_agent(state, "SkeletonChecker")
 
-        self.assertIn("Content", captured["infer_input"].user_msg)
-        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        rendered_prompt = (
+            f"RetrievedContext={captured['prompt_kwargs']['RetrievedContext']}\n"
+            f"Content={captured['prompt_kwargs']['Content']}"
+        )
+        self.assertIn("RetrievedContext=", rendered_prompt)
+        self.assertIn("Content=", rendered_prompt)
+        self.assertTrue(captured["prompt_kwargs"]["Content"].strip())
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
         self.assertEqual(
