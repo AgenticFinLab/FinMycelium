@@ -33,6 +33,7 @@ if _helper_spec is None or _helper_spec.loader is None:
 _helper_module = importlib.util.module_from_spec(_helper_spec)
 _helper_spec.loader.exec_module(_helper_module)
 summarize_latest_builder_output = _helper_module.summarize_latest_builder_output
+replay_latest_readme_checkpoint = _helper_module.replay_latest_readme_checkpoint
 
 
 QUERY_TEXT = "What is the case involving fraud and money laundering by Qian Zhimin?"
@@ -204,68 +205,62 @@ class GlobalShadowReplayTest(unittest.TestCase):
         self.assertEqual(package.selected_sample_ids, [])
         self.assertEqual(package.rendered_context, "")
 
-    def test_summarize_latest_builder_output_counts_latest_checkpoint(self):
+    def test_summarize_latest_builder_output_prefers_latest_valid_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            older_dir = root / "build_output_20240101010101000000"
-            newer_dir = root / "build_output_20240202020202000000"
-            older_dir.mkdir()
-            newer_dir.mkdir()
+            older_valid_dir = root / "build_output_20240101010101000000"
+            partial_dir = root / "build_output_20240202020202000000"
+            empty_dir = root / "build_output_20240303030303000000"
+            older_valid_dir.mkdir()
+            partial_dir.mkdir()
+            empty_dir.mkdir()
 
-            older_skeleton = older_dir / "SkeletonReconstructor-1-Result.json"
+            older_skeleton = older_valid_dir / "SkeletonReconstructor-1-Result.json"
             older_skeleton.write_text(
                 json.dumps({"stages": [{"episodes": [{}]}]}),
                 encoding="utf-8",
             )
-            older_final = older_dir / "FinalEventCascade.json"
+            older_final = older_valid_dir / "FinalEventCascade.json"
             older_final.write_text(
                 json.dumps({"stages": [{"episodes": [{}, {}]}]}),
                 encoding="utf-8",
             )
 
-            newer_skeleton = newer_dir / "SkeletonReconstructor-2-Result.json"
-            newer_skeleton.write_text(
-                json.dumps(
-                    {
-                        "stages": [
-                            {"episodes": [{}, {}]},
-                            {"episodes": [{}]},
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-            newer_final = newer_dir / "FinalEventCascade.json"
-            newer_final.write_text(
-                json.dumps(
-                    {
-                        "stages": [
-                            {"episodes": [{}, {}, {}]},
-                            {"episodes": [{}]},
-                            {"episodes": [{}, {}]},
-                        ]
-                    }
-                ),
+            partial_skeleton = partial_dir / "SkeletonReconstructor-2-Result.json"
+            partial_skeleton.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}]}]}),
                 encoding="utf-8",
             )
 
             older_mtime = 1_700_000_000
-            newer_mtime = 1_800_000_000
-            for path in (older_dir, older_skeleton, older_final):
+            partial_mtime = 1_800_000_000
+            empty_mtime = 1_900_000_000
+            for path in (older_valid_dir, older_skeleton, older_final):
                 os.utime(path, (older_mtime, older_mtime))
-            for path in (newer_dir, newer_skeleton, newer_final):
-                os.utime(path, (newer_mtime, newer_mtime))
+            for path in (partial_dir, partial_skeleton):
+                os.utime(path, (partial_mtime, partial_mtime))
+            os.utime(empty_dir, (empty_mtime, empty_mtime))
 
             summary = summarize_latest_builder_output(root)
+            checkpoint = replay_latest_readme_checkpoint(root)
 
-            self.assertEqual(summary["builder_output_count"], 2)
-            self.assertEqual(summary["latest_builder_dir"], str(newer_dir))
-            self.assertEqual(summary["skeleton"]["path"], str(newer_skeleton))
-            self.assertEqual(summary["skeleton"]["stage_count"], 2)
-            self.assertEqual(summary["skeleton"]["episode_count"], 3)
-            self.assertEqual(summary["final"]["path"], str(newer_final))
-            self.assertEqual(summary["final"]["stage_count"], 3)
-            self.assertEqual(summary["final"]["episode_count"], 6)
+            self.assertEqual(summary["builder_output_count"], 3)
+            self.assertEqual(summary["latest_builder_dir"], str(older_valid_dir))
+            self.assertEqual(summary["skeleton"]["path"], str(older_skeleton))
+            self.assertEqual(summary["skeleton"]["stage_count"], 1)
+            self.assertEqual(summary["skeleton"]["episode_count"], 1)
+            self.assertEqual(summary["final"]["path"], str(older_final))
+            self.assertEqual(summary["final"]["stage_count"], 1)
+            self.assertEqual(summary["final"]["episode_count"], 2)
+            self.assertEqual(checkpoint["checkpoint_dir"], str(older_valid_dir))
+            self.assertEqual(
+                checkpoint["summary"],
+                {
+                    "checkpoint_dir": str(older_valid_dir),
+                    "skeleton": summary["skeleton"],
+                    "final": summary["final"],
+                },
+            )
 
 
 

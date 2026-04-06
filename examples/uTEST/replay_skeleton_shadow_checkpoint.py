@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_ROOT = Path(__file__).resolve().parents[2] / "EXPERIMENT" / "uTEST"
+DEFAULT_ROOT = Path(
+    "/home/lenovo/projects/AgenticFinLab/.local-runtime/finmy-readme-main/outputs/builder"
+)
 
 
 def _count_stages_and_episodes(cascade: dict[str, Any]) -> dict[str, int | None]:
@@ -26,17 +28,14 @@ def _count_stages_and_episodes(cascade: dict[str, Any]) -> dict[str, int | None]
     return {"stage_count": len(stages), "episode_count": episode_count}
 
 
-def _latest_build_output_dir(root: Path) -> Path | None:
+def _build_output_dirs(root: Path) -> list[Path]:
     if not root.exists():
-        return None
+        return []
 
     build_dirs = [
         item for item in root.iterdir() if item.is_dir() and item.name.startswith("build_output_")
     ]
-    if not build_dirs:
-        return None
-
-    return max(build_dirs, key=lambda item: (item.stat().st_mtime, item.name))
+    return sorted(build_dirs, key=lambda item: (item.stat().st_mtime, item.name))
 
 
 def _latest_matching_file(directory: Path, patterns: tuple[str, ...]) -> Path | None:
@@ -48,6 +47,29 @@ def _latest_matching_file(directory: Path, patterns: tuple[str, ...]) -> Path | 
         return None
 
     return max(candidates, key=lambda item: (item.stat().st_mtime, item.name))
+
+
+def _has_usable_checkpoint(directory: Path) -> bool:
+    skeleton_file = _latest_matching_file(
+        directory,
+        ("SkeletonReconstructor*-Result.json", "SkeletonReconstructor-*.json"),
+    )
+    final_file = _latest_matching_file(
+        directory,
+        ("FinalEventCascade.json", "IntegratedEventCascade.json"),
+    )
+    return skeleton_file is not None and final_file is not None
+
+
+def _latest_valid_build_output_dir(root: Path) -> Path | None:
+    build_dirs = _build_output_dirs(root)
+    if not build_dirs:
+        return None
+
+    for candidate in reversed(build_dirs):
+        if _has_usable_checkpoint(candidate):
+            return candidate
+    return None
 
 
 def _load_json_counts(path: Path | None) -> dict[str, object]:
@@ -65,10 +87,27 @@ def _load_json_counts(path: Path | None) -> dict[str, object]:
     }
 
 
+def _summarize_checkpoint_dir(checkpoint_dir: Path) -> dict[str, object]:
+    skeleton_file = _latest_matching_file(
+        checkpoint_dir,
+        ("SkeletonReconstructor*-Result.json", "SkeletonReconstructor-*.json"),
+    )
+    final_file = _latest_matching_file(
+        checkpoint_dir,
+        ("FinalEventCascade.json", "IntegratedEventCascade.json"),
+    )
+
+    return {
+        "checkpoint_dir": str(checkpoint_dir),
+        "skeleton": _load_json_counts(skeleton_file),
+        "final": _load_json_counts(final_file),
+    }
+
+
 def summarize_latest_builder_output(root: Path) -> dict[str, object]:
     """Summarize the newest `build_output_*` directory under `root`."""
 
-    latest_dir = _latest_build_output_dir(root)
+    latest_dir = _latest_valid_build_output_dir(root)
     summary: dict[str, object] = {
         "root": str(root),
         "builder_output_count": 0,
@@ -80,21 +119,28 @@ def summarize_latest_builder_output(root: Path) -> dict[str, object]:
     if latest_dir is None:
         return summary
 
-    build_dirs = [
-        item for item in root.iterdir() if item.is_dir() and item.name.startswith("build_output_")
-    ]
-    summary["builder_output_count"] = len(build_dirs)
+    summary["builder_output_count"] = len(_build_output_dirs(root))
     summary["latest_builder_dir"] = str(latest_dir)
-
-    skeleton_file = _latest_matching_file(latest_dir, ("SkeletonReconstructor*-Result.json",))
-    final_file = _latest_matching_file(
-        latest_dir,
-        ("FinalEventCascade.json", "IntegratedEventCascade.json"),
-    )
-
-    summary["skeleton"] = _load_json_counts(skeleton_file)
-    summary["final"] = _load_json_counts(final_file)
+    checkpoint_summary = _summarize_checkpoint_dir(latest_dir)
+    summary["skeleton"] = checkpoint_summary["skeleton"]
+    summary["final"] = checkpoint_summary["final"]
     return summary
+
+
+def replay_latest_readme_checkpoint(root: Path) -> dict[str, object]:
+    """Replay the latest usable README checkpoint and return its summary."""
+
+    latest_dir = _latest_valid_build_output_dir(root)
+    if latest_dir is None:
+        return {
+            "checkpoint_dir": None,
+            "summary": summarize_latest_builder_output(root),
+        }
+
+    return {
+        "checkpoint_dir": str(latest_dir),
+        "summary": _summarize_checkpoint_dir(latest_dir),
+    }
 
 
 def main() -> None:
@@ -108,8 +154,8 @@ def main() -> None:
         help="Root directory that contains build_output_* folders.",
     )
     args = parser.parse_args()
-    summary = summarize_latest_builder_output(args.root)
-    print(json.dumps(summary, indent=2, ensure_ascii=False))
+    checkpoint = replay_latest_readme_checkpoint(args.root)
+    print(json.dumps(checkpoint, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
