@@ -39,13 +39,13 @@ class EvidenceCard:
     title: str
     excerpt: str
     tokens: List[str] = field(default_factory=list)
+    score: int = 0
+    source_char_count: int = 0
     time_hints: List[str] = field(default_factory=list)
     entity_hints: List[str] = field(default_factory=list)
     action_hints: List[str] = field(default_factory=list)
     money_hints: List[str] = field(default_factory=list)
     quality_flags: List[str] = field(default_factory=list)
-    score: int = 0
-    source_char_count: int = 0
 
 
 @dataclass
@@ -173,8 +173,6 @@ _ACTION_RULES = (
     (re.compile(r"\binvestigat(?:e|es|ed|ing)\b", re.IGNORECASE), "investigate"),
     (re.compile(r"\blaunder(?:s|ing|ed)?\b", re.IGNORECASE), "launder"),
     (re.compile(r"\bseiz(?:e|es|ed|ing)\b", re.IGNORECASE), "seize"),
-    (re.compile(r"\brun(?:s|ning|ned)?\b", re.IGNORECASE), "run"),
-    (re.compile(r"\btr(?:y|ies|ied|ying)\b", re.IGNORECASE), "try"),
 )
 
 
@@ -194,7 +192,7 @@ def _extract_time_hints(text: str) -> List[str]:
     return _dedupe_preserve_order(hints)
 
 
-_MONEY_KEYWORDS = ("bitcoin", "btc", "crypto", "cryptocurrency", "cash", "funds", "proceeds")
+_MONEY_KEYWORDS = ("bitcoin", "btc")
 
 
 def _extract_money_hints(text: str) -> List[str]:
@@ -206,15 +204,8 @@ def _extract_money_hints(text: str) -> List[str]:
     return _dedupe_preserve_order(hints)
 
 
-def _extract_entity_hints(text: str, query_keywords: Sequence[str] | None = None) -> List[str]:
+def _extract_entity_hints(text: str) -> List[str]:
     hints = [match.group(0).lower() for match in _ENTITY_RE.finditer(text)]
-    if query_keywords:
-        for keyword in query_keywords:
-            if not keyword:
-                continue
-            keyword_text = keyword.strip()
-            if " " in keyword_text and keyword_text[:1].isalpha() and keyword_text[0].isupper():
-                hints.append(keyword_text.lower())
     return _dedupe_preserve_order(hints)
 
 
@@ -268,7 +259,7 @@ def build_evidence_assets(
         tokens = tokenize_text(excerpt)[: policy.max_card_tokens]
         time_hints = _extract_time_hints(content)
         money_hints = _extract_money_hints(content)
-        entity_hints = _extract_entity_hints(content, query_keywords=user_query.key_words)
+        entity_hints = _extract_entity_hints(content)
         action_hints = _extract_action_hints(content)
         quality_flags = _derive_quality_flags(time_hints, entity_hints, action_hints, money_hints)
         sample_token_counts[sample.sample_id] = count_tokens(content)
