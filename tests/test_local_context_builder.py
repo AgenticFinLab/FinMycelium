@@ -474,6 +474,54 @@ class LocalContextBuilderTest(unittest.TestCase):
             package.memory["selection_rationale"][0]["matched_fields"],
         )
 
+    def test_transaction_reconstructor_keeps_stage_signals_while_bonusing_money_evidence(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="narrative-card",
+                    title="narrative-card",
+                    excerpt="Investigators described the broader stage narrative.",
+                    tokens=["myanmar", "network", "stage", "investigators", "narrative"],
+                ),
+                EvidenceCard(
+                    sample_id="money-card",
+                    title="money-card",
+                    excerpt="Bitcoin proceeds were transferred through the Myanmar Network Stage.",
+                    tokens=["bitcoin", "transfer", "myanmar", "network", "stage", "proceeds"],
+                    money_hints=["bitcoin"],
+                    action_hints=["transfer"],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="TransactionReconstructor",
+            query_text="How was bitcoin transferred in the Myanmar Network Stage?",
+            key_words=["bitcoin", "transfer"],
+            target_stage="Myanmar Network Stage",
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.selected_sample_ids, ["money-card"])
+        self.assertIn(
+            "stage_name",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+        self.assertIn(
+            "stage_hints",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+        self.assertIn(
+            "money_hints",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+        self.assertIn(
+            "action_hints",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+
     def test_participant_reconstructor_uses_its_own_budget_tier_before_scope_defaults(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),
@@ -510,6 +558,40 @@ class LocalContextBuilderTest(unittest.TestCase):
             participant_package.budget_summary["target_card_budget"],
             stage_package.budget_summary["target_card_budget"],
         )
+
+    def test_budget_summary_reports_when_matching_cards_are_clipped_by_budget(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Myanmar Network Stage moved alpha transfer funds.",
+                    tokens=["alpha", "transfer", "myanmar", "network", "stage"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-2",
+                    title="sample-2",
+                    excerpt="Myanmar Network Stage moved alpha transfer funds again.",
+                    tokens=["alpha", "transfer", "myanmar", "network", "stage", "again"],
+                ),
+            ],
+        )
+        package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="StageDescriptionReconstructor",
+                query_text="alpha transfer",
+                key_words=["alpha"],
+                target_stage="Myanmar Network Stage",
+            ),
+            bundle,
+        )
+
+        self.assertEqual(package.budget_summary["candidate_card_count"], 2)
+        self.assertEqual(package.budget_summary["clipped_card_count"], 1)
+        self.assertTrue(package.budget_summary["budget_clipped"])
+        self.assertEqual(package.budget_summary["used_card_count"], 1)
 
     def test_global_scope_respects_resolved_card_budget_reported_in_budget_summary(self):
         bundle = EvidenceAssetBundle(
