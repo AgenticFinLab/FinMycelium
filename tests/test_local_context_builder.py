@@ -615,7 +615,7 @@ class LocalContextBuilderTest(unittest.TestCase):
                     title="sample-1",
                     excerpt=(
                         "Skip to main content Search for Careers Contact About us "
-                        "Qian Zhimin ran the Blue Sky Ponzi scheme."
+                        "Latest headlines Related stories Sign up for newsletters."
                     ),
                     tokens=[
                         "skip",
@@ -628,10 +628,13 @@ class LocalContextBuilderTest(unittest.TestCase):
                         "contact",
                         "about",
                         "us",
-                        "qian",
-                        "zhimin",
-                        "blue",
-                        "sky",
+                        "latest",
+                        "headlines",
+                        "related",
+                        "stories",
+                        "sign",
+                        "up",
+                        "newsletters",
                     ],
                 )
             ],
