@@ -474,6 +474,43 @@ class LocalContextBuilderTest(unittest.TestCase):
             package.memory["selection_rationale"][0]["matched_fields"],
         )
 
+    def test_participant_reconstructor_uses_its_own_budget_tier_before_scope_defaults(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="A participant was linked to the transfer.",
+                    tokens=["participant", "transfer"],
+                )
+            ],
+        )
+        participant_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="ParticipantReconstructor",
+                query_text="Who handled the transfer?",
+                key_words=["transfer"],
+                target_stage="Stage 1",
+            ),
+            bundle,
+        )
+        stage_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="StageDescriptionReconstructor",
+                query_text="Who handled the transfer?",
+                key_words=["transfer"],
+                target_stage="Stage 1",
+            ),
+            bundle,
+        )
+
+        self.assertLess(
+            participant_package.budget_summary["target_card_budget"],
+            stage_package.budget_summary["target_card_budget"],
+        )
+
     def test_global_scope_respects_resolved_card_budget_reported_in_budget_summary(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),

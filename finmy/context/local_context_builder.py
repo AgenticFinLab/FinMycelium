@@ -34,7 +34,7 @@ class LocalContextPackage:
     summary: dict[str, int] = field(default_factory=dict)
     query_bundle: dict[str, object] = field(default_factory=dict)
     memory: dict[str, object] = field(default_factory=dict)
-    budget_summary: dict[str, int] = field(default_factory=dict)
+    budget_summary: dict[str, object] = field(default_factory=dict)
 
 
 class LocalContextBuilder:
@@ -44,6 +44,12 @@ class LocalContextBuilder:
         "episodereconstructor": "episode",
         "stagedescriptionreconstructor": "stage",
         "eventdescriptionreconstructor": "global",
+    }
+    _TARGET_CARD_BUDGET_BY_AGENT_NAME = {
+        "participantreconstructor": 1,
+        "transactionreconstructor": 1,
+        "episodereconstructor": 1,
+        "stagedescriptionreconstructor": 2,
     }
     _GLOBAL_LOW_SIGNAL_TOKENS = {
         "a",
@@ -197,6 +203,21 @@ class LocalContextBuilder:
         "transfer",
         "unfold",
     }
+    _TRANSACTION_MONEY_TOKENS = {
+        "bitcoin",
+        "btc",
+        "cash",
+        "crypto",
+        "cryptocurrency",
+        "funds",
+        "money",
+        "payment",
+        "payments",
+        "proceeds",
+        "settlement",
+        "wire",
+        "wires",
+    }
     _TARGET_CARD_BUDGET_BY_SCOPE = {
         "global": 3,
         "stage": 2,
@@ -215,12 +236,19 @@ class LocalContextBuilder:
         )
         scope = self._derive_scope(request)
         query_bundle = self.build_query_bundle(request)
+        target_card_budget, budget_source = self._resolve_card_budget(
+            bundle,
+            scope,
+            request.agent_name,
+        )
 
         selected_cards, selection_rationale = self._select_cards(
             bundle,
             query_tokens,
             scope,
             query_bundle,
+            request.agent_name,
+            target_card_budget,
         )
         if scope == "global" and self._assess_global_status(selected_cards) != "sufficient":
             selected_cards = []
@@ -252,17 +280,24 @@ class LocalContextBuilder:
                 assets_provided,
                 scope,
                 selection_rationale,
+                target_card_budget,
+                budget_source,
+                request.agent_name,
             ),
         )
 
     def build_query_bundle(self, request: LocalContextRequest) -> dict[str, object]:
         scope = self._derive_scope(request)
+        agent_name = (request.agent_name or "").strip().lower()
         query_bundle: dict[str, object] = {
             "scope": scope,
             "agent_name": request.agent_name,
             "query_text": request.query_text,
             "keyword_hints": self._collect_keyword_hints(request),
         }
+        if agent_name == "transactionreconstructor":
+            query_bundle["money_hints"] = self._collect_transaction_money_hints(request)
+            query_bundle["action_hints"] = self._collect_transaction_action_hints(request)
 
         if scope == "global":
             query_bundle["global_phase_hints"] = self._collect_global_phase_hints(request)
@@ -286,9 +321,16 @@ class LocalContextBuilder:
         query_tokens: List[str],
         scope: str,
         query_bundle: dict[str, object],
+        agent_name: str,
+        target_card_budget: int,
     ) -> tuple[List[EvidenceCard], List[dict[str, object]]]:
         if scope == "global":
-            return self._select_global_cards(bundle, query_tokens, query_bundle)
+            return self._select_global_cards(
+                bundle,
+                query_tokens,
+                query_bundle,
+                target_card_budget,
+            )
 
         ranked_cards = []
         for index, card in enumerate(bundle.evidence_cards):
@@ -297,6 +339,7 @@ class LocalContextBuilder:
                 query_tokens,
                 scope,
                 query_bundle,
+                agent_name,
             )
             if score <= 0:
                 continue
@@ -310,7 +353,7 @@ class LocalContextBuilder:
             (card, matched_fields)
             for _, _, card, matched_fields in selected_entries
         ]
-        selected_entries = selected_entries[: self._resolve_card_budget(bundle, scope)]
+        selected_entries = selected_entries[:target_card_budget]
         selected_cards = [card for card, _ in selected_entries]
         selection_rationale = [
             {
@@ -326,6 +369,7 @@ class LocalContextBuilder:
         bundle: EvidenceAssetBundle,
         query_tokens: List[str],
         query_bundle: dict[str, object],
+        target_card_budget: int,
     ) -> tuple[List[EvidenceCard], List[dict[str, object]]]:
         query_content_tokens = [
             token for token in query_tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
@@ -376,7 +420,7 @@ class LocalContextBuilder:
             ranked_cards,
             key=lambda item: (item[0], item[1], item[2], item[3]),
         )
-        selected_entries = selected_entries[: self._resolve_card_budget(bundle, "global")]
+        selected_entries = selected_entries[:target_card_budget]
         selected_cards = [card for _, _, _, _, card, _, _ in selected_entries]
         selection_rationale = [
             {
@@ -506,6 +550,22 @@ class LocalContextBuilder:
                 phase_hints.append(phase_name)
         return phase_hints
 
+    def _collect_transaction_money_hints(self, request: LocalContextRequest) -> List[str]:
+        return self._dedupe_tokens(
+            [
+                token
+                for token in self._collect_keyword_hints(request)
+                if token in self._TRANSACTION_MONEY_TOKENS
+            ]
+        )
+
+    def _collect_transaction_action_hints(self, request: LocalContextRequest) -> List[str]:
+        return [
+            token
+            for token in self._collect_keyword_hints(request)
+            if token in self._EPISODE_ACTION_TOKENS
+        ]
+
     def _collect_stage_hints(self, request: LocalContextRequest) -> List[str]:
         return self._dedupe_tokens(
             [
@@ -575,8 +635,10 @@ class LocalContextBuilder:
         assets_provided: bool,
         scope: str,
         selection_rationale: List[dict[str, object]],
-    ) -> dict[str, int]:
-        target_card_budget = self._resolve_card_budget(bundle, scope)
+        target_card_budget: int,
+        budget_source: str,
+        agent_name: str,
+    ) -> dict[str, object]:
         return {
             "used_card_count": len(selected_cards),
             "target_card_budget": target_card_budget,
@@ -584,13 +646,28 @@ class LocalContextBuilder:
             "remaining_card_budget": max(target_card_budget - len(selected_cards), 0),
             "asset_bundle_count": 1 if assets_provided else 0,
             "selection_rationale_count": len(selection_rationale),
+            "budget_source": budget_source,
+            "budget_agent_name": agent_name,
+            "budget_scope": scope,
         }
 
-    def _resolve_card_budget(self, bundle: EvidenceAssetBundle, scope: str) -> int:
+    def _resolve_card_budget(
+        self,
+        bundle: EvidenceAssetBundle,
+        scope: str,
+        agent_name: str,
+    ) -> tuple[int, str]:
+        normalized_agent_name = (agent_name or "").strip().lower()
+        agent_budget = self._TARGET_CARD_BUDGET_BY_AGENT_NAME.get(normalized_agent_name)
+        if agent_budget is not None:
+            if bundle.retrieval_policy.max_cards is None:
+                return agent_budget, "agent"
+            return min(agent_budget, bundle.retrieval_policy.max_cards), "agent"
+
         scope_budget = self._TARGET_CARD_BUDGET_BY_SCOPE.get(scope, len(bundle.evidence_cards))
         if bundle.retrieval_policy.max_cards is None:
-            return scope_budget
-        return min(scope_budget, bundle.retrieval_policy.max_cards)
+            return scope_budget, "scope"
+        return min(scope_budget, bundle.retrieval_policy.max_cards), "scope"
 
     def _score_scope_card(
         self,
@@ -598,7 +675,11 @@ class LocalContextBuilder:
         query_tokens: List[str],
         scope: str,
         query_bundle: dict[str, object],
+        agent_name: str,
     ) -> tuple[int, List[str]]:
+        if (agent_name or "").strip().lower() == "transactionreconstructor":
+            return self._score_transaction_card(card, query_tokens, query_bundle)
+
         query_overlap = score_token_overlap(card.tokens, query_tokens)
         if query_overlap <= 0:
             return 0, []
@@ -654,6 +735,71 @@ class LocalContextBuilder:
         if time_overlap > 0:
             matched_fields.append("time_hints")
             score += time_overlap * 20
+        return score, matched_fields
+
+    def _score_transaction_card(
+        self,
+        card: EvidenceCard,
+        query_tokens: List[str],
+        query_bundle: dict[str, object],
+    ) -> tuple[int, List[str]]:
+        query_overlap = score_token_overlap(card.tokens, query_tokens)
+        if query_overlap <= 0:
+            return 0, []
+
+        matched_fields = ["query_tokens"]
+        score = query_overlap * 100
+
+        stage_name_tokens = tokenize_text(str(query_bundle.get("stage_name", "")))
+        episode_name_tokens = tokenize_text(str(query_bundle.get("episode_name", "")))
+        stage_name_overlap = score_token_overlap(card.tokens, stage_name_tokens)
+        episode_name_overlap = score_token_overlap(card.tokens, episode_name_tokens)
+        if stage_name_overlap > 0:
+            matched_fields.append("stage_name")
+            score += stage_name_overlap * 10
+        if episode_name_overlap > 0:
+            matched_fields.append("episode_name")
+            score += episode_name_overlap * 20
+
+        money_hints = [
+            str(token)
+            for token in query_bundle.get("money_hints", [])
+            if isinstance(token, str)
+        ]
+        action_hints = [
+            str(token)
+            for token in query_bundle.get("action_hints", [])
+            if isinstance(token, str)
+        ]
+        entity_hints = [
+            str(token)
+            for token in query_bundle.get("entity_hints", [])
+            if isinstance(token, str)
+        ]
+        time_hints = [
+            str(token)
+            for token in query_bundle.get("time_hints", [])
+            if isinstance(token, str)
+        ]
+
+        money_overlap = self._score_exact_hint_overlap(card.money_hints, money_hints)
+        action_overlap = self._score_exact_hint_overlap(card.action_hints, action_hints)
+        entity_overlap = self._score_exact_hint_overlap(card.entity_hints, entity_hints)
+        time_overlap = self._score_exact_hint_overlap(card.time_hints, time_hints)
+
+        if money_overlap > 0:
+            matched_fields.append("money_hints")
+            score += money_overlap * 200
+        if action_overlap > 0:
+            matched_fields.append("action_hints")
+            score += action_overlap * 120
+        if entity_overlap > 0:
+            matched_fields.append("entity_hints")
+            score += entity_overlap * 40
+        if time_overlap > 0:
+            matched_fields.append("time_hints")
+            score += time_overlap * 20
+
         return score, matched_fields
 
     def _score_exact_hint_overlap(
