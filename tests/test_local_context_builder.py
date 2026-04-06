@@ -139,6 +139,58 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertIn("alpha beta strongest excerpt", package.rendered_context)
         self.assertNotIn("alpha stale score excerpt", package.rendered_context)
 
+    def test_max_cards_prioritizes_strong_case_signal_over_high_information_backstop(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Qian Zhimin used bitcoin to launder proceeds from Blue Sky.",
+                    tokens=[
+                        "qian",
+                        "zhimin",
+                        "bitcoin",
+                        "launder",
+                        "proceeds",
+                        "blue",
+                        "sky",
+                    ],
+                ),
+                EvidenceCard(
+                    sample_id="sample-2",
+                    title="sample-2",
+                    excerpt=(
+                        "Authorities traced cryptocurrency proceeds to London property purchases "
+                        "and shell transfers."
+                    ),
+                    tokens=[
+                        "authorities",
+                        "traced",
+                        "cryptocurrency",
+                        "proceeds",
+                        "london",
+                        "property",
+                        "purchases",
+                        "shell",
+                        "transfers",
+                    ],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
     def test_global_request_falls_back_when_no_cards_overlap(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
