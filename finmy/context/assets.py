@@ -192,6 +192,19 @@ def _extract_time_hints(text: str) -> List[str]:
     return _dedupe_preserve_order(hints)
 
 
+def _count_time_mentions(text: str) -> int:
+    month_year_spans = [match.span() for match in _MONTH_YEAR_RE.finditer(text)]
+    count = len(month_year_spans)
+
+    for match in _YEAR_RE.finditer(text):
+        year_span = match.span()
+        if any(month_start <= year_span[0] and year_span[1] <= month_end for month_start, month_end in month_year_spans):
+            continue
+        count += 1
+
+    return count
+
+
 _MONEY_KEYWORDS = ("bitcoin", "btc")
 
 
@@ -291,7 +304,7 @@ def build_evidence_assets(
         sample_token_counts=sample_token_counts,
         sample_signal_counts={
             card.sample_id: {
-                "time_hints": len(card.time_hints),
+                "time_hints": _count_time_mentions(sample.content or ""),
                 "entity_hints": len(card.entity_hints),
                 "action_hints": len(card.action_hints),
                 "money_hints": len(card.money_hints),
