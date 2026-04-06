@@ -300,6 +300,7 @@ class LocalContextBuilder:
         if agent_name == "transactionreconstructor":
             query_bundle["money_hints"] = self._collect_transaction_money_hints(request)
             query_bundle["action_hints"] = self._collect_transaction_action_hints(request)
+            query_bundle["stage_hints"] = self._collect_transaction_stage_hints(request)
 
         if scope == "global":
             query_bundle["global_phase_hints"] = self._collect_global_phase_hints(request)
@@ -308,7 +309,10 @@ class LocalContextBuilder:
         query_bundle["stage_name"] = request.target_stage
 
         if scope == "stage":
-            query_bundle["stage_hints"] = self._collect_stage_hints(request)
+            if agent_name == "transactionreconstructor":
+                query_bundle["stage_hints"] = self._collect_transaction_stage_hints(request)
+            else:
+                query_bundle["stage_hints"] = self._collect_stage_hints(request)
             return query_bundle
 
         query_bundle["episode_name"] = request.target_episode
@@ -569,6 +573,9 @@ class LocalContextBuilder:
             if token in self._EPISODE_ACTION_TOKENS
         ]
 
+    def _collect_transaction_stage_hints(self, request: LocalContextRequest) -> List[str]:
+        return self._dedupe_tokens(tokenize_text(request.target_stage))
+
     def _collect_stage_hints(self, request: LocalContextRequest) -> List[str]:
         return self._dedupe_tokens(
             [
@@ -697,6 +704,7 @@ class LocalContextBuilder:
         if (agent_name or "").strip().lower() != "transactionreconstructor":
             return base_score, matched_fields
 
+        stage_score = self._score_transaction_stage_alignment(card, query_bundle)
         bonus_score, bonus_fields = self._score_transaction_bonus(
             card,
             query_bundle,
@@ -704,7 +712,7 @@ class LocalContextBuilder:
         for field in bonus_fields:
             if field not in matched_fields:
                 matched_fields.append(field)
-        return base_score + bonus_score, matched_fields
+        return base_score + stage_score + bonus_score, matched_fields
 
     def _score_standard_scope_card(
         self,
@@ -818,6 +826,21 @@ class LocalContextBuilder:
             score += time_overlap * 20
 
         return score, matched_fields
+
+    def _score_transaction_stage_alignment(
+        self,
+        card: EvidenceCard,
+        query_bundle: dict[str, object],
+    ) -> int:
+        stage_name_tokens = tokenize_text(str(query_bundle.get("stage_name", "")))
+        stage_hint_tokens = [
+            str(token)
+            for token in query_bundle.get("stage_hints", [])
+            if isinstance(token, str)
+        ]
+        stage_name_overlap = score_token_overlap(card.tokens, stage_name_tokens)
+        stage_hint_overlap = score_token_overlap(card.tokens, stage_hint_tokens)
+        return (stage_name_overlap * 200) + (stage_hint_overlap * 100)
 
     def _score_exact_hint_overlap(
         self,
