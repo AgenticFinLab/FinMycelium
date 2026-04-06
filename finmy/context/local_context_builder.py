@@ -144,6 +144,7 @@ class LocalContextBuilder:
         "cnn values your feedback",
         "video player was slow to load",
     )
+    _GLOBAL_MIN_INFORMATION_BODY_TOKENS = 4
 
     def build(
         self,
@@ -269,15 +270,35 @@ class LocalContextBuilder:
         if not excerpt:
             return True
 
-        if not any(excerpt.startswith(prefix) for prefix in self._GLOBAL_NOISE_PHRASES):
+        body_excerpt = self._strip_global_noise_prefix(excerpt)
+        if body_excerpt == excerpt:
             return False
 
-        card_tokens = [
-            token for token in card.tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
+        body_tokens = tokenize_text(body_excerpt)
+        if not body_tokens:
+            return True
+
+        body_content_tokens = [
+            token
+            for token in body_tokens
+            if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
+            and token not in self._GLOBAL_TEMPLATE_TOKENS
         ]
-        has_case_signal = bool(self._extract_global_case_signal_tokens(card_tokens))
-        has_information_signal = bool(self._extract_global_high_information_tokens(card_tokens))
-        return not (has_case_signal or has_information_signal)
+        has_case_signal = bool(self._extract_global_case_signal_tokens(body_content_tokens))
+        if has_case_signal:
+            return False
+
+        has_information_signal = (
+            len(self._extract_global_high_information_tokens(body_content_tokens))
+            >= self._GLOBAL_MIN_INFORMATION_BODY_TOKENS
+        )
+        return not has_information_signal
+
+    def _strip_global_noise_prefix(self, excerpt: str) -> str:
+        for prefix in sorted(self._GLOBAL_NOISE_PHRASES, key=len, reverse=True):
+            if excerpt.startswith(prefix):
+                return excerpt[len(prefix) :].lstrip(" \t\r\n-:;,.!?")
+        return excerpt
 
     def _derive_scope(self, request: LocalContextRequest) -> str:
         agent_name = (request.agent_name or "").strip().lower()

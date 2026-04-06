@@ -437,10 +437,16 @@ class LocalContextBuilderTest(unittest.TestCase):
                     sample_id="sample-1",
                     title="sample-1",
                     excerpt=(
-                        "Qian Zhimin pleaded guilty after investigators traced bitcoin proceeds. "
-                        "International edition."
+                        "Skip to main content International edition. Qian Zhimin pleaded guilty "
+                        "after investigators traced bitcoin proceeds."
                     ),
                     tokens=[
+                        "skip",
+                        "to",
+                        "main",
+                        "content",
+                        "international",
+                        "edition",
                         "qian",
                         "zhimin",
                         "pleaded",
@@ -450,8 +456,6 @@ class LocalContextBuilderTest(unittest.TestCase):
                         "traced",
                         "bitcoin",
                         "proceeds",
-                        "international",
-                        "edition",
                     ],
                 )
             ],
@@ -467,6 +471,46 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.scope, "global")
         self.assertEqual(package.retrieval_status, "sufficient")
         self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
+    def test_global_request_rejects_leading_chrome_topic_keyword_pileup_without_substantive_body(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt=(
+                        "Skip to main content International edition Cryptocurrency property "
+                        "purchases Latest headlines"
+                    ),
+                    tokens=[
+                        "skip",
+                        "to",
+                        "main",
+                        "content",
+                        "international",
+                        "edition",
+                        "cryptocurrency",
+                        "property",
+                        "purchases",
+                        "latest",
+                        "headlines",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="How were cryptocurrency assets used in London property purchases?",
+            key_words=["cryptocurrency", "property purchases"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "fallback_fulltext")
+        self.assertEqual(package.selected_sample_ids, [])
 
     def test_global_request_keeps_signal_card_in_mixed_bundle_and_rejects_chrome(self):
         bundle = EvidenceAssetBundle(
