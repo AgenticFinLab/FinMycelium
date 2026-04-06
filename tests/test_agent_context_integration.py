@@ -793,6 +793,21 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertIn("CompactContent", captured["prompt_kwargs"])
         self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        target_episode_context = json.loads(captured["prompt_kwargs"]["TargetEpisodeContext"])
+        self.assertEqual(
+            target_episode_context,
+            {
+                "episode_id": "E1",
+                "name": "Episode 1",
+                "index_in_stage": 0,
+                "start_time": "2025-01-01",
+                "end_time": "2025-01-02",
+                "participant_ids": [],
+                "transaction_ids": [],
+            },
+        )
+        self.assertNotIn("participants", target_episode_context)
+        self.assertNotIn("transactions", target_episode_context)
         self.assertIn("alpha episode excerpt", captured["prompt_kwargs"]["RetrievedContext"])
         self.assertIn("alpha episode excerpt", rendered_prompt)
         self.assertIn("RETRIEVED CONTEXT BEGIN", rendered_prompt)

@@ -58,7 +58,6 @@ import copy
 import os
 import json
 import logging
-from dataclasses import asdict
 from functools import partial
 from pathlib import Path
 
@@ -342,14 +341,48 @@ class AgentEventBuilder(BaseBuilder):
             if isinstance(sample.content, str) and sample.content.strip()
         )
 
+    def _scalar_value(self, field):
+        """Extract a plain scalar from a verifiable field, dict wrapper, or primitive."""
+        if hasattr(field, "value"):
+            return field.value
+        if isinstance(field, dict):
+            return field.get("value", "unknown")
+        return field if isinstance(field, (str, int, float, bool)) else "unknown"
+
     def _render_target_episode_context(self, target_episode: Episode) -> str:
-        """Serialize the target episode context in a compact prompt-friendly form."""
+        """Serialize a compact target episode summary for additive prompts."""
+        participant_ids = []
+        for participant in getattr(target_episode, "participants", []) or []:
+            if isinstance(participant, dict):
+                participant_id = participant.get("participant_id")
+            else:
+                participant_id = getattr(participant, "participant_id", None)
+            if participant_id:
+                participant_ids.append(participant_id)
+
+        transaction_ids = []
+        for transaction in getattr(target_episode, "transactions", []) or []:
+            if isinstance(transaction, dict):
+                transaction_id = transaction.get("transaction_id")
+            else:
+                transaction_id = getattr(transaction, "transaction_id", None)
+            if transaction_id:
+                transaction_ids.append(transaction_id)
+
+        compact_context = {
+            "episode_id": getattr(target_episode, "episode_id", "unknown"),
+            "name": self._scalar_value(getattr(target_episode, "name", "unknown")),
+            "index_in_stage": getattr(target_episode, "index_in_stage", "unknown"),
+            "start_time": self._scalar_value(getattr(target_episode, "start_time", "unknown")),
+            "end_time": self._scalar_value(getattr(target_episode, "end_time", "unknown")),
+            "participant_ids": participant_ids,
+            "transaction_ids": transaction_ids,
+        }
         return json.dumps(
-            asdict(target_episode),
+            compact_context,
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
-            default=str,
         )
 
     def _attach_compact_heavy_agent_prompt_kwargs(
