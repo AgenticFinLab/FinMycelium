@@ -22,6 +22,11 @@ def render_evidence_card(card: EvidenceCard) -> str:
             f"title: {card.title}",
             f"excerpt: {card.excerpt}",
             f"tokens: {', '.join(card.tokens)}",
+            f"time_hints: {', '.join(card.time_hints)}",
+            f"entity_hints: {', '.join(card.entity_hints)}",
+            f"action_hints: {', '.join(card.action_hints)}",
+            f"money_hints: {', '.join(card.money_hints)}",
+            f"quality_flags: {', '.join(card.quality_flags)}",
         ]
     )
 
@@ -58,6 +63,13 @@ def render_context_asset_summary(summary: Mapping[str, int]) -> str:
         "sample_id_count",
         "global_token_count",
         "query_token_count",
+        "signal_card_count",
+        "time_hint_count",
+        "entity_hint_count",
+        "action_hint_count",
+        "money_hint_count",
+        "quality_flag_count",
+        "query_signal_count",
     ]
     lines = ["context_asset_summary:"]
     lines.extend(f"  {key}={summary.get(key, 0)}" for key in ordered_keys)

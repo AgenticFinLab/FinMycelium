@@ -27,6 +27,7 @@ class EvidenceIndex:
     sample_token_counts: dict[str, dict[str, int]] = field(default_factory=dict)
     sample_signal_counts: dict[str, dict[str, int]] = field(default_factory=dict)
     query_token_counts: dict[str, int] = field(default_factory=dict)
+    query_signal_counts: dict[str, int] = field(default_factory=dict)
     sample_ids: List[str] = field(default_factory=list)
     query_tokens: List[str] = field(default_factory=list)
 
@@ -74,13 +75,29 @@ def summarize_context_assets(bundle: EvidenceAssetBundle | None) -> dict[str, in
             "sample_id_count": 0,
             "global_token_count": 0,
             "query_token_count": 0,
+            "signal_card_count": 0,
+            "time_hint_count": 0,
+            "entity_hint_count": 0,
+            "action_hint_count": 0,
+            "money_hint_count": 0,
+            "quality_flag_count": 0,
+            "query_signal_count": 0,
         }
+
+    query_signal_counts = bundle.index.query_signal_counts
 
     return {
         "evidence_card_count": len(bundle.evidence_cards),
         "sample_id_count": len(bundle.index.sample_ids),
         "global_token_count": sum(bundle.index.token_counts.values()),
         "query_token_count": sum(bundle.index.query_token_counts.values()),
+        "signal_card_count": sum(1 for card in bundle.evidence_cards if card.quality_flags),
+        "time_hint_count": sum(len(card.time_hints) for card in bundle.evidence_cards),
+        "entity_hint_count": sum(len(card.entity_hints) for card in bundle.evidence_cards),
+        "action_hint_count": sum(len(card.action_hints) for card in bundle.evidence_cards),
+        "money_hint_count": sum(len(card.money_hints) for card in bundle.evidence_cards),
+        "quality_flag_count": sum(len(card.quality_flags) for card in bundle.evidence_cards),
+        "query_signal_count": sum(query_signal_counts.values()),
     }
 
 
@@ -260,7 +277,18 @@ def build_evidence_assets(
 
     query_text = user_query.query_text or ""
     query_keyword_text = " ".join(user_query.key_words or [])
+    query_signal_text = f"{query_text} {query_keyword_text}".strip()
     query_tokens = tokenize_text(f"{query_text} {query_keyword_text}".strip())
+    query_time_hints = _extract_time_hints(query_signal_text)
+    query_entity_hints = _extract_entity_hints(query_signal_text)
+    query_action_hints = _extract_action_hints(query_signal_text)
+    query_money_hints = _extract_money_hints(query_signal_text)
+    query_quality_flags = _derive_quality_flags(
+        query_time_hints,
+        query_entity_hints,
+        query_action_hints,
+        query_money_hints,
+    )
 
     sample_token_counts: dict[str, dict[str, int]] = {}
     sample_signal_counts: dict[str, dict[str, int]] = {}
@@ -311,7 +339,14 @@ def build_evidence_assets(
         token_counts=global_token_counts,
         sample_token_counts=sample_token_counts,
         sample_signal_counts=sample_signal_counts,
-        query_token_counts=count_tokens(f"{query_text} {query_keyword_text}".strip()),
+        query_token_counts=count_tokens(query_signal_text),
+        query_signal_counts={
+            "time_hints": _count_time_mentions(query_signal_text),
+            "entity_hints": len(query_entity_hints),
+            "action_hints": len(query_action_hints),
+            "money_hints": len(query_money_hints),
+            "quality_flags": len(query_quality_flags),
+        },
         sample_ids=[sample.sample_id for sample in sample_list],
         query_tokens=query_tokens,
     )

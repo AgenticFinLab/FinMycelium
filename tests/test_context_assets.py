@@ -7,7 +7,9 @@ from finmy.context.assets import (
     EvidenceIndex,
     EvidenceRetrievalPolicy,
     build_evidence_assets,
+    summarize_context_assets,
 )
+from finmy.context.renderers import render_context_asset_summary, render_evidence_card
 from finmy.converter import convert_to_build_input
 from finmy.generic import DataSample, MetaSample, UserQueryInput
 
@@ -282,6 +284,85 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         self.assertIn("sample-1", bundle.index.sample_signal_counts)
         self.assertEqual(bundle.index.sample_signal_counts["sample-1"]["money_hints"], 1)
         self.assertEqual(bundle.index.sample_signal_counts["sample-1"]["time_hints"], 1)
+
+    def test_context_asset_summary_counts_signal_bearing_cards(self):
+        user_query = UserQueryInput(
+            query_text="What happened in Qian Zhimin's bitcoin laundering case?",
+            key_words=["Qian Zhimin", "bitcoin", "money laundering"],
+        )
+        samples = [
+            DataSample(
+                sample_id="sample-1",
+                raw_data_id="raw-1",
+                content=(
+                    "In July 2017, Zhimin Qian fled China. "
+                    "She later tried to buy a £23.5 million London property "
+                    "and police investigated the bitcoin proceeds."
+                ),
+                category="risk",
+                knowledge_field="finance",
+            ),
+            DataSample(
+                sample_id="sample-2",
+                raw_data_id="raw-2",
+                content="This background note is intentionally generic and signal-free.",
+                category="background",
+                knowledge_field="finance",
+            ),
+        ]
+
+        bundle = build_evidence_assets(user_query, samples)
+        summary = summarize_context_assets(bundle)
+
+        self.assertEqual(summary["evidence_card_count"], 2)
+        self.assertEqual(summary["signal_card_count"], 1)
+        self.assertEqual(summary["time_hint_count"], 2)
+        self.assertEqual(summary["entity_hint_count"], 2)
+        self.assertEqual(summary["action_hint_count"], 2)
+        self.assertEqual(summary["money_hint_count"], 2)
+        self.assertEqual(summary["quality_flag_count"], 4)
+        self.assertEqual(summary["query_signal_count"], 6)
+
+    def test_render_evidence_card_includes_structured_hints(self):
+        card = EvidenceCard(
+            sample_id="sample-1",
+            title="risk",
+            excerpt="...",
+            time_hints=["2017"],
+            entity_hints=["zhimin qian"],
+            action_hints=["flee"],
+            money_hints=["£23.5 million"],
+            quality_flags=["has_money_signal"],
+        )
+
+        rendered = render_evidence_card(card)
+
+        self.assertIn("time_hints: 2017", rendered)
+        self.assertIn("entity_hints: zhimin qian", rendered)
+        self.assertIn("action_hints: flee", rendered)
+        self.assertIn("money_hints: £23.5 million", rendered)
+        self.assertIn("quality_flags: has_money_signal", rendered)
+
+    def test_render_context_asset_summary_includes_signal_metrics(self):
+        summary = {
+            "evidence_card_count": 2,
+            "sample_id_count": 2,
+            "global_token_count": 10,
+            "query_token_count": 3,
+            "signal_card_count": 1,
+            "time_hint_count": 2,
+            "entity_hint_count": 1,
+            "action_hint_count": 3,
+            "money_hint_count": 2,
+            "quality_flag_count": 4,
+            "query_signal_count": 3,
+        }
+
+        rendered = render_context_asset_summary(summary)
+
+        self.assertIn("signal_card_count=1", rendered)
+        self.assertIn("time_hint_count=2", rendered)
+        self.assertIn("query_signal_count=3", rendered)
 
 
 if __name__ == "__main__":
