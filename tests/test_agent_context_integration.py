@@ -1047,6 +1047,34 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertIn("CompactContent", captured["prompt_kwargs"])
         self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextQueryBundle"],
+            json.dumps(
+                {
+                    "scope": "episode",
+                    "stage_name": "Stage 1",
+                    "episode_name": "Episode 1",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextBudgetSummary"],
+            json.dumps(
+                {"target_card_budget": 1, "used_card_count": 1},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextMemory"],
+            json.dumps(
+                {"selection_rationale": [{"matched_fields": ["episode_name"]}]},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
         self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
 
     def test_episode_reconstructor_receives_retrieved_context_without_clearing_content(self):
@@ -1431,6 +1459,34 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertIn("CompactContent", captured["prompt_kwargs"])
         self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextQueryBundle"],
+            json.dumps(
+                {
+                    "scope": "episode",
+                    "stage_name": "Stage 1",
+                    "episode_name": "Episode 1",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextBudgetSummary"],
+            json.dumps(
+                {"target_card_budget": 1, "used_card_count": 1},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextMemory"],
+            json.dumps(
+                {"selection_rationale": [{"matched_fields": ["episode_name"]}]},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
         self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
 
     def test_stage_description_reconstructor_receives_stage_scoped_context(self):

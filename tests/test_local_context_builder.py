@@ -388,7 +388,7 @@ class LocalContextBuilderTest(unittest.TestCase):
             episode_package.memory["selection_rationale"][0]["matched_fields"],
         )
 
-    def test_transaction_reconstructor_keeps_episode_scope_and_tighter_budget_when_episode_hint_is_missing(self):
+    def test_transaction_reconstructor_keeps_tighter_budget_than_stage_path_when_episode_hint_is_missing(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),
             index=EvidenceIndex(),
@@ -416,9 +416,21 @@ class LocalContextBuilderTest(unittest.TestCase):
         )
 
         package = LocalContextBuilder().build(request, bundle)
+        stage_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="StageDescriptionReconstructor",
+                query_text="How was bitcoin transferred in this episode?",
+                key_words=["bitcoin", "transfer"],
+                target_stage="Stage 1",
+            ),
+            bundle,
+        )
 
-        self.assertEqual(package.scope, "episode")
-        self.assertEqual(package.budget_summary["target_card_budget"], 1)
+        self.assertEqual(package.scope, "stage")
+        self.assertLess(
+            package.budget_summary["target_card_budget"],
+            stage_package.budget_summary["target_card_budget"],
+        )
         self.assertEqual(package.selected_sample_ids, ["sample-money"])
 
     def test_transaction_reconstructor_prefers_money_relevant_evidence_over_narrative_evidence(self):
@@ -438,6 +450,7 @@ class LocalContextBuilderTest(unittest.TestCase):
                     excerpt="Bitcoin proceeds were transferred through the episode account.",
                     tokens=["bitcoin", "transfer", "episode", "proceeds", "account"],
                     money_hints=["bitcoin"],
+                    action_hints=["transfer"],
                 ),
             ],
         )
@@ -454,6 +467,10 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.selected_sample_ids, ["money-card"])
         self.assertIn(
             "money_hints",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+        self.assertIn(
+            "action_hints",
             package.memory["selection_rationale"][0]["matched_fields"],
         )
 
