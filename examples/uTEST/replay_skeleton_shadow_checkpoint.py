@@ -71,15 +71,24 @@ def _latest_matching_file(directory: Path, patterns: tuple[str, ...]) -> Path | 
     return max(preferred_candidates, key=lambda item: (item.stat().st_mtime, item.name))
 
 
+def _final_checkpoint_file(directory: Path) -> Path | None:
+    final_file = directory / "FinalEventCascade.json"
+    if final_file.exists():
+        return final_file
+
+    integrated_file = directory / "IntegratedEventCascade.json"
+    if integrated_file.exists():
+        return integrated_file
+
+    return None
+
+
 def _has_usable_checkpoint(directory: Path) -> bool:
     skeleton_file = _latest_matching_file(
         directory,
         ("SkeletonReconstructor*-Result.json", "SkeletonReconstructor-*.json"),
     )
-    final_file = _latest_matching_file(
-        directory,
-        ("FinalEventCascade.json", "IntegratedEventCascade.json"),
-    )
+    final_file = _final_checkpoint_file(directory)
     if skeleton_file is None or final_file is None:
         return False
 
@@ -131,10 +140,7 @@ def _summarize_checkpoint_dir(checkpoint_dir: Path) -> dict[str, object]:
         checkpoint_dir,
         ("SkeletonReconstructor*-Result.json", "SkeletonReconstructor-*.json"),
     )
-    final_file = _latest_matching_file(
-        checkpoint_dir,
-        ("FinalEventCascade.json", "IntegratedEventCascade.json"),
-    )
+    final_file = _final_checkpoint_file(checkpoint_dir)
 
     return {
         "checkpoint_dir": str(checkpoint_dir),
@@ -282,10 +288,11 @@ def create_fresh_readme_checkpoint(root: Path) -> Path:
 def summarize_latest_builder_output(root: Path) -> dict[str, object]:
     """Summarize the newest `build_output_*` directory under `root`."""
 
+    build_dirs = _build_output_dirs(root)
     latest_dir = _latest_valid_build_output_dir(root)
     summary: dict[str, object] = {
         "root": str(root),
-        "builder_output_count": 0,
+        "builder_output_count": len(build_dirs),
         "latest_builder_dir": None,
         "skeleton": {"path": None, "stage_count": None, "episode_count": None},
         "final": {"path": None, "stage_count": None, "episode_count": None},
@@ -294,7 +301,6 @@ def summarize_latest_builder_output(root: Path) -> dict[str, object]:
     if latest_dir is None:
         return summary
 
-    summary["builder_output_count"] = len(_build_output_dirs(root))
     summary["latest_builder_dir"] = str(latest_dir)
     checkpoint_summary = _summarize_checkpoint_dir(latest_dir)
     summary["skeleton"] = checkpoint_summary["skeleton"]

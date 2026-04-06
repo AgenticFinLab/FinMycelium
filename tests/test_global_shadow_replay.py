@@ -261,6 +261,42 @@ class GlobalShadowReplayTest(unittest.TestCase):
             self.assertEqual(summary["final"]["stage_count"], 1)
             self.assertEqual(summary["final"]["episode_count"], 2)
 
+    def test_summarize_latest_builder_output_keeps_count_when_all_invalid(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            malformed_dir = root / "build_output_20240101010101000000"
+            empty_dir = root / "build_output_20240202020202000000"
+            malformed_dir.mkdir()
+            empty_dir.mkdir()
+
+            malformed_skeleton = malformed_dir / "SkeletonReconstructor-1-Result.json"
+            malformed_final = malformed_dir / "FinalEventCascade.json"
+            malformed_skeleton.write_text("not json", encoding="utf-8")
+            malformed_final.write_text("not json", encoding="utf-8")
+
+            empty_skeleton = empty_dir / "SkeletonReconstructor-1-Result.json"
+            empty_final = empty_dir / "FinalEventCascade.json"
+            empty_skeleton.write_bytes(b"")
+            empty_final.write_bytes(b"")
+
+            malformed_mtime = 1_700_000_000
+            empty_mtime = 1_800_000_000
+            for path in (malformed_dir, malformed_skeleton, malformed_final):
+                os.utime(path, (malformed_mtime, malformed_mtime))
+            for path in (empty_dir, empty_skeleton, empty_final):
+                os.utime(path, (empty_mtime, empty_mtime))
+
+            summary = summarize_latest_builder_output(root)
+
+            self.assertEqual(summary["builder_output_count"], 2)
+            self.assertIsNone(summary["latest_builder_dir"])
+            self.assertIsNone(summary["skeleton"]["path"])
+            self.assertIsNone(summary["skeleton"]["stage_count"])
+            self.assertIsNone(summary["skeleton"]["episode_count"])
+            self.assertIsNone(summary["final"]["path"])
+            self.assertIsNone(summary["final"]["stage_count"])
+            self.assertIsNone(summary["final"]["episode_count"])
+
     def test_summarize_latest_builder_output_skips_newer_malformed_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -300,6 +336,43 @@ class GlobalShadowReplayTest(unittest.TestCase):
             self.assertEqual(summary["skeleton"]["stage_count"], 1)
             self.assertEqual(summary["skeleton"]["episode_count"], 1)
             self.assertEqual(summary["final"]["path"], str(older_final))
+            self.assertEqual(summary["final"]["stage_count"], 1)
+            self.assertEqual(summary["final"]["episode_count"], 2)
+
+    def test_summarize_latest_builder_output_prefers_final_over_integrated(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            checkpoint_dir = root / "build_output_20240101010101000000"
+            checkpoint_dir.mkdir()
+
+            skeleton = checkpoint_dir / "SkeletonReconstructor-1-Result.json"
+            final = checkpoint_dir / "FinalEventCascade.json"
+            integrated = checkpoint_dir / "IntegratedEventCascade.json"
+            skeleton.write_text(
+                json.dumps({"stages": [{"episodes": [{}]}]}),
+                encoding="utf-8",
+            )
+            final.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}]}]}),
+                encoding="utf-8",
+            )
+            integrated.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}, {}]}]}),
+                encoding="utf-8",
+            )
+
+            checkpoint_mtime = 1_700_000_000
+            integrated_mtime = 1_800_000_000
+            for path in (checkpoint_dir, skeleton, final):
+                os.utime(path, (checkpoint_mtime, checkpoint_mtime))
+            os.utime(integrated, (integrated_mtime, integrated_mtime))
+
+            summary = summarize_latest_builder_output(root)
+
+            self.assertEqual(summary["builder_output_count"], 1)
+            self.assertEqual(summary["latest_builder_dir"], str(checkpoint_dir))
+            self.assertEqual(summary["skeleton"]["path"], str(skeleton))
+            self.assertEqual(summary["final"]["path"], str(final))
             self.assertEqual(summary["final"]["stage_count"], 1)
             self.assertEqual(summary["final"]["episode_count"], 2)
 
