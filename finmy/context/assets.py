@@ -87,7 +87,6 @@ def _shorten_excerpt(text: str, char_limit: int) -> str:
 _NOISE_PREFIX_PHRASES = (
     "skip to main content",
     "search for careers contact about us",
-    "ad feedback",
     "cnn values your feedback",
     "video player was slow to load",
 )
@@ -97,12 +96,30 @@ _NOISE_PREFIX_PATTERNS = tuple(
     for phrase in _NOISE_PREFIX_PHRASES
 )
 
+_AD_FEEDBACK_CHAIN_PATTERN = re.compile(
+    r"^ad feedback(?=(?:\s*->\s*|[\s\.,:;!?]+)+(?:cnn analysis|cnn values your feedback|video player was slow to load)\b)",
+    re.IGNORECASE,
+)
+
+_AD_FEEDBACK_STRIP_PATTERN = re.compile(
+    r"^ad feedback(?:\s*->\s*|[\s\.,:;!?]+)+",
+    re.IGNORECASE,
+)
+
 
 def _strip_noise_prefix(text: str) -> str:
     working = text.lstrip()
     stripped_any = False
 
     while working:
+        if _AD_FEEDBACK_CHAIN_PATTERN.match(working):
+            strip_match = _AD_FEEDBACK_STRIP_PATTERN.match(working)
+            if strip_match is None:
+                break
+            working = working[strip_match.end() :].lstrip()
+            stripped_any = True
+            continue
+
         for pattern in _NOISE_PREFIX_PATTERNS:
             match = pattern.match(working)
             if not match:

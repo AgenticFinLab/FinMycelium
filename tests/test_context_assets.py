@@ -105,6 +105,28 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         self.assertTrue(excerpt.startswith("CNN analysis"))
         self.assertIn("Qian Zhimin", excerpt)
 
+    def test_build_evidence_assets_preserves_legitimate_prose_starting_with_ad_feedback(self):
+        user_query = UserQueryInput(
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+            time_range=None,
+            extras={},
+        )
+        sample = DataSample(
+            sample_id="sample-1",
+            raw_data_id="raw-1",
+            content="Ad Feedback is essential to this case study.",
+            category="Financial Risk Control",
+            knowledge_field="Artificial Intelligence",
+            tag="url",
+            method="URLParser",
+        )
+
+        bundle = build_evidence_assets(user_query, [sample])
+
+        excerpt = bundle.evidence_cards[0].excerpt
+        self.assertEqual(excerpt, "Ad Feedback is essential to this case study.")
+
     def test_build_evidence_assets_removes_full_ad_feedback_chain(self):
         user_query = UserQueryInput(
             query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
