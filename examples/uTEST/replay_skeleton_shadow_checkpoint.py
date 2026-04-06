@@ -83,9 +83,17 @@ def _has_usable_checkpoint(directory: Path) -> bool:
     if skeleton_file is None or final_file is None:
         return False
 
+    skeleton_counts = _load_json_counts(skeleton_file)
+    final_counts = _load_json_counts(final_file)
     return (
-        _load_json_counts(skeleton_file)["stage_count"] is not None
-        and _load_json_counts(final_file)["stage_count"] is not None
+        isinstance(skeleton_counts["stage_count"], int)
+        and skeleton_counts["stage_count"] > 0
+        and isinstance(skeleton_counts["episode_count"], int)
+        and skeleton_counts["episode_count"] > 0
+        and isinstance(final_counts["stage_count"], int)
+        and final_counts["stage_count"] > 0
+        and isinstance(final_counts["episode_count"], int)
+        and final_counts["episode_count"] > 0
     )
 
 

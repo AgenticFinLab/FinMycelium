@@ -303,6 +303,48 @@ class GlobalShadowReplayTest(unittest.TestCase):
             self.assertEqual(summary["final"]["stage_count"], 1)
             self.assertEqual(summary["final"]["episode_count"], 2)
 
+    def test_summarize_latest_builder_output_skips_newer_empty_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            older_valid_dir = root / "build_output_20240101010101000000"
+            newer_empty_dir = root / "build_output_20240202020202000000"
+            older_valid_dir.mkdir()
+            newer_empty_dir.mkdir()
+
+            older_skeleton = older_valid_dir / "SkeletonReconstructor-1-Result.json"
+            older_final = older_valid_dir / "FinalEventCascade.json"
+            older_skeleton.write_text(
+                json.dumps({"stages": [{"episodes": [{}]}]}),
+                encoding="utf-8",
+            )
+            older_final.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}]}]}),
+                encoding="utf-8",
+            )
+
+            newer_skeleton = newer_empty_dir / "SkeletonReconstructor-1-Result.json"
+            newer_final = newer_empty_dir / "FinalEventCascade.json"
+            newer_skeleton.write_text(json.dumps({"stages": []}), encoding="utf-8")
+            newer_final.write_text(json.dumps({"stages": []}), encoding="utf-8")
+
+            older_mtime = 1_700_000_000
+            newer_mtime = 1_800_000_000
+            for path in (older_valid_dir, older_skeleton, older_final):
+                os.utime(path, (older_mtime, older_mtime))
+            for path in (newer_empty_dir, newer_skeleton, newer_final):
+                os.utime(path, (newer_mtime, newer_mtime))
+
+            summary = summarize_latest_builder_output(root)
+
+            self.assertEqual(summary["builder_output_count"], 2)
+            self.assertEqual(summary["latest_builder_dir"], str(older_valid_dir))
+            self.assertEqual(summary["skeleton"]["path"], str(older_skeleton))
+            self.assertEqual(summary["skeleton"]["stage_count"], 1)
+            self.assertEqual(summary["skeleton"]["episode_count"], 1)
+            self.assertEqual(summary["final"]["path"], str(older_final))
+            self.assertEqual(summary["final"]["stage_count"], 1)
+            self.assertEqual(summary["final"]["episode_count"], 2)
+
     def test_replay_latest_readme_checkpoint_uses_injected_creator(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -364,12 +406,14 @@ class GlobalShadowReplayTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.save_dir = "/tmp/fresh-readme-checkpoint"
                 self.received_state = None
+                self.execute_calls: list[str] = []
 
             def _get_agent_prompts(self):
                 return ("system", "user")
 
             def execute_agent(self, state, agent_name):
                 self.received_state = state
+                self.execute_calls.append(agent_name)
                 return state
 
             def integrate_results(self, state):
@@ -440,6 +484,7 @@ class GlobalShadowReplayTest(unittest.TestCase):
         self.assertEqual(checkpoint_dir, Path(fake_pipeline.builder.save_dir))
         self.assertTrue(fake_pipeline.build_input_attach_context_assets)
         self.assertIsNotNone(fake_pipeline.builder.received_state)
+        self.assertEqual(fake_pipeline.builder.execute_calls, ["SkeletonReconstructor"])
         self.assertEqual(
             fake_pipeline.builder.received_state["build_input"].context_assets,
             "attached-assets",
