@@ -199,6 +199,105 @@ class GlobalShadowReplayTest(unittest.TestCase):
         )
         self.assertNotIn("Skip to main content", package.rendered_context)
 
+    def test_load_readme_contents_prefers_baseline_source_over_cache_fallback(self):
+        with patch.object(
+            _helper_module,
+            "_load_baseline_readme_contents",
+            return_value=["baseline-1", "baseline-2", "baseline-3"],
+        ) as baseline_loader, patch.object(
+            _helper_module,
+            "_load_fixture_readme_contents",
+            return_value=["fixture-1", "fixture-2", "fixture-3"],
+        ) as fixture_loader, patch.object(
+            _helper_module,
+            "_load_cached_fallback_readme_contents",
+            return_value=["cache-1", "cache-2", "cache-3"],
+        ) as cache_loader:
+            contents = _helper_module._load_readme_contents(Path("/tmp/runtime"))
+
+        self.assertEqual(contents, ["baseline-1", "baseline-2", "baseline-3"])
+        baseline_loader.assert_called_once()
+        fixture_loader.assert_not_called()
+        cache_loader.assert_not_called()
+
+    def test_load_readme_contents_falls_back_to_fixture_when_baseline_unavailable(self):
+        with patch.object(
+            _helper_module,
+            "_load_baseline_readme_contents",
+            return_value=[],
+        ) as baseline_loader, patch.object(
+            _helper_module,
+            "_load_fixture_readme_contents",
+            return_value=["fixture-1", "fixture-2", "fixture-3"],
+        ) as fixture_loader, patch.object(
+            _helper_module,
+            "_load_cached_fallback_readme_contents",
+            return_value=["cache-1", "cache-2", "cache-3"],
+        ) as cache_loader:
+            contents = _helper_module._load_readme_contents(Path("/tmp/runtime"))
+
+        self.assertEqual(contents, ["fixture-1", "fixture-2", "fixture-3"])
+        baseline_loader.assert_called_once()
+        fixture_loader.assert_called_once()
+        cache_loader.assert_not_called()
+
+    def test_load_readme_contents_uses_cache_only_as_last_resort(self):
+        with patch.object(
+            _helper_module,
+            "_load_baseline_readme_contents",
+            return_value=[],
+        ) as baseline_loader, patch.object(
+            _helper_module,
+            "_load_fixture_readme_contents",
+            return_value=[],
+        ) as fixture_loader, patch.object(
+            _helper_module,
+            "_load_cached_fallback_readme_contents",
+            return_value=["cache-1", "cache-2", "cache-3"],
+        ) as cache_loader:
+            contents = _helper_module._load_readme_contents(Path("/tmp/runtime"))
+
+        self.assertEqual(contents, ["cache-1", "cache-2", "cache-3"])
+        baseline_loader.assert_called_once()
+        fixture_loader.assert_called_once()
+        cache_loader.assert_called_once()
+
+    def test_load_readme_contents_preserves_baseline_source_order(self):
+        baseline_contents = [
+            "Qian Zhimin ran the Blue Sky scheme and fled to Britain with bitcoin proceeds.",
+            "Fraudster who hid in London is jailed over £5.5bn bitcoin scam and admitted money laundering.",
+            "Two people imprisoned for their key roles in a large-scale money laundering case after CPS prosecution.",
+        ]
+
+        with patch.object(
+            _helper_module,
+            "_load_baseline_readme_contents",
+            return_value=baseline_contents,
+        ), patch.object(
+            _helper_module,
+            "_load_fixture_readme_contents",
+            return_value=[],
+        ), patch.object(
+            _helper_module,
+            "_load_cached_fallback_readme_contents",
+            return_value=[
+                "Ad Feedback CNN values your feedback ...",
+                "Skip to main content ... Guardian ...",
+                "Skip to main content ... CPS ...",
+            ],
+        ):
+            contents = _helper_module._load_readme_contents(Path("/tmp/runtime"))
+
+        self.assertEqual(contents, baseline_contents)
+        self.assertEqual(
+            contents,
+            [
+                "Qian Zhimin ran the Blue Sky scheme and fled to Britain with bitcoin proceeds.",
+                "Fraudster who hid in London is jailed over £5.5bn bitcoin scam and admitted money laundering.",
+                "Two people imprisoned for their key roles in a large-scale money laundering case after CPS prosecution.",
+            ],
+        )
+
     def test_all_noise_bundle_falls_back_to_fulltext(self):
         package = self.builder.build(self.request, NOISE_BUNDLE)
 
