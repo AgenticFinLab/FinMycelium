@@ -428,6 +428,46 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.retrieval_status, "sufficient")
         self.assertEqual(package.selected_sample_ids, ["sample-1"])
 
+    def test_global_noise_filter_uses_leading_chrome_not_whole_excerpt_substring(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt=(
+                        "Qian Zhimin pleaded guilty after investigators traced bitcoin proceeds. "
+                        "International edition."
+                    ),
+                    tokens=[
+                        "qian",
+                        "zhimin",
+                        "pleaded",
+                        "guilty",
+                        "after",
+                        "investigators",
+                        "traced",
+                        "bitcoin",
+                        "proceeds",
+                        "international",
+                        "edition",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
     def test_global_request_keeps_signal_card_in_mixed_bundle_and_rejects_chrome(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),

@@ -265,8 +265,19 @@ class LocalContextBuilder:
         return 0, ""
 
     def _is_global_noise_card(self, card: EvidenceCard) -> bool:
-        haystack = f"{card.title} {card.excerpt}".strip().lower()
-        return any(phrase in haystack for phrase in self._GLOBAL_NOISE_PHRASES)
+        excerpt = (card.excerpt or "").strip().lower()
+        if not excerpt:
+            return True
+
+        if not any(excerpt.startswith(prefix) for prefix in self._GLOBAL_NOISE_PHRASES):
+            return False
+
+        card_tokens = [
+            token for token in card.tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
+        ]
+        has_case_signal = bool(self._extract_global_case_signal_tokens(card_tokens))
+        has_information_signal = bool(self._extract_global_high_information_tokens(card_tokens))
+        return not (has_case_signal or has_information_signal)
 
     def _derive_scope(self, request: LocalContextRequest) -> str:
         agent_name = (request.agent_name or "").strip().lower()
