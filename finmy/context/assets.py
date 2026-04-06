@@ -117,7 +117,7 @@ def _strip_noise_prefix(text: str) -> str:
 
 
 def _clean_excerpt_source(text: str) -> str:
-    return _strip_noise_prefix(text)
+    return _strip_noise_prefix(text).strip()
 
 
 def _sample_title(sample: DataSample) -> str:

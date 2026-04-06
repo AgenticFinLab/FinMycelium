@@ -160,6 +160,28 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         self.assertTrue(excerpt.startswith("CNN reports"))
         self.assertIn("Qian Zhimin", excerpt)
 
+    def test_build_evidence_assets_strips_whitespace_for_non_noise_content(self):
+        user_query = UserQueryInput(
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+            time_range=None,
+            extras={},
+        )
+        sample = DataSample(
+            sample_id="sample-1",
+            raw_data_id="raw-1",
+            content="   Qian Zhimin text   ",
+            category="Financial Risk Control",
+            knowledge_field="Artificial Intelligence",
+            tag="url",
+            method="URLParser",
+        )
+
+        bundle = build_evidence_assets(user_query, [sample])
+
+        excerpt = bundle.evidence_cards[0].excerpt
+        self.assertEqual(excerpt, "Qian Zhimin text")
+
 
 if __name__ == "__main__":
     unittest.main()
