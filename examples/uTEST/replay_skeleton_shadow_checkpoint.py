@@ -231,7 +231,7 @@ def create_fresh_readme_checkpoint(root: Path) -> Path:
     build_input = pipeline.create_build_input(
         user_query,
         meta_samples,
-        attach_context_assets=False,
+        attach_context_assets=True,
     )
 
     builder = pipeline.builder

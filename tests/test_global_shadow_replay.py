@@ -1,9 +1,12 @@
 import importlib.util
 import json
 import os
+import sys
 import tempfile
+import types
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from finmy.context import (
     LocalContextBuilder,
@@ -287,6 +290,118 @@ class GlobalShadowReplayTest(unittest.TestCase):
             self.assertEqual(checkpoint["summary"]["checkpoint_dir"], str(checkpoint_dir))
             self.assertEqual(checkpoint["summary"]["skeleton"]["path"], str(skeleton))
             self.assertEqual(checkpoint["summary"]["final"]["path"], str(final))
+
+    def test_main_uses_default_root_and_prints_checkpoint(self):
+        checkpoint_payload = {
+            "checkpoint_dir": "/tmp/build_output_20240404040404000000",
+            "summary": {
+                "checkpoint_dir": "/tmp/build_output_20240404040404000000",
+                "skeleton": {"path": "/tmp/SkeletonReconstructor-1-Result.json"},
+                "final": {"path": "/tmp/FinalEventCascade.json"},
+            },
+        }
+
+        with patch.object(
+            sys,
+            "argv",
+            ["replay_skeleton_shadow_checkpoint.py"],
+        ), patch.object(
+            _helper_module,
+            "replay_latest_readme_checkpoint",
+            return_value=checkpoint_payload,
+        ) as replay, patch("builtins.print") as print_mock:
+            _helper_module.main()
+
+        replay.assert_called_once_with(_helper_module.DEFAULT_ROOT)
+        print_mock.assert_called_once_with(
+            json.dumps(checkpoint_payload, indent=2, ensure_ascii=False)
+        )
+
+    def test_create_fresh_readme_checkpoint_attaches_context_assets(self):
+        class FakeBuilder:
+            def __init__(self) -> None:
+                self.save_dir = "/tmp/fresh-readme-checkpoint"
+                self.received_state = None
+
+            def _get_agent_prompts(self):
+                return ("system", "user")
+
+            def execute_agent(self, state, agent_name):
+                self.received_state = state
+                return state
+
+            def integrate_results(self, state):
+                return {"stages": []}
+
+            def save_traces(self, *args, **kwargs):
+                return None
+
+            def integrate_from_files(self):
+                return {"stages": []}
+
+        class FakePipeline:
+            def __init__(self, config):
+                self.config = config
+                self.builder = FakeBuilder()
+                self.build_input_attach_context_assets = None
+
+            def create_and_store_user_query(self, query_text, key_words):
+                return {"query_text": query_text, "key_words": key_words}
+
+            def create_raw_data_records(self, contents):
+                return [{"content": content} for content in contents]
+
+            def _process_matching(self, raw_data_records, summarized_query):
+                return [{"sample_id": "sample-1"}]
+
+            def store_meta_samples(self, meta_samples):
+                return None
+
+            def create_build_input(self, user_query, meta_samples, attach_context_assets=False):
+                self.build_input_attach_context_assets = attach_context_assets
+                return types.SimpleNamespace(context_assets="attached-assets")
+
+        class FakeSummarizedUserQuery:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        fake_pipeline_module = types.ModuleType("finmy.pipeline")
+
+        fake_summarizer_pkg = types.ModuleType("finmy.summarizer")
+        fake_summarizer_module = types.ModuleType("finmy.summarizer.summarizer")
+        fake_summarizer_module.SummarizedUserQuery = FakeSummarizedUserQuery
+        fake_summarizer_pkg.summarizer = fake_summarizer_module
+
+        fake_pipeline = FakePipeline(config={"builder_config": {}})
+        fake_pipeline_module.FinmyPipeline = lambda config: fake_pipeline
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            with patch.object(
+                _helper_module,
+                "_load_readme_checkpoint_config",
+                return_value={"builder_config": {}, "matcher_config": {}},
+            ), patch.object(
+                _helper_module,
+                "_load_readme_contents",
+                return_value=["fresh benchmark content"],
+            ), patch.dict(
+                sys.modules,
+                {
+                    "finmy.pipeline": fake_pipeline_module,
+                    "finmy.summarizer": fake_summarizer_pkg,
+                    "finmy.summarizer.summarizer": fake_summarizer_module,
+                },
+            ):
+                checkpoint_dir = _helper_module.create_fresh_readme_checkpoint(root)
+
+        self.assertEqual(checkpoint_dir, Path(fake_pipeline.builder.save_dir))
+        self.assertTrue(fake_pipeline.build_input_attach_context_assets)
+        self.assertIsNotNone(fake_pipeline.builder.received_state)
+        self.assertEqual(
+            fake_pipeline.builder.received_state["build_input"].context_assets,
+            "attached-assets",
+        )
 
 
 
