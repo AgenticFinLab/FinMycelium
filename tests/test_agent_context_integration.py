@@ -81,6 +81,29 @@ def _build_input():
     )
 
 
+def _build_compact_input():
+    bundle = EvidenceAssetBundle(
+        retrieval_policy=EvidenceRetrievalPolicy(),
+        index=EvidenceIndex(),
+        evidence_cards=[
+            EvidenceCard(
+                sample_id="sample-1",
+                title="sample-1",
+                excerpt="alpha episode excerpt",
+                tokens=["alpha", "episode"],
+            )
+        ],
+    )
+    return SimpleNamespace(
+        user_query=SimpleNamespace(query_text="alpha episode", key_words=["alpha"]),
+        samples=[
+            SimpleNamespace(content="  real content  "),
+            SimpleNamespace(content="\nsecondary content line\n"),
+        ],
+        context_assets=bundle,
+    )
+
+
 def _build_shadow_mode_input():
     bundle = EvidenceAssetBundle(
         retrieval_policy=EvidenceRetrievalPolicy(),
@@ -816,6 +839,99 @@ class AgentContextIntegrationTest(unittest.TestCase):
             json.dumps({"selected_count": 1}, ensure_ascii=False),
         )
 
+    def test_participant_reconstructor_exposes_compact_payload_contract_additively(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps({"participants": [_participant()]}),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [{"SkeletonChecker": _skeleton()}],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {"ParticipantReconstructor": "sys"},
+            "agent_user_msgs": {"ParticipantReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        rich_context = SimpleNamespace(
+            rendered_context="RICH_PARTICIPANT_CONTEXT",
+            summary={"selected_count": 1},
+            retrieval_status="fallback_fulltext",
+            query_bundle={
+                "scope": "episode",
+                "stage_name": "Stage 1",
+                "episode_name": "Episode 1",
+            },
+            budget_summary={"target_card_budget": 1, "used_card_count": 1},
+            memory={"selection_rationale": [{"matched_fields": ["episode_name"]}]},
+        )
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=rich_context,
+        ):
+            self.builder.execute_agent(state, "ParticipantReconstructor")
+
+        expected_compact_content = "real content\nsecondary content line"
+        self.assertEqual(captured["prompt_kwargs"]["Content"], expected_compact_content)
+        self.assertEqual(
+            captured["prompt_kwargs"]["CompactContent"], expected_compact_content
+        )
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        self.assertEqual(
+            json.loads(captured["prompt_kwargs"]["TargetEpisodeContext"]),
+            {
+                "episode_id": "E1",
+                "name": "Episode 1",
+                "index_in_stage": 0,
+                "start_time": "2025-01-01",
+                "end_time": "2025-01-02",
+                "participant_ids": [],
+                "transaction_ids": [],
+            },
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContext"],
+            "RICH_PARTICIPANT_CONTEXT",
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+
     def test_participant_reconstructor_uses_empty_retrieved_context_when_no_matches(self):
         captured = {}
 
@@ -933,6 +1049,26 @@ class AgentContextIntegrationTest(unittest.TestCase):
             captured["prompt_kwargs"]["TargetEpisode"].name["value"],
             "Episode 1",
         )
+        self.assertEqual(
+            captured["prompt_kwargs"]["Content"],
+            "real content",
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["CompactContent"],
+            "real content",
+        )
+        self.assertEqual(
+            json.loads(captured["prompt_kwargs"]["TargetEpisodeContext"]),
+            {
+                "episode_id": "E1",
+                "name": "Episode 1",
+                "index_in_stage": 0,
+                "start_time": "2025-01-01",
+                "end_time": "2025-01-02",
+                "participant_ids": ["P_1", "P_2"],
+                "transaction_ids": [],
+            },
+        )
 
     def test_transaction_reconstructor_uses_empty_retrieved_context_when_no_matches(self):
         captured = {}
@@ -1028,7 +1164,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
 
         state = {
-            "build_input": _build_input(),
+            "build_input": _build_compact_input(),
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
@@ -1092,7 +1228,14 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 sort_keys=True,
             ),
         )
-        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        self.assertEqual(
+            captured["prompt_kwargs"]["Content"],
+            "real content\nsecondary content line",
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["CompactContent"],
+            "real content\nsecondary content line",
+        )
 
     def test_episode_reconstructor_receives_retrieved_context_without_clearing_content(self):
         captured = {}
@@ -1321,7 +1464,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
 
         state = {
-            "build_input": _build_input(),
+            "build_input": _build_compact_input(),
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
@@ -1431,7 +1574,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
 
         state = {
-            "build_input": _build_input(),
+            "build_input": _build_compact_input(),
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
@@ -1504,7 +1647,26 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 sort_keys=True,
             ),
         )
-        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        self.assertEqual(
+            captured["prompt_kwargs"]["Content"],
+            "real content\nsecondary content line",
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["CompactContent"],
+            "real content\nsecondary content line",
+        )
+        self.assertEqual(
+            json.loads(captured["prompt_kwargs"]["TargetEpisodeContext"]),
+            {
+                "episode_id": "E1",
+                "name": "Episode 1",
+                "index_in_stage": 0,
+                "start_time": "2025-01-01",
+                "end_time": "2025-01-02",
+                "participant_ids": ["P_1", "P_2"],
+                "transaction_ids": ["T_1"],
+            },
+        )
 
     def test_stage_description_reconstructor_receives_stage_scoped_context(self):
         captured = {}

@@ -395,6 +395,9 @@ class AgentEventBuilder(BaseBuilder):
         prompt_kwargs["TargetEpisodeContext"] = self._render_target_episode_context(
             target_episode
         )
+        # Heavy-agent prompts still bind through `Content`, so point that slot at the
+        # compact rendering without removing the additive compact fields.
+        prompt_kwargs["Content"] = prompt_kwargs["CompactContent"]
 
     def _is_unknown_value(self, value: str) -> bool:
         return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
