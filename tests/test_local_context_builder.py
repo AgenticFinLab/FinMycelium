@@ -375,8 +375,8 @@ class LocalContextBuilderTest(unittest.TestCase):
         )
         request = LocalContextRequest(
             agent_name="EventDescriptionReconstructor",
-            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
-            key_words=["fraud", "money laundering"],
+            query_text="How were cryptocurrency assets moved?",
+            key_words=["cryptocurrency"],
         )
 
         package = LocalContextBuilder().build(request, bundle)
