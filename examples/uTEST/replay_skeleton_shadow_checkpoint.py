@@ -13,6 +13,11 @@ DEFAULT_ROOT = Path(
 )
 BENCHMARK_QUERY_TEXT = "What is the case involving fraud and money laundering by Qian Zhimin?"
 BENCHMARK_KEY_WORDS = ["fraud", "money laundering", "investigators property purchases"]
+_BASELINE_TEXT_IDS = [
+    "text_17753984186945425425",
+    "text_17753984187024184994",
+    "text_17753984187113457823",
+]
 
 
 def _workspace_root(root: Path) -> Path:
@@ -150,6 +155,73 @@ def _summarize_checkpoint_dir(checkpoint_dir: Path) -> dict[str, object]:
 
 
 def _load_readme_contents(workspace_root: Path, limit: int = 3) -> list[str]:
+    baseline_contents = _load_baseline_readme_contents(workspace_root)
+    if baseline_contents:
+        return baseline_contents[:limit]
+
+    fixture_contents = _load_fixture_readme_contents(workspace_root)
+    if fixture_contents:
+        return fixture_contents[:limit]
+
+    return _load_cached_fallback_readme_contents(workspace_root, limit=limit)
+
+
+def _load_baseline_readme_contents(workspace_root: Path) -> list[str]:
+    data_path = workspace_root / "cache" / "data-blocks" / "text_block_0.json"
+    if not data_path.exists():
+        return []
+
+    with data_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if not isinstance(payload, dict):
+        return []
+
+    contents: list[str] = []
+    for text_id in _BASELINE_TEXT_IDS:
+        item = payload.get(text_id)
+        if not isinstance(item, dict):
+            return []
+
+        text = item.get("text")
+        if not isinstance(text, str):
+            return []
+
+        normalized = " ".join(text.split())
+        if not normalized:
+            return []
+
+        contents.append(normalized[:5000])
+
+    return contents
+
+
+def _load_fixture_readme_contents(workspace_root: Path) -> list[str]:
+    fixture_path = Path(__file__).resolve().parent / "replay_readme_fixture.json"
+    if not fixture_path.exists():
+        return []
+
+    with fixture_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if not isinstance(payload, list):
+        return []
+
+    contents: list[str] = []
+    for item in payload:
+        if not isinstance(item, str):
+            return []
+
+        normalized = " ".join(item.split())
+        if not normalized:
+            return []
+
+        contents.append(normalized[:5000])
+
+    return contents
+
+
+def _load_cached_fallback_readme_contents(workspace_root: Path, limit: int = 3) -> list[str]:
     data_path = workspace_root / "cache" / "data-blocks" / "text_block_0.json"
     if not data_path.exists():
         return []
