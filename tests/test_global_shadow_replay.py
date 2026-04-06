@@ -215,7 +215,12 @@ class GlobalShadowReplayTest(unittest.TestCase):
             partial_dir.mkdir()
             empty_dir.mkdir()
 
+            older_skeleton_raw = older_valid_dir / "SkeletonReconstructor-1.json"
             older_skeleton = older_valid_dir / "SkeletonReconstructor-1-Result.json"
+            older_skeleton_raw.write_text(
+                json.dumps({"stages": [{"episodes": [{}]}]}),
+                encoding="utf-8",
+            )
             older_skeleton.write_text(
                 json.dumps({"stages": [{"episodes": [{}]}]}),
                 encoding="utf-8",
@@ -237,12 +242,12 @@ class GlobalShadowReplayTest(unittest.TestCase):
             empty_mtime = 1_900_000_000
             for path in (older_valid_dir, older_skeleton, older_final):
                 os.utime(path, (older_mtime, older_mtime))
+            os.utime(older_skeleton_raw, (older_mtime + 100, older_mtime + 100))
             for path in (partial_dir, partial_skeleton):
                 os.utime(path, (partial_mtime, partial_mtime))
             os.utime(empty_dir, (empty_mtime, empty_mtime))
 
             summary = summarize_latest_builder_output(root)
-            checkpoint = replay_latest_readme_checkpoint(root)
 
             self.assertEqual(summary["builder_output_count"], 3)
             self.assertEqual(summary["latest_builder_dir"], str(older_valid_dir))
@@ -252,15 +257,36 @@ class GlobalShadowReplayTest(unittest.TestCase):
             self.assertEqual(summary["final"]["path"], str(older_final))
             self.assertEqual(summary["final"]["stage_count"], 1)
             self.assertEqual(summary["final"]["episode_count"], 2)
-            self.assertEqual(checkpoint["checkpoint_dir"], str(older_valid_dir))
-            self.assertEqual(
-                checkpoint["summary"],
-                {
-                    "checkpoint_dir": str(older_valid_dir),
-                    "skeleton": summary["skeleton"],
-                    "final": summary["final"],
-                },
+
+    def test_replay_latest_readme_checkpoint_uses_injected_creator(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            checkpoint_dir = root / "build_output_20240404040404000000"
+            checkpoint_dir.mkdir()
+            skeleton = checkpoint_dir / "SkeletonReconstructor-1-Result.json"
+            final = checkpoint_dir / "FinalEventCascade.json"
+            skeleton.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}]}]}),
+                encoding="utf-8",
             )
+            final.write_text(
+                json.dumps({"stages": [{"episodes": [{}, {}]}]}),
+                encoding="utf-8",
+            )
+
+            def fake_creator(requested_root: Path) -> Path:
+                self.assertEqual(requested_root, root)
+                return checkpoint_dir
+
+            checkpoint = replay_latest_readme_checkpoint(
+                root,
+                checkpoint_creator=fake_creator,
+            )
+
+            self.assertEqual(checkpoint["checkpoint_dir"], str(checkpoint_dir))
+            self.assertEqual(checkpoint["summary"]["checkpoint_dir"], str(checkpoint_dir))
+            self.assertEqual(checkpoint["summary"]["skeleton"]["path"], str(skeleton))
+            self.assertEqual(checkpoint["summary"]["final"]["path"], str(final))
 
 
 
