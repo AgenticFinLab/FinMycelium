@@ -138,6 +138,33 @@ class LocalContextBuilder:
         "zhimin",
         "bitcoin",
     }
+    _GLOBAL_PHASE_BUCKET_TERMS = {
+        "early": {
+            "blue",
+            "fraud",
+            "ponzi",
+            "scheme",
+            "sky",
+            "2014",
+            "2015",
+        },
+        "middle": {
+            "bitcoin",
+            "launder",
+            "laundering",
+            "myanmar",
+            "2018",
+            "2019",
+        },
+        "late": {
+            "court",
+            "trial",
+            "sentenced",
+            "jailed",
+            "2024",
+            "2025",
+        },
+    }
     _GLOBAL_NOISE_PREFIXES = (
         "skip to main content",
         "search for careers contact about us",
@@ -161,6 +188,8 @@ class LocalContextBuilder:
         scope = self._derive_scope(request)
 
         selected_cards = self._select_cards(bundle, query_tokens, scope)
+        if scope == "global" and self._assess_global_status(selected_cards) != "sufficient":
+            selected_cards = []
         selected_sample_ids = [card.sample_id for card in selected_cards]
 
         retrieval_status = "sufficient" if selected_sample_ids else "fallback_fulltext"
@@ -236,8 +265,28 @@ class LocalContextBuilder:
             selected_cards = selected_cards[: bundle.retrieval_policy.max_cards]
         return selected_cards
 
+    def _assess_global_status(self, selected_cards: List[EvidenceCard]) -> str:
+        if not selected_cards:
+            return "fallback_fulltext"
+
+        phase_hits = set()
+        for card in selected_cards:
+            phase_hits.update(self._extract_global_phase_hits(card.tokens))
+
+        if phase_hits == {"late"}:
+            return "fallback_fulltext"
+        return "sufficient"
+
     def _extract_global_case_signal_tokens(self, tokens: List[str]) -> List[str]:
         return [token for token in tokens if token in self._GLOBAL_CASE_SIGNAL_TOKENS]
+
+    def _extract_global_phase_hits(self, tokens: List[str]) -> List[str]:
+        token_set = {token for token in tokens if token}
+        hits = []
+        for phase_name, phase_terms in self._GLOBAL_PHASE_BUCKET_TERMS.items():
+            if token_set.intersection(phase_terms):
+                hits.append(phase_name)
+        return hits
 
     def _extract_global_high_information_tokens(self, tokens: List[str]) -> List[str]:
         return [

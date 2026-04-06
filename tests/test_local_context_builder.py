@@ -289,6 +289,91 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.selected_sample_ids, [])
         self.assertEqual(package.rendered_context, "")
 
+    def test_global_request_falls_back_when_selection_is_late_only(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Qian Zhimin was sentenced in court in 2025 after trial.",
+                    tokens=[
+                        "qian",
+                        "zhimin",
+                        "sentenced",
+                        "court",
+                        "2025",
+                        "trial",
+                    ],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "fallback_fulltext")
+        self.assertEqual(package.summary["selected_count"], 0)
+        self.assertEqual(package.selected_sample_ids, [])
+        self.assertEqual(package.rendered_context, "")
+
+    def test_global_request_stays_sufficient_when_selection_covers_multiple_phases(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Qian Zhimin ran a Blue Sky ponzi scheme in 2014.",
+                    tokens=[
+                        "qian",
+                        "zhimin",
+                        "fraud",
+                        "ponzi",
+                        "blue",
+                        "sky",
+                        "2014",
+                    ],
+                ),
+                EvidenceCard(
+                    sample_id="sample-2",
+                    title="sample-2",
+                    excerpt=(
+                        "Investigators traced bitcoin laundering through Myanmar in 2018."
+                    ),
+                    tokens=[
+                        "investigators",
+                        "traced",
+                        "bitcoin",
+                        "laundering",
+                        "myanmar",
+                        "2018",
+                    ],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.summary["selected_count"], 2)
+        self.assertEqual(package.selected_sample_ids, ["sample-1", "sample-2"])
+        self.assertIn("Blue Sky ponzi scheme", package.rendered_context)
+        self.assertIn("bitcoin laundering", package.rendered_context)
+
     def test_global_request_is_sufficient_when_case_terms_overlap(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
