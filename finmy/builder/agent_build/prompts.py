@@ -67,6 +67,7 @@ Instructions:
 - Event type: set `event_type` if supported by Content; otherwise "unknown".
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and its episodes.
 - Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
+- RetrievedContext and RetrievedContextSummary are additive evidence only. Use them when present, but never remove, replace, or weaken `Content`.
 - Ordering: set indices by temporal/logical order starting from 0.
 - Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
 - Output: raw JSON only; do not include explanations or code fences.
@@ -96,6 +97,14 @@ CRITICAL Time Constraints:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
@@ -155,6 +164,7 @@ Instructions:
 - Correct any errors in hierarchy, timing, indexing, or naming.
 - **IMPORTANT**: Maintain the EXACT structure of the Proposed Skeleton. Do not add/remove fields.
 - Ensure the final output is a valid JSON object matching the Schema.
+- RetrievedContext and RetrievedContextSummary are additive evidence only. Use them when present, but never remove, replace, or weaken `Content`.
 
 === Query BEGIN ===
 {Query}
@@ -167,6 +177,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 
 === PROPOSED SKELETON BEGIN ===
 {ProposedSkeleton}

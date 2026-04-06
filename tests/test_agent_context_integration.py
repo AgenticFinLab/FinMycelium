@@ -183,12 +183,15 @@ class AgentContextIntegrationTest(unittest.TestCase):
 
         self.builder.execute_agent(state, "SkeletonReconstructor")
 
-        rendered_prompt = (
-            f"RetrievedContext={captured['prompt_kwargs']['RetrievedContext']}\n"
-            f"Content={captured['prompt_kwargs']['Content']}"
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
         )
-        self.assertIn("RetrievedContext=", rendered_prompt)
-        self.assertIn("Content=", rendered_prompt)
+        self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", captured["infer_input"].user_msg)
+        self.assertIn("=== CONTENT BEGIN ===", captured["infer_input"].user_msg)
+        self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", rendered_prompt)
+        self.assertIn("=== CONTENT BEGIN ===", rendered_prompt)
+        self.assertIn("alpha episode excerpt", rendered_prompt)
+        self.assertIn("real content", rendered_prompt)
         self.assertTrue(captured["prompt_kwargs"]["Content"].strip())
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
@@ -248,12 +251,15 @@ class AgentContextIntegrationTest(unittest.TestCase):
 
         self.builder.execute_agent(state, "SkeletonChecker")
 
-        rendered_prompt = (
-            f"RetrievedContext={captured['prompt_kwargs']['RetrievedContext']}\n"
-            f"Content={captured['prompt_kwargs']['Content']}"
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
         )
-        self.assertIn("RetrievedContext=", rendered_prompt)
-        self.assertIn("Content=", rendered_prompt)
+        self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", captured["infer_input"].user_msg)
+        self.assertIn("=== CONTENT BEGIN ===", captured["infer_input"].user_msg)
+        self.assertIn("=== RETRIEVED CONTEXT BEGIN ===", rendered_prompt)
+        self.assertIn("=== CONTENT BEGIN ===", rendered_prompt)
+        self.assertIn("alpha episode excerpt", rendered_prompt)
+        self.assertIn("real content", rendered_prompt)
         self.assertTrue(captured["prompt_kwargs"]["Content"].strip())
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
         self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
