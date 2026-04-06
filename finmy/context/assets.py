@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import List, Sequence
 
 from finmy.generic import DataSample, UserQueryInput
@@ -83,47 +84,32 @@ def _shorten_excerpt(text: str, char_limit: int) -> str:
     return f"{text[:char_limit].rstrip()}..."
 
 
-_NOISE_PREFIXES = (
+_NOISE_PREFIX_PHRASES = (
     "skip to main content",
+    "search for careers contact about us",
     "ad feedback",
+    "cnn values your feedback",
+    "video player was slow to load",
 )
 
-_NOISE_LEADING_TOKENS = {
-    "skip",
-    "to",
-    "main",
-    "content",
-    "search",
-    "for",
-    "careers",
-    "contact",
-    "about",
-    "us",
-    "ad",
-    "feedback",
-    "cnn",
-    "values",
-    "your",
-    "video",
-    "player",
-    "was",
-    "slow",
-    "load",
-}
+_NOISE_PREFIX_PATTERNS = tuple(
+    re.compile(rf"^{re.escape(phrase)}(?:[\s\.,:;!?]+|$)", re.IGNORECASE)
+    for phrase in _NOISE_PREFIX_PHRASES
+)
 
 
 def _strip_noise_prefix(text: str) -> str:
-    normalized = text.strip()
-    lowered = normalized.lower()
+    normalized = " ".join(text.strip().split())
 
-    if not any(lowered.startswith(prefix) for prefix in _NOISE_PREFIXES):
-        return normalized
-
-    words = normalized.split()
-    for index, word in enumerate(words):
-        token = word.strip(".,:;!?()[]{}\"'")
-        if token.lower() not in _NOISE_LEADING_TOKENS:
-            return " ".join(words[index:]).strip()
+    while normalized:
+        for pattern in _NOISE_PREFIX_PATTERNS:
+            match = pattern.match(normalized)
+            if not match:
+                continue
+            normalized = normalized[match.end() :].lstrip()
+            break
+        else:
+            return normalized
 
     return normalized
 
