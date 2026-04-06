@@ -288,15 +288,7 @@ class LocalContextBuilder:
         query_bundle: dict[str, object],
     ) -> tuple[List[EvidenceCard], List[dict[str, object]]]:
         if scope == "global":
-            selected_cards = self._select_global_cards(bundle, query_tokens)
-            selection_rationale = [
-                {
-                    "sample_id": card.sample_id,
-                    "matched_fields": ["query_tokens"],
-                }
-                for card in selected_cards
-            ]
-            return selected_cards, selection_rationale
+            return self._select_global_cards(bundle, query_tokens, query_bundle)
 
         ranked_cards = []
         for index, card in enumerate(bundle.evidence_cards):
@@ -333,7 +325,8 @@ class LocalContextBuilder:
         self,
         bundle: EvidenceAssetBundle,
         query_tokens: List[str],
-    ) -> List[EvidenceCard]:
+        query_bundle: dict[str, object],
+    ) -> tuple[List[EvidenceCard], List[dict[str, object]]]:
         query_content_tokens = [
             token for token in query_tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
         ]
@@ -341,8 +334,13 @@ class LocalContextBuilder:
         query_information_tokens = self._extract_global_high_information_tokens(
             query_content_tokens
         )
+        query_phase_hints = [
+            str(value)
+            for value in query_bundle.get("global_phase_hints", [])
+            if isinstance(value, str)
+        ]
         if not case_signal_tokens and not query_information_tokens:
-            return []
+            return [], []
 
         ranked_cards = []
         for index, card in enumerate(bundle.evidence_cards):
@@ -356,16 +354,39 @@ class LocalContextBuilder:
             )
             if overlap <= 0:
                 continue
+            card_phase_hits = self._extract_global_phase_hits(card.tokens)
             match_priority = 0 if match_kind == "strong" else 1
-            ranked_cards.append((match_priority, -overlap, index, card))
+            phase_overlap = score_token_overlap(card_phase_hits, query_phase_hints)
+            matched_fields = ["query_tokens"]
+            if phase_overlap > 0:
+                matched_fields.append("global_phase_hints")
+            ranked_cards.append(
+                (
+                    match_priority,
+                    -phase_overlap,
+                    -overlap,
+                    index,
+                    card,
+                    match_kind,
+                    matched_fields,
+                )
+            )
 
-        selected_cards = [
-            card
-            for _, _, _, card in sorted(ranked_cards, key=lambda item: (item[0], item[1], item[2]))
+        selected_entries = sorted(
+            ranked_cards,
+            key=lambda item: (item[0], item[1], item[2], item[3]),
+        )
+        selected_entries = selected_entries[: self._resolve_card_budget(bundle, "global")]
+        selected_cards = [card for _, _, _, _, card, _, _ in selected_entries]
+        selection_rationale = [
+            {
+                "sample_id": card.sample_id,
+                "matched_fields": matched_fields,
+                "match_kind": match_kind,
+            }
+            for _, _, _, _, card, match_kind, matched_fields in selected_entries
         ]
-        if bundle.retrieval_policy.max_cards is not None:
-            selected_cards = selected_cards[: bundle.retrieval_policy.max_cards]
-        return selected_cards
+        return selected_cards, selection_rationale
 
     def _assess_global_status(self, selected_cards: List[EvidenceCard]) -> str:
         if not selected_cards:

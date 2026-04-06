@@ -388,6 +388,106 @@ class LocalContextBuilderTest(unittest.TestCase):
             episode_package.memory["selection_rationale"][0]["matched_fields"],
         )
 
+    def test_global_scope_respects_resolved_card_budget_reported_in_budget_summary(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="Qian Zhimin ran a Blue Sky ponzi scheme in 2014.",
+                    tokens=["qian", "zhimin", "fraud", "ponzi", "blue", "sky", "2014"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-2",
+                    title="sample-2",
+                    excerpt="Investigators traced bitcoin laundering through Myanmar in 2018.",
+                    tokens=["investigators", "traced", "bitcoin", "laundering", "myanmar", "2018"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-3",
+                    title="sample-3",
+                    excerpt="Qian Zhimin converted bitcoin proceeds after fleeing China.",
+                    tokens=["qian", "zhimin", "bitcoin", "proceeds", "china", "converted"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-4",
+                    title="sample-4",
+                    excerpt="Blue Sky organizers recruited investors in 2015.",
+                    tokens=["blue", "sky", "organizers", "investors", "2015"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-5",
+                    title="sample-5",
+                    excerpt="Bitcoin transfers moved proceeds through Myanmar in 2019.",
+                    tokens=["bitcoin", "transfers", "proceeds", "myanmar", "2019"],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.budget_summary["target_card_budget"], 3)
+        self.assertEqual(package.budget_summary["used_card_count"], 3)
+        self.assertEqual(len(package.selected_sample_ids), 3)
+        self.assertEqual(package.budget_summary["remaining_card_budget"], 0)
+
+    def test_global_scope_selection_rationale_uses_query_bundle_phase_and_match_kind(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=2),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-strong",
+                    title="sample-strong",
+                    excerpt="Qian Zhimin ran a Blue Sky ponzi scheme in 2014.",
+                    tokens=["qian", "zhimin", "fraud", "ponzi", "blue", "sky", "2014"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-backstop",
+                    title="sample-backstop",
+                    excerpt="Authorities traced cryptocurrency to London property purchases and shell transfers.",
+                    tokens=["authorities", "traced", "cryptocurrency", "london", "property", "purchases", "shell", "transfers"],
+                ),
+            ],
+        )
+        strong_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="EventDescriptionReconstructor",
+                query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+                key_words=["fraud", "money laundering"],
+            ),
+            bundle,
+        )
+        backstop_package = LocalContextBuilder().build(
+            LocalContextRequest(
+                agent_name="EventDescriptionReconstructor",
+                query_text="How were cryptocurrency assets used in London property purchases?",
+                key_words=["cryptocurrency", "London property"],
+            ),
+            bundle,
+        )
+
+        self.assertEqual(
+            strong_package.memory["selection_rationale"][0]["matched_fields"],
+            ["query_tokens", "global_phase_hints"],
+        )
+        self.assertEqual(
+            strong_package.memory["selection_rationale"][0]["match_kind"],
+            "strong",
+        )
+        self.assertEqual(
+            backstop_package.memory["selection_rationale"][0]["match_kind"],
+            "backstop",
+        )
+
     def test_max_cards_keeps_the_most_relevant_matches(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
