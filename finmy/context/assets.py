@@ -83,6 +83,55 @@ def _shorten_excerpt(text: str, char_limit: int) -> str:
     return f"{text[:char_limit].rstrip()}..."
 
 
+_NOISE_PREFIXES = (
+    "skip to main content",
+    "ad feedback",
+)
+
+_NOISE_LEADING_TOKENS = {
+    "skip",
+    "to",
+    "main",
+    "content",
+    "search",
+    "for",
+    "careers",
+    "contact",
+    "about",
+    "us",
+    "ad",
+    "feedback",
+    "cnn",
+    "values",
+    "your",
+    "video",
+    "player",
+    "was",
+    "slow",
+    "load",
+}
+
+
+def _strip_noise_prefix(text: str) -> str:
+    normalized = text.strip()
+    lowered = normalized.lower()
+
+    if not any(lowered.startswith(prefix) for prefix in _NOISE_PREFIXES):
+        return normalized
+
+    words = normalized.split()
+    for index, word in enumerate(words):
+        token = word.strip(".,:;!?()[]{}\"'")
+        if token.lower() not in _NOISE_LEADING_TOKENS:
+            return " ".join(words[index:]).strip()
+
+    return normalized
+
+
+def _clean_excerpt_source(text: str) -> str:
+    return _strip_noise_prefix(text)
+
+
 def _sample_title(sample: DataSample) -> str:
     if sample.category:
         return sample.category
@@ -108,7 +157,8 @@ def build_evidence_assets(
 
     for sample in sample_list:
         content = sample.content or ""
-        excerpt = _shorten_excerpt(content.strip(), policy.excerpt_char_limit)
+        excerpt_source = _clean_excerpt_source(content)
+        excerpt = _shorten_excerpt(excerpt_source, policy.excerpt_char_limit)
         tokens = tokenize_text(excerpt)[: policy.max_card_tokens]
         sample_token_counts[sample.sample_id] = count_tokens(content)
         card_candidates.append(

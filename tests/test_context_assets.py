@@ -6,9 +6,10 @@ from finmy.context.assets import (
     EvidenceCard,
     EvidenceIndex,
     EvidenceRetrievalPolicy,
+    build_evidence_assets,
 )
 from finmy.converter import convert_to_build_input
-from finmy.generic import MetaSample, UserQueryInput
+from finmy.generic import DataSample, MetaSample, UserQueryInput
 
 
 class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
@@ -50,6 +51,61 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
             )
 
         self.assertIs(build_input.context_assets, context_assets)
+
+    def test_build_evidence_assets_skips_skip_to_main_content_prefix(self):
+        user_query = UserQueryInput(
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+            time_range=None,
+            extras={},
+        )
+        sample = DataSample(
+            sample_id="sample-1",
+            raw_data_id="raw-1",
+            content=(
+                "Skip to main content Search for Careers Contact About us "
+                "Qian Zhimin ran the Blue Sky Ponzi scheme and later laundered funds."
+            ),
+            category="Financial Risk Control",
+            knowledge_field="Artificial Intelligence",
+            tag="url",
+            method="URLParser",
+        )
+
+        bundle = build_evidence_assets(user_query, [sample])
+
+        self.assertEqual(len(bundle.evidence_cards), 1)
+        excerpt = bundle.evidence_cards[0].excerpt
+        self.assertNotIn("Skip to main content", excerpt)
+        self.assertIn("Qian Zhimin", excerpt)
+        self.assertIn("Blue Sky", excerpt)
+
+    def test_build_evidence_assets_skips_ad_feedback_prefix(self):
+        user_query = UserQueryInput(
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+            time_range=None,
+            extras={},
+        )
+        sample = DataSample(
+            sample_id="sample-1",
+            raw_data_id="raw-1",
+            content=(
+                "Ad Feedback CNN values your feedback Video player was slow to load. "
+                "Qian Zhimin bought bitcoin and moved proceeds through accomplices."
+            ),
+            category="Financial Risk Control",
+            knowledge_field="Artificial Intelligence",
+            tag="url",
+            method="URLParser",
+        )
+
+        bundle = build_evidence_assets(user_query, [sample])
+
+        excerpt = bundle.evidence_cards[0].excerpt
+        self.assertNotIn("Ad Feedback", excerpt)
+        self.assertIn("Qian Zhimin", excerpt)
+        self.assertIn("bitcoin", excerpt)
 
 
 if __name__ == "__main__":
