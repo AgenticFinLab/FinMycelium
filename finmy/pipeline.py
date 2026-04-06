@@ -18,6 +18,7 @@ framework for financial data processing and knowledge extraction.
 import os
 import uuid
 import logging
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -470,15 +471,15 @@ class FinmyPipeline:
         )
         build_user_query_input = user_query_input
         if summarized_query is not None:
-            summarized_key_words = getattr(summarized_query, "key_words", [])
+            summarized_key_words = self._normalize_summarized_keywords(
+                getattr(summarized_query, "key_words", None)
+            )
             merged_key_words = self._merge_keywords(
                 user_query_input.key_words, summarized_key_words
             )
-            build_user_query_input = UserQueryInput(
-                user_query_id=user_query_input.user_query_id,
-                query_text=user_query_input.query_text,
+            build_user_query_input = replace(
+                user_query_input,
                 key_words=merged_key_words,
-                time_range=user_query_input.time_range,
                 extras=dict(user_query_input.extras),
             )
         build_input = convert_to_build_input(
@@ -516,6 +517,16 @@ class FinmyPipeline:
             seen.add(keyword)
             merged_keywords.append(keyword)
         return merged_keywords
+
+    @staticmethod
+    def _normalize_summarized_keywords(summarized_keywords) -> List[str]:
+        if summarized_keywords is None:
+            return []
+        if isinstance(summarized_keywords, dict):
+            return list(summarized_keywords.keys())
+        if isinstance(summarized_keywords, (list, tuple)):
+            return list(summarized_keywords)
+        return []
 
     def _is_url(self, source: str) -> bool:
         """

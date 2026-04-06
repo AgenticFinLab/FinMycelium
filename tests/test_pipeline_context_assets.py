@@ -55,6 +55,44 @@ class PipelineContextAssetsTest(unittest.TestCase):
             render_context_asset_summary(summarize_context_assets(expected_bundle)),
         )
 
+    def test_create_build_input_merges_dict_shaped_summarized_keywords(self):
+        pipeline = FinmyPipeline.__new__(FinmyPipeline)
+        pipeline.logger = Mock()
+
+        user_query = UserQueryInput(query_text="alpha risk", key_words=["alpha", "shared"])
+        summarized_query = SimpleNamespace(key_words={"shared": 3, "beta": 2, "gamma": 1})
+        meta_samples = [
+            MetaSample(
+                sample_id="sample-1",
+                raw_data_id="raw-1",
+                location="meta-1",
+                time="2025-01-01 00:00:00 UTC",
+                category="risk",
+                knowledge_field="finance",
+                tag="tag-1",
+                method="method-1",
+            )
+        ]
+        expected_bundle = EvidenceAssetBundle.empty()
+
+        with patch(
+            "finmy.pipeline.build_evidence_assets",
+            return_value=expected_bundle,
+        ), patch(
+            "finmy.converter.read_text_data_from_block",
+            return_value="alpha excerpt",
+        ):
+            build_input = pipeline.create_build_input(
+                user_query,
+                meta_samples,
+                attach_context_assets=True,
+                summarized_query=summarized_query,
+            )
+
+        self.assertEqual(
+            build_input.user_query.key_words, ["alpha", "shared", "beta", "gamma"]
+        )
+
     def test_create_build_input_defaults_to_disabled_context_assets(self):
         pipeline = FinmyPipeline.__new__(FinmyPipeline)
         pipeline.logger = SimpleNamespace(info=lambda *args, **kwargs: None)
