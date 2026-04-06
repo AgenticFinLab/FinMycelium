@@ -317,11 +317,11 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         self.assertEqual(summary["evidence_card_count"], 2)
         self.assertEqual(summary["signal_card_count"], 1)
         self.assertEqual(summary["time_hint_count"], 2)
-        self.assertEqual(summary["entity_hint_count"], 2)
+        self.assertEqual(summary["entity_hint_count"], 1)
         self.assertEqual(summary["action_hint_count"], 2)
         self.assertEqual(summary["money_hint_count"], 2)
-        self.assertEqual(summary["quality_flag_count"], 4)
-        self.assertEqual(summary["query_signal_count"], 6)
+        self.assertNotIn("quality_flag_count", summary)
+        self.assertNotIn("query_signal_count", summary)
 
     def test_render_evidence_card_includes_structured_hints(self):
         card = EvidenceCard(
@@ -343,6 +343,23 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         self.assertIn("money_hints: £23.5 million", rendered)
         self.assertIn("quality_flags: has_money_signal", rendered)
 
+    def test_render_evidence_card_suppresses_empty_hint_lines(self):
+        card = EvidenceCard(
+            sample_id="sample-1",
+            title="risk",
+            excerpt="...",
+            tokens=["alpha"],
+        )
+
+        rendered = render_evidence_card(card)
+
+        self.assertIn("tokens: alpha", rendered)
+        self.assertNotIn("time_hints:", rendered)
+        self.assertNotIn("entity_hints:", rendered)
+        self.assertNotIn("action_hints:", rendered)
+        self.assertNotIn("money_hints:", rendered)
+        self.assertNotIn("quality_flags:", rendered)
+
     def test_render_context_asset_summary_includes_signal_metrics(self):
         summary = {
             "evidence_card_count": 2,
@@ -352,17 +369,35 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
             "signal_card_count": 1,
             "time_hint_count": 2,
             "entity_hint_count": 1,
-            "action_hint_count": 3,
+            "action_hint_count": 2,
             "money_hint_count": 2,
-            "quality_flag_count": 4,
-            "query_signal_count": 3,
         }
 
         rendered = render_context_asset_summary(summary)
 
         self.assertIn("signal_card_count=1", rendered)
         self.assertIn("time_hint_count=2", rendered)
-        self.assertIn("query_signal_count=3", rendered)
+        self.assertNotIn("quality_flag_count", rendered)
+        self.assertNotIn("query_signal_count", rendered)
+
+    def test_build_evidence_assets_filters_obvious_month_phrase_entity_false_positive(self):
+        user_query = UserQueryInput(
+            query_text="Track the case timeline",
+            key_words=["timeline"],
+        )
+        sample = DataSample(
+            sample_id="sample-1",
+            raw_data_id="raw-1",
+            content="In July 2017, Zhimin Qian bought property in London.",
+            category="risk",
+            knowledge_field="finance",
+        )
+
+        bundle = build_evidence_assets(user_query, [sample])
+        card = bundle.evidence_cards[0]
+
+        self.assertNotIn("in july", card.entity_hints)
+        self.assertIn("zhimin qian", card.entity_hints)
 
 
 if __name__ == "__main__":

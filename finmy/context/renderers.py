@@ -16,19 +16,23 @@ def render_retrieval_policy(policy: EvidenceRetrievalPolicy) -> str:
 
 
 def render_evidence_card(card: EvidenceCard) -> str:
-    return "\n".join(
-        [
-            f"sample_id: {card.sample_id}",
-            f"title: {card.title}",
-            f"excerpt: {card.excerpt}",
-            f"tokens: {', '.join(card.tokens)}",
-            f"time_hints: {', '.join(card.time_hints)}",
-            f"entity_hints: {', '.join(card.entity_hints)}",
-            f"action_hints: {', '.join(card.action_hints)}",
-            f"money_hints: {', '.join(card.money_hints)}",
-            f"quality_flags: {', '.join(card.quality_flags)}",
-        ]
-    )
+    lines = [
+        f"sample_id: {card.sample_id}",
+        f"title: {card.title}",
+        f"excerpt: {card.excerpt}",
+        f"tokens: {', '.join(card.tokens)}",
+    ]
+    optional_fields = [
+        ("time_hints", card.time_hints),
+        ("entity_hints", card.entity_hints),
+        ("action_hints", card.action_hints),
+        ("money_hints", card.money_hints),
+        ("quality_flags", card.quality_flags),
+    ]
+    for label, values in optional_fields:
+        if values:
+            lines.append(f"{label}: {', '.join(values)}")
+    return "\n".join(lines)
 
 
 def render_evidence_index(index: EvidenceIndex, top_n: int = 10) -> str:
@@ -68,8 +72,6 @@ def render_context_asset_summary(summary: Mapping[str, int]) -> str:
         "entity_hint_count",
         "action_hint_count",
         "money_hint_count",
-        "quality_flag_count",
-        "query_signal_count",
     ]
     lines = ["context_asset_summary:"]
     lines.extend(f"  {key}={summary.get(key, 0)}" for key in ordered_keys)

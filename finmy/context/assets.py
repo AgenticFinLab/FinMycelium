@@ -80,11 +80,7 @@ def summarize_context_assets(bundle: EvidenceAssetBundle | None) -> dict[str, in
             "entity_hint_count": 0,
             "action_hint_count": 0,
             "money_hint_count": 0,
-            "quality_flag_count": 0,
-            "query_signal_count": 0,
         }
-
-    query_signal_counts = bundle.index.query_signal_counts
 
     return {
         "evidence_card_count": len(bundle.evidence_cards),
@@ -96,8 +92,6 @@ def summarize_context_assets(bundle: EvidenceAssetBundle | None) -> dict[str, in
         "entity_hint_count": sum(len(card.entity_hints) for card in bundle.evidence_cards),
         "action_hint_count": sum(len(card.action_hints) for card in bundle.evidence_cards),
         "money_hint_count": sum(len(card.money_hints) for card in bundle.evidence_cards),
-        "quality_flag_count": sum(len(card.quality_flags) for card in bundle.evidence_cards),
-        "query_signal_count": sum(query_signal_counts.values()),
     }
 
 
@@ -223,6 +217,7 @@ def _count_time_mentions(text: str) -> int:
 
 
 _MONEY_KEYWORDS = ("bitcoin", "btc")
+_ENTITY_FALSE_POSITIVE_PREFIXES = {"in", "on", "at", "by", "from", "to", "into"}
 
 
 def _extract_money_hints(text: str) -> List[str]:
@@ -235,7 +230,12 @@ def _extract_money_hints(text: str) -> List[str]:
 
 
 def _extract_entity_hints(text: str) -> List[str]:
-    hints = [match.group(0).lower() for match in _ENTITY_RE.finditer(text)]
+    hints: List[str] = []
+    for match in _ENTITY_RE.finditer(text):
+        hint = match.group(0).lower()
+        if hint.split()[0] in _ENTITY_FALSE_POSITIVE_PREFIXES:
+            continue
+        hints.append(hint)
     return _dedupe_preserve_order(hints)
 
 
@@ -283,13 +283,6 @@ def build_evidence_assets(
     query_entity_hints = _extract_entity_hints(query_signal_text)
     query_action_hints = _extract_action_hints(query_signal_text)
     query_money_hints = _extract_money_hints(query_signal_text)
-    query_quality_flags = _derive_quality_flags(
-        query_time_hints,
-        query_entity_hints,
-        query_action_hints,
-        query_money_hints,
-    )
-
     sample_token_counts: dict[str, dict[str, int]] = {}
     sample_signal_counts: dict[str, dict[str, int]] = {}
     card_candidates: List[EvidenceCard] = []
@@ -345,7 +338,6 @@ def build_evidence_assets(
             "entity_hints": len(query_entity_hints),
             "action_hints": len(query_action_hints),
             "money_hints": len(query_money_hints),
-            "quality_flags": len(query_quality_flags),
         },
         sample_ids=[sample.sample_id for sample in sample_list],
         query_tokens=query_tokens,

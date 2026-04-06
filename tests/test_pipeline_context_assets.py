@@ -27,7 +27,27 @@ class PipelineContextAssetsTest(unittest.TestCase):
                 method="method-1",
             )
         ]
-        expected_bundle = EvidenceAssetBundle.empty()
+        expected_bundle = EvidenceAssetBundle(
+            retrieval_policy=SimpleNamespace(max_cards=None, excerpt_char_limit=240, max_card_tokens=48),
+            index=SimpleNamespace(
+                token_counts={"alpha": 2, "shared": 1},
+                sample_ids=["sample-1"],
+                query_token_counts={"alpha": 1, "shared": 1},
+            ),
+            evidence_cards=[
+                SimpleNamespace(
+                    sample_id="sample-1",
+                    title="risk",
+                    excerpt="alpha excerpt",
+                    tokens=["alpha"],
+                    time_hints=["2025"],
+                    entity_hints=["alpha corp"],
+                    action_hints=[],
+                    money_hints=[],
+                    quality_flags=["has_time_signal", "has_entity_signal"],
+                )
+            ],
+        )
 
         with patch(
             "finmy.pipeline.build_evidence_assets",
@@ -54,6 +74,14 @@ class PipelineContextAssetsTest(unittest.TestCase):
             "Passive context assets attached: %s",
             render_context_asset_summary(summarize_context_assets(expected_bundle)),
         )
+        logged_summary = next(
+            call.args[1]
+            for call in pipeline.logger.info.call_args_list
+            if call.args and call.args[0] == "Passive context assets attached: %s"
+        )
+        self.assertIn("signal_card_count=1", logged_summary)
+        self.assertNotIn("quality_flag_count", logged_summary)
+        self.assertNotIn("query_signal_count", logged_summary)
 
     def test_create_build_input_merges_dict_shaped_summarized_keywords(self):
         pipeline = FinmyPipeline.__new__(FinmyPipeline)
