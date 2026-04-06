@@ -58,6 +58,7 @@ import copy
 import os
 import json
 import logging
+from dataclasses import asdict
 from functools import partial
 from pathlib import Path
 
@@ -331,6 +332,35 @@ class AgentEventBuilder(BaseBuilder):
             )
             if local_context
             else "{}"
+        )
+
+    def _render_compact_content(self, build_input: BuildInput) -> str:
+        """Render source content in a whitespace-normalized form for additive prompts."""
+        return "\n".join(
+            sample.content.strip()
+            for sample in build_input.samples
+            if isinstance(sample.content, str) and sample.content.strip()
+        )
+
+    def _render_target_episode_context(self, target_episode: Episode) -> str:
+        """Serialize the target episode context in a compact prompt-friendly form."""
+        return json.dumps(
+            asdict(target_episode),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+            default=str,
+        )
+
+    def _attach_compact_heavy_agent_prompt_kwargs(
+        self,
+        prompt_kwargs: dict,
+        build_input: BuildInput,
+        target_episode: Episode,
+    ) -> None:
+        prompt_kwargs["CompactContent"] = self._render_compact_content(build_input)
+        prompt_kwargs["TargetEpisodeContext"] = self._render_target_episode_context(
+            target_episode
         )
 
     def _is_unknown_value(self, value: str) -> bool:
@@ -695,6 +725,11 @@ class AgentEventBuilder(BaseBuilder):
                 prompt_kwargs["ReconstructedParticipants"] = (
                     self._collect_reconstructed_participants_structure(state)
                 )
+                self._attach_compact_heavy_agent_prompt_kwargs(
+                    prompt_kwargs,
+                    build_ipt,
+                    target_episode,
+                )
                 local_context = self._build_local_context_package(state, agent_name)
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
@@ -706,6 +741,11 @@ class AgentEventBuilder(BaseBuilder):
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
+                self._attach_compact_heavy_agent_prompt_kwargs(
+                    prompt_kwargs,
+                    build_ipt,
+                    target_episode,
+                )
                 local_context = self._build_local_context_package(state, agent_name)
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
@@ -723,6 +763,11 @@ class AgentEventBuilder(BaseBuilder):
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
                 prompt_kwargs["TargetEpisode"] = target_episode
+                self._attach_compact_heavy_agent_prompt_kwargs(
+                    prompt_kwargs,
+                    build_ipt,
+                    target_episode,
+                )
                 local_context = self._build_local_context_package(state, agent_name)
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 

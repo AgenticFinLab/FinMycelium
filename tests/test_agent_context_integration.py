@@ -791,6 +791,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
             **captured["prompt_kwargs"]
         )
         self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertIn("CompactContent", captured["prompt_kwargs"])
+        self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
         self.assertIn("alpha episode excerpt", captured["prompt_kwargs"]["RetrievedContext"])
         self.assertIn("alpha episode excerpt", rendered_prompt)
         self.assertIn("RETRIEVED CONTEXT BEGIN", rendered_prompt)
