@@ -234,12 +234,14 @@ class AgentEventBuilder(BaseBuilder):
         raise ValueError("No skeleton result found in builder state")
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
-        """Build local context for episode- and stage-scoped reconstruction paths.
+        """Build local context for reconstruction paths and skeleton shadow mode.
 
-        This helper stays intentionally narrow and only serves reconstruction steps
-        that already work with additive local evidence.
+        This helper stays intentionally narrow and only serves agents that already
+        work with additive local evidence, plus the shadow-mode skeleton agents.
         """
         if agent_name not in {
+            "SkeletonReconstructor",
+            "SkeletonChecker",
             "ParticipantReconstructor",
             "TransactionReconstructor",
             "EpisodeReconstructor",
@@ -250,6 +252,14 @@ class AgentEventBuilder(BaseBuilder):
         bundle = state["build_input"].context_assets
         if bundle is None or not bundle.evidence_cards:
             return None
+
+        if self._should_use_shadow_local_context(agent_name):
+            request = LocalContextRequest(
+                agent_name=agent_name,
+                query_text=state["build_input"].user_query.query_text,
+                key_words=state["build_input"].user_query.key_words,
+            )
+            return LocalContextBuilder().build(request, bundle)
 
         event_skeleton = self._get_event_skeleton(state)
         if agent_name == "StageDescriptionReconstructor":
@@ -280,6 +290,9 @@ class AgentEventBuilder(BaseBuilder):
             target_episode=self._field_value(latest_episode.get("name")),
         )
         return LocalContextBuilder().build(request, bundle)
+
+    def _should_use_shadow_local_context(self, agent_name: str) -> bool:
+        return agent_name in {"SkeletonReconstructor", "SkeletonChecker"}
 
     def _is_unknown_value(self, value: str) -> bool:
         return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
@@ -473,6 +486,18 @@ class AgentEventBuilder(BaseBuilder):
             "Keywords": build_ipt.user_query.key_words,
             "Content": "\n".join([sample.content for sample in build_ipt.samples]),
         }
+
+        shadow_local_context = None
+        if self._should_use_shadow_local_context(agent_name):
+            shadow_local_context = self._build_local_context_package(state, agent_name)
+            prompt_kwargs["RetrievedContext"] = (
+                shadow_local_context.rendered_context if shadow_local_context else ""
+            )
+            prompt_kwargs["RetrievedContextSummary"] = (
+                json.dumps(shadow_local_context.summary, ensure_ascii=False)
+                if shadow_local_context
+                else "{}"
+            )
 
         # Retrieve templates
         sys_msg_template = state["agent_system_msgs"][agent_name]

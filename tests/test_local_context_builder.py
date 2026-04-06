@@ -165,6 +165,35 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.selected_sample_ids, [])
         self.assertEqual(package.rendered_context, "")
 
+    def test_global_request_can_be_sufficient_without_authorizing_content_removal(self):
+        builder = LocalContextBuilder()
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt="alpha global excerpt",
+                    tokens=["alpha", "global"],
+                )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="alpha global",
+            key_words=["alpha"],
+        )
+
+        package = builder.build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.summary["selected_count"], 1)
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+        self.assertNotEqual(package.rendered_context.strip(), "")
+        self.assertIn("alpha global excerpt", package.rendered_context)
+
 
 if __name__ == "__main__":
     unittest.main()

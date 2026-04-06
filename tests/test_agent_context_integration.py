@@ -132,6 +132,126 @@ class AgentContextIntegrationTest(unittest.TestCase):
     def setUp(self):
         self.builder = AgentEventBuilder.__new__(AgentEventBuilder)
 
+    def test_skeleton_reconstructor_shadow_mode_keeps_full_content(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(_skeleton()),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {
+                "SkeletonReconstructor": main_build_module.EventLayoutReconstructorSys
+            },
+            "agent_user_msgs": {
+                "SkeletonReconstructor": main_build_module.EventLayoutReconstructorUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "SkeletonReconstructor")
+
+        self.assertIn("Content", captured["infer_input"].user_msg)
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+
+    def test_skeleton_checker_shadow_mode_keeps_full_content(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(_skeleton()),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [{"SkeletonReconstructor": _skeleton()}],
+            "agent_executed": ["SkeletonReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {
+                "SkeletonChecker": main_build_module.SkeletonCheckerSys
+            },
+            "agent_user_msgs": {
+                "SkeletonChecker": main_build_module.SkeletonCheckerUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "SkeletonChecker")
+
+        self.assertIn("Content", captured["infer_input"].user_msg)
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertNotEqual(captured["prompt_kwargs"]["RetrievedContext"], "")
+        self.assertEqual(
+            captured["prompt_kwargs"]["RetrievedContextSummary"],
+            json.dumps({"selected_count": 1}, ensure_ascii=False),
+        )
+
     def test_participant_reconstructor_receives_retrieved_context(self):
         captured = {}
 
