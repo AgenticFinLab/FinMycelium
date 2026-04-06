@@ -29,6 +29,11 @@ class ContextMetricsTest(unittest.TestCase):
                 "sample_id_count": 1,
                 "global_token_count": 6,
                 "query_token_count": 3,
+                "signal_card_count": 0,
+                "time_hint_count": 0,
+                "entity_hint_count": 0,
+                "action_hint_count": 0,
+                "money_hint_count": 0,
             },
         )
 
