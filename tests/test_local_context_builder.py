@@ -388,6 +388,75 @@ class LocalContextBuilderTest(unittest.TestCase):
             episode_package.memory["selection_rationale"][0]["matched_fields"],
         )
 
+    def test_transaction_reconstructor_keeps_episode_scope_and_tighter_budget_when_episode_hint_is_missing(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-narrative",
+                    title="sample-narrative",
+                    excerpt="Investigators described the broader episode narrative.",
+                    tokens=["bitcoin", "transfer", "episode", "investigators", "narrative"],
+                ),
+                EvidenceCard(
+                    sample_id="sample-money",
+                    title="sample-money",
+                    excerpt="Bitcoin proceeds were transferred through the episode account.",
+                    tokens=["bitcoin", "transfer", "episode", "proceeds", "account"],
+                    money_hints=["bitcoin"],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="TransactionReconstructor",
+            query_text="How was bitcoin transferred in this episode?",
+            key_words=["bitcoin", "transfer"],
+            target_stage="Stage 1",
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "episode")
+        self.assertEqual(package.budget_summary["target_card_budget"], 1)
+        self.assertEqual(package.selected_sample_ids, ["sample-money"])
+
+    def test_transaction_reconstructor_prefers_money_relevant_evidence_over_narrative_evidence(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(max_cards=1),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="narrative-card",
+                    title="narrative-card",
+                    excerpt="Investigators described the broader episode narrative.",
+                    tokens=["bitcoin", "transfer", "episode", "investigators", "narrative"],
+                ),
+                EvidenceCard(
+                    sample_id="money-card",
+                    title="money-card",
+                    excerpt="Bitcoin proceeds were transferred through the episode account.",
+                    tokens=["bitcoin", "transfer", "episode", "proceeds", "account"],
+                    money_hints=["bitcoin"],
+                ),
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="TransactionReconstructor",
+            query_text="How was bitcoin transferred in this episode?",
+            key_words=["bitcoin", "transfer"],
+            target_stage="Stage 1",
+            target_episode="Episode 1",
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.selected_sample_ids, ["money-card"])
+        self.assertIn(
+            "money_hints",
+            package.memory["selection_rationale"][0]["matched_fields"],
+        )
+
     def test_global_scope_respects_resolved_card_budget_reported_in_budget_summary(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(max_cards=5),

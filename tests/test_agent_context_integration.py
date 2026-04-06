@@ -976,6 +976,79 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("real content", rendered_prompt)
         self.assertNotIn("alpha episode excerpt", rendered_prompt)
 
+    def test_transaction_reconstructor_exposes_compact_payload_contract_additively(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps({"transactions": []}),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+            ],
+            "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {"TransactionReconstructor": "sys"},
+            "agent_user_msgs": {"TransactionReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        rich_context = SimpleNamespace(
+            rendered_context="RICH_TRANSACTION_CONTEXT",
+            summary={"selected_count": 1},
+            retrieval_status="fallback_fulltext",
+            query_bundle={
+                "scope": "episode",
+                "stage_name": "Stage 1",
+                "episode_name": "Episode 1",
+            },
+            budget_summary={"target_card_budget": 1, "used_card_count": 1},
+            memory={"selection_rationale": [{"matched_fields": ["episode_name"]}]},
+        )
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=rich_context,
+        ):
+            self.builder.execute_agent(state, "TransactionReconstructor")
+
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertIn("CompactContent", captured["prompt_kwargs"])
+        self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
+
     def test_episode_reconstructor_receives_retrieved_context_without_clearing_content(self):
         captured = {}
 
@@ -1265,6 +1338,100 @@ class AgentContextIntegrationTest(unittest.TestCase):
                 sort_keys=True,
             ),
         )
+
+    def test_episode_reconstructor_exposes_compact_payload_contract_additively(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        rich_context = SimpleNamespace(
+            rendered_context="RICH_EPISODE_CONTEXT",
+            summary={"selected_count": 1},
+            retrieval_status="fallback_fulltext",
+            query_bundle={
+                "scope": "episode",
+                "stage_name": "Stage 1",
+                "episode_name": "Episode 1",
+            },
+            budget_summary={"target_card_budget": 1, "used_card_count": 1},
+            memory={"selection_rationale": [{"matched_fields": ["episode_name"]}]},
+        )
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=rich_context,
+        ):
+            self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        self.assertIn("RetrievedContext", captured["prompt_kwargs"])
+        self.assertIn("CompactContent", captured["prompt_kwargs"])
+        self.assertIn("TargetEpisodeContext", captured["prompt_kwargs"])
+        self.assertEqual(captured["prompt_kwargs"]["Content"], "real content")
 
     def test_stage_description_reconstructor_receives_stage_scoped_context(self):
         captured = {}
