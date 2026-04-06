@@ -191,7 +191,7 @@ def _load_baseline_readme_contents(workspace_root: Path) -> list[str]:
         if not normalized:
             return []
 
-        contents.append(normalized[:5000])
+        contents.append(normalized)
 
     return contents
 

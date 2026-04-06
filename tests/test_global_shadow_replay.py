@@ -298,6 +298,36 @@ class GlobalShadowReplayTest(unittest.TestCase):
             ],
         )
 
+    def test_load_baseline_readme_contents_does_not_clip_to_5000_chars(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace_root = Path(tmpdir)
+            data_dir = workspace_root / "cache" / "data-blocks"
+            data_dir.mkdir(parents=True)
+
+            long_prefixes = [
+                "cnn" * 2100,
+                "guardian" * 900,
+                "cps" * 1900,
+            ]
+            payload = {
+                text_id: {"text": prefix}
+                for text_id, prefix in zip(
+                    _helper_module._BASELINE_TEXT_IDS,
+                    long_prefixes,
+                    strict=True,
+                )
+            }
+            (data_dir / "text_block_0.json").write_text(
+                json.dumps(payload),
+                encoding="utf-8",
+            )
+
+            contents = _helper_module._load_baseline_readme_contents(workspace_root)
+
+            self.assertEqual(len(contents), 3)
+            self.assertEqual(contents[0], long_prefixes[0])
+            self.assertGreater(len(contents[0]), 5000)
+
     def test_all_noise_bundle_falls_back_to_fulltext(self):
         package = self.builder.build(self.request, NOISE_BUNDLE)
 
