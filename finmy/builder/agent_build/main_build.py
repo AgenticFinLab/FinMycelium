@@ -506,6 +506,12 @@ class AgentEventBuilder(BaseBuilder):
                 and shadow_local_context.retrieval_status == "sufficient"
             ):
                 prompt_kwargs["Content"] = ""
+            elif (
+                agent_name == "SkeletonChecker"
+                and shadow_local_context is not None
+                and shadow_local_context.retrieval_status == "sufficient"
+            ):
+                prompt_kwargs["Content"] = ""
 
         # Retrieve templates
         sys_msg_template = state["agent_system_msgs"][agent_name]
