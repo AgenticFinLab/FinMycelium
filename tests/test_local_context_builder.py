@@ -300,8 +300,8 @@ class LocalContextBuilderTest(unittest.TestCase):
         )
         request = LocalContextRequest(
             agent_name="EventDescriptionReconstructor",
-            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
-            key_words=["fraud", "money laundering"],
+            query_text="How were cryptocurrency proceeds used in London property purchases?",
+            key_words=["cryptocurrency", "London property"],
         )
 
         package = LocalContextBuilder().build(request, bundle)
@@ -339,6 +339,73 @@ class LocalContextBuilderTest(unittest.TestCase):
                         "china",
                     ],
                 )
+            ],
+        )
+        request = LocalContextRequest(
+            agent_name="EventDescriptionReconstructor",
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+        )
+
+        package = LocalContextBuilder().build(request, bundle)
+
+        self.assertEqual(package.scope, "global")
+        self.assertEqual(package.retrieval_status, "sufficient")
+        self.assertEqual(package.selected_sample_ids, ["sample-1"])
+
+    def test_global_request_keeps_signal_card_in_mixed_bundle_and_rejects_chrome(self):
+        bundle = EvidenceAssetBundle(
+            retrieval_policy=EvidenceRetrievalPolicy(),
+            index=EvidenceIndex(),
+            evidence_cards=[
+                EvidenceCard(
+                    sample_id="sample-1",
+                    title="sample-1",
+                    excerpt=(
+                        "Skip to main content International edition Qian Zhimin converted bitcoin "
+                        "proceeds after fleeing China."
+                    ),
+                    tokens=[
+                        "skip",
+                        "to",
+                        "main",
+                        "content",
+                        "international",
+                        "edition",
+                        "qian",
+                        "zhimin",
+                        "converted",
+                        "bitcoin",
+                        "proceeds",
+                        "after",
+                        "fleeing",
+                        "china",
+                    ],
+                ),
+                EvidenceCard(
+                    sample_id="sample-2",
+                    title="sample-2",
+                    excerpt=(
+                        "Skip to main content Search for Careers Contact About us International "
+                        "edition Latest headlines"
+                    ),
+                    tokens=[
+                        "skip",
+                        "to",
+                        "main",
+                        "content",
+                        "search",
+                        "for",
+                        "careers",
+                        "contact",
+                        "about",
+                        "us",
+                        "international",
+                        "edition",
+                        "latest",
+                        "headlines",
+                    ],
+                ),
             ],
         )
         request = LocalContextRequest(
