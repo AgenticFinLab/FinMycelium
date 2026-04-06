@@ -96,6 +96,22 @@ class LocalContextBuilder:
         "you",
         "your",
     }
+    _GLOBAL_CASE_SIGNAL_TOKENS = {
+        "blue",
+        "fraud",
+        "evidence",
+        "launder",
+        "laundering",
+        "money",
+        "ponzi",
+        "proceeds",
+        "qian",
+        "reconciliation",
+        "scheme",
+        "sky",
+        "zhimin",
+        "bitcoin",
+    }
     _GLOBAL_NOISE_PHRASES = (
         "skip to main content",
         "ad feedback",
@@ -157,9 +173,10 @@ class LocalContextBuilder:
         bundle: EvidenceAssetBundle,
         query_tokens: List[str],
     ) -> List[EvidenceCard]:
-        case_signal_tokens = [
+        query_content_tokens = [
             token for token in query_tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
         ]
+        case_signal_tokens = self._extract_global_case_signal_tokens(query_content_tokens)
         if not case_signal_tokens:
             return []
 
@@ -168,9 +185,10 @@ class LocalContextBuilder:
             if self._is_global_noise_card(card):
                 continue
 
-            card_case_tokens = [
+            card_content_tokens = [
                 token for token in card.tokens if token not in self._GLOBAL_LOW_SIGNAL_TOKENS
             ]
+            card_case_tokens = self._extract_global_case_signal_tokens(card_content_tokens)
             overlap = score_token_overlap(card_case_tokens, case_signal_tokens)
             if overlap <= 0:
                 continue
@@ -183,6 +201,9 @@ class LocalContextBuilder:
         if bundle.retrieval_policy.max_cards is not None:
             selected_cards = selected_cards[: bundle.retrieval_policy.max_cards]
         return selected_cards
+
+    def _extract_global_case_signal_tokens(self, tokens: List[str]) -> List[str]:
+        return [token for token in tokens if token in self._GLOBAL_CASE_SIGNAL_TOKENS]
 
     def _is_global_noise_card(self, card: EvidenceCard) -> bool:
         haystack = f"{card.title} {card.excerpt}".strip().lower()

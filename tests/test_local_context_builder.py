@@ -165,8 +165,7 @@ class LocalContextBuilderTest(unittest.TestCase):
         self.assertEqual(package.selected_sample_ids, [])
         self.assertEqual(package.rendered_context, "")
 
-    def test_global_request_can_be_sufficient_without_authorizing_content_removal(self):
-        builder = LocalContextBuilder()
+    def test_global_request_falls_back_when_overlap_is_generic_institutional_terms(self):
         bundle = EvidenceAssetBundle(
             retrieval_policy=EvidenceRetrievalPolicy(),
             index=EvidenceIndex(),
@@ -174,25 +173,33 @@ class LocalContextBuilderTest(unittest.TestCase):
                 EvidenceCard(
                     sample_id="sample-1",
                     title="sample-1",
-                    excerpt="alpha global excerpt",
-                    tokens=["alpha", "global"],
+                    excerpt="The legal service reviewed the institutional matter and filed a report.",
+                    tokens=[
+                        "the",
+                        "legal",
+                        "service",
+                        "reviewed",
+                        "institutional",
+                        "matter",
+                        "filed",
+                        "report",
+                    ],
                 )
             ],
         )
         request = LocalContextRequest(
             agent_name="EventDescriptionReconstructor",
-            query_text="alpha global",
-            key_words=["alpha"],
+            query_text="What is the legal service matter at the institution?",
+            key_words=["legal service", "institutional matter"],
         )
 
-        package = builder.build(request, bundle)
+        package = LocalContextBuilder().build(request, bundle)
 
         self.assertEqual(package.scope, "global")
-        self.assertEqual(package.retrieval_status, "sufficient")
-        self.assertEqual(package.summary["selected_count"], 1)
-        self.assertEqual(package.selected_sample_ids, ["sample-1"])
-        self.assertNotEqual(package.rendered_context.strip(), "")
-        self.assertIn("alpha global excerpt", package.rendered_context)
+        self.assertEqual(package.retrieval_status, "fallback_fulltext")
+        self.assertEqual(package.summary["selected_count"], 0)
+        self.assertEqual(package.selected_sample_ids, [])
+        self.assertEqual(package.rendered_context, "")
 
     def test_global_request_falls_back_when_overlap_is_only_stopwords(self):
         bundle = EvidenceAssetBundle(
