@@ -93,7 +93,7 @@ _NOISE_PREFIX_PHRASES = (
 )
 
 _NOISE_PREFIX_PATTERNS = tuple(
-    re.compile(rf"^{re.escape(phrase)}(?:[\s\.,:;!?]+|$)", re.IGNORECASE)
+    re.compile(rf"^{re.escape(phrase)}(?:\s*->\s*|[\s\.,:;!?]+|$)", re.IGNORECASE)
     for phrase in _NOISE_PREFIX_PHRASES
 )
 

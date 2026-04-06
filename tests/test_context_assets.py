@@ -134,6 +134,36 @@ class ConvertToBuildInputContextAssetsTest(unittest.TestCase):
         self.assertTrue(excerpt.startswith("Qian Zhimin"))
         self.assertIn("fraud scheme", excerpt)
 
+    def test_build_evidence_assets_removes_arrow_delimited_ad_feedback_chain(self):
+        user_query = UserQueryInput(
+            query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
+            key_words=["fraud", "money laundering"],
+            time_range=None,
+            extras={},
+        )
+        sample = DataSample(
+            sample_id="sample-1",
+            raw_data_id="raw-1",
+            content=(
+                "Ad Feedback -> CNN values your feedback -> Video player was slow to load "
+                "Qian Zhimin allegedly ran a large fraud scheme."
+            ),
+            category="Financial Risk Control",
+            knowledge_field="Artificial Intelligence",
+            tag="url",
+            method="URLParser",
+        )
+
+        bundle = build_evidence_assets(user_query, [sample])
+
+        excerpt = bundle.evidence_cards[0].excerpt
+        self.assertNotIn("Ad Feedback", excerpt)
+        self.assertNotIn("CNN values your feedback", excerpt)
+        self.assertNotIn("Video player was slow to load", excerpt)
+        self.assertNotIn("->", excerpt)
+        self.assertTrue(excerpt.startswith("Qian Zhimin"))
+        self.assertIn("fraud scheme", excerpt)
+
     def test_build_evidence_assets_preserves_legitimate_leading_cnn_reports_text(self):
         user_query = UserQueryInput(
             query_text="What is the case involving fraud and money laundering by Qian Zhimin?",
