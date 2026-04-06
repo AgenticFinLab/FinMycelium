@@ -263,6 +263,7 @@ def build_evidence_assets(
     query_tokens = tokenize_text(f"{query_text} {query_keyword_text}".strip())
 
     sample_token_counts: dict[str, dict[str, int]] = {}
+    sample_signal_counts: dict[str, dict[str, int]] = {}
     card_candidates: List[EvidenceCard] = []
 
     for sample in sample_list:
@@ -276,6 +277,13 @@ def build_evidence_assets(
         action_hints = _extract_action_hints(content)
         quality_flags = _derive_quality_flags(time_hints, entity_hints, action_hints, money_hints)
         sample_token_counts[sample.sample_id] = count_tokens(content)
+        sample_signal_counts[sample.sample_id] = {
+            "time_hints": _count_time_mentions(content),
+            "entity_hints": len(entity_hints),
+            "action_hints": len(action_hints),
+            "money_hints": len(money_hints),
+            "quality_flags": len(quality_flags),
+        }
         card_candidates.append(
             EvidenceCard(
                 sample_id=sample.sample_id,
@@ -302,16 +310,7 @@ def build_evidence_assets(
     bundle_index = EvidenceIndex(
         token_counts=global_token_counts,
         sample_token_counts=sample_token_counts,
-        sample_signal_counts={
-            card.sample_id: {
-                "time_hints": _count_time_mentions(sample.content or ""),
-                "entity_hints": len(card.entity_hints),
-                "action_hints": len(card.action_hints),
-                "money_hints": len(card.money_hints),
-                "quality_flags": len(card.quality_flags),
-            }
-            for card in card_candidates
-        },
+        sample_signal_counts=sample_signal_counts,
         query_token_counts=count_tokens(f"{query_text} {query_keyword_text}".strip()),
         sample_ids=[sample.sample_id for sample in sample_list],
         query_tokens=query_tokens,
