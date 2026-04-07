@@ -1705,32 +1705,23 @@ class AgentContextIntegrationTest(unittest.TestCase):
             captured["prompt_kwargs"]["CompactContent"],
             "real content\nsecondary content line",
         )
-        self.assertEqual(
-            json.loads(captured["prompt_kwargs"]["TargetEpisodeContext"]),
-            {
-                "episode_id": "E1",
-                "name": "Episode 1",
-                "index_in_stage": 0,
-                "start_time": "2025-01-01",
-                "end_time": "2025-01-02",
-                "participant_ids": ["P_1", "P_2"],
-                "transaction_ids": ["T_1"],
-            },
-        )
-        self.assertEqual(
-            json.loads(captured["prompt_kwargs"]["StageSkeletonContext"]),
-            {
-                "stage_id": "S1",
-                "name": "Stage 1",
-                "index_in_event": 0,
-                "start_time": "2025-01-01",
-                "end_time": "2025-01-02",
-                "episode_ids": ["E1"],
-                "episode_names": ["Episode 1"],
-            },
-        )
-        self.assertIn('"stage_id":"S1"', rendered_prompt)
-        self.assertIn('"episode_ids":["E1"]', rendered_prompt)
+        target_context = captured["prompt_kwargs"]["TargetEpisodeContext"]
+        self.assertIn("Episode ID: E1", target_context)
+        self.assertIn("Episode Name: Episode 1", target_context)
+        self.assertIn("Episode Index In Stage: 0", target_context)
+        self.assertIn("Participant IDs: P_1, P_2", target_context)
+        self.assertIn("Transaction IDs: T_1", target_context)
+        self.assertNotIn('"participant_ids"', target_context)
+        self.assertNotIn('"transaction_ids"', target_context)
+        stage_context = captured["prompt_kwargs"]["StageSkeletonContext"]
+        self.assertIn("Stage ID: S1", stage_context)
+        self.assertIn("Stage Name: Stage 1", stage_context)
+        self.assertIn("Episodes:", stage_context)
+        self.assertIn("- E1: Episode 1", stage_context)
+        self.assertNotIn('"episode_names"', stage_context)
+        self.assertNotIn('"episode_ids"', stage_context)
+        self.assertIn("Stage ID: S1", rendered_prompt)
+        self.assertIn("- E1: Episode 1", rendered_prompt)
         self.assertNotIn('"episodes": [', rendered_prompt)
         self.assertNotIn('"participants": [', rendered_prompt)
         self.assertNotIn('"transactions": [', rendered_prompt)
