@@ -1566,9 +1566,9 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "real content\nsecondary content line",
         )
         self.assertIn("real content\nsecondary content line", rendered_prompt)
-        self.assertIn('"episode_ids":["E1"]', rendered_prompt)
-        self.assertIn('"participant_ids":["P_1","P_2"]', rendered_prompt)
-        self.assertIn('"stage_id":"S1"', rendered_prompt)
+        self.assertIn("Stage ID: S1", rendered_prompt)
+        self.assertIn("- E1: Episode 1", rendered_prompt)
+        self.assertIn("Participant IDs: P_1, P_2", rendered_prompt)
         self.assertNotIn('"participants": [', rendered_prompt)
         self.assertNotIn('"transactions": [', rendered_prompt)
         self.assertNotIn('"episodes": [', rendered_prompt)

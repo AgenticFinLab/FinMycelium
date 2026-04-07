@@ -385,6 +385,37 @@ class AgentEventBuilder(BaseBuilder):
             sort_keys=True,
         )
 
+    def _render_episode_target_context_text(self, target_episode: Episode) -> str:
+        """Render the episode target context as compact text for safer JSON output."""
+        participant_ids = []
+        for participant in getattr(target_episode, "participants", []) or []:
+            if isinstance(participant, dict):
+                participant_id = participant.get("participant_id")
+            else:
+                participant_id = getattr(participant, "participant_id", None)
+            if participant_id:
+                participant_ids.append(participant_id)
+
+        transaction_ids = []
+        for transaction in getattr(target_episode, "transactions", []) or []:
+            if isinstance(transaction, dict):
+                transaction_id = transaction.get("transaction_id")
+            else:
+                transaction_id = getattr(transaction, "transaction_id", None)
+            if transaction_id:
+                transaction_ids.append(transaction_id)
+
+        lines = [
+            f"Episode ID: {getattr(target_episode, 'episode_id', 'unknown')}",
+            f"Episode Name: {self._scalar_value(getattr(target_episode, 'name', 'unknown'))}",
+            f"Episode Index In Stage: {getattr(target_episode, 'index_in_stage', 'unknown')}",
+            f"Episode Start Time: {self._scalar_value(getattr(target_episode, 'start_time', 'unknown'))}",
+            f"Episode End Time: {self._scalar_value(getattr(target_episode, 'end_time', 'unknown'))}",
+            f"Participant IDs: {', '.join(participant_ids) if participant_ids else 'none'}",
+            f"Transaction IDs: {', '.join(transaction_ids) if transaction_ids else 'none'}",
+        ]
+        return "\n".join(lines)
+
     def _attach_compact_heavy_agent_prompt_kwargs(
         self,
         prompt_kwargs: dict,
@@ -397,36 +428,27 @@ class AgentEventBuilder(BaseBuilder):
         )
 
     def _render_compact_stage_context(self, stage: dict) -> str:
-        """Serialize the stage skeleton into a compact episode-summary form."""
-        episode_ids = []
-        episode_names = []
+        """Render the stage skeleton as compact text for safer model consumption."""
+        episode_lines = []
         for episode in stage.get("episodes", []) or []:
             if isinstance(episode, dict):
-                episode_id = episode.get("episode_id")
+                episode_id = episode.get("episode_id", "unknown")
                 episode_name = self._scalar_value(episode.get("name", "unknown"))
             else:
-                episode_id = getattr(episode, "episode_id", None)
+                episode_id = getattr(episode, "episode_id", "unknown")
                 episode_name = self._scalar_value(getattr(episode, "name", "unknown"))
-            if episode_id:
-                episode_ids.append(episode_id)
-            if episode_name:
-                episode_names.append(episode_name)
+            episode_lines.append(f"- {episode_id}: {episode_name}")
 
-        compact_context = {
-            "stage_id": stage.get("stage_id", "unknown"),
-            "name": self._scalar_value(stage.get("name", "unknown")),
-            "index_in_event": stage.get("index_in_event", "unknown"),
-            "start_time": self._scalar_value(stage.get("start_time", "unknown")),
-            "end_time": self._scalar_value(stage.get("end_time", "unknown")),
-            "episode_ids": episode_ids,
-            "episode_names": episode_names,
-        }
-        return json.dumps(
-            compact_context,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
+        lines = [
+            f"Stage ID: {stage.get('stage_id', 'unknown')}",
+            f"Stage Name: {self._scalar_value(stage.get('name', 'unknown'))}",
+            f"Stage Index In Event: {stage.get('index_in_event', 'unknown')}",
+            f"Stage Start Time: {self._scalar_value(stage.get('start_time', 'unknown'))}",
+            f"Stage End Time: {self._scalar_value(stage.get('end_time', 'unknown'))}",
+            "Episodes:",
+            *(episode_lines or ["- none"]),
+        ]
+        return "\n".join(lines)
 
     def _rewrite_heavy_agent_user_msg_template(
         self, agent_name: str, user_msg_template: str
@@ -853,6 +875,9 @@ class AgentEventBuilder(BaseBuilder):
                     prompt_kwargs,
                     build_ipt,
                     target_episode,
+                )
+                prompt_kwargs["TargetEpisodeContext"] = (
+                    self._render_episode_target_context_text(target_episode)
                 )
                 local_context = self._build_local_context_package(state, agent_name)
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
