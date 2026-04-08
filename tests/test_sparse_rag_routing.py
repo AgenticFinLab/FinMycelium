@@ -980,3 +980,58 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(episodes[0]["transactions"], [])
         self.assertEqual(episodes[1]["participants"][0]["participant_id"], "P1")
         self.assertEqual(episodes[1]["transactions"], [])
+
+    def test_integrate_from_files_uses_episode_locator_when_replay_results_only_cover_second_episode(self):
+        builder = self.builder
+        skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Arrest"},
+                            "index_in_stage": 0,
+                            "participants": [],
+                            "transactions": [],
+                        },
+                        {
+                            "episode_id": "E2",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 1,
+                            "participants": [],
+                            "transactions": [],
+                        },
+                    ],
+                }
+            ]
+        }
+        participant_two = {"participants": [{"participant_id": "P2"}]}
+        episode_two = {
+            "episode_id": "E2",
+            "name": {"value": "Money Laundering"},
+            "index_in_stage": 1,
+            "participants": "Results of ParticipantReconstructor",
+            "transactions": "Results of TransactionReconstructor",
+            "participant_relations": [],
+            "descriptions": [],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            builder.save_dir = tmpdir
+            files = {
+                "SkeletonChecker-1-Result.json": skeleton,
+                "ParticipantReconstructor-2-Stage0-Episode1-Result.json": participant_two,
+                "EpisodeReconstructor-3-Stage0-Episode1-Result.json": episode_two,
+            }
+            for filename, payload in files.items():
+                with open(os.path.join(tmpdir, filename), "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+
+            final_cascade = builder.integrate_from_files()
+
+        episodes = final_cascade["stages"][0]["episodes"]
+        self.assertEqual(episodes[0]["participants"], [])
+        self.assertEqual(episodes[0]["transactions"], [])
+        self.assertEqual(episodes[1]["participants"][0]["participant_id"], "P2")
+        self.assertEqual(episodes[1]["transactions"], [])

@@ -58,6 +58,7 @@ import copy
 import os
 import json
 import logging
+import re
 from functools import partial
 from pathlib import Path
 
@@ -81,6 +82,8 @@ from finmy.context.local_context_builder import (
 from finmy.builder.agent_build.prompts import *
 
 logger = logging.getLogger(__name__)
+
+_REPLAY_STAGE_EPISODE_SUFFIX = re.compile(r"-Stage(?P<stage>\d+)-Episode(?P<episode>\d+)-Result\.json$")
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -431,15 +434,22 @@ class AgentEventBuilder(BaseBuilder):
             if "EpisodeReconstructor" not in result:
                 continue
 
-            (
-                stage_index,
-                episode_index,
-                stage,
-                episode,
-                locator,
-            ) = self._get_episode_by_sequence_index(event_skeleton, episode_seq_idx)
-            if stage_index is None:
-                break
+            locator = result.get("_meta", {}).get("episode_locator")
+            if locator:
+                stage_index = locator.get("stage_index")
+                episode_index = locator.get("episode_index")
+                if stage_index is None or episode_index is None:
+                    break
+            else:
+                (
+                    stage_index,
+                    episode_index,
+                    stage,
+                    episode,
+                    locator,
+                ) = self._get_episode_by_sequence_index(event_skeleton, episode_seq_idx)
+                if stage_index is None:
+                    break
 
             mode = "full" if transaction_seen_for_current_episode else "light"
             plan_entries.append(
@@ -455,6 +465,26 @@ class AgentEventBuilder(BaseBuilder):
             transaction_seen_for_current_episode = False
 
         return {"episodes": plan_entries}
+
+    def _replay_episode_locator_from_filename(
+        self,
+        filename: str,
+        event_skeleton: dict | None,
+    ) -> dict[str, object] | None:
+        match = _REPLAY_STAGE_EPISODE_SUFFIX.search(filename)
+        if not match:
+            return None
+        stage_index = int(match.group("stage"))
+        episode_index = int(match.group("episode"))
+        locator = self._episode_locator(stage_index, episode_index)
+        stages = (event_skeleton or {}).get("stages", []) or []
+        if stage_index < len(stages):
+            stage = stages[stage_index]
+            locator["stage_id"] = stage.get("stage_id")
+            episodes = stage.get("episodes", []) or []
+            if episode_index < len(episodes):
+                locator["episode_id"] = episodes[episode_index].get("episode_id")
+        return locator
 
     def _route_after_participant_reconstructor(self, state: AgentState):
         """Route light episodes around TransactionReconstructor."""
@@ -1603,15 +1633,28 @@ class AgentEventBuilder(BaseBuilder):
         if not sorted_indices:
             raise FileNotFoundError(f"No result files found in {self.save_dir}")
 
-        # Read files and reconstruct agent_results
-        agent_results = []
+        loaded_results = []
 
         for idx in sorted_indices:
             agent_name, filename = files_map[idx]
             filepath = os.path.join(self.save_dir, filename)
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            agent_results.append({agent_name: data})
+            loaded_results.append((idx, agent_name, filename, data))
+
+        event_skeleton = None
+        for _, agent_name, _, data in loaded_results:
+            if agent_name in {"SkeletonChecker", "SkeletonReconstructor"}:
+                event_skeleton = data
+
+        # Reconstruct agent_results, restoring episode locator metadata from replay-safe filenames.
+        agent_results = []
+        for _, agent_name, filename, data in loaded_results:
+            result_entry = {agent_name: data}
+            locator = self._replay_episode_locator_from_filename(filename, event_skeleton)
+            if locator is not None:
+                result_entry["_meta"] = {"episode_locator": locator}
+            agent_results.append(result_entry)
 
         # Create a dummy state
         # integrate_results only needs state["agent_results"]
