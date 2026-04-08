@@ -155,13 +155,13 @@ class SparseRagRoutingTest(unittest.TestCase):
                 {
                     "stage_id": "S1",
                     "episodes": [
-                        {"episode_id": "E1", "name": "Arrest"},
+                        {"episode_id": "E1", "name": {"value": "Arrest"}},
                     ],
                 },
                 {
                     "stage_id": "S2",
                     "episodes": [
-                        {"episode_id": "E2", "name": "Money Laundering"},
+                        {"episode_id": "E2", "name": {"value": "Money Laundering"}},
                     ],
                 },
             ]
@@ -278,14 +278,14 @@ class SparseRagRoutingTest(unittest.TestCase):
                 {
                     "stage_id": "S1",
                     "episodes": [
-                        {"episode_id": "E1", "name": "Arrest"},
+                        {"episode_id": "E1", "name": {"value": "Arrest"}},
                     ],
                 }
             ]
         }
         self.builder.extract_latest_episode = lambda _skeleton, _count: (
             {"stage_id": "S1", "index_in_event": 0},
-            {"episode_id": "E1", "name": "Arrest", "index_in_stage": 0},
+            {"episode_id": "E1", "name": {"value": "Arrest"}, "index_in_stage": 0},
         )
 
         self.assertEqual(
@@ -318,7 +318,10 @@ class SparseRagRoutingTest(unittest.TestCase):
                 {
                     "stage_id": "S1",
                     "episodes": [
-                        {"episode_id": "E1", "name": "Money Laundering"},
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Money Laundering"},
+                        },
                     ],
                 }
             ]
@@ -327,10 +330,62 @@ class SparseRagRoutingTest(unittest.TestCase):
             {"stage_id": "S1", "index_in_event": 0},
             {
                 "episode_id": "E1",
-                "name": "Money Laundering",
+                "name": {"value": "Money Laundering"},
                 "index_in_stage": 0,
             },
         )
+
+        self.assertEqual(
+            self.builder._route_after_participant_reconstructor(state),
+            "TransactionReconstructor",
+        )
+
+    def test_route_after_participant_reconstructor_uses_global_cursor_after_light_episode(self):
+        state = {
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "EpisodeReconstructor",
+                "ParticipantReconstructor",
+            ],
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
+                        "detail_tier": "compact",
+                    },
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        },
+                        "mode": "full",
+                        "detail_tier": "standard",
+                    },
+                ]
+            },
+            "agent_results": [],
+        }
+
+        self.builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Arrest"}},
+                        {"episode_id": "E2", "name": {"value": "Money Laundering"}},
+                    ],
+                }
+            ]
+        }
 
         self.assertEqual(
             self.builder._route_after_participant_reconstructor(state),
@@ -360,12 +415,12 @@ class SparseRagRoutingTest(unittest.TestCase):
                     "episodes": [
                         {
                             "episode_id": "E1",
-                            "name": "Arrest",
+                            "name": {"value": "Arrest"},
                             "index_in_stage": 0,
                         },
                         {
                             "episode_id": "E2",
-                            "name": "Money Laundering",
+                            "name": {"value": "Money Laundering"},
                             "index_in_stage": 1,
                         },
                     ],
@@ -384,12 +439,12 @@ class SparseRagRoutingTest(unittest.TestCase):
                                 "episodes": [
                                     {
                                         "episode_id": "E1",
-                                        "name": "Arrest",
+                                        "name": {"value": "Arrest"},
                                         "index_in_stage": 0,
                                     },
                                     {
                                         "episode_id": "E2",
-                                        "name": "Money Laundering",
+                                        "name": {"value": "Money Laundering"},
                                         "index_in_stage": 1,
                                     },
                                 ],
@@ -405,7 +460,7 @@ class SparseRagRoutingTest(unittest.TestCase):
                 {
                     "EpisodeReconstructor": {
                         "episode_id": "E1",
-                        "name": "Arrest",
+                        "name": {"value": "Arrest"},
                         "index_in_stage": 0,
                         "participants": [{"participant_id": "P1"}],
                         "transactions": [],
@@ -466,3 +521,274 @@ class SparseRagRoutingTest(unittest.TestCase):
             builder.execute_agent(state, "TransactionReconstructor")
 
         self.assertEqual(captured["prompt_kwargs"]["TargetEpisode"].episode_id, "E2")
+
+    def test_transaction_reconstructor_local_context_targets_second_episode_after_light_first_episode(self):
+        captured = {}
+
+        class FakeLocalContextBuilder:
+            def build(self, request, bundle):
+                captured["request"] = request
+                return SimpleNamespace(
+                    rendered_context="CTX",
+                    summary={},
+                    query_bundle={},
+                    budget_summary={},
+                    memory={},
+                    retrieval_status="sufficient",
+                )
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            return SimpleNamespace(response="{}", to_dict=lambda: {})
+
+        builder = self.builder
+        builder.agents_lm = object()
+        builder.save_traces = lambda *args, **kwargs: None
+        builder._rewrite_heavy_agent_user_msg_template = lambda *args, **kwargs: "user"
+        builder._attach_compact_heavy_agent_prompt_kwargs = (
+            lambda *args, **kwargs: None
+        )
+        builder._attach_local_context_prompt_kwargs = lambda *args, **kwargs: None
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Arrest"},
+                            "index_in_stage": 0,
+                        },
+                        {
+                            "episode_id": "E2",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 1,
+                        },
+                    ],
+                }
+            ]
+        }
+
+        state = {
+            "build_input": self._make_build_input(),
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "S1",
+                                "episodes": [
+                                    {
+                                        "episode_id": "E1",
+                                        "name": {"value": "Arrest"},
+                                        "index_in_stage": 0,
+                                    },
+                                    {
+                                        "episode_id": "E2",
+                                        "name": {"value": "Money Laundering"},
+                                        "index_in_stage": 1,
+                                    },
+                                ],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    }
+                },
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "E1",
+                        "name": {"value": "Arrest"},
+                        "index_in_stage": 0,
+                        "participants": [{"participant_id": "P1"}],
+                        "transactions": [],
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P2"}]
+                    }
+                },
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "EpisodeReconstructor",
+                "ParticipantReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {"TransactionReconstructor": "sys"},
+            "agent_user_msgs": {"TransactionReconstructor": "user"},
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
+                        "detail_tier": "compact",
+                    },
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        },
+                        "mode": "full",
+                        "detail_tier": "standard",
+                    },
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.main_build_module, "LocalContextBuilder", return_value=FakeLocalContextBuilder()
+        ), patch.object(
+            self.main_build_module, "run_single_inference", side_effect=fake_run_single_inference
+        ), patch.object(
+            self.main_build_module,
+            "extract_json_response",
+            return_value={},
+        ):
+            builder.execute_agent(state, "TransactionReconstructor")
+
+        self.assertEqual(captured["request"].target_episode, "Money Laundering")
+
+    def test_integrate_results_preserves_light_episode_empty_transactions_and_keeps_full_episode_transactions(self):
+        builder = self.builder
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Arrest"},
+                            "index_in_stage": 0,
+                        },
+                        {
+                            "episode_id": "E2",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 1,
+                        },
+                    ],
+                }
+            ]
+        }
+
+        state = {
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "S1",
+                                "episodes": [
+                                    {
+                                        "episode_id": "E1",
+                                        "name": {"value": "Arrest"},
+                                        "index_in_stage": 0,
+                                        "participants": [],
+                                        "transactions": [],
+                                    },
+                                    {
+                                        "episode_id": "E2",
+                                        "name": {"value": "Money Laundering"},
+                                        "index_in_stage": 1,
+                                        "participants": [],
+                                        "transactions": [],
+                                    },
+                                ],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    }
+                },
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "E1",
+                        "name": {"value": "Arrest"},
+                        "index_in_stage": 0,
+                        "participants": [{"participant_id": "P1"}],
+                        "transactions": [],
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P2"}]
+                    }
+                },
+                {
+                    "TransactionReconstructor": {
+                        "transactions": [
+                            {
+                                "transaction_id": "T_1",
+                                "name": {"value": "Transaction 1"},
+                                "transaction_type": {"value": "transfer"},
+                                "timestamp": {"value": "2025-01-01"},
+                                "details": {"value": "Episode-level transaction"},
+                                "from_participant_id": "P_1",
+                                "to_participant_id": "P_2",
+                                "instruments": [],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "E2",
+                        "name": {"value": "Money Laundering"},
+                        "index_in_stage": 1,
+                        "participants": [{"participant_id": "P2"}],
+                        "transactions": [],
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                },
+            ],
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
+                        "detail_tier": "compact",
+                    },
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        },
+                        "mode": "full",
+                        "detail_tier": "standard",
+                    },
+                ]
+            },
+        }
+
+        final_cascade = builder.integrate_results(state)
+        episodes = final_cascade["stages"][0]["episodes"]
+        self.assertEqual(episodes[0]["transactions"], [])
+        self.assertEqual(episodes[1]["transactions"][0]["transaction_id"], "T_1")

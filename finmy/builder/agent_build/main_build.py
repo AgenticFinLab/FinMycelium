@@ -428,7 +428,7 @@ class AgentEventBuilder(BaseBuilder):
             )
             return LocalContextBuilder().build(request, bundle)
 
-        current_count = state["agent_executed"].count(agent_name)
+        current_count = self._current_episode_sequence_index(state)
         target_stage, latest_episode = self.extract_latest_episode(
             event_skeleton, current_count
         )
@@ -1349,20 +1349,39 @@ class AgentEventBuilder(BaseBuilder):
 
         # Populate episodes in order
         ep_idx = 0
-        for stage in final_cascade["stages"]:
-            for episode in stage["episodes"]:
+        transaction_idx = 0
+        for stage_index, stage in enumerate(final_cascade["stages"]):
+            for episode_index, episode in enumerate(stage["episodes"]):
                 if ep_idx < len(er_results):
                     # Replace with the fully reconstructed episode
                     episode.update(er_results[ep_idx])
 
-                    # Ensure transactions are attached
-                    if (
+                    plan_entry = self._get_episode_execution_plan_entry(
+                        state.get("episode_execution_plan"),
+                        stage_index,
+                        episode_index,
+                    )
+                    execution_mode = (
+                        plan_entry.get("mode", "full") if plan_entry else "full"
+                    )
+
+                    # Ensure transactions are attached for full episodes only.
+                    if execution_mode == "full":
+                        if (
+                            "transactions" not in episode
+                            or not episode["transactions"]
+                            or isinstance(episode["transactions"], str)
+                        ):
+                            if transaction_idx < len(tr_results):
+                                episode["transactions"] = tr_results[transaction_idx][
+                                    "transactions"
+                                ]
+                        transaction_idx += 1
+                    elif (
                         "transactions" not in episode
-                        or not episode["transactions"]
                         or isinstance(episode["transactions"], str)
                     ):
-                        if ep_idx < len(tr_results):
-                            episode["transactions"] = tr_results[ep_idx]["transactions"]
+                        episode["transactions"] = []
                     # Ensure participants are attached (EpisodeReconstructor uses placeholders)
                     if "participants" not in episode or isinstance(
                         episode["participants"], str
