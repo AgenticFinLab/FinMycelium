@@ -343,6 +343,101 @@ class SparseRagRoutingTest(unittest.TestCase):
             "TransactionReconstructor",
         )
 
+    def test_episode_reconstructor_light_mode_receives_compactness_hint(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": {"value": "Arrest"},
+                        "index_in_stage": 0,
+                        "start_time": {"value": "2025-01-01", "reason": "evidence"},
+                        "end_time": {"value": "2025-01-02", "reason": "evidence"},
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        builder = self.builder
+        builder.agents_lm = object()
+        builder.save_traces = lambda *args, **kwargs: None
+        builder._build_local_context_package = lambda *args, **kwargs: None
+        builder._attach_local_context_prompt_kwargs = lambda *args, **kwargs: None
+        builder._rewrite_heavy_agent_user_msg_template = lambda *args, **kwargs: "user"
+
+        state = {
+            "build_input": self._make_build_input(),
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "S1",
+                                "episodes": [
+                                    {
+                                        "episode_id": "E1",
+                                        "name": {"value": "Arrest"},
+                                        "index_in_stage": 0,
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    }
+                },
+            ],
+            "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {"EpisodeReconstructor": "sys"},
+            "agent_user_msgs": {"EpisodeReconstructor": "user"},
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
+                        "detail_tier": "compact",
+                    }
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.main_build_module, "run_single_inference", side_effect=fake_run_single_inference
+        ), patch.object(
+            self.main_build_module,
+            "extract_json_response",
+            return_value={},
+        ):
+            builder.execute_agent(state, "EpisodeReconstructor")
+
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
+        self.assertEqual(captured["prompt_kwargs"]["TransactionDetailTier"], "compact")
+        self.assertIn("EpisodeCompactnessHint", captured["prompt_kwargs"])
+        self.assertIn(
+            "compact-light-mode",
+            captured["prompt_kwargs"]["EpisodeCompactnessHint"],
+        )
+        self.assertIn("P1", captured["prompt_kwargs"]["TargetEpisodeContext"])
+
     def test_route_after_participant_reconstructor_uses_global_cursor_after_light_episode(self):
         state = {
             "agent_executed": [

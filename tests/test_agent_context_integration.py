@@ -1795,6 +1795,11 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
         self.assertEqual(captured["prompt_kwargs"]["TransactionDetailTier"], "compact")
+        self.assertIn("EpisodeCompactnessHint", captured["prompt_kwargs"])
+        self.assertIn(
+            "compact-light-mode",
+            captured["prompt_kwargs"]["EpisodeCompactnessHint"],
+        )
         self.assertEqual(
             captured["prompt_kwargs"]["EpisodeLocator"],
             {

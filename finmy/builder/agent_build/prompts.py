@@ -505,7 +505,7 @@ Inputs:
 - StageSkeleton: stage name, episode identifiers, and chronology only
 - TargetEpisode: The skeleton of the episode, including `episode_id`, `name`, `index_in_stage`, and pre-reconstructed lists of `participants` and `transactions`.
 - Query, Keywords, Content
-- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeCompactnessHint
 
 Constraints:
 - The TARGET Episode is identified by `episode_id`, `name`, `index_in_stage`.
@@ -520,6 +520,7 @@ Instructions:
 - Read `EpisodeLocator` to stay anchored to the exact stage/episode target.
 - Read `EpisodeExecutionMode` and `TransactionDetailTier` before deciding how much to infer from the transaction foundation.
 - If `EpisodeExecutionMode` is `light`, preserve the provided participants, tolerate an empty transaction foundation, focus on timeline and concise relations, and do not invent transactions to compensate for a compact path.
+- If `EpisodeExecutionMode` is `light`, also obey `EpisodeCompactnessHint` and keep `participant_relations` and `descriptions` minimal unless the content clearly requires more detail.
 - If `EpisodeExecutionMode` is `full`, preserve the current richer reconstruction behavior.
 - **Output Placeholders**: In your output JSON:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
@@ -552,10 +553,12 @@ Inputs:
 - TargetEpisode (includes pre-filled `participants` and `transactions`).
 - Query, Keywords, Content.
 - EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier.
+- EpisodeCompactnessHint.
 
 Instructions:
 - **Fixed Fields**: Treat provided `participants` and `transactions` as fixed.
 - **Execution Mode**: If `EpisodeExecutionMode` is `light`, preserve the provided participants, accept an empty transaction foundation, and keep relations/descriptions concise and evidence-bound.
+- **Compactness Hint**: If `EpisodeCompactnessHint` is present, follow it exactly and prefer the smallest valid output that remains grounded in `Content`.
 - **Output Placeholders**:
     - `"participants": "Results of ParticipantReconstructor"`
     - `"transactions": "Results of TransactionReconstructor"`
@@ -582,6 +585,10 @@ Output:
 === EPISODE LOCATOR BEGIN ===
 {EpisodeLocator}
 === EPISODE LOCATOR END ===
+
+=== EPISODE COMPACTNESS HINT BEGIN ===
+{EpisodeCompactnessHint}
+=== EPISODE COMPACTNESS HINT END ===
 
 === EPISODE EXECUTION MODE BEGIN ===
 {EpisodeExecutionMode}

@@ -1176,6 +1176,17 @@ class AgentEventBuilder(BaseBuilder):
                     belong_state
                 )
                 prompt_kwargs["TargetEpisode"] = target_episode
+                if execution_mode == "light":
+                    prompt_kwargs["EpisodeCompactnessHint"] = (
+                        "compact-light-mode: keep participant_relations and descriptions "
+                        "minimal, do not synthesize transactions, and prefer the smallest "
+                        "valid JSON grounded in Content"
+                    )
+                else:
+                    prompt_kwargs["EpisodeCompactnessHint"] = (
+                        "standard-full-mode: preserve the current richer reconstruction "
+                        "behavior while staying evidence-bound"
+                    )
                 self._attach_compact_heavy_agent_prompt_kwargs(
                     prompt_kwargs,
                     build_ipt,
