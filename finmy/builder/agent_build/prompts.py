@@ -420,6 +420,10 @@ You are a senior expert in financial transaction analysis. Your task is to ident
 
 The target episode's basic skeleton and its participants are provided. You must ensure the extracted transactions involve these participants and align with the episode's timeframe.
 Treat `RetrievedContext` and `RetrievedContextSummary` as additive evidence only. Use them to help ground transaction selection and details, but never replace or override `Content`.
+Read `EpisodeLocator` to stay anchored to the exact stage/episode target.
+Read `TransactionDetailTier` before deciding output depth:
+- If `TransactionDetailTier` is `compact`, emit only clearly evidenced material transactions and prefer omission over speculative linkage.
+- If `TransactionDetailTier` is `standard`, preserve the current richer extraction behavior.
 
 Output a JSON object with a single key "transactions" containing a list of `Transaction` objects defined in the Schema.
 
@@ -448,6 +452,7 @@ Based on the TargetEpisode (which includes Participants), Query, Keywords, and C
 Inputs:
 - TargetEpisode: The skeleton of the episode, including `participants` list.
 - Query, Keywords, Content.
+- EpisodeLocator, TransactionDetailTier.
 
 Output:
 - A JSON object with a single key "transactions" containing a list of `Transaction` objects.
@@ -457,10 +462,19 @@ Instructions:
 - Identify financial transactions supported by `Content`.
 - Use the `participant_id`s from `TargetEpisode.participants` for `from_participant_id` and `to_participant_id`.
 - Use `VerifiableField` for grounded details.
+- If `TransactionDetailTier` is `compact`, prefer an empty list over uncertain transaction linkage.
 
 === TARGET EPISODE BEGIN ===
 {TargetEpisode}
 === TARGET EPISODE END ===
+
+=== EPISODE LOCATOR BEGIN ===
+{EpisodeLocator}
+=== EPISODE LOCATOR END ===
+
+=== TRANSACTION DETAIL TIER BEGIN ===
+{TransactionDetailTier}
+=== TRANSACTION DETAIL TIER END ===
 
 === Query BEGIN ===
 {Query}
@@ -491,6 +505,7 @@ Inputs:
 - StageSkeleton: stage name, episode identifiers, and chronology only
 - TargetEpisode: The skeleton of the episode, including `episode_id`, `name`, `index_in_stage`, and pre-reconstructed lists of `participants` and `transactions`.
 - Query, Keywords, Content
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier
 
 Constraints:
 - The TARGET Episode is identified by `episode_id`, `name`, `index_in_stage`.
@@ -502,6 +517,10 @@ Instructions:
 - **Participants & Transactions Reference**: The `participants` and `transactions` lists in TargetEpisode are already fully reconstructed. Use them as context.
 - Treat `RetrievedContext` as additive evidence only. Use it to ground episode relations and timestamps, but do not remove or replace `Content`.
 - If `RetrievedContextSummary` is provided, use it as a compact signal about what was retrieved for this episode.
+- Read `EpisodeLocator` to stay anchored to the exact stage/episode target.
+- Read `EpisodeExecutionMode` and `TransactionDetailTier` before deciding how much to infer from the transaction foundation.
+- If `EpisodeExecutionMode` is `light`, preserve the provided participants, tolerate an empty transaction foundation, focus on timeline and concise relations, and do not invent transactions to compensate for a compact path.
+- If `EpisodeExecutionMode` is `full`, preserve the current richer reconstruction behavior.
 - **Output Placeholders**: In your output JSON:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
     - Set `transactions` to the exact string `"Results of TransactionReconstructor"`.
@@ -532,9 +551,11 @@ Inputs:
 - StageSkeleton (context).
 - TargetEpisode (includes pre-filled `participants` and `transactions`).
 - Query, Keywords, Content.
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier.
 
 Instructions:
 - **Fixed Fields**: Treat provided `participants` and `transactions` as fixed.
+- **Execution Mode**: If `EpisodeExecutionMode` is `light`, preserve the provided participants, accept an empty transaction foundation, and keep relations/descriptions concise and evidence-bound.
 - **Output Placeholders**:
     - `"participants": "Results of ParticipantReconstructor"`
     - `"transactions": "Results of TransactionReconstructor"`
@@ -557,6 +578,18 @@ Output:
 === TARGET EPISODE BEGIN ===
 {TargetEpisode}
 === TARGET EPISODE END ===
+
+=== EPISODE LOCATOR BEGIN ===
+{EpisodeLocator}
+=== EPISODE LOCATOR END ===
+
+=== EPISODE EXECUTION MODE BEGIN ===
+{EpisodeExecutionMode}
+=== EPISODE EXECUTION MODE END ===
+
+=== TRANSACTION DETAIL TIER BEGIN ===
+{TransactionDetailTier}
+=== TRANSACTION DETAIL TIER END ===
 
 === Query BEGIN ===
 {Query}

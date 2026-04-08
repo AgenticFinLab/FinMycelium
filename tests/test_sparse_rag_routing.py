@@ -883,3 +883,100 @@ class SparseRagRoutingTest(unittest.TestCase):
         episodes = final_cascade["stages"][0]["episodes"]
         self.assertEqual(episodes[0]["transactions"], [])
         self.assertEqual(episodes[1]["transactions"][0]["transaction_id"], "T_1")
+
+    def test_integrate_results_uses_episode_locator_when_transaction_result_missing(self):
+        builder = self.builder
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Arrest"},
+                            "index_in_stage": 0,
+                            "participants": [],
+                            "transactions": [],
+                        },
+                        {
+                            "episode_id": "E2",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 1,
+                            "participants": [],
+                            "transactions": [],
+                        },
+                    ],
+                }
+            ]
+        }
+
+        state = {
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "S1",
+                                "episodes": [
+                                    {
+                                        "episode_id": "E1",
+                                        "name": {"value": "Arrest"},
+                                        "index_in_stage": 0,
+                                        "participants": [],
+                                        "transactions": [],
+                                    },
+                                    {
+                                        "episode_id": "E2",
+                                        "name": {"value": "Money Laundering"},
+                                        "index_in_stage": 1,
+                                        "participants": [],
+                                        "transactions": [],
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        }
+                    },
+                },
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "E2",
+                        "name": {"value": "Money Laundering"},
+                        "index_in_stage": 1,
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        },
+                        "execution_mode": "light",
+                    },
+                },
+            ],
+            "agent_executed": ["ParticipantReconstructor", "EpisodeReconstructor"],
+        }
+
+        final_cascade = builder.integrate_results(state)
+        episodes = final_cascade["stages"][0]["episodes"]
+        self.assertEqual(episodes[0]["participants"], [])
+        self.assertEqual(episodes[0]["transactions"], [])
+        self.assertEqual(episodes[1]["participants"][0]["participant_id"], "P1")
+        self.assertEqual(episodes[1]["transactions"], [])

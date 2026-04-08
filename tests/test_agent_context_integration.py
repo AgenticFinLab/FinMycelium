@@ -1,16 +1,119 @@
 import json
+import importlib
+import sys
+import types
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import finmy.builder.agent_build.main_build as main_build_module
-from finmy.builder.agent_build.main_build import AgentEventBuilder
 from finmy.context.assets import (
     EvidenceAssetBundle,
     EvidenceCard,
     EvidenceIndex,
     EvidenceRetrievalPolicy,
 )
+
+
+def _build_langgraph_shims():
+    langgraph_module = types.ModuleType("langgraph")
+    graph_module = types.ModuleType("langgraph.graph")
+    graph_state_module = types.ModuleType("langgraph.graph.state")
+
+    class _MessagesState(dict):
+        pass
+
+    class _StateGraph:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def add_node(self, *args, **kwargs):
+            return None
+
+        def set_entry_point(self, *args, **kwargs):
+            return None
+
+        def add_conditional_edges(self, *args, **kwargs):
+            return None
+
+        def add_edge(self, *args, **kwargs):
+            return None
+
+        def compile(self, *args, **kwargs):
+            return None
+
+    graph_module.StateGraph = _StateGraph
+    graph_module.END = "END"
+    graph_module.MessagesState = _MessagesState
+    graph_state_module.CompiledStateGraph = object
+    langgraph_module.graph = graph_module
+    return {
+        "langgraph": langgraph_module,
+        "langgraph.graph": graph_module,
+        "langgraph.graph.state": graph_state_module,
+    }
+
+
+def _build_lmbase_shims():
+    lmbase_module = types.ModuleType("lmbase")
+    lmbase_inference_module = types.ModuleType("lmbase.inference")
+    lmbase_inference_base_module = types.ModuleType("lmbase.inference.base")
+    lmbase_inference_api_call_module = types.ModuleType("lmbase.inference.api_call")
+    lmbase_utils_module = types.ModuleType("lmbase.utils")
+    lmbase_utils_tools_module = types.ModuleType("lmbase.utils.tools")
+
+    class _BaseContainer:
+        pass
+
+    class _LangChainAPIInference:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class _InferInput:
+        def __init__(self, *args, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    class _InferOutput:
+        def __init__(self, *args, **kwargs):
+            self.response = ""
+
+        def to_dict(self):
+            return {}
+
+    lmbase_inference_base_module.InferInput = _InferInput
+    lmbase_inference_base_module.InferOutput = _InferOutput
+    lmbase_inference_module.InferInput = _InferInput
+    lmbase_inference_module.InferOutput = _InferOutput
+    lmbase_inference_api_call_module.LangChainAPIInference = _LangChainAPIInference
+    lmbase_utils_tools_module.BaseContainer = _BaseContainer
+    lmbase_module.inference = lmbase_inference_module
+    lmbase_module.utils = lmbase_utils_module
+    return {
+        "lmbase": lmbase_module,
+        "lmbase.inference": lmbase_inference_module,
+        "lmbase.inference.base": lmbase_inference_base_module,
+        "lmbase.inference.api_call": lmbase_inference_api_call_module,
+        "lmbase.utils": lmbase_utils_module,
+        "lmbase.utils.tools": lmbase_utils_tools_module,
+    }
+
+
+def _load_builder_module():
+    fake_modules = {}
+    fake_modules.update(_build_langgraph_shims())
+    fake_modules.update(_build_lmbase_shims())
+    with patch.dict(sys.modules, fake_modules):
+        sys.modules.pop("finmy.builder.agent_build.main_build", None)
+        module = importlib.import_module("finmy.builder.agent_build.main_build")
+    return module
+
+
+try:
+    import finmy.builder.agent_build.main_build as main_build_module
+except ModuleNotFoundError:
+    main_build_module = _load_builder_module()
+
+AgentEventBuilder = main_build_module.AgentEventBuilder
 
 
 def _vf(value):
@@ -1572,6 +1675,135 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertNotIn('"participants": [', rendered_prompt)
         self.assertNotIn('"transactions": [', rendered_prompt)
         self.assertNotIn('"episodes": [', rendered_prompt)
+
+    def test_episode_reconstructor_light_mode_exposes_empty_transactions_and_compact_tier(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2024"),
+                        "end_time": _vf("2024"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P_1", "name": _vf("Qian Zhimin")}]
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "execution_mode": "light",
+                    },
+                },
+            ],
+            "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
+                        "detail_tier": "compact",
+                    }
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        rich_context = SimpleNamespace(
+            rendered_context="RICH_EPISODE_CONTEXT",
+            summary={"selected_count": 1},
+            retrieval_status="fallback_fulltext",
+            query_bundle={
+                "scope": "episode",
+                "stage_name": "Stage 1",
+                "episode_name": "Episode 1",
+            },
+            budget_summary={"target_card_budget": 1, "used_card_count": 1},
+            memory={"selection_rationale": [{"matched_fields": ["episode_name"]}]},
+        )
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=rich_context,
+        ):
+            self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
+        self.assertEqual(captured["prompt_kwargs"]["TransactionDetailTier"], "compact")
+        self.assertEqual(
+            captured["prompt_kwargs"]["EpisodeLocator"],
+            {
+                "stage_index": 0,
+                "episode_index": 0,
+                "stage_id": "S1",
+                "episode_id": "E1",
+            },
+        )
+        self.assertIn("Transaction IDs: none", captured["prompt_kwargs"]["TargetEpisodeContext"])
+        self.assertIn("Participant IDs: P_1", captured["prompt_kwargs"]["TargetEpisodeContext"])
+        self.assertIn("real content\nsecondary content line", rendered_prompt)
 
     def test_episode_reconstructor_exposes_compact_payload_contract_additively(self):
         captured = {}

@@ -365,6 +365,51 @@ class AgentEventBuilder(BaseBuilder):
                 return entry
         return None
 
+    def _episode_locator_key(self, locator: dict[str, object] | None):
+        if not isinstance(locator, dict):
+            return None
+        stage_id = locator.get("stage_id")
+        episode_id = locator.get("episode_id")
+        if stage_id is not None and episode_id is not None:
+            return ("ids", stage_id, episode_id)
+        stage_index = locator.get("stage_index")
+        episode_index = locator.get("episode_index")
+        if stage_index is not None and episode_index is not None:
+            return ("indices", stage_index, episode_index)
+        return None
+
+    def _result_locator_map(
+        self,
+        state: AgentState,
+        agent_name: str,
+    ) -> dict[tuple[object, ...], dict]:
+        locator_map: dict[tuple[object, ...], dict] = {}
+        for item in state["agent_results"]:
+            if agent_name not in item:
+                continue
+            locator_key = self._episode_locator_key(
+                item.get("_meta", {}).get("episode_locator")
+            )
+            if locator_key is not None:
+                locator_map[locator_key] = item[agent_name]
+        return locator_map
+
+    def _result_locator_meta_map(
+        self,
+        state: AgentState,
+        agent_name: str,
+    ) -> dict[tuple[object, ...], dict]:
+        locator_map: dict[tuple[object, ...], dict] = {}
+        for item in state["agent_results"]:
+            if agent_name not in item:
+                continue
+            locator_key = self._episode_locator_key(
+                item.get("_meta", {}).get("episode_locator")
+            )
+            if locator_key is not None:
+                locator_map[locator_key] = item.get("_meta", {})
+        return locator_map
+
     def _reconstruct_episode_execution_plan_from_results(
         self,
         state: AgentState,
@@ -1130,7 +1175,18 @@ class AgentEventBuilder(BaseBuilder):
         self.save_traces(parsed_result, f"{savename}-Result", "json")
 
         # Update state
-        state["agent_results"].append({agent_name: parsed_result})
+        result_entry = {agent_name: parsed_result}
+        if agent_name in {
+            "ParticipantReconstructor",
+            "TransactionReconstructor",
+            "EpisodeReconstructor",
+        }:
+            result_entry["_meta"] = {
+                "episode_locator": locator,
+                "execution_mode": execution_mode,
+                "detail_tier": detail_tier,
+            }
+        state["agent_results"].append(result_entry)
         state["cost"].append({agent_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(agent_name)
 
@@ -1370,12 +1426,23 @@ class AgentEventBuilder(BaseBuilder):
         Integrates all agent results into the final EventCascade structure.
         """
         # 1. Start with the skeleton
-        final_cascade = self._collect_reconstructed_participants_structure(state)
+        final_cascade = copy.deepcopy(self._get_event_skeleton(state))
         episode_execution_plan = state.get("episode_execution_plan")
         if not (episode_execution_plan and episode_execution_plan.get("episodes")):
             episode_execution_plan = self._reconstruct_episode_execution_plan_from_results(
                 state
             )
+
+        episode_result_locator_map = self._result_locator_map(state, "EpisodeReconstructor")
+        episode_meta_locator_map = self._result_locator_meta_map(
+            state, "EpisodeReconstructor"
+        )
+        participant_result_locator_map = self._result_locator_map(
+            state, "ParticipantReconstructor"
+        )
+        transaction_result_locator_map = self._result_locator_map(
+            state, "TransactionReconstructor"
+        )
 
         # 2. Collect Transaction results
         tr_results = [
@@ -1403,18 +1470,50 @@ class AgentEventBuilder(BaseBuilder):
         transaction_idx = 0
         for stage_index, stage in enumerate(final_cascade["stages"]):
             for episode_index, episode in enumerate(stage["episodes"]):
-                if ep_idx < len(er_results):
+                locator_key = self._episode_locator_key(
+                    self._episode_locator(
+                        stage_index,
+                        episode_index,
+                        stage.get("stage_id"),
+                        episode.get("episode_id"),
+                    )
+                )
+                episode_result = (
+                    episode_result_locator_map.get(locator_key)
+                    if episode_result_locator_map
+                    else (er_results[ep_idx] if ep_idx < len(er_results) else None)
+                )
+                participant_result = (
+                    participant_result_locator_map.get(locator_key)
+                    if participant_result_locator_map
+                    else (p_results[ep_idx] if ep_idx < len(p_results) else None)
+                )
+                transaction_result = (
+                    transaction_result_locator_map.get(locator_key)
+                    if transaction_result_locator_map
+                    else (
+                        tr_results[transaction_idx]
+                        if transaction_idx < len(tr_results)
+                        else None
+                    )
+                )
+
+                if episode_result is not None:
                     # Replace with the fully reconstructed episode
-                    episode.update(er_results[ep_idx])
+                    episode.update(episode_result)
 
                     plan_entry = self._get_episode_execution_plan_entry(
                         episode_execution_plan,
                         stage_index,
                         episode_index,
                     )
-                    execution_mode = (
-                        plan_entry.get("mode", "full") if plan_entry else "full"
-                    )
+                    execution_mode = "full"
+                    if plan_entry:
+                        execution_mode = plan_entry.get("mode", "full")
+                    elif locator_key in episode_meta_locator_map:
+                        execution_mode = episode_meta_locator_map[locator_key].get(
+                            "execution_mode", "full"
+                        )
 
                     # Ensure transactions are attached for full episodes only.
                     if execution_mode == "full":
@@ -1423,11 +1522,12 @@ class AgentEventBuilder(BaseBuilder):
                             or not episode["transactions"]
                             or isinstance(episode["transactions"], str)
                         ):
-                            if transaction_idx < len(tr_results):
-                                episode["transactions"] = tr_results[transaction_idx][
-                                    "transactions"
-                                ]
-                        transaction_idx += 1
+                            if transaction_result is not None:
+                                episode["transactions"] = transaction_result.get(
+                                    "transactions", []
+                                )
+                        if not transaction_result_locator_map:
+                            transaction_idx += 1
                     elif (
                         "transactions" not in episode
                         or isinstance(episode["transactions"], str)
@@ -1437,8 +1537,10 @@ class AgentEventBuilder(BaseBuilder):
                     if "participants" not in episode or isinstance(
                         episode["participants"], str
                     ):
-                        if ep_idx < len(p_results):
-                            episode["participants"] = p_results[ep_idx]["participants"]
+                        if participant_result is not None:
+                            episode["participants"] = participant_result.get(
+                                "participants", []
+                            )
                 ep_idx += 1
 
         # 4. Integrate StageDescriptionReconstructor results
