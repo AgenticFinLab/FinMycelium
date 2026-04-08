@@ -235,6 +235,67 @@ class AgentEventBuilder(BaseBuilder):
             return skeleton
         raise ValueError("No skeleton result found in builder state")
 
+    def _episode_locator(self, stage_id: str, episode_id: str) -> str:
+        """Return a stable episode locator used across routing and integration."""
+        return f"{stage_id}:{episode_id}"
+
+    def _iter_skeleton_episodes(self, event_skeleton: dict):
+        for stage in event_skeleton.get("stages", []) or []:
+            stage_id = stage.get("stage_id", "")
+            for episode in stage.get("episodes", []) or []:
+                yield stage, episode, self._episode_locator(
+                    stage_id, episode.get("episode_id", "")
+                )
+
+    def _build_episode_execution_plan(
+        self,
+        build_input: BuildInput,
+        event_skeleton: dict,
+    ) -> dict[str, dict[str, object]]:
+        """Build a cheap per-episode routing plan from the validated skeleton.
+
+        The first slice only needs a coarse, deterministic mode split:
+        episodes that look money-dense should stay on the full path, while the
+        rest can use the light path.
+        """
+        bundle = getattr(build_input, "context_assets", None)
+        cards = getattr(bundle, "evidence_cards", []) or []
+        has_money_signal = any(
+            bool(getattr(card, "money_hints", None))
+            or "money_dense" in (getattr(card, "quality_flags", None) or [])
+            for card in cards
+        )
+        money_tokens = {
+            "cash",
+            "fund",
+            "funds",
+            "launder",
+            "laundering",
+            "payment",
+            "transfer",
+            "property",
+            "asset",
+            "assets",
+            "money",
+            "wire",
+        }
+
+        plan: dict[str, dict[str, object]] = {}
+        for stage, episode, locator in self._iter_skeleton_episodes(event_skeleton):
+            episode_name = self._scalar_value(episode.get("name", "")).lower()
+            stage_name = self._scalar_value(stage.get("name", "")).lower()
+            combined_text = f"{stage_name} {episode_name}"
+            money_dense = has_money_signal and any(
+                token in combined_text for token in money_tokens
+            )
+            mode = "full" if money_dense else "light"
+            plan[locator] = {
+                "mode": mode,
+                "detail_tier": "standard" if mode == "full" else "compact",
+            }
+
+        return plan
+
     def _build_local_context_package(self, state: AgentState, agent_name: str):
         """Build local context for reconstruction paths and skeleton shadow mode.
 
@@ -913,6 +974,15 @@ class AgentEventBuilder(BaseBuilder):
         if agent_name in {"SkeletonReconstructor", "SkeletonChecker"}:
             is_valid, reason = self._validate_event_skeleton(parsed_result)
             state["skeleton_validation_reason"] = reason
+            if (
+                agent_name == "SkeletonChecker"
+                and is_valid
+                and not state.get("episode_execution_plan")
+            ):
+                state["episode_execution_plan"] = self._build_episode_execution_plan(
+                    build_ipt,
+                    parsed_result,
+                )
             if agent_name == "SkeletonChecker" and not is_valid:
                 has_content = self._content_has_signal(state["build_input"])
                 if has_content:

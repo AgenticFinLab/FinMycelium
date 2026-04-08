@@ -76,6 +76,8 @@ class AgentState(MessagesState):
     agent_system_msgs: Dict[str, str]
     # Per-agent user prompts (agent_name -> user_prompt)
     agent_user_msgs: Dict[str, str]
+    # Stable per-episode execution routing metadata populated after skeleton validation
+    episode_execution_plan: Dict[str, Dict[str, Any]]
     # Local retry metadata for skeleton validation/routing decisions
     skeleton_retry_count: int
     skeleton_validation_reason: str
