@@ -235,23 +235,40 @@ class AgentEventBuilder(BaseBuilder):
             return skeleton
         raise ValueError("No skeleton result found in builder state")
 
-    def _episode_locator(self, stage_id: str, episode_id: str) -> str:
-        """Return a stable episode locator used across routing and integration."""
-        return f"{stage_id}:{episode_id}"
+    def _episode_locator(
+        self,
+        stage_index: int,
+        episode_index: int,
+        stage_id: str | None = None,
+        episode_id: str | None = None,
+    ) -> dict[str, object]:
+        """Return a stable, explicit episode locator used across routing and integration."""
+        locator = {
+            "stage_index": stage_index,
+            "episode_index": episode_index,
+        }
+        if stage_id is not None:
+            locator["stage_id"] = stage_id
+        if episode_id is not None:
+            locator["episode_id"] = episode_id
+        return locator
 
     def _iter_skeleton_episodes(self, event_skeleton: dict):
-        for stage in event_skeleton.get("stages", []) or []:
+        for stage_index, stage in enumerate(event_skeleton.get("stages", []) or []):
             stage_id = stage.get("stage_id", "")
-            for episode in stage.get("episodes", []) or []:
-                yield stage, episode, self._episode_locator(
-                    stage_id, episode.get("episode_id", "")
+            for episode_index, episode in enumerate(stage.get("episodes", []) or []):
+                yield stage_index, episode_index, stage, episode, self._episode_locator(
+                    stage_index,
+                    episode_index,
+                    stage_id,
+                    episode.get("episode_id", ""),
                 )
 
     def _build_episode_execution_plan(
         self,
         build_input: BuildInput,
         event_skeleton: dict,
-    ) -> dict[str, dict[str, object]]:
+    ) -> dict[str, object]:
         """Build a cheap per-episode routing plan from the validated skeleton.
 
         The first slice only needs a coarse, deterministic mode split:
@@ -280,8 +297,14 @@ class AgentEventBuilder(BaseBuilder):
             "wire",
         }
 
-        plan: dict[str, dict[str, object]] = {}
-        for stage, episode, locator in self._iter_skeleton_episodes(event_skeleton):
+        plan_entries: list[dict[str, object]] = []
+        for (
+            stage_index,
+            episode_index,
+            stage,
+            episode,
+            locator,
+        ) in self._iter_skeleton_episodes(event_skeleton):
             episode_name = self._scalar_value(episode.get("name", "")).lower()
             stage_name = self._scalar_value(stage.get("name", "")).lower()
             combined_text = f"{stage_name} {episode_name}"
@@ -289,12 +312,36 @@ class AgentEventBuilder(BaseBuilder):
                 token in combined_text for token in money_tokens
             )
             mode = "full" if money_dense else "light"
-            plan[locator] = {
-                "mode": mode,
-                "detail_tier": "standard" if mode == "full" else "compact",
-            }
+            plan_entries.append(
+                {
+                    "locator": locator,
+                    "stage_index": stage_index,
+                    "episode_index": episode_index,
+                    "mode": mode,
+                    "detail_tier": "standard" if mode == "full" else "compact",
+                }
+            )
 
-        return plan
+        return {"episodes": plan_entries}
+
+    def _get_episode_execution_plan_entry(
+        self,
+        episode_execution_plan: dict[str, object] | None,
+        stage_index: int,
+        episode_index: int,
+    ) -> dict[str, object] | None:
+        """Find the execution-plan record for a skeleton episode using explicit coordinates."""
+        if not episode_execution_plan:
+            return None
+
+        for entry in episode_execution_plan.get("episodes", []) or []:
+            locator = entry.get("locator", {}) if isinstance(entry, dict) else {}
+            if (
+                locator.get("stage_index") == stage_index
+                and locator.get("episode_index") == episode_index
+            ):
+                return entry
+        return None
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
         """Build local context for reconstruction paths and skeleton shadow mode.
@@ -706,6 +753,7 @@ class AgentEventBuilder(BaseBuilder):
         build_ipt = state["build_input"]
         state.setdefault("skeleton_retry_count", 0)
         state.setdefault("skeleton_validation_reason", "")
+        state.setdefault("episode_execution_plan", {"episodes": []})
 
         # Common prompt arguments
         prompt_kwargs = {
@@ -977,7 +1025,7 @@ class AgentEventBuilder(BaseBuilder):
             if (
                 agent_name == "SkeletonChecker"
                 and is_valid
-                and not state.get("episode_execution_plan")
+                and not (state.get("episode_execution_plan", {}).get("episodes") or [])
             ):
                 state["episode_execution_plan"] = self._build_episode_execution_plan(
                     build_ipt,
@@ -1336,6 +1384,7 @@ class AgentEventBuilder(BaseBuilder):
             "cost": [],
             "agent_system_msgs": agent_system_msgs,
             "agent_user_msgs": agent_user_msgs,
+            "episode_execution_plan": {"episodes": []},
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }

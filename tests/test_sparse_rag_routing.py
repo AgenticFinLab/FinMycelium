@@ -1,9 +1,19 @@
-import unittest
+import importlib
 import sys
 import types
+import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
-if "langgraph" not in sys.modules:
+from finmy.context.assets import (
+    EvidenceAssetBundle,
+    EvidenceCard,
+    EvidenceIndex,
+    EvidenceRetrievalPolicy,
+)
+
+
+def _build_langgraph_shims():
     langgraph_module = types.ModuleType("langgraph")
     graph_module = types.ModuleType("langgraph.graph")
     graph_state_module = types.ModuleType("langgraph.graph.state")
@@ -35,11 +45,14 @@ if "langgraph" not in sys.modules:
     graph_module.MessagesState = _MessagesState
     graph_state_module.CompiledStateGraph = object
     langgraph_module.graph = graph_module
-    sys.modules["langgraph"] = langgraph_module
-    sys.modules["langgraph.graph"] = graph_module
-    sys.modules["langgraph.graph.state"] = graph_state_module
+    return {
+        "langgraph": langgraph_module,
+        "langgraph.graph": graph_module,
+        "langgraph.graph.state": graph_state_module,
+    }
 
-if "lmbase" not in sys.modules:
+
+def _build_lmbase_shims():
     lmbase_module = types.ModuleType("lmbase")
     lmbase_inference_module = types.ModuleType("lmbase.inference")
     lmbase_inference_base_module = types.ModuleType("lmbase.inference.base")
@@ -73,25 +86,33 @@ if "lmbase" not in sys.modules:
     lmbase_utils_tools_module.BaseContainer = _BaseContainer
     lmbase_module.inference = lmbase_inference_module
     lmbase_module.utils = lmbase_utils_module
-    sys.modules["lmbase"] = lmbase_module
-    sys.modules["lmbase.inference"] = lmbase_inference_module
-    sys.modules["lmbase.inference.base"] = lmbase_inference_base_module
-    sys.modules["lmbase.inference.api_call"] = lmbase_inference_api_call_module
-    sys.modules["lmbase.utils"] = lmbase_utils_module
-    sys.modules["lmbase.utils.tools"] = lmbase_utils_tools_module
+    return {
+        "lmbase": lmbase_module,
+        "lmbase.inference": lmbase_inference_module,
+        "lmbase.inference.base": lmbase_inference_base_module,
+        "lmbase.inference.api_call": lmbase_inference_api_call_module,
+        "lmbase.utils": lmbase_utils_module,
+        "lmbase.utils.tools": lmbase_utils_tools_module,
+    }
 
-from finmy.builder.agent_build.main_build import AgentEventBuilder
-from finmy.context.assets import (
-    EvidenceAssetBundle,
-    EvidenceCard,
-    EvidenceIndex,
-    EvidenceRetrievalPolicy,
-)
+
+def _load_builder_module():
+    fake_modules = {}
+    fake_modules.update(_build_langgraph_shims())
+    fake_modules.update(_build_lmbase_shims())
+    with patch.dict(sys.modules, fake_modules):
+        sys.modules.pop("finmy.builder.agent_build.main_build", None)
+        module = importlib.import_module("finmy.builder.agent_build.main_build")
+    return module.AgentEventBuilder, module
 
 
 class SparseRagRoutingTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.AgentEventBuilder, cls.main_build_module = _load_builder_module()
+
     def setUp(self):
-        self.builder = AgentEventBuilder.__new__(AgentEventBuilder)
+        self.builder = self.AgentEventBuilder.__new__(self.AgentEventBuilder)
 
     def _make_build_input(self):
         bundle = EvidenceAssetBundle(
@@ -146,16 +167,89 @@ class SparseRagRoutingTest(unittest.TestCase):
             ]
         }
 
+    def _plan_entry(self, plan, stage_index, episode_index):
+        for entry in plan["episodes"]:
+            locator = entry["locator"]
+            if (
+                locator["stage_index"] == stage_index
+                and locator["episode_index"] == episode_index
+            ):
+                return entry
+        self.fail(f"No plan entry for stage {stage_index}, episode {episode_index}")
+
     def test_build_episode_execution_plan_marks_simple_episode_light(self):
         plan = self.builder._build_episode_execution_plan(
             self._make_build_input(),
             self._make_skeleton(),
         )
-        self.assertEqual(plan["S1:E1"]["mode"], "light")
+        self.assertEqual(self._plan_entry(plan, 0, 0)["mode"], "light")
 
     def test_build_episode_execution_plan_marks_money_dense_episode_full(self):
         plan = self.builder._build_episode_execution_plan(
             self._make_build_input(),
             self._make_skeleton(),
         )
-        self.assertEqual(plan["S2:E2"]["mode"], "full")
+        self.assertEqual(self._plan_entry(plan, 1, 0)["mode"], "full")
+
+    def test_run_initializes_empty_episode_execution_plan(self):
+        build_input = self._make_build_input()
+        observed_state = {}
+
+        class DummyApp:
+            def invoke(self, state, config=None):
+                observed_state.update(state)
+                return state
+
+        self.builder._get_agent_prompts = lambda: ({}, {})
+        self.builder.graph = lambda: DummyApp()
+        self.builder.integrate_results = lambda state: state
+        self.builder.integrate_from_files = lambda: {}
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.build_config = {"graph_config": {}}
+
+        self.builder.run(build_input)
+
+        self.assertEqual(observed_state["episode_execution_plan"], {"episodes": []})
+
+    def test_skeleton_checker_populates_episode_execution_plan(self):
+        build_input = self._make_build_input()
+        skeleton = self._make_skeleton()
+        state = {
+            "build_input": build_input,
+            "agent_results": [{"SkeletonReconstructor": skeleton}],
+            "agent_executed": ["SkeletonReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {"SkeletonChecker": "system {STRUCTURE_SPEC}"},
+            "agent_user_msgs": {"SkeletonChecker": "user"},
+            "episode_execution_plan": {"episodes": []},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        fake_output = types.SimpleNamespace(
+            response="{}",
+            to_dict=lambda: {"response": "{}"},
+        )
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder._build_local_context_package = lambda *args, **kwargs: None
+        self.builder._attach_local_context_prompt_kwargs = lambda *args, **kwargs: None
+        self.builder._rewrite_heavy_agent_user_msg_template = lambda *args, **kwargs: "user"
+        self.builder._validate_event_skeleton = lambda skeleton_dict: (True, "")
+
+        with patch.object(
+            self.main_build_module, "run_single_inference", return_value=fake_output
+        ), patch.object(
+            self.main_build_module,
+            "extract_json_response",
+            return_value=skeleton,
+        ):
+            self.builder.execute_agent(state, "SkeletonChecker")
+
+        self.assertEqual(len(state["episode_execution_plan"]["episodes"]), 2)
+        self.assertEqual(
+            self._plan_entry(state["episode_execution_plan"], 0, 0)["mode"],
+            "light",
+        )
+
