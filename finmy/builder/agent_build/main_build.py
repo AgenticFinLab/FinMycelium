@@ -264,6 +264,10 @@ class AgentEventBuilder(BaseBuilder):
                     episode.get("episode_id", ""),
                 )
 
+    def _episode_locator_key(self, locator: dict[str, object]) -> tuple[object, object]:
+        """Return a stable lookup key for a coordinate-based episode locator."""
+        return locator.get("stage_index"), locator.get("episode_index")
+
     def _build_episode_execution_plan(
         self,
         build_input: BuildInput,
@@ -342,6 +346,30 @@ class AgentEventBuilder(BaseBuilder):
             ):
                 return entry
         return None
+
+    def _route_after_participant_reconstructor(self, state: AgentState):
+        """Route light episodes around TransactionReconstructor."""
+        event_skeleton = self._get_event_skeleton(state)
+        participant_runs = state["agent_executed"].count("ParticipantReconstructor")
+        current_episode_idx = max(participant_runs - 1, 0)
+        belong_state, latest_episode = self.extract_latest_episode(
+            event_skeleton,
+            current_episode_idx,
+        )
+        if not latest_episode:
+            raise ValueError("Could not determine episode for participant routing")
+
+        stage_index = (
+            belong_state.get("index_in_event", 0) if isinstance(belong_state, dict) else 0
+        )
+        episode_index = latest_episode.get("index_in_stage", 0)
+        plan_entry = self._get_episode_execution_plan_entry(
+            state.get("episode_execution_plan"),
+            stage_index,
+            episode_index,
+        )
+        mode = plan_entry.get("mode", "full") if plan_entry else "full"
+        return "EpisodeReconstructor" if mode == "light" else "TransactionReconstructor"
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
         """Build local context for reconstruction paths and skeleton shadow mode.
@@ -930,6 +958,31 @@ class AgentEventBuilder(BaseBuilder):
                 raise ValueError(f"Could not find episode for count {current_count}")
 
             target_episode = Episode(**latest_episode)
+            stage_index = (
+                belong_state.get("index_in_event", 0)
+                if isinstance(belong_state, dict)
+                else 0
+            )
+            episode_index = getattr(target_episode, "index_in_stage", 0)
+            locator = self._episode_locator(
+                stage_index,
+                episode_index,
+                belong_state.get("stage_id") if isinstance(belong_state, dict) else None,
+                latest_episode.get("episode_id"),
+            )
+            plan_entry = self._get_episode_execution_plan_entry(
+                state.get("episode_execution_plan"),
+                stage_index,
+                episode_index,
+            )
+            execution_mode = plan_entry.get("mode", "full") if plan_entry else "full"
+            detail_tier = (
+                plan_entry.get("detail_tier", "standard") if plan_entry else "standard"
+            )
+
+            prompt_kwargs["EpisodeLocator"] = locator
+            prompt_kwargs["EpisodeExecutionMode"] = execution_mode
+            prompt_kwargs["TransactionDetailTier"] = detail_tier
 
             savename_suffix = f"-Stage{belong_state['index_in_event']}-Episode{target_episode.index_in_stage}"
 
@@ -964,14 +1017,23 @@ class AgentEventBuilder(BaseBuilder):
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             elif agent_name == "EpisodeReconstructor":
-                # Get transactions from the immediately preceding step (TransactionReconstructor)
-                last_result = state["agent_results"][-1]
-                transactions_data = last_result["TransactionReconstructor"]
-                target_episode.transactions = transactions_data["transactions"]
+                # Light episodes skip TransactionReconstructor and inherit the
+                # participant output directly from the previous node.
+                if execution_mode == "light":
+                    participants_data = state["agent_results"][-1][
+                        "ParticipantReconstructor"
+                    ]
+                    transactions_data = {"transactions": []}
+                else:
+                    # Get transactions from the immediately preceding step (TransactionReconstructor)
+                    last_result = state["agent_results"][-1]
+                    transactions_data = last_result["TransactionReconstructor"]
 
-                # Get participants from the step before that (ParticipantReconstructor)
-                second_last_result = state["agent_results"][-2]
-                participants_data = second_last_result["ParticipantReconstructor"]
+                    # Get participants from the step before that (ParticipantReconstructor)
+                    second_last_result = state["agent_results"][-2]
+                    participants_data = second_last_result["ParticipantReconstructor"]
+
+                target_episode.transactions = transactions_data["transactions"]
                 target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
@@ -1015,7 +1077,17 @@ class AgentEventBuilder(BaseBuilder):
         self.save_traces(parsed_result, f"{savename}-Result", "json")
 
         # Update state
-        state["agent_results"].append({agent_name: parsed_result})
+        result_entry = {agent_name: parsed_result}
+        if agent_name in {
+            "ParticipantReconstructor",
+            "TransactionReconstructor",
+            "EpisodeReconstructor",
+        }:
+            result_entry["_meta"] = {
+                "episode_locator": locator,
+                "execution_mode": execution_mode,
+            }
+        state["agent_results"].append(result_entry)
         state["cost"].append({agent_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(agent_name)
 
@@ -1143,8 +1215,15 @@ class AgentEventBuilder(BaseBuilder):
             },
         )
 
-        # Intra-Episode Flow: Participant -> Transaction -> Episode
-        g.add_edge("ParticipantReconstructor", "TransactionReconstructor")
+        # Intra-Episode Flow: route light episodes directly to EpisodeReconstructor.
+        g.add_conditional_edges(
+            "ParticipantReconstructor",
+            self._route_after_participant_reconstructor,
+            {
+                "TransactionReconstructor": "TransactionReconstructor",
+                "EpisodeReconstructor": "EpisodeReconstructor",
+            },
+        )
         g.add_edge("TransactionReconstructor", "EpisodeReconstructor")
 
         # ============================================================================
@@ -1250,50 +1329,74 @@ class AgentEventBuilder(BaseBuilder):
         # 1. Start with the skeleton
         final_cascade = self._collect_reconstructed_participants_structure(state)
 
-        # 2. Collect Transaction results
-        tr_results = [
-            r["TransactionReconstructor"]
-            for r in state["agent_results"]
-            if "TransactionReconstructor" in r
-        ]
+        def _result_locator_map(agent_name: str) -> dict[tuple[object, object], dict]:
+            locator_map: dict[tuple[object, object], dict] = {}
+            for result in state["agent_results"]:
+                if agent_name not in result:
+                    continue
+                locator = result.get("_meta", {}).get("episode_locator")
+                if isinstance(locator, dict):
+                    locator_map[self._episode_locator_key(locator)] = result[agent_name]
+            return locator_map
 
-        # Also collect Participant results to reattach after Episode update
-        p_results = [
-            r["ParticipantReconstructor"]
-            for r in state["agent_results"]
-            if "ParticipantReconstructor" in r
-        ]
+        def _result_sequence(agent_name: str) -> list[dict]:
+            return [
+                result[agent_name]
+                for result in state["agent_results"]
+                if agent_name in result
+            ]
 
-        # 3. Collect Episode results
-        er_results = [
-            r["EpisodeReconstructor"]
-            for r in state["agent_results"]
-            if "EpisodeReconstructor" in r
-        ]
+        tr_results = _result_locator_map("TransactionReconstructor")
+        tr_results_seq = _result_sequence("TransactionReconstructor")
+        p_results = _result_locator_map("ParticipantReconstructor")
+        p_results_seq = _result_sequence("ParticipantReconstructor")
+        er_results = _result_locator_map("EpisodeReconstructor")
+        er_results_seq = _result_sequence("EpisodeReconstructor")
 
-        # Populate episodes in order
-        ep_idx = 0
-        for stage in final_cascade["stages"]:
-            for episode in stage["episodes"]:
-                if ep_idx < len(er_results):
-                    # Replace with the fully reconstructed episode
-                    episode.update(er_results[ep_idx])
+        episode_seq_idx = 0
+        for stage_index, stage in enumerate(final_cascade["stages"]):
+            for episode_index, episode in enumerate(stage["episodes"]):
+                locator = self._episode_locator(
+                    stage_index,
+                    episode_index,
+                    stage.get("stage_id"),
+                    episode.get("episode_id"),
+                )
+                episode_result = er_results.get(self._episode_locator_key(locator))
+                if episode_result is None and episode_seq_idx < len(er_results_seq):
+                    episode_result = er_results_seq[episode_seq_idx]
+                if episode_result:
+                    episode.update(episode_result)
 
-                    # Ensure transactions are attached
-                    if (
-                        "transactions" not in episode
-                        or not episode["transactions"]
-                        or isinstance(episode["transactions"], str)
-                    ):
-                        if ep_idx < len(tr_results):
-                            episode["transactions"] = tr_results[ep_idx]["transactions"]
-                    # Ensure participants are attached (EpisodeReconstructor uses placeholders)
-                    if "participants" not in episode or isinstance(
-                        episode["participants"], str
-                    ):
-                        if ep_idx < len(p_results):
-                            episode["participants"] = p_results[ep_idx]["participants"]
-                ep_idx += 1
+                if not episode.get("transactions") or isinstance(
+                    episode.get("transactions"), str
+                ):
+                    transactions = tr_results.get(
+                        self._episode_locator_key(locator),
+                        {},
+                    ).get("transactions")
+                    if transactions is None and episode_seq_idx < len(tr_results_seq):
+                        transactions = tr_results_seq[episode_seq_idx].get(
+                            "transactions",
+                            [],
+                        )
+                    episode["transactions"] = transactions or []
+
+                if not episode.get("participants") or isinstance(
+                    episode.get("participants"), str
+                ):
+                    participants = p_results.get(
+                        self._episode_locator_key(locator),
+                        {},
+                    ).get("participants")
+                    if participants is None and episode_seq_idx < len(p_results_seq):
+                        participants = p_results_seq[episode_seq_idx].get(
+                            "participants",
+                            [],
+                        )
+                    episode["participants"] = participants or []
+
+                episode_seq_idx += 1
 
         # 4. Integrate StageDescriptionReconstructor results
         sd_results = [
