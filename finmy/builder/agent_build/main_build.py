@@ -451,14 +451,20 @@ class AgentEventBuilder(BaseBuilder):
                 if stage_index is None:
                     break
 
-            mode = "full" if transaction_seen_for_current_episode else "light"
+            result_meta = result.get("_meta", {})
+            mode = result_meta.get("execution_mode")
+            if mode not in {"light", "full"}:
+                mode = "full" if transaction_seen_for_current_episode else "light"
+            detail_tier = result_meta.get("detail_tier")
+            if detail_tier not in {"compact", "standard"}:
+                detail_tier = "standard" if mode == "full" else "compact"
             plan_entries.append(
                 {
                     "locator": locator,
                     "stage_index": stage_index,
                     "episode_index": episode_index,
                     "mode": mode,
-                    "detail_tier": "standard" if mode == "full" else "compact",
+                    "detail_tier": detail_tier,
                 }
             )
             episode_seq_idx += 1
@@ -1202,9 +1208,6 @@ class AgentEventBuilder(BaseBuilder):
         self.save_traces({agent_name: out.to_dict()}, savename, "json")
 
         parsed_result = extract_json_response(result)
-        self.save_traces(parsed_result, f"{savename}-Result", "json")
-
-        # Update state
         result_entry = {agent_name: parsed_result}
         if agent_name in {
             "ParticipantReconstructor",
@@ -1216,6 +1219,19 @@ class AgentEventBuilder(BaseBuilder):
                 "execution_mode": execution_mode,
                 "detail_tier": detail_tier,
             }
+        saved_result_artifact = (
+            result_entry
+            if agent_name
+            in {
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+                "EpisodeReconstructor",
+            }
+            else parsed_result
+        )
+        self.save_traces(saved_result_artifact, f"{savename}-Result", "json")
+
+        # Update state
         state["agent_results"].append(result_entry)
         state["cost"].append({agent_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(agent_name)
@@ -1518,15 +1534,6 @@ class AgentEventBuilder(BaseBuilder):
                     if participant_result_locator_map
                     else (p_results[ep_idx] if ep_idx < len(p_results) else None)
                 )
-                transaction_result = (
-                    transaction_result_locator_map.get(locator_key)
-                    if transaction_result_locator_map
-                    else (
-                        tr_results[transaction_idx]
-                        if transaction_idx < len(tr_results)
-                        else None
-                    )
-                )
 
                 if episode_result is not None:
                     # Replace with the fully reconstructed episode
@@ -1544,9 +1551,27 @@ class AgentEventBuilder(BaseBuilder):
                         execution_mode = episode_meta_locator_map[locator_key].get(
                             "execution_mode", "full"
                         )
+                    transaction_result = (
+                        transaction_result_locator_map.get(locator_key)
+                        if transaction_result_locator_map
+                        else (
+                            tr_results[transaction_idx]
+                            if execution_mode == "full"
+                            and transaction_idx < len(tr_results)
+                            else None
+                        )
+                    )
 
-                    # Ensure transactions are attached for full episodes only.
-                    if execution_mode == "full":
+                    # Light episodes must not trust episode-level transactions
+                    # unless the matching transaction agent actually ran.
+                    if execution_mode == "light":
+                        if transaction_result is not None:
+                            episode["transactions"] = transaction_result.get(
+                                "transactions", []
+                            )
+                        else:
+                            episode["transactions"] = []
+                    else:
                         if (
                             "transactions" not in episode
                             or not episode["transactions"]
@@ -1558,11 +1583,6 @@ class AgentEventBuilder(BaseBuilder):
                                 )
                         if not transaction_result_locator_map:
                             transaction_idx += 1
-                    elif (
-                        "transactions" not in episode
-                        or isinstance(episode["transactions"], str)
-                    ):
-                        episode["transactions"] = []
                     # Ensure participants are attached (EpisodeReconstructor uses placeholders)
                     if "participants" not in episode or isinstance(
                         episode["participants"], str
@@ -1650,10 +1670,20 @@ class AgentEventBuilder(BaseBuilder):
         # Reconstruct agent_results, restoring episode locator metadata from replay-safe filenames.
         agent_results = []
         for _, agent_name, filename, data in loaded_results:
-            result_entry = {agent_name: data}
-            locator = self._replay_episode_locator_from_filename(filename, event_skeleton)
-            if locator is not None:
-                result_entry["_meta"] = {"episode_locator": locator}
+            if isinstance(data, dict) and agent_name in data:
+                result_entry = dict(data)
+            else:
+                result_entry = {agent_name: data}
+            result_entry.setdefault("_meta", {})
+            locator = result_entry["_meta"].get("episode_locator")
+            if locator is None:
+                locator = self._replay_episode_locator_from_filename(
+                    filename, event_skeleton
+                )
+                if locator is not None:
+                    result_entry["_meta"]["episode_locator"] = locator
+            if not result_entry["_meta"]:
+                result_entry.pop("_meta")
             agent_results.append(result_entry)
 
         # Create a dummy state

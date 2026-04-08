@@ -110,7 +110,10 @@ def _load_builder_module():
 
 try:
     import finmy.builder.agent_build.main_build as main_build_module
-except ModuleNotFoundError:
+except ModuleNotFoundError as exc:
+    missing_module = exc.name or ""
+    if missing_module.split(".")[0] not in {"langgraph", "lmbase"}:
+        raise
     main_build_module = _load_builder_module()
 
 AgentEventBuilder = main_build_module.AgentEventBuilder
