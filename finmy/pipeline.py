@@ -21,7 +21,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import pytz
@@ -335,6 +335,7 @@ class FinmyPipeline:
         self,
         query_text: str,
         key_words: List[str],
+        extras: Optional[Dict[str, Any]] = None,
     ) -> UserQueryInput:
         """
         Create a user query input object and store it in the database.
@@ -342,6 +343,7 @@ class FinmyPipeline:
         Args:
             query_text: The query text
             key_words: List of keywords for the query
+            extras: Optional strategy metadata or experiment flags
 
         Returns:
             UserQueryInput object that was created and stored
@@ -350,6 +352,7 @@ class FinmyPipeline:
         user_query_input = UserQueryInput(
             query_text=query_text,
             key_words=key_words,
+            extras=dict(extras or {}),
         )
         self.logger.info("User query input object created: %s", user_query_input)
         self.logger.info("Inserting user query input object into database...")
