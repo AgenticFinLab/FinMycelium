@@ -1201,3 +1201,75 @@ class SparseRagRoutingTest(unittest.TestCase):
         episode = final_cascade["stages"][0]["episodes"][0]
         self.assertEqual(episode["participants"][0]["participant_id"], "P1")
         self.assertEqual(episode["transactions"][0]["transaction_id"], "T_1")
+
+    def test_integrate_from_files_full_episode_without_transaction_artifact_clears_placeholder(self):
+        builder = self.builder
+        skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 0,
+                            "participants": [],
+                            "transactions": [],
+                        }
+                    ],
+                }
+            ]
+        }
+        participant_one = {
+            "ParticipantReconstructor": {
+                "participants": [{"participant_id": "P1"}]
+            },
+            "_meta": {
+                "episode_locator": {
+                    "stage_index": 0,
+                    "episode_index": 0,
+                    "stage_id": "S1",
+                    "episode_id": "E1",
+                },
+                "execution_mode": "full",
+                "detail_tier": "standard",
+            },
+        }
+        episode_one = {
+            "EpisodeReconstructor": {
+                "episode_id": "E1",
+                "name": {"value": "Money Laundering"},
+                "index_in_stage": 0,
+                "participants": "Results of ParticipantReconstructor",
+                "transactions": "Results of TransactionReconstructor",
+                "participant_relations": [],
+                "descriptions": [],
+            },
+            "_meta": {
+                "episode_locator": {
+                    "stage_index": 0,
+                    "episode_index": 0,
+                    "stage_id": "S1",
+                    "episode_id": "E1",
+                },
+                "execution_mode": "full",
+                "detail_tier": "standard",
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            builder.save_dir = tmpdir
+            files = {
+                "SkeletonChecker-1-Result.json": skeleton,
+                "ParticipantReconstructor-2-Stage0-Episode0-Result.json": participant_one,
+                "EpisodeReconstructor-3-Stage0-Episode0-Result.json": episode_one,
+            }
+            for filename, payload in files.items():
+                with open(os.path.join(tmpdir, filename), "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+
+            final_cascade = builder.integrate_from_files()
+
+        episode = final_cascade["stages"][0]["episodes"][0]
+        self.assertEqual(episode["participants"][0]["participant_id"], "P1")
+        self.assertEqual(episode["transactions"], [])

@@ -1581,6 +1581,8 @@ class AgentEventBuilder(BaseBuilder):
                                 episode["transactions"] = transaction_result.get(
                                     "transactions", []
                                 )
+                            else:
+                                episode["transactions"] = []
                         if not transaction_result_locator_map:
                             transaction_idx += 1
                     # Ensure participants are attached (EpisodeReconstructor uses placeholders)
