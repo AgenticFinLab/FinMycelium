@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Callable
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.finmy_benchmark_query_contract import (
+    BENCHMARK_KEY_WORDS,
+    BENCHMARK_QUERY_TEXT,
+)
 
 
 DEFAULT_ROOT = Path(
     "/home/lenovo/projects/AgenticFinLab/.local-runtime/finmy-readme-main/outputs/builder"
 )
-BENCHMARK_QUERY_TEXT = "What is the case involving fraud and money laundering by Qian Zhimin?"
-BENCHMARK_KEY_WORDS = ["fraud", "money laundering", "investigators property purchases"]
 _BASELINE_TEXT_IDS = [
     "text_17753984186945425425",
     "text_17753984187024184994",
