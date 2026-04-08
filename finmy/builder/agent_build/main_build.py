@@ -365,6 +365,52 @@ class AgentEventBuilder(BaseBuilder):
                 return entry
         return None
 
+    def _reconstruct_episode_execution_plan_from_results(
+        self,
+        state: AgentState,
+    ) -> dict[str, object]:
+        """Infer episode execution modes from a replayed agent result sequence."""
+        try:
+            event_skeleton = self._get_event_skeleton(state)
+        except ValueError:
+            return {"episodes": []}
+
+        plan_entries: list[dict[str, object]] = []
+        episode_seq_idx = 0
+        transaction_seen_for_current_episode = False
+
+        for result in state["agent_results"]:
+            if "TransactionReconstructor" in result:
+                transaction_seen_for_current_episode = True
+
+            if "EpisodeReconstructor" not in result:
+                continue
+
+            (
+                stage_index,
+                episode_index,
+                stage,
+                episode,
+                locator,
+            ) = self._get_episode_by_sequence_index(event_skeleton, episode_seq_idx)
+            if stage_index is None:
+                break
+
+            mode = "full" if transaction_seen_for_current_episode else "light"
+            plan_entries.append(
+                {
+                    "locator": locator,
+                    "stage_index": stage_index,
+                    "episode_index": episode_index,
+                    "mode": mode,
+                    "detail_tier": "standard" if mode == "full" else "compact",
+                }
+            )
+            episode_seq_idx += 1
+            transaction_seen_for_current_episode = False
+
+        return {"episodes": plan_entries}
+
     def _route_after_participant_reconstructor(self, state: AgentState):
         """Route light episodes around TransactionReconstructor."""
         event_skeleton = self._get_event_skeleton(state)
@@ -1325,6 +1371,11 @@ class AgentEventBuilder(BaseBuilder):
         """
         # 1. Start with the skeleton
         final_cascade = self._collect_reconstructed_participants_structure(state)
+        episode_execution_plan = state.get("episode_execution_plan")
+        if not (episode_execution_plan and episode_execution_plan.get("episodes")):
+            episode_execution_plan = self._reconstruct_episode_execution_plan_from_results(
+                state
+            )
 
         # 2. Collect Transaction results
         tr_results = [
@@ -1357,7 +1408,7 @@ class AgentEventBuilder(BaseBuilder):
                     episode.update(er_results[ep_idx])
 
                     plan_entry = self._get_episode_execution_plan_entry(
-                        state.get("episode_execution_plan"),
+                        episode_execution_plan,
                         stage_index,
                         episode_index,
                     )

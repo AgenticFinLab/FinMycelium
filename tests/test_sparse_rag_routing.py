@@ -1,7 +1,10 @@
+import json
 import importlib
+import os
 import sys
 import types
 import unittest
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -789,6 +792,94 @@ class SparseRagRoutingTest(unittest.TestCase):
         }
 
         final_cascade = builder.integrate_results(state)
+        episodes = final_cascade["stages"][0]["episodes"]
+        self.assertEqual(episodes[0]["transactions"], [])
+        self.assertEqual(episodes[1]["transactions"][0]["transaction_id"], "T_1")
+
+    def test_integrate_from_files_replays_mixed_light_then_full_transactions_correctly(self):
+        builder = self.builder
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Arrest"}, "index_in_stage": 0},
+                        {
+                            "episode_id": "E2",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 1,
+                        },
+                    ],
+                }
+            ]
+        }
+
+        skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Arrest"}, "index_in_stage": 0},
+                        {
+                            "episode_id": "E2",
+                            "name": {"value": "Money Laundering"},
+                            "index_in_stage": 1,
+                        },
+                    ],
+                }
+            ]
+        }
+        participant_one = {"participants": [{"participant_id": "P1"}]}
+        participant_two = {"participants": [{"participant_id": "P2"}]}
+        transaction_two = {
+            "transactions": [
+                {
+                    "transaction_id": "T_1",
+                    "name": {"value": "Transaction 1"},
+                    "transaction_type": {"value": "transfer"},
+                    "timestamp": {"value": "2025-01-01"},
+                    "details": {"value": "Episode-level transaction"},
+                    "from_participant_id": "P_1",
+                    "to_participant_id": "P_2",
+                    "instruments": [],
+                }
+            ]
+        }
+        episode_one = {
+            "episode_id": "E1",
+            "name": {"value": "Arrest"},
+            "index_in_stage": 0,
+            "participants": [{"participant_id": "P1"}],
+            "transactions": [],
+            "participant_relations": [],
+            "descriptions": [],
+        }
+        episode_two = {
+            "episode_id": "E2",
+            "name": {"value": "Money Laundering"},
+            "index_in_stage": 1,
+            "participants": [{"participant_id": "P2"}],
+            "transactions": [],
+            "participant_relations": [],
+            "descriptions": [],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            builder.save_dir = tmpdir
+            files = {
+                "SkeletonChecker-1-Result.json": {"stages": skeleton["stages"]},
+                "ParticipantReconstructor-2-Result.json": participant_one,
+                "EpisodeReconstructor-3-Result.json": episode_one,
+                "ParticipantReconstructor-4-Result.json": participant_two,
+                "TransactionReconstructor-5-Result.json": transaction_two,
+                "EpisodeReconstructor-6-Result.json": episode_two,
+            }
+            for filename, payload in files.items():
+                with open(os.path.join(tmpdir, filename), "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+
+            final_cascade = builder.integrate_from_files()
+
         episodes = final_cascade["stages"][0]["episodes"]
         self.assertEqual(episodes[0]["transactions"], [])
         self.assertEqual(episodes[1]["transactions"][0]["transaction_id"], "T_1")
