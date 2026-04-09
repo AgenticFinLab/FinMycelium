@@ -2170,10 +2170,12 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
             ],
             "agent_executed": [
                 "SkeletonChecker",
                 "ParticipantReconstructor",
+                "TransactionReconstructor",
             ],
             "cost": [],
             "agent_system_msgs": {
@@ -2260,6 +2262,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
             _build_compact_input(),
             _skeleton(),
         )
+        plan["episodes"][0]["mode"] = "full"
         plan["episodes"][0]["episode_detail_tier"] = "compact"
         plan["episodes"][0]["detail_tier"] = "compact"
         plan["episodes"][0]["conflict_guard"] = "strict"
@@ -2298,6 +2301,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         rendered_prompt = captured["infer_input"].user_msg.format(
             **captured["prompt_kwargs"]
         )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "full")
         self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "standard")
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "strict")
         self.assertEqual(plan["episodes"][0]["episode_detail_tier"], "compact")
@@ -2369,10 +2373,12 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
             ],
             "agent_executed": [
                 "SkeletonChecker",
                 "ParticipantReconstructor",
+                "TransactionReconstructor",
             ],
             "cost": [],
             "agent_system_msgs": {
@@ -2464,10 +2470,12 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
             ],
             "agent_executed": [
                 "SkeletonChecker",
                 "ParticipantReconstructor",
+                "TransactionReconstructor",
             ],
             "cost": [],
             "agent_system_msgs": {

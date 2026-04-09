@@ -1448,6 +1448,92 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(episode["transactions"], [])
         self.assertEqual(episode["participants"][0]["participant_id"], "P1")
 
+    def test_integrate_from_files_keeps_strict_episode_transactions_when_skip_flag_is_missing(self):
+        builder = self.builder
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Replay strict episode"},
+                            "index_in_stage": 0,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            builder.save_dir = tmpdir
+            files = {
+                "SkeletonChecker-1-Result.json": {
+                    "stages": [
+                        {
+                            "stage_id": "S1",
+                            "episodes": [
+                                {
+                                    "episode_id": "E1",
+                                    "name": {"value": "Replay strict episode"},
+                                    "index_in_stage": 0,
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "ParticipantReconstructor-2-Stage0-Episode0-Result.json": {
+                    "participants": [{"participant_id": "P1"}],
+                },
+                "TransactionReconstructor-3-Stage0-Episode0-Result.json": {
+                    "transactions": [{"transaction_id": "T1"}],
+                },
+                "EpisodeReconstructor-4-Stage0-Episode0-Result.json": {
+                    "episode_id": "E1",
+                    "name": {"value": "Replay strict episode"},
+                    "index_in_stage": 0,
+                    "participants": [{"participant_id": "P1"}],
+                    "transactions": [{"transaction_id": "T1"}],
+                    "participant_relations": [],
+                    "descriptions": [],
+                },
+            }
+            for filename, payload in files.items():
+                with open(os.path.join(tmpdir, filename), "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+
+            with open(
+                os.path.join(tmpdir, "EpisodeReconstructor-4-Stage0-Episode0-Result.json"),
+                "w",
+                encoding="utf-8",
+            ) as f:
+                json.dump(
+                    {
+                        "EpisodeReconstructor": files[
+                            "EpisodeReconstructor-4-Stage0-Episode0-Result.json"
+                        ],
+                        "_meta": {
+                            "episode_locator": {
+                                "stage_index": 0,
+                                "episode_index": 0,
+                                "stage_id": "S1",
+                                "episode_id": "E1",
+                            },
+                            "execution_mode": "full",
+                            "transaction_tier": "compact",
+                            "detail_tier": "standard",
+                            "conflict_guard": "strict",
+                        },
+                    },
+                    f,
+                )
+
+            final_cascade = builder.integrate_from_files()
+
+        episode = final_cascade["stages"][0]["episodes"][0]
+        self.assertEqual(episode["transactions"], [{"transaction_id": "T1"}])
+        self.assertEqual(episode["participants"][0]["participant_id"], "P1")
+
     def test_route_after_participant_reconstructor_skips_transaction_for_light_episode(self):
         state = {
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
@@ -1490,7 +1576,7 @@ class SparseRagRoutingTest(unittest.TestCase):
             "EpisodeReconstructor",
         )
 
-    def test_route_after_participant_reconstructor_stays_light_when_transaction_tier_is_minimal(self):
+    def test_route_after_participant_reconstructor_routes_transaction_for_compact_tier(self):
         state = {
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
             "episode_execution_plan": {
@@ -1503,6 +1589,47 @@ class SparseRagRoutingTest(unittest.TestCase):
                             "episode_id": "E1",
                         },
                         "mode": "full",
+                        "transaction_tier": "compact",
+                        "detail_tier": "compact",
+                    }
+                ]
+            },
+            "agent_results": [],
+        }
+
+        self.builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Arrest"}},
+                    ],
+                }
+            ]
+        }
+        self.builder.extract_latest_episode = lambda _skeleton, _count: (
+            {"stage_id": "S1", "index_in_event": 0},
+            {"episode_id": "E1", "name": {"value": "Arrest"}, "index_in_stage": 0},
+        )
+
+        self.assertEqual(
+            self.builder._route_after_participant_reconstructor(state),
+            "TransactionReconstructor",
+        )
+
+    def test_route_after_participant_reconstructor_routes_transaction_for_minimal_tier(self):
+        state = {
+            "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
                         "transaction_tier": "minimal",
                         "detail_tier": "compact",
                     }
@@ -1528,7 +1655,7 @@ class SparseRagRoutingTest(unittest.TestCase):
 
         self.assertEqual(
             self.builder._route_after_participant_reconstructor(state),
-            "EpisodeReconstructor",
+            "TransactionReconstructor",
         )
 
     def test_route_after_participant_reconstructor_keeps_full_episode_on_full_mode(self):

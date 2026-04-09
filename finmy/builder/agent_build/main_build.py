@@ -353,15 +353,34 @@ class AgentEventBuilder(BaseBuilder):
     ) -> bool:
         if not plan_entry:
             return execution_mode == "light"
+        if plan_entry.get("transaction_step_skipped") is True:
+            return True
         conflict_guard = plan_entry.get("conflict_guard")
         if conflict_guard == "strict":
             return False
         transaction_tier = plan_entry.get("transaction_tier")
-        if transaction_tier in {"skip", "minimal", "compact"}:
+        if transaction_tier == "skip":
             return True
+        if transaction_tier in {"minimal", "compact", "standard"}:
+            return False
         if transaction_tier is None:
             return plan_entry.get("mode") == "light" or execution_mode == "light"
         return False
+
+    def _episode_execution_mode(
+        self,
+        plan_entry: dict[str, object] | None,
+    ) -> str:
+        if not plan_entry:
+            return "full"
+        execution_mode = plan_entry.get("mode", "full")
+        transaction_tier = plan_entry.get("transaction_tier")
+        conflict_guard = plan_entry.get("conflict_guard")
+        if transaction_tier == "skip":
+            return "light"
+        if conflict_guard != "strict" and transaction_tier in {"minimal", "compact"}:
+            return "light"
+        return execution_mode
 
     def _get_episode_execution_plan_entry(
         self,
@@ -550,14 +569,12 @@ class AgentEventBuilder(BaseBuilder):
             stage_index,
             episode_index,
         )
-        return (
-            "EpisodeReconstructor"
-            if self._transaction_step_skipped(
-                plan_entry,
-                execution_mode=plan_entry.get("mode") if plan_entry else None,
-            )
-            else "TransactionReconstructor"
-        )
+        if self._transaction_step_skipped(
+            plan_entry,
+            execution_mode=plan_entry.get("mode") if plan_entry else None,
+        ):
+            return "EpisodeReconstructor"
+        return "TransactionReconstructor"
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
         """Build local context for reconstruction paths and skeleton shadow mode.
@@ -1306,12 +1323,11 @@ class AgentEventBuilder(BaseBuilder):
                 episode_detail_tier = plan_entry.get("detail_tier")
             if conflict_guard == "strict":
                 episode_detail_tier = "standard"
+            execution_mode = self._episode_execution_mode(plan_entry)
             transaction_step_skipped = self._transaction_step_skipped(
                 plan_entry,
                 execution_mode=execution_mode,
             )
-            if transaction_step_skipped:
-                execution_mode = "light"
             if episode_detail_tier not in {"minimal", "compact", "standard"}:
                 episode_detail_tier = "compact" if execution_mode == "light" else "standard"
 
