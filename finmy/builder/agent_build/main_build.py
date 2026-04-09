@@ -1148,7 +1148,7 @@ class AgentEventBuilder(BaseBuilder):
             ) or "standard"
             conflict_guard = (
                 plan_entry.get("conflict_guard") if plan_entry else None
-            ) or "normal"
+            ) or "standard"
             detail_tier = (
                 plan_entry.get("detail_tier", "standard") if plan_entry else "standard"
             )

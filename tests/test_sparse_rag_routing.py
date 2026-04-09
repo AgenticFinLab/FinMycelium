@@ -1131,7 +1131,7 @@ class SparseRagRoutingTest(unittest.TestCase):
                         },
                         "mode": "light",
                         "participant_tier": "minimal",
-                        "conflict_guard": "strict",
+                        "conflict_guard": "standard",
                         "detail_tier": "compact",
                     }
                 ]

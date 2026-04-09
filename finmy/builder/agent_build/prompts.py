@@ -381,7 +381,7 @@ Instructions:
 - If `ParticipantDetailTier` is `minimal`, prefer only the materially necessary actors, prefer a group participant over weakly evidenced individual expansion, and cap action volume while avoiding verbose attributes.
 - If `ParticipantDetailTier` is `compact`, keep the core actor topology but omit peripheral participants.
 - If `ConflictGuard` is `strict`, prefer conservative inclusion over aggressive compression when evidence is ambiguous.
-- If `ParticipantDetailTier` is `standard` and `ConflictGuard` is `normal`, preserve the current full-path participant reconstruction behavior.
+- If `ParticipantDetailTier` is `standard` and `ConflictGuard` is `standard`, preserve the current full-path participant reconstruction behavior.
 - Use `VerifiableField` with evidence and reasons for all grounded fields.
 - Ensure involvement and `actions` are time-consistent with the episode `start_time` and `end_time` or directly causally linked.
 - Deduplicate aliases and unify names; avoid duplicates for the same entity.

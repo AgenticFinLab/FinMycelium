@@ -1087,6 +1087,12 @@ class AgentContextIntegrationTest(unittest.TestCase):
             f"{agent_name}-{execution_idx}"
         )
 
+        plan = self.builder._build_episode_execution_plan(
+            _build_compact_input(),
+            _skeleton(),
+        )
+        plan_entry = plan["episodes"][0]
+
         state = {
             "build_input": _build_compact_input(),
             "agent_results": [{"SkeletonChecker": _skeleton()}],
@@ -1096,22 +1102,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_user_msgs": {
                 "ParticipantReconstructor": main_build_module.ParticipantReconstructorUser
             },
-            "episode_execution_plan": {
-                "episodes": [
-                    {
-                        "locator": {
-                            "stage_index": 0,
-                            "episode_index": 0,
-                            "stage_id": "S1",
-                            "episode_id": "E1",
-                        },
-                        "mode": "light",
-                        "participant_tier": "minimal",
-                        "conflict_guard": "strict",
-                        "detail_tier": "compact",
-                    }
-                ]
-            },
+            "episode_execution_plan": plan,
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -1126,8 +1117,16 @@ class AgentContextIntegrationTest(unittest.TestCase):
         rendered_prompt = captured["infer_input"].user_msg.format(
             **captured["prompt_kwargs"]
         )
-        self.assertEqual(captured["prompt_kwargs"]["ParticipantDetailTier"], "minimal")
-        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "strict")
+        self.assertEqual(
+            captured["prompt_kwargs"]["ParticipantDetailTier"],
+            plan_entry["participant_tier"],
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["ConflictGuard"], plan_entry["conflict_guard"]
+        )
+        self.assertEqual(plan_entry["mode"], "light")
+        self.assertEqual(plan_entry["participant_tier"], "minimal")
+        self.assertEqual(plan_entry["conflict_guard"], "standard")
         self.assertIn("ParticipantDetailTier", rendered_prompt)
         self.assertIn("ConflictGuard", rendered_prompt)
         self.assertIn("prefer only the materially necessary actors", rendered_prompt)
@@ -1136,7 +1135,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
             rendered_prompt,
         )
         self.assertIn("cap action volume", rendered_prompt)
-        self.assertIn("conservative inclusion over aggressive compression", rendered_prompt)
+        self.assertIn("standard", rendered_prompt)
 
     def test_light_participant_tier_preserves_id_reuse_but_caps_actor_set(self):
         captured = {}
@@ -1196,6 +1195,12 @@ class AgentContextIntegrationTest(unittest.TestCase):
             }
         )
 
+        plan = self.builder._build_episode_execution_plan(
+            _build_compact_input(),
+            skeleton,
+        )
+        plan_entry = plan["episodes"][1]
+
         state = {
             "build_input": _build_compact_input(),
             "agent_results": [
@@ -1214,22 +1219,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_user_msgs": {
                 "ParticipantReconstructor": main_build_module.ParticipantReconstructorUser
             },
-            "episode_execution_plan": {
-                "episodes": [
-                    {
-                        "locator": {
-                            "stage_index": 0,
-                            "episode_index": 1,
-                            "stage_id": "S1",
-                            "episode_id": "E2",
-                        },
-                        "mode": "light",
-                        "participant_tier": "minimal",
-                        "conflict_guard": "strict",
-                        "detail_tier": "compact",
-                    }
-                ]
-            },
+            "episode_execution_plan": plan,
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }
@@ -1252,20 +1242,23 @@ class AgentContextIntegrationTest(unittest.TestCase):
             [participant["participant_id"] for participant in first_episode_participants],
             ["P_1", "P_2"],
         )
-        self.assertEqual(captured["prompt_kwargs"]["ParticipantDetailTier"], "minimal")
-        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "strict")
+        self.assertEqual(
+            captured["prompt_kwargs"]["ParticipantDetailTier"],
+            plan_entry["participant_tier"],
+        )
+        self.assertEqual(
+            captured["prompt_kwargs"]["ConflictGuard"], plan_entry["conflict_guard"]
+        )
+        self.assertEqual(plan_entry["mode"], "light")
+        self.assertEqual(plan_entry["participant_tier"], "minimal")
+        self.assertEqual(plan_entry["conflict_guard"], "standard")
         self.assertIn("ParticipantDetailTier", rendered_prompt)
         self.assertIn("ConflictGuard", rendered_prompt)
-        self.assertEqual(
-            state["agent_results"][-1]["ParticipantReconstructor"]["participants"][0][
-                "participant_id"
-            ],
-            "P_1",
-        )
-        self.assertEqual(
-            len(state["agent_results"][-1]["ParticipantReconstructor"]["participants"]),
-            1,
-        )
+        self.assertIn("enable ID reuse", rendered_prompt)
+        self.assertIn("reuse the same", rendered_prompt)
+        self.assertIn("participant_id", rendered_prompt)
+        self.assertIn("prefer only the materially necessary actors", rendered_prompt)
+        self.assertEqual(captured["prompt_kwargs"]["TargetEpisode"].episode_id, "E2")
 
     def test_participant_reconstructor_uses_empty_retrieved_context_when_no_matches(self):
         captured = {}
@@ -1751,6 +1744,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("TARGET EPISODE BEGIN", rendered_prompt)
         self.assertIn("real content", rendered_prompt)
         self.assertNotIn("alpha episode excerpt", rendered_prompt)
+        self.assertNotIn("ParticipantDetailTier", captured["prompt_kwargs"])
+        self.assertNotIn("ConflictGuard", captured["prompt_kwargs"])
 
     def test_episode_reconstructor_exposes_richer_local_context_metadata_additively(self):
         captured = {}
