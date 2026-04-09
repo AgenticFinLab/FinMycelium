@@ -2159,6 +2159,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
             _build_compact_input(),
             _skeleton(),
         )
+        plan["episodes"][0]["mode"] = "full"
+        plan["episodes"][0]["transaction_tier"] = "minimal"
         plan["episodes"][0]["episode_detail_tier"] = "minimal"
         plan["episodes"][0]["detail_tier"] = "minimal"
         plan["episodes"][0]["conflict_guard"] = "standard"
@@ -2168,12 +2170,10 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
-                {"TransactionReconstructor": _episode_transactions()},
             ],
             "agent_executed": [
                 "SkeletonChecker",
                 "ParticipantReconstructor",
-                "TransactionReconstructor",
             ],
             "cost": [],
             "agent_system_msgs": {
@@ -2197,6 +2197,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         rendered_prompt = captured["infer_input"].user_msg.format(
             **captured["prompt_kwargs"]
         )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
         self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "minimal")
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
         self.assertIn("EpisodeDetailTier", rendered_prompt)
@@ -2307,6 +2308,101 @@ class AgentContextIntegrationTest(unittest.TestCase):
             rendered_prompt,
         )
 
+    def test_episode_reconstructor_keeps_compact_tier_when_conflict_guard_is_standard(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        plan = self.builder._build_episode_execution_plan(
+            _build_compact_input(),
+            _skeleton(),
+        )
+        plan["episodes"][0]["mode"] = "full"
+        plan["episodes"][0]["transaction_tier"] = "minimal"
+        plan["episodes"][0]["detail_tier"] = "compact"
+        plan["episodes"][0]["episode_detail_tier"] = "compact"
+        plan["episodes"][0]["conflict_guard"] = "standard"
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "episode_execution_plan": plan,
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=None,
+        ):
+            self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "compact")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
+        self.assertIn("compact-light-mode", captured["prompt_kwargs"]["EpisodeCompactnessHint"])
+        self.assertIn("EpisodeDetailTier", rendered_prompt)
+        self.assertIn("EpisodeCompactnessHint", rendered_prompt)
+
     def test_episode_reconstructor_uses_legacy_detail_tier_when_episode_detail_tier_is_missing(self):
         captured = {}
 
@@ -2357,6 +2453,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
             _build_compact_input(),
             _skeleton(),
         )
+        plan["episodes"][0]["mode"] = "full"
+        plan["episodes"][0]["transaction_tier"] = "minimal"
         plan["episodes"][0].pop("episode_detail_tier", None)
         plan["episodes"][0].pop("conflict_guard", None)
         plan["episodes"][0]["detail_tier"] = "compact"
@@ -2366,12 +2464,10 @@ class AgentContextIntegrationTest(unittest.TestCase):
             "agent_results": [
                 {"SkeletonChecker": _skeleton()},
                 {"ParticipantReconstructor": _transaction_participants()},
-                {"TransactionReconstructor": _episode_transactions()},
             ],
             "agent_executed": [
                 "SkeletonChecker",
                 "ParticipantReconstructor",
-                "TransactionReconstructor",
             ],
             "cost": [],
             "agent_system_msgs": {
@@ -2395,6 +2491,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         rendered_prompt = captured["infer_input"].user_msg.format(
             **captured["prompt_kwargs"]
         )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
         self.assertEqual(captured["prompt_kwargs"]["TransactionDetailTier"], "compact")
         self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "compact")
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")

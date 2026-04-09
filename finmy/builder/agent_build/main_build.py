@@ -353,8 +353,11 @@ class AgentEventBuilder(BaseBuilder):
     ) -> bool:
         if not plan_entry:
             return execution_mode == "light"
+        conflict_guard = plan_entry.get("conflict_guard")
+        if conflict_guard == "strict":
+            return False
         transaction_tier = plan_entry.get("transaction_tier")
-        if transaction_tier == "skip":
+        if transaction_tier in {"skip", "minimal", "compact"}:
             return True
         if transaction_tier is None:
             return plan_entry.get("mode") == "light" or execution_mode == "light"
@@ -547,12 +550,12 @@ class AgentEventBuilder(BaseBuilder):
             stage_index,
             episode_index,
         )
-        transaction_tier = plan_entry.get("transaction_tier") if plan_entry else None
-        if transaction_tier is None and plan_entry:
-            transaction_tier = "skip" if plan_entry.get("mode") == "light" else "standard"
         return (
             "EpisodeReconstructor"
-            if transaction_tier == "skip"
+            if self._transaction_step_skipped(
+                plan_entry,
+                execution_mode=plan_entry.get("mode") if plan_entry else None,
+            )
             else "TransactionReconstructor"
         )
 
@@ -1301,14 +1304,16 @@ class AgentEventBuilder(BaseBuilder):
             )
             if episode_detail_tier is None and plan_entry:
                 episode_detail_tier = plan_entry.get("detail_tier")
-            if episode_detail_tier not in {"minimal", "compact", "standard"}:
-                episode_detail_tier = "standard"
             if conflict_guard == "strict":
                 episode_detail_tier = "standard"
             transaction_step_skipped = self._transaction_step_skipped(
                 plan_entry,
                 execution_mode=execution_mode,
             )
+            if transaction_step_skipped:
+                execution_mode = "light"
+            if episode_detail_tier not in {"minimal", "compact", "standard"}:
+                episode_detail_tier = "compact" if execution_mode == "light" else "standard"
 
             prompt_kwargs["EpisodeLocator"] = locator
             prompt_kwargs["EpisodeExecutionMode"] = execution_mode

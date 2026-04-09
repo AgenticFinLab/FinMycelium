@@ -1490,6 +1490,47 @@ class SparseRagRoutingTest(unittest.TestCase):
             "EpisodeReconstructor",
         )
 
+    def test_route_after_participant_reconstructor_stays_light_when_transaction_tier_is_minimal(self):
+        state = {
+            "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "full",
+                        "transaction_tier": "minimal",
+                        "detail_tier": "compact",
+                    }
+                ]
+            },
+            "agent_results": [],
+        }
+
+        self.builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Arrest"}},
+                    ],
+                }
+            ]
+        }
+        self.builder.extract_latest_episode = lambda _skeleton, _count: (
+            {"stage_id": "S1", "index_in_event": 0},
+            {"episode_id": "E1", "name": {"value": "Arrest"}, "index_in_stage": 0},
+        )
+
+        self.assertEqual(
+            self.builder._route_after_participant_reconstructor(state),
+            "EpisodeReconstructor",
+        )
+
     def test_route_after_participant_reconstructor_keeps_full_episode_on_full_mode(self):
         state = {
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
