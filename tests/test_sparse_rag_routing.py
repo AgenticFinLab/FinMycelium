@@ -666,6 +666,118 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(episode["transactions"], [])
         self.assertEqual(episode["participants"][0]["participant_id"], "P1")
 
+    def test_episode_reconstructor_round_trip_preserves_episode_detail_tier_and_conflict_guard_metadata(self):
+        builder = self.builder
+        builder.agents_lm = object()
+        builder.save_traces = lambda *args, **kwargs: None
+        builder._build_local_context_package = lambda *args, **kwargs: None
+        builder._attach_local_context_prompt_kwargs = lambda *args, **kwargs: None
+        builder._rewrite_heavy_agent_user_msg_template = lambda *args, **kwargs: "user"
+
+        state = {
+            "build_input": self._make_build_input(),
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "S1",
+                                "episodes": [
+                                    {
+                                        "episode_id": "E1",
+                                        "name": {"value": "Arrest"},
+                                        "index_in_stage": 0,
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    }
+                },
+                {
+                    "TransactionReconstructor": {
+                        "transactions": []
+                    }
+                },
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {"EpisodeReconstructor": "sys"},
+            "agent_user_msgs": {"EpisodeReconstructor": "user"},
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "full",
+                        "transaction_tier": "compact",
+                        "detail_tier": "compact",
+                        "episode_detail_tier": "compact",
+                        "conflict_guard": "strict",
+                    }
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        fake_output = types.SimpleNamespace(
+            response=json.dumps(
+                {
+                    "episode_id": "E1",
+                    "name": {"value": "Arrest"},
+                    "index_in_stage": 0,
+                    "participants": "Results of ParticipantReconstructor",
+                    "transactions": "Results of TransactionReconstructor",
+                    "participant_relations": [],
+                    "descriptions": [],
+                }
+            ),
+            to_dict=lambda: {"response": "{}"},
+        )
+
+        with patch.object(
+            self.main_build_module, "run_single_inference", return_value=fake_output
+        ), patch.object(
+            self.main_build_module,
+            "extract_json_response",
+            return_value={
+                "episode_id": "E1",
+                "name": {"value": "Arrest"},
+                "index_in_stage": 0,
+                "participants": "Results of ParticipantReconstructor",
+                "transactions": "Results of TransactionReconstructor",
+                "participant_relations": [],
+                "descriptions": [],
+            },
+        ):
+            builder.execute_agent(state, "EpisodeReconstructor")
+
+        meta = state["agent_results"][-1]["_meta"]
+        self.assertEqual(meta["detail_tier"], "compact")
+        self.assertEqual(meta["episode_detail_tier"], "standard")
+        self.assertEqual(meta["conflict_guard"], "strict")
+
+        reconstructed_plan = builder._reconstruct_episode_execution_plan_from_results(
+            state
+        )
+        entry = self._plan_entry(reconstructed_plan, 0, 0)
+        self.assertEqual(entry["detail_tier"], "compact")
+        self.assertEqual(entry["episode_detail_tier"], "standard")
+        self.assertEqual(entry["conflict_guard"], "strict")
+
     def test_integrate_results_keeps_blank_id_episodes_distinct(self):
         builder = self.builder
         builder._get_event_skeleton = lambda _state: {

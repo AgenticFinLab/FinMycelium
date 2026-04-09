@@ -483,6 +483,14 @@ class AgentEventBuilder(BaseBuilder):
             detail_tier = result_meta.get("detail_tier")
             if detail_tier not in {"compact", "standard"}:
                 detail_tier = "standard" if mode == "full" else "compact"
+            episode_detail_tier = result_meta.get("episode_detail_tier")
+            if episode_detail_tier is None:
+                episode_detail_tier = result_meta.get("detail_tier")
+            if episode_detail_tier not in {"minimal", "compact", "standard"}:
+                episode_detail_tier = "standard"
+            conflict_guard = result_meta.get("conflict_guard")
+            if conflict_guard not in {"standard", "strict"}:
+                conflict_guard = "standard"
             plan_entries.append(
                 {
                     "locator": locator,
@@ -492,6 +500,8 @@ class AgentEventBuilder(BaseBuilder):
                     "transaction_tier": transaction_tier,
                     "transaction_step_skipped": transaction_step_skipped,
                     "detail_tier": detail_tier,
+                    "episode_detail_tier": episode_detail_tier,
+                    "conflict_guard": conflict_guard,
                 }
             )
             episode_seq_idx += 1
@@ -1156,7 +1166,9 @@ class AgentEventBuilder(BaseBuilder):
             )
             episode_detail_tier = (
                 plan_entry.get("episode_detail_tier") if plan_entry else None
-            ) or "standard"
+            )
+            if episode_detail_tier is None and plan_entry:
+                episode_detail_tier = plan_entry.get("detail_tier")
             if episode_detail_tier not in {"minimal", "compact", "standard"}:
                 episode_detail_tier = "standard"
             if conflict_guard == "strict":
@@ -1290,6 +1302,8 @@ class AgentEventBuilder(BaseBuilder):
                 else ("skip" if execution_mode == "light" else "standard"),
                 "transaction_step_skipped": transaction_step_skipped,
                 "detail_tier": detail_tier,
+                "episode_detail_tier": episode_detail_tier,
+                "conflict_guard": conflict_guard,
             }
         saved_result_artifact = (
             result_entry
