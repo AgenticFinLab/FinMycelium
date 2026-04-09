@@ -7,6 +7,7 @@ assign conservative execution tiers.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 __all__ = ["_complexity_bucket", "build_stage_aware_execution_budget"]
@@ -81,42 +82,46 @@ def _get_cards(build_input: Any) -> list[Any]:
     return list(getattr(bundle, "evidence_cards", []) or [])
 
 
-def _query_text(build_input: Any) -> str:
-    user_query = getattr(build_input, "user_query", None)
-    if user_query is None:
-        return ""
-    query_text = _scalar_text(getattr(user_query, "query_text", ""))
-    keywords = " ".join(getattr(user_query, "key_words", []) or [])
-    return f"{query_text} {keywords}".strip()
-
-
-def _build_context_text(build_input: Any) -> str:
-    parts: list[str] = [_query_text(build_input)]
-    samples = getattr(build_input, "samples", []) or []
-    parts.extend(_scalar_text(getattr(sample, "content", "")) for sample in samples)
-    for card in _get_cards(build_input):
-        parts.append(_scalar_text(getattr(card, "title", "")))
-        parts.append(_scalar_text(getattr(card, "excerpt", "")))
-    return " ".join(part for part in parts if part).lower()
-
-
 def _has_any(text: str, hints: set[str]) -> bool:
     return any(hint in text for hint in hints)
 
 
+def _text_tokens(value: Any) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", _lower_text(value)))
+
+
+def _card_text(card: Any) -> str:
+    parts = [
+        _lower_text(getattr(card, "title", "")),
+        _lower_text(getattr(card, "excerpt", "")),
+        " ".join(getattr(card, "time_hints", []) or []),
+        " ".join(getattr(card, "entity_hints", []) or []),
+        " ".join(getattr(card, "action_hints", []) or []),
+        " ".join(getattr(card, "money_hints", []) or []),
+        " ".join(getattr(card, "quality_flags", []) or []),
+    ]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _relevant_cards(build_input: Any, local_text: str) -> list[Any]:
+    local_tokens = _text_tokens(local_text)
+    if not local_tokens:
+        return []
+
+    relevant: list[Any] = []
+    for card in _get_cards(build_input):
+        card_text = _card_text(card)
+        if local_tokens & _text_tokens(card_text):
+            relevant.append(card)
+    return relevant
+
+
 def _stage_signal_score(build_input: Any, stage: dict[str, Any]) -> int:
     episode_text = " ".join(_lower_text(episode.get("name")) for episode in stage.get("episodes", []) or [])
-    card_text = " ".join(
-        part
-        for card in _get_cards(build_input)
-        for part in (
-            _lower_text(getattr(card, "title", "")),
-            _lower_text(getattr(card, "excerpt", "")),
-            " ".join(getattr(card, "quality_flags", []) or []),
-        )
-        if part
-    )
-    stage_text = f"{_lower_text(stage.get('name'))} {episode_text} {card_text}".strip()
+    stage_text = f"{_lower_text(stage.get('name'))} {episode_text}".strip()
+    relevant_cards = _relevant_cards(build_input, stage_text)
+    card_text = " ".join(_card_text(card) for card in relevant_cards)
+    stage_text = f"{stage_text} {card_text}".strip()
     score = 0
     if _has_any(stage_text, _TIMELINE_HINTS):
         score += 2
@@ -129,29 +134,17 @@ def _stage_signal_score(build_input: Any, stage: dict[str, Any]) -> int:
     if any(
         "source_overlap" in (getattr(card, "quality_flags", []) or [])
         or "conflict_heavy" in (getattr(card, "quality_flags", []) or [])
-        for card in _get_cards(build_input)
+        for card in relevant_cards
     ):
         score += 1
     return score
 
 
 def _episode_signal_score(build_input: Any, stage: dict[str, Any], episode: dict[str, Any]) -> int:
-    episode_text = " ".join(
-        [
-            _lower_text(stage.get("name")),
-            _lower_text(episode.get("name")),
-            " ".join(
-                part
-                for card in _get_cards(build_input)
-                for part in (
-                    _lower_text(getattr(card, "title", "")),
-                    _lower_text(getattr(card, "excerpt", "")),
-                    " ".join(getattr(card, "quality_flags", []) or []),
-                )
-                if part
-            ),
-        ]
-    )
+    episode_text = f"{_lower_text(stage.get('name'))} {_lower_text(episode.get('name'))}".strip()
+    relevant_cards = _relevant_cards(build_input, episode_text)
+    card_text = " ".join(_card_text(card) for card in relevant_cards)
+    episode_text = f"{episode_text} {card_text}".strip()
     score = 0
     if _has_any(episode_text, _TIMELINE_HINTS):
         score += 1
@@ -164,7 +157,7 @@ def _episode_signal_score(build_input: Any, stage: dict[str, Any], episode: dict
     if any(
         "source_overlap" in (getattr(card, "quality_flags", []) or [])
         or "conflict_heavy" in (getattr(card, "quality_flags", []) or [])
-        for card in _get_cards(build_input)
+        for card in relevant_cards
     ):
         score += 1
     return score
@@ -197,9 +190,10 @@ def _episode_detail_tier(stage_bucket: str, episode_score: int) -> str:
 
 
 def _conflict_guard(episode_text: str, build_input: Any) -> str:
+    relevant_cards = _relevant_cards(build_input, episode_text)
     if _has_any(episode_text, _CONFLICT_HINTS):
         return "strict"
-    for card in _get_cards(build_input):
+    for card in relevant_cards:
         flags = set(getattr(card, "quality_flags", []) or [])
         if {"source_overlap", "conflict_heavy", "ambiguous_source"} & flags:
             return "strict"

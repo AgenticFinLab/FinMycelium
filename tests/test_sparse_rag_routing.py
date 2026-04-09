@@ -233,10 +233,15 @@ class SparseRagRoutingTest(unittest.TestCase):
 
         budget = build_stage_aware_execution_budget(build_input, event_skeleton)
 
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "low")
         self.assertEqual(budget["stages"][1]["timeline_complexity"], "high")
         self.assertEqual(
             budget["episodes"][("S2", "E4")]["episode_detail_tier"], "standard"
         )
+        self.assertEqual(
+            budget["episodes"][("S1", "E1")]["conflict_guard"], "standard"
+        )
+        self.assertEqual(budget["episodes"][("S1", "E1")]["mode"], "light")
         self.assertIn(
             budget["episodes"][("S1", "E1")]["participant_tier"],
             {"minimal", "compact"},
