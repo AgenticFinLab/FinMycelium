@@ -312,6 +312,78 @@ class SparseRagRoutingTest(unittest.TestCase):
             budget["episodes"][("S1", "E1")]["conflict_guard"], "strict"
         )
 
+    def test_stage_aware_budget_keeps_unrelated_simple_stage_light_when_evidence_cards_only_match_complex_stage(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="legal timeline and witness conflict",
+                key_words=["timeline", "conflict"],
+            ),
+            samples=[
+                SimpleNamespace(content="simple background summary with no overlap."),
+                SimpleNamespace(
+                    content="court timeline review of conflicting witness account."
+                ),
+            ],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 7, "s2": 11}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="court timeline review",
+                        excerpt="witness timeline and conflicting account",
+                        source_char_count=0,
+                        time_hints=["2024-05", "2024-06"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["review"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="witness conflict review",
+                        excerpt="timeline and court hearing account",
+                        source_char_count=0,
+                        time_hints=["2024-05", "2024-06"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["hear"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                ],
+            ),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Simple background"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial contact"}},
+                    ],
+                },
+                {
+                    "stage_id": "S2",
+                    "name": {"value": "Legal timeline reconstruction"},
+                    "episodes": [
+                        {"episode_id": "E4", "name": {"value": "Court timeline review"}},
+                    ],
+                },
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "low")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["mode"], "light")
+        self.assertEqual(budget["episodes"][("S2", "E4")]["conflict_guard"], "strict")
+        self.assertEqual(budget["episodes"][("S2", "E4")]["mode"], "full")
+
     def test_run_initializes_empty_episode_execution_plan(self):
         build_input = self._make_build_input()
         observed_state = {}
