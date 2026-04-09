@@ -298,23 +298,31 @@ class AgentEventBuilder(BaseBuilder):
         event_skeleton: dict,
     ) -> dict[str, object]:
         """Build a planner-backed per-episode routing plan from the skeleton."""
-        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+        planner_skeleton = copy.deepcopy(event_skeleton)
+        for stage_index, stage in enumerate(planner_skeleton.get("stages", []) or []):
+            stage["stage_id"] = f"stage-{stage_index}"
+            for episode_index, episode in enumerate(stage.get("episodes", []) or []):
+                episode["episode_id"] = f"episode-{stage_index}-{episode_index}"
+
+        budget = build_stage_aware_execution_budget(build_input, planner_skeleton)
+        budget_entries = list(budget.get("episodes", {}).values())
 
         plan_entries: list[dict[str, object]] = []
-        for (
+        for sequence_index, (
             stage_index,
             episode_index,
             stage,
             episode,
             locator,
-        ) in self._iter_skeleton_episodes(event_skeleton):
+        ) in enumerate(self._iter_skeleton_episodes(event_skeleton)):
             stage_id = self._scalar_value(stage.get("stage_id", ""))
             episode_id = self._scalar_value(episode.get("episode_id", ""))
-            budget_entry = budget.get("episodes", {}).get((stage_id, episode_id), {})
+            budget_entry = (
+                budget_entries[sequence_index]
+                if sequence_index < len(budget_entries)
+                else {}
+            )
             mode = budget_entry.get("mode", "full")
-            transaction_tier = budget_entry.get("transaction_tier", "standard")
-            if mode == "light":
-                transaction_tier = "skip"
             plan_entries.append(
                 {
                     "locator": locator,
@@ -324,7 +332,10 @@ class AgentEventBuilder(BaseBuilder):
                     "episode_index": episode_index,
                     "mode": mode,
                     "participant_tier": budget_entry.get("participant_tier", "standard"),
-                    "transaction_tier": transaction_tier,
+                    "transaction_tier": budget_entry.get(
+                        "transaction_tier",
+                        "skip" if mode == "light" else "standard",
+                    ),
                     "episode_detail_tier": budget_entry.get(
                         "episode_detail_tier", "standard"
                     ),
@@ -334,6 +345,20 @@ class AgentEventBuilder(BaseBuilder):
             )
 
         return {"episodes": plan_entries}
+
+    def _transaction_step_skipped(
+        self,
+        plan_entry: dict[str, object] | None,
+        execution_mode: str | None = None,
+    ) -> bool:
+        if not plan_entry:
+            return execution_mode == "light"
+        transaction_tier = plan_entry.get("transaction_tier")
+        if transaction_tier == "skip":
+            return True
+        if transaction_tier is None:
+            return plan_entry.get("mode") == "light" or execution_mode == "light"
+        return False
 
     def _get_episode_execution_plan_entry(
         self,
@@ -444,6 +469,15 @@ class AgentEventBuilder(BaseBuilder):
             transaction_tier = result_meta.get("transaction_tier")
             if transaction_tier not in {"skip", "minimal", "compact", "standard"}:
                 transaction_tier = "skip" if mode == "light" else "standard"
+            transaction_step_skipped = result_meta.get("transaction_step_skipped")
+            if not isinstance(transaction_step_skipped, bool):
+                transaction_step_skipped = self._transaction_step_skipped(
+                    {
+                        "mode": mode,
+                        "transaction_tier": transaction_tier,
+                    },
+                    execution_mode=mode,
+                )
             detail_tier = result_meta.get("detail_tier")
             if detail_tier not in {"compact", "standard"}:
                 detail_tier = "standard" if mode == "full" else "compact"
@@ -454,6 +488,7 @@ class AgentEventBuilder(BaseBuilder):
                     "episode_index": episode_index,
                     "mode": mode,
                     "transaction_tier": transaction_tier,
+                    "transaction_step_skipped": transaction_step_skipped,
                     "detail_tier": detail_tier,
                 }
             )
@@ -1109,6 +1144,10 @@ class AgentEventBuilder(BaseBuilder):
             detail_tier = (
                 plan_entry.get("detail_tier", "standard") if plan_entry else "standard"
             )
+            transaction_step_skipped = self._transaction_step_skipped(
+                plan_entry,
+                execution_mode=execution_mode,
+            )
 
             prompt_kwargs["EpisodeLocator"] = locator
             prompt_kwargs["EpisodeExecutionMode"] = execution_mode
@@ -1147,9 +1186,9 @@ class AgentEventBuilder(BaseBuilder):
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             elif agent_name == "EpisodeReconstructor":
-                # Light episodes skip TransactionReconstructor and inherit the
-                # participant output directly from the previous node.
-                if execution_mode == "light":
+                # Skip episodes inherit the participant output directly from the
+                # previous node and do not consume a TransactionReconstructor result.
+                if transaction_step_skipped:
                     participants_data = state["agent_results"][-1][
                         "ParticipantReconstructor"
                     ]
@@ -1227,6 +1266,7 @@ class AgentEventBuilder(BaseBuilder):
                 "transaction_tier": plan_entry.get("transaction_tier", "skip")
                 if plan_entry
                 else ("skip" if execution_mode == "light" else "standard"),
+                "transaction_step_skipped": transaction_step_skipped,
                 "detail_tier": detail_tier,
             }
         saved_result_artifact = (
@@ -1561,26 +1601,25 @@ class AgentEventBuilder(BaseBuilder):
                         execution_mode = episode_meta_locator_map[locator_key].get(
                             "execution_mode", "full"
                         )
+                    transaction_step_skipped = self._transaction_step_skipped(
+                        plan_entry
+                        or episode_meta_locator_map.get(locator_key),
+                        execution_mode=execution_mode,
+                    )
                     transaction_result = (
                         transaction_result_locator_map.get(locator_key)
-                        if transaction_result_locator_map
+                        if not transaction_step_skipped and transaction_result_locator_map
                         else (
                             tr_results[transaction_idx]
-                            if execution_mode == "full"
+                            if not transaction_step_skipped
                             and transaction_idx < len(tr_results)
                             else None
                         )
                     )
 
-                    # Light episodes must not trust episode-level transactions
-                    # unless the matching transaction agent actually ran.
-                    if execution_mode == "light":
-                        if transaction_result is not None:
-                            episode["transactions"] = transaction_result.get(
-                                "transactions", []
-                            )
-                        else:
-                            episode["transactions"] = []
+                    # Skip episodes must not trust episode-level transactions.
+                    if transaction_step_skipped:
+                        episode["transactions"] = []
                     else:
                         if (
                             "transactions" not in episode
