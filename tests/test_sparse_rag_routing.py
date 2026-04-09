@@ -238,6 +238,7 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(
             budget["episodes"][("S2", "E4")]["episode_detail_tier"], "standard"
         )
+        self.assertEqual(budget["episodes"][("S2", "E4")]["mode"], "full")
         self.assertEqual(
             budget["episodes"][("S1", "E1")]["conflict_guard"], "standard"
         )
@@ -310,7 +311,6 @@ class SparseRagRoutingTest(unittest.TestCase):
                     "name": {"value": "Routine intro"},
                     "episodes": [
                         {"episode_id": "E1", "name": {"value": "Initial contact"}},
-                        {"episode_id": "E2", "name": {"value": "Court timeline review"}},
                     ],
                 }
             ]
@@ -320,7 +320,6 @@ class SparseRagRoutingTest(unittest.TestCase):
 
         self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
         self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
-        self.assertEqual(budget["episodes"][("S1", "E2")]["conflict_guard"], "strict")
 
     def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
         from finmy.builder.agent_build.execution_budget import (
@@ -398,9 +397,74 @@ class SparseRagRoutingTest(unittest.TestCase):
         budget = build_stage_aware_execution_budget(build_input, event_skeleton)
 
         self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
-        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
         self.assertEqual(budget["episodes"][("S2", "E2")]["conflict_guard"], "strict")
         self.assertEqual(budget["episodes"][("S2", "E2")]["episode_detail_tier"], "standard")
+        self.assertEqual(budget["episodes"][("S2", "E2")]["mode"], "full")
+
+    def test_stage_aware_budget_keeps_high_complex_stage_episodes_standard_even_when_episode_name_is_simple(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="legal timeline reconstruction",
+                key_words=["legal", "timeline"],
+            ),
+            samples=[
+                SimpleNamespace(content="background summary with a simple contact note."),
+                SimpleNamespace(
+                    content="timeline reconstruction with court hearing dates and legal proceedings."
+                ),
+            ],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 7, "s2": 11}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="background summary",
+                        excerpt="background summary with a simple contact note",
+                        source_char_count=0,
+                        time_hints=["2024-05"],
+                        entity_hints=["Qian Zhimin"],
+                        action_hints=["note"],
+                        money_hints=[],
+                        quality_flags=[],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="timeline reconstruction",
+                        excerpt="timeline reconstruction with court hearing dates",
+                        source_char_count=0,
+                        time_hints=["2024-05", "2024-06"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["review"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                ],
+            ),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Legal timeline reconstruction"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial contact"}},
+                        {"episode_id": "E2", "name": {"value": "Court timeline review"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "high")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "standard")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
+        self.assertEqual(budget["episodes"][("S1", "E2")]["episode_detail_tier"], "standard")
 
     def test_stage_aware_budget_sets_conflict_guard_when_source_overlap_is_ambiguous(self):
         from finmy.builder.agent_build.execution_budget import (
