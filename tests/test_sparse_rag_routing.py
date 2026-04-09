@@ -666,6 +666,236 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(episode["transactions"], [])
         self.assertEqual(episode["participants"][0]["participant_id"], "P1")
 
+    def test_integrate_results_keeps_blank_id_episodes_distinct(self):
+        builder = self.builder
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "",
+                    "episodes": [
+                        {
+                            "episode_id": "",
+                            "name": {"value": "Blank First"},
+                            "index_in_stage": 0,
+                            "participants": [],
+                            "transactions": [],
+                        }
+                    ],
+                },
+                {
+                    "stage_id": "",
+                    "episodes": [
+                        {
+                            "episode_id": "",
+                            "name": {"value": "Blank Second"},
+                            "index_in_stage": 0,
+                            "participants": [],
+                            "transactions": [],
+                        }
+                    ],
+                },
+            ]
+        }
+
+        state = {
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "",
+                                "episodes": [
+                                    {
+                                        "episode_id": "",
+                                        "name": {"value": "Blank First"},
+                                        "index_in_stage": 0,
+                                        "participants": [],
+                                        "transactions": [],
+                                    }
+                                ],
+                            },
+                            {
+                                "stage_id": "",
+                                "episodes": [
+                                    {
+                                        "episode_id": "",
+                                        "name": {"value": "Blank Second"},
+                                        "index_in_stage": 0,
+                                        "participants": [],
+                                        "transactions": [],
+                                    }
+                                ],
+                            },
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "",
+                            "episode_id": "",
+                        }
+                    },
+                },
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "",
+                        "name": {"value": "First episode"},
+                        "index_in_stage": 0,
+                        "participants": [{"participant_id": "P1"}],
+                        "transactions": [],
+                        "participant_relations": [],
+                        "descriptions": [],
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "",
+                            "episode_id": "",
+                        }
+                    },
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P2"}]
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 1,
+                            "episode_index": 0,
+                            "stage_id": "",
+                            "episode_id": "",
+                        }
+                    },
+                },
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "",
+                        "name": {"value": "Second episode"},
+                        "index_in_stage": 0,
+                        "participants": [{"participant_id": "P2"}],
+                        "transactions": [],
+                        "participant_relations": [],
+                        "descriptions": [],
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 1,
+                            "episode_index": 0,
+                            "stage_id": "",
+                            "episode_id": "",
+                        }
+                    },
+                },
+            ]
+        }
+
+        final_cascade = builder.integrate_results(state)
+        first_episode = final_cascade["stages"][0]["episodes"][0]
+        second_episode = final_cascade["stages"][1]["episodes"][0]
+        self.assertEqual(first_episode["name"]["value"], "First episode")
+        self.assertEqual(second_episode["name"]["value"], "Second episode")
+        self.assertEqual(first_episode["participants"][0]["participant_id"], "P1")
+        self.assertEqual(second_episode["participants"][0]["participant_id"], "P2")
+
+    def test_integrate_from_files_keeps_blank_id_replay_episodes_distinct(self):
+        builder = self.builder
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "",
+                    "episodes": [
+                        {
+                            "episode_id": "",
+                            "name": {"value": "Blank First"},
+                            "index_in_stage": 0,
+                        }
+                    ],
+                },
+                {
+                    "stage_id": "",
+                    "episodes": [
+                        {
+                            "episode_id": "",
+                            "name": {"value": "Blank Second"},
+                            "index_in_stage": 0,
+                        }
+                    ],
+                },
+            ]
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            builder.save_dir = tmpdir
+            files = {
+                "SkeletonChecker-1-Result.json": {
+                    "stages": [
+                        {
+                            "stage_id": "",
+                            "episodes": [
+                                {
+                                    "episode_id": "",
+                                    "name": {"value": "Blank First"},
+                                    "index_in_stage": 0,
+                                }
+                            ],
+                        },
+                        {
+                            "stage_id": "",
+                            "episodes": [
+                                {
+                                    "episode_id": "",
+                                    "name": {"value": "Blank Second"},
+                                    "index_in_stage": 0,
+                                }
+                            ],
+                        },
+                    ]
+                },
+                "ParticipantReconstructor-2-Stage0-Episode0-Result.json": {
+                    "participants": [{"participant_id": "P1"}]
+                },
+                "EpisodeReconstructor-3-Stage0-Episode0-Result.json": {
+                    "episode_id": "",
+                    "name": {"value": "First replay episode"},
+                    "index_in_stage": 0,
+                    "participants": [{"participant_id": "P1"}],
+                    "transactions": [],
+                    "participant_relations": [],
+                    "descriptions": [],
+                },
+                "ParticipantReconstructor-4-Stage1-Episode0-Result.json": {
+                    "participants": [{"participant_id": "P2"}]
+                },
+                "EpisodeReconstructor-5-Stage1-Episode0-Result.json": {
+                    "episode_id": "",
+                    "name": {"value": "Second replay episode"},
+                    "index_in_stage": 0,
+                    "participants": [{"participant_id": "P2"}],
+                    "transactions": [],
+                    "participant_relations": [],
+                    "descriptions": [],
+                },
+            }
+            for filename, payload in files.items():
+                with open(os.path.join(tmpdir, filename), "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+
+            final_cascade = builder.integrate_from_files()
+
+        first_episode = final_cascade["stages"][0]["episodes"][0]
+        second_episode = final_cascade["stages"][1]["episodes"][0]
+        self.assertEqual(first_episode["name"]["value"], "First replay episode")
+        self.assertEqual(second_episode["name"]["value"], "Second replay episode")
+        self.assertEqual(first_episode["participants"][0]["participant_id"], "P1")
+        self.assertEqual(second_episode["participants"][0]["participant_id"], "P2")
+
     def test_route_after_participant_reconstructor_skips_transaction_for_light_episode(self):
         state = {
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],

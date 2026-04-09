@@ -382,14 +382,16 @@ class AgentEventBuilder(BaseBuilder):
     def _episode_locator_key(self, locator: dict[str, object] | None):
         if not isinstance(locator, dict):
             return None
-        stage_id = locator.get("stage_id")
-        episode_id = locator.get("episode_id")
-        if stage_id is not None and episode_id is not None:
-            return ("ids", stage_id, episode_id)
         stage_index = locator.get("stage_index")
         episode_index = locator.get("episode_index")
+        stage_id = locator.get("stage_id")
+        episode_id = locator.get("episode_id")
         if stage_index is not None and episode_index is not None:
-            return ("indices", stage_index, episode_index)
+            if stage_id or episode_id:
+                return ("locator", stage_index, episode_index, stage_id or None, episode_id or None)
+            return ("locator", stage_index, episode_index, None, None)
+        if stage_id and episode_id:
+            return ("ids", stage_id, episode_id)
         return None
 
     def _result_locator_map(
