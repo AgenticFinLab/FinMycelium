@@ -1413,6 +1413,169 @@ class SparseRagRoutingTest(unittest.TestCase):
         )
         self.assertIn("P1", captured["prompt_kwargs"]["TargetEpisodeContext"])
 
+    def test_stage_sparse_cache_is_built_once_and_reused_within_the_same_stage(self):
+        captured = []
+        build_calls = {"count": 0}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured.append(prompt_kwargs)
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": prompt_kwargs["TargetEpisode"].episode_id,
+                        "name": {"value": "Arrest"},
+                        "index_in_stage": prompt_kwargs["TargetEpisode"].index_in_stage,
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        def fake_stage_sparse_context(*args, **kwargs):
+            build_calls["count"] += 1
+            return SimpleNamespace(
+                scope="stage",
+                retrieval_status="sufficient",
+                selected_sample_ids=["s1"],
+                rendered_context="stage sparse context",
+                summary={"selected_count": 1},
+                query_bundle={
+                    "scope": "stage",
+                    "agent_name": "StageDescriptionReconstructor",
+                    "stage_name": "Stage 1",
+                },
+                memory={
+                    "selected_sample_ids": ["s1"],
+                    "selected_hint_counts": {"entity_hints": 1},
+                    "selection_rationale": [
+                        {"sample_id": "s1", "matched_fields": ["stage_name"]}
+                    ],
+                },
+                budget_summary={"target_card_budget": 2, "used_card_count": 1},
+            )
+
+        builder = self.builder
+        builder.agents_lm = object()
+        builder.save_traces = lambda *args, **kwargs: None
+        builder._rewrite_heavy_agent_user_msg_template = lambda *args, **kwargs: "user"
+        builder._build_local_context_package = lambda *args, **kwargs: None
+        builder._attach_local_context_prompt_kwargs = lambda *args, **kwargs: None
+        builder._build_stage_sparse_context = fake_stage_sparse_context
+
+        state = {
+            "build_input": self._make_build_input(),
+            "agent_results": [
+                {
+                    "SkeletonChecker": {
+                        "stages": [
+                            {
+                                "stage_id": "S1",
+                                "name": {"value": "Stage 1"},
+                                "episodes": [
+                                    {
+                                        "episode_id": "E1",
+                                        "name": {"value": "Arrest"},
+                                        "index_in_stage": 0,
+                                    },
+                                    {
+                                        "episode_id": "E2",
+                                        "name": {"value": "Money Laundering"},
+                                        "index_in_stage": 1,
+                                    },
+                                ],
+                            }
+                        ]
+                    }
+                },
+                {
+                    "ParticipantReconstructor": {
+                        "participants": [{"participant_id": "P1"}]
+                    }
+                },
+                {
+                    "TransactionReconstructor": {"transactions": []}
+                },
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {"EpisodeReconstructor": "sys"},
+            "agent_user_msgs": {"EpisodeReconstructor": "user"},
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "full",
+                        "participant_tier": "standard",
+                        "transaction_tier": "standard",
+                        "detail_tier": "standard",
+                        "conflict_guard": "standard",
+                    },
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        },
+                        "mode": "full",
+                        "participant_tier": "standard",
+                        "transaction_tier": "standard",
+                        "detail_tier": "standard",
+                        "conflict_guard": "standard",
+                    },
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+            "stage_sparse_cache": {},
+        }
+
+        with patch.object(
+            self.main_build_module, "run_single_inference", side_effect=fake_run_single_inference
+        ), patch.object(
+            self.main_build_module,
+            "extract_json_response",
+            side_effect=lambda result: json.loads(result),
+        ):
+            builder.execute_agent(state, "EpisodeReconstructor")
+
+            state["agent_results"].append(
+                {"ParticipantReconstructor": {"participants": [{"participant_id": "P2"}]}}
+            )
+            state["agent_results"].append(
+                {"TransactionReconstructor": {"transactions": []}}
+            )
+            state["agent_executed"].extend(
+                ["ParticipantReconstructor", "TransactionReconstructor"]
+            )
+
+            builder.execute_agent(state, "EpisodeReconstructor")
+
+        self.assertEqual(build_calls["count"], 1)
+        self.assertIn(0, state["stage_sparse_cache"])
+        self.assertEqual(len(captured), 2)
+        self.assertEqual(
+            captured[0]["StageSparseCache"],
+            captured[1]["StageSparseCache"],
+        )
+        first_cache = json.loads(captured[0]["StageSparseCache"])
+        self.assertEqual(first_cache["stage_id"], "S1")
+        self.assertEqual(first_cache["stage_name"], "Stage 1")
+        self.assertIn("stage_actor_map", first_cache)
+        self.assertIn("stage_conflict_summary", first_cache)
+
     def test_route_after_participant_reconstructor_uses_global_cursor_after_light_episode(self):
         state = {
             "agent_executed": [

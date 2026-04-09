@@ -654,6 +654,128 @@ class AgentEventBuilder(BaseBuilder):
             else "{}"
         )
 
+    def _build_stage_sparse_context(self, state: AgentState, stage_index: int, stage: dict):
+        """Build the stage-scoped retrieval package used to seed sparse stage cache."""
+        bundle = state["build_input"].context_assets
+        if bundle is None or not bundle.evidence_cards:
+            return None
+
+        request = LocalContextRequest(
+            agent_name="StageDescriptionReconstructor",
+            query_text=state["build_input"].user_query.query_text,
+            key_words=state["build_input"].user_query.key_words,
+            target_stage=self._field_value(stage.get("name")),
+        )
+        return LocalContextBuilder().build(request, bundle)
+
+    def _build_stage_sparse_cache(
+        self,
+        state: AgentState,
+        stage_index: int,
+        stage: dict,
+    ) -> dict:
+        """Build or reuse a stage-level sparse cache for the current stage."""
+        stage_sparse_cache = state.setdefault("stage_sparse_cache", {})
+        cached_stage = stage_sparse_cache.get(stage_index)
+        if cached_stage is not None:
+            return cached_stage
+
+        stage_context = self._build_stage_sparse_context(state, stage_index, stage)
+        stage_name = self._scalar_value(stage.get("name", "unknown"))
+        stage_id = self._scalar_value(stage.get("stage_id", "unknown"))
+        episodes = stage.get("episodes", []) or []
+        plan_entries: list[dict[str, object]] = []
+        for episode_index, episode in enumerate(episodes):
+            plan_entry = self._get_episode_execution_plan_entry(
+                state.get("episode_execution_plan"),
+                stage_index,
+                episode_index,
+            ) or {}
+            plan_entries.append(
+                {
+                    "episode_index": episode_index,
+                    "episode_id": self._scalar_value(episode.get("episode_id", "unknown")),
+                    "episode_name": self._scalar_value(episode.get("name", "unknown")),
+                    "mode": plan_entry.get("mode", "full"),
+                    "participant_tier": plan_entry.get("participant_tier", "standard"),
+                    "transaction_tier": plan_entry.get(
+                        "transaction_tier",
+                        "skip" if plan_entry.get("mode") == "light" else "standard",
+                    ),
+                    "detail_tier": plan_entry.get("detail_tier", "standard"),
+                    "conflict_guard": plan_entry.get("conflict_guard", "standard"),
+                }
+            )
+
+        selected_sample_ids = []
+        selected_hint_counts: dict[str, object] = {}
+        selection_rationale: list[dict[str, object]] = []
+        retrieval_status = "missing_context_assets"
+        query_bundle: dict[str, object] = {}
+        selected_count = 0
+        rendered_context = ""
+        if stage_context is not None:
+            selected_sample_ids = list(getattr(stage_context, "selected_sample_ids", []) or [])
+            selected_hint_counts = dict(
+                getattr(stage_context, "memory", {}).get("selected_hint_counts", {}) or {}
+            )
+            selection_rationale = list(
+                getattr(stage_context, "memory", {}).get("selection_rationale", []) or []
+            )
+            retrieval_status = getattr(stage_context, "retrieval_status", retrieval_status)
+            query_bundle = dict(getattr(stage_context, "query_bundle", {}) or {})
+            selected_count = getattr(stage_context, "summary", {}).get("selected_count", 0)
+            rendered_context = getattr(stage_context, "rendered_context", "")
+
+        stage_sparse_cache[stage_index] = {
+            "stage_index": stage_index,
+            "stage_id": stage_id,
+            "stage_name": stage_name,
+            "stage_episode_count": len(episodes),
+            "stage_evidence_digest": {
+                "retrieval_status": retrieval_status,
+                "selected_sample_ids": selected_sample_ids,
+                "selected_count": selected_count,
+                "rendered_context": rendered_context,
+                "query_bundle": query_bundle,
+            },
+            "stage_actor_map": {
+                "episode_overview": plan_entries,
+                "selected_sample_ids": selected_sample_ids,
+                "selected_hint_counts": selected_hint_counts,
+                "selection_rationale": selection_rationale,
+            },
+            "stage_conflict_summary": {
+                "light_episode_count": sum(
+                    1 for entry in plan_entries if entry.get("mode") == "light"
+                ),
+                "transaction_skip_count": sum(
+                    1 for entry in plan_entries if entry.get("transaction_tier") == "skip"
+                ),
+                "conflict_guards": sorted(
+                    {
+                        str(entry.get("conflict_guard", "standard"))
+                        for entry in plan_entries
+                        if entry.get("conflict_guard")
+                    }
+                ),
+                "episode_modes": [entry.get("mode", "full") for entry in plan_entries],
+                "episode_count": len(episodes),
+            },
+        }
+        return stage_sparse_cache[stage_index]
+
+    def _attach_stage_sparse_cache_prompt_kwargs(
+        self,
+        prompt_kwargs: dict,
+        stage_sparse_cache: dict | None,
+    ) -> None:
+        prompt_kwargs["StageSparseCache"] = json.dumps(
+            stage_sparse_cache or {},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
     def _render_compact_content(self, build_input: BuildInput) -> str:
         """Render source content in a whitespace-normalized form for additive prompts."""
         return "\n".join(
@@ -967,6 +1089,7 @@ class AgentEventBuilder(BaseBuilder):
         state.setdefault("skeleton_retry_count", 0)
         state.setdefault("skeleton_validation_reason", "")
         state.setdefault("episode_execution_plan", {"episodes": []})
+        state.setdefault("stage_sparse_cache", {})
 
         # Common prompt arguments
         prompt_kwargs = {
@@ -1073,6 +1196,15 @@ class AgentEventBuilder(BaseBuilder):
 
                 local_context = self._build_local_context_package(state, agent_name)
                 self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
+                stage_sparse_cache = self._build_stage_sparse_cache(
+                    state,
+                    stage_idx,
+                    target_stage_skeleton,
+                )
+                self._attach_stage_sparse_cache_prompt_kwargs(
+                    prompt_kwargs,
+                    stage_sparse_cache,
+                )
 
             sys_msg = sys_msg_template.format(
                 STRUCTURE_SPEC=_STAGE_DESCRIPTION_SPEC,
@@ -1181,6 +1313,15 @@ class AgentEventBuilder(BaseBuilder):
             prompt_kwargs["EpisodeLocator"] = locator
             prompt_kwargs["EpisodeExecutionMode"] = execution_mode
             prompt_kwargs["TransactionDetailTier"] = detail_tier
+            stage_sparse_cache = self._build_stage_sparse_cache(
+                state,
+                stage_index,
+                belong_state,
+            )
+            self._attach_stage_sparse_cache_prompt_kwargs(
+                prompt_kwargs,
+                stage_sparse_cache,
+            )
             if agent_name == "ParticipantReconstructor":
                 prompt_kwargs["ParticipantDetailTier"] = participant_tier
                 prompt_kwargs["ConflictGuard"] = conflict_guard

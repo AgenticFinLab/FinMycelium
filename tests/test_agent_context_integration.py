@@ -1891,6 +1891,85 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertNotIn('"transactions": [', rendered_prompt)
         self.assertNotIn('"episodes": [', rendered_prompt)
 
+    def test_episode_reconstructor_attaches_stage_sparse_cache_additively(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        self.assertIn("StageSparseCache", captured["prompt_kwargs"])
+        stage_sparse_cache = json.loads(captured["prompt_kwargs"]["StageSparseCache"])
+        self.assertEqual(stage_sparse_cache["stage_id"], "S1")
+        self.assertEqual(stage_sparse_cache["stage_name"], "Stage 1")
+        self.assertIn("stage_evidence_digest", stage_sparse_cache)
+        self.assertIn("stage_actor_map", stage_sparse_cache)
+        self.assertIn("stage_conflict_summary", stage_sparse_cache)
+
     def test_episode_reconstructor_light_mode_exposes_empty_transactions_and_compact_tier(self):
         captured = {}
 
