@@ -137,6 +137,8 @@ def _stage_signal_score(build_input: Any, stage: dict[str, Any]) -> int:
         for card in relevant_cards
     ):
         score += 1
+    if any("money_dense" in (getattr(card, "quality_flags", []) or []) for card in relevant_cards):
+        score += 2
     return score
 
 
@@ -159,6 +161,22 @@ def _episode_signal_score(build_input: Any, stage: dict[str, Any], episode: dict
         or "conflict_heavy" in (getattr(card, "quality_flags", []) or [])
         for card in relevant_cards
     ):
+        score += 1
+    if any("money_dense" in (getattr(card, "quality_flags", []) or []) for card in relevant_cards):
+        score += 2
+    return score
+
+
+def _episode_detail_signal_score(stage: dict[str, Any], episode: dict[str, Any]) -> int:
+    episode_text = f"{_lower_text(stage.get('name'))} {_lower_text(episode.get('name'))}".strip()
+    score = 0
+    if _has_any(episode_text, _TIMELINE_HINTS):
+        score += 1
+    if _has_any(episode_text, _CONFLICT_HINTS):
+        score += 2
+    if "legal" in episode_text and "timeline" in episode_text:
+        score += 1
+    if any(hint in episode_text for hint in ("court hearing", "timeline review", "legal proceedings")):
         score += 1
     return score
 
@@ -183,22 +201,23 @@ def _transaction_tier(score: int, conflict_guard: str) -> str:
     return "standard"
 
 
-def _episode_detail_tier(stage_bucket: str, episode_score: int) -> str:
-    if stage_bucket == "high" or episode_score >= 2:
+def _episode_detail_tier(stage_bucket: str, episode_score: int, conflict_guard: str) -> str:
+    if conflict_guard == "strict":
+        return "standard"
+    if episode_score >= 3:
         return "standard"
     return "compact"
 
 
 def _conflict_guard(episode_text: str, build_input: Any) -> str:
     relevant_cards = _relevant_cards(build_input, episode_text)
-    if _has_any(episode_text, _CONFLICT_HINTS):
-        return "strict"
+    conflict_signal_hits = 0
     for card in relevant_cards:
         flags = set(getattr(card, "quality_flags", []) or [])
         if {"source_overlap", "conflict_heavy", "ambiguous_source"} & flags:
-            return "strict"
-        if len(getattr(card, "time_hints", []) or []) > 1 and len(getattr(card, "entity_hints", []) or []) > 0:
-            return "strict"
+            conflict_signal_hits += 1
+    if conflict_signal_hits >= 2:
+        return "strict"
     return "standard"
 
 
@@ -238,7 +257,8 @@ def build_stage_aware_execution_budget(build_input: Any, event_skeleton: dict[st
             conflict_guard = _conflict_guard(episode_text, build_input)
             participant_tier = _participant_tier(episode_score, conflict_guard)
             transaction_tier = _transaction_tier(episode_score, conflict_guard)
-            episode_detail_tier = _episode_detail_tier(stage_bucket, episode_score)
+            episode_detail_score = _episode_detail_signal_score(stage, episode)
+            episode_detail_tier = _episode_detail_tier(stage_bucket, episode_detail_score, conflict_guard)
             mode = "full" if episode_score >= 2 or conflict_guard == "strict" else "light"
 
             episodes[(stage_id, episode_id)] = {

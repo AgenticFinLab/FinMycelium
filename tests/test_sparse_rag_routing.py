@@ -247,6 +247,161 @@ class SparseRagRoutingTest(unittest.TestCase):
             {"minimal", "compact"},
         )
 
+    def test_stage_aware_budget_keeps_non_conflict_episodes_compact_by_default(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="timeline and conflict reconstruction",
+                key_words=["timeline", "conflict"],
+            ),
+            samples=[
+                SimpleNamespace(content="simple background remains direct."),
+                SimpleNamespace(
+                    content="court timeline review with conflicting witness account and overlapping reports."
+                ),
+            ],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 8, "s2": 13, "s3": 9}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="simple background",
+                        excerpt="simple background remains direct",
+                        source_char_count=0,
+                        time_hints=["2024-05"],
+                        entity_hints=["Qian Zhimin"],
+                        action_hints=["review"],
+                        money_hints=[],
+                        quality_flags=[],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="conflicting witness account",
+                        excerpt="court timeline review with overlapping reports",
+                        source_char_count=0,
+                        time_hints=["2024-05", "2024-06"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["review"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                    EvidenceCard(
+                        sample_id="s3",
+                        title="follow-up review",
+                        excerpt="inconsistent witness accounts in the follow-up review",
+                        source_char_count=0,
+                        time_hints=["2024-06"],
+                        entity_hints=["witness a", "witness c"],
+                        action_hints=["review"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                ],
+            ),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Routine intro"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial contact"}},
+                        {"episode_id": "E2", "name": {"value": "Court timeline review"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
+        self.assertEqual(budget["episodes"][("S1", "E2")]["conflict_guard"], "strict")
+
+    def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="single weak note and repeated conflict review",
+                key_words=["note", "conflict"],
+            ),
+            samples=[
+                SimpleNamespace(content="single routine note with one weak flag."),
+                SimpleNamespace(content="repeated conflict report with multiple accounts and dates."),
+            ],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 5, "s2": 11, "s3": 9}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="single routine note",
+                        excerpt="single routine note with one weak flag",
+                        source_char_count=0,
+                        time_hints=["monday"],
+                        entity_hints=["witness a"],
+                        action_hints=["note"],
+                        money_hints=[],
+                        quality_flags=["ambiguous_source"],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="repeated conflict report",
+                        excerpt="multiple accounts and dates",
+                        source_char_count=0,
+                        time_hints=["monday", "tuesday"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["report"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                    EvidenceCard(
+                        sample_id="s3",
+                        title="repeated conflict report supplement",
+                        excerpt="multiple accounts and dates in the follow-up report",
+                        source_char_count=0,
+                        time_hints=["monday", "wednesday"],
+                        entity_hints=["witness a", "witness c"],
+                        action_hints=["report"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                ],
+            ),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Routine review"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Single routine note"}},
+                    ],
+                },
+                {
+                    "stage_id": "S2",
+                    "name": {"value": "Repeated conflict review"},
+                    "episodes": [
+                        {"episode_id": "E2", "name": {"value": "Repeated conflict report"}},
+                    ],
+                },
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
+        self.assertEqual(budget["episodes"][("S2", "E2")]["conflict_guard"], "strict")
+        self.assertEqual(budget["episodes"][("S2", "E2")]["episode_detail_tier"], "standard")
+
     def test_stage_aware_budget_sets_conflict_guard_when_source_overlap_is_ambiguous(self):
         from finmy.builder.agent_build.execution_budget import (
             build_stage_aware_execution_budget,
