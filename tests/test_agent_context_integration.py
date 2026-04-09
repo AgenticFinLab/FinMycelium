@@ -1663,6 +1663,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("StageSkeleton", rendered_prompt)
         self.assertIn("TargetEpisode", rendered_prompt)
         self.assertIn("Episode 1", rendered_prompt)
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "standard")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
         self.assertEqual(
             captured["prompt_kwargs"]["RetrievedContextSummary"],
             json.dumps({"selected_count": 1}, ensure_ascii=False),
@@ -1745,7 +1747,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("real content", rendered_prompt)
         self.assertNotIn("alpha episode excerpt", rendered_prompt)
         self.assertNotIn("ParticipantDetailTier", captured["prompt_kwargs"])
-        self.assertNotIn("ConflictGuard", captured["prompt_kwargs"])
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "standard")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
 
     def test_episode_reconstructor_exposes_richer_local_context_metadata_additively(self):
         captured = {}
@@ -2021,6 +2024,196 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("Transaction IDs: none", captured["prompt_kwargs"]["TargetEpisodeContext"])
         self.assertIn("Participant IDs: P_1", captured["prompt_kwargs"]["TargetEpisodeContext"])
         self.assertIn("real content\nsecondary content line", rendered_prompt)
+
+    def test_episode_reconstructor_injects_minimal_episode_detail_tier(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        plan = self.builder._build_episode_execution_plan(
+            _build_compact_input(),
+            _skeleton(),
+        )
+        plan["episodes"][0]["episode_detail_tier"] = "minimal"
+        plan["episodes"][0]["detail_tier"] = "minimal"
+        plan["episodes"][0]["conflict_guard"] = "standard"
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "episode_execution_plan": plan,
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=None,
+        ):
+            self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "minimal")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
+        self.assertIn("EpisodeDetailTier", rendered_prompt)
+        self.assertIn("emit at most one concise description", rendered_prompt)
+        self.assertIn("include only essential participant_relations", rendered_prompt)
+        self.assertIn("EpisodeCompactnessHint", captured["prompt_kwargs"])
+        self.assertIn("TransactionDetailTier", captured["prompt_kwargs"])
+
+    def test_episode_reconstructor_promotes_strict_conflict_guard_to_standard(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "episode_id": "E1",
+                        "name": _vf("Episode 1"),
+                        "index_in_stage": 0,
+                        "start_time": _vf("2025-01-01"),
+                        "end_time": _vf("2025-01-02"),
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        plan = self.builder._build_episode_execution_plan(
+            _build_compact_input(),
+            _skeleton(),
+        )
+        plan["episodes"][0]["episode_detail_tier"] = "compact"
+        plan["episodes"][0]["detail_tier"] = "compact"
+        plan["episodes"][0]["conflict_guard"] = "strict"
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "episode_execution_plan": plan,
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=None,
+        ):
+            self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "standard")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "strict")
+        self.assertEqual(plan["episodes"][0]["episode_detail_tier"], "compact")
+        self.assertIn("EpisodeDetailTier", rendered_prompt)
+        self.assertIn("ConflictGuard", rendered_prompt)
 
     def test_episode_reconstructor_exposes_compact_payload_contract_additively(self):
         captured = {}

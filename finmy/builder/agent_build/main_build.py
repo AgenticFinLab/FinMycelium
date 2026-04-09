@@ -1149,9 +1149,18 @@ class AgentEventBuilder(BaseBuilder):
             conflict_guard = (
                 plan_entry.get("conflict_guard") if plan_entry else None
             ) or "standard"
+            if conflict_guard not in {"standard", "strict"}:
+                conflict_guard = "standard"
             detail_tier = (
                 plan_entry.get("detail_tier", "standard") if plan_entry else "standard"
             )
+            episode_detail_tier = (
+                plan_entry.get("episode_detail_tier") if plan_entry else None
+            ) or "standard"
+            if episode_detail_tier not in {"minimal", "compact", "standard"}:
+                episode_detail_tier = "standard"
+            if conflict_guard == "strict":
+                episode_detail_tier = "standard"
             transaction_step_skipped = self._transaction_step_skipped(
                 plan_entry,
                 execution_mode=execution_mode,
@@ -1222,6 +1231,8 @@ class AgentEventBuilder(BaseBuilder):
                     belong_state
                 )
                 prompt_kwargs["TargetEpisode"] = target_episode
+                prompt_kwargs["EpisodeDetailTier"] = episode_detail_tier
+                prompt_kwargs["ConflictGuard"] = conflict_guard
                 if execution_mode == "light":
                     prompt_kwargs["EpisodeCompactnessHint"] = (
                         "compact-light-mode: keep participant_relations and descriptions "

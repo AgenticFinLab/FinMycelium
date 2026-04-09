@@ -519,7 +519,7 @@ Inputs:
 - StageSkeleton: stage name, episode identifiers, and chronology only
 - TargetEpisode: The skeleton of the episode, including `episode_id`, `name`, `index_in_stage`, and pre-reconstructed lists of `participants` and `transactions`.
 - Query, Keywords, Content
-- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeCompactnessHint
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeDetailTier, ConflictGuard, EpisodeCompactnessHint
 
 Constraints:
 - The TARGET Episode is identified by `episode_id`, `name`, `index_in_stage`.
@@ -532,9 +532,13 @@ Instructions:
 - Treat `RetrievedContext` as additive evidence only. Use it to ground episode relations and timestamps, but do not remove or replace `Content`.
 - If `RetrievedContextSummary` is provided, use it as a compact signal about what was retrieved for this episode.
 - Read `EpisodeLocator` to stay anchored to the exact stage/episode target.
-- Read `EpisodeExecutionMode` and `TransactionDetailTier` before deciding how much to infer from the transaction foundation.
+- Read `EpisodeExecutionMode`, `TransactionDetailTier`, `EpisodeDetailTier`, and `ConflictGuard` before deciding how much to infer from the transaction foundation.
 - If `EpisodeExecutionMode` is `light`, preserve the provided participants, tolerate an empty transaction foundation, focus on timeline and concise relations, and do not invent transactions to compensate for a compact path.
 - If `EpisodeExecutionMode` is `light`, also obey `EpisodeCompactnessHint` and keep `participant_relations` and `descriptions` minimal unless the content clearly requires more detail.
+- If `EpisodeDetailTier` is `minimal`, emit at most one concise description, include only essential participant_relations, and keep the smallest valid JSON grounded in `Content`.
+- If `EpisodeDetailTier` is `compact`, keep descriptions terse and include only essential participant_relations.
+- If `EpisodeDetailTier` is `standard`, preserve the current richer reconstruction behavior.
+- If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
 - If `EpisodeExecutionMode` is `full`, preserve the current richer reconstruction behavior.
 - **Output Placeholders**: In your output JSON:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
@@ -566,12 +570,16 @@ Inputs:
 - StageSkeleton (context).
 - TargetEpisode (includes pre-filled `participants` and `transactions`).
 - Query, Keywords, Content.
-- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier.
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeDetailTier, ConflictGuard.
 - EpisodeCompactnessHint.
 
 Instructions:
 - **Fixed Fields**: Treat provided `participants` and `transactions` as fixed.
 - **Execution Mode**: If `EpisodeExecutionMode` is `light`, preserve the provided participants, accept an empty transaction foundation, and keep relations/descriptions concise and evidence-bound.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `minimal`, emit at most one concise description, include only essential participant_relations, and keep the smallest valid output grounded in `Content`.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `compact`, keep descriptions brief and include only essential participant_relations.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `standard`, preserve richer reconstruction behavior.
+- **Conflict Guard**: If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
 - **Compactness Hint**: If `EpisodeCompactnessHint` is present, follow it exactly and prefer the smallest valid output that remains grounded in `Content`.
 - **Output Placeholders**:
     - `"participants": "Results of ParticipantReconstructor"`
@@ -611,6 +619,14 @@ Output:
 === TRANSACTION DETAIL TIER BEGIN ===
 {TransactionDetailTier}
 === TRANSACTION DETAIL TIER END ===
+
+=== EPISODE DETAIL TIER BEGIN ===
+{EpisodeDetailTier}
+=== EPISODE DETAIL TIER END ===
+
+=== CONFLICT GUARD BEGIN ===
+{ConflictGuard}
+=== CONFLICT GUARD END ===
 
 === Query BEGIN ===
 {Query}
