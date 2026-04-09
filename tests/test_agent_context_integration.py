@@ -2117,6 +2117,10 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
         self.assertIn("EpisodeDetailTier", rendered_prompt)
         self.assertIn("emit at most one concise description", rendered_prompt)
+        self.assertIn(
+            "preserve timeline anchors but do not add narrative expansion",
+            rendered_prompt,
+        )
         self.assertIn("include only essential participant_relations", rendered_prompt)
         self.assertIn("EpisodeCompactnessHint", captured["prompt_kwargs"])
         self.assertIn("TransactionDetailTier", captured["prompt_kwargs"])
@@ -2214,6 +2218,10 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertEqual(plan["episodes"][0]["episode_detail_tier"], "compact")
         self.assertIn("EpisodeDetailTier", rendered_prompt)
         self.assertIn("ConflictGuard", rendered_prompt)
+        self.assertIn(
+            "preserve major causal and legal facts while keeping descriptions brief",
+            rendered_prompt,
+        )
 
     def test_episode_reconstructor_exposes_compact_payload_contract_additively(self):
         captured = {}

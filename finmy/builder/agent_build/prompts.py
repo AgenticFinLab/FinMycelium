@@ -535,8 +535,8 @@ Instructions:
 - Read `EpisodeExecutionMode`, `TransactionDetailTier`, `EpisodeDetailTier`, and `ConflictGuard` before deciding how much to infer from the transaction foundation.
 - If `EpisodeExecutionMode` is `light`, preserve the provided participants, tolerate an empty transaction foundation, focus on timeline and concise relations, and do not invent transactions to compensate for a compact path.
 - If `EpisodeExecutionMode` is `light`, also obey `EpisodeCompactnessHint` and keep `participant_relations` and `descriptions` minimal unless the content clearly requires more detail.
-- If `EpisodeDetailTier` is `minimal`, emit at most one concise description, include only essential participant_relations, and keep the smallest valid JSON grounded in `Content`.
-- If `EpisodeDetailTier` is `compact`, keep descriptions terse and include only essential participant_relations.
+- If `EpisodeDetailTier` is `minimal`, emit at most one concise description, preserve timeline anchors but do not add narrative expansion, include only essential participant_relations, and keep the smallest valid JSON grounded in `Content`.
+- If `EpisodeDetailTier` is `compact`, preserve major causal and legal facts while keeping descriptions brief, and include only essential participant_relations.
 - If `EpisodeDetailTier` is `standard`, preserve the current richer reconstruction behavior.
 - If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
 - If `EpisodeExecutionMode` is `full`, preserve the current richer reconstruction behavior.
@@ -576,8 +576,8 @@ Inputs:
 Instructions:
 - **Fixed Fields**: Treat provided `participants` and `transactions` as fixed.
 - **Execution Mode**: If `EpisodeExecutionMode` is `light`, preserve the provided participants, accept an empty transaction foundation, and keep relations/descriptions concise and evidence-bound.
-- **Episode Detail Tier**: If `EpisodeDetailTier` is `minimal`, emit at most one concise description, include only essential participant_relations, and keep the smallest valid output grounded in `Content`.
-- **Episode Detail Tier**: If `EpisodeDetailTier` is `compact`, keep descriptions brief and include only essential participant_relations.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `minimal`, emit at most one concise description, preserve timeline anchors but do not add narrative expansion, include only essential participant_relations, and keep the smallest valid output grounded in `Content`.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `compact`, preserve major causal and legal facts while keeping descriptions brief, and include only essential participant_relations.
 - **Episode Detail Tier**: If `EpisodeDetailTier` is `standard`, preserve richer reconstruction behavior.
 - **Conflict Guard**: If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
 - **Compactness Hint**: If `EpisodeCompactnessHint` is present, follow it exactly and prefer the smallest valid output that remains grounded in `Content`.
