@@ -1130,6 +1130,8 @@ class SparseRagRoutingTest(unittest.TestCase):
                             "episode_id": "E1",
                         },
                         "mode": "light",
+                        "participant_tier": "minimal",
+                        "conflict_guard": "strict",
                         "detail_tier": "compact",
                     }
                 ]

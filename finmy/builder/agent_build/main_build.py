@@ -1143,6 +1143,12 @@ class AgentEventBuilder(BaseBuilder):
                 episode_index,
             )
             execution_mode = plan_entry.get("mode", "full") if plan_entry else "full"
+            participant_tier = (
+                plan_entry.get("participant_tier") if plan_entry else None
+            ) or "standard"
+            conflict_guard = (
+                plan_entry.get("conflict_guard") if plan_entry else None
+            ) or "normal"
             detail_tier = (
                 plan_entry.get("detail_tier", "standard") if plan_entry else "standard"
             )
@@ -1154,6 +1160,9 @@ class AgentEventBuilder(BaseBuilder):
             prompt_kwargs["EpisodeLocator"] = locator
             prompt_kwargs["EpisodeExecutionMode"] = execution_mode
             prompt_kwargs["TransactionDetailTier"] = detail_tier
+            if agent_name == "ParticipantReconstructor":
+                prompt_kwargs["ParticipantDetailTier"] = participant_tier
+                prompt_kwargs["ConflictGuard"] = conflict_guard
 
             savename_suffix = f"-Stage{stage_index}-Episode{episode_index}"
 

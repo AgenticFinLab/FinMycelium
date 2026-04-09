@@ -1053,6 +1053,220 @@ class AgentContextIntegrationTest(unittest.TestCase):
             json.dumps({"selected_count": 1}, ensure_ascii=False),
         )
 
+    def test_participant_reconstructor_receives_minimal_tier_prompt_kwargs(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps({"participants": [_participant()]}),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [{"SkeletonChecker": _skeleton()}],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {"ParticipantReconstructor": "sys"},
+            "agent_user_msgs": {
+                "ParticipantReconstructor": main_build_module.ParticipantReconstructorUser
+            },
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "light",
+                        "participant_tier": "minimal",
+                        "conflict_guard": "strict",
+                        "detail_tier": "compact",
+                    }
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=None,
+        ):
+            self.builder.execute_agent(state, "ParticipantReconstructor")
+
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertEqual(captured["prompt_kwargs"]["ParticipantDetailTier"], "minimal")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "strict")
+        self.assertIn("ParticipantDetailTier", rendered_prompt)
+        self.assertIn("ConflictGuard", rendered_prompt)
+        self.assertIn("prefer only the materially necessary actors", rendered_prompt)
+        self.assertIn(
+            "prefer a group participant over weakly evidenced individual expansion",
+            rendered_prompt,
+        )
+        self.assertIn("cap action volume", rendered_prompt)
+        self.assertIn("conservative inclusion over aggressive compression", rendered_prompt)
+
+    def test_light_participant_tier_preserves_id_reuse_but_caps_actor_set(self):
+        captured = {}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            captured["infer_input"] = infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(
+                    {
+                        "participants": [
+                            {
+                                "participant_id": "P_1",
+                                "name": _vf("Participant 1"),
+                                "participant_type": "organization",
+                                "base_role": _vf("counterparty"),
+                                "attributes": {},
+                                "actions": [],
+                            }
+                        ]
+                    }
+                ),
+                to_dict=lambda: {"response": "raw"},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        original_extract_json_response = main_build_module.extract_json_response
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "extract_json_response",
+            original_extract_json_response,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        main_build_module.extract_json_response = lambda result: json.loads(result)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        skeleton = _skeleton()
+        skeleton["stages"][0]["episodes"].append(
+            {
+                "episode_id": "E2",
+                "name": _vf("Episode 2"),
+                "index_in_stage": 1,
+                "start_time": _vf("2025-01-03"),
+                "end_time": _vf("2025-01-04"),
+            }
+        )
+
+        state = {
+            "build_input": _build_compact_input(),
+            "agent_results": [
+                {"SkeletonChecker": skeleton},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"EpisodeReconstructor": {"episode_id": "E1"}},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+                "EpisodeReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {"ParticipantReconstructor": "sys"},
+            "agent_user_msgs": {
+                "ParticipantReconstructor": main_build_module.ParticipantReconstructorUser
+            },
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 1,
+                            "stage_id": "S1",
+                            "episode_id": "E2",
+                        },
+                        "mode": "light",
+                        "participant_tier": "minimal",
+                        "conflict_guard": "strict",
+                        "detail_tier": "compact",
+                    }
+                ]
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with patch.object(
+            self.builder,
+            "_build_local_context_package",
+            return_value=None,
+        ):
+            self.builder.execute_agent(state, "ParticipantReconstructor")
+
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        reconstructed_participants = captured["prompt_kwargs"]["ReconstructedParticipants"]
+        first_episode_participants = reconstructed_participants["stages"][0]["episodes"][0][
+            "participants"
+        ]
+        self.assertEqual(
+            [participant["participant_id"] for participant in first_episode_participants],
+            ["P_1", "P_2"],
+        )
+        self.assertEqual(captured["prompt_kwargs"]["ParticipantDetailTier"], "minimal")
+        self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "strict")
+        self.assertIn("ParticipantDetailTier", rendered_prompt)
+        self.assertIn("ConflictGuard", rendered_prompt)
+        self.assertEqual(
+            state["agent_results"][-1]["ParticipantReconstructor"]["participants"][0][
+                "participant_id"
+            ],
+            "P_1",
+        )
+        self.assertEqual(
+            len(state["agent_results"][-1]["ParticipantReconstructor"]["participants"]),
+            1,
+        )
+
     def test_participant_reconstructor_uses_empty_retrieved_context_when_no_matches(self):
         captured = {}
 

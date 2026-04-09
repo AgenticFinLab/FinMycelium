@@ -364,6 +364,8 @@ Inputs:
 - Query: The analysis intent.
 - Keywords: Key terms to focus on.
 - Content: The source text for this episode.
+- ParticipantDetailTier: Controls how aggressively to compress the participant set.
+- ConflictGuard: Controls how conservative the inclusion boundary should be.
 - ReconstructedParticipants: Previously reconstructed participants aligned to the EventCascade structure to enable ID reuse:
   EventCascade
     └── stages: List[EventStage]
@@ -376,6 +378,10 @@ Output:
 
 Instructions:
 - Extract the core set of participants crucial to the TargetEpisode. Include other participants only if clearly evidenced and relevant.
+- If `ParticipantDetailTier` is `minimal`, prefer only the materially necessary actors, prefer a group participant over weakly evidenced individual expansion, and cap action volume while avoiding verbose attributes.
+- If `ParticipantDetailTier` is `compact`, keep the core actor topology but omit peripheral participants.
+- If `ConflictGuard` is `strict`, prefer conservative inclusion over aggressive compression when evidence is ambiguous.
+- If `ParticipantDetailTier` is `standard` and `ConflictGuard` is `normal`, preserve the current full-path participant reconstruction behavior.
 - Use `VerifiableField` with evidence and reasons for all grounded fields.
 - Ensure involvement and `actions` are time-consistent with the episode `start_time` and `end_time` or directly causally linked.
 - Deduplicate aliases and unify names; avoid duplicates for the same entity.
@@ -404,6 +410,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== PARTICIPANT DETAIL TIER BEGIN ===
+{ParticipantDetailTier}
+=== PARTICIPANT DETAIL TIER END ===
+
+=== CONFLICT GUARD BEGIN ===
+{ConflictGuard}
+=== CONFLICT GUARD END ===
 
 === RETRIEVED CONTEXT BEGIN ===
 {RetrievedContext}
