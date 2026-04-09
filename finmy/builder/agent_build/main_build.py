@@ -74,6 +74,9 @@ from finmy.builder.utils import (
     run_single_inference,
 )
 from finmy.builder.base import AgentState
+from finmy.builder.agent_build.execution_budget import (
+    build_stage_aware_execution_budget,
+)
 from finmy.builder.agent_build.structure import Episode
 from finmy.context.local_context_builder import (
     LocalContextBuilder,
@@ -294,33 +297,8 @@ class AgentEventBuilder(BaseBuilder):
         build_input: BuildInput,
         event_skeleton: dict,
     ) -> dict[str, object]:
-        """Build a cheap per-episode routing plan from the validated skeleton.
-
-        The first slice only needs a coarse, deterministic mode split:
-        episodes that look money-dense should stay on the full path, while the
-        rest can use the light path.
-        """
-        bundle = getattr(build_input, "context_assets", None)
-        cards = getattr(bundle, "evidence_cards", []) or []
-        has_money_signal = any(
-            bool(getattr(card, "money_hints", None))
-            or "money_dense" in (getattr(card, "quality_flags", None) or [])
-            for card in cards
-        )
-        money_tokens = {
-            "cash",
-            "fund",
-            "funds",
-            "launder",
-            "laundering",
-            "payment",
-            "transfer",
-            "property",
-            "asset",
-            "assets",
-            "money",
-            "wire",
-        }
+        """Build a planner-backed per-episode routing plan from the skeleton."""
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
 
         plan_entries: list[dict[str, object]] = []
         for (
@@ -330,20 +308,28 @@ class AgentEventBuilder(BaseBuilder):
             episode,
             locator,
         ) in self._iter_skeleton_episodes(event_skeleton):
-            episode_name = self._scalar_value(episode.get("name", "")).lower()
-            stage_name = self._scalar_value(stage.get("name", "")).lower()
-            combined_text = f"{stage_name} {episode_name}"
-            money_dense = has_money_signal and any(
-                token in combined_text for token in money_tokens
-            )
-            mode = "full" if money_dense else "light"
+            stage_id = self._scalar_value(stage.get("stage_id", ""))
+            episode_id = self._scalar_value(episode.get("episode_id", ""))
+            budget_entry = budget.get("episodes", {}).get((stage_id, episode_id), {})
+            mode = budget_entry.get("mode", "full")
+            transaction_tier = budget_entry.get("transaction_tier", "standard")
+            if mode == "light":
+                transaction_tier = "skip"
             plan_entries.append(
                 {
                     "locator": locator,
+                    "stage_id": stage_id,
+                    "episode_id": episode_id,
                     "stage_index": stage_index,
                     "episode_index": episode_index,
                     "mode": mode,
-                    "detail_tier": "standard" if mode == "full" else "compact",
+                    "participant_tier": budget_entry.get("participant_tier", "standard"),
+                    "transaction_tier": transaction_tier,
+                    "episode_detail_tier": budget_entry.get(
+                        "episode_detail_tier", "standard"
+                    ),
+                    "conflict_guard": budget_entry.get("conflict_guard", "standard"),
+                    "detail_tier": budget_entry.get("episode_detail_tier", "standard"),
                 }
             )
 
@@ -455,6 +441,9 @@ class AgentEventBuilder(BaseBuilder):
             mode = result_meta.get("execution_mode")
             if mode not in {"light", "full"}:
                 mode = "full" if transaction_seen_for_current_episode else "light"
+            transaction_tier = result_meta.get("transaction_tier")
+            if transaction_tier not in {"skip", "minimal", "compact", "standard"}:
+                transaction_tier = "skip" if mode == "light" else "standard"
             detail_tier = result_meta.get("detail_tier")
             if detail_tier not in {"compact", "standard"}:
                 detail_tier = "standard" if mode == "full" else "compact"
@@ -464,6 +453,7 @@ class AgentEventBuilder(BaseBuilder):
                     "stage_index": stage_index,
                     "episode_index": episode_index,
                     "mode": mode,
+                    "transaction_tier": transaction_tier,
                     "detail_tier": detail_tier,
                 }
             )
@@ -510,8 +500,14 @@ class AgentEventBuilder(BaseBuilder):
             stage_index,
             episode_index,
         )
-        mode = plan_entry.get("mode", "full") if plan_entry else "full"
-        return "EpisodeReconstructor" if mode == "light" else "TransactionReconstructor"
+        transaction_tier = plan_entry.get("transaction_tier") if plan_entry else None
+        if transaction_tier is None and plan_entry:
+            transaction_tier = "skip" if plan_entry.get("mode") == "light" else "standard"
+        return (
+            "EpisodeReconstructor"
+            if transaction_tier == "skip"
+            else "TransactionReconstructor"
+        )
 
     def _build_local_context_package(self, state: AgentState, agent_name: str):
         """Build local context for reconstruction paths and skeleton shadow mode.
@@ -1228,6 +1224,9 @@ class AgentEventBuilder(BaseBuilder):
             result_entry["_meta"] = {
                 "episode_locator": locator,
                 "execution_mode": execution_mode,
+                "transaction_tier": plan_entry.get("transaction_tier", "skip")
+                if plan_entry
+                else ("skip" if execution_mode == "light" else "standard"),
                 "detail_tier": detail_tier,
             }
         saved_result_artifact = (

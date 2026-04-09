@@ -446,6 +446,93 @@ class SparseRagRoutingTest(unittest.TestCase):
             "light",
         )
 
+    def test_skeleton_checker_populates_stage_aware_execution_budget(self):
+        skeleton = self._make_skeleton()
+        state = {
+            "build_input": self._make_build_input(),
+            "agent_results": [{"SkeletonReconstructor": skeleton}],
+            "agent_executed": ["SkeletonReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {"SkeletonChecker": "system {STRUCTURE_SPEC}"},
+            "agent_user_msgs": {"SkeletonChecker": "user"},
+            "episode_execution_plan": {"episodes": []},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        fake_output = types.SimpleNamespace(
+            response=json.dumps(skeleton),
+            to_dict=lambda: {"response": "{}"},
+        )
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder._build_local_context_package = lambda *args, **kwargs: None
+        self.builder._attach_local_context_prompt_kwargs = lambda *args, **kwargs: None
+        self.builder._rewrite_heavy_agent_user_msg_template = lambda *args, **kwargs: "user"
+        self.builder._validate_event_skeleton = lambda skeleton_dict: (True, "")
+
+        with patch.object(
+            self.main_build_module, "run_single_inference", return_value=fake_output
+        ), patch.object(
+            self.main_build_module,
+            "extract_json_response",
+            return_value=skeleton,
+        ):
+            self.builder.execute_agent(state, "SkeletonChecker")
+
+        entry = self._plan_entry(state["episode_execution_plan"], 0, 0)
+        self.assertEqual(entry["locator"]["stage_id"], "S1")
+        self.assertEqual(entry["locator"]["episode_id"], "E1")
+        self.assertIn(entry["mode"], {"light", "full"})
+        self.assertIn(entry["participant_tier"], {"minimal", "compact", "standard"})
+        self.assertIn(
+            entry["transaction_tier"], {"skip", "minimal", "compact", "standard"}
+        )
+        self.assertIn(entry["episode_detail_tier"], {"compact", "standard"})
+        self.assertIn(entry["conflict_guard"], {"standard", "strict"})
+
+    def test_route_after_participant_reconstructor_uses_budget_transaction_tier(self):
+        state = {
+            "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
+            "episode_execution_plan": {
+                "episodes": [
+                    {
+                        "locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "mode": "full",
+                        "transaction_tier": "skip",
+                        "detail_tier": "standard",
+                    }
+                ]
+            },
+            "agent_results": [],
+        }
+
+        self.builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Arrest"}},
+                    ],
+                }
+            ]
+        }
+        self.builder.extract_latest_episode = lambda _skeleton, _count: (
+            {"stage_id": "S1", "index_in_event": 0},
+            {"episode_id": "E1", "name": {"value": "Arrest"}, "index_in_stage": 0},
+        )
+
+        self.assertEqual(
+            self.builder._route_after_participant_reconstructor(state),
+            "EpisodeReconstructor",
+        )
+
     def test_route_after_participant_reconstructor_skips_transaction_for_light_episode(self):
         state = {
             "agent_executed": ["SkeletonChecker", "ParticipantReconstructor"],
