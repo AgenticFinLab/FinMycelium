@@ -1969,6 +1969,11 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertIn("stage_evidence_digest", stage_sparse_cache)
         self.assertIn("stage_actor_map", stage_sparse_cache)
         self.assertIn("stage_conflict_summary", stage_sparse_cache)
+        rendered_prompt = captured["infer_input"].user_msg.format(
+            **captured["prompt_kwargs"]
+        )
+        self.assertIn("STAGE SPARSE CACHE BEGIN", rendered_prompt)
+        self.assertIn('"stage_name": "Stage 1"', rendered_prompt)
 
     def test_episode_reconstructor_light_mode_exposes_empty_transactions_and_compact_tier(self):
         captured = {}

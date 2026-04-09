@@ -78,6 +78,8 @@ class AgentState(MessagesState):
     agent_user_msgs: Dict[str, str]
     # Stable per-episode execution routing metadata populated after skeleton validation
     episode_execution_plan: Dict[str, Any]
+    # Stage-scoped sparse cache reused by same-stage heavy agents and rebuilt per stage
+    stage_sparse_cache: Dict[Any, Any]
     # Local retry metadata for skeleton validation/routing decisions
     skeleton_retry_count: int
     skeleton_validation_reason: str

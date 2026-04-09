@@ -1934,6 +1934,7 @@ class AgentEventBuilder(BaseBuilder):
             "agent_system_msgs": agent_system_msgs,
             "agent_user_msgs": agent_user_msgs,
             "episode_execution_plan": {"episodes": []},
+            "stage_sparse_cache": {},
             "skeleton_retry_count": 0,
             "skeleton_validation_reason": "",
         }

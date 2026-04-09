@@ -572,6 +572,7 @@ Inputs:
 - Query, Keywords, Content.
 - EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeDetailTier, ConflictGuard.
 - EpisodeCompactnessHint.
+- StageSparseCache: stage-level additive summary for same-stage consistency.
 
 Instructions:
 - **Fixed Fields**: Treat provided `participants` and `transactions` as fixed.
@@ -581,6 +582,7 @@ Instructions:
 - **Episode Detail Tier**: If `EpisodeDetailTier` is `standard`, preserve richer reconstruction behavior.
 - **Conflict Guard**: If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
 - **Compactness Hint**: If `EpisodeCompactnessHint` is present, follow it exactly and prefer the smallest valid output that remains grounded in `Content`.
+- **Stage Cache**: If `StageSparseCache` is present, use it as additive stage-level context to keep same-stage episode reconstruction aligned, but never replace or weaken `Content`.
 - **Output Placeholders**:
     - `"participants": "Results of ParticipantReconstructor"`
     - `"transactions": "Results of TransactionReconstructor"`
@@ -647,4 +649,8 @@ Output:
 === RETRIEVED CONTEXT SUMMARY BEGIN ===
 {RetrievedContextSummary}
 === RETRIEVED CONTEXT SUMMARY END ===
+
+=== STAGE SPARSE CACHE BEGIN ===
+{StageSparseCache}
+=== STAGE SPARSE CACHE END ===
 """.strip()
