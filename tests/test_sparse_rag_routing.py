@@ -194,6 +194,119 @@ class SparseRagRoutingTest(unittest.TestCase):
         )
         self.assertEqual(self._plan_entry(plan, 1, 0)["mode"], "full")
 
+    def test_stage_aware_budget_marks_relation_and_timeline_complex_episodes_conservatively(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="legal timeline reconstruction",
+                key_words=["legal", "timeline"],
+            ),
+            samples=[
+                SimpleNamespace(content="stage one remains simple and direct."),
+                SimpleNamespace(
+                    content="stage two legal timeline review with court hearing dates and conflicting chronology."
+                ),
+            ],
+            context_assets=EvidenceAssetBundle.empty(),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Simple background"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial contact"}},
+                    ],
+                },
+                {
+                    "stage_id": "S2",
+                    "name": {"value": "Legal timeline reconstruction"},
+                    "episodes": [
+                        {"episode_id": "E4", "name": {"value": "Court timeline review"}},
+                    ],
+                },
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][1]["timeline_complexity"], "high")
+        self.assertEqual(
+            budget["episodes"][("S2", "E4")]["episode_detail_tier"], "standard"
+        )
+        self.assertIn(
+            budget["episodes"][("S1", "E1")]["participant_tier"],
+            {"minimal", "compact"},
+        )
+
+    def test_stage_aware_budget_sets_conflict_guard_when_source_overlap_is_ambiguous(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="conflicting witness accounts and overlapping reports",
+                key_words=["conflict", "overlap"],
+            ),
+            samples=[
+                SimpleNamespace(
+                    content="witness A says the transfer happened on Monday while witness B says Tuesday."
+                ),
+                SimpleNamespace(
+                    content="witness A and witness B repeat the same names, dates, and events with inconsistent timing."
+                ),
+            ],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 10, "s2": 12}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="conflicting witness account",
+                        excerpt="witness A says Monday",
+                        source_char_count=0,
+                        time_hints=["monday", "tuesday"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["transfer"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="overlapping report",
+                        excerpt="same names and dates",
+                        source_char_count=0,
+                        time_hints=["monday", "tuesday"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["report"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                ],
+            ),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Overlapping conflict stage"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Ambiguous source overlap"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(
+            budget["episodes"][("S1", "E1")]["conflict_guard"], "strict"
+        )
+
     def test_run_initializes_empty_episode_execution_plan(self):
         build_input = self._make_build_input()
         observed_state = {}
