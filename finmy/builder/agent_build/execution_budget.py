@@ -167,20 +167,6 @@ def _episode_signal_score(build_input: Any, stage: dict[str, Any], episode: dict
     return score
 
 
-def _episode_detail_signal_score(stage: dict[str, Any], episode: dict[str, Any]) -> int:
-    episode_text = f"{_lower_text(stage.get('name'))} {_lower_text(episode.get('name'))}".strip()
-    score = 0
-    if _has_any(episode_text, _TIMELINE_HINTS):
-        score += 1
-    if _has_any(episode_text, _CONFLICT_HINTS):
-        score += 2
-    if "legal" in episode_text and "timeline" in episode_text:
-        score += 1
-    if any(hint in episode_text for hint in ("court hearing", "timeline review", "legal proceedings")):
-        score += 1
-    return score
-
-
 def _participant_tier(score: int, conflict_guard: str) -> str:
     if conflict_guard == "strict":
         return "compact" if score <= 2 else "standard"
@@ -201,7 +187,7 @@ def _transaction_tier(score: int, conflict_guard: str) -> str:
     return "standard"
 
 
-def _episode_detail_tier(stage_bucket: str, episode_score: int, conflict_guard: str) -> str:
+def _episode_detail_tier(stage_bucket: str, conflict_guard: str) -> str:
     if conflict_guard == "strict" or stage_bucket == "high":
         return "standard"
     return "compact"
@@ -255,8 +241,7 @@ def build_stage_aware_execution_budget(build_input: Any, event_skeleton: dict[st
             conflict_guard = _conflict_guard(episode_text, build_input)
             participant_tier = _participant_tier(episode_score, conflict_guard)
             transaction_tier = _transaction_tier(episode_score, conflict_guard)
-            episode_detail_score = _episode_detail_signal_score(stage, episode)
-            episode_detail_tier = _episode_detail_tier(stage_bucket, episode_detail_score, conflict_guard)
+            episode_detail_tier = _episode_detail_tier(stage_bucket, conflict_guard)
             mode = "full" if episode_score >= 2 or conflict_guard == "strict" else "light"
 
             episodes[(stage_id, episode_id)] = {

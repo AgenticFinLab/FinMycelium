@@ -348,23 +348,50 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(budget["stages"][0]["timeline_complexity"], "medium")
         self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
 
-    def test_episode_detail_tier_requires_stronger_signal_for_standard(self):
+    def test_episode_detail_tier_uses_strict_on_medium_stage(self):
         from finmy.builder.agent_build.execution_budget import (
             build_stage_aware_execution_budget,
         )
 
         build_input = SimpleNamespace(
-            user_query=SimpleNamespace(query_text="timeline review", key_words=["timeline"]),
-            samples=[SimpleNamespace(content="timeline review with a simple note.")],
-            context_assets=EvidenceAssetBundle.empty(),
+            user_query=SimpleNamespace(query_text="note", key_words=["note"]),
+            samples=[SimpleNamespace(content="single note with ambiguous source markers.")],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 5, "s2": 6}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="note one",
+                        excerpt="note one",
+                        source_char_count=0,
+                        time_hints=["monday"],
+                        entity_hints=["a"],
+                        action_hints=["note"],
+                        money_hints=[],
+                        quality_flags=["ambiguous_source"],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="note two",
+                        excerpt="note two",
+                        source_char_count=0,
+                        time_hints=["tuesday"],
+                        entity_hints=["a"],
+                        action_hints=["note"],
+                        money_hints=[],
+                        quality_flags=["ambiguous_source"],
+                    ),
+                ],
+            ),
         )
         event_skeleton = {
             "stages": [
                 {
                     "stage_id": "S1",
-                    "name": {"value": "Timeline overview"},
+                    "name": {"value": "Note"},
                     "episodes": [
-                        {"episode_id": "E1", "name": {"value": "Court hearing note"}},
+                        {"episode_id": "E1", "name": {"value": "Note"}},
                     ],
                 }
             ]
@@ -373,7 +400,8 @@ class SparseRagRoutingTest(unittest.TestCase):
         budget = build_stage_aware_execution_budget(build_input, event_skeleton)
 
         self.assertEqual(budget["stages"][0]["timeline_complexity"], "medium")
-        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "strict")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "standard")
 
     def test_episode_detail_tier_stays_standard_for_high_complexity_stage(self):
         from finmy.builder.agent_build.execution_budget import (
