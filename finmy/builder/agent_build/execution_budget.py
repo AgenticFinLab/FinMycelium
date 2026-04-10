@@ -202,11 +202,7 @@ def _transaction_tier(score: int, conflict_guard: str) -> str:
 
 
 def _episode_detail_tier(stage_bucket: str, episode_score: int, conflict_guard: str) -> str:
-    if conflict_guard == "strict":
-        return "standard"
-    if stage_bucket == "high":
-        return "standard"
-    if episode_score >= 3:
+    if conflict_guard == "strict" or stage_bucket == "high":
         return "standard"
     return "compact"
 

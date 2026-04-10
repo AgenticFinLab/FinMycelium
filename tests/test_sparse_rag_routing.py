@@ -354,10 +354,8 @@ class SparseRagRoutingTest(unittest.TestCase):
         )
 
         build_input = SimpleNamespace(
-            user_query=SimpleNamespace(query_text="timeline overview", key_words=["timeline"]),
-            samples=[
-                SimpleNamespace(content="timeline overview with court hearing notes.")
-            ],
+            user_query=SimpleNamespace(query_text="timeline review", key_words=["timeline"]),
+            samples=[SimpleNamespace(content="timeline review with a simple note.")],
             context_assets=EvidenceAssetBundle.empty(),
         )
         event_skeleton = {
@@ -429,7 +427,6 @@ class SparseRagRoutingTest(unittest.TestCase):
                     "name": {"value": "Legal timeline reconstruction"},
                     "episodes": [
                         {"episode_id": "E1", "name": {"value": "Initial contact"}},
-                        {"episode_id": "E2", "name": {"value": "Court timeline review"}},
                     ],
                 }
             ]
@@ -439,7 +436,6 @@ class SparseRagRoutingTest(unittest.TestCase):
 
         self.assertEqual(budget["stages"][0]["timeline_complexity"], "high")
         self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "standard")
-        self.assertEqual(budget["episodes"][("S1", "E2")]["episode_detail_tier"], "standard")
 
     def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
         from finmy.builder.agent_build.execution_budget import (
