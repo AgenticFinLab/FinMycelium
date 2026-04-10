@@ -321,6 +321,62 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
         self.assertEqual(budget["episodes"][("S1", "E1")]["conflict_guard"], "standard")
 
+    def test_episode_detail_tier_keeps_medium_case_compact(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(query_text="timeline review", key_words=["timeline"]),
+            samples=[SimpleNamespace(content="timeline review with a simple note.")],
+            context_assets=EvidenceAssetBundle.empty(),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Timeline review"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial note"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "medium")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
+
+    def test_episode_detail_tier_requires_stronger_signal_for_standard(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(query_text="timeline review", key_words=["timeline"]),
+            samples=[
+                SimpleNamespace(content="timeline review with a simple note.")
+            ],
+            context_assets=EvidenceAssetBundle.empty(),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Timeline review"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial note"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "medium")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
+
     def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
         from finmy.builder.agent_build.execution_budget import (
             build_stage_aware_execution_budget,
