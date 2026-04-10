@@ -1407,7 +1407,10 @@ class AgentEventBuilder(BaseBuilder):
                 prompt_kwargs["TargetEpisode"] = target_episode
                 prompt_kwargs["EpisodeDetailTier"] = episode_detail_tier
                 prompt_kwargs["ConflictGuard"] = conflict_guard
-                if execution_mode == "light":
+                if execution_mode == "light" or (
+                    episode_detail_tier in {"minimal", "compact"}
+                    and conflict_guard != "strict"
+                ):
                     prompt_kwargs["EpisodeCompactnessHint"] = (
                         "compact-light-mode: keep participant_relations and descriptions "
                         "minimal, do not synthesize transactions, and prefer the smallest "

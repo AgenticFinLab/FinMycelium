@@ -465,6 +465,37 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(budget["stages"][0]["timeline_complexity"], "high")
         self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "standard")
 
+    def test_medium_stage_prefers_light_mode_until_episode_signal_is_strong(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(query_text="conflict review", key_words=["conflict"]),
+            samples=[SimpleNamespace(content="conflict review with a simple note.")],
+            context_assets=EvidenceAssetBundle.empty(),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Overview"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Conflicting note"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "medium")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["mode"], "light")
+        self.assertIn(
+            budget["episodes"][("S1", "E1")]["transaction_tier"],
+            {"minimal", "compact"},
+        )
+
     def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
         from finmy.builder.agent_build.execution_budget import (
             build_stage_aware_execution_budget,

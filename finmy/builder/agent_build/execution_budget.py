@@ -239,10 +239,22 @@ def build_stage_aware_execution_budget(build_input: Any, event_skeleton: dict[st
             episode_score = _episode_signal_score(build_input, stage, episode)
             episode_text = f"{_lower_text(stage.get('name'))} {_lower_text(episode.get('name'))}"
             conflict_guard = _conflict_guard(episode_text, build_input)
+            relevant_cards = _relevant_cards(build_input, episode_text)
             participant_tier = _participant_tier(episode_score, conflict_guard)
             transaction_tier = _transaction_tier(episode_score, conflict_guard)
             episode_detail_tier = _episode_detail_tier(stage_bucket, conflict_guard)
-            mode = "full" if episode_score >= 2 or conflict_guard == "strict" else "light"
+            mode = "light"
+            if conflict_guard == "strict":
+                mode = "full"
+            elif stage_bucket == "high" and episode_score >= 2:
+                mode = "full"
+            elif episode_score >= 2 and any(
+                "money_dense" in (getattr(card, "quality_flags", []) or [])
+                for card in relevant_cards
+            ):
+                mode = "full"
+            elif episode_score >= 3:
+                mode = "full"
 
             episodes[(stage_id, episode_id)] = {
                 "stage_id": stage_id,
