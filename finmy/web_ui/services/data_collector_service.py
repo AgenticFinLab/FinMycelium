@@ -8,6 +8,7 @@ import datetime
 import json
 import traceback
 from typing import List, Dict, Any
+from urllib.parse import urlparse
 import streamlit as st
 
 from finmy.url_collector.SearchCollector.bocha_search import bochasearch_api
@@ -34,9 +35,48 @@ class DataCollectorService:
         self.config = config
         self.save_dir = save_dir
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        self.collector_config = self.config.get("url_collector_config", {}) or {}
         self.parser = URLParser(
-            delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
+            delay=self.collector_config.get("delay", 1.0),
+            timeout=self.collector_config.get("timeout", 30),
+            use_selenium_fallback=self.collector_config.get(
+                "use_selenium_fallback", True
+            ),
+            selenium_wait_time=self.collector_config.get("selenium_wait_time", 5),
+            chromedriver_path=self.collector_config.get("chromedriver_path"),
         )
+
+    def _hostname(self, url: str) -> str:
+        parsed = urlparse(url)
+        hostname = parsed.netloc or parsed.path
+        return hostname.lower()
+
+    def _domain_fragments(self, key: str) -> List[str]:
+        values = self.collector_config.get(key, []) or []
+        return [str(value).strip().lower() for value in values if str(value).strip()]
+
+    def _is_blocked_domain(self, url: str) -> bool:
+        hostname = self._hostname(url)
+        return any(fragment in hostname for fragment in self._domain_fragments("blocked_domains"))
+
+    def _preferred_rank(self, url: str) -> int:
+        hostname = self._hostname(url)
+        preferred_domains = self._domain_fragments("preferred_domains")
+        return 0 if any(fragment in hostname for fragment in preferred_domains) else 1
+
+    def _select_candidates(self, items: List[Dict[str, Any]], parse_limit: int) -> List[Dict[str, Any]]:
+        ranked_candidates = []
+        for index, item in enumerate(items):
+            url = item.get("url", "")
+            if not url or self._is_blocked_domain(url):
+                continue
+            ranked_candidates.append((self._preferred_rank(url), index, item))
+
+        ranked_candidates.sort(key=lambda candidate: (candidate[0], candidate[1]))
+        selected_items = [item for _, _, item in ranked_candidates]
+        if parse_limit is not None and parse_limit >= 0:
+            return selected_items[:parse_limit]
+        return selected_items
 
     def collect_bocha_search_results(
         self, search_query: str, keywords: List[str]
@@ -58,9 +98,14 @@ class DataCollectorService:
 
         formatted_content = []
         try:
-            bocha_search_results = bochasearch_api(search_query, summary=True, count=10)
+            bocha_search_count = self.collector_config.get("bocha_search_count", 10)
+            bocha_parse_limit = self.collector_config.get("bocha_parse_limit", 5)
+            bocha_search_results = bochasearch_api(
+                search_query, summary=True, count=bocha_search_count
+            )
             logging.info("Bocha Search: %s", bocha_search_results)
-            results_count = len(bocha_search_results["data"]["webPages"]["value"])
+            raw_items = bocha_search_results["data"]["webPages"]["value"]
+            results_count = len(raw_items)
             logging.info("Bocha Search: Get %d search results.", results_count)
             st.write(
                 f"**{format_timestamp()}** - Bocha Search: Get {results_count} search results."
@@ -68,7 +113,8 @@ class DataCollectorService:
             st.write(f"**{format_timestamp()}** - Bocha Search: Parsing...")
 
             formatted_results = []
-            for item in bocha_search_results["data"]["webPages"]["value"]:
+            selected_items = self._select_candidates(raw_items, bocha_parse_limit)
+            for item in selected_items:
                 st.write(
                     f"**{format_timestamp()}** - Bocha Search: Parsing {item['url']}"
                 )
@@ -154,7 +200,9 @@ class DataCollectorService:
         formatted_content = []
         try:
             baidu_search_results = baidusearch_api(search_query)
-            results_count = len(baidu_search_results.get("references", []))
+            baidu_parse_limit = self.collector_config.get("baidu_parse_limit", 8)
+            raw_references = baidu_search_results.get("references", [])
+            results_count = len(raw_references)
             logging.info("Baidu Search: Get %d search results.", results_count)
             st.write(
                 f"**{format_timestamp()}** - Baidu Search: Get {results_count} search results."
@@ -163,7 +211,10 @@ class DataCollectorService:
 
             formatted_results = []
             if "references" in baidu_search_results:
-                for item in baidu_search_results["references"]:
+                selected_items = self._select_candidates(
+                    raw_references, baidu_parse_limit
+                )
+                for item in selected_items:
                     st.write(
                         f"**{format_timestamp()}** - Baidu Search: Parsing {item['url']}"
                     )

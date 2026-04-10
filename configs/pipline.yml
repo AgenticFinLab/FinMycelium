@@ -63,6 +63,26 @@ url_collector_config:
   delay: 1.0
   use_selenium_fallback: True
   selenium_wait_time: 5
+  bocha_search_count: 10
+  bocha_parse_limit: 5
+  baidu_parse_limit: 8
+  blocked_domains:
+    - "wordhippo.com"
+    - "docin.com"
+    - "book118.com"
+    - "taodocs.com"
+    - "dictall.com"
+    - "chashiwen.com"
+    - "edudba.com"
+    - "iask.sina.com.cn"
+  preferred_domains:
+    - "cnn.com"
+    - "theguardian.com"
+    - "cps.gov.uk"
+    - "baike.baidu.com"
+    - "163.com"
+    - "weixin.qq.com"
+    - "weibo.com"
 pdf_collector_config:
   output_dir: "EXPERIMENT/uTEST/Pipline/input/pdf"
   batch_size: 10

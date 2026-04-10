@@ -91,14 +91,13 @@ def parse_keywords(keywords_str: str) -> List[str]:
     if not keywords_str:
         return []
     
-    # Normalize full-width Chinese commas to standard commas
+    # Normalize common punctuation delimiters while preserving multi-word phrases.
     unified_keywords = (
-        keywords_str.replace("，", ",").replace(";", ",").replace("；", "")
+        keywords_str.replace("，", ",").replace("；", ";")
     )
-    
-    # Split on commas/spaces (supports multiple consecutive delimiters)
-    keyword_list = re.split(r"[,|\s]+", unified_keywords)
+
+    # Split only on explicit list delimiters or line breaks, not spaces.
+    keyword_list = re.split(r"\s*[,;\n]+\s*", unified_keywords)
     
     # Clean up keywords (strip whitespace + remove empty strings)
     return [k.strip() for k in keyword_list if k.strip()]
-
