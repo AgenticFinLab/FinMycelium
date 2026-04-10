@@ -374,13 +374,14 @@ class AgentEventBuilder(BaseBuilder):
         if not plan_entry:
             return "full"
         execution_mode = plan_entry.get("mode", "full")
+        if execution_mode in {"light", "full"}:
+            return execution_mode
         transaction_tier = plan_entry.get("transaction_tier")
-        conflict_guard = plan_entry.get("conflict_guard")
         if transaction_tier == "skip":
             return "light"
-        if conflict_guard != "strict" and transaction_tier in {"minimal", "compact"}:
+        if transaction_tier in {"minimal", "compact"}:
             return "light"
-        return execution_mode
+        return "full"
 
     def _get_episode_execution_plan_entry(
         self,
@@ -504,12 +505,22 @@ class AgentEventBuilder(BaseBuilder):
                 )
             detail_tier = result_meta.get("detail_tier")
             if detail_tier not in {"compact", "standard"}:
-                detail_tier = "standard" if mode == "full" else "compact"
+                compact_replay = mode == "light" or transaction_tier in {
+                    "skip",
+                    "minimal",
+                    "compact",
+                } or transaction_step_skipped
+                detail_tier = "compact" if compact_replay else "standard"
             episode_detail_tier = result_meta.get("episode_detail_tier")
             if episode_detail_tier is None:
                 episode_detail_tier = result_meta.get("detail_tier")
             if episode_detail_tier not in {"minimal", "compact", "standard"}:
-                episode_detail_tier = "standard"
+                compact_replay = mode == "light" or transaction_tier in {
+                    "skip",
+                    "minimal",
+                    "compact",
+                } or transaction_step_skipped
+                episode_detail_tier = "compact" if compact_replay else "standard"
             conflict_guard = result_meta.get("conflict_guard")
             if conflict_guard not in {"standard", "strict"}:
                 conflict_guard = "standard"
@@ -1407,14 +1418,16 @@ class AgentEventBuilder(BaseBuilder):
                 prompt_kwargs["TargetEpisode"] = target_episode
                 prompt_kwargs["EpisodeDetailTier"] = episode_detail_tier
                 prompt_kwargs["ConflictGuard"] = conflict_guard
-                if execution_mode == "light" or (
-                    episode_detail_tier in {"minimal", "compact"}
-                    and conflict_guard != "strict"
-                ):
+                if execution_mode == "light":
                     prompt_kwargs["EpisodeCompactnessHint"] = (
                         "compact-light-mode: keep participant_relations and descriptions "
                         "minimal, do not synthesize transactions, and prefer the smallest "
                         "valid JSON grounded in Content"
+                    )
+                elif episode_detail_tier in {"minimal", "compact"}:
+                    prompt_kwargs["EpisodeCompactnessHint"] = (
+                        "compact-full-mode: preserve compact episode detail while "
+                        "completing the full reconstruction path and staying evidence-bound"
                     )
                 else:
                     prompt_kwargs["EpisodeCompactnessHint"] = (

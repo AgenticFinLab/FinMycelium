@@ -2199,7 +2199,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         rendered_prompt = captured["infer_input"].user_msg.format(
             **captured["prompt_kwargs"]
         )
-        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "full")
         self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "minimal")
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
         self.assertIn("EpisodeDetailTier", rendered_prompt)
@@ -2210,6 +2210,7 @@ class AgentContextIntegrationTest(unittest.TestCase):
         )
         self.assertIn("include only essential participant_relations", rendered_prompt)
         self.assertIn("EpisodeCompactnessHint", captured["prompt_kwargs"])
+        self.assertIn("compact-full-mode", captured["prompt_kwargs"]["EpisodeCompactnessHint"])
         self.assertIn("TransactionDetailTier", captured["prompt_kwargs"])
 
     def test_episode_reconstructor_promotes_strict_conflict_guard_to_standard(self):
@@ -2362,8 +2363,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
             _build_compact_input(),
             _skeleton(),
         )
-        plan["episodes"][0]["mode"] = "full"
-        plan["episodes"][0]["transaction_tier"] = "minimal"
+        plan["episodes"][0]["mode"] = "light"
+        plan["episodes"][0]["transaction_tier"] = "compact"
         plan["episodes"][0]["detail_tier"] = "compact"
         plan["episodes"][0]["episode_detail_tier"] = "compact"
         plan["episodes"][0]["conflict_guard"] = "standard"
@@ -2460,7 +2461,6 @@ class AgentContextIntegrationTest(unittest.TestCase):
             _skeleton(),
         )
         plan["episodes"][0]["mode"] = "full"
-        plan["episodes"][0]["transaction_tier"] = "standard"
         plan["episodes"][0]["detail_tier"] = "compact"
         plan["episodes"][0]["episode_detail_tier"] = "compact"
         plan["episodes"][0]["conflict_guard"] = "standard"
@@ -2502,10 +2502,8 @@ class AgentContextIntegrationTest(unittest.TestCase):
         self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "full")
         self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "compact")
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
-        self.assertIn("compact", captured["prompt_kwargs"]["EpisodeCompactnessHint"])
-        self.assertNotIn(
-            "standard-full-mode", captured["prompt_kwargs"]["EpisodeCompactnessHint"]
-        )
+        self.assertIn("compact-full-mode", captured["prompt_kwargs"]["EpisodeCompactnessHint"])
+        self.assertNotIn("compact-light-mode", captured["prompt_kwargs"]["EpisodeCompactnessHint"])
         self.assertIn("EpisodeDetailTier", rendered_prompt)
         self.assertIn("EpisodeCompactnessHint", rendered_prompt)
 
@@ -2560,7 +2558,6 @@ class AgentContextIntegrationTest(unittest.TestCase):
             _skeleton(),
         )
         plan["episodes"][0]["mode"] = "full"
-        plan["episodes"][0]["transaction_tier"] = "minimal"
         plan["episodes"][0].pop("episode_detail_tier", None)
         plan["episodes"][0].pop("conflict_guard", None)
         plan["episodes"][0]["detail_tier"] = "compact"
@@ -2599,15 +2596,12 @@ class AgentContextIntegrationTest(unittest.TestCase):
         rendered_prompt = captured["infer_input"].user_msg.format(
             **captured["prompt_kwargs"]
         )
-        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "light")
+        self.assertEqual(captured["prompt_kwargs"]["EpisodeExecutionMode"], "full")
         self.assertEqual(captured["prompt_kwargs"]["TransactionDetailTier"], "compact")
         self.assertEqual(captured["prompt_kwargs"]["EpisodeDetailTier"], "compact")
         self.assertEqual(captured["prompt_kwargs"]["ConflictGuard"], "standard")
         self.assertIn("EpisodeDetailTier", rendered_prompt)
-        self.assertIn(
-            "preserve major causal and legal facts while keeping descriptions brief",
-            rendered_prompt,
-        )
+        self.assertIn("compact-full-mode", captured["prompt_kwargs"]["EpisodeCompactnessHint"])
 
     def test_episode_reconstructor_exposes_compact_payload_contract_additively(self):
         captured = {}

@@ -496,6 +496,28 @@ class SparseRagRoutingTest(unittest.TestCase):
             {"minimal", "compact"},
         )
 
+    def test_episode_execution_mode_tracks_planner_mode_with_compact_tiers(self):
+        self.assertEqual(
+            self.builder._episode_execution_mode(
+                {
+                    "mode": "full",
+                    "transaction_tier": "compact",
+                    "conflict_guard": "standard",
+                }
+            ),
+            "full",
+        )
+        self.assertEqual(
+            self.builder._episode_execution_mode(
+                {
+                    "mode": "light",
+                    "transaction_tier": "compact",
+                    "conflict_guard": "standard",
+                }
+            ),
+            "light",
+        )
+
     def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
         from finmy.builder.agent_build.execution_budget import (
             build_stage_aware_execution_budget,
@@ -1171,6 +1193,62 @@ class SparseRagRoutingTest(unittest.TestCase):
         self.assertEqual(entry["detail_tier"], "compact")
         self.assertEqual(entry["episode_detail_tier"], "standard")
         self.assertEqual(entry["conflict_guard"], "strict")
+
+    def test_replay_plan_defaults_keep_compact_tier_for_full_mode_compact_episode(self):
+        builder = self.builder
+        state = {
+            "agent_results": [
+                {
+                    "EpisodeReconstructor": {
+                        "episode_id": "E1",
+                        "name": {"value": "Arrest"},
+                        "index_in_stage": 0,
+                        "participants": "Results of ParticipantReconstructor",
+                        "transactions": "Results of TransactionReconstructor",
+                        "participant_relations": [],
+                        "descriptions": [],
+                    },
+                    "_meta": {
+                        "episode_locator": {
+                            "stage_index": 0,
+                            "episode_index": 0,
+                            "stage_id": "S1",
+                            "episode_id": "E1",
+                        },
+                        "execution_mode": "full",
+                        "transaction_tier": "compact",
+                        "conflict_guard": "standard",
+                    },
+                }
+            ],
+            "agent_executed": ["EpisodeReconstructor"],
+        }
+
+        builder._get_event_skeleton = lambda _state: {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "episodes": [
+                        {
+                            "episode_id": "E1",
+                            "name": {"value": "Arrest"},
+                            "index_in_stage": 0,
+                            "participants": [],
+                            "transactions": [],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        reconstructed_plan = builder._reconstruct_episode_execution_plan_from_results(
+            state
+        )
+        entry = self._plan_entry(reconstructed_plan, 0, 0)
+        self.assertEqual(entry["mode"], "full")
+        self.assertEqual(entry["detail_tier"], "compact")
+        self.assertEqual(entry["episode_detail_tier"], "compact")
+        self.assertEqual(entry["conflict_guard"], "standard")
 
     def test_integrate_results_keeps_blank_id_episodes_distinct(self):
         builder = self.builder
