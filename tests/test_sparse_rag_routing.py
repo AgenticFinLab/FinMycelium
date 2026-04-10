@@ -354,9 +354,9 @@ class SparseRagRoutingTest(unittest.TestCase):
         )
 
         build_input = SimpleNamespace(
-            user_query=SimpleNamespace(query_text="timeline review", key_words=["timeline"]),
+            user_query=SimpleNamespace(query_text="timeline overview", key_words=["timeline"]),
             samples=[
-                SimpleNamespace(content="timeline review with a simple note.")
+                SimpleNamespace(content="timeline overview with court hearing notes.")
             ],
             context_assets=EvidenceAssetBundle.empty(),
         )
@@ -364,9 +364,9 @@ class SparseRagRoutingTest(unittest.TestCase):
             "stages": [
                 {
                     "stage_id": "S1",
-                    "name": {"value": "Timeline review"},
+                    "name": {"value": "Timeline overview"},
                     "episodes": [
-                        {"episode_id": "E1", "name": {"value": "Initial note"}},
+                        {"episode_id": "E1", "name": {"value": "Court hearing note"}},
                     ],
                 }
             ]
@@ -376,6 +376,70 @@ class SparseRagRoutingTest(unittest.TestCase):
 
         self.assertEqual(budget["stages"][0]["timeline_complexity"], "medium")
         self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "compact")
+
+    def test_episode_detail_tier_stays_standard_for_high_complexity_stage(self):
+        from finmy.builder.agent_build.execution_budget import (
+            build_stage_aware_execution_budget,
+        )
+
+        build_input = SimpleNamespace(
+            user_query=SimpleNamespace(
+                query_text="legal timeline reconstruction",
+                key_words=["legal", "timeline"],
+            ),
+            samples=[
+                SimpleNamespace(content="background summary with a simple contact note."),
+                SimpleNamespace(
+                    content="timeline reconstruction with court hearing dates and legal proceedings."
+                ),
+            ],
+            context_assets=EvidenceAssetBundle(
+                retrieval_policy=EvidenceRetrievalPolicy(),
+                index=EvidenceIndex(token_counts={"s1": 7, "s2": 11}),
+                evidence_cards=[
+                    EvidenceCard(
+                        sample_id="s1",
+                        title="background summary",
+                        excerpt="background summary with a simple contact note",
+                        source_char_count=0,
+                        time_hints=["2024-05"],
+                        entity_hints=["Qian Zhimin"],
+                        action_hints=["note"],
+                        money_hints=[],
+                        quality_flags=[],
+                    ),
+                    EvidenceCard(
+                        sample_id="s2",
+                        title="timeline reconstruction",
+                        excerpt="timeline reconstruction with court hearing dates",
+                        source_char_count=0,
+                        time_hints=["2024-05", "2024-06"],
+                        entity_hints=["witness a", "witness b"],
+                        action_hints=["review"],
+                        money_hints=[],
+                        quality_flags=["source_overlap", "conflict_heavy"],
+                    ),
+                ],
+            ),
+        )
+        event_skeleton = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "name": {"value": "Legal timeline reconstruction"},
+                    "episodes": [
+                        {"episode_id": "E1", "name": {"value": "Initial contact"}},
+                        {"episode_id": "E2", "name": {"value": "Court timeline review"}},
+                    ],
+                }
+            ]
+        }
+
+        budget = build_stage_aware_execution_budget(build_input, event_skeleton)
+
+        self.assertEqual(budget["stages"][0]["timeline_complexity"], "high")
+        self.assertEqual(budget["episodes"][("S1", "E1")]["episode_detail_tier"], "standard")
+        self.assertEqual(budget["episodes"][("S1", "E2")]["episode_detail_tier"], "standard")
 
     def test_stage_aware_budget_requires_repeated_conflict_signals_before_strict(self):
         from finmy.builder.agent_build.execution_budget import (
