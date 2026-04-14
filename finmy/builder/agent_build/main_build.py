@@ -183,6 +183,7 @@ class AgentEventBuilder(BaseBuilder):
     """
 
     _SHADOW_LOCAL_CONTEXT_AGENTS = {"SkeletonReconstructor", "SkeletonChecker"}
+    _JSON_PARSE_RETRY_AGENTS = {"SkeletonReconstructor", "SkeletonChecker"}
 
     def _get_agent_prompts(self):
         """Initialize system and user prompts for all agents."""
@@ -231,6 +232,85 @@ class AgentEventBuilder(BaseBuilder):
             if agent_name in res:
                 return res[agent_name]
         return None
+
+    def _compact_verifiable_fields_for_prompt(self, obj):
+        """Trim verbose evidence payloads that unnecessarily bloat checker prompts."""
+        if isinstance(obj, list):
+            return [self._compact_verifiable_fields_for_prompt(item) for item in obj]
+        if not isinstance(obj, dict):
+            return obj
+
+        compacted = {
+            key: self._compact_verifiable_fields_for_prompt(value)
+            for key, value in obj.items()
+        }
+        if "value" in compacted:
+            if "evidence_source_contents" in compacted:
+                compacted["evidence_source_contents"] = []
+            if "reasons" in compacted:
+                compacted["reasons"] = []
+        return compacted
+
+    def _compact_skeleton_for_checker_prompt(self, skeleton: dict) -> dict:
+        return self._compact_verifiable_fields_for_prompt(copy.deepcopy(skeleton))
+
+    def _build_json_retry_user_msg(self, base_user_msg: str, agent_name: str) -> str:
+        return (
+            f"{base_user_msg}\n\n"
+            "IMPORTANT OUTPUT RECOVERY:\n"
+            f"- Your previous {agent_name} response was invalid or truncated JSON.\n"
+            "- Return exactly one complete raw JSON object.\n"
+            "- Do not include markdown fences, commentary, or partial output.\n"
+            "- Ensure all braces, brackets, strings, and commas are properly closed.\n"
+        )
+
+    def _infer_and_parse_json(
+        self,
+        agent_name: str,
+        sys_msg: str,
+        user_msg_template: str,
+        prompt_kwargs: dict,
+        savename: str,
+    ) -> tuple[InferOutput, dict]:
+        max_attempts = (
+            2 if agent_name in self._JSON_PARSE_RETRY_AGENTS else 1
+        )
+        current_user_msg = user_msg_template
+        last_error = None
+
+        for attempt in range(1, max_attempts + 1):
+            out: InferOutput = run_single_inference(
+                self.agents_lm,
+                InferInput(system_msg=sys_msg, user_msg=current_user_msg),
+                **prompt_kwargs,
+            )
+            result = out.response
+            attempt_save_name = (
+                savename if attempt == 1 else f"{savename}-Retry{attempt - 1}"
+            )
+            self.save_traces({agent_name: out.to_dict()}, attempt_save_name, "json")
+
+            try:
+                return out, extract_json_response(result)
+            except ValueError as exc:
+                last_error = exc
+                if attempt >= max_attempts:
+                    raise ValueError(
+                        f"{agent_name} returned invalid JSON after {attempt} attempt(s): {exc}"
+                    ) from exc
+                logger.warning(
+                    "%s returned invalid JSON on attempt %s/%s; retrying once with stricter output instruction.",
+                    agent_name,
+                    attempt,
+                    max_attempts,
+                )
+                current_user_msg = self._build_json_retry_user_msg(
+                    user_msg_template, agent_name
+                )
+
+        raise ValueError(
+            f"{agent_name} returned invalid JSON and exhausted retries: {last_error}"
+        )
 
     def _get_event_skeleton(self, state: AgentState) -> dict:
         skeleton = self._latest_agent_result(state, "SkeletonChecker")
@@ -1174,7 +1254,10 @@ class AgentEventBuilder(BaseBuilder):
                     "SkeletonChecker requires a prior SkeletonReconstructor result"
                 )
             prompt_kwargs["ProposedSkeleton"] = json.dumps(
-                skeleton_result, default=str, indent=2
+                self._compact_skeleton_for_checker_prompt(skeleton_result),
+                default=str,
+                ensure_ascii=False,
+                separators=(",", ":"),
             )
             sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
@@ -1451,21 +1534,17 @@ class AgentEventBuilder(BaseBuilder):
         # Since we just injected a JSON schema containing braces, we must escape them.
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
 
-        out: InferOutput = run_single_inference(
-            self.agents_lm,
-            InferInput(system_msg=sys_msg, user_msg=user_msg_template),
-            **prompt_kwargs,
-        )
-        result = out.response
-
-        # Persist traces
         savename = (
             self.get_save_name(agent_name, len(state["agent_executed"]) + 1)
             + savename_suffix
         )
-        self.save_traces({agent_name: out.to_dict()}, savename, "json")
-
-        parsed_result = extract_json_response(result)
+        out, parsed_result = self._infer_and_parse_json(
+            agent_name=agent_name,
+            sys_msg=sys_msg,
+            user_msg_template=user_msg_template,
+            prompt_kwargs=prompt_kwargs,
+            savename=savename,
+        )
         result_entry = {agent_name: parsed_result}
         if agent_name in {
             "ParticipantReconstructor",

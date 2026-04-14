@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import finmy.builder.agent_build.main_build as main_build_module
 from finmy.builder.agent_build.main_build import AgentEventBuilder
+from finmy.context.assets import EvidenceAssetBundle
 
 
 def _vf(value):
@@ -50,7 +51,8 @@ def _skeleton(title="Demo Event", stages=None):
 def _build_input(sample_contents):
     return SimpleNamespace(
         user_query=SimpleNamespace(query_text="demo query", key_words=["demo"]),
-        samples=[SimpleNamespace(content=content) for content in sample_contents]
+        samples=[SimpleNamespace(content=content) for content in sample_contents],
+        context_assets=EvidenceAssetBundle.empty(),
     )
 
 
@@ -275,6 +277,114 @@ class SkeletonValidationTest(unittest.TestCase):
         self.assertIn('"latest recon"', captured["prompt_kwargs"]["ProposedSkeleton"])
         self.assertNotIn('"first recon"', captured["prompt_kwargs"]["ProposedSkeleton"])
         self.assertEqual(updated_state["agent_results"][-1], {"SkeletonChecker": {"checked": True}})
+
+    def test_skeleton_checker_retries_once_when_json_output_is_truncated(self):
+        responses = [
+            SimpleNamespace(
+                response='{"event_id":"broken"',
+                to_dict=lambda: {"response": '{"event_id":"broken"'},
+            ),
+            SimpleNamespace(
+                response=json.dumps(_skeleton(title="checked skeleton")),
+                to_dict=lambda: {"response": json.dumps(_skeleton(title="checked skeleton"))},
+            ),
+        ]
+        call_count = {"value": 0}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            del infer_input, prompt_kwargs
+            idx = call_count["value"]
+            call_count["value"] += 1
+            return responses[idx]
+
+        original_run_single_inference = main_build_module.run_single_inference
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [{"SkeletonReconstructor": _skeleton(title="latest recon")}],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {"SkeletonChecker": "schema {STRUCTURE_SPEC}"},
+            "agent_user_msgs": {"SkeletonChecker": "user prompt"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        updated_state = self.builder.execute_agent(state, "SkeletonChecker")
+
+        self.assertEqual(call_count["value"], 2)
+        self.assertEqual(
+            updated_state["agent_results"][-1]["SkeletonChecker"]["title"]["value"],
+            "checked skeleton",
+        )
+
+    def test_skeleton_checker_uses_compacted_skeleton_payload_to_reduce_echo_size(self):
+        captured = {}
+        verbose_skeleton = _skeleton(title="latest recon")
+        verbose_skeleton["title"]["evidence_source_contents"] = ["x" * 200]
+        verbose_skeleton["title"]["reasons"] = ["y" * 120]
+        verbose_skeleton["stages"][0]["name"]["evidence_source_contents"] = ["z" * 200]
+        verbose_skeleton["stages"][0]["episodes"][0]["name"]["evidence_source_contents"] = [
+            "episode evidence" * 20
+        ]
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            del infer_input
+            captured["prompt_kwargs"] = prompt_kwargs
+            return SimpleNamespace(
+                response=json.dumps(_skeleton(title="checked skeleton")),
+                to_dict=lambda: {"response": json.dumps(_skeleton(title="checked skeleton"))},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [{"SkeletonReconstructor": verbose_skeleton}],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {"SkeletonChecker": "schema {STRUCTURE_SPEC}"},
+            "agent_user_msgs": {"SkeletonChecker": "user prompt"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        self.builder.execute_agent(state, "SkeletonChecker")
+
+        proposed = json.loads(captured["prompt_kwargs"]["ProposedSkeleton"])
+        self.assertEqual(proposed["title"]["value"], "latest recon")
+        self.assertEqual(proposed["title"]["evidence_source_contents"], [])
+        self.assertEqual(proposed["title"]["reasons"], [])
+        self.assertEqual(proposed["stages"][0]["name"]["evidence_source_contents"], [])
+        self.assertEqual(
+            proposed["stages"][0]["episodes"][0]["name"]["evidence_source_contents"], []
+        )
 
     def test_graph_persists_skeleton_retry_metadata_across_actual_routing(self):
         call_counts = {
