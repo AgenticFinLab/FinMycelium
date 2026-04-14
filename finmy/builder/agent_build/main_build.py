@@ -183,7 +183,15 @@ class AgentEventBuilder(BaseBuilder):
     """
 
     _SHADOW_LOCAL_CONTEXT_AGENTS = {"SkeletonReconstructor", "SkeletonChecker"}
-    _JSON_PARSE_RETRY_AGENTS = {"SkeletonReconstructor", "SkeletonChecker"}
+    _JSON_PARSE_RETRY_AGENTS = {
+        "SkeletonReconstructor",
+        "SkeletonChecker",
+        "ParticipantReconstructor",
+        "TransactionReconstructor",
+        "EpisodeReconstructor",
+        "StageDescriptionReconstructor",
+        "EventDescriptionReconstructor",
+    }
 
     def _get_agent_prompts(self):
         """Initialize system and user prompts for all agents."""
