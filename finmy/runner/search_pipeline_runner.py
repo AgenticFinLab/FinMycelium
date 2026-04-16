@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, TYPE_CHECKING
 
@@ -11,6 +12,9 @@ from finmy.url_collector.base import URLCollectorInput
 
 if TYPE_CHECKING:
     from finmy.url_collector.url_parser import URLParser
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_search_query(main_input: str, keywords: List[str]) -> str:
@@ -63,6 +67,20 @@ def _write_json(path: Path, payload: Any) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _safe_search_call(fn, *args, source_name: str, **kwargs) -> Dict[str, Any]:
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        logger.warning("%s search failed: %s", source_name, exc)
+        return {
+            "_error": {
+                "source": source_name,
+                "type": type(exc).__name__,
+                "message": str(exc),
+            }
+        }
 
 
 def _format_bocha_results(
@@ -142,8 +160,18 @@ def collect_search_contents(
     stamp = _timestamp()
     parser = parser or _default_parser({})
 
-    bocha_response = _bocha_search(search_query, summary=True, count=10)
-    baidu_response = _baidu_search(search_query)
+    bocha_response = _safe_search_call(
+        _bocha_search,
+        search_query,
+        summary=True,
+        count=10,
+        source_name="bocha",
+    )
+    baidu_response = _safe_search_call(
+        _baidu_search,
+        search_query,
+        source_name="baidu",
+    )
 
     bocha_formatted = _format_bocha_results(bocha_response, search_query, keywords, parser)
     baidu_formatted = _format_baidu_results(baidu_response, search_query, keywords, parser)

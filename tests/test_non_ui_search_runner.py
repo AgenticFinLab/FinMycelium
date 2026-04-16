@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+import requests
 
 
 class NonUISearchRunnerTest(unittest.TestCase):
@@ -123,6 +124,51 @@ class NonUISearchRunnerTest(unittest.TestCase):
         self.assertEqual(result["bocha_result_count"], 1)
         self.assertEqual(result["baidu_result_count"], 2)
         self.assertEqual(result["pipeline_result"], {"status": "ok"})
+
+    def test_collect_search_contents_tolerates_bocha_invalid_json(self):
+        from finmy.runner.search_pipeline_runner import collect_search_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_dir = Path(tmpdir)
+            parser = Mock()
+            parser.run.return_value = SimpleNamespace(
+                results=[{"content": [{"text": "baidu parsed"}]}]
+            )
+
+            baidu_response = {
+                "references": [
+                    {
+                        "title": "Baidu title",
+                        "url": "https://example.com/baidu",
+                        "snippet": "baidu snippet",
+                        "content": "baidu content",
+                        "website": "Baidu Site",
+                        "date": "2026-04-15",
+                    }
+                ]
+            }
+
+            with patch(
+                "finmy.runner.search_pipeline_runner._bocha_search",
+                side_effect=requests.exceptions.JSONDecodeError("Expecting value", "", 0),
+            ), patch(
+                "finmy.runner.search_pipeline_runner._baidu_search",
+                return_value=baidu_response,
+            ), patch(
+                "finmy.runner.search_pipeline_runner._render_parsed_content",
+                side_effect=lambda parsed: parsed[0]["text"],
+            ):
+                result = collect_search_contents(
+                    search_query="Event query",
+                    keywords=["alpha", "beta"],
+                    save_dir=save_dir,
+                    parser=parser,
+                )
+
+        self.assertEqual(result["bocha_result_count"], 0)
+        self.assertEqual(result["baidu_result_count"], 1)
+        self.assertEqual(len(result["all_text_content"]), 1)
+        self.assertIn("Baidu title", result["all_text_content"][0])
 
 
 if __name__ == "__main__":

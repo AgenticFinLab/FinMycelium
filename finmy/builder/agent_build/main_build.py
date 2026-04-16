@@ -281,7 +281,7 @@ class AgentEventBuilder(BaseBuilder):
         savename: str,
     ) -> tuple[InferOutput, dict]:
         max_attempts = (
-            2 if agent_name in self._JSON_PARSE_RETRY_AGENTS else 1
+            3 if agent_name in self._JSON_PARSE_RETRY_AGENTS else 1
         )
         current_user_msg = user_msg_template
         last_error = None
@@ -307,7 +307,7 @@ class AgentEventBuilder(BaseBuilder):
                         f"{agent_name} returned invalid JSON after {attempt} attempt(s): {exc}"
                     ) from exc
                 logger.warning(
-                    "%s returned invalid JSON on attempt %s/%s; retrying once with stricter output instruction.",
+                    "%s returned invalid JSON on attempt %s/%s; retrying with stricter output instruction.",
                     agent_name,
                     attempt,
                     max_attempts,
@@ -536,6 +536,26 @@ class AgentEventBuilder(BaseBuilder):
             if locator_key is not None:
                 locator_map[locator_key] = item.get("_meta", {})
         return locator_map
+
+    def _unwrap_agent_payload(self, payload: object, agent_name: str) -> object:
+        """Unwrap replay-style agent payloads that embed the agent name at top level."""
+        if isinstance(payload, dict):
+            nested = payload.get(agent_name)
+            if isinstance(nested, dict):
+                return nested
+        return payload
+
+    def _agent_result_items(
+        self,
+        payload: object,
+        agent_name: str,
+        collection_name: str,
+    ) -> list[dict] | list:
+        normalized = self._unwrap_agent_payload(payload, agent_name)
+        if not isinstance(normalized, dict):
+            return []
+        items = normalized.get(collection_name)
+        return items if isinstance(items, list) else []
 
     def _reconstruct_episode_execution_plan_from_results(
         self,
@@ -1469,7 +1489,11 @@ class AgentEventBuilder(BaseBuilder):
                 # Get participants from the immediately preceding step (ParticipantReconstructor)
                 last_result = state["agent_results"][-1]
                 participants_data = last_result["ParticipantReconstructor"]
-                target_episode.participants = participants_data["participants"]
+                target_episode.participants = self._agent_result_items(
+                    participants_data,
+                    "ParticipantReconstructor",
+                    "participants",
+                )
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
@@ -1498,8 +1522,16 @@ class AgentEventBuilder(BaseBuilder):
                     second_last_result = state["agent_results"][-2]
                     participants_data = second_last_result["ParticipantReconstructor"]
 
-                target_episode.transactions = transactions_data["transactions"]
-                target_episode.participants = participants_data["participants"]
+                target_episode.transactions = self._agent_result_items(
+                    transactions_data,
+                    "TransactionReconstructor",
+                    "transactions",
+                )
+                target_episode.participants = self._agent_result_items(
+                    participants_data,
+                    "ParticipantReconstructor",
+                    "participants",
+                )
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
