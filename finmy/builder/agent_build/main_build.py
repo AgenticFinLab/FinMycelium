@@ -192,6 +192,11 @@ class AgentEventBuilder(BaseBuilder):
         "StageDescriptionReconstructor",
         "EventDescriptionReconstructor",
     }
+    _JSON_SYNTACTIC_RECOVERY_AGENTS = {
+        "ParticipantReconstructor",
+        "EpisodeReconstructor",
+        "StageDescriptionReconstructor",
+    }
 
     def _get_agent_prompts(self):
         """Initialize system and user prompts for all agents."""
@@ -272,6 +277,71 @@ class AgentEventBuilder(BaseBuilder):
             "- Ensure all braces, brackets, strings, and commas are properly closed.\n"
         )
 
+    def _extract_balanced_json_fragment(self, text: str, start_idx: int) -> str | None:
+        """Return the first balanced JSON object/array starting at ``start_idx``.
+
+        This is intentionally syntactic only: it finds a balanced fragment and leaves
+        semantic validation to the existing downstream checks.
+        """
+        if start_idx < 0 or start_idx >= len(text):
+            return None
+        opener = text[start_idx]
+        if opener not in "{[":
+            return None
+
+        closers = {"{": "}", "[": "]"}
+        stack = [closers[opener]]
+        in_string = False
+        escape = False
+
+        for idx in range(start_idx + 1, len(text)):
+            ch = text[idx]
+            if in_string:
+                if escape:
+                    escape = False
+                    continue
+                if ch == "\\":
+                    escape = True
+                    continue
+                if ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+            elif ch in "{[":
+                stack.append(closers[ch])
+            elif ch in "}]":
+                if not stack or ch != stack[-1]:
+                    return None
+                stack.pop()
+                if not stack:
+                    return text[start_idx : idx + 1]
+
+        return None
+
+    def _recover_syntactic_json_response(self, response_text: str) -> dict:
+        """Recover a JSON payload from mild wrapper/junk without inventing content."""
+        clean_text = response_text.strip()
+        fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
+        if fence_match:
+            clean_text = fence_match.group(1).strip()
+
+        seen_candidates: set[str] = set()
+        for start_idx, ch in enumerate(clean_text):
+            if ch not in "{[":
+                continue
+            candidate = self._extract_balanced_json_fragment(clean_text, start_idx)
+            if not candidate or candidate in seen_candidates:
+                continue
+            seen_candidates.add(candidate)
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+
+        raise ValueError("Failed to recover a balanced JSON fragment from response")
+
     def _infer_and_parse_json(
         self,
         agent_name: str,
@@ -302,6 +372,11 @@ class AgentEventBuilder(BaseBuilder):
                 return out, extract_json_response(result)
             except ValueError as exc:
                 last_error = exc
+                if agent_name in self._JSON_SYNTACTIC_RECOVERY_AGENTS:
+                    try:
+                        return out, self._recover_syntactic_json_response(result)
+                    except ValueError as recovery_exc:
+                        last_error = recovery_exc
                 if attempt >= max_attempts:
                     raise ValueError(
                         f"{agent_name} returned invalid JSON after {attempt} attempt(s): {exc}"

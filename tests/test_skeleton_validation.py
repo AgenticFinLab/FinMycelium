@@ -1,10 +1,117 @@
 import unittest
 import json
+import importlib
+import sys
+import types
 from types import SimpleNamespace
+from unittest.mock import patch
 
-import finmy.builder.agent_build.main_build as main_build_module
-from finmy.builder.agent_build.main_build import AgentEventBuilder
 from finmy.context.assets import EvidenceAssetBundle
+
+
+def _build_langgraph_shims():
+    langgraph_module = types.ModuleType("langgraph")
+    graph_module = types.ModuleType("langgraph.graph")
+    graph_state_module = types.ModuleType("langgraph.graph.state")
+
+    class _MessagesState(dict):
+        pass
+
+    class _StateGraph:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def add_node(self, *args, **kwargs):
+            return None
+
+        def set_entry_point(self, *args, **kwargs):
+            return None
+
+        def add_conditional_edges(self, *args, **kwargs):
+            return None
+
+        def add_edge(self, *args, **kwargs):
+            return None
+
+        def compile(self, *args, **kwargs):
+            return None
+
+    graph_module.StateGraph = _StateGraph
+    graph_module.END = "END"
+    graph_module.MessagesState = _MessagesState
+    graph_state_module.CompiledStateGraph = object
+    langgraph_module.graph = graph_module
+    return {
+        "langgraph": langgraph_module,
+        "langgraph.graph": graph_module,
+        "langgraph.graph.state": graph_state_module,
+    }
+
+
+def _build_lmbase_shims():
+    lmbase_module = types.ModuleType("lmbase")
+    lmbase_inference_module = types.ModuleType("lmbase.inference")
+    lmbase_inference_base_module = types.ModuleType("lmbase.inference.base")
+    lmbase_inference_api_call_module = types.ModuleType("lmbase.inference.api_call")
+    lmbase_utils_module = types.ModuleType("lmbase.utils")
+    lmbase_utils_tools_module = types.ModuleType("lmbase.utils.tools")
+
+    class _BaseContainer:
+        pass
+
+    class _LangChainAPIInference:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class _InferInput:
+        def __init__(self, *args, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    class _InferOutput:
+        def __init__(self, *args, **kwargs):
+            self.response = ""
+
+        def to_dict(self):
+            return {}
+
+    lmbase_inference_base_module.InferInput = _InferInput
+    lmbase_inference_base_module.InferOutput = _InferOutput
+    lmbase_inference_module.InferInput = _InferInput
+    lmbase_inference_module.InferOutput = _InferOutput
+    lmbase_inference_api_call_module.LangChainAPIInference = _LangChainAPIInference
+    lmbase_utils_tools_module.BaseContainer = _BaseContainer
+    lmbase_module.inference = lmbase_inference_module
+    lmbase_module.utils = lmbase_utils_module
+    return {
+        "lmbase": lmbase_module,
+        "lmbase.inference": lmbase_inference_module,
+        "lmbase.inference.base": lmbase_inference_base_module,
+        "lmbase.inference.api_call": lmbase_inference_api_call_module,
+        "lmbase.utils": lmbase_utils_module,
+        "lmbase.utils.tools": lmbase_utils_tools_module,
+    }
+
+
+def _load_builder_module():
+    fake_modules = {}
+    fake_modules.update(_build_langgraph_shims())
+    fake_modules.update(_build_lmbase_shims())
+    with patch.dict(sys.modules, fake_modules):
+        sys.modules.pop("finmy.builder.agent_build.main_build", None)
+        module = importlib.import_module("finmy.builder.agent_build.main_build")
+    return module
+
+
+try:
+    import finmy.builder.agent_build.main_build as main_build_module
+except ModuleNotFoundError as exc:
+    missing_module = exc.name or ""
+    if missing_module.split(".")[0] not in {"langgraph", "lmbase"}:
+        raise
+    main_build_module = _load_builder_module()
+
+AgentEventBuilder = main_build_module.AgentEventBuilder
 
 
 def _vf(value):
@@ -67,6 +174,46 @@ def _participant(participant_id="P_1", name="Participant 1"):
     }
 
 
+def _transaction_participants():
+    return {
+        "participants": [
+            {
+                "participant_id": "P_1",
+                "name": _vf("Participant 1"),
+                "participant_type": "organization",
+                "base_role": _vf("payer"),
+                "attributes": {},
+                "actions": [],
+            },
+            {
+                "participant_id": "P_2",
+                "name": _vf("Participant 2"),
+                "participant_type": "organization",
+                "base_role": _vf("receiver"),
+                "attributes": {},
+                "actions": [],
+            },
+        ]
+    }
+
+
+def _episode_transactions():
+    return {
+        "transactions": [
+            {
+                "transaction_id": "T_1",
+                "name": _vf("Transaction 1"),
+                "transaction_type": _vf("transfer"),
+                "timestamp": _vf("2025-01-01"),
+                "details": _vf("Episode-level transaction"),
+                "from_participant_id": "P_1",
+                "to_participant_id": "P_2",
+                "instruments": [],
+            }
+        ]
+    }
+
+
 def _full_episode(name="Episode 1", start="2025-01-01", end="2025-01-02"):
     return {
         "episode_id": "E1",
@@ -108,6 +255,27 @@ def _full_skeleton(title="Demo Event", stages=None):
 class SkeletonValidationTest(unittest.TestCase):
     def setUp(self):
         self.builder = AgentEventBuilder.__new__(AgentEventBuilder)
+
+    def _install_single_response_inference(self, response_text):
+        call_count = {"value": 0}
+
+        def fake_run_single_inference(_lm, infer_input, **prompt_kwargs):
+            del infer_input, prompt_kwargs
+            call_count["value"] += 1
+            return SimpleNamespace(
+                response=response_text,
+                to_dict=lambda: {"response": response_text},
+            )
+
+        original_run_single_inference = main_build_module.run_single_inference
+        self.addCleanup(
+            setattr,
+            main_build_module,
+            "run_single_inference",
+            original_run_single_inference,
+        )
+        main_build_module.run_single_inference = fake_run_single_inference
+        return call_count
 
     def test_blank_strings_are_treated_as_unknown_values(self):
         self.assertTrue(self.builder._is_unknown_value("   "))
@@ -567,6 +735,210 @@ class SkeletonValidationTest(unittest.TestCase):
             updated_state["agent_results"][-1]["ParticipantReconstructor"]["participants"][0]["participant_id"],
             "P_1",
         )
+
+    def test_participant_reconstructor_recovers_mild_wrapper_junk_without_retry(self):
+        response_text = "analysis notes {not json} final payload: " + json.dumps(
+            {"participants": [_participant()]}
+        )
+        call_count = self._install_single_response_inference(response_text)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+        self.builder._should_use_shadow_local_context = lambda _agent_name: False
+        self.builder._build_local_context_package = lambda state, agent_name: None
+        self.builder._attach_local_context_prompt_kwargs = (
+            lambda prompt_kwargs, local_context: None
+        )
+        self.builder._rewrite_heavy_agent_user_msg_template = (
+            lambda agent_name, template: template
+        )
+        self.builder._current_episode_sequence_index = lambda state: 0
+        self.builder._get_episode_by_sequence_index = lambda event_skeleton, current_count: (
+            0,
+            0,
+            event_skeleton["stages"][0],
+            event_skeleton["stages"][0]["episodes"][0],
+            {"stage_index": 0, "episode_index": 0, "stage_id": "S1", "episode_id": "E1"},
+        )
+        self.builder._get_episode_execution_plan_entry = lambda plan, stage_index, episode_index: {
+            "mode": "full",
+            "participant_tier": "standard",
+            "conflict_guard": "standard",
+            "detail_tier": "standard",
+        }
+        self.builder._episode_execution_mode = lambda plan_entry: "full"
+        self.builder._transaction_step_skipped = lambda plan_entry, execution_mode: False
+        self.builder._build_stage_sparse_cache = (
+            lambda state, stage_index, belong_state: {}
+        )
+        self.builder._attach_stage_sparse_cache_prompt_kwargs = (
+            lambda prompt_kwargs, stage_sparse_cache: None
+        )
+        self.builder._collect_reconstructed_participants_structure = (
+            lambda state: _full_skeleton()
+        )
+        self.builder._attach_compact_heavy_agent_prompt_kwargs = (
+            lambda prompt_kwargs, build_ipt, target_episode: None
+        )
+
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [{"SkeletonChecker": _skeleton(title="checked skeleton")}],
+            "agent_executed": [],
+            "cost": [],
+            "agent_system_msgs": {"ParticipantReconstructor": "schema {STRUCTURE_SPEC}"},
+            "agent_user_msgs": {"ParticipantReconstructor": "user prompt"},
+            "episode_execution_plan": {"episodes": []},
+            "stage_sparse_cache": {},
+        }
+
+        updated_state = self.builder.execute_agent(state, "ParticipantReconstructor")
+
+        self.assertEqual(call_count["value"], 1)
+        self.assertEqual(
+            updated_state["agent_results"][-1]["ParticipantReconstructor"]["participants"][0]["participant_id"],
+            "P_1",
+        )
+
+    def test_episode_reconstructor_recovers_mild_wrapper_junk_without_retry(self):
+        response_text = "analysis notes {not json} final payload: " + json.dumps(
+            _full_episode()
+        )
+        call_count = self._install_single_response_inference(response_text)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [
+                {"SkeletonChecker": _skeleton()},
+                {"ParticipantReconstructor": _transaction_participants()},
+                {"TransactionReconstructor": _episode_transactions()},
+            ],
+            "agent_executed": [
+                "SkeletonChecker",
+                "ParticipantReconstructor",
+                "TransactionReconstructor",
+            ],
+            "cost": [],
+            "agent_system_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorSys
+            },
+            "agent_user_msgs": {
+                "EpisodeReconstructor": main_build_module.EpisodeReconstructorUser
+            },
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        updated_state = self.builder.execute_agent(state, "EpisodeReconstructor")
+
+        self.assertEqual(call_count["value"], 1)
+        self.assertEqual(
+            updated_state["agent_results"][-1]["EpisodeReconstructor"]["episode_id"],
+            "E1",
+        )
+
+    def test_stage_description_reconstructor_recovers_mild_wrapper_junk_without_retry(self):
+        response_text = "analysis notes {not json} final payload: " + json.dumps(
+            {"descriptions": [_vf("stage description")], "stage_id": "S1"}
+        )
+        call_count = self._install_single_response_inference(response_text)
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        stage = _skeleton()["stages"][0]
+        stage["episodes"] = [
+            {
+                "episode_id": "E1",
+                "name": _vf("Episode 1"),
+                "index_in_stage": 0,
+                "start_time": _vf("2025-01-01"),
+                "end_time": _vf("2025-01-01"),
+                "participants": _transaction_participants()["participants"],
+                "transactions": _episode_transactions()["transactions"],
+                "participant_relations": [],
+                "descriptions": [],
+            }
+        ]
+
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [
+                {"SkeletonChecker": {"stages": [stage]}},
+                {"EpisodeReconstructor": stage["episodes"][0]},
+            ],
+            "agent_executed": ["SkeletonChecker", "EpisodeReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {"StageDescriptionReconstructor": "sys"},
+            "agent_user_msgs": {"StageDescriptionReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        updated_state = self.builder.execute_agent(state, "StageDescriptionReconstructor")
+
+        self.assertEqual(call_count["value"], 1)
+        self.assertEqual(
+            updated_state["agent_results"][-1]["StageDescriptionReconstructor"]["descriptions"][0]["value"],
+            "stage description",
+        )
+
+    def test_stage_description_reconstructor_still_fails_on_unrecoverable_truncation(self):
+        call_count = self._install_single_response_inference("broken output {no close")
+
+        self.builder.agents_lm = object()
+        self.builder.save_traces = lambda *args, **kwargs: None
+        self.builder.get_save_name = lambda agent_name, execution_idx: (
+            f"{agent_name}-{execution_idx}"
+        )
+
+        stage = _skeleton()["stages"][0]
+        stage["episodes"] = [
+            {
+                "episode_id": "E1",
+                "name": _vf("Episode 1"),
+                "index_in_stage": 0,
+                "start_time": _vf("2025-01-01"),
+                "end_time": _vf("2025-01-01"),
+                "participants": _transaction_participants()["participants"],
+                "transactions": _episode_transactions()["transactions"],
+                "participant_relations": [],
+                "descriptions": [],
+            }
+        ]
+
+        state = {
+            "build_input": _build_input(["real content"]),
+            "agent_results": [
+                {"SkeletonChecker": {"stages": [stage]}},
+                {"EpisodeReconstructor": stage["episodes"][0]},
+            ],
+            "agent_executed": ["SkeletonChecker", "EpisodeReconstructor"],
+            "cost": [],
+            "agent_system_msgs": {"StageDescriptionReconstructor": "sys"},
+            "agent_user_msgs": {"StageDescriptionReconstructor": "user"},
+            "skeleton_retry_count": 0,
+            "skeleton_validation_reason": "",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "StageDescriptionReconstructor returned invalid JSON after 3 attempt",
+        ):
+            self.builder.execute_agent(state, "StageDescriptionReconstructor")
+        self.assertEqual(call_count["value"], 3)
 
     def test_graph_persists_skeleton_retry_metadata_across_actual_routing(self):
         call_counts = {
