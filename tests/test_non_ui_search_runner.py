@@ -76,6 +76,206 @@ class NonUISearchRunnerTest(unittest.TestCase):
             payload = json.loads(all_text_path.read_text(encoding="utf-8"))
             self.assertEqual(len(payload), 2)
 
+    def test_collect_search_contents_passes_configured_bocha_count(self):
+        from finmy.runner.search_pipeline_runner import collect_search_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_dir = Path(tmpdir)
+            parser = Mock()
+
+            def fake_bocha_search(query, *, summary, count):
+                self.assertEqual(query, "Event query")
+                self.assertTrue(summary)
+                self.assertEqual(count, 20)
+                return {"data": {"webPages": {"value": []}}}
+
+            with patch(
+                "finmy.runner.search_pipeline_runner._bocha_search",
+                side_effect=fake_bocha_search,
+            ), patch(
+                "finmy.runner.search_pipeline_runner._baidu_search",
+                return_value={"references": []},
+            ):
+                result = collect_search_contents(
+                    search_query="Event query",
+                    keywords=["alpha"],
+                    save_dir=save_dir,
+                    parser=parser,
+                    bocha_count=20,
+                )
+
+        self.assertEqual(result["bocha_result_count"], 0)
+        self.assertEqual(result["baidu_result_count"], 0)
+
+    def test_collect_search_contents_limits_baidu_results_by_configured_count(self):
+        from finmy.runner.search_pipeline_runner import collect_search_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_dir = Path(tmpdir)
+            parser = Mock()
+            parser.run.side_effect = [
+                SimpleNamespace(results=[{"content": [{"text": "baidu parsed one"}]}]),
+            ]
+
+            baidu_response = {
+                "references": [
+                    {
+                        "title": "Baidu title one",
+                        "url": "https://example.com/baidu-one",
+                        "snippet": "baidu snippet one",
+                        "content": "baidu content one",
+                        "website": "Baidu Site",
+                        "date": "2026-04-14",
+                    },
+                    {
+                        "title": "Baidu title two",
+                        "url": "https://example.com/baidu-two",
+                        "snippet": "baidu snippet two",
+                        "content": "baidu content two",
+                        "website": "Baidu Site",
+                        "date": "2026-04-14",
+                    },
+                ]
+            }
+
+            with patch(
+                "finmy.runner.search_pipeline_runner._bocha_search",
+                return_value={"data": {"webPages": {"value": []}}},
+            ), patch(
+                "finmy.runner.search_pipeline_runner._baidu_search",
+                return_value=baidu_response,
+            ), patch(
+                "finmy.runner.search_pipeline_runner._render_parsed_content",
+                side_effect=lambda parsed: parsed[0]["text"],
+            ):
+                result = collect_search_contents(
+                    search_query="Event query",
+                    keywords=["alpha"],
+                    save_dir=save_dir,
+                    parser=parser,
+                    baidu_count=1,
+                )
+
+        self.assertEqual(result["baidu_result_count"], 1)
+        self.assertEqual(len(result["all_text_content"]), 1)
+        self.assertIn("Baidu title one", result["all_text_content"][0])
+
+    def test_collect_search_contents_filters_and_interleaves_search_results(self):
+        from finmy.runner.search_pipeline_runner import collect_search_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_dir = Path(tmpdir)
+            parser = Mock()
+            parser.run.side_effect = [
+                SimpleNamespace(results=[{"content": [{"text": "bocha parsed alpha " * 20}]}]),
+                SimpleNamespace(results=[{"content": []}]),
+                SimpleNamespace(results=[{"content": [{"text": "bocha parsed gamma " * 20}]}]),
+                SimpleNamespace(results=[{"content": [{"text": "baidu parsed beta " * 20}]}]),
+                SimpleNamespace(results=[{"content": [{"text": "baidu duplicate alpha " * 20}]}]),
+                SimpleNamespace(results=[{"content": [{"text": "baidu parsed delta " * 20}]}]),
+            ]
+
+            bocha_response = {
+                "data": {
+                    "webPages": {
+                        "value": [
+                            {
+                                "name": "Bocha Alpha",
+                                "url": "https://example.com/alpha",
+                                "snippet": "alpha snippet",
+                                "summary": "alpha summary",
+                                "siteName": "Bocha Site",
+                                "datePublished": "2026-04-14",
+                            },
+                            {
+                                "name": "Short Navigation",
+                                "url": "https://example.com/nav",
+                                "snippet": "tiny",
+                                "summary": "",
+                                "siteName": "Example",
+                                "datePublished": "2026-04-14",
+                            },
+                            {
+                                "name": "Bocha Gamma",
+                                "url": "https://example.com/gamma",
+                                "snippet": "gamma snippet",
+                                "summary": "gamma summary",
+                                "siteName": "Bocha Site",
+                                "datePublished": "2026-04-14",
+                            },
+                        ]
+                    }
+                }
+            }
+            baidu_response = {
+                "references": [
+                    {
+                        "title": "Baidu Beta",
+                        "url": "https://example.com/beta",
+                        "snippet": "beta snippet",
+                        "content": "beta content",
+                        "website": "Baidu Site",
+                        "date": "2026-04-14",
+                    },
+                    {
+                        "title": "Baidu Alpha Duplicate",
+                        "url": "https://example.com/alpha/",
+                        "snippet": "duplicate alpha snippet",
+                        "content": "duplicate alpha content",
+                        "website": "Baidu Site",
+                        "date": "2026-04-14",
+                    },
+                    {
+                        "title": "Baidu Delta",
+                        "url": "https://example.com/delta",
+                        "snippet": "delta snippet",
+                        "content": "delta content",
+                        "website": "Baidu Site",
+                        "date": "2026-04-14",
+                    },
+                ]
+            }
+
+            with patch(
+                "finmy.runner.search_pipeline_runner._bocha_search",
+                return_value=bocha_response,
+            ), patch(
+                "finmy.runner.search_pipeline_runner._baidu_search",
+                return_value=baidu_response,
+            ), patch(
+                "finmy.runner.search_pipeline_runner._render_parsed_content",
+                side_effect=lambda parsed: parsed[0]["text"] if parsed else "",
+            ):
+                result = collect_search_contents(
+                    search_query="Event query",
+                    keywords=["alpha", "beta"],
+                    save_dir=save_dir,
+                    parser=parser,
+                    merge_strategy="interleave",
+                    quality_filter={
+                        "enabled": True,
+                        "min_text_chars": 300,
+                        "dedupe_url": True,
+                    },
+                )
+            filtered_bocha_exists = Path(result["filtered_bocha_results_path"]).exists()
+            filtered_baidu_exists = Path(result["filtered_baidu_results_path"]).exists()
+
+        titles = [
+            line
+            for content in result["all_text_content"]
+            for line in content.splitlines()
+            if line in {"Bocha Alpha", "Bocha Gamma", "Baidu Beta", "Baidu Delta"}
+        ]
+        self.assertEqual(titles, ["Bocha Alpha", "Baidu Beta", "Bocha Gamma", "Baidu Delta"])
+        self.assertEqual(result["bocha_result_count"], 3)
+        self.assertEqual(result["baidu_result_count"], 3)
+        self.assertEqual(result["filtered_bocha_result_count"], 2)
+        self.assertEqual(result["filtered_baidu_result_count"], 2)
+        self.assertEqual(len(result["all_text_content"]), 4)
+        self.assertTrue(filtered_bocha_exists)
+        self.assertTrue(filtered_baidu_exists)
+
     def test_run_search_pipeline_uses_pipeline_with_limited_contents(self):
         from finmy.runner.search_pipeline_runner import run_search_pipeline
 
@@ -123,6 +323,58 @@ class NonUISearchRunnerTest(unittest.TestCase):
         self.assertEqual(result["search_query"], "Main event \n\nkeywords: alpha beta")
         self.assertEqual(result["bocha_result_count"], 1)
         self.assertEqual(result["baidu_result_count"], 2)
+        self.assertEqual(result["pipeline_result"], {"status": "ok"})
+
+    def test_run_search_pipeline_passes_configured_bocha_count_to_search(self):
+        from finmy.runner.search_pipeline_runner import run_search_pipeline
+
+        config = {
+            "output_dir": "/unused/output",
+            "search_config": {
+                "bocha_count": 15,
+                "baidu_count": 15,
+                "merge_strategy": "interleave",
+                "quality_filter": {"enabled": True, "min_text_chars": 300},
+            },
+            "all_content_config": {"max_content_length": 1000},
+        }
+        fake_pipeline = Mock()
+        fake_pipeline.lm_build_pipeline_with_contents.return_value = {"status": "ok"}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_dir = Path(tmpdir)
+
+            def fake_collect_search_contents(**kwargs):
+                self.assertEqual(kwargs.get("bocha_count"), 15)
+                self.assertEqual(kwargs.get("baidu_count"), 15)
+                self.assertEqual(kwargs.get("merge_strategy"), "interleave")
+                self.assertEqual(
+                    kwargs.get("quality_filter"),
+                    {"enabled": True, "min_text_chars": 300},
+                )
+                return {
+                    "all_text_content": ["content a"],
+                    "bocha_result_count": 1,
+                    "baidu_result_count": 0,
+                    "all_text_content_path": str(save_dir / "All_Text_Content.json"),
+                }
+
+            with patch(
+                "finmy.runner.search_pipeline_runner.collect_search_contents",
+                side_effect=fake_collect_search_contents,
+            ), patch(
+                "finmy.runner.search_pipeline_runner._create_pipeline",
+                return_value=fake_pipeline,
+            ):
+                result = run_search_pipeline(
+                    config=config,
+                    main_input="Main event",
+                    keywords=["alpha"],
+                    save_dir=save_dir,
+                    parser=object(),
+                )
+
+        self.assertEqual(result["bocha_result_count"], 1)
         self.assertEqual(result["pipeline_result"], {"status": "ok"})
 
     def test_collect_search_contents_tolerates_bocha_invalid_json(self):
