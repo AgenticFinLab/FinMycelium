@@ -5,8 +5,9 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import re
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, Dict, Iterable, List, TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from finmy.url_collector.base import URLCollectorInput
@@ -389,14 +390,224 @@ def collect_search_contents(
     }
 
 
-def _limit_content_length(content_list: List[str], max_length: int | float) -> List[str]:
+_NOISE_LINE_PATTERNS = (
+    "skip to main content",
+    "cookie",
+    "privacy policy",
+    "terms of use",
+    "all rights reserved",
+    "advertisement",
+    "subscribe",
+    "sign in",
+    "log in",
+    "navigation",
+    "newsletter",
+    "accept all",
+    "share this",
+)
+
+_SIGNAL_PATTERN = re.compile(
+    r"\b(?:19|20)\d{2}\b|"
+    r"\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\b|"
+    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+(?:19|20)\d{2}\b|"
+    r"[$€£¥]\s?\d[\d,]*(?:\.\d+)?|"
+    r"\b\d[\d,]*(?:\.\d+)?\s?(?:million|billion|trillion|mn|bn|usd|eur|gbp|rmb|yuan)\b",
+    re.IGNORECASE,
+)
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _light_denoise_content(content: str) -> str:
+    """Remove obvious web boilerplate without summarizing or reordering content."""
+    seen_short_lines: set[str] = set()
+    cleaned_lines: List[str] = []
+    for raw_line in content.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        if not line:
+            continue
+        lowered = line.lower()
+        if len(line) < 140 and any(pattern in lowered for pattern in _NOISE_LINE_PATTERNS):
+            continue
+        if len(line) < 90:
+            if lowered in seen_short_lines:
+                continue
+            seen_short_lines.add(lowered)
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines).strip()
+
+
+def _signal_terms(query_text: str | None, keywords: Iterable[str] | None) -> List[str]:
+    raw_terms: List[str] = []
+    if query_text:
+        raw_terms.append(query_text)
+        raw_terms.extend(re.findall(r"[A-Za-z][A-Za-z0-9&.'-]{3,}", query_text))
+        raw_terms.extend(re.findall(r"[\u4e00-\u9fff]{2,}", query_text))
+    for keyword in keywords or []:
+        for part in re.split(r"[;,|]", str(keyword)):
+            part = part.strip()
+            if part:
+                raw_terms.append(part)
+                raw_terms.extend(re.findall(r"[A-Za-z][A-Za-z0-9&.'-]{3,}", part))
+                raw_terms.extend(re.findall(r"[\u4e00-\u9fff]{2,}", part))
+
+    terms: List[str] = []
+    seen: set[str] = set()
+    for term in raw_terms:
+        normalized = re.sub(r"\s+", " ", term).strip()
+        key = normalized.lower()
+        if len(key) < 3 or key in seen:
+            continue
+        seen.add(key)
+        terms.append(normalized)
+        if len(terms) >= 40:
+            break
+    return terms
+
+
+def _merge_ranges(ranges: List[tuple[int, int]], content_length: int) -> List[tuple[int, int]]:
+    normalized = [
+        (max(0, start), min(content_length, end))
+        for start, end in ranges
+        if end > start
+    ]
+    if not normalized:
+        return []
+    normalized.sort()
+    merged = [normalized[0]]
+    for start, end in normalized[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _render_ranges(content: str, ranges: List[tuple[int, int]]) -> str:
+    parts: List[str] = []
+    previous_end = 0
+    for start, end in ranges:
+        if parts and start > previous_end:
+            parts.append("\n...\n")
+        parts.append(content[start:end].strip())
+        previous_end = end
+    return "\n".join(part for part in parts if part).strip()
+
+
+def _clip_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    clipped = text[:max_chars].rstrip()
+    last_break = max(clipped.rfind("\n"), clipped.rfind(". "), clipped.rfind("。"))
+    if last_break >= max_chars * 0.65:
+        clipped = clipped[: last_break + 1].rstrip()
+    return clipped
+
+
+def _trim_evidence_aware_item(
+    content: str,
+    *,
+    query_text: str | None,
+    keywords: Iterable[str] | None,
+    trim_config: Dict[str, Any],
+    item_cap: int | None = None,
+) -> str:
+    soft_cap = _positive_int(trim_config.get("per_item_soft_cap"), 8000)
+    hard_cap = _positive_int(trim_config.get("per_item_hard_cap"), 16000)
+    head_chars = _positive_int(trim_config.get("head_chars"), 2500)
+    window_chars = _positive_int(trim_config.get("keyword_window_chars"), 1800)
+    if item_cap is not None:
+        hard_cap = min(hard_cap, item_cap)
+        soft_cap = min(soft_cap, hard_cap)
+    if hard_cap <= 0:
+        return ""
+
+    cleaned = _light_denoise_content(content)
+    if len(cleaned) <= soft_cap:
+        return cleaned
+
+    ranges: List[tuple[int, int]] = [(0, min(head_chars, len(cleaned)))]
+    lowered = cleaned.lower()
+    half_window = max(1, window_chars // 2)
+    signal_range_count = 0
+
+    for term in _signal_terms(query_text, keywords):
+        pattern = re.escape(term.lower())
+        for match in re.finditer(pattern, lowered):
+            ranges.append((match.start() - half_window, match.end() + half_window))
+            signal_range_count += 1
+            if signal_range_count >= 10:
+                break
+        if signal_range_count >= 10:
+            break
+
+    for match in _SIGNAL_PATTERN.finditer(cleaned):
+        ranges.append((match.start() - half_window, match.end() + half_window))
+        signal_range_count += 1
+        if signal_range_count >= 14:
+            break
+
+    if signal_range_count == 0 and len(cleaned) > head_chars:
+        tail_chars = min(max(600, head_chars // 2), len(cleaned) - head_chars)
+        ranges.append((len(cleaned) - tail_chars, len(cleaned)))
+
+    rendered = _render_ranges(cleaned, _merge_ranges(ranges, len(cleaned)))
+    cap = hard_cap if signal_range_count else soft_cap
+    return _clip_text(rendered, cap)
+
+
+def _limit_content_length(
+    content_list: List[str],
+    max_length: int | float,
+    query_text: str | None = None,
+    keywords: Iterable[str] | None = None,
+    trim_config: Dict[str, Any] | None = None,
+) -> List[str]:
+    trim_config = trim_config or {}
+    trim_mode = str(
+        trim_config.get("content_trim_mode")
+        or trim_config.get("trim_mode")
+        or "greedy"
+    )
+    if trim_mode != "evidence_aware":
+        limited: List[str] = []
+        total = 0
+        for item in content_list:
+            item_length = len(item)
+            if total + item_length <= max_length:
+                limited.append(item)
+                total += item_length
+            else:
+                break
+        return limited
+
     limited: List[str] = []
     total = 0
+    min_item_chars = _positive_int(trim_config.get("min_item_chars"), 1200)
     for item in content_list:
-        item_length = len(item)
-        if total + item_length <= max_length:
-            limited.append(item)
-            total += item_length
+        remaining = max_length - total
+        if remaining < min_item_chars:
+            break
+        item_cap = int(remaining) if remaining != float("inf") else None
+        trimmed = _trim_evidence_aware_item(
+            item,
+            query_text=query_text,
+            keywords=keywords,
+            trim_config=trim_config,
+            item_cap=item_cap,
+        )
+        if not trimmed:
+            continue
+        if total + len(trimmed) <= max_length:
+            limited.append(trimmed)
+            total += len(trimmed)
         else:
             break
     return limited
@@ -426,6 +637,9 @@ def run_search_pipeline(
     limited_contents = _limit_content_length(
         search_payload["all_text_content"],
         max_length=max_length,
+        query_text=main_input,
+        keywords=keywords,
+        trim_config=config.get("all_content_config", {}),
     )
 
     pipeline = _create_pipeline(config)

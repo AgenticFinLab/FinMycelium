@@ -325,6 +325,79 @@ class NonUISearchRunnerTest(unittest.TestCase):
         self.assertEqual(result["baidu_result_count"], 2)
         self.assertEqual(result["pipeline_result"], {"status": "ok"})
 
+    def test_limit_content_length_keeps_legacy_greedy_behavior_by_default(self):
+        from finmy.runner.search_pipeline_runner import _limit_content_length
+
+        limited = _limit_content_length(
+            ["1234567890", "abcdef", "zzz"],
+            max_length=15,
+        )
+
+        self.assertEqual(limited, ["1234567890"])
+
+    def test_limit_content_length_evidence_aware_keeps_keyword_window_from_long_content(self):
+        from finmy.runner.search_pipeline_runner import _limit_content_length
+
+        long_content = "\n".join(
+            [
+                "Skip to main content",
+                "Navigation Search Subscribe Sign in",
+                "background " * 80,
+                "ordinary filler " * 80,
+                "In 2024, Acme Bank entered emergency resolution after a liquidity run.",
+                "ordinary tail " * 80,
+            ]
+        )
+
+        limited = _limit_content_length(
+            [long_content, "short follow-up report"],
+            max_length=1200,
+            query_text="Acme Bank liquidity run",
+            keywords=["emergency resolution"],
+            trim_config={
+                "content_trim_mode": "evidence_aware",
+                "per_item_soft_cap": 320,
+                "per_item_hard_cap": 700,
+                "head_chars": 120,
+                "keyword_window_chars": 220,
+                "min_item_chars": 80,
+            },
+        )
+
+        self.assertEqual(len(limited), 2)
+        self.assertIn("Acme Bank entered emergency resolution", limited[0])
+        self.assertNotIn("Skip to main content", limited[0])
+        self.assertLessEqual(len(limited[0]), 700)
+
+    def test_limit_content_length_evidence_aware_respects_total_and_per_item_caps(self):
+        from finmy.runner.search_pipeline_runner import _limit_content_length
+
+        contents = [
+            "Event Alpha 2024 " + ("dense evidence " * 120),
+            "Event Alpha settlement " + ("details " * 120),
+            "Event Alpha aftermath " + ("details " * 120),
+        ]
+
+        limited = _limit_content_length(
+            contents,
+            max_length=900,
+            query_text="Event Alpha settlement",
+            keywords=["Event Alpha", "settlement"],
+            trim_config={
+                "content_trim_mode": "evidence_aware",
+                "per_item_soft_cap": 260,
+                "per_item_hard_cap": 360,
+                "head_chars": 100,
+                "keyword_window_chars": 160,
+                "min_item_chars": 80,
+            },
+        )
+
+        self.assertGreaterEqual(len(limited), 2)
+        self.assertLessEqual(sum(len(item) for item in limited), 900)
+        self.assertTrue(all(len(item) <= 360 for item in limited))
+        self.assertTrue(any("settlement" in item for item in limited))
+
     def test_run_search_pipeline_passes_configured_bocha_count_to_search(self):
         from finmy.runner.search_pipeline_runner import run_search_pipeline
 
