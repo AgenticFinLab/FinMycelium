@@ -20,6 +20,7 @@ from lmbase.utils.tools import BaseContainer
 
 from finmy.generic import UserQueryInput, DataSample
 from finmy.builder.agent_build.structure import EventCascade
+from finmy.context.assets import EvidenceAssetBundle
 
 
 @dataclass
@@ -28,6 +29,7 @@ class BuildInput(BaseContainer):
 
     user_query: UserQueryInput
     samples: List[DataSample]
+    context_assets: EvidenceAssetBundle = field(default_factory=EvidenceAssetBundle.empty)
 
 
 @dataclass
@@ -74,6 +76,13 @@ class AgentState(MessagesState):
     agent_system_msgs: Dict[str, str]
     # Per-agent user prompts (agent_name -> user_prompt)
     agent_user_msgs: Dict[str, str]
+    # Stable per-episode execution routing metadata populated after skeleton validation
+    episode_execution_plan: Dict[str, Any]
+    # Stage-scoped sparse cache reused by same-stage heavy agents and rebuilt per stage
+    stage_sparse_cache: Dict[Any, Any]
+    # Local retry metadata for skeleton validation/routing decisions
+    skeleton_retry_count: int
+    skeleton_validation_reason: str
 
     # LangGraph runtime messages envelope (optional; may be unused depending on node implementations)
     messages: List[Any] = None

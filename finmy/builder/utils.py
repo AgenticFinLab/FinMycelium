@@ -12,12 +12,32 @@ import ast
 from pathlib import Path
 from typing import List, Set, Dict, Any, Optional
 
+from lmbase.inference import InferInput, InferOutput
+
 from finmy.builder.constant import (
     OTHER_TOKEN_NUM,
     CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST,
     AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST,
     BuildType,
 )
+
+
+def run_single_inference(infer: Any, infer_input: InferInput, **kwargs) -> InferOutput:
+    """Run one inference request against lmbase's batch-style API.
+
+    FinMycelium historically called `run()` with a single `InferInput` and expected
+    a single `InferOutput`. Newer lmbase releases accept `infer_inputs=[...]` and return
+    a batch container. This helper keeps FinMycelium's single-request call sites working
+    without changing lmbase.
+    """
+    output = infer.run(infer_inputs=[infer_input], **kwargs)
+    if isinstance(output, InferOutput):
+        return output
+
+    outputs = getattr(output, "outputs", None)
+    if not outputs:
+        raise ValueError("Batch inference returned no outputs for a single-input call.")
+    return outputs[0]
 
 
 def load_python_text(path: str | Path) -> str:

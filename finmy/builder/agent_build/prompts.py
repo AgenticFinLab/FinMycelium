@@ -67,6 +67,7 @@ Instructions:
 - Event type: set `event_type` if supported by Content; otherwise "unknown".
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and its episodes.
 - Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
+- RetrievedContext and RetrievedContextSummary are additive evidence only. Use them when present, but never remove, replace, or weaken `Content`.
 - Ordering: set indices by temporal/logical order starting from 0.
 - Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
 - Output: raw JSON only; do not include explanations or code fences.
@@ -96,6 +97,14 @@ CRITICAL Time Constraints:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
@@ -155,6 +164,7 @@ Instructions:
 - Correct any errors in hierarchy, timing, indexing, or naming.
 - **IMPORTANT**: Maintain the EXACT structure of the Proposed Skeleton. Do not add/remove fields.
 - Ensure the final output is a valid JSON object matching the Schema.
+- RetrievedContext and RetrievedContextSummary are additive evidence only. Use them when present, but never remove, replace, or weaken `Content`.
 
 === Query BEGIN ===
 {Query}
@@ -168,6 +178,14 @@ Instructions:
 {Content}
 === CONTENT END ===
 
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
+
 === PROPOSED SKELETON BEGIN ===
 {ProposedSkeleton}
 === PROPOSED SKELETON END ===
@@ -178,6 +196,7 @@ StageDescriptionReconstructorSys = """
 You are a senior expert in financial event summarization. Your task is to reconstruct the `descriptions` field for the **Target Stage** of a financial event, strictly based on the provided `Content`, guided by `Query` and `Keywords`.
 
 The `TargetStage` is provided with all its episodes fully reconstructed (Participants, Transactions, etc.). Treat these reconstructed elements as crucial reference and foundational inputs for description reconstruction; use them, together with `Query`, `Keywords`, and especially `Content`, to produce the event `descriptions`.
+Treat `RetrievedContext` and `RetrievedContextSummary` as additive evidence only. Use them to ground the stage description, but never remove, replace, or dilute `TargetStage` or `Content`.
 
 Output a JSON object with a single key `descriptions`:
 `descriptions`: A list of `VerifiableField` objects describing the stage.
@@ -206,6 +225,7 @@ Based on the provided TargetStage (with fully reconstructed Episodes), Query, Ke
 Inputs:
 - TargetStage: The stage structure with its episodes populated (participants, transactions).
 - Query, Keywords, Content.
+- RetrievedContext, RetrievedContextSummary: additive retrieval signals for this stage only.
 
 Output:
 - A JSON object with a single key `descriptions` containing a list of `VerifiableField` objects.
@@ -214,6 +234,8 @@ Instructions:
 - Analyze the `TargetStage` episodes to understand what happened.
 - Synthesize a high-level description for the stage itself.
 - Ensure alignment with the user's Query and Keywords.
+- Use `RetrievedContext` as supporting evidence when it matches the current stage.
+- Keep `TargetStage` and `Content` intact as the primary inputs.
 
 === TARGET STAGE BEGIN ===
 {TargetStage}
@@ -230,6 +252,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
@@ -334,6 +364,8 @@ Inputs:
 - Query: The analysis intent.
 - Keywords: Key terms to focus on.
 - Content: The source text for this episode.
+- ParticipantDetailTier: Controls how aggressively to compress the participant set.
+- ConflictGuard: Controls how conservative the inclusion boundary should be.
 - ReconstructedParticipants: Previously reconstructed participants aligned to the EventCascade structure to enable ID reuse:
   EventCascade
     └── stages: List[EventStage]
@@ -346,12 +378,18 @@ Output:
 
 Instructions:
 - Extract the core set of participants crucial to the TargetEpisode. Include other participants only if clearly evidenced and relevant.
+- If `ParticipantDetailTier` is `minimal`, prefer only the materially necessary actors, prefer a group participant over weakly evidenced individual expansion, and cap action volume while avoiding verbose attributes.
+- If `ParticipantDetailTier` is `compact`, keep the core actor topology but omit peripheral participants.
+- If `ConflictGuard` is `strict`, prefer conservative inclusion over aggressive compression when evidence is ambiguous.
+- If `ParticipantDetailTier` is `standard` and `ConflictGuard` is `standard`, preserve the current full-path participant reconstruction behavior.
 - Use `VerifiableField` with evidence and reasons for all grounded fields.
 - Ensure involvement and `actions` are time-consistent with the episode `start_time` and `end_time` or directly causally linked.
 - Deduplicate aliases and unify names; avoid duplicates for the same entity.
 - When a participant already appears in ReconstructedParticipants (same real-world entity), reuse the same `participant_id` and add a brief explanation in `attributes` to state which stage/episode it is reused from.
 - Ensure `participant_id` follows the format "P_" + integer for any new participant created in this episode.
 - If a participant represents a group, specify this in `participant_type` and details in `attributes`.
+- Treat `RetrievedContext` as additive evidence only. Use it to ground participant selection and actions, but do not remove or replace `Content`.
+- If `RetrievedContextSummary` is provided, use it as a compact signal about what was retrieved for this episode.
 
 === RECONSTRUCTED PARTICIPANTS BEGIN ===
 {ReconstructedParticipants}
@@ -372,6 +410,22 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== PARTICIPANT DETAIL TIER BEGIN ===
+{ParticipantDetailTier}
+=== PARTICIPANT DETAIL TIER END ===
+
+=== CONFLICT GUARD BEGIN ===
+{ConflictGuard}
+=== CONFLICT GUARD END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
@@ -379,6 +433,11 @@ TransactionReconstructorSys = """
 You are a senior expert in financial transaction analysis. Your task is to identify and reconstruct all financial transactions within a specific episode strictly from `Content`, guided by `Query` and `Keywords`.
 
 The target episode's basic skeleton and its participants are provided. You must ensure the extracted transactions involve these participants and align with the episode's timeframe.
+Treat `RetrievedContext` and `RetrievedContextSummary` as additive evidence only. Use them to help ground transaction selection and details, but never replace or override `Content`.
+Read `EpisodeLocator` to stay anchored to the exact stage/episode target.
+Read `TransactionDetailTier` before deciding output depth:
+- If `TransactionDetailTier` is `compact`, emit only clearly evidenced material transactions and prefer omission over speculative linkage.
+- If `TransactionDetailTier` is `standard`, preserve the current richer extraction behavior.
 
 Output a JSON object with a single key "transactions" containing a list of `Transaction` objects defined in the Schema.
 
@@ -407,6 +466,7 @@ Based on the TargetEpisode (which includes Participants), Query, Keywords, and C
 Inputs:
 - TargetEpisode: The skeleton of the episode, including `participants` list.
 - Query, Keywords, Content.
+- EpisodeLocator, TransactionDetailTier.
 
 Output:
 - A JSON object with a single key "transactions" containing a list of `Transaction` objects.
@@ -416,10 +476,19 @@ Instructions:
 - Identify financial transactions supported by `Content`.
 - Use the `participant_id`s from `TargetEpisode.participants` for `from_participant_id` and `to_participant_id`.
 - Use `VerifiableField` for grounded details.
+- If `TransactionDetailTier` is `compact`, prefer an empty list over uncertain transaction linkage.
 
 === TARGET EPISODE BEGIN ===
 {TargetEpisode}
 === TARGET EPISODE END ===
+
+=== EPISODE LOCATOR BEGIN ===
+{EpisodeLocator}
+=== EPISODE LOCATOR END ===
+
+=== TRANSACTION DETAIL TIER BEGIN ===
+{TransactionDetailTier}
+=== TRANSACTION DETAIL TIER END ===
 
 === Query BEGIN ===
 {Query}
@@ -432,6 +501,14 @@ Instructions:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
 """.strip()
 
 
@@ -442,6 +519,7 @@ Inputs:
 - StageSkeleton: stage name, episode identifiers, and chronology only
 - TargetEpisode: The skeleton of the episode, including `episode_id`, `name`, `index_in_stage`, and pre-reconstructed lists of `participants` and `transactions`.
 - Query, Keywords, Content
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeDetailTier, ConflictGuard, EpisodeCompactnessHint
 
 Constraints:
 - The TARGET Episode is identified by `episode_id`, `name`, `index_in_stage`.
@@ -451,6 +529,17 @@ Constraints:
 
 Instructions:
 - **Participants & Transactions Reference**: The `participants` and `transactions` lists in TargetEpisode are already fully reconstructed. Use them as context.
+- Treat `RetrievedContext` as additive evidence only. Use it to ground episode relations and timestamps, but do not remove or replace `Content`.
+- If `RetrievedContextSummary` is provided, use it as a compact signal about what was retrieved for this episode.
+- Read `EpisodeLocator` to stay anchored to the exact stage/episode target.
+- Read `EpisodeExecutionMode`, `TransactionDetailTier`, `EpisodeDetailTier`, and `ConflictGuard` before deciding how much to infer from the transaction foundation.
+- If `EpisodeExecutionMode` is `light`, preserve the provided participants, tolerate an empty transaction foundation, focus on timeline and concise relations, and do not invent transactions to compensate for a compact path.
+- If `EpisodeExecutionMode` is `light`, also obey `EpisodeCompactnessHint` and keep `participant_relations` and `descriptions` minimal unless the content clearly requires more detail.
+- If `EpisodeDetailTier` is `minimal`, emit at most one concise description, preserve timeline anchors but do not add narrative expansion, include only essential participant_relations, and keep the smallest valid JSON grounded in `Content`.
+- If `EpisodeDetailTier` is `compact`, preserve major causal and legal facts while keeping descriptions brief, and include only essential participant_relations.
+- If `EpisodeDetailTier` is `standard`, preserve the current richer reconstruction behavior.
+- If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
+- If `EpisodeExecutionMode` is `full`, preserve the current richer reconstruction behavior.
 - **Output Placeholders**: In your output JSON:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
     - Set `transactions` to the exact string `"Results of TransactionReconstructor"`.
@@ -481,9 +570,19 @@ Inputs:
 - StageSkeleton (context).
 - TargetEpisode (includes pre-filled `participants` and `transactions`).
 - Query, Keywords, Content.
+- EpisodeLocator, EpisodeExecutionMode, TransactionDetailTier, EpisodeDetailTier, ConflictGuard.
+- EpisodeCompactnessHint.
+- StageSparseCache: stage-level additive summary for same-stage consistency.
 
 Instructions:
 - **Fixed Fields**: Treat provided `participants` and `transactions` as fixed.
+- **Execution Mode**: If `EpisodeExecutionMode` is `light`, preserve the provided participants, accept an empty transaction foundation, and keep relations/descriptions concise and evidence-bound.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `minimal`, emit at most one concise description, preserve timeline anchors but do not add narrative expansion, include only essential participant_relations, and keep the smallest valid output grounded in `Content`.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `compact`, preserve major causal and legal facts while keeping descriptions brief, and include only essential participant_relations.
+- **Episode Detail Tier**: If `EpisodeDetailTier` is `standard`, preserve richer reconstruction behavior.
+- **Conflict Guard**: If `ConflictGuard` is `strict`, prefer conservative inclusion whenever evidence is ambiguous.
+- **Compactness Hint**: If `EpisodeCompactnessHint` is present, follow it exactly and prefer the smallest valid output that remains grounded in `Content`.
+- **Stage Cache**: If `StageSparseCache` is present, use it as additive stage-level context to keep same-stage episode reconstruction aligned, but never replace or weaken `Content`.
 - **Output Placeholders**:
     - `"participants": "Results of ParticipantReconstructor"`
     - `"transactions": "Results of TransactionReconstructor"`
@@ -507,6 +606,30 @@ Output:
 {TargetEpisode}
 === TARGET EPISODE END ===
 
+=== EPISODE LOCATOR BEGIN ===
+{EpisodeLocator}
+=== EPISODE LOCATOR END ===
+
+=== EPISODE COMPACTNESS HINT BEGIN ===
+{EpisodeCompactnessHint}
+=== EPISODE COMPACTNESS HINT END ===
+
+=== EPISODE EXECUTION MODE BEGIN ===
+{EpisodeExecutionMode}
+=== EPISODE EXECUTION MODE END ===
+
+=== TRANSACTION DETAIL TIER BEGIN ===
+{TransactionDetailTier}
+=== TRANSACTION DETAIL TIER END ===
+
+=== EPISODE DETAIL TIER BEGIN ===
+{EpisodeDetailTier}
+=== EPISODE DETAIL TIER END ===
+
+=== CONFLICT GUARD BEGIN ===
+{ConflictGuard}
+=== CONFLICT GUARD END ===
+
 === Query BEGIN ===
 {Query}
 === Query END ===
@@ -518,4 +641,16 @@ Output:
 === CONTENT BEGIN ===
 {Content}
 === CONTENT END ===
+
+=== RETRIEVED CONTEXT BEGIN ===
+{RetrievedContext}
+=== RETRIEVED CONTEXT END ===
+
+=== RETRIEVED CONTEXT SUMMARY BEGIN ===
+{RetrievedContextSummary}
+=== RETRIEVED CONTEXT SUMMARY END ===
+
+=== STAGE SPARSE CACHE BEGIN ===
+{StageSparseCache}
+=== STAGE SPARSE CACHE END ===
 """.strip()

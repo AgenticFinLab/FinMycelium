@@ -18,9 +18,10 @@ framework for financial data processing and knowledge extraction.
 import os
 import uuid
 import logging
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import pytz
@@ -32,6 +33,8 @@ from finmy.converter import (
     convert_to_build_input,
     match_output_to_meta_samples,
 )
+from finmy.context.assets import build_evidence_assets, summarize_context_assets
+from finmy.context.renderers import render_context_asset_summary
 from finmy.db_manager import DataManager
 from finmy.builder.base import BuildInput, BaseBuilder
 from finmy.builder.registry import get as get_builder
@@ -47,11 +50,6 @@ from finmy.url_collector.url_parser import URLParser
 from finmy.matcher.base import MatchOutput, MatchItem
 from finmy.converter import read_text_data_from_block
 from finmy.builder.agent_build import prompts as agent_build_prompts
-
-
-# ============================================================================
-# Pipeline Class
-# ============================================================================
 
 
 class FinmyPipeline:
@@ -337,6 +335,7 @@ class FinmyPipeline:
         self,
         query_text: str,
         key_words: List[str],
+        extras: Optional[Dict[str, Any]] = None,
     ) -> UserQueryInput:
         """
         Create a user query input object and store it in the database.
@@ -344,6 +343,7 @@ class FinmyPipeline:
         Args:
             query_text: The query text
             key_words: List of keywords for the query
+            extras: Optional strategy metadata or experiment flags
 
         Returns:
             UserQueryInput object that was created and stored
@@ -352,6 +352,7 @@ class FinmyPipeline:
         user_query_input = UserQueryInput(
             query_text=query_text,
             key_words=key_words,
+            extras=dict(extras or {}),
         )
         self.logger.info("User query input object created: %s", user_query_input)
         self.logger.info("Inserting user query input object into database...")
@@ -452,7 +453,11 @@ class FinmyPipeline:
         self.logger.info("=" * 25)
 
     def create_build_input(
-        self, user_query_input: UserQueryInput, meta_samples
+        self,
+        user_query_input: UserQueryInput,
+        meta_samples,
+        attach_context_assets: bool = False,
+        summarized_query: Optional[SummarizedUserQuery] = None,
     ) -> BuildInput:
         """
         Create BuildInput object from user query and meta samples.
@@ -467,11 +472,33 @@ class FinmyPipeline:
         self.logger.info(
             "Creating BuildInput object from user_query and meta_samples..."
         )
+        build_user_query_input = user_query_input
+        if summarized_query is not None:
+            summarized_key_words = self._normalize_summarized_keywords(
+                getattr(summarized_query, "key_words", None)
+            )
+            merged_key_words = self._merge_keywords(
+                user_query_input.key_words, summarized_key_words
+            )
+            build_user_query_input = replace(
+                user_query_input,
+                key_words=merged_key_words,
+                extras=dict(user_query_input.extras),
+            )
         build_input = convert_to_build_input(
-            user_query=user_query_input,
+            user_query=build_user_query_input,
             meta_samples=meta_samples,
             extras={},
         )
+        if attach_context_assets:
+            build_input.context_assets = build_evidence_assets(
+                build_input.user_query, build_input.samples
+            )
+            context_summary = summarize_context_assets(build_input.context_assets)
+            self.logger.info(
+                "Passive context assets attached: %s",
+                render_context_asset_summary(context_summary),
+            )
         self.logger.info(
             "BuildInput object created: query_text: %s, key_words: %s, use samples: %s",
             build_input.user_query.query_text,
@@ -480,6 +507,29 @@ class FinmyPipeline:
         )
         self.logger.info("=" * 25)
         return build_input
+
+    @staticmethod
+    def _merge_keywords(
+        raw_keywords: List[str], summarized_keywords: List[str]
+    ) -> List[str]:
+        merged_keywords: List[str] = []
+        seen = set()
+        for keyword in list(raw_keywords) + list(summarized_keywords):
+            if keyword in seen:
+                continue
+            seen.add(keyword)
+            merged_keywords.append(keyword)
+        return merged_keywords
+
+    @staticmethod
+    def _normalize_summarized_keywords(summarized_keywords) -> List[str]:
+        if summarized_keywords is None:
+            return []
+        if isinstance(summarized_keywords, dict):
+            return list(summarized_keywords.keys())
+        if isinstance(summarized_keywords, (list, tuple)):
+            return list(summarized_keywords)
+        return []
 
     def _is_url(self, source: str) -> bool:
         """
@@ -746,7 +796,12 @@ class FinmyPipeline:
         self.store_meta_samples(meta_samples)
 
         # Step 9: Create build input for downstream processing
-        build_input = self.create_build_input(user_query_input, meta_samples)
+        build_input = self.create_build_input(
+            user_query_input,
+            meta_samples,
+            attach_context_assets=True,
+            summarized_query=summarized_query,
+        )
 
         # Step 10: Execute builder and return result
         return self.builder.run(build_input)
@@ -798,7 +853,12 @@ class FinmyPipeline:
         self.store_meta_samples(meta_samples)
 
         # Step 9: Create build input for downstream processing
-        build_input = self.create_build_input(user_query_input, meta_samples)
+        build_input = self.create_build_input(
+            user_query_input,
+            meta_samples,
+            attach_context_assets=False,
+            summarized_query=summarized_query,
+        )
 
         # Step 10: Execute builder and return result
         return self.builder.run(build_input)

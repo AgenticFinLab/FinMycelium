@@ -61,8 +61,20 @@ output_dir: "EXPERIMENT/uTEST/Pipline/output"
 #   - "url": URL collector
 url_collector_config:
   delay: 1.0
-  use_selenium_fallback: True
+  use_selenium_fallback: False
   selenium_wait_time: 5
+
+search_config:
+  bocha_count: 15
+  baidu_count: 15
+  merge_strategy: interleave
+  quality_filter:
+    enabled: true
+    min_text_chars: 300
+    dedupe_url: true
+    reject_search_pages: true
+    reject_auth_pages: true
+
 pdf_collector_config:
   output_dir: "EXPERIMENT/uTEST/Pipline/input/pdf"
   batch_size: 10

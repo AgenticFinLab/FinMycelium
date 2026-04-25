@@ -21,6 +21,7 @@ from finmy.builder.utils import (
     load_python_text,
     extract_dataclass_blocks,
     extract_json_response,
+    run_single_inference,
 )
 
 
@@ -116,8 +117,9 @@ class LMBuilder(BaseBuilder):
 
         # 3. Call LM
         # Use self.agents_lm which is initialized in BaseBuilder
-        out: InferOutput = self.agents_lm.run(
-            infer_input=InferInput(system_msg=sys_msg, user_msg=user_msg),
+        out: InferOutput = run_single_inference(
+            self.agents_lm,
+            InferInput(system_msg=sys_msg, user_msg=user_msg),
             **prompt_kwargs,
         )
 
