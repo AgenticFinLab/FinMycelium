@@ -52,7 +52,7 @@
 
 
 
-<iframe src="//player.bilibili.com/player.html?isOutside=true&aid=116487666797590&bvid=BV1HW9DB7Enx&cid=37945082967&p=1" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
+https://github.com/user-attachments/assets/edd7d0f4-4c0f-4429-96b3-9a8846e2c270
 
 
 ---
