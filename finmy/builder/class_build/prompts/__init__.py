@@ -5,6 +5,7 @@ Automatically collects all prompt functions from submodules
 
 from . import (
     classify,
+    cryptocurrency_ico_scam,
     ponzi_scheme,
     pyramid_scheme,
     pump_and_dump,
@@ -25,7 +26,7 @@ from . import (
     stablecoin_depeg,
     other_financial_event
 )
-from . import cryptocurrency_ICO_scam as cryptocurrency_ico_scam
+
 
 # Define __all__ for wildcard imports
 __all__ = [
