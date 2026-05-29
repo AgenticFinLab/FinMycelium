@@ -1,0 +1,68 @@
+# Pipeline configuration example for ContextEventBuilder.
+#
+# This file is opt-in and does not change configs/pipline.yml.
+
+lm_type: &lm_type "api"
+lm_name: &lm_name "deepseek/deepseek-chat"
+
+inference_config: &inference_config
+  device: "cuda"
+
+generation_config: &generation_config
+  max_new_tokens: 8192
+  temperature: 0.2
+  top_p: 0.95
+
+event_builder_config: &event_builder_config
+  context_top_k: 8
+  max_context_chars: 6000
+  excerpt_char_limit: 240
+  max_card_tokens: 48
+  enable_sparse_routing: true
+
+builder_config:
+  builder_type: "ContextEventBuilder"
+  lm_type: *lm_type
+  lm_name: *lm_name
+  inference_config: *inference_config
+  generation_config: *generation_config
+  save_folder: "EXPERIMENT/uTEST/EventPipeline"
+  graph_config:
+    recursion_limit: 150
+  event_builder_config: *event_builder_config
+  agents:
+    SkeletonReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
+    SkeletonChecker:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
+    ParticipantReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
+    TransactionReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
+    EpisodeReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
+    StageDescriptionReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
+    EventDescriptionReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *inference_config
+      generation_config: *generation_config
