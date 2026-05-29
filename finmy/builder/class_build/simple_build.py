@@ -8,6 +8,7 @@ import os
 from typing import Dict, Any, Optional, List
 from lmbase.inference.api_call import LangChainAPIInference, InferInput
 from finmy.builder.class_build.prompts import *
+from finmy.builder.utils import run_single_inference
 
 
 def format_user_prompt(
@@ -154,7 +155,7 @@ class ClassLMSimpleBuild:
             system_msg="Hello",
             user_msg="Test message",
         )
-        result = test_api_call.run(chatbot)
+        result = run_single_inference(test_api_call, chatbot)
         print("Test response:", result.response)
         return result.response
     
@@ -182,7 +183,7 @@ class ClassLMSimpleBuild:
             system_msg= classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
             user_msg=  self.user_prompt.format(Query=self.query, Keywords=self.keywords, Content=str(self.all_text_content[:200])) + "\n\nSYSTEM PROMPT:\n\n"+ classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
         )
-        classify_output = api_call.run(classify_chatbot)
+        classify_output = run_single_inference(api_call, classify_chatbot)
         classify_output_text = classify_output.response.strip()
         print("Classify output text:", classify_output_text)
         classify_event_type = self.extract_json_response(classify_output_text)["event_type"]["primary_type"]
@@ -196,7 +197,7 @@ class ClassLMSimpleBuild:
             system_msg=escaped_prompt,
             user_msg=str(self.all_text_content) + "\n\n\n" + escaped_prompt,
         )
-        detailed_output = api_call.run(chatbot)
+        detailed_output = run_single_inference(api_call, chatbot)
         
         print("Received detailed output from LLM")
         output_text = detailed_output.response.strip()
@@ -216,7 +217,7 @@ class ClassLMSimpleBuild:
                         system_msg="You are a professional JSON format expert.",
                         user_msg=output_text.replace("{", "{{").replace("}", "}}") + "\n\nPlease format the above text as a proper JSON object strictly. If there is any error in the format, please fix it. Don't add any extra text or change the content of the text. Only return the JSON object. You should ignore directly: (1) javascript:void((function(){{}})()); (2) document.open();document.domain='sogou.com';document.close(); ",
                     )
-                    format_output = api_call.run(format_chatbot)
+                    format_output = run_single_inference(api_call, format_chatbot)
                     format_output_text = format_output.response.strip()
                     print("Format output text:", format_output_text)
 

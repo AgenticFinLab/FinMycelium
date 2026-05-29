@@ -9,6 +9,7 @@ from typing import Any
 from lmbase.inference.base import InferInput
 
 from finmy.builder.base import AgentState, BaseBuilder, BuildInput, BuildOutput
+from finmy.builder.utils import run_single_inference
 
 from .context_assets import (
     EvidenceAssetBundle,
@@ -180,8 +181,9 @@ class ContextEventBuilder(BaseBuilder):
             context_assets=context_assets,
         )
         system_msg, user_msg = self._format_agent_messages(agent_name, prompt_kwargs)
-        output = self.agents_lm.run(
-            infer_input=InferInput(system_msg=system_msg, user_msg=user_msg),
+        output = run_single_inference(
+            self.agents_lm,
+            InferInput(system_msg=system_msg, user_msg=user_msg),
             **prompt_kwargs,
         )
         response_text = getattr(output, "response", output)
