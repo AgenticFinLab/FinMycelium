@@ -158,9 +158,17 @@ class EventPromptInputsTest(unittest.TestCase):
 
         self.assertEqual(output.event_cascades["event_id"], "EVT-1")
         self.assertEqual(output.extras["builder_type"], "ContextEventBuilder")
-        self.assertEqual(output.extras["agent_executed"], ["SkeletonReconstructor"])
-        self.assertEqual(len(builder.agents_lm.calls), 1)
+        self.assertEqual(
+            output.extras["agent_executed"],
+            [
+                "SkeletonReconstructor",
+                "SkeletonChecker",
+                "EventDescriptionReconstructor",
+            ],
+        )
+        self.assertEqual(len(builder.agents_lm.calls), 3)
         self.assertIn("RetrievedContext", builder.agents_lm.calls[0][1])
+        self.assertIn("ProposedSkeleton", builder.agents_lm.calls[1][1])
 
 
 if __name__ == "__main__":
