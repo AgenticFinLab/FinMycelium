@@ -57,8 +57,6 @@ import time
 import copy
 import os
 import json
-import logging
-import re
 from functools import partial
 from pathlib import Path
 
@@ -71,22 +69,10 @@ from finmy.builder.utils import (
     load_python_text,
     filter_dataclass_fields,
     extract_json_response,
-    run_single_inference,
 )
 from finmy.builder.base import AgentState
-from finmy.builder.agent_build.execution_budget import (
-    build_stage_aware_execution_budget,
-)
 from finmy.builder.agent_build.structure import Episode
-from finmy.context.local_context_builder import (
-    LocalContextBuilder,
-    LocalContextRequest,
-)
 from finmy.builder.agent_build.prompts import *
-
-logger = logging.getLogger(__name__)
-
-_REPLAY_STAGE_EPISODE_SUFFIX = re.compile(r"-Stage(?P<stage>\d+)-Episode(?P<episode>\d+)-Result\.json$")
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -182,22 +168,6 @@ class AgentEventBuilder(BaseBuilder):
         - Produces grounded `descriptions` for the entire event using the full cascade plus source content.
     """
 
-    _SHADOW_LOCAL_CONTEXT_AGENTS = {"SkeletonReconstructor", "SkeletonChecker"}
-    _JSON_PARSE_RETRY_AGENTS = {
-        "SkeletonReconstructor",
-        "SkeletonChecker",
-        "ParticipantReconstructor",
-        "TransactionReconstructor",
-        "EpisodeReconstructor",
-        "StageDescriptionReconstructor",
-        "EventDescriptionReconstructor",
-    }
-    _JSON_SYNTACTIC_RECOVERY_AGENTS = {
-        "ParticipantReconstructor",
-        "EpisodeReconstructor",
-        "StageDescriptionReconstructor",
-    }
-
     def _get_agent_prompts(self):
         """Initialize system and user prompts for all agents."""
         agent_system_msgs = {}
@@ -240,967 +210,18 @@ class AgentEventBuilder(BaseBuilder):
 
         return agent_system_msgs, agent_user_msgs
 
-    def _latest_agent_result(self, state: AgentState, agent_name: str):
-        for res in reversed(state["agent_results"]):
-            if agent_name in res:
-                return res[agent_name]
-        return None
-
-    def _compact_verifiable_fields_for_prompt(self, obj):
-        """Trim verbose evidence payloads that unnecessarily bloat checker prompts."""
-        if isinstance(obj, list):
-            return [self._compact_verifiable_fields_for_prompt(item) for item in obj]
-        if not isinstance(obj, dict):
-            return obj
-
-        compacted = {
-            key: self._compact_verifiable_fields_for_prompt(value)
-            for key, value in obj.items()
-        }
-        if "value" in compacted:
-            if "evidence_source_contents" in compacted:
-                compacted["evidence_source_contents"] = []
-            if "reasons" in compacted:
-                compacted["reasons"] = []
-        return compacted
-
-    def _compact_skeleton_for_checker_prompt(self, skeleton: dict) -> dict:
-        return self._compact_verifiable_fields_for_prompt(copy.deepcopy(skeleton))
-
-    def _build_json_retry_user_msg(self, base_user_msg: str, agent_name: str) -> str:
-        return (
-            f"{base_user_msg}\n\n"
-            "IMPORTANT OUTPUT RECOVERY:\n"
-            f"- Your previous {agent_name} response was invalid or truncated JSON.\n"
-            "- Return exactly one complete raw JSON object.\n"
-            "- Do not include markdown fences, commentary, or partial output.\n"
-            "- Ensure all braces, brackets, strings, and commas are properly closed.\n"
-        )
-
-    def _extract_balanced_json_fragment(self, text: str, start_idx: int) -> str | None:
-        """Return the first balanced JSON object/array starting at ``start_idx``.
-
-        This is intentionally syntactic only: it finds a balanced fragment and leaves
-        semantic validation to the existing downstream checks.
-        """
-        if start_idx < 0 or start_idx >= len(text):
-            return None
-        opener = text[start_idx]
-        if opener not in "{[":
-            return None
-
-        closers = {"{": "}", "[": "]"}
-        stack = [closers[opener]]
-        in_string = False
-        escape = False
-
-        for idx in range(start_idx + 1, len(text)):
-            ch = text[idx]
-            if in_string:
-                if escape:
-                    escape = False
-                    continue
-                if ch == "\\":
-                    escape = True
-                    continue
-                if ch == '"':
-                    in_string = False
-                continue
-
-            if ch == '"':
-                in_string = True
-            elif ch in "{[":
-                stack.append(closers[ch])
-            elif ch in "}]":
-                if not stack or ch != stack[-1]:
-                    return None
-                stack.pop()
-                if not stack:
-                    return text[start_idx : idx + 1]
-
-        return None
-
-    def _recover_syntactic_json_response(self, response_text: str) -> dict:
-        """Recover a JSON payload from mild wrapper/junk without inventing content."""
-        clean_text = response_text.strip()
-        fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.DOTALL)
-        if fence_match:
-            clean_text = fence_match.group(1).strip()
-
-        seen_candidates: set[str] = set()
-        for start_idx, ch in enumerate(clean_text):
-            if ch not in "{[":
-                continue
-            candidate = self._extract_balanced_json_fragment(clean_text, start_idx)
-            if not candidate or candidate in seen_candidates:
-                continue
-            seen_candidates.add(candidate)
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                continue
-
-        raise ValueError("Failed to recover a balanced JSON fragment from response")
-
-    def _infer_and_parse_json(
-        self,
-        agent_name: str,
-        sys_msg: str,
-        user_msg_template: str,
-        prompt_kwargs: dict,
-        savename: str,
-    ) -> tuple[InferOutput, dict]:
-        max_attempts = (
-            3 if agent_name in self._JSON_PARSE_RETRY_AGENTS else 1
-        )
-        current_user_msg = user_msg_template
-        last_error = None
-
-        for attempt in range(1, max_attempts + 1):
-            out: InferOutput = run_single_inference(
-                self.agents_lm,
-                InferInput(system_msg=sys_msg, user_msg=current_user_msg),
-                **prompt_kwargs,
-            )
-            result = out.response
-            attempt_save_name = (
-                savename if attempt == 1 else f"{savename}-Retry{attempt - 1}"
-            )
-            self.save_traces({agent_name: out.to_dict()}, attempt_save_name, "json")
-
-            try:
-                return out, extract_json_response(result)
-            except ValueError as exc:
-                last_error = exc
-                if agent_name in self._JSON_SYNTACTIC_RECOVERY_AGENTS:
-                    try:
-                        return out, self._recover_syntactic_json_response(result)
-                    except ValueError as recovery_exc:
-                        last_error = recovery_exc
-                if attempt >= max_attempts:
-                    raise ValueError(
-                        f"{agent_name} returned invalid JSON after {attempt} attempt(s): {exc}"
-                    ) from exc
-                logger.warning(
-                    "%s returned invalid JSON on attempt %s/%s; retrying with stricter output instruction.",
-                    agent_name,
-                    attempt,
-                    max_attempts,
-                )
-                current_user_msg = self._build_json_retry_user_msg(
-                    user_msg_template, agent_name
-                )
-
-        raise ValueError(
-            f"{agent_name} returned invalid JSON and exhausted retries: {last_error}"
-        )
-
     def _get_event_skeleton(self, state: AgentState) -> dict:
-        skeleton = self._latest_agent_result(state, "SkeletonChecker")
-        if skeleton is not None:
-            return skeleton
-        skeleton = self._latest_agent_result(state, "SkeletonReconstructor")
-        if skeleton is not None:
-            return skeleton
-        raise ValueError("No skeleton result found in builder state")
-
-    def _episode_locator(
-        self,
-        stage_index: int,
-        episode_index: int,
-        stage_id: str | None = None,
-        episode_id: str | None = None,
-    ) -> dict[str, object]:
-        """Return a stable, explicit episode locator used across routing and integration."""
-        locator = {
-            "stage_index": stage_index,
-            "episode_index": episode_index,
-        }
-        if stage_id is not None:
-            locator["stage_id"] = stage_id
-        if episode_id is not None:
-            locator["episode_id"] = episode_id
-        return locator
-
-    def _iter_skeleton_episodes(self, event_skeleton: dict):
-        for stage_index, stage in enumerate(event_skeleton.get("stages", []) or []):
-            stage_id = stage.get("stage_id", "")
-            for episode_index, episode in enumerate(stage.get("episodes", []) or []):
-                yield stage_index, episode_index, stage, episode, self._episode_locator(
-                    stage_index,
-                    episode_index,
-                    stage_id,
-                    episode.get("episode_id", ""),
-                )
-
-    def _current_episode_sequence_index(self, state: AgentState) -> int:
-        """Return the current global episode sequence index."""
-        return state["agent_executed"].count("EpisodeReconstructor")
-
-    def _get_episode_by_sequence_index(
-        self,
-        event_skeleton: dict,
-        sequence_index: int,
-    ):
-        """Resolve a structural episode by its global sequence order."""
-        for (
-            stage_index,
-            episode_index,
-            stage,
-            episode,
-            locator,
-        ) in self._iter_skeleton_episodes(event_skeleton):
-            if sequence_index == 0:
-                return stage_index, episode_index, stage, episode, locator
-            sequence_index -= 1
-        return None, None, None, None, None
-
-    def _build_episode_execution_plan(
-        self,
-        build_input: BuildInput,
-        event_skeleton: dict,
-    ) -> dict[str, object]:
-        """Build a planner-backed per-episode routing plan from the skeleton."""
-        planner_skeleton = copy.deepcopy(event_skeleton)
-        for stage_index, stage in enumerate(planner_skeleton.get("stages", []) or []):
-            stage["stage_id"] = f"stage-{stage_index}"
-            for episode_index, episode in enumerate(stage.get("episodes", []) or []):
-                episode["episode_id"] = f"episode-{stage_index}-{episode_index}"
-
-        budget = build_stage_aware_execution_budget(build_input, planner_skeleton)
-        budget_entries = list(budget.get("episodes", {}).values())
-
-        plan_entries: list[dict[str, object]] = []
-        for sequence_index, (
-            stage_index,
-            episode_index,
-            stage,
-            episode,
-            locator,
-        ) in enumerate(self._iter_skeleton_episodes(event_skeleton)):
-            stage_id = self._scalar_value(stage.get("stage_id", ""))
-            episode_id = self._scalar_value(episode.get("episode_id", ""))
-            budget_entry = (
-                budget_entries[sequence_index]
-                if sequence_index < len(budget_entries)
-                else {}
-            )
-            mode = budget_entry.get("mode", "full")
-            plan_entries.append(
-                {
-                    "locator": locator,
-                    "stage_id": stage_id,
-                    "episode_id": episode_id,
-                    "stage_index": stage_index,
-                    "episode_index": episode_index,
-                    "mode": mode,
-                    "participant_tier": budget_entry.get("participant_tier", "standard"),
-                    "transaction_tier": budget_entry.get(
-                        "transaction_tier",
-                        "skip" if mode == "light" else "standard",
-                    ),
-                    "episode_detail_tier": budget_entry.get(
-                        "episode_detail_tier", "standard"
-                    ),
-                    "conflict_guard": budget_entry.get("conflict_guard", "standard"),
-                    "detail_tier": budget_entry.get("episode_detail_tier", "standard"),
-                }
-            )
-
-        return {"episodes": plan_entries}
-
-    def _transaction_step_skipped(
-        self,
-        plan_entry: dict[str, object] | None,
-        execution_mode: str | None = None,
-    ) -> bool:
-        if not plan_entry:
-            return execution_mode == "light"
-        if plan_entry.get("transaction_step_skipped") is True:
-            return True
-        conflict_guard = plan_entry.get("conflict_guard")
-        if conflict_guard == "strict":
-            return False
-        transaction_tier = plan_entry.get("transaction_tier")
-        if transaction_tier == "skip":
-            return True
-        if transaction_tier in {"minimal", "compact", "standard"}:
-            return False
-        if transaction_tier is None:
-            return plan_entry.get("mode") == "light" or execution_mode == "light"
-        return False
-
-    def _episode_execution_mode(
-        self,
-        plan_entry: dict[str, object] | None,
-    ) -> str:
-        if not plan_entry:
-            return "full"
-        execution_mode = plan_entry.get("mode", "full")
-        if execution_mode in {"light", "full"}:
-            return execution_mode
-        transaction_tier = plan_entry.get("transaction_tier")
-        if transaction_tier == "skip":
-            return "light"
-        if transaction_tier in {"minimal", "compact"}:
-            return "light"
-        return "full"
-
-    def _get_episode_execution_plan_entry(
-        self,
-        episode_execution_plan: dict[str, object] | None,
-        stage_index: int,
-        episode_index: int,
-    ) -> dict[str, object] | None:
-        """Find the execution-plan record for a skeleton episode using explicit coordinates."""
-        if not episode_execution_plan:
-            return None
-
-        for entry in episode_execution_plan.get("episodes", []) or []:
-            locator = entry.get("locator", {}) if isinstance(entry, dict) else {}
-            if (
-                locator.get("stage_index") == stage_index
-                and locator.get("episode_index") == episode_index
-            ):
-                return entry
-        return None
-
-    def _episode_locator_key(self, locator: dict[str, object] | None):
-        if not isinstance(locator, dict):
-            return None
-        stage_index = locator.get("stage_index")
-        episode_index = locator.get("episode_index")
-        stage_id = locator.get("stage_id")
-        episode_id = locator.get("episode_id")
-        if stage_index is not None and episode_index is not None:
-            if stage_id or episode_id:
-                return ("locator", stage_index, episode_index, stage_id or None, episode_id or None)
-            return ("locator", stage_index, episode_index, None, None)
-        if stage_id and episode_id:
-            return ("ids", stage_id, episode_id)
-        return None
-
-    def _result_locator_map(
-        self,
-        state: AgentState,
-        agent_name: str,
-    ) -> dict[tuple[object, ...], dict]:
-        locator_map: dict[tuple[object, ...], dict] = {}
-        for item in state["agent_results"]:
-            if agent_name not in item:
-                continue
-            locator_key = self._episode_locator_key(
-                item.get("_meta", {}).get("episode_locator")
-            )
-            if locator_key is not None:
-                locator_map[locator_key] = item[agent_name]
-        return locator_map
-
-    def _result_locator_meta_map(
-        self,
-        state: AgentState,
-        agent_name: str,
-    ) -> dict[tuple[object, ...], dict]:
-        locator_map: dict[tuple[object, ...], dict] = {}
-        for item in state["agent_results"]:
-            if agent_name not in item:
-                continue
-            locator_key = self._episode_locator_key(
-                item.get("_meta", {}).get("episode_locator")
-            )
-            if locator_key is not None:
-                locator_map[locator_key] = item.get("_meta", {})
-        return locator_map
-
-    def _unwrap_agent_payload(self, payload: object, agent_name: str) -> object:
-        """Unwrap replay-style agent payloads that embed the agent name at top level."""
-        if isinstance(payload, dict):
-            nested = payload.get(agent_name)
-            if isinstance(nested, dict):
-                return nested
-        return payload
-
-    def _agent_result_items(
-        self,
-        payload: object,
-        agent_name: str,
-        collection_name: str,
-    ) -> list[dict] | list:
-        normalized = self._unwrap_agent_payload(payload, agent_name)
-        if not isinstance(normalized, dict):
-            return []
-        items = normalized.get(collection_name)
-        return items if isinstance(items, list) else []
-
-    def _reconstruct_episode_execution_plan_from_results(
-        self,
-        state: AgentState,
-    ) -> dict[str, object]:
-        """Infer episode execution modes from a replayed agent result sequence."""
-        try:
-            event_skeleton = self._get_event_skeleton(state)
-        except ValueError:
-            return {"episodes": []}
-
-        plan_entries: list[dict[str, object]] = []
-        episode_seq_idx = 0
-        transaction_seen_for_current_episode = False
-
-        for result in state["agent_results"]:
-            if "TransactionReconstructor" in result:
-                transaction_seen_for_current_episode = True
-
-            if "EpisodeReconstructor" not in result:
-                continue
-
-            locator = result.get("_meta", {}).get("episode_locator")
-            if locator:
-                stage_index = locator.get("stage_index")
-                episode_index = locator.get("episode_index")
-                if stage_index is None or episode_index is None:
-                    break
-            else:
-                (
-                    stage_index,
-                    episode_index,
-                    stage,
-                    episode,
-                    locator,
-                ) = self._get_episode_by_sequence_index(event_skeleton, episode_seq_idx)
-                if stage_index is None:
-                    break
-
-            result_meta = result.get("_meta", {})
-            mode = result_meta.get("execution_mode")
-            if mode not in {"light", "full"}:
-                mode = "full" if transaction_seen_for_current_episode else "light"
-            transaction_tier = result_meta.get("transaction_tier")
-            if transaction_tier not in {"skip", "minimal", "compact", "standard"}:
-                transaction_tier = "skip" if mode == "light" else "standard"
-            transaction_step_skipped = result_meta.get("transaction_step_skipped")
-            if not isinstance(transaction_step_skipped, bool):
-                transaction_step_skipped = self._transaction_step_skipped(
-                    {
-                        "mode": mode,
-                        "transaction_tier": transaction_tier,
-                    },
-                    execution_mode=mode,
-                )
-            detail_tier = result_meta.get("detail_tier")
-            if detail_tier not in {"compact", "standard"}:
-                compact_replay = mode == "light" or transaction_tier in {
-                    "skip",
-                    "minimal",
-                    "compact",
-                } or transaction_step_skipped
-                detail_tier = "compact" if compact_replay else "standard"
-            episode_detail_tier = result_meta.get("episode_detail_tier")
-            if episode_detail_tier is None:
-                episode_detail_tier = result_meta.get("detail_tier")
-            if episode_detail_tier not in {"minimal", "compact", "standard"}:
-                compact_replay = mode == "light" or transaction_tier in {
-                    "skip",
-                    "minimal",
-                    "compact",
-                } or transaction_step_skipped
-                episode_detail_tier = "compact" if compact_replay else "standard"
-            conflict_guard = result_meta.get("conflict_guard")
-            if conflict_guard not in {"standard", "strict"}:
-                conflict_guard = "standard"
-            plan_entries.append(
-                {
-                    "locator": locator,
-                    "stage_index": stage_index,
-                    "episode_index": episode_index,
-                    "mode": mode,
-                    "transaction_tier": transaction_tier,
-                    "transaction_step_skipped": transaction_step_skipped,
-                    "detail_tier": detail_tier,
-                    "episode_detail_tier": episode_detail_tier,
-                    "conflict_guard": conflict_guard,
-                }
-            )
-            episode_seq_idx += 1
-            transaction_seen_for_current_episode = False
-
-        return {"episodes": plan_entries}
-
-    def _replay_episode_locator_from_filename(
-        self,
-        filename: str,
-        event_skeleton: dict | None,
-    ) -> dict[str, object] | None:
-        match = _REPLAY_STAGE_EPISODE_SUFFIX.search(filename)
-        if not match:
-            return None
-        stage_index = int(match.group("stage"))
-        episode_index = int(match.group("episode"))
-        locator = self._episode_locator(stage_index, episode_index)
-        stages = (event_skeleton or {}).get("stages", []) or []
-        if stage_index < len(stages):
-            stage = stages[stage_index]
-            locator["stage_id"] = stage.get("stage_id")
-            episodes = stage.get("episodes", []) or []
-            if episode_index < len(episodes):
-                locator["episode_id"] = episodes[episode_index].get("episode_id")
-        return locator
-
-    def _route_after_participant_reconstructor(self, state: AgentState):
-        """Route light episodes around TransactionReconstructor."""
-        event_skeleton = self._get_event_skeleton(state)
-        current_episode_idx = self._current_episode_sequence_index(state)
-        (
-            stage_index,
-            episode_index,
-            _stage,
-            _episode,
-            _locator,
-        ) = self._get_episode_by_sequence_index(event_skeleton, current_episode_idx)
-        if stage_index is None:
-            raise ValueError("Could not determine episode for participant routing")
-        plan_entry = self._get_episode_execution_plan_entry(
-            state.get("episode_execution_plan"),
-            stage_index,
-            episode_index,
-        )
-        if self._transaction_step_skipped(
-            plan_entry,
-            execution_mode=plan_entry.get("mode") if plan_entry else None,
-        ):
-            return "EpisodeReconstructor"
-        return "TransactionReconstructor"
-
-    def _build_local_context_package(self, state: AgentState, agent_name: str):
-        """Build local context for reconstruction paths and skeleton shadow mode.
-
-        This helper stays intentionally narrow and only serves agents that already
-        work with additive local evidence, plus the shadow-mode skeleton agents.
         """
-        if agent_name not in {
-            "SkeletonReconstructor",
-            "SkeletonChecker",
-            "ParticipantReconstructor",
-            "TransactionReconstructor",
-            "EpisodeReconstructor",
-            "StageDescriptionReconstructor",
-        }:
-            return None
+        Retrieves the definitive event skeleton.
+        Prioritizes SkeletonChecker result if available, otherwise SkeletonReconstructor.
+        """
+        # Search for SkeletonChecker result in agent_results
+        for res in state["agent_results"]:
+            if "SkeletonChecker" in res:
+                return res["SkeletonChecker"]
 
-        bundle = state["build_input"].context_assets
-        if bundle is None or not bundle.evidence_cards:
-            return None
-
-        if self._should_use_shadow_local_context(agent_name):
-            request = LocalContextRequest(
-                agent_name=agent_name,
-                query_text=state["build_input"].user_query.query_text,
-                key_words=state["build_input"].user_query.key_words,
-            )
-            return LocalContextBuilder().build(request, bundle)
-
-        event_skeleton = self._get_event_skeleton(state)
-        if agent_name == "StageDescriptionReconstructor":
-            stage_idx = state["agent_executed"].count(agent_name)
-            if stage_idx >= len(event_skeleton["stages"]):
-                return None
-            target_stage = event_skeleton["stages"][stage_idx]
-            request = LocalContextRequest(
-                agent_name=agent_name,
-                query_text=state["build_input"].user_query.query_text,
-                key_words=state["build_input"].user_query.key_words,
-                target_stage=self._field_value(target_stage.get("name")),
-            )
-            return LocalContextBuilder().build(request, bundle)
-
-        current_count = self._current_episode_sequence_index(state)
-        target_stage, latest_episode = self.extract_latest_episode(
-            event_skeleton, current_count
-        )
-        if not latest_episode:
-            return None
-
-        request = LocalContextRequest(
-            agent_name=agent_name,
-            query_text=state["build_input"].user_query.query_text,
-            key_words=state["build_input"].user_query.key_words,
-            target_stage=self._field_value(target_stage.get("name")) if target_stage else "",
-            target_episode=self._field_value(latest_episode.get("name")),
-        )
-        return LocalContextBuilder().build(request, bundle)
-
-    def _should_use_shadow_local_context(self, agent_name: str) -> bool:
-        return agent_name in self._SHADOW_LOCAL_CONTEXT_AGENTS
-
-    def _attach_local_context_prompt_kwargs(self, prompt_kwargs: dict, local_context) -> None:
-        prompt_kwargs["RetrievedContext"] = (
-            local_context.rendered_context if local_context else ""
-        )
-        prompt_kwargs["RetrievedContextSummary"] = (
-            json.dumps(local_context.summary, ensure_ascii=False)
-            if local_context
-            else "{}"
-        )
-        prompt_kwargs["RetrievedContextQueryBundle"] = (
-            json.dumps(
-                getattr(local_context, "query_bundle", {}) or {},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            if local_context
-            else "{}"
-        )
-        prompt_kwargs["RetrievedContextBudgetSummary"] = (
-            json.dumps(
-                getattr(local_context, "budget_summary", {}) or {},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            if local_context
-            else "{}"
-        )
-        prompt_kwargs["RetrievedContextMemory"] = (
-            json.dumps(
-                getattr(local_context, "memory", {}) or {},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            if local_context
-            else "{}"
-        )
-
-    def _build_stage_sparse_context(self, state: AgentState, stage_index: int, stage: dict):
-        """Build the stage-scoped retrieval package used to seed sparse stage cache."""
-        bundle = state["build_input"].context_assets
-        if bundle is None or not bundle.evidence_cards:
-            return None
-
-        request = LocalContextRequest(
-            agent_name="StageDescriptionReconstructor",
-            query_text=state["build_input"].user_query.query_text,
-            key_words=state["build_input"].user_query.key_words,
-            target_stage=self._field_value(stage.get("name")),
-        )
-        return LocalContextBuilder().build(request, bundle)
-
-    def _build_stage_sparse_cache(
-        self,
-        state: AgentState,
-        stage_index: int,
-        stage: dict,
-    ) -> dict:
-        """Build or reuse a stage-level sparse cache for the current stage."""
-        stage_sparse_cache = state.setdefault("stage_sparse_cache", {})
-        cached_stage = stage_sparse_cache.get(stage_index)
-        if cached_stage is not None:
-            return cached_stage
-
-        stage_context = self._build_stage_sparse_context(state, stage_index, stage)
-        stage_name = self._scalar_value(stage.get("name", "unknown"))
-        stage_id = self._scalar_value(stage.get("stage_id", "unknown"))
-        episodes = stage.get("episodes", []) or []
-        plan_entries: list[dict[str, object]] = []
-        for episode_index, episode in enumerate(episodes):
-            plan_entry = self._get_episode_execution_plan_entry(
-                state.get("episode_execution_plan"),
-                stage_index,
-                episode_index,
-            ) or {}
-            plan_entries.append(
-                {
-                    "episode_index": episode_index,
-                    "episode_id": self._scalar_value(episode.get("episode_id", "unknown")),
-                    "episode_name": self._scalar_value(episode.get("name", "unknown")),
-                    "mode": plan_entry.get("mode", "full"),
-                    "participant_tier": plan_entry.get("participant_tier", "standard"),
-                    "transaction_tier": plan_entry.get(
-                        "transaction_tier",
-                        "skip" if plan_entry.get("mode") == "light" else "standard",
-                    ),
-                    "detail_tier": plan_entry.get("detail_tier", "standard"),
-                    "conflict_guard": plan_entry.get("conflict_guard", "standard"),
-                }
-            )
-
-        selected_sample_ids = []
-        selected_hint_counts: dict[str, object] = {}
-        selection_rationale: list[dict[str, object]] = []
-        retrieval_status = "missing_context_assets"
-        query_bundle: dict[str, object] = {}
-        selected_count = 0
-        rendered_context = ""
-        if stage_context is not None:
-            selected_sample_ids = list(getattr(stage_context, "selected_sample_ids", []) or [])
-            selected_hint_counts = dict(
-                getattr(stage_context, "memory", {}).get("selected_hint_counts", {}) or {}
-            )
-            selection_rationale = list(
-                getattr(stage_context, "memory", {}).get("selection_rationale", []) or []
-            )
-            retrieval_status = getattr(stage_context, "retrieval_status", retrieval_status)
-            query_bundle = dict(getattr(stage_context, "query_bundle", {}) or {})
-            selected_count = getattr(stage_context, "summary", {}).get("selected_count", 0)
-            rendered_context = getattr(stage_context, "rendered_context", "")
-
-        stage_sparse_cache[stage_index] = {
-            "stage_index": stage_index,
-            "stage_id": stage_id,
-            "stage_name": stage_name,
-            "stage_episode_count": len(episodes),
-            "stage_evidence_digest": {
-                "retrieval_status": retrieval_status,
-                "selected_sample_ids": selected_sample_ids,
-                "selected_count": selected_count,
-                "rendered_context": rendered_context,
-                "query_bundle": query_bundle,
-            },
-            "stage_actor_map": {
-                "episode_overview": plan_entries,
-                "selected_sample_ids": selected_sample_ids,
-                "selected_hint_counts": selected_hint_counts,
-                "selection_rationale": selection_rationale,
-            },
-            "stage_conflict_summary": {
-                "light_episode_count": sum(
-                    1 for entry in plan_entries if entry.get("mode") == "light"
-                ),
-                "transaction_skip_count": sum(
-                    1 for entry in plan_entries if entry.get("transaction_tier") == "skip"
-                ),
-                "conflict_guards": sorted(
-                    {
-                        str(entry.get("conflict_guard", "standard"))
-                        for entry in plan_entries
-                        if entry.get("conflict_guard")
-                    }
-                ),
-                "episode_modes": [entry.get("mode", "full") for entry in plan_entries],
-                "episode_count": len(episodes),
-            },
-        }
-        return stage_sparse_cache[stage_index]
-
-    def _attach_stage_sparse_cache_prompt_kwargs(
-        self,
-        prompt_kwargs: dict,
-        stage_sparse_cache: dict | None,
-    ) -> None:
-        prompt_kwargs["StageSparseCache"] = json.dumps(
-            stage_sparse_cache or {},
-            ensure_ascii=False,
-            sort_keys=True,
-        )
-
-    def _render_compact_content(self, build_input: BuildInput) -> str:
-        """Render source content in a whitespace-normalized form for additive prompts."""
-        return "\n".join(
-            sample.content.strip()
-            for sample in build_input.samples
-            if isinstance(sample.content, str) and sample.content.strip()
-        )
-
-    def _scalar_value(self, field):
-        """Extract a plain scalar from a verifiable field, dict wrapper, or primitive."""
-        if hasattr(field, "value"):
-            return field.value
-        if isinstance(field, dict):
-            return field.get("value", "unknown")
-        return field if isinstance(field, (str, int, float, bool)) else "unknown"
-
-    def _render_target_episode_context(self, target_episode: Episode) -> str:
-        """Serialize a compact target episode summary for additive prompts."""
-        participant_ids = []
-        for participant in getattr(target_episode, "participants", []) or []:
-            if isinstance(participant, dict):
-                participant_id = participant.get("participant_id")
-            else:
-                participant_id = getattr(participant, "participant_id", None)
-            if participant_id:
-                participant_ids.append(participant_id)
-
-        transaction_ids = []
-        for transaction in getattr(target_episode, "transactions", []) or []:
-            if isinstance(transaction, dict):
-                transaction_id = transaction.get("transaction_id")
-            else:
-                transaction_id = getattr(transaction, "transaction_id", None)
-            if transaction_id:
-                transaction_ids.append(transaction_id)
-
-        compact_context = {
-            "episode_id": getattr(target_episode, "episode_id", "unknown"),
-            "name": self._scalar_value(getattr(target_episode, "name", "unknown")),
-            "index_in_stage": getattr(target_episode, "index_in_stage", "unknown"),
-            "start_time": self._scalar_value(getattr(target_episode, "start_time", "unknown")),
-            "end_time": self._scalar_value(getattr(target_episode, "end_time", "unknown")),
-            "participant_ids": participant_ids,
-            "transaction_ids": transaction_ids,
-        }
-        return json.dumps(
-            compact_context,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-
-    def _render_episode_target_context_text(self, target_episode: Episode) -> str:
-        """Render the episode target context as compact text for safer JSON output."""
-        participant_ids = []
-        for participant in getattr(target_episode, "participants", []) or []:
-            if isinstance(participant, dict):
-                participant_id = participant.get("participant_id")
-            else:
-                participant_id = getattr(participant, "participant_id", None)
-            if participant_id:
-                participant_ids.append(participant_id)
-
-        transaction_ids = []
-        for transaction in getattr(target_episode, "transactions", []) or []:
-            if isinstance(transaction, dict):
-                transaction_id = transaction.get("transaction_id")
-            else:
-                transaction_id = getattr(transaction, "transaction_id", None)
-            if transaction_id:
-                transaction_ids.append(transaction_id)
-
-        lines = [
-            f"Episode ID: {getattr(target_episode, 'episode_id', 'unknown')}",
-            f"Episode Name: {self._scalar_value(getattr(target_episode, 'name', 'unknown'))}",
-            f"Episode Index In Stage: {getattr(target_episode, 'index_in_stage', 'unknown')}",
-            f"Episode Start Time: {self._scalar_value(getattr(target_episode, 'start_time', 'unknown'))}",
-            f"Episode End Time: {self._scalar_value(getattr(target_episode, 'end_time', 'unknown'))}",
-            f"Participant IDs: {', '.join(participant_ids) if participant_ids else 'none'}",
-            f"Transaction IDs: {', '.join(transaction_ids) if transaction_ids else 'none'}",
-        ]
-        return "\n".join(lines)
-
-    def _attach_compact_heavy_agent_prompt_kwargs(
-        self,
-        prompt_kwargs: dict,
-        build_input: BuildInput,
-        target_episode: Episode,
-    ) -> None:
-        prompt_kwargs["CompactContent"] = self._render_compact_content(build_input)
-        prompt_kwargs["TargetEpisodeContext"] = self._render_target_episode_context(
-            target_episode
-        )
-
-    def _render_compact_stage_context(self, stage: dict) -> str:
-        """Render the stage skeleton as compact text for safer model consumption."""
-        episode_lines = []
-        for episode in stage.get("episodes", []) or []:
-            if isinstance(episode, dict):
-                episode_id = episode.get("episode_id", "unknown")
-                episode_name = self._scalar_value(episode.get("name", "unknown"))
-            else:
-                episode_id = getattr(episode, "episode_id", "unknown")
-                episode_name = self._scalar_value(getattr(episode, "name", "unknown"))
-            episode_lines.append(f"- {episode_id}: {episode_name}")
-
-        lines = [
-            f"Stage ID: {stage.get('stage_id', 'unknown')}",
-            f"Stage Name: {self._scalar_value(stage.get('name', 'unknown'))}",
-            f"Stage Index In Event: {stage.get('index_in_event', 'unknown')}",
-            f"Stage Start Time: {self._scalar_value(stage.get('start_time', 'unknown'))}",
-            f"Stage End Time: {self._scalar_value(stage.get('end_time', 'unknown'))}",
-            "Episodes:",
-            *(episode_lines or ["- none"]),
-        ]
-        return "\n".join(lines)
-
-    def _rewrite_heavy_agent_user_msg_template(
-        self, agent_name: str, user_msg_template: str
-    ) -> str:
-        """Swap bulky prompt placeholders for compact ones without changing kwargs."""
-        rewritten = user_msg_template.replace("{Content}", "{CompactContent}")
-        rewritten = rewritten.replace("{TargetEpisode}", "{TargetEpisodeContext}")
-        if agent_name == "EpisodeReconstructor":
-            rewritten = rewritten.replace("{StageSkeleton}", "{StageSkeletonContext}")
-        return rewritten
-
-    def _is_unknown_value(self, value: str) -> bool:
-        return not isinstance(value, str) or not value.strip() or value.strip().lower() == "unknown"
-
-    def _field_value(self, field) -> str:
-        if isinstance(field, dict):
-            return field.get("value", "unknown")
-        return "unknown"
-
-    def _validate_event_skeleton(self, skeleton: dict) -> tuple[bool, str]:
-        stages = skeleton.get("stages", [])
-        if len(stages) < 1:
-            return False, "no_stages"
-        if self._is_unknown_value(self._field_value(skeleton.get("title"))):
-            return False, "unknown_event_title"
-        total_episodes = sum(len(stage.get("episodes", [])) for stage in stages)
-        if total_episodes < 1:
-            return False, "no_episodes"
-        if any(len(stage.get("episodes", [])) < 1 for stage in stages):
-            return False, "empty_stage_detected"
-        stage_has_signal = any(
-            not all(
-                self._is_unknown_value(self._field_value(stage.get(key)))
-                for key in ("name", "start_time", "end_time")
-            )
-            for stage in stages
-        )
-        if not stage_has_signal:
-            return False, "unknown_stage_fields"
-        episode_has_signal = any(
-            not all(
-                self._is_unknown_value(self._field_value(episode.get(key)))
-                for key in ("name", "start_time", "end_time")
-            )
-            for stage in stages
-            for episode in stage.get("episodes", [])
-        )
-        if not episode_has_signal:
-            return False, "unknown_episode_fields"
-        return True, ""
-
-    def _content_has_signal(self, build_input: BuildInput) -> bool:
-        return any(
-            isinstance(sample.content, str) and sample.content.strip()
-            for sample in build_input.samples
-        )
-
-    def _validation_error_message(self, reason: str, has_content: bool) -> str:
-        if not has_content:
-            return "Insufficient source content to reconstruct a valid event skeleton"
-        mapping = {
-            "no_stages": "Invalid event skeleton: no stages or episodes reconstructed",
-            "no_episodes": "Invalid event skeleton: no stages or episodes reconstructed",
-            "empty_stage_detected": "Invalid event skeleton: a stage contains no episodes",
-            "unknown_event_title": "Invalid event skeleton: event title is unknown",
-            "unknown_stage_fields": "Invalid event skeleton: stage key fields are semantically empty",
-            "unknown_episode_fields": "Invalid event skeleton: episode key fields are semantically empty",
-        }
-        return mapping.get(reason, f"Invalid event skeleton: {reason}")
-
-    def _raise_validation_error(self, reason: str, has_content: bool) -> None:
-        message = self._validation_error_message(reason, has_content=has_content)
-        logger.error(message)
-        raise ValueError(message)
-
-    def _route_after_skeleton_reconstructor(self, state: AgentState):
-        skeleton = self._get_event_skeleton(state)
-        is_valid, reason = self._validate_event_skeleton(skeleton)
-        if is_valid:
-            return "SkeletonChecker"
-        if not self._content_has_signal(state["build_input"]):
-            self._raise_validation_error(reason, has_content=False)
-        return "SkeletonChecker"
-
-    def _route_after_skeleton_checker(self, state: AgentState):
-        skeleton = self._get_event_skeleton(state)
-        is_valid, reason = self._validate_event_skeleton(skeleton)
-        if is_valid:
-            return "ParticipantReconstructor"
-        has_content = self._content_has_signal(state["build_input"])
-        # The checker node persists each failed attempt, so a count of 1 still
-        # leaves one retry available for the graph to take.
-        if has_content and state.get("skeleton_retry_count", 0) < 2:
-            return "SkeletonReconstructor"
-        self._raise_validation_error(reason, has_content=has_content)
+        # Fallback to SkeletonReconstructor (should be at index 0)
+        return state["agent_results"][0]["SkeletonReconstructor"]
 
     def extract_latest_episode(
         self,
@@ -1300,10 +321,6 @@ class AgentEventBuilder(BaseBuilder):
         """
         t0 = time.time()
         build_ipt = state["build_input"]
-        state.setdefault("skeleton_retry_count", 0)
-        state.setdefault("skeleton_validation_reason", "")
-        state.setdefault("episode_execution_plan", {"episodes": []})
-        state.setdefault("stage_sparse_cache", {})
 
         # Common prompt arguments
         prompt_kwargs = {
@@ -1312,34 +329,9 @@ class AgentEventBuilder(BaseBuilder):
             "Content": "\n".join([sample.content for sample in build_ipt.samples]),
         }
 
-        shadow_local_context = None
-        if self._should_use_shadow_local_context(agent_name):
-            shadow_local_context = self._build_local_context_package(state, agent_name)
-            self._attach_local_context_prompt_kwargs(prompt_kwargs, shadow_local_context)
-            if (
-                agent_name == "SkeletonReconstructor"
-                and shadow_local_context is not None
-                and shadow_local_context.retrieval_status == "sufficient"
-            ):
-                prompt_kwargs["Content"] = ""
-            elif (
-                agent_name == "SkeletonChecker"
-                and shadow_local_context is not None
-                and shadow_local_context.retrieval_status == "sufficient"
-            ):
-                prompt_kwargs["Content"] = ""
-
         # Retrieve templates
         sys_msg_template = state["agent_system_msgs"][agent_name]
         user_msg_template = state["agent_user_msgs"][agent_name]
-        if agent_name in {
-            "ParticipantReconstructor",
-            "TransactionReconstructor",
-            "EpisodeReconstructor",
-        }:
-            user_msg_template = self._rewrite_heavy_agent_user_msg_template(
-                agent_name, user_msg_template
-            )
 
         savename_suffix = ""
         sys_msg = ""
@@ -1349,18 +341,11 @@ class AgentEventBuilder(BaseBuilder):
             sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
         elif agent_name == "SkeletonChecker":
-            skeleton_result = self._latest_agent_result(
-                state, "SkeletonReconstructor"
-            )
-            if skeleton_result is None:
-                raise ValueError(
-                    "SkeletonChecker requires a prior SkeletonReconstructor result"
-                )
+            # Pass the previous Skeleton as context
+            # It should be the first result
+            skeleton_result = state["agent_results"][0]["SkeletonReconstructor"]
             prompt_kwargs["ProposedSkeleton"] = json.dumps(
-                self._compact_skeleton_for_checker_prompt(skeleton_result),
-                default=str,
-                ensure_ascii=False,
-                separators=(",", ":"),
+                skeleton_result, default=str, indent=2
             )
             sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
@@ -1409,18 +394,6 @@ class AgentEventBuilder(BaseBuilder):
 
                 prompt_kwargs["TargetStage"] = json.dumps(
                     target_stage_skeleton, default=str, indent=2
-                )
-
-                local_context = self._build_local_context_package(state, agent_name)
-                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
-                stage_sparse_cache = self._build_stage_sparse_cache(
-                    state,
-                    stage_idx,
-                    target_stage_skeleton,
-                )
-                self._attach_stage_sparse_cache_prompt_kwargs(
-                    prompt_kwargs,
-                    stage_sparse_cache,
                 )
 
             sys_msg = sys_msg_template.format(
@@ -1481,70 +454,19 @@ class AgentEventBuilder(BaseBuilder):
             # Retrieve definitive skeleton (prioritizing Checker result)
             event_skeleton = self._get_event_skeleton(state)
 
-            # Determine which episode we are on using the global episode cursor.
-            current_count = self._current_episode_sequence_index(state)
-            (
-                stage_index,
-                episode_index,
-                belong_state,
-                latest_episode,
-                locator,
-            ) = self._get_episode_by_sequence_index(event_skeleton, current_count)
+            # Determine which episode we are on
+            current_count = state["agent_executed"].count(agent_name)
+            belong_state, latest_episode = self.extract_latest_episode(
+                event_skeleton, current_count
+            )
 
             if not latest_episode:
                 # Should not happen if logic is correct, but good to handle
                 raise ValueError(f"Could not find episode for count {current_count}")
 
             target_episode = Episode(**latest_episode)
-            plan_entry = self._get_episode_execution_plan_entry(
-                state.get("episode_execution_plan"),
-                stage_index,
-                episode_index,
-            )
-            execution_mode = plan_entry.get("mode", "full") if plan_entry else "full"
-            participant_tier = (
-                plan_entry.get("participant_tier") if plan_entry else None
-            ) or "standard"
-            conflict_guard = (
-                plan_entry.get("conflict_guard") if plan_entry else None
-            ) or "standard"
-            if conflict_guard not in {"standard", "strict"}:
-                conflict_guard = "standard"
-            detail_tier = (
-                plan_entry.get("detail_tier", "standard") if plan_entry else "standard"
-            )
-            episode_detail_tier = (
-                plan_entry.get("episode_detail_tier") if plan_entry else None
-            )
-            if episode_detail_tier is None and plan_entry:
-                episode_detail_tier = plan_entry.get("detail_tier")
-            if conflict_guard == "strict":
-                episode_detail_tier = "standard"
-            execution_mode = self._episode_execution_mode(plan_entry)
-            transaction_step_skipped = self._transaction_step_skipped(
-                plan_entry,
-                execution_mode=execution_mode,
-            )
-            if episode_detail_tier not in {"minimal", "compact", "standard"}:
-                episode_detail_tier = "compact" if execution_mode == "light" else "standard"
 
-            prompt_kwargs["EpisodeLocator"] = locator
-            prompt_kwargs["EpisodeExecutionMode"] = execution_mode
-            prompt_kwargs["TransactionDetailTier"] = detail_tier
-            stage_sparse_cache = self._build_stage_sparse_cache(
-                state,
-                stage_index,
-                belong_state,
-            )
-            self._attach_stage_sparse_cache_prompt_kwargs(
-                prompt_kwargs,
-                stage_sparse_cache,
-            )
-            if agent_name == "ParticipantReconstructor":
-                prompt_kwargs["ParticipantDetailTier"] = participant_tier
-                prompt_kwargs["ConflictGuard"] = conflict_guard
-
-            savename_suffix = f"-Stage{stage_index}-Episode{episode_index}"
+            savename_suffix = f"-Stage{belong_state['index_in_event']}-Episode{target_episode.index_in_stage}"
 
             if agent_name == "ParticipantReconstructor":
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_PARTICIPANT_SPEC)
@@ -1552,96 +474,30 @@ class AgentEventBuilder(BaseBuilder):
                 prompt_kwargs["ReconstructedParticipants"] = (
                     self._collect_reconstructed_participants_structure(state)
                 )
-                self._attach_compact_heavy_agent_prompt_kwargs(
-                    prompt_kwargs,
-                    build_ipt,
-                    target_episode,
-                )
-                local_context = self._build_local_context_package(state, agent_name)
-                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             elif agent_name == "TransactionReconstructor":
                 # Get participants from the immediately preceding step (ParticipantReconstructor)
                 last_result = state["agent_results"][-1]
                 participants_data = last_result["ParticipantReconstructor"]
-                target_episode.participants = self._agent_result_items(
-                    participants_data,
-                    "ParticipantReconstructor",
-                    "participants",
-                )
+                target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
-                self._attach_compact_heavy_agent_prompt_kwargs(
-                    prompt_kwargs,
-                    build_ipt,
-                    target_episode,
-                )
-                local_context = self._build_local_context_package(state, agent_name)
-                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
             elif agent_name == "EpisodeReconstructor":
-                # Skip episodes inherit the participant output directly from the
-                # previous node and do not consume a TransactionReconstructor result.
-                if transaction_step_skipped:
-                    participants_data = state["agent_results"][-1][
-                        "ParticipantReconstructor"
-                    ]
-                    transactions_data = {"transactions": []}
-                else:
-                    # Get transactions from the immediately preceding step (TransactionReconstructor)
-                    last_result = state["agent_results"][-1]
-                    transactions_data = last_result["TransactionReconstructor"]
+                # Get transactions from the immediately preceding step (TransactionReconstructor)
+                last_result = state["agent_results"][-1]
+                transactions_data = last_result["TransactionReconstructor"]
+                target_episode.transactions = transactions_data["transactions"]
 
-                    # Get participants from the step before that (ParticipantReconstructor)
-                    second_last_result = state["agent_results"][-2]
-                    participants_data = second_last_result["ParticipantReconstructor"]
-
-                target_episode.transactions = self._agent_result_items(
-                    transactions_data,
-                    "TransactionReconstructor",
-                    "transactions",
-                )
-                target_episode.participants = self._agent_result_items(
-                    participants_data,
-                    "ParticipantReconstructor",
-                    "participants",
-                )
+                # Get participants from the step before that (ParticipantReconstructor)
+                second_last_result = state["agent_results"][-2]
+                participants_data = second_last_result["ParticipantReconstructor"]
+                target_episode.participants = participants_data["participants"]
 
                 sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
-                prompt_kwargs["StageSkeletonContext"] = self._render_compact_stage_context(
-                    belong_state
-                )
                 prompt_kwargs["TargetEpisode"] = target_episode
-                prompt_kwargs["EpisodeDetailTier"] = episode_detail_tier
-                prompt_kwargs["ConflictGuard"] = conflict_guard
-                if execution_mode == "light":
-                    prompt_kwargs["EpisodeCompactnessHint"] = (
-                        "compact-light-mode: keep participant_relations and descriptions "
-                        "minimal, do not synthesize transactions, and prefer the smallest "
-                        "valid JSON grounded in Content"
-                    )
-                elif episode_detail_tier in {"minimal", "compact"}:
-                    prompt_kwargs["EpisodeCompactnessHint"] = (
-                        "compact-full-mode: preserve compact episode detail while "
-                        "completing the full reconstruction path and staying evidence-bound"
-                    )
-                else:
-                    prompt_kwargs["EpisodeCompactnessHint"] = (
-                        "standard-full-mode: preserve the current richer reconstruction "
-                        "behavior while staying evidence-bound"
-                    )
-                self._attach_compact_heavy_agent_prompt_kwargs(
-                    prompt_kwargs,
-                    build_ipt,
-                    target_episode,
-                )
-                prompt_kwargs["TargetEpisodeContext"] = (
-                    self._render_episode_target_context_text(target_episode)
-                )
-                local_context = self._build_local_context_package(state, agent_name)
-                self._attach_local_context_prompt_kwargs(prompt_kwargs, local_context)
 
         # Escape braces for format if needed.
         # We escape them because the downstream inference engine (LangChain)
@@ -1649,69 +505,26 @@ class AgentEventBuilder(BaseBuilder):
         # Since we just injected a JSON schema containing braces, we must escape them.
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
 
+        out: InferOutput = self.agents_lm.run(
+            infer_input=InferInput(system_msg=sys_msg, user_msg=user_msg_template),
+            **prompt_kwargs,
+        )
+        result = out.response
+
+        # Persist traces
         savename = (
             self.get_save_name(agent_name, len(state["agent_executed"]) + 1)
             + savename_suffix
         )
-        out, parsed_result = self._infer_and_parse_json(
-            agent_name=agent_name,
-            sys_msg=sys_msg,
-            user_msg_template=user_msg_template,
-            prompt_kwargs=prompt_kwargs,
-            savename=savename,
-        )
-        result_entry = {agent_name: parsed_result}
-        if agent_name in {
-            "ParticipantReconstructor",
-            "TransactionReconstructor",
-            "EpisodeReconstructor",
-        }:
-            result_entry["_meta"] = {
-                "episode_locator": locator,
-                "execution_mode": execution_mode,
-                "transaction_tier": plan_entry.get("transaction_tier", "skip")
-                if plan_entry
-                else ("skip" if execution_mode == "light" else "standard"),
-                "transaction_step_skipped": transaction_step_skipped,
-                "detail_tier": detail_tier,
-                "episode_detail_tier": episode_detail_tier,
-                "conflict_guard": conflict_guard,
-            }
-        saved_result_artifact = (
-            result_entry
-            if agent_name
-            in {
-                "ParticipantReconstructor",
-                "TransactionReconstructor",
-                "EpisodeReconstructor",
-            }
-            else parsed_result
-        )
-        self.save_traces(saved_result_artifact, f"{savename}-Result", "json")
+        self.save_traces({agent_name: out.to_dict()}, savename, "json")
+
+        parsed_result = extract_json_response(result)
+        self.save_traces(parsed_result, f"{savename}-Result", "json")
 
         # Update state
-        state["agent_results"].append(result_entry)
+        state["agent_results"].append({agent_name: parsed_result})
         state["cost"].append({agent_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(agent_name)
-
-        if agent_name in {"SkeletonReconstructor", "SkeletonChecker"}:
-            is_valid, reason = self._validate_event_skeleton(parsed_result)
-            state["skeleton_validation_reason"] = reason
-            if (
-                agent_name == "SkeletonChecker"
-                and is_valid
-                and not (state.get("episode_execution_plan", {}).get("episodes") or [])
-            ):
-                state["episode_execution_plan"] = self._build_episode_execution_plan(
-                    build_ipt,
-                    parsed_result,
-                )
-            if agent_name == "SkeletonChecker" and not is_valid:
-                has_content = self._content_has_signal(state["build_input"])
-                if has_content:
-                    # Persist the consumed attempt on the node return path so
-                    # conditional routing reads stable state instead of mutating it.
-                    state["skeleton_retry_count"] += 1
         return state
 
     def graph(self) -> CompiledStateGraph:
@@ -1799,34 +612,15 @@ class AgentEventBuilder(BaseBuilder):
         # 2. Set Entry Point and Basic Linear Edges
         # ============================================================================
 
+        # Start with Skeleton
         g.set_entry_point("SkeletonReconstructor")
 
-        g.add_conditional_edges(
-            "SkeletonReconstructor",
-            self._route_after_skeleton_reconstructor,
-            {
-                "SkeletonChecker": "SkeletonChecker",
-            },
-        )
+        # Basic Flow: Skeleton -> SkeletonChecker -> First Episode (Participant)
+        g.add_edge("SkeletonReconstructor", "SkeletonChecker")
+        g.add_edge("SkeletonChecker", "ParticipantReconstructor")
 
-        g.add_conditional_edges(
-            "SkeletonChecker",
-            self._route_after_skeleton_checker,
-            {
-                "SkeletonReconstructor": "SkeletonReconstructor",
-                "ParticipantReconstructor": "ParticipantReconstructor",
-            },
-        )
-
-        # Intra-Episode Flow: route light episodes directly to EpisodeReconstructor.
-        g.add_conditional_edges(
-            "ParticipantReconstructor",
-            self._route_after_participant_reconstructor,
-            {
-                "TransactionReconstructor": "TransactionReconstructor",
-                "EpisodeReconstructor": "EpisodeReconstructor",
-            },
-        )
+        # Intra-Episode Flow: Participant -> Transaction -> Episode
+        g.add_edge("ParticipantReconstructor", "TransactionReconstructor")
         g.add_edge("TransactionReconstructor", "EpisodeReconstructor")
 
         # ============================================================================
@@ -1930,23 +724,7 @@ class AgentEventBuilder(BaseBuilder):
         Integrates all agent results into the final EventCascade structure.
         """
         # 1. Start with the skeleton
-        final_cascade = copy.deepcopy(self._get_event_skeleton(state))
-        episode_execution_plan = state.get("episode_execution_plan")
-        if not (episode_execution_plan and episode_execution_plan.get("episodes")):
-            episode_execution_plan = self._reconstruct_episode_execution_plan_from_results(
-                state
-            )
-
-        episode_result_locator_map = self._result_locator_map(state, "EpisodeReconstructor")
-        episode_meta_locator_map = self._result_locator_meta_map(
-            state, "EpisodeReconstructor"
-        )
-        participant_result_locator_map = self._result_locator_map(
-            state, "ParticipantReconstructor"
-        )
-        transaction_result_locator_map = self._result_locator_map(
-            state, "TransactionReconstructor"
-        )
+        final_cascade = self._collect_reconstructed_participants_structure(state)
 
         # 2. Collect Transaction results
         tr_results = [
@@ -1971,85 +749,26 @@ class AgentEventBuilder(BaseBuilder):
 
         # Populate episodes in order
         ep_idx = 0
-        transaction_idx = 0
-        for stage_index, stage in enumerate(final_cascade["stages"]):
-            for episode_index, episode in enumerate(stage["episodes"]):
-                locator_key = self._episode_locator_key(
-                    self._episode_locator(
-                        stage_index,
-                        episode_index,
-                        stage.get("stage_id"),
-                        episode.get("episode_id"),
-                    )
-                )
-                episode_result = (
-                    episode_result_locator_map.get(locator_key)
-                    if episode_result_locator_map
-                    else (er_results[ep_idx] if ep_idx < len(er_results) else None)
-                )
-                participant_result = (
-                    participant_result_locator_map.get(locator_key)
-                    if participant_result_locator_map
-                    else (p_results[ep_idx] if ep_idx < len(p_results) else None)
-                )
-
-                if episode_result is not None:
+        for stage in final_cascade["stages"]:
+            for episode in stage["episodes"]:
+                if ep_idx < len(er_results):
                     # Replace with the fully reconstructed episode
-                    episode.update(episode_result)
+                    episode.update(er_results[ep_idx])
 
-                    plan_entry = self._get_episode_execution_plan_entry(
-                        episode_execution_plan,
-                        stage_index,
-                        episode_index,
-                    )
-                    execution_mode = "full"
-                    if plan_entry:
-                        execution_mode = plan_entry.get("mode", "full")
-                    elif locator_key in episode_meta_locator_map:
-                        execution_mode = episode_meta_locator_map[locator_key].get(
-                            "execution_mode", "full"
-                        )
-                    transaction_step_skipped = self._transaction_step_skipped(
-                        plan_entry
-                        or episode_meta_locator_map.get(locator_key),
-                        execution_mode=execution_mode,
-                    )
-                    transaction_result = (
-                        transaction_result_locator_map.get(locator_key)
-                        if not transaction_step_skipped and transaction_result_locator_map
-                        else (
-                            tr_results[transaction_idx]
-                            if not transaction_step_skipped
-                            and transaction_idx < len(tr_results)
-                            else None
-                        )
-                    )
-
-                    # Skip episodes must not trust episode-level transactions.
-                    if transaction_step_skipped:
-                        episode["transactions"] = []
-                    else:
-                        if (
-                            "transactions" not in episode
-                            or not episode["transactions"]
-                            or isinstance(episode["transactions"], str)
-                        ):
-                            if transaction_result is not None:
-                                episode["transactions"] = transaction_result.get(
-                                    "transactions", []
-                                )
-                            else:
-                                episode["transactions"] = []
-                        if not transaction_result_locator_map:
-                            transaction_idx += 1
+                    # Ensure transactions are attached
+                    if (
+                        "transactions" not in episode
+                        or not episode["transactions"]
+                        or isinstance(episode["transactions"], str)
+                    ):
+                        if ep_idx < len(tr_results):
+                            episode["transactions"] = tr_results[ep_idx]["transactions"]
                     # Ensure participants are attached (EpisodeReconstructor uses placeholders)
                     if "participants" not in episode or isinstance(
                         episode["participants"], str
                     ):
-                        if participant_result is not None:
-                            episode["participants"] = participant_result.get(
-                                "participants", []
-                            )
+                        if ep_idx < len(p_results):
+                            episode["participants"] = p_results[ep_idx]["participants"]
                 ep_idx += 1
 
         # 4. Integrate StageDescriptionReconstructor results
@@ -2112,38 +831,15 @@ class AgentEventBuilder(BaseBuilder):
         if not sorted_indices:
             raise FileNotFoundError(f"No result files found in {self.save_dir}")
 
-        loaded_results = []
+        # Read files and reconstruct agent_results
+        agent_results = []
 
         for idx in sorted_indices:
             agent_name, filename = files_map[idx]
             filepath = os.path.join(self.save_dir, filename)
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            loaded_results.append((idx, agent_name, filename, data))
-
-        event_skeleton = None
-        for _, agent_name, _, data in loaded_results:
-            if agent_name in {"SkeletonChecker", "SkeletonReconstructor"}:
-                event_skeleton = data
-
-        # Reconstruct agent_results, restoring episode locator metadata from replay-safe filenames.
-        agent_results = []
-        for _, agent_name, filename, data in loaded_results:
-            if isinstance(data, dict) and agent_name in data:
-                result_entry = dict(data)
-            else:
-                result_entry = {agent_name: data}
-            result_entry.setdefault("_meta", {})
-            locator = result_entry["_meta"].get("episode_locator")
-            if locator is None:
-                locator = self._replay_episode_locator_from_filename(
-                    filename, event_skeleton
-                )
-                if locator is not None:
-                    result_entry["_meta"]["episode_locator"] = locator
-            if not result_entry["_meta"]:
-                result_entry.pop("_meta")
-            agent_results.append(result_entry)
+            agent_results.append({agent_name: data})
 
         # Create a dummy state
         # integrate_results only needs state["agent_results"]
@@ -2164,10 +860,6 @@ class AgentEventBuilder(BaseBuilder):
             "cost": [],
             "agent_system_msgs": agent_system_msgs,
             "agent_user_msgs": agent_user_msgs,
-            "episode_execution_plan": {"episodes": []},
-            "stage_sparse_cache": {},
-            "skeleton_retry_count": 0,
-            "skeleton_validation_reason": "",
         }
 
         # 3. Compile graph

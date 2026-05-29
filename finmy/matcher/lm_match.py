@@ -13,7 +13,6 @@ from lmbase.inference.base import InferInput
 
 from .utils import safe_parse_json
 from .base import MatchInput, BaseMatcher
-from finmy.builder.utils import run_single_inference
 
 
 SYSTEM_PROMPT = """
@@ -86,9 +85,8 @@ class LLMMatcher(BaseMatcher):
         sq = match_input.summarized_query
         # Obtain the inference output `base.InferOutput`
 
-        output = run_single_inference(
-            self.api_infer,
-            InferInput(
+        output = self.api_infer.run(
+            infer_input=InferInput(
                 system_msg=self.config.get("system_prompt", SYSTEM_PROMPT),
                 user_msg=self.config.get("user_prompt", HUMAN_PROMPT_TEMPLATE),
             ),

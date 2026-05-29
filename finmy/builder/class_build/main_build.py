@@ -11,7 +11,6 @@ import logging
 
 from lmbase.inference.api_call import LangChainAPIInference, InferInput
 from finmy.builder.base import BaseBuilder, BuildInput, BuildOutput, AgentState
-from finmy.builder.utils import run_single_inference
 
 # Import all prompt modules
 from finmy.builder.class_build.prompts import (
@@ -212,7 +211,7 @@ class ClassEventBuilder(BaseBuilder):
             system_msg="Hello",
             user_msg="Test message",
         )
-        result = run_single_inference(test_api_call, chatbot)
+        result = test_api_call.run(chatbot)
         logging.info(f"Test response: {result.response}")
         return result.response
 
@@ -267,7 +266,7 @@ class ClassEventBuilder(BaseBuilder):
             + classify.classify_prompt().replace("{", "{{").replace("}", "}}"),
         )
 
-        classify_output = run_single_inference(api_call, classify_chatbot)
+        classify_output = api_call.run(classify_chatbot)
         classify_output_text = classify_output.response.strip()
         logging.info(f"Classify output text: {classify_output_text}")
 
@@ -287,7 +286,7 @@ class ClassEventBuilder(BaseBuilder):
             user_msg=str(all_content) + "\n\n\n" + escaped_prompt,
         )
 
-        detailed_output = run_single_inference(api_call, detailed_chatbot)
+        detailed_output = api_call.run(detailed_chatbot)
         output_text = detailed_output.response.strip()
         logging.info("Received detailed output from LLM")
 
@@ -313,7 +312,7 @@ class ClassEventBuilder(BaseBuilder):
                         + "(2) document.open();document.domain='sogou.com';document.close();",
                     )
 
-                    format_output = run_single_inference(api_call, format_chatbot)
+                    format_output = api_call.run(format_chatbot)
                     format_output_text = format_output.response.strip()
                     event_cascade_json = self.extract_json_response(format_output_text)
                     break
