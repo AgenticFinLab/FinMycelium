@@ -9,8 +9,11 @@ Notes:
 import re
 import json
 import ast
+import inspect
 from pathlib import Path
 from typing import List, Set, Dict, Any, Optional
+
+from lmbase.inference import InferInput, InferOutput
 
 from finmy.builder.constant import (
     OTHER_TOKEN_NUM,
@@ -18,6 +21,42 @@ from finmy.builder.constant import (
     AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST,
     BuildType,
 )
+
+
+def _run_accepts_parameter(run_method: Any, parameter_name: str) -> bool:
+    try:
+        return parameter_name in inspect.signature(run_method).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def run_single_inference(
+    infer: Any,
+    infer_input: InferInput,
+    **kwargs: Any,
+) -> InferOutput:
+    """Run one inference request across single-input and batch-input APIs."""
+
+    run_method = infer.run
+    if _run_accepts_parameter(run_method, "infer_inputs"):
+        output = run_method(infer_inputs=[infer_input], **kwargs)
+    elif _run_accepts_parameter(run_method, "infer_input"):
+        output = run_method(infer_input=infer_input, **kwargs)
+    else:
+        try:
+            output = run_method(infer_inputs=[infer_input], **kwargs)
+        except TypeError:
+            output = run_method(infer_input, **kwargs)
+
+    if isinstance(output, InferOutput) or hasattr(output, "response"):
+        return output
+
+    outputs = getattr(output, "outputs", None)
+    if outputs is None and isinstance(output, (list, tuple)):
+        outputs = output
+    if not outputs:
+        raise ValueError("Batch inference returned no outputs for a single-input call.")
+    return outputs[0]
 
 
 def load_python_text(path: str | Path) -> str:
