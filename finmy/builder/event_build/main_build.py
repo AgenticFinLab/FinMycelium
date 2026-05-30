@@ -882,27 +882,37 @@ class ContextEventBuilder(BaseBuilder):
                 )
                 locator_key = self._episode_locator_key(locator)
                 episode_result = episode_locator_map.get(locator_key)
-                if episode_result is None and episode_idx < len(episode_results):
+                if (
+                    episode_result is None
+                    and not episode_locator_map
+                    and episode_idx < len(episode_results)
+                ):
                     episode_result = episode_results[episode_idx]
                 participant_result = participant_locator_map.get(locator_key)
-                if participant_result is None and episode_idx < len(participant_results):
+                if (
+                    participant_result is None
+                    and not participant_locator_map
+                    and episode_idx < len(participant_results)
+                ):
                     participant_result = participant_results[episode_idx]
                 plan_entry = self._get_episode_execution_plan_entry(
                     episode_execution_plan,
                     stage_index,
                     episode_index,
                 )
+                episode_meta = episode_meta_map.get(locator_key, {})
                 execution_mode = (
-                    episode_meta_map.get(locator_key, {}).get("execution_mode")
-                    or self._episode_execution_mode(plan_entry)
+                    episode_meta.get("execution_mode")
+                    or (self._episode_execution_mode(plan_entry) if plan_entry else None)
                 )
                 transaction_skipped = self._transaction_step_skipped(
-                    plan_entry or episode_meta_map.get(locator_key),
+                    plan_entry or episode_meta,
                     execution_mode=execution_mode,
                 )
                 transaction_result = transaction_locator_map.get(locator_key)
                 if (
                     transaction_result is None
+                    and not transaction_locator_map
                     and not transaction_skipped
                     and transaction_idx < len(transaction_results)
                 ):
@@ -979,18 +989,38 @@ class ContextEventBuilder(BaseBuilder):
         if not indexed_files:
             raise FileNotFoundError(f"No result files found in {self.save_dir}")
 
-        agent_results: list[dict[str, Any]] = []
-        event_skeleton = None
-        for _, agent_name, filename in sorted(indexed_files):
+        loaded_results: list[tuple[int, str, str, object, object]] = []
+        for index, agent_name, filename in sorted(indexed_files):
             with open(os.path.join(self.save_dir, filename), "r", encoding="utf-8") as fh:
                 payload = json.load(fh)
             result = self._unwrap_agent_payload(payload, agent_name)
-            if agent_name in {"SkeletonChecker", "SkeletonReconstructor"}:
-                event_skeleton = result
+            loaded_results.append((index, agent_name, filename, payload, result))
+
+        checked_skeleton = None
+        reconstructed_skeleton = None
+        for _, agent_name, _, _, result in loaded_results:
+            if agent_name == "SkeletonChecker":
+                checked_skeleton = result
+            elif agent_name == "SkeletonReconstructor":
+                reconstructed_skeleton = result
+        event_skeleton = checked_skeleton or reconstructed_skeleton
+
+        agent_results: list[dict[str, Any]] = []
+        for _, agent_name, filename, payload, result in loaded_results:
             entry: dict[str, Any] = {agent_name: result}
-            locator = self._replay_episode_locator_from_filename(filename, event_skeleton)
+            meta = (
+                dict(payload.get("_meta", {}))
+                if isinstance(payload, dict) and isinstance(payload.get("_meta"), dict)
+                else {}
+            )
+            locator = meta.get("episode_locator") or self._replay_episode_locator_from_filename(
+                filename,
+                event_skeleton,
+            )
             if locator is not None:
-                entry["_meta"] = {"episode_locator": locator}
+                meta["episode_locator"] = locator
+            if meta:
+                entry["_meta"] = meta
             agent_results.append(entry)
 
         dummy_state: AgentState = {
