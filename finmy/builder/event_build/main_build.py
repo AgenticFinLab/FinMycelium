@@ -58,6 +58,7 @@ class ContextEventBuilder(BaseBuilder):
         "EventDescriptionReconstructor",
     }
     _JSON_SYNTACTIC_RECOVERY_AGENTS = {
+        "SkeletonChecker",
         "ParticipantReconstructor",
         "EpisodeReconstructor",
         "StageDescriptionReconstructor",
@@ -385,6 +386,9 @@ class ContextEventBuilder(BaseBuilder):
             for key in ("value", "text", "name", "title"):
                 if key in field:
                     return self._scalar_value(field[key])
+            return ""
+        if isinstance(field, (list, tuple, set)):
+            return " ".join(self._scalar_value(item) for item in field).strip()
         return str(field)
 
     def _is_unknown_value(self, value: str) -> bool:
@@ -530,6 +534,8 @@ class ContextEventBuilder(BaseBuilder):
         execution_mode: str | None = None,
     ) -> bool:
         if plan_entry and plan_entry.get("transaction_step_skipped") is True:
+            return True
+        if str((plan_entry or {}).get("transaction_tier") or "").lower() == "skip":
             return True
         mode = execution_mode or (plan_entry or {}).get("mode")
         return mode == "light"
@@ -702,6 +708,16 @@ class ContextEventBuilder(BaseBuilder):
                 "execution_mode": self._episode_execution_mode(plan_entry),
                 "transaction_step_skipped": self._transaction_step_skipped(plan_entry),
             }
+            if plan_entry:
+                for key in (
+                    "participant_tier",
+                    "transaction_tier",
+                    "episode_detail_tier",
+                    "conflict_guard",
+                    "compactness_hint",
+                ):
+                    if key in plan_entry:
+                        meta[key] = plan_entry[key]
         self._append_agent_result(state, agent_name, parsed_result, meta)
         if agent_name == "SkeletonChecker":
             state["episode_execution_plan"] = self._build_episode_execution_plan(
