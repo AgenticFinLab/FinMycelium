@@ -1,0 +1,187 @@
+# ============================================================================
+# Pipeline Configuration for Financial Event Reconstruction
+# ============================================================================
+# Purpose: Configure language model and agent parameters for financial event
+#          reconstruction pipeline
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Language Model Base Configuration
+# ----------------------------------------------------------------------------
+# lm_type: Language model type
+#   - "api": Use API calls (recommended, no local model deployment needed)
+#   - "local": Use locally deployed model
+lm_type: &lm_type "api"
+
+# lm_name: Language model name/identifier
+#   - API mode: Use model identifier provided by service provider
+#               (e.g., "deepseek/deepseek-chat")
+#   - Local mode: Use local model path
+lm_name: &lm_name "deepseek/deepseek-chat"
+
+# inference_config: Inference configuration (mainly for local models)
+#   device: Computing device, options: "cuda" (GPU), "cpu" (CPU)
+inference_config: &infer
+  device: "cuda"
+
+# generation_config: Text generation configuration parameters
+#   max_new_tokens: Maximum number of tokens to generate, controls output
+#                   length upper limit (recommended: 5000-20000)
+#   temperature: Sampling temperature, controls output randomness
+#                (0.0-1.0, lower = more deterministic, higher = more random)
+#   top_p: Nucleus sampling parameter, controls probability threshold for
+#          candidate tokens (0.0-1.0, typically 0.9-0.95)
+generation_config: &generation_config
+  max_new_tokens: 8192
+  temperature: 0.2
+  top_p: 0.95
+
+
+db_config: &db_config
+  url: "mysql+pymysql://finmyceliumdata:LYrxcTXM5Kpz5z3S@10.123.4.30:3306/finmyceliumdata"
+
+# ----------------------------------------------------------------------------
+# Output Path Configuration
+# ----------------------------------------------------------------------------
+# save_folder: Directory for saving intermediate results and logs
+#   All intermediate states, trace information, and debug outputs will be
+#   saved in this directory
+# save_folder: "EXPERIMENT/uTEST/Pipline"
+
+# output_dir: Directory for saving final output results
+#   Reconstructed event cascades (EventCascade) and other final results will
+#   be saved in this directory
+output_dir: "EXPERIMENT/uTEST/Pipline/output"
+
+# ----------------------------------------------------------------------------
+# Collector Configuration
+# ----------------------------------------------------------------------------
+# collector_type: Collector type
+#   - "pdf": PDF collector
+#   - "url": URL collector
+url_collector_config:
+  delay: 1.0
+  use_selenium_fallback: False
+  selenium_wait_time: 5
+
+search_config:
+  bocha_count: 15
+  baidu_count: 15
+  merge_strategy: interleave
+  quality_filter:
+    enabled: true
+    min_text_chars: 300
+    dedupe_url: true
+    reject_search_pages: true
+    reject_auth_pages: true
+
+pdf_collector_config:
+  output_dir: "EXPERIMENT/uTEST/Pipline/input/pdf"
+  batch_size: 10
+  language: "zh"
+  check_pdf_limits: True
+  retry_failed: True
+  env_file: ".env"
+
+all_content_config:
+  max_content_length: 60000
+
+
+# ----------------------------------------------------------------------------
+# Component Type Configuration
+# ----------------------------------------------------------------------------
+# summarizer_type: Summarizer type
+#   - "kw_lm": LLM-based keyword summarizer (default)
+#   - "kw_rule": Rule-based keyword summarizer
+summarizer_config: &summarizer_config
+  summarizer_type: "KWLMSummarizer"
+  llm_name: "deepseek/deepseek-chat"
+
+
+# ----------------------------------------------------------------------------
+# Matcher Configuration
+# ----------------------------------------------------------------------------
+# matcher_type: Matcher type
+#   - "llm": LLM-based matcher (default)
+#   - "re": Regex-based matcher
+#   - "lx_keyword": LlamaIndex keyword-based matcher
+#   - "lx_llm": LlamaIndex LLM-based matcher
+#   - "lx_vector": LlamaIndex vector-based matcher
+# use_matcher: False | True # if not using matcher, the matcher_type and lm_name will be ignored
+matcher_config: &matcher_config
+  use_matcher: False
+  matcher_type: "LXMatcher"
+  lm_name: "deepseek/deepseek-chat"
+
+
+# ----------------------------------------------------------------------------
+# Builder Configuration
+# ----------------------------------------------------------------------------
+# builder_config: Configuration for builder components.
+#   These settings will be passed to the builder instance responsible for constructing event representations.
+#   - builder_type: Specifies the type of builder to use (e.g., "AgentEventBuilder", "ClassEventBuilder").
+#   - lm_type/lm_name: Indicates the language model type and name if LLM-based building is needed.
+#   - inference_config/generation_config: Provides inference and generation settings for LLMs used by the builder.
+#   - graph_config: Configures parameters such as recursion limits for building graph structures.
+#   - save_folder: Directory path where intermediate or final builder outputs will be saved.
+#   - agents: Detailed configurations for each agent involved in event reconstruction.
+#       Each agent can have individual LLM, inference, and generation parameters, or use shared defaults.
+# ----------------------------------------------------------------------------
+builder_config:
+  builder_type: "AgentEventBuilder"
+  lm_type: *lm_type
+  lm_name: *lm_name
+  inference_config: *infer
+  generation_config: *generation_config
+  graph_config:
+    recursion_limit: 150
+
+  save_folder: "EXPERIMENT/uTEST/Pipline"
+
+  # Agent Configuration (for AgentEventBuilder type)
+  # agents: Define agents participating in event reconstruction and their
+  #         configurations
+  #   Each agent can be independently configured with language model parameters,
+  #   or reference the common configurations defined above (using * reference)
+  agents:
+  SkeletonReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  SkeletonChecker:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  ParticipantReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  TransactionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  EpisodeReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  StageDescriptionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
+
+  EventDescriptionReconstructor:
+    lm_type: *lm_type
+    lm_name: *lm_name
+    inference_config: *infer
+    generation_config: *generation_config
