@@ -1,4 +1,4 @@
-"""Context-aware financial event reconstruction builder."""
+"""Sparse RAG enhanced financial event reconstruction builder."""
 
 from __future__ import annotations
 
@@ -35,10 +35,10 @@ _REPLAY_STAGE_EPISODE_SUFFIX = re.compile(
 )
 
 
-class ContextEventBuilder(BaseBuilder):
-    """Independent builder entry point for context-aware event reconstruction."""
+class SparseRagBuilder(BaseBuilder):
+    """Independent builder entry point for sparse RAG event reconstruction."""
 
-    builder_type = "ContextEventBuilder"
+    builder_type = "SparseRagBuilder"
     build_input_fields = ("user_query", "samples")
     required_build_config_keys = (
         "agents",
@@ -47,7 +47,8 @@ class ContextEventBuilder(BaseBuilder):
         "generation_config",
         "save_folder",
     )
-    event_config_key = "event_builder_config"
+    event_config_key = "sparse_builder_config"
+    legacy_event_config_key = "event_builder_config"
     _JSON_PARSE_RETRY_AGENTS = {
         "SkeletonReconstructor",
         "SkeletonChecker",
@@ -71,7 +72,11 @@ class ContextEventBuilder(BaseBuilder):
 
     def _event_config(self) -> dict[str, Any]:
         build_config = getattr(self, "build_config", None) or {}
-        return build_config.get(self.event_config_key, {}) or {}
+        return (
+            build_config.get(self.event_config_key)
+            or build_config.get(self.legacy_event_config_key)
+            or {}
+        )
 
     def _event_config_value(self, key: str, default: Any) -> Any:
         return self._event_config().get(key, default)
@@ -191,7 +196,7 @@ class ContextEventBuilder(BaseBuilder):
 
         system_prompts, user_prompts = self._get_agent_prompts()
         if agent_name not in system_prompts or agent_name not in user_prompts:
-            raise ValueError(f"Unknown ContextEventBuilder agent: {agent_name}")
+            raise ValueError(f"Unknown SparseRagBuilder agent: {agent_name}")
         return (
             system_prompts[agent_name].format(**prompt_kwargs),
             user_prompts[agent_name].format(**prompt_kwargs),
@@ -375,7 +380,7 @@ class ContextEventBuilder(BaseBuilder):
         skeleton = self._latest_agent_result(state, "SkeletonReconstructor")
         if skeleton is not None:
             return skeleton
-        raise ValueError("No skeleton result found in ContextEventBuilder state")
+        raise ValueError("No skeleton result found in SparseRagBuilder state")
 
     def _scalar_value(self, field: Any) -> str:
         if field is None:

@@ -1,4 +1,4 @@
-"""Render helpers for event_build passive evidence assets."""
+"""Render helpers for sparse_build passive evidence assets."""
 
 from __future__ import annotations
 

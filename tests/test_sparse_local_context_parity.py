@@ -1,14 +1,14 @@
-"""Local context parity tests adapted to event_build's private architecture."""
+"""Local context parity tests adapted to sparse_build's private architecture."""
 
 import unittest
 
 from finmy.generic import DataSample, UserQueryInput
 
 
-class EventLocalContextParityTest(unittest.TestCase):
+class SparseLocalContextParityTest(unittest.TestCase):
     def test_global_context_rejects_template_only_navigation_matches(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.local_context_builder import (
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.local_context_builder import (
             LocalContextBuilder,
             LocalContextRequest,
         )
@@ -46,8 +46,8 @@ class EventLocalContextParityTest(unittest.TestCase):
         self.assertEqual(package.budget_summary["candidate_card_count"], 0)
 
     def test_global_context_keeps_case_signal_card_and_filters_template_card(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.local_context_builder import (
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.local_context_builder import (
             LocalContextBuilder,
             LocalContextRequest,
         )
@@ -92,8 +92,8 @@ class EventLocalContextParityTest(unittest.TestCase):
         self.assertEqual(package.memory["selection_rationale"][0]["match_kind"], "strong")
 
     def test_transaction_context_prefers_stage_aligned_card_over_generic_money_card(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.local_context_builder import (
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.local_context_builder import (
             LocalContextBuilder,
             LocalContextRequest,
         )

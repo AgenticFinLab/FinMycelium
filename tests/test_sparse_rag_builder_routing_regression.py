@@ -1,11 +1,11 @@
-"""Routing parity tests for ContextEventBuilder execution budgets."""
+"""Routing parity tests for SparseRagBuilder execution budgets."""
 
 from types import SimpleNamespace
 import unittest
 
 from finmy.generic import DataSample, UserQueryInput
 
-from test_event_builder_registry import _install_external_dependency_stubs_if_missing
+from test_sparse_rag_builder_registry import _install_external_dependency_stubs_if_missing
 
 
 def _vf(value):
@@ -99,23 +99,23 @@ def _state(plan_entry):
     }
 
 
-class EventBuilderRoutingRegressionTest(unittest.TestCase):
+class SparseRagBuilderRoutingRegressionTest(unittest.TestCase):
     def setUp(self):
         _install_external_dependency_stubs_if_missing()
 
     def test_participant_route_honors_transaction_skip_tier(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
 
         route = builder._route_after_participant_reconstructor(_state({}))
 
         self.assertEqual(route, "EpisodeReconstructor")
 
     def test_episode_prompt_uses_empty_transactions_for_skip_tier(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
 
         _, _, episode_budget, extra = builder._prompt_context_for_agent(
             _state({}),
@@ -130,10 +130,10 @@ class EventBuilderRoutingRegressionTest(unittest.TestCase):
         )
 
     def test_execute_agent_records_budget_tiers_in_episode_metadata(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
-        builder.build_config = {"event_builder_config": {"max_context_chars": 400}}
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
+        builder.build_config = {"sparse_builder_config": {"max_context_chars": 400}}
         builder._infer_and_parse_json = lambda *args, **kwargs: {
             "descriptions": [_vf("Episode reconstructed without transactions.")]
         }

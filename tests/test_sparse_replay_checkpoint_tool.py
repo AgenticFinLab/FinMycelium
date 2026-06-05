@@ -1,4 +1,4 @@
-"""Tests for the lightweight ContextEventBuilder checkpoint replay tool."""
+"""Tests for the lightweight SparseRagBuilder checkpoint replay tool."""
 
 import importlib.util
 import json
@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from test_event_builder_registry import _install_external_dependency_stubs_if_missing
+from test_sparse_rag_builder_registry import _install_external_dependency_stubs_if_missing
 
 
 def _vf(value):
@@ -59,10 +59,10 @@ def _load_tool_module():
         Path(__file__).resolve().parents[1]
         / "examples"
         / "uTEST"
-        / "replay_context_event_builder_checkpoint.py"
+        / "replay_sparse_rag_builder_checkpoint.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "replay_context_event_builder_checkpoint",
+        "replay_sparse_rag_builder_checkpoint",
         tool_path,
     )
     module = importlib.util.module_from_spec(spec)
@@ -113,7 +113,7 @@ class EventReplayCheckpointToolTest(unittest.TestCase):
         self.assertEqual(summary["skeleton"]["stage_count"], 1)
         self.assertEqual(summary["final"]["episode_count"], 1)
 
-    def test_replay_checkpoint_dir_uses_context_event_builder_result_files(self):
+    def test_replay_checkpoint_dir_uses_sparse_rag_builder_result_files(self):
         tool = _load_tool_module()
         skeleton = _skeleton()
         episode_result = {

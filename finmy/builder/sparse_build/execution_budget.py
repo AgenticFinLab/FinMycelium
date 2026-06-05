@@ -1,4 +1,4 @@
-"""Stage-aware execution budget planning for event_build sparse routing."""
+"""Stage-aware execution budget planning for sparse_build sparse routing."""
 
 from __future__ import annotations
 

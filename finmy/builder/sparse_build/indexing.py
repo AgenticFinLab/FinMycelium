@@ -1,4 +1,4 @@
-"""Lightweight token indexing helpers for event_build evidence assets."""
+"""Lightweight token indexing helpers for sparse_build evidence assets."""
 
 from __future__ import annotations
 

@@ -1,11 +1,11 @@
-"""Replay regression coverage for ContextEventBuilder."""
+"""Replay regression coverage for SparseRagBuilder."""
 
 import json
 from pathlib import Path
 import tempfile
 import unittest
 
-from test_event_builder_registry import _install_external_dependency_stubs_if_missing
+from test_sparse_rag_builder_registry import _install_external_dependency_stubs_if_missing
 
 
 def _vf(value):
@@ -54,12 +54,12 @@ def _write_json(directory, filename, payload):
     Path(directory, filename).write_text(json.dumps(payload), encoding="utf-8")
 
 
-class ContextEventBuilderReplayRegressionTest(unittest.TestCase):
+class SparseRagBuilderReplayRegressionTest(unittest.TestCase):
     def setUp(self):
         _install_external_dependency_stubs_if_missing()
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-        self.builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        self.builder = SparseRagBuilder.__new__(SparseRagBuilder)
 
     def test_integrate_from_files_keeps_blank_id_replay_episodes_distinct(self):
         skeleton = {

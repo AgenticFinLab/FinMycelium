@@ -1,4 +1,4 @@
-"""Validation and JSON recovery parity tests for ContextEventBuilder."""
+"""Validation and JSON recovery parity tests for SparseRagBuilder."""
 
 import json
 from types import SimpleNamespace
@@ -29,11 +29,11 @@ def _valid_skeleton():
     }
 
 
-class EventBuilderValidationParityTest(unittest.TestCase):
+class SparseRagBuilderValidationParityTest(unittest.TestCase):
     def setUp(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-        self.builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        self.builder = SparseRagBuilder.__new__(SparseRagBuilder)
 
     def test_validate_skeleton_rejects_metadata_only_stage_name(self):
         skeleton = _valid_skeleton()

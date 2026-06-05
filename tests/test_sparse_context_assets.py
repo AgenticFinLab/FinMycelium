@@ -1,13 +1,13 @@
-"""Focused tests for event_build local context assets."""
+"""Focused tests for sparse_build local context assets."""
 
 import unittest
 
 from finmy.generic import DataSample, UserQueryInput
 
 
-class EventContextAssetsTest(unittest.TestCase):
+class SparseContextAssetsTest(unittest.TestCase):
     def test_empty_samples_build_empty_bundle_without_crashing(self):
-        from finmy.builder.event_build.context_assets import (
+        from finmy.builder.sparse_build.context_assets import (
             build_evidence_assets,
             summarize_context_assets,
         )
@@ -24,7 +24,7 @@ class EventContextAssetsTest(unittest.TestCase):
         self.assertGreater(summary["query_token_count"], 0)
 
     def test_query_terms_and_sample_content_generate_ranked_evidence_cards(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
 
         user_query = UserQueryInput(
             query_text="Blue Sky bitcoin laundering",
@@ -53,8 +53,8 @@ class EventContextAssetsTest(unittest.TestCase):
         self.assertIn("2017", card.time_hints)
 
     def test_rendered_summary_and_card_are_stable_strings(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.renderers import (
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.renderers import (
             render_context_asset_summary,
             render_evidence_card,
         )
@@ -93,11 +93,11 @@ class EventContextAssetsTest(unittest.TestCase):
         self.assertIn("evidence_card_count=1", rendered_summary)
 
     def test_local_context_builder_selects_matching_cards_with_length_boundary(self):
-        from finmy.builder.event_build.context_assets import (
+        from finmy.builder.sparse_build.context_assets import (
             EvidenceRetrievalPolicy,
             build_evidence_assets,
         )
-        from finmy.builder.event_build.local_context_builder import (
+        from finmy.builder.sparse_build.local_context_builder import (
             LocalContextBuilder,
             LocalContextRequest,
         )

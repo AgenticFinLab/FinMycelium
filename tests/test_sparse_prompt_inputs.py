@@ -1,11 +1,11 @@
-"""Focused tests for event_build prompt input wiring."""
+"""Focused tests for sparse_build prompt input wiring."""
 
 from types import SimpleNamespace
 import unittest
 
 from finmy.generic import DataSample, UserQueryInput
 
-from test_event_builder_registry import _install_external_dependency_stubs_if_missing
+from test_sparse_rag_builder_registry import _install_external_dependency_stubs_if_missing
 
 
 class EventPromptInputsTest(unittest.TestCase):
@@ -13,7 +13,7 @@ class EventPromptInputsTest(unittest.TestCase):
         _install_external_dependency_stubs_if_missing()
 
     def test_prompts_include_required_sparse_context_variables(self):
-        from finmy.builder.event_build.prompts import (
+        from finmy.builder.sparse_build.prompts import (
             ADDITIVE_CONTEXT_POLICY,
             required_prompt_variables,
         )
@@ -30,11 +30,11 @@ class EventPromptInputsTest(unittest.TestCase):
         self.assertIn("EpisodeDetailTier", required)
 
     def test_builder_prompt_kwargs_expose_context_budget_and_primary_content(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.execution_budget import (
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.execution_budget import (
             build_stage_aware_execution_budget,
         )
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         user_query = UserQueryInput(
             query_text="bitcoin laundering transfer",
@@ -68,8 +68,8 @@ class EventPromptInputsTest(unittest.TestCase):
             context_assets=context_assets,
         )
         episode_budget = budget["episodes"][("S1", "E1")]
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
-        builder.build_config = {"event_builder_config": {"max_context_chars": 400}}
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
+        builder.build_config = {"sparse_builder_config": {"max_context_chars": 400}}
 
         kwargs = builder._build_prompt_kwargs(
             build_input=build_input,
@@ -89,8 +89,8 @@ class EventPromptInputsTest(unittest.TestCase):
         self.assertIn("used_card_count", kwargs["RetrievedContextBudgetSummary"])
 
     def test_format_agent_messages_supplies_all_template_variables(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         user_query = UserQueryInput(query_text="alpha transfer", key_words=["alpha"])
         samples = [
@@ -104,8 +104,8 @@ class EventPromptInputsTest(unittest.TestCase):
         ]
         build_input = SimpleNamespace(user_query=user_query, samples=samples)
         context_assets = build_evidence_assets(user_query, samples)
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
-        builder.build_config = {"event_builder_config": {"max_context_chars": 400}}
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
+        builder.build_config = {"sparse_builder_config": {"max_context_chars": 400}}
 
         system_msg, user_msg = builder._format_agent_messages(
             agent_name="EpisodeReconstructor",
@@ -124,7 +124,7 @@ class EventPromptInputsTest(unittest.TestCase):
         self.assertIn("alpha transfer evidence", user_msg)
 
     def test_run_uses_mock_inference_without_external_api(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         class FakeInference:
             def __init__(self):
@@ -150,14 +150,14 @@ class EventPromptInputsTest(unittest.TestCase):
                 )
             ],
         )
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
-        builder.build_config = {"event_builder_config": {"max_context_chars": 400}}
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
+        builder.build_config = {"sparse_builder_config": {"max_context_chars": 400}}
         builder.agents_lm = FakeInference()
 
         output = builder.run(build_input)
 
         self.assertEqual(output.event_cascades["event_id"], "EVT-1")
-        self.assertEqual(output.extras["builder_type"], "ContextEventBuilder")
+        self.assertEqual(output.extras["builder_type"], "SparseRagBuilder")
         self.assertEqual(
             output.extras["agent_executed"],
             [
