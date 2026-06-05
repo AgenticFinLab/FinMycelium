@@ -1,8 +1,8 @@
-"""Inspect and replay saved ContextEventBuilder checkpoint directories.
+"""Inspect and replay saved SparseRagBuilder checkpoint directories.
 
 This helper intentionally stays lightweight: it reads existing builder output
 files, summarizes skeleton/final cascade counts, and can replay saved agent
-results through ContextEventBuilder.integrate_from_files without calling an LLM.
+results through SparseRagBuilder.integrate_from_files without calling an LLM.
 """
 
 from __future__ import annotations
@@ -159,16 +159,16 @@ def summarize_latest_checkpoint(root: Path | str) -> dict[str, object]:
 
 
 def replay_checkpoint_dir(checkpoint_dir: Path | str) -> dict[str, Any]:
-    from finmy.builder.event_build.main_build import ContextEventBuilder
+    from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-    builder = ContextEventBuilder.__new__(ContextEventBuilder)
+    builder = SparseRagBuilder.__new__(SparseRagBuilder)
     builder.save_dir = str(Path(checkpoint_dir))
     return builder.integrate_from_files()
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Inspect or replay ContextEventBuilder checkpoint directories."
+        description="Inspect or replay SparseRagBuilder checkpoint directories."
     )
     parser.add_argument(
         "root",
@@ -178,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--replay",
         action="store_true",
-        help="Replay the selected checkpoint with ContextEventBuilder.integrate_from_files.",
+        help="Replay the selected checkpoint with SparseRagBuilder.integrate_from_files.",
     )
     args = parser.parse_args(argv)
 

@@ -1,4 +1,4 @@
-"""Prompt templates for ContextEventBuilder."""
+"""Prompt templates for SparseRagBuilder."""
 
 from __future__ import annotations
 
@@ -139,7 +139,7 @@ EventDescriptionReconstructorUser = (
 
 
 def required_prompt_variables() -> set[str]:
-    """Return the public prompt variables expected from ContextEventBuilder."""
+    """Return the public prompt variables expected from SparseRagBuilder."""
 
     return set(REQUIRED_PROMPT_VARIABLES)
 

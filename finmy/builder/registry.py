@@ -15,7 +15,7 @@ Supported Builders:
 - **LMBuilder** (`lm`): Standard builder using single LM inference.
 - **ClassLMBuilder** (`class_lm`): Builder that first classifies event type then uses specific prompts.
 - **AgentEventBuilder** (`agent_build`): Advanced builder using a multi-agent system for event reconstruction.
-- **ContextEventBuilder** (`event_build`): Context-aware event reconstruction builder entry point.
+- **SparseRagBuilder** (`sparse_build`): Sparse RAG event reconstruction builder entry point.
 
 Usage:
     config = {"builder_type": "agent_build", ...}
@@ -29,7 +29,7 @@ from .base import BaseBuilder
 from .lm_build import LMBuilder
 from .class_build.main_build import ClassEventBuilder
 from .agent_build.main_build import AgentEventBuilder
-from .event_build.main_build import ContextEventBuilder
+from .sparse_build.main_build import SparseRagBuilder
 
 # ============================================================================
 # Registry Factory Pattern Implementation
@@ -40,7 +40,7 @@ builder_factory: Dict[str, Callable] = {
     "LMBuilder": LMBuilder,
     "ClassEventBuilder": ClassEventBuilder,
     "AgentEventBuilder": AgentEventBuilder,
-    "ContextEventBuilder": ContextEventBuilder,
+    "SparseRagBuilder": SparseRagBuilder,
 }
 
 

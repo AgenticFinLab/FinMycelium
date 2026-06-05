@@ -1,4 +1,4 @@
-"""Skeleton validation behavior for ContextEventBuilder."""
+"""Skeleton validation behavior for SparseRagBuilder."""
 
 import unittest
 from types import SimpleNamespace
@@ -36,11 +36,11 @@ def _valid_skeleton():
     }
 
 
-class ContextEventBuilderValidationTest(unittest.TestCase):
+class SparseRagBuilderValidationTest(unittest.TestCase):
     def setUp(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
-        self.builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        self.builder = SparseRagBuilder.__new__(SparseRagBuilder)
 
     def test_validate_skeleton_rejects_empty_stages(self):
         skeleton = {**_valid_skeleton(), "stages": []}

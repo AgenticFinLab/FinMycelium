@@ -1,4 +1,4 @@
-"""Local context selection for ContextEventBuilder prompts."""
+"""Local context selection for SparseRagBuilder prompts."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Contract tests for the context event builder registry entry."""
+"""Contract tests for the sparse RAG builder registry entry."""
 
 import dataclasses
 import importlib.util
@@ -97,37 +97,46 @@ def _install_external_dependency_stubs_if_missing():
     _install_lmbase_stub_if_missing()
 
 
-class ContextEventBuilderRegistryTest(unittest.TestCase):
+class SparseRagBuilderRegistryTest(unittest.TestCase):
     def setUp(self):
         _install_external_dependency_stubs_if_missing()
 
-    def test_context_event_builder_is_registered_under_public_builder_type(self):
+    def test_sparse_rag_builder_is_registered_under_public_builder_type(self):
         from finmy.builder.registry import builder_factory
 
-        self.assertIn("ContextEventBuilder", builder_factory)
-        builder_cls = builder_factory["ContextEventBuilder"]
-        self.assertEqual("ContextEventBuilder", builder_cls.__name__)
-        self.assertEqual("finmy.builder.event_build.main_build", builder_cls.__module__)
+        self.assertIn("SparseRagBuilder", builder_factory)
+        builder_cls = builder_factory["SparseRagBuilder"]
+        self.assertEqual("SparseRagBuilder", builder_cls.__name__)
+        self.assertEqual("finmy.builder.sparse_build.main_build", builder_cls.__module__)
 
-    def test_context_event_builder_declares_public_contract(self):
+    def test_sparse_rag_builder_declares_public_contract(self):
         from finmy.builder.base import BaseBuilder, BuildInput
         from finmy.builder.registry import builder_factory
 
-        self.assertIn("ContextEventBuilder", builder_factory)
-        builder_cls = builder_factory["ContextEventBuilder"]
+        self.assertIn("SparseRagBuilder", builder_factory)
+        builder_cls = builder_factory["SparseRagBuilder"]
 
         self.assertTrue(issubclass(builder_cls, BaseBuilder))
-        self.assertEqual("ContextEventBuilder", builder_cls.builder_type)
+        self.assertEqual("SparseRagBuilder", builder_cls.builder_type)
         self.assertEqual(("user_query", "samples"), builder_cls.build_input_fields)
         self.assertEqual(
             ("agents", "lm_type", "lm_name", "generation_config", "save_folder"),
             builder_cls.required_build_config_keys,
         )
-        self.assertEqual("event_builder_config", builder_cls.event_config_key)
+        self.assertEqual("sparse_builder_config", builder_cls.event_config_key)
         self.assertEqual(
             ["user_query", "samples"],
             [field.name for field in dataclasses.fields(BuildInput)],
         )
+
+    def test_sparse_rag_builder_accepts_legacy_event_config_key(self):
+        from finmy.builder.registry import builder_factory
+
+        builder_cls = builder_factory["SparseRagBuilder"]
+        builder = builder_cls.__new__(builder_cls)
+        builder.build_config = {"event_builder_config": {"max_context_chars": 123}}
+
+        self.assertEqual(123, builder._event_config_value("max_context_chars", 6000))
 
 
 if __name__ == "__main__":

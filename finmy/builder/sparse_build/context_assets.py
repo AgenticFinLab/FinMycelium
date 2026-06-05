@@ -1,4 +1,4 @@
-"""Passive evidence asset dataclasses and builders for event_build."""
+"""Passive evidence asset dataclasses and builders for sparse_build."""
 
 from __future__ import annotations
 

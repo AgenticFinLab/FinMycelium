@@ -1,4 +1,4 @@
-# Pipeline configuration example for ContextEventBuilder.
+# Pipeline configuration example for SparseRagBuilder.
 #
 # This file is opt-in and does not change configs/pipline.yml.
 
@@ -13,7 +13,7 @@ generation_config: &generation_config
   temperature: 0.2
   top_p: 0.95
 
-event_builder_config: &event_builder_config
+sparse_builder_config: &sparse_builder_config
   context_top_k: 8
   max_context_chars: 6000
   excerpt_char_limit: 240
@@ -21,7 +21,7 @@ event_builder_config: &event_builder_config
   enable_sparse_routing: true
 
 builder_config:
-  builder_type: "ContextEventBuilder"
+  builder_type: "SparseRagBuilder"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *inference_config
@@ -29,7 +29,7 @@ builder_config:
   save_folder: "EXPERIMENT/uTEST/EventPipeline"
   graph_config:
     recursion_limit: 150
-  event_builder_config: *event_builder_config
+  sparse_builder_config: *sparse_builder_config
   agents:
     SkeletonReconstructor:
       lm_type: *lm_type

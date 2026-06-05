@@ -1,4 +1,4 @@
-"""Full-flow behavior tests for ContextEventBuilder."""
+"""Full-flow behavior tests for SparseRagBuilder."""
 
 import json
 from pathlib import Path
@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from finmy.generic import DataSample, UserQueryInput
 
-from test_event_builder_registry import _install_external_dependency_stubs_if_missing
+from test_sparse_rag_builder_registry import _install_external_dependency_stubs_if_missing
 
 
 def _vf(value):
@@ -60,7 +60,7 @@ class _SequencedInference:
         )
 
 
-class ContextEventBuilderFullFlowTest(unittest.TestCase):
+class SparseRagBuilderFullFlowTest(unittest.TestCase):
     def setUp(self):
         _install_external_dependency_stubs_if_missing()
 
@@ -85,7 +85,7 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
         )
 
     def test_run_executes_full_agent_flow_and_integrates_results(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         skeleton = _skeleton()
         participant_result = {
@@ -132,9 +132,9 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
             "descriptions": [_vf("The event describes a bitcoin laundering transfer.")]
         }
 
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
         builder.build_config = {
-            "event_builder_config": {"max_context_chars": 600},
+            "sparse_builder_config": {"max_context_chars": 600},
             "graph_config": {"recursion_limit": 50},
         }
         builder.agents_lm = _SequencedInference(
@@ -181,7 +181,7 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
         self.assertFalse(builder.agents_lm.responses)
 
     def test_run_persists_replayable_result_files(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         skeleton = _skeleton()
         participant_result = {"participants": []}
@@ -197,9 +197,9 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
         event_description = {"descriptions": [_vf("Event description")]}
 
         with tempfile.TemporaryDirectory() as save_dir:
-            builder = ContextEventBuilder.__new__(ContextEventBuilder)
+            builder = SparseRagBuilder.__new__(SparseRagBuilder)
             builder.build_config = {
-                "event_builder_config": {"max_context_chars": 600},
+                "sparse_builder_config": {"max_context_chars": 600},
                 "graph_config": {"recursion_limit": 50},
             }
             builder.save_dir = save_dir
@@ -221,7 +221,7 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
         self.assertEqual(replayed, output.event_cascades)
 
     def test_light_episode_skips_transaction_reconstructor(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         skeleton = _skeleton()
         skeleton["stages"][0]["name"] = _vf("Background")
@@ -248,9 +248,9 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
                 )
             ],
         )
-        builder = ContextEventBuilder.__new__(ContextEventBuilder)
+        builder = SparseRagBuilder.__new__(SparseRagBuilder)
         builder.build_config = {
-            "event_builder_config": {"max_context_chars": 600},
+            "sparse_builder_config": {"max_context_chars": 600},
             "graph_config": {"recursion_limit": 50},
         }
         builder.agents_lm = _SequencedInference(
@@ -282,7 +282,7 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
         self.assertFalse(builder.agents_lm.responses)
 
     def test_replay_prefers_checker_skeleton_regardless_of_file_order(self):
-        from finmy.builder.event_build.main_build import ContextEventBuilder
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         draft = _skeleton()
         draft["title"] = _vf("Draft skeleton")
@@ -303,11 +303,11 @@ class ContextEventBuilderFullFlowTest(unittest.TestCase):
                 json.dumps(event_description),
                 encoding="utf-8",
             )
-            builder = ContextEventBuilder.__new__(ContextEventBuilder)
+            builder = SparseRagBuilder.__new__(SparseRagBuilder)
             builder.save_dir = save_dir
 
             with patch(
-                "finmy.builder.event_build.main_build.os.listdir",
+                "finmy.builder.sparse_build.main_build.os.listdir",
                 return_value=[
                     "SkeletonChecker-1-Result.json",
                     "SkeletonReconstructor-1-Result.json",

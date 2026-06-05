@@ -1,4 +1,4 @@
-"""Focused tests for event_build execution budget routing."""
+"""Focused tests for sparse_build execution budget routing."""
 
 from types import SimpleNamespace
 import unittest
@@ -8,7 +8,7 @@ from finmy.generic import DataSample, UserQueryInput
 
 class EventExecutionBudgetTest(unittest.TestCase):
     def test_simple_episode_uses_light_mode_without_context_assets(self):
-        from finmy.builder.event_build.execution_budget import (
+        from finmy.builder.sparse_build.execution_budget import (
             build_stage_aware_execution_budget,
         )
 
@@ -36,8 +36,8 @@ class EventExecutionBudgetTest(unittest.TestCase):
         self.assertEqual(episode_budget["conflict_guard"], "standard")
 
     def test_money_dense_episode_uses_full_mode(self):
-        from finmy.builder.event_build.context_assets import build_evidence_assets
-        from finmy.builder.event_build.execution_budget import (
+        from finmy.builder.sparse_build.context_assets import build_evidence_assets
+        from finmy.builder.sparse_build.execution_budget import (
             build_stage_aware_execution_budget,
         )
 
@@ -88,7 +88,7 @@ class EventExecutionBudgetTest(unittest.TestCase):
         self.assertEqual(episode_budget["episode_detail_tier"], "standard")
 
     def test_missing_context_assets_does_not_crash(self):
-        from finmy.builder.event_build.execution_budget import (
+        from finmy.builder.sparse_build.execution_budget import (
             build_stage_aware_execution_budget,
         )
 
@@ -101,7 +101,7 @@ class EventExecutionBudgetTest(unittest.TestCase):
         self.assertEqual(budget, {"stages": [], "episodes": {}})
 
     def test_budget_prompt_vars_use_explicit_prompt_keys(self):
-        from finmy.builder.event_build.execution_budget import episode_budget_prompt_vars
+        from finmy.builder.sparse_build.execution_budget import episode_budget_prompt_vars
 
         prompt_vars = episode_budget_prompt_vars(
             {
