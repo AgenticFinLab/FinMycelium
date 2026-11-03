@@ -69,6 +69,7 @@ from finmy.builder.utils import (
     load_python_text,
     filter_dataclass_fields,
     extract_json_response,
+    run_single_inference,
 )
 from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
@@ -505,8 +506,9 @@ class AgentEventBuilder(BaseBuilder):
         # Since we just injected a JSON schema containing braces, we must escape them.
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
 
-        out: InferOutput = self.agents_lm.run(
-            infer_input=InferInput(system_msg=sys_msg, user_msg=user_msg_template),
+        out: InferOutput = run_single_inference(
+            self.agents_lm,
+            InferInput(system_msg=sys_msg, user_msg=user_msg_template),
             **prompt_kwargs,
         )
         result = out.response

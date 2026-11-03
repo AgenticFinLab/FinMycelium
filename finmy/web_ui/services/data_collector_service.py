@@ -18,6 +18,7 @@ from finmy.url_collector.url_parser_clean import extract_content_from_parsed_con
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.web_ui.utils.formatters import format_timestamp
+from finmy.runner.relevance_filter import make_document
 
 
 class DataCollectorService:
@@ -32,6 +33,7 @@ class DataCollectorService:
             save_dir: Directory to save collected data
         """
         self.config = config
+        self.documents = {name: [] for name in ("url", "file", "bocha", "baidu")}
         self.save_dir = save_dir
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.parser = URLParser(
@@ -109,6 +111,7 @@ class DataCollectorService:
                     f"{extract_content_from_parsed_content(item['parsed_content'])}\n\n\n"
                 )
                 formatted_content.append(item_content)
+                self.documents["bocha"].append(make_document(item_content, item, "bocha"))
 
             st.write(f"**{format_timestamp()}** - Success: Bocha Search")
         except (
@@ -204,6 +207,7 @@ class DataCollectorService:
                     f"{extract_content_from_parsed_content(item['parsed_content'])}\n\n\n"
                 )
                 formatted_content.append(item_content)
+                self.documents["baidu"].append(make_document(item_content, item, "baidu"))
 
             st.write(f"**{format_timestamp()}** - Success: Baidu Search")
         except (
@@ -353,6 +357,7 @@ class DataCollectorService:
                         f"{extract_content_from_parsed_content(item.get('parsed_content', []))}"
                     )
                     url_link_content.append(item_content)
+                    self.documents["url"].append(make_document(item_content, item, "url"))
 
             # Save and format filepath data
             if structure_data_filepath:
@@ -376,6 +381,7 @@ class DataCollectorService:
                                 f"content:\n{f.read()}"
                             )
                             filepath_content.append(item_content)
+                            self.documents["file"].append(make_document(item_content, item, "file"))
         except (
             KeyError,
             ValueError,

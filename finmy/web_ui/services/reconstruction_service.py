@@ -14,6 +14,7 @@ from finmy.pipeline import FinmyPipeline
 from finmy.builder.utils import estimate_complete_time
 from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
+from finmy.runner.relevance_filter import filter_documents
 
 
 class ReconstructionService:
@@ -42,6 +43,7 @@ class ReconstructionService:
         Returns:
             Reconstruction results dictionary
         """
+        keywords = keywords or []
         # Prepare search query
         search_query_content = f"{main_input} \n\nkeywords: {' '.join(keywords)}"
         st.write(f"**{format_timestamp()}** - Input has been processed.")
@@ -81,8 +83,30 @@ class ReconstructionService:
         logging.info("All_Text_Content: %s", all_text_content)
         logging.info("Length of All_Text_Content List: %d", len(all_text_content))
         
-        # Limit content length
-        all_text_content_limit = self._limit_content_length(all_text_content)
+        # P0: classify sources BEFORE the existing context-length budget is applied.
+        # Keep the original All_Text_Content and formatted search archives unchanged.
+        documents = [doc for source in ("url", "file", "bocha", "baidu")
+                     for doc in collector.documents[source]]
+        if [d["raw_text"] for d in documents] != all_text_content:
+            raise ValueError("Collected source metadata/content are out of sync")
+        filtered = filter_documents(
+            documents, main_input, keywords, self.config, save_dir, progress=st.write,
+        )
+        summary = filtered["summary"]
+        st.write(f"Relevance filter: kept {summary['kept']}/{summary['retrieved']} "
+                 f"documents; removed {summary['removed']}.")
+        for warning in filtered["warnings"]:
+            st.warning(warning)
+        if not filtered["contents"]:
+            raise ValueError("No relevant sources remain. Inspect relevance_decisions.json or refine the search.")
+
+        # P1/P2 ranking and budget allocation are unchanged by this patch.
+        all_text_content_limit = self._limit_content_length(filtered["contents"])
+        # Archive exactly what the builder receives, rather than only pre-budget data.
+        with open(os.path.join(save_dir, "builder_input_contents.json"), "w", encoding="utf-8") as f:
+            json.dump(all_text_content_limit, f, ensure_ascii=False, indent=2)
+        if not all_text_content_limit:
+            raise ValueError("Context budget admitted no documents. Inspect filtered_contents.json.")
         
         # Run pipeline
         return self._run_pipeline(
