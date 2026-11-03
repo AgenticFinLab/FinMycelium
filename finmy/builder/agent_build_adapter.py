@@ -131,6 +131,7 @@ class BuildOnlyAgentEventBuilder(AgentEventBuilder):
         self.save_traces(inputs, "BuildInput", "json")
         self.save_traces(manifest, "RunManifest", "json")
         started = time.perf_counter()
+        output = None
         try:
             output = super().run(build_input)
             manifest.update(status="completed", event_id=output.event_cascades["event_id"])
@@ -142,6 +143,12 @@ class BuildOnlyAgentEventBuilder(AgentEventBuilder):
             manifest.update(elapsed_seconds=time.perf_counter() - started,
                             usage=summarize_calls(self.calls), artifact_sha256=artifact_hashes(self.save_dir))
             self.save_traces(manifest, "RunManifest", "json")
+            if manifest["status"] == "completed" and output is not None:
+                output.extras = {**(output.extras or {}),
+                                 "builder_type": "AgentEventBuilder",
+                                 "run_directory": self.save_dir,
+                                 "elapsed_seconds": manifest["elapsed_seconds"],
+                                 "usage": deepcopy(manifest["usage"])}
 
 
 def replay_original(directory):

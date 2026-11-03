@@ -62,6 +62,28 @@ is no implicit resume or automatic restart of a failed run.
 
 ## Outputs and replay
 
+Through this entry, both builders return `BuildOutput.event_cascades` and save
+`FinalEventCascade.json`. On success, `BuildOutput.extras` includes:
+
+| Field | Meaning |
+|---|---|
+| `builder_type` | `AgentEventBuilder` or `SparseRagBuilder` |
+| `run_directory` | The builder's output directory |
+| `elapsed_seconds` | Construction time from `RunManifest.json`, excluding optional Gantt rendering |
+| `usage` | The same call/token summary as `RunManifest.json`; unknown usage remains null |
+
+Both methods save `BuildInput.json`, `RunManifest.json` and `CallLedger.json`.
+Method-specific extras and diagnostic files are optional for consumers. Internal
+role filenames and `result` state are not a shared interface. `completed` means
+construction completed under the selected method's checks, not that both methods
+passed identical structural or semantic review. Graph content is not normalized
+or rewritten by the adapter.
+
+For Python callers, use `select_builder` from this entry to obtain the selected
+implementation. The original class and the full pipeline registry are unchanged;
+direct calls to the original class do not acquire the build-only adapter's metadata.
+Historical sparse manifests without `builder_type` remain supported for replay.
+
 Each execution has its own directory under `output/build-only/agent/` or
 `output/build-only/sparse/`. `RunManifest.json` records inputs/configuration/code
 hashes, status, total elapsed time, token accounting and per-role costs. Missing

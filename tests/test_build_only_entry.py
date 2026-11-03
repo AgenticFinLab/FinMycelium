@@ -107,6 +107,68 @@ class BuildOnlyEntryTest(unittest.TestCase):
         self.assertEqual(adapted.logs, expected.logs)
         self.assertIn('{"field":"{Query}","nested":{"n":1}}', actual_messages[0][1]["content"])
 
+    def test_shared_success_metadata_matches_manifest_and_ledger(self):
+        for kind in ("agent", "sparse"):
+            with self.subTest(kind=kind):
+                self.set_responses()
+                config = self.config(kind)
+                cls, _ = select_builder(config)
+                builder = cls(build_config=config)
+                output = builder.run(self.inputs)
+                directory = Path(builder.save_dir)
+                manifest = json.loads((directory / "RunManifest.json").read_text())
+                ledger = json.loads((directory / "CallLedger.json").read_text())
+                self.assertEqual(manifest["builder_type"], config["builder_type"])
+                self.assertEqual(output.extras["builder_type"], config["builder_type"])
+                self.assertEqual(output.extras["run_directory"], builder.save_dir)
+                self.assertEqual(output.extras["elapsed_seconds"], manifest["elapsed_seconds"])
+                self.assertEqual(output.extras["usage"], manifest["usage"])
+                self.assertEqual(output.extras["usage"]["calls"], len(ledger))
+                self.assertEqual(output.extras["usage"]["prompt_tokens"],
+                                 sum(c["prompt_tokens"] for c in ledger))
+                self.assertEqual(self.create.call_count, 11)
+                self.assertEqual(output.event_cascades,
+                                 json.loads((directory / "FinalEventCascade.json").read_text()))
+                self.assertEqual(replay(directory)["status"], "replay_pass")
+                if kind == "sparse":
+                    self.assertEqual(output.extras["calls"], ledger)
+                    self.assertEqual(output.extras["acceptance"],
+                                     json.loads((directory / "AcceptanceDecision.json").read_text()))
+                    self.assertIn("episode_execution_plan", output.extras)
+                    self.assertIn("context_asset_summary", output.extras)
+
+    def test_sparse_metadata_preserves_inner_output(self):
+        self.set_responses()
+        cls, _ = select_builder(self.config("sparse"))
+        builder = cls(build_config=self.config("sparse"))
+        inner = builder._run_validated
+        captured = []
+
+        def capture(inputs):
+            output = inner(inputs)
+            captured.append(copy.deepcopy(output))
+            return output
+
+        with patch.object(builder, "_run_validated", side_effect=capture):
+            result = builder.run(self.inputs)
+        self.assertEqual(result.event_cascades, captured[0].event_cascades)
+        self.assertEqual(result.result, captured[0].result)
+        self.assertEqual(result.logs, captured[0].logs)
+        for key, value in captured[0].extras.items():
+            self.assertEqual(result.extras[key], value)
+
+    def test_historical_sparse_manifest_without_builder_type_replays(self):
+        cls, _ = select_builder(self.config("sparse"))
+        builder = cls(build_config=self.config("sparse"))
+        builder.run(self.inputs)
+        path = Path(builder.save_dir, "RunManifest.json")
+        manifest = json.loads(path.read_text())
+        manifest.pop("builder_type")
+        path.write_text(json.dumps(manifest))
+        before = path.read_bytes()
+        self.assertEqual(replay(builder.save_dir)["status"], "replay_pass")
+        self.assertEqual(path.read_bytes(), before)
+
     def test_missing_credentials_rejected_before_client(self):
         with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, "key is missing"):
             main(["--config", self.config_path(), "--input", str(INPUT), "--execute"])
@@ -170,12 +232,17 @@ class BuildOnlyEntryTest(unittest.TestCase):
         self.assertEqual(self.create.call_count, 1)
 
     def test_unknown_usage_stays_null(self):
-        self.set_responses(usage=False)
-        builder = BuildOnlyAgentEventBuilder(self.config())
-        builder.run(self.inputs)
-        manifest = json.loads(Path(builder.save_dir, "RunManifest.json").read_text())
-        self.assertIsNone(manifest["usage"]["prompt_tokens"])
-        self.assertEqual(manifest["usage"]["unknown_prompt_tokens_calls"], 11)
+        for kind in ("agent", "sparse"):
+            with self.subTest(kind=kind):
+                self.set_responses(usage=False)
+                config = self.config(kind)
+                cls, _ = select_builder(config)
+                builder = cls(build_config=config)
+                output = builder.run(self.inputs)
+                manifest = json.loads(Path(builder.save_dir, "RunManifest.json").read_text())
+                self.assertIsNone(output.extras["usage"]["prompt_tokens"])
+                self.assertEqual(output.extras["usage"], manifest["usage"])
+                self.assertEqual(manifest["usage"]["unknown_prompt_tokens_calls"], 11)
 
     def test_original_replay_rejects_changed_missing_or_extra_results(self):
         builder = BuildOnlyAgentEventBuilder(self.config())
