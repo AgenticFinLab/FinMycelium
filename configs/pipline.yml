@@ -38,7 +38,7 @@ generation_config: &generation_config
 
 
 db_config: &db_config
-  url: "mysql+pymysql://finmyceliumdata:LYrxcTXM5Kpz5z3S@10.123.4.30:3306/finmyceliumdata"
+  url: "sqlite:///data/finmy.sqlite3"
 
 # ----------------------------------------------------------------------------
 # Output Path Configuration
