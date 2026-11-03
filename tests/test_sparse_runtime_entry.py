@@ -33,7 +33,10 @@ def responses():
         episode["participant_relations"] = [{
             "from_participant_id": "P_1", "to_participant_id": "P_2", "relation_name": vf("cooperation")
         }]
-        outputs.extend([{"participants": episode["participants"]}, {"transactions": []}, episode,
+        participants = episode["participants"]
+        episode["participants"] = "Results of ParticipantReconstructor"
+        episode["transactions"] = "Results of TransactionReconstructor"
+        outputs.extend([{"participants": participants}, {"transactions": []}, episode,
                         {"descriptions": [vf("Completed stage description")]}])
     outputs.append({"descriptions": [vf("Completed event description")]})
     return outputs
@@ -76,6 +79,10 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         self.assertEqual(builder.integrate_from_files(strict=True), result.event_cascades)
         manifest = json.loads(Path(builder.save_dir, "RunManifest.json").read_text())
         self.assertEqual(manifest["status"], "completed")
+        self.assertEqual(manifest["construction_contract_version"], 2)
+        checks = json.loads(Path(builder.save_dir, "ConstructionCheck.json").read_text())
+        self.assertEqual(len(checks["identity_map"]), 2)
+        self.assertEqual(checks["identity_map"], json.loads(Path(builder.save_dir, "ParticipantIdentityMap.json").read_text()))
         self.assertEqual(manifest["usage"]["prompt_tokens"], 1100)
         self.assertEqual(manifest["usage"]["completion_tokens"], 550)
         self.assertIn("finmy/builder/agent_build/structure.py", manifest["code"]["source_sha256"])
@@ -86,6 +93,52 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         self.assertFalse(evidence["semantic_support_checked"])
         with self.assertRaisesRegex(RuntimeError, "new builder"):
             builder.run(self.inputs)
+
+    def test_reuse_assembly_retains_original_arrays_and_evidence(self):
+        values = responses()
+        values[2]["participants"][0]["actions"][0]["name"].update(
+            evidence_source_contents=["Baytown Council warned residents about a storm."],
+            reasons=["Synthetic preservation marker"])
+        self.create.side_effect = [response(content=json.dumps(x)) for x in values]
+        builder = self.builder()
+        graph = builder.run(self.inputs).event_cascades
+        self.assertEqual(graph["stages"][0]["episodes"][0]["participants"], values[2]["participants"])
+        self.assertEqual(builder.integrate_from_files(strict=True), graph)
+
+    def test_legacy_replay_keeps_full_array_contract(self):
+        builder = self.builder()
+        graph = builder.run(self.inputs).event_cascades
+        root = Path(builder.save_dir)
+        for path in root.glob("EpisodeReconstructor-*-Result.json"):
+            data = json.loads(path.read_text())
+            locator = data["_meta"]["episode_locator"]
+            data["EpisodeReconstructor"] = graph["stages"][locator["stage_index"]]["episodes"][locator["episode_index"]]
+            path.write_text(json.dumps(data))
+        manifest = json.loads((root / "RunManifest.json").read_text())
+        manifest.pop("construction_contract_version")
+        manifest["artifact_sha256"] = builder._artifact_hashes()
+        (root / "RunManifest.json").write_text(json.dumps(manifest))
+        self.assertEqual(builder.integrate_from_files(strict=True), graph)
+        manifest["construction_contract_version"] = 2
+        (root / "RunManifest.json").write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "must equal"):
+            builder.integrate_from_files(strict=True)
+
+    def test_unknown_contract_and_inconsistent_report_fail_replay(self):
+        builder = self.builder()
+        builder.run(self.inputs)
+        root = Path(builder.save_dir)
+        manifest = json.loads((root / "RunManifest.json").read_text())
+        manifest["construction_contract_version"] = 99
+        (root / "RunManifest.json").write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "Unsupported"):
+            builder.integrate_from_files(strict=True)
+        manifest["construction_contract_version"] = 2
+        (root / "ConstructionCheck.json").write_text("{}")
+        manifest["artifact_sha256"] = builder._artifact_hashes()
+        (root / "RunManifest.json").write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "checks differ"):
+            builder.integrate_from_files(strict=True)
 
     def test_replay_rejects_missing_or_mislocated_outputs(self):
         builder = self.builder()
@@ -115,6 +168,7 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         self.assertEqual(self.create.call_count, 1)
 
     def test_strict_quote_failure_does_not_publish_final(self):
+        self.builder_config["sparse_builder_config"]["evidence_policy"] = "strict"
         values = responses()
         values[1]["title"]["evidence_source_contents"] = ["Never present in either source."]
         self.create.side_effect = [response(content=json.dumps(x)) for x in values]

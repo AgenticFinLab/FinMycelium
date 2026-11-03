@@ -48,7 +48,7 @@ sparse_builder_config: &sparse_builder_config
   max_json_attempts: 3
   max_calls: 300
   request_timeout_seconds: 900
-  evidence_policy: "strict"
+  evidence_policy: "report"
 
 builder_config:
   builder_type: "SparseRagBuilder"

@@ -73,7 +73,42 @@ be reviewed before sharing. `output/` is Git-ignored.
   `response-*.json`, role traces, `FinalEventCascade.json` and
   `IntegratedEventCascade.json`.
 - Sparse: `BuildInput.json`, role request/response/result traces,
-  `EvidenceCheck.json`, and `FinalEventCascade.json` after its checks pass.
+  `ParticipantIdentityMap.json`, `ConstructionCheck.json`, `EvidenceCheck.json`,
+  `QualityReview.json`, `AcceptanceDecision.json`, `CandidateEventCascade.json`,
+  and `FinalEventCascade.json` when the configured quote policy permits it.
+
+The assembled candidate is retained before final validation, including on a quote
+gate failure. It is not an approved graph. Evidence contract v2 locates quotes in
+unchanged sources by exact text or whitespace-only normalization and records
+sample IDs, source SHA-256, original excerpts and zero-based, end-exclusive Unicode
+character offsets. Punctuation, casing, ellipses and paraphrases are not normalized.
+Within each source, exact matches take precedence; whitespace-only locations are
+used when no exact match exists. Multiple returned locations are retained rather
+than silently choosing one.
+Query/keyword citations are marked separately and do not count as source support.
+
+`QualityReview.json` lists conservative English-language review candidates for
+payment state, dates, relation endpoints and uncited source paragraphs. Aliases,
+pronouns and irrelevant paragraphs can cause false positives. This is neither
+semantic approval nor a factual coverage score, and it does not rewrite the graph.
+Missing quotations are reported separately; the existing strict policy rejects
+unlocatable supplied quotes, not every field without a quote. An accepted draft
+still requires content review, even if no heuristic issue is found.
+
+Sparse construction contract v2 reuses Participant and Transaction outputs
+unchanged. Episode generates relations/descriptions and references those arrays
+by exact placeholders. Downstream prompts use value-only projections, retaining
+the complete source text and all original role results in the saved artifacts.
+Canonical participant ID/name/type bindings are checked across episodes; roles
+may change. Known action/transaction dates must overlap their target episode's
+checked time window. Coarse dates retain their precision; unknown/unparsed dates
+are reported as unchecked, not silently converted to exact timestamps.
+
+`ConstructionCheck.json` records identity bindings, time checks and repeated-action
+candidates. It is a structural diagnostic, not an entailment or alias-resolution
+oracle. Narrative scope, relation direction and ambiguous identities still need
+content review. Old sparse runs without the v2 marker retain their original
+replay contract; they are not retroactively certified by the new checks.
 
 Verify stored artifacts and reassemble without model calls:
 
@@ -86,12 +121,18 @@ field remain supported. It requires a completed run and rejects changed or
 missing artifacts and a mismatch with the saved final graph. It does not resume
 construction or certify factual quality.
 
-The original adapter intentionally leaves graph parsing and quality behavior
-unchanged: a completed draft still needs structural and evidence review. The
-sparse example uses `evidence_policy: strict`, rejecting quotations absent from
-the input text. Exact quote presence does not establish semantic support or
-correct action/time attribution. These are different quality policies, not
-equivalent acceptance gates.
+The sparse examples use `evidence_policy: report`: unmatched quotations are
+recorded without blocking draft output or triggering extra model calls. The
+generation workflow reuses role results and compact context, with prompts for
+source quotations, fact status and process coverage. Local source anchoring and
+quality diagnostics remain available. Invalid structure, identity references,
+or execution integrity still fail their respective checks.
+
+Set `evidence_policy: strict` to opt into blocking quotations absent from the
+input after traceable whitespace normalization. Quote presence alone does not
+establish semantic support or correct action/time attribution. In either mode,
+`FinalEventCascade.json` is the completed draft, not a human-approved dataset EPG.
+The original adapter leaves its graph parsing and quality behavior unchanged.
 
 The adapter is opt-in through this entry (or `BuildOnlyAgentEventBuilder` in
 Python); it does not replace the original builder in the full pipeline registry.
