@@ -10,6 +10,14 @@ Scope:
 - Determine event type, the number of stages, and the number of episodes per stage from `Content`.
 - Use `VerifiableField` as defined in the Schema for applicable fields (timestamps, names, categorical labels).
 
+Evidence coverage:
+- Review each source in `Content` for distinct, material activities within the scope of `Query` and `Keywords` before grouping them into stages and episodes.
+- Cover evidenced purchases or sales, decisions, public statements, regulatory actions, and disclosures when relevant to the request. An activity does not need a financial transfer to merit an Episode; a statement or approval can have no transactions.
+- Distinguish an activity being reported from the reporting itself. Deduplicate repeated accounts of the same activity; do not turn every mention, document, background fact, or speculation into an Episode.
+- Account for each supported material activity in an Episode whose name, temporal scope, and existing VerifiableField evidence identify that activity. A broad Stage title or a date span alone is not evidence that an activity is covered.
+- Group closely related occurrences in one coherent Episode when its name and evidence retain their meaning and supported timing. Do not absorb a distinct statement, decision, or later activity solely because it involves the same participants or asset. There is no target Stage or Episode count.
+- Check coverage across all supplied sources before finalizing the skeleton. Use existing evidence_source_contents and concise reasons to ground fields; do not add a coverage inventory or other fields to the output Schema.
+
 Target structure (reconstruction focus):
 EventCascade
   └── stages: List[EventStage]
@@ -24,15 +32,16 @@ Time Consistency & Granularity (CRITICAL):
 1) Hierarchy Constraint:
    - Stage Time: Must be within the Event's `start_time` and `end_time`.
    - Episode Time: Must be within its parent Stage's `start_time` and `end_time`.
-2) Continuity Constraint (CRITICAL for Financial Events):
-   - **No Excessive Gaps**: Financial events are typically continuous processes. Avoid large, unexplained time gaps between consecutive Stages or Episodes unless explicitly supported by `Content` (e.g., a market weekend close or a regulatory waiting period).
-   - **Seamless Transition**: Ideally, the end time of one Stage/Episode should align closely with the start time of the next, reflecting the fluid nature of information flow and market reactions.
-   - **Gap Justification**: If a significant time gap exists because `Content` provides no information for the intervening period, you MUST explicitly state this in the reasoning field (if available) or ensure the "unknown" status is clear. Do not fabricate continuity if evidence is missing, but acknowledge the gap as a data limitation.
+2) Evidence-Based Temporal Coverage:
+   - Gaps between evidenced activities are allowed. Recheck `Content` for omitted activities in a gap, but do not invent an activity or stretch dates to fill it.
+   - Use supported temporal or logical order; independent activities may overlap when the evidence supports that relationship.
 3) Granularity & Format Requirement:
-   - **Standard Format**: Strictly use ISO 8601 style: `YYYY-MM-DD` for date-only, `YYYY-MM-DD HH:MM:SS` for date-time.
+   - **Standard Format**: Use `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS` according to the precision supported by the source. Put interval boundaries in the existing start_time/end_time fields, not in a combined range string.
    - **Precision**: Extract timestamps with maximum precision supported by `Content`.
    - If `Content` supports hours/minutes, you MUST include them.
-   - If `Content` does not explicitly support hours/minutes/seconds, do NOT add them (keep as `YYYY-MM-DD`).
+   - Never add days or times absent from the evidence. For a month-only activity, both boundaries may use the same `YYYY-MM`; do not invent the first or last day of that month.
+   - Resolve relative dates only when the source context supports the reference year/month. Publication time may anchor relative language but is not automatically the activity's occurrence time.
+   - If a season or other vague phrase cannot support an allowed date value, set the unresolved boundary to "unknown" and preserve the source phrase and uncertainty in its existing evidence_source_contents/reasons. Retain the supported activity despite its imprecise date.
    - Timezone: If `Content` mentions a timezone, you MUST include it. Otherwise, do NOT add a timezone (default to event local time).
    - Never truncate available time information.
 
@@ -45,7 +54,7 @@ How to reconstruct:
 Strict constraints:
 - Use ONLY fields and types defined by the schema; names and types must match exactly.
 - Do NOT fabricate beyond `Content`; set missing information to "unknown".
-- Stage and Episode IDs must be stable and unique. If no canonical scheme exists, use sequential identifiers (e.g., "S1", "E1") starting from 1.
+- Stage IDs must be unique across the event, and Episode IDs must be unique across all stages. If no canonical scheme exists, use sequential identifiers (e.g., "S1", "E1") starting from 1; do not restart Episode numbering within each stage.
 
 Schema definition (must follow exactly):
 === BEGIN Schema ===
@@ -67,22 +76,23 @@ Instructions:
 - Event type: set `event_type` if supported by Content; otherwise "unknown".
 - Stages: decide the number of stages; for each set `stage_id`, `name`, `index_in_event`, `start_time`, `end_time`, and its episodes.
 - Episodes: decide the number per stage; for each set `episode_id`, `name`, `index_in_stage`, `start_time`, `end_time` strictly from `Content` using `VerifiableField` aligned with `Query` and `Keywords` (if insufficient evidence, set to "unknown" with concise reasons).
+- Review every supplied source for supported material activities relevant to the request, including statements, decisions, approvals, and disclosures as well as trades. Map each activity to an identifiable Episode; date overlap or a broad Stage name alone does not establish coverage.
+- Preserve coherent groupings and deduplicate repeated reports. Keep distinct activities represented, including those without transactions or exact dates. Do not force a particular Stage/Episode count or create episodes from mere mentions or speculation.
 - Ordering: set indices by temporal/logical order starting from 0.
-- Stage and Episode IDs: use stable locally unique IDs (e.g., "S1", "E1") starting from 1.
+- Stage and Episode IDs: use stable IDs (e.g., "S1", "E1") starting from 1. Episode IDs must be unique across all stages, not just within a stage.
 - Output: raw JSON only; do not include explanations or code fences.
 
 CRITICAL Time Constraints:
 1. Hierarchy: Event range >= Stage range >= Episode range.
-   - Ensure Stage start/end are strictly inside Event start/end.
-   - Ensure Episode start/end are strictly inside Stage start/end.
-2. Continuity:
-   - **Avoid Gaps**: Ensure Stages and Episodes flow continuously. The end of Stage N should ideally match or immediately precede the start of Stage N+1.
-   - **Reasonable Intervals**: If a gap exists, it must be justified by `Content` (e.g., non-trading hours).
-   - **Missing Data**: If a gap is due to missing information in `Content`, explicitly note this limitation rather than fabricating times.
+   - Ensure Stage start/end are within Event start/end (inclusive, at supported precision).
+   - Ensure Episode start/end are within Stage start/end (inclusive, at supported precision).
+2. Temporal coverage:
+   - Check gaps against the sources for omitted activities. Keep gaps when no supported activity fills them; do not invent continuity or stretch time bounds.
 3. Granularity & Format:
-   - **Format**: Use `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`.
+   - **Format**: Use `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS`. Store start and end separately.
    - Use highest precision available supported by `Content`.
-   - If precise time (hours/minutes/seconds) is missing in `Content`, do NOT add "00:00:00". Keep it as Date only.
+   - Do not invent days or times. Preserve month/year precision; use "unknown" for unresolved vague boundaries and keep the original phrase in existing evidence/reasons. An imprecise date alone is not a reason to drop an activity.
+   - Use source context to resolve relative dates; do not equate publication and occurrence time without evidence.
    - Include timezone ONLY if explicitly mentioned in `Content`.
 
 === Query BEGIN ===
@@ -111,24 +121,28 @@ Validation Checklist:
 1. **Hierarchy & Containment**:
    - Event start_time/end_time must encompass all Stage start_time/end_time.
    - Stage start_time/end_time must encompass all Episode start_time/end_time within that stage.
-   - Indices (index_in_event, index_in_stage) must be sequential (0, 1, 2...) and correspond to chronological order.
-   - IDs (stage_id, episode_id) must be unique and stable.
+   - Indices (index_in_event, index_in_stage) must be sequential (0, 1, 2...) and correspond to supported temporal/logical order.
+   - Stage IDs must be unique within the event; Episode IDs must be unique across all stages. Preserve valid existing IDs and assign unused IDs to additions; repair duplicate IDs only where needed.
 
 2. **Time Accuracy & Logic**:
    - Timestamps must be grounded in `Content`.
    - start_time <= end_time for all entities.
    - No illogical overlaps (e.g., Stage 2 starting before Stage 1 ends, unless parallel logic is explicitly supported by content).
-   - Format must be ISO 8601 (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`).
+   - Accept `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS` at the source's supported precision. Use the existing start_time/end_time fields separately; do not invent days to replace a month or year.
+   - Keep supported activities with imprecise dates. For unresolved seasons or relative phrases, retain the original phrase and uncertainty in existing evidence_source_contents/reasons and use "unknown" for unresolved boundaries.
+   - Resolve relative dates from source context; publication, filing, and occurrence dates are distinct unless evidence links them. Gaps are allowed; do not fabricate continuity.
 
 3. **Completeness & Alignment**:
-   - The breakdown of Stages and Episodes must fully cover the key phases described in `Content` and requested by `Query`/`Keywords`.
-   - Names should be descriptive and relevant.
+   - Review each source in `Content`, not only the activities already named in `ProposedSkeleton`. Identify distinct material activities relevant to `Query`/`Keywords`, including trades, decisions, public statements, approvals, and disclosures. Repeated reporting of one activity does not create additional activities.
+   - For each supported activity, find an Episode whose name, timing, and existing field evidence actually represent it. A broad Stage name or time interval alone is insufficient. Treat an activity as already covered when a coherent grouped Episode explicitly preserves its meaning and supported timing.
+   - Add a missing supported activity as an Episode in the appropriate Stage; add a Stage only if needed for a coherent placement. Do not drop a material activity merely because it has no transactions or exact date.
+   - Preserve correct existing Episodes and valid groupings. Do not force a fixed number of Episodes, split every daily trade into its own Episode, or promote background mentions, speculative plans, or conflicting details into established facts. Use existing evidence/reasons to qualify uncertain fields.
 
 Action:
-- If the input Skeleton is correct, return it as is.
+- Return the input Skeleton unchanged only after both coverage against the sources and structural checks pass.
 - If errors are found (e.g., time violations, missing stages, incorrect indices), YOU MUST CORRECT THEM.
 - **Correction Rules**:
-   - **Structure Preservation**: The output JSON must maintain the EXACT structure of the `ProposedSkeleton`. Do not add, remove, or rename any keys. Only values should be corrected.
+   - **Schema Preservation**: Preserve the Schema's field names and types, not the original lengths of the stages/episodes lists. You may insert missing supported Stage/Episode objects using only Schema fields. Preserve valid existing objects and IDs, and update affected indices to reflect the corrected order.
    - All modifications must be strictly grounded in `Content`.
    - **Time Hierarchy Correction**: If a parent entity's `start_time` or `end_time` (e.g., Event or Stage) does not encompass its children (e.g., Stages or Episodes), **expand the parent's `start_time`/`end_time`** to cover the children, provided this is supported by `Content`.
      - Example (Event vs Stage): If Event `start_time` is 2024-02-01 but Stage 1 `start_time` is 2024-01-15, change Event `start_time` to 2024-01-15 (or earlier if content supports it).
@@ -142,8 +156,8 @@ Schema definition (must follow exactly):
 
 Output requirements:
 - Output a single raw JSON object for `EventCascade` (the corrected version) that matches the Schema exactly.
-- **Structure Maintenance**: The output JSON structure must be IDENTICAL to the `ProposedSkeleton`. Do not add or remove fields.
-- **Content Integrity**: Only modify field values in the `ProposedSkeleton` where corrections are necessary based on `Content`, `Query`, `Keywords`. Keep correct parts unchanged.
+- **Schema Maintenance**: Return the complete corrected EventCascade with its supported existing objects and any necessary additions. Do not add extra keys such as a coverage report, checklist, or review status.
+- **Content Integrity**: Make only evidence-grounded corrections and coverage additions. Keep correct parts unchanged; ground new or corrected fields using the existing VerifiableField evidence_source_contents and concise reasons.
 - Do not include explanations, code fences, or additional text.
 """
 
@@ -151,9 +165,10 @@ SkeletonCheckerUser = """
 Based on the Query, Keywords, Content, and the Proposed Skeleton, perform a comprehensive check and correction.
 
 Instructions:
-- Review the Proposed Skeleton against the Content and the Validation Checklist.
-- Correct any errors in hierarchy, timing, indexing, or naming.
-- **IMPORTANT**: Maintain the EXACT structure of the Proposed Skeleton. Do not add/remove fields.
+- Review every source for distinct supported material activities relevant to the request, including non-transaction activities, and check whether each is represented by an Episode's name, timing, and field evidence.
+- Distinguish activities already covered by a coherent grouped Episode from true omissions. Add missing supported Episodes (and Stages only where needed); preserve correct existing objects and valid groupings. Do not target a fixed count or treat every mention as an activity.
+- Correct hierarchy, timing, indexing, and naming where necessary. Retain coarse dates and unresolved boundaries with existing evidence/reasons; do not invent exact dates or force continuous coverage.
+- **IMPORTANT**: Maintain Schema field names and types; stages/episodes list lengths may change to repair omissions. Preserve valid IDs, allocate unused IDs for additions, repair duplicates, and update affected indices. Episode IDs must be unique across all stages.
 - Ensure the final output is a valid JSON object matching the Schema.
 
 === Query BEGIN ===
@@ -378,21 +393,30 @@ Instructions:
 TransactionReconstructorSys = """
 You are a senior expert in financial transaction analysis. Your task is to identify and reconstruct all financial transactions within a specific episode strictly from `Content`, guided by `Query` and `Keywords`.
 
-The target episode's basic skeleton and its participants are provided. You must ensure the extracted transactions involve these participants and align with the episode's timeframe.
+The target episode's basic skeleton and its participants are provided. `Content` can cover the entire event and several other episodes. Select only transactions that actually belong to `TargetEpisode`; event-level relevance alone is insufficient.
 
 Output a JSON object with a single key "transactions" containing a list of `Transaction` objects defined in the Schema.
 
 Scope:
-- Identify all financial transfers, payments, settlements, or funding flows between the identified participants in this episode.
+- Identify financial transfers, payments, settlements, or funding flows evidenced as occurring in this episode.
 - Populate `name`, `transaction_type`, `timestamp`, `details`, `from_participant_id`, `to_participant_id`, and `instruments`.
-- Ensure transactions fall within the episode `start_time` and `end_time` or are directly relevant.
+- Require both membership in the episode's described activity and temporal consistency with its `start_time` and `end_time`. Shared entities, assets, or investment themes do not establish episode membership.
+- Exclude earlier and later transactions, including those mentioned as background, comparisons, or subsequent outcomes. Do not attach them to this episode's `transactions` list.
+- Use the transaction's occurrence time, not an article's publication time or a filing/disclosure time. Treat these dates as identical only when the source explicitly supports that interpretation.
+- Preserve the source's date precision. For coarse or unknown dates or episode bounds, require explicit contextual evidence linking the transaction to this episode; a possible date overlap alone is insufficient. Omit a transaction if its assignment cannot be established. Never invent a date or change episode boundaries to make it fit.
+
+Empty results:
+- An episode may have no transactions. A speech, regulatory approval, or disclosure does not itself establish that a transfer occurred in that episode. Do not import the purchases discussed in it merely to populate this field.
+- If no transaction satisfies these requirements, return exactly {{"transactions": []}}. An empty list is a valid complete result; never create a placeholder transaction.
 
 Constraints:
-- Use `VerifiableField` for all applicable fields.
-- `from_participant_id` and `to_participant_id` MUST be chosen from the provided `TargetEpisode.participants`. Do not invent new IDs.
-- If a transaction involves an external party not in the participant list, you may ignore it or map it to a generic group participant if one exists in the list.
+- Use `VerifiableField` for all applicable fields. In `timestamp.reasons`, explain the evidence for the transaction's occurrence time and membership in this episode.
+- Each known `from_participant_id` and `to_participant_id` MUST be chosen from the provided `TargetEpisode.participants`. Do not invent new IDs.
+- Match IDs to the entities actually identified in the evidence. Keep individuals and organizations distinct: a company's purchase cannot be assigned to its chair, executive, owner, or adviser, and a personal purchase cannot be assigned to an affiliated company.
+- For an otherwise supported in-scope transaction, if a party is unidentified or has no matching participant, use the existing VerifiableField with value="unknown" for that ID. In its `reasons`, distinguish an unidentified party from a named party missing from the participant list; for the latter, state the evidenced entity name and cite the source in `evidence_source_contents`. Do not substitute another participant to satisfy the schema.
+- An existing group participant may be used only when the evidence actually identifies that group as the party, not as a replacement for a missing named entity. Do not assign a security issuer or regulator as the counterparty merely because it is present in the participant list.
 - Reconstruct only critical, material transactions directly evidenced in `Content`; omit peripheral, redundant, or speculative flows.
-- Output raw JSON only.
+- Output raw JSON with only the `transactions` key. Do not add diagnostic records or extra fields to represent omitted transactions.
 
 Schema:
 === BEGIN Schema ===
@@ -413,8 +437,10 @@ Output:
   Example: dict(transactions: List[Transaction])
 
 Instructions:
-- Identify financial transactions supported by `Content`.
-- Use the `participant_id`s from `TargetEpisode.participants` for `from_participant_id` and `to_participant_id`.
+- Select transactions belonging to this episode's activity and time span, even though `Content` includes evidence for the full event. Exclude background and subsequent transactions.
+- Distinguish occurrence time from publication and disclosure time; preserve date precision and omit transactions whose episode membership is unsupported.
+- Use only participant IDs matching the actual source entities. Never substitute an individual for a company or vice versa. For an otherwise in-scope transaction with an unknown or missing party, set that ID field's value to "unknown" and explain the missing identity in its existing `reasons` field.
+- Return {{"transactions": []}} when no supported in-scope transaction remains. Speeches, approvals, and disclosures may legitimately have no transactions.
 - Use `VerifiableField` for grounded details.
 
 === TARGET EPISODE BEGIN ===
