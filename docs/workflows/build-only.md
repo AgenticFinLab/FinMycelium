@@ -9,8 +9,11 @@ is needed for execution; offline preflight and replay need no key.
 
 | Configuration | Builder | Behavior |
 |---|---|---|
-| `configs/build_only_agent.yml` | Original AgentEventBuilder | `75be1f9` prompts, role order, parsing and assembly; single-call API adapter |
-| `configs/build_only_sparse.yml` | Repaired SparseRagBuilder | Sparse routing, role validation and bounded JSON retries; additional context assets disabled |
+| `configs/build_only_agent.yml` | AgentEventBuilder | Original multi-agent reconstruction with a single-call API adapter |
+| `configs/build_only_sparse.yml` | SparseRagBuilder | Sparse routing, compact context and role-result reuse, with optional local retrieval augmentation |
+
+The sparse example enables routing but disables additional evidence cards.
+See [Sparse reconstruction](sparse-rag-build.md) for method-specific behavior.
 
 Both examples select `ark/doubao-seed-2-0-pro-260215`, with a 12,288-token
 per-call output cap, temperature 0.2 and top-p 0.95. They do not explicitly set
@@ -99,38 +102,10 @@ be reviewed before sharing. `output/` is Git-ignored.
   `QualityReview.json`, `AcceptanceDecision.json`, `CandidateEventCascade.json`,
   and `FinalEventCascade.json` when the configured quote policy permits it.
 
-The assembled candidate is retained before final validation, including on a quote
-gate failure. It is not an approved graph. Evidence contract v2 locates quotes in
-unchanged sources by exact text or whitespace-only normalization and records
-sample IDs, source SHA-256, original excerpts and zero-based, end-exclusive Unicode
-character offsets. Punctuation, casing, ellipses and paraphrases are not normalized.
-Within each source, exact matches take precedence; whitespace-only locations are
-used when no exact match exists. Multiple returned locations are retained rather
-than silently choosing one.
-Query/keyword citations are marked separately and do not count as source support.
-
-`QualityReview.json` lists conservative English-language review candidates for
-payment state, dates, relation endpoints and uncited source paragraphs. Aliases,
-pronouns and irrelevant paragraphs can cause false positives. This is neither
-semantic approval nor a factual coverage score, and it does not rewrite the graph.
-Missing quotations are reported separately; the existing strict policy rejects
-unlocatable supplied quotes, not every field without a quote. An accepted draft
-still requires content review, even if no heuristic issue is found.
-
-Sparse construction contract v2 reuses Participant and Transaction outputs
-unchanged. Episode generates relations/descriptions and references those arrays
-by exact placeholders. Downstream prompts use value-only projections, retaining
-the complete source text and all original role results in the saved artifacts.
-Canonical participant ID/name/type bindings are checked across episodes; roles
-may change. Known action/transaction dates must overlap their target episode's
-checked time window. Coarse dates retain their precision; unknown/unparsed dates
-are reported as unchecked, not silently converted to exact timestamps.
-
-`ConstructionCheck.json` records identity bindings, time checks and repeated-action
-candidates. It is a structural diagnostic, not an entailment or alias-resolution
-oracle. Narrative scope, relation direction and ambiguous identities still need
-content review. Old sparse runs without the v2 marker retain their original
-replay contract; they are not retroactively certified by the new checks.
+Sparse retains the assembled candidate before final validation. Its local reports
+record identity/time checks, source quotation locations and content-review hints
+without additional model calls. Details are in
+[Results and Checks](sparse-rag-build.md#results-and-checks).
 
 Verify stored artifacts and reassemble without model calls:
 
@@ -144,11 +119,8 @@ missing artifacts and a mismatch with the saved final graph. It does not resume
 construction or certify factual quality.
 
 The sparse examples use `evidence_policy: report`: unmatched quotations are
-recorded without blocking draft output or triggering extra model calls. The
-generation workflow reuses role results and compact context, with prompts for
-source quotations, fact status and process coverage. Local source anchoring and
-quality diagnostics remain available. Invalid structure, identity references,
-or execution integrity still fail their respective checks.
+recorded without blocking draft output or triggering extra model calls. Structure,
+identity references and execution integrity still undergo their existing checks.
 
 Set `evidence_policy: strict` to opt into blocking quotations absent from the
 input after traceable whitespace normalization. Quote presence alone does not
