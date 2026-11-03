@@ -76,6 +76,17 @@ FinMycelium 依赖 [lmbase](https://github.com/AgenticFinLab/lmbase) 仓库提�
 
 ### 基本使用
 
+#### 使用已整理的正文构建
+
+纯文本 SparseRagBuilder 入口不需要网络检索、PDF 解析或 MySQL，详见
+[构建说明](docs/workflows/sparse-rag-build.md)。先做离线检查：
+
+```bash
+python -m finmy.runner.sparse_build_runner --input examples/sparse_input.json
+```
+
+只有加上 `--execute` 才会调用模型；以上命令本身不会生成图。
+
 #### 使用管道
 ```python
 from finmy.pipeline import FinmyPipeline

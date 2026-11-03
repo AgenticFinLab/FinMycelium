@@ -107,7 +107,10 @@ class FinmyPipeline:
         self.data_manager = DataManager(self.db_config)
 
         # Initialize the Work modules
-        self.pdf_collector = PDFCollector(self.pdf_collector_config)
+        # Sparse text construction does not need MinerU. PDF collection creates
+        # its collector on demand in _collect_data_from_sources.
+        if self.builder_config.get("builder_type") != "SparseRagBuilder":
+            self.pdf_collector = PDFCollector(self.pdf_collector_config)
         self.url_collector = URLParser(self.url_collector_config)
         self.summarizer = self._create_summarizer()
         if self.matcher_config["use_matcher"]:

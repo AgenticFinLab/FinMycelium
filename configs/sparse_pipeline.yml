@@ -1,6 +1,30 @@
 # Pipeline configuration example for SparseRagBuilder.
 #
 # This file is opt-in and does not change configs/pipline.yml.
+# Paths are relative to the working directory. Full Pipeline adds query
+# summarization calls; the text runner uses builder_config only.
+
+output_dir: "output/sparse"
+save_folder: "output/sparse"
+db_config:
+  url: "sqlite:///output/sparse/metadata.sqlite3"
+url_collector_config:
+  delay: 1.0
+  use_selenium_fallback: false
+  selenium_wait_time: 5
+pdf_collector_config:
+  output_dir: "output/sparse/pdf"
+  batch_size: 10
+  language: "en"
+  check_pdf_limits: true
+  env_file: ".env"
+summarizer_config:
+  summarizer_type: "KWLMSummarizer"
+  llm_name: "deepseek/deepseek-chat"
+matcher_config:
+  use_matcher: false
+  matcher_type: "LXMatcher"
+  lm_name: "deepseek/deepseek-chat"
 
 lm_type: &lm_type "api"
 lm_name: &lm_name "deepseek/deepseek-chat"
@@ -19,6 +43,12 @@ sparse_builder_config: &sparse_builder_config
   excerpt_char_limit: 240
   max_card_tokens: 48
   enable_sparse_routing: true
+  enable_context_assets: true
+  output_language: "English"
+  max_json_attempts: 3
+  max_calls: 300
+  request_timeout_seconds: 900
+  evidence_policy: "strict"
 
 builder_config:
   builder_type: "SparseRagBuilder"
@@ -26,7 +56,7 @@ builder_config:
   lm_name: *lm_name
   inference_config: *inference_config
   generation_config: *generation_config
-  save_folder: "EXPERIMENT/uTEST/EventPipeline"
+  save_folder: "output/sparse"
   graph_config:
     recursion_limit: 150
   sparse_builder_config: *sparse_builder_config
