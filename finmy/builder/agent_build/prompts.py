@@ -2,7 +2,21 @@
 Prompts of the step-wise event builder.
 """
 
-EventLayoutReconstructorSys = """
+_TEMPORAL_NORMALIZATION_POLICY = """
+Temporal normalization policy (applies to all reconstructed time fields):
+- Recognize temporal expressions across languages, calendar systems, era-based year numbering, and regional or historical conventions, including calendar dates, festivals, solar terms, seasons, reporting periods, fiscal periods, relative dates, and business/trading days. These categories are illustrative, not an exhaustive whitelist.
+- Identify the original expression and its supported calendar, year-numbering system, reference year/event, locale, and timezone before conversion. Distinguish calendar conversion from year-number conversion; account for applicable year starts, leap rules, and historical conventions rather than assuming a fixed year offset. Source language alone does not establish a calendar or locale.
+- Normalize to Gregorian dates or ranges at the finest precision justified jointly by Content and a reliably established, applicable calendar rule. A date derived by such a rule need not appear literally in Content. Resolve aliases from context; if the calendar, anchor, or conversion rule remains ambiguous, retain supported coarse information or mark the unresolved boundary as "unknown" rather than guess.
+- Preserve the original source wording in existing evidence_source_contents. In existing reasons, distinguish directly stated values from derived values and explain the anchor, applicable convention/rule, and remaining uncertainty. Use supplied reference information or available calculation tools when needed; if a conversion cannot be established reliably, leave it unresolved. Do not claim external verification or tool use that did not occur.
+- For periods, derive bounds only from supported context or an explicitly applicable convention. Distinguish a named day from a holiday period, calendar from fiscal periods, and elapsed days from business/trading days. In reasons, distinguish an occurrence window from evidence that an activity lasted throughout that window. Do not choose a midpoint or arbitrary endpoint as the occurrence date.
+- Use only existing Schema fields. Where start_time/end_time exist, put supported bounds in those fields separately. For a single timestamp field, use a supported exact or coarse Gregorian value; if the range cannot be represented faithfully, use "unknown" and describe the supported range in its existing reasons. Do not add fields or encode a combined range string as a timestamp.
+- Supported output precision is YYYY, YYYY-MM, YYYY-MM-DD, YYYY-MM-DD HH:MM, or YYYY-MM-DD HH:MM:SS, with an evidenced timezone when applicable. Retain year/month precision when no valid rule supports finer precision; never pad it with an invented month, day, or midnight. After calendar conversion, a source period may cross Gregorian months or years, so represent its actual supported bounds rather than forcing it into one Gregorian year/month.
+- Keep occurrence, publication, filing, and disclosure times distinct. Resolve relative expressions against the appropriate source/event anchor, not the current run date. Time normalization does not establish episode membership or justify moving an activity into a different Episode.
+
+"""
+
+
+EventLayoutReconstructorSys = _TEMPORAL_NORMALIZATION_POLICY + """
 You are a senior expert in financial-event type identification and event skeleton reconstruction. Your task is to reconstruct and set the skeleton for one specific financial event strictly from real data: respect `Query` and `Keywords`, and use only facts in `Content`. Produce one JSON object that matches the provided Schema exactly.
 
 Scope:
@@ -36,12 +50,12 @@ Time Consistency & Granularity (CRITICAL):
    - Gaps between evidenced activities are allowed. Recheck `Content` for omitted activities in a gap, but do not invent an activity or stretch dates to fill it.
    - Use supported temporal or logical order; independent activities may overlap when the evidence supports that relationship.
 3) Granularity & Format Requirement:
-   - **Standard Format**: Use `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS` according to the precision supported by the source. Put interval boundaries in the existing start_time/end_time fields, not in a combined range string.
-   - **Precision**: Extract timestamps with maximum precision supported by `Content`.
+   - **Standard Format**: Use Gregorian `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS` at the precision supported by Content and the temporal normalization policy. Put interval boundaries in the existing start_time/end_time fields, not in a combined range string.
+   - **Precision**: Extract or derive timestamps using Content and reliably established, applicable calendar rules, with the basis recorded in existing evidence/reasons.
    - If `Content` supports hours/minutes, you MUST include them.
-   - Never add days or times absent from the evidence. For a month-only activity, both boundaries may use the same `YYYY-MM`; do not invent the first or last day of that month.
+   - Do not invent precision; justified calendar conversion is allowed. For an activity known only to a Gregorian month, both boundaries may use the same `YYYY-MM`; this does not mean the activity lasted the whole month.
    - Resolve relative dates only when the source context supports the reference year/month. Publication time may anchor relative language but is not automatically the activity's occurrence time.
-   - If a season or other vague phrase cannot support an allowed date value, set the unresolved boundary to "unknown" and preserve the source phrase and uncertainty in its existing evidence_source_contents/reasons. Retain the supported activity despite its imprecise date.
+   - Resolve seasons and other named periods to bounds when supported by context and an applicable convention. Otherwise retain supported coarse information or set the unresolved boundary to "unknown", keeping the source phrase and uncertainty in existing evidence/reasons. Retain the supported activity despite its imprecise date.
    - Timezone: If `Content` mentions a timezone, you MUST include it. Otherwise, do NOT add a timezone (default to event local time).
    - Never truncate available time information.
 
@@ -90,8 +104,8 @@ CRITICAL Time Constraints:
    - Check gaps against the sources for omitted activities. Keep gaps when no supported activity fills them; do not invent continuity or stretch time bounds.
 3. Granularity & Format:
    - **Format**: Use `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS`. Store start and end separately.
-   - Use highest precision available supported by `Content`.
-   - Do not invent days or times. Preserve month/year precision; use "unknown" for unresolved vague boundaries and keep the original phrase in existing evidence/reasons. An imprecise date alone is not a reason to drop an activity.
+   - Apply the temporal normalization policy across calendar systems, year-numbering systems, and natural-language time expressions; use the finest precision justified by Content and an applicable conversion rule.
+   - Preserve original wording and conversion grounds in existing evidence/reasons. Keep month/year precision or unresolved boundaries when finer values cannot be established; do not pad missing components. An imprecise date alone is not a reason to drop an activity.
    - Use source context to resolve relative dates; do not equate publication and occurrence time without evidence.
    - Include timezone ONLY if explicitly mentioned in `Content`.
 
@@ -109,7 +123,7 @@ CRITICAL Time Constraints:
 """.strip()
 
 
-SkeletonCheckerSys = """
+SkeletonCheckerSys = _TEMPORAL_NORMALIZATION_POLICY + """
 You are a senior expert in financial event verification and data quality assurance. Your task is to audit and correct the Skeleton of a financial event (EventCascade) strictly based on Query, Keywords, and Content.
 
 Scope:
@@ -128,8 +142,8 @@ Validation Checklist:
    - Timestamps must be grounded in `Content`.
    - start_time <= end_time for all entities.
    - No illogical overlaps (e.g., Stage 2 starting before Stage 1 ends, unless parallel logic is explicitly supported by content).
-   - Accept `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS` at the source's supported precision. Use the existing start_time/end_time fields separately; do not invent days to replace a month or year.
-   - Keep supported activities with imprecise dates. For unresolved seasons or relative phrases, retain the original phrase and uncertainty in existing evidence_source_contents/reasons and use "unknown" for unresolved boundaries.
+   - Accept Gregorian `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD HH:MM:SS` at the precision justified by Content and the temporal normalization policy. Audit derived dates against their original expression, calendar/year-numbering system, anchor, and stated conversion rule. Use start_time/end_time separately; reject invented precision, not justified calendar conversion.
+   - Keep supported activities with imprecise dates. Resolve named periods or relative phrases when their applicable convention and anchor are established; otherwise preserve supported coarse information or unresolved boundaries with the original phrase and uncertainty in existing evidence_source_contents/reasons.
    - Resolve relative dates from source context; publication, filing, and occurrence dates are distinct unless evidence links them. Gaps are allowed; do not fabricate continuity.
 
 3. **Completeness & Alignment**:
@@ -167,7 +181,7 @@ Based on the Query, Keywords, Content, and the Proposed Skeleton, perform a comp
 Instructions:
 - Review every source for distinct supported material activities relevant to the request, including non-transaction activities, and check whether each is represented by an Episode's name, timing, and field evidence.
 - Distinguish activities already covered by a coherent grouped Episode from true omissions. Add missing supported Episodes (and Stages only where needed); preserve correct existing objects and valid groupings. Do not target a fixed count or treat every mention as an activity.
-- Correct hierarchy, timing, indexing, and naming where necessary. Retain coarse dates and unresolved boundaries with existing evidence/reasons; do not invent exact dates or force continuous coverage.
+- Correct hierarchy, timing, indexing, and naming where necessary. Apply the temporal normalization policy and verify calendar-derived dates/ranges against source wording, anchors, and applicable rules. Retain coarse dates or unresolved boundaries when needed; do not invent precision or force continuous coverage.
 - **IMPORTANT**: Maintain Schema field names and types; stages/episodes list lengths may change to repair omissions. Preserve valid IDs, allocate unused IDs for additions, repair duplicates, and update affected indices. Episode IDs must be unique across all stages.
 - Ensure the final output is a valid JSON object matching the Schema.
 
@@ -312,6 +326,8 @@ You are a senior expert in financial participant identification and profiling. Y
 
 The target episode's basic skeleton (ID, name, index_in_stage, start_time, end_time) is provided. You must ensure the extracted participants align with this episode's information and timeframe. Prioritize identifying the necessary, important, and key participants that materially drive or are affected by the episode's outcomes.
 
+Content may cover the entire event. Select entities whose roles are evidenced in TargetEpisode, not every entity mentioned elsewhere in Content or ReconstructedParticipants.
+
 Output a JSON object with a single key "participants" containing a list of `Participant` objects defined in the Schema.
 
 Scope:
@@ -322,6 +338,13 @@ Scope:
 - Deduplicate aliases and unify names referring to the same entity; avoid redundant participants.
 - Reuse IDs when the same entity already exists in previously reconstructed participants across other stages/episodes (provided in `ReconstructedParticipants` structured as EventCascade → stages → episodes).
 
+Entity coverage and attribution:
+- Distinguish the speaker, any explicitly represented organization, and the entities whose decisions, rights, obligations, or assets are materially at issue in the episode. Include a clearly evidenced organization in such a role even when only its representative speaks or it performs no separate action in this episode. Core relevance is not limited to the person speaking and the subject being discussed.
+- Include these entities only when Content establishes their material role in TargetEpisode; do not automatically import every employer, affiliate, or background entity. Resolve pronouns and shorthand from source context; affiliation alone does not prove representation or identify the actor.
+- Keep individuals, organizations, and distinct affiliated organizations separate, with distinct participant IDs. A representative and their organization are not aliases. Attribute speaking to the speaker and purchases, holdings, decisions, or obligations to the actual evidenced entity; never transfer them to an executive, owner, adviser, or affiliated organization merely by association. Preserve an individual's own activity when the evidence identifies that individual as the actor.
+- An included participant may have an empty actions list. Do not invent an action or copy another participant's action to justify inclusion. Use the existing role, evidence, and reasons to explain its involvement.
+- Before returning, check that each material actor and rights/obligations holder explicitly supported for this episode is represented by the correct entity. Use ReconstructedParticipants to resolve identity and reuse IDs, not as independent evidence of involvement or a reason to copy earlier actions into this episode.
+
 Field Requirements of the Output are strictly defined in the Schema. Additionally:
 - participant_id: Use a stable, unique identifier of the form "P_" + integer; when an entity is already present in `ReconstructedParticipants`, reuse its `participant_id` and note the reuse briefly via an appropriate `attributes` entry.
 
@@ -330,7 +353,7 @@ Constraints:
 - Use `VerifiableField` for all applicable fields to ensure grounding in `Content`.
 - Each participant must have clear evidence from `Content` supporting inclusion; if evidence is insufficient, omit or set fields to unknown with brief reasons.
 - Do NOT fabricate information; if evidence is missing, use "unknown".
-- Reconstruct only the most critical and core participants that materially drive or are affected by the episode; omit peripheral or weakly implied entities.
+- Reconstruct the core participants, including evidenced organizations represented in statements or whose decisions, rights, or obligations are materially at issue; omit peripheral or weakly implied entities.
 - Avoid redundancy, associative inference, and any invented participants not explicitly supported by `Content`.
 - Output raw JSON only.
 
@@ -361,10 +384,13 @@ Output:
 
 Instructions:
 - Extract the core set of participants crucial to the TargetEpisode. Include other participants only if clearly evidenced and relevant.
+- Distinguish the speaker, an explicitly represented organization, and the actual actors or rights/obligations holders discussed. Include each when its material role in this episode is supported, even without a separate action; do not include all affiliates or background mentions.
+- Keep people and organizations distinct. Deduplicate only aliases of the same entity, not representatives and organizations or affiliated organizations. Attribute each action to its evidenced actor; an empty actions list is valid.
 - Use `VerifiableField` with evidence and reasons for all grounded fields.
 - Ensure involvement and `actions` are time-consistent with the episode `start_time` and `end_time` or directly causally linked.
 - Deduplicate aliases and unify names; avoid duplicates for the same entity.
 - When a participant already appears in ReconstructedParticipants (same real-world entity), reuse the same `participant_id` and add a brief explanation in `attributes` to state which stage/episode it is reused from.
+- Check coverage of the material entities before returning. Prior participant records support identity matching, not automatic inclusion or reuse of actions from other episodes.
 - Ensure `participant_id` follows the format "P_" + integer for any new participant created in this episode.
 - If a participant represents a group, specify this in `participant_type` and details in `attributes`.
 
@@ -390,7 +416,7 @@ Instructions:
 """.strip()
 
 
-TransactionReconstructorSys = """
+TransactionReconstructorSys = _TEMPORAL_NORMALIZATION_POLICY + """
 You are a senior expert in financial transaction analysis. Your task is to identify and reconstruct all financial transactions within a specific episode strictly from `Content`, guided by `Query` and `Keywords`.
 
 The target episode's basic skeleton and its participants are provided. `Content` can cover the entire event and several other episodes. Select only transactions that actually belong to `TargetEpisode`; event-level relevance alone is insufficient.
@@ -403,7 +429,7 @@ Scope:
 - Require both membership in the episode's described activity and temporal consistency with its `start_time` and `end_time`. Shared entities, assets, or investment themes do not establish episode membership.
 - Exclude earlier and later transactions, including those mentioned as background, comparisons, or subsequent outcomes. Do not attach them to this episode's `transactions` list.
 - Use the transaction's occurrence time, not an article's publication time or a filing/disclosure time. Treat these dates as identical only when the source explicitly supports that interpretation.
-- Preserve the source's date precision. For coarse or unknown dates or episode bounds, require explicit contextual evidence linking the transaction to this episode; a possible date overlap alone is insufficient. Omit a transaction if its assignment cannot be established. Never invent a date or change episode boundaries to make it fit.
+- Normalize occurrence time under the temporal normalization policy, preserving the precision justified by evidence and applicable calendar rules. For coarse or unknown dates or episode bounds, require explicit contextual evidence linking the transaction to this episode; a possible date overlap alone is insufficient. Omit a transaction if its assignment cannot be established. Never invent a date or change episode boundaries to make it fit.
 
 Empty results:
 - An episode may have no transactions. A speech, regulatory approval, or disclosure does not itself establish that a transfer occurred in that episode. Do not import the purchases discussed in it merely to populate this field.
@@ -438,7 +464,7 @@ Output:
 
 Instructions:
 - Select transactions belonging to this episode's activity and time span, even though `Content` includes evidence for the full event. Exclude background and subsequent transactions.
-- Distinguish occurrence time from publication and disclosure time; preserve date precision and omit transactions whose episode membership is unsupported.
+- Distinguish occurrence time from publication and disclosure time. Apply the temporal normalization policy to timestamp, retaining source wording and any conversion basis in existing evidence/reasons. Respect the single timestamp field and omit transactions whose episode membership is unsupported.
 - Use only participant IDs matching the actual source entities. Never substitute an individual for a company or vice versa. For an otherwise in-scope transaction with an unknown or missing party, set that ID field's value to "unknown" and explain the missing identity in its existing `reasons` field.
 - Return {{"transactions": []}} when no supported in-scope transaction remains. Speeches, approvals, and disclosures may legitimately have no transactions.
 - Use `VerifiableField` for grounded details.
@@ -461,7 +487,7 @@ Instructions:
 """.strip()
 
 
-EpisodeReconstructorSys = """
+EpisodeReconstructorSys = _TEMPORAL_NORMALIZATION_POLICY + """
 You are a senior expert in financial-event episode reconstruction. Reconstruct the TARGET Episode strictly from `Content`, aligned by `Query` and `Keywords`. Output ONE raw JSON `Episode` that matches the Schema exactly.
 
 Inputs:
@@ -481,8 +507,12 @@ Instructions:
     - Set `participants` to the exact string `"Results of ParticipantReconstructor"`.
     - Set `transactions` to the exact string `"Results of TransactionReconstructor"`.
     - Do NOT output the full objects for these fields.
-- **Relations**: Build `participant_relations` referencing the `participant_id`s from the provided `participants` list. Include only relations that are explicitly supported by `Content` and materially relevant; omit speculative or peripheral links.
-- **Descriptions & Times**: Complete `descriptions`, `start_time`, and `end_time` comprehensively from `Content`.
+- **Relations**: Build `participant_relations` only for evidence-backed, materially relevant relationships between the actual entities in TargetEpisode.participants. For each relation, match both endpoint IDs to their entity names and verify the predicate and direction against Content; ground the relationship using its existing VerifiableField evidence and reasons.
+    - Keep individuals and organizations distinct. A company's ownership, investment, contractual, or regulatory relationship cannot be assigned to its representative, executive, owner, or adviser, or vice versa. Affiliated organizations are also distinct endpoints. Use an individual's relationship only when Content supports that individual as the actual party.
+    - Do not infer ownership from speaking about an asset, leadership of an investor, or a chain of affiliations. Represent leadership/representation and ownership as separate relationships only when each is evidenced and its actual endpoints are present. Resolve shorthand from context rather than substituting the closest available participant.
+    - If an actual endpoint is absent, ambiguous, or not supported by Content, omit that relation. Do not add a participant, invent an ID, use an "unknown" endpoint, or substitute another entity to complete an edge. If a source-backed fact is retained in an existing description, its reasons may note the missing endpoint and the evidenced entity name; do not invent a relation or extra reporting fields.
+    - An empty `participant_relations` list is valid. Return [] for this field when no supported relationship can be represented with the provided participants. Do not force an edge merely because two participants are present; preserve the complete Episode output and the required participants/transactions placeholders.
+- **Descriptions & Times**: Complete `descriptions`, `start_time`, and `end_time` from Content under the temporal normalization policy. Preserve correctly normalized skeleton dates, their precision, and conversion evidence unless Content establishes a correction. Keep descriptions consistent with the original expression and supported bounds; do not turn an uncertain occurrence window into a precise date or continuous activity.
 - **General**:
     - Use `VerifiableField` and concise reasons.
     - If evidence is insufficient, set `value` to "unknown".
@@ -513,8 +543,9 @@ Instructions:
 - **Output Placeholders**:
     - `"participants": "Results of ParticipantReconstructor"`
     - `"transactions": "Results of TransactionReconstructor"`
-- **Relations**: Identify `participant_relations` between the provided participants.
-- **Descriptions & Timestamps**: Extract detailed `descriptions`, `start_time`, and `end_time`.
+- **Relations**: Verify each relation's actual parties, predicate, and direction against Content, then match those parties to the provided participant IDs. Keep company and individual relationships separate; speaking, affiliation, or leadership alone does not establish personal ownership or investment.
+- **Missing Endpoints & Empty Relations**: Omit a relation if either actual party is missing or ambiguous; never substitute another entity, invent an ID, or add a participant. Return `participant_relations: []` when no supported relation remains, within the complete Episode object. Missing named endpoints may be noted in an existing relevant description's reasons without adding fields or placeholder relations.
+- **Descriptions & Timestamps**: Reconstruct `descriptions`, `start_time`, and `end_time` under the temporal normalization policy. Preserve valid prior normalization and its evidence; use justified calendar-derived dates/ranges without inventing precision or erasing uncertainty.
 - **Consistency**: Ensure all fields are grounded in `Content`.
 
 Field Requirements:
