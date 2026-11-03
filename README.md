@@ -80,6 +80,17 @@ FinMycelium relies on the [lmbase](https://github.com/AgenticFinLab/lmbase) repo
 
 ### Basic Usage
 
+#### Build From Prepared Text
+
+For an opt-in SparseRagBuilder workflow without web search, PDF parsing or MySQL,
+see [Sparse text reconstruction](docs/workflows/sparse-rag-build.md). Start with an offline check:
+
+```bash
+python -m finmy.runner.sparse_build_runner --input examples/sparse_input.json
+```
+
+Actual model calls require `--execute`; this command alone does not generate a graph.
+
 #### Using the Pipeline
 ```python
 from finmy.pipeline import FinmyPipeline

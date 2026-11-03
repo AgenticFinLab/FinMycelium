@@ -1,0 +1,25 @@
+{
+  "user_query": {
+    "user_query_id": "synthetic-storm-2025",
+    "query_text": "Reconstruct preparation and recovery during the fictional Baytown storm of 1-2 January 2025.",
+    "key_words": ["Baytown", "storm", "recovery"],
+    "extras": {
+      "source_registry": {
+        "report-1": {"source": "synthetic example written for tests", "license": "repository license"},
+        "report-2": {"source": "synthetic example written for tests", "license": "repository license"}
+      }
+    }
+  },
+  "samples": [
+    {
+      "sample_id": "sample-1",
+      "raw_data_id": "report-1",
+      "content": "On 1 January 2025, Baytown Council warned residents about a storm. The council and Baytown Rescue opened a shelter together. Forty residents arrived at the shelter."
+    },
+    {
+      "sample_id": "sample-2",
+      "raw_data_id": "report-2",
+      "content": "On 2 January 2025, Baytown Council inspected the roads with Baytown Rescue. The main road reopened at noon. The shelter closed that evening after all forty residents returned home."
+    }
+  ]
+}
