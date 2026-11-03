@@ -94,14 +94,14 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
                     "participant_id": "P_1",
                     "name": _vf("Alpha"),
                     "participant_type": _vf("organization"),
-                    "attributes": [],
+                    "attributes": {},
                     "actions": [],
                 },
                 {
                     "participant_id": "P_2",
                     "name": _vf("Beta"),
                     "participant_type": _vf("organization"),
-                    "attributes": [],
+                    "attributes": {},
                     "actions": [],
                 },
             ]
@@ -109,13 +109,12 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
         transaction_result = {
             "transactions": [
                 {
-                    "transaction_id": "T_1",
                     "name": _vf("Bitcoin transfer"),
                     "transaction_type": _vf("crypto transfer"),
                     "timestamp": _vf("2025-01-01"),
                     "details": [_vf("Alpha transferred £23.5 million in bitcoin.")],
-                    "from_participant_id": "P_1",
-                    "to_participant_id": "P_2",
+                    "from_participant_id": _vf("P_1"),
+                    "to_participant_id": _vf("P_2"),
                     "instruments": [],
                 }
             ]
@@ -174,10 +173,8 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
             output.event_cascades["descriptions"],
             event_description["descriptions"],
         )
-        self.assertEqual(
-            json.loads(builder.agents_lm.calls[1][1]["ProposedSkeleton"]),
-            skeleton,
-        )
+        self.assertIn(json.dumps(skeleton, ensure_ascii=False), builder.agents_lm.calls[1][0].user_msg)
+        self.assertEqual(builder.agents_lm.calls[1][1], {})
         self.assertFalse(builder.agents_lm.responses)
 
     def test_run_persists_replayable_result_files(self):
@@ -220,7 +217,7 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
 
         self.assertEqual(replayed, output.event_cascades)
 
-    def test_light_episode_skips_transaction_reconstructor(self):
+    def test_light_episode_with_minimal_tier_still_runs_transaction_reconstructor(self):
         from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         skeleton = _skeleton()
@@ -258,6 +255,7 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
                 json.dumps(skeleton),
                 json.dumps(skeleton),
                 json.dumps(participant_result),
+                json.dumps({"transactions": []}),
                 json.dumps(episode_result),
                 json.dumps(stage_description),
                 json.dumps(event_description),
@@ -272,6 +270,7 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
                 "SkeletonReconstructor",
                 "SkeletonChecker",
                 "ParticipantReconstructor",
+                "TransactionReconstructor",
                 "EpisodeReconstructor",
                 "StageDescriptionReconstructor",
                 "EventDescriptionReconstructor",
