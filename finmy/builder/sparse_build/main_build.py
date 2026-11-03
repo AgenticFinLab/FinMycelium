@@ -1349,6 +1349,7 @@ class SparseRagBuilder(BaseBuilder):
         self._run_started = True
         self._call_records = []
         inputs, manifest = run_identity(build_input, self.build_config)
+        manifest["builder_type"] = self.builder_type
         manifest["construction_contract_version"] = CONSTRUCTION_CONTRACT_VERSION
         manifest["evidence_contract_version"] = EVIDENCE_CONTRACT_VERSION
         persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
@@ -1358,6 +1359,7 @@ class SparseRagBuilder(BaseBuilder):
             self.save_traces(inputs, "BuildInput", "json")
             self.save_traces(manifest, "RunManifest", "json")
         started = time.perf_counter()
+        output = None
         try:
             output = self._run_validated(build_input)
             manifest.update(status="completed", event_id=output.event_cascades["event_id"])
@@ -1371,6 +1373,12 @@ class SparseRagBuilder(BaseBuilder):
             if persist:
                 manifest["artifact_sha256"] = self._artifact_hashes()
                 self.save_traces(manifest, "RunManifest", "json")
+
+            if manifest["status"] == "completed" and output is not None:
+                output.extras.update(builder_type=self.builder_type,
+                                     run_directory=getattr(self, "save_dir", None),
+                                     elapsed_seconds=manifest["elapsed_seconds"],
+                                     usage=copy.deepcopy(manifest["usage"]))
 
     def _run_validated(self, build_input):
         context_assets = self._build_private_context_assets(build_input)
