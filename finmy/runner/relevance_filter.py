@@ -244,7 +244,7 @@ def filter_documents(
     if not enabled:
         return {"contents": [d["raw_text"] for d in docs], "summary": {
             "enabled": False, "retrieved": len(docs), "kept": len(docs), "removed": 0,
-        }, "warnings": []}
+        }, "warnings": [], "documents": docs, "decisions": []}
 
     chunk_chars = _positive_int(options.get("chunk_chars", 8000), "chunk_chars", 512, 16000)
     overlap = _positive_int(options.get("overlap_chars", 200), "overlap_chars", 0, chunk_chars - 1)
@@ -356,7 +356,8 @@ def filter_documents(
     })
     _write_json(destination / "filtered_documents.json", kept)
     _write_json(destination / "filtered_contents.json", contents)
-    return {"contents": contents, "summary": summary, "warnings": errors}
+    return {"contents": contents, "summary": summary, "warnings": errors,
+            "documents": kept, "decisions": report}
 
 
 def load_saved_documents(directory: str | Path) -> list[dict[str, Any]]:

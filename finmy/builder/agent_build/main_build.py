@@ -57,6 +57,7 @@ import time
 import copy
 import os
 import json
+import logging
 from functools import partial
 from pathlib import Path
 
@@ -73,6 +74,7 @@ from finmy.builder.utils import (
 )
 from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
+from finmy.builder.agent_build.validation import validate_event_cascade
 from finmy.builder.agent_build.prompts import *
 
 # Obtain all text content under the structure.py
@@ -798,7 +800,30 @@ class AgentEventBuilder(BaseBuilder):
             res = ed_results[-1]
             final_cascade["descriptions"] = res["descriptions"]
 
-        return final_cascade
+        return self._validate_integrated_cascade(final_cascade)
+
+    def _validate_integrated_cascade(self, cascade: dict) -> dict:
+        """Check the assembled graph once all episode outputs are attached."""
+        options = (self.build_config or {}).get("epg_validation", {})
+        if not isinstance(options, dict):
+            raise ValueError("epg_validation must be a mapping")
+        for key in ("enabled", "deduplicate"):
+            if key in options and not isinstance(options[key], bool):
+                raise ValueError(f"epg_validation.{key} must be a boolean")
+        self.raw_event_cascade = copy.deepcopy(cascade)
+        self.epg_validation_report = None
+        if not options.get("enabled", True):
+            return cascade
+        validated, report = validate_event_cascade(
+            cascade, deduplicate=options.get("deduplicate", True)
+        )
+        self.epg_validation_report = report
+        if report.get("issues_after"):
+            logging.warning(
+                "EPG validation found %d unresolved issues; see epg_validation_report.json",
+                len(report["issues_after"]),
+            )
+        return validated
 
     def integrate_from_files(self) -> dict:
         """
@@ -875,6 +900,10 @@ class AgentEventBuilder(BaseBuilder):
 
         # 5. Integrate results
         cascade_dict = self.integrate_results(final_state)
+        validation_report = self.epg_validation_report
+        if validation_report is not None:
+            self.save_traces(self.raw_event_cascade, "RawEventCascade", "json")
+            self.save_traces(validation_report, "epg_validation_report", "json")
         self.save_traces(
             cascade_dict,
             save_name="FinalEventCascade",
@@ -893,5 +922,5 @@ class AgentEventBuilder(BaseBuilder):
             event_cascades=cascade_dict,
             result=final_state,
             logs=final_state["agent_executed"],
-            extras=None,
+            extras={"epg_validation": validation_report},
         )

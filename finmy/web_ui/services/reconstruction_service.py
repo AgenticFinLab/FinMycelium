@@ -15,6 +15,7 @@ from finmy.builder.utils import estimate_complete_time
 from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
 from finmy.runner.relevance_filter import filter_documents
+from finmy.runner.context_budget import allocate_context
 
 
 class ReconstructionService:
@@ -100,8 +101,23 @@ class ReconstructionService:
         if not filtered["contents"]:
             raise ValueError("No relevant sources remain. Inspect relevance_decisions.json or refine the search.")
 
-        # P1/P2 ranking and budget allocation are unchanged by this patch.
-        all_text_content_limit = self._limit_content_length(filtered["contents"])
+        # Budget retained evidence before building: CORE/CONTEXT first, long
+        # sources as verbatim excerpts. No extra model call is needed here.
+        budgeted = allocate_context(
+            filtered["documents"], filtered["decisions"], self.config,
+            include_metadata=summary["enabled"],
+        )
+        all_text_content_limit = budgeted["contents"]
+        budget_report = budgeted["report"]
+        with open(os.path.join(save_dir, "context_budget_report.json"), "w", encoding="utf-8") as f:
+            json.dump(budget_report, f, ensure_ascii=False, indent=2)
+        budget_summary = budget_report["summary"]
+        st.write(f"Context budget: {budget_summary['included_documents']}/"
+                 f"{budget_summary['candidate_documents']} sources; "
+                 f"{budget_summary['used_chars']}/{budget_summary['max_content_length']} chars; "
+                 f"{budget_summary['truncated_documents']} excerpted.")
+        for warning in budget_report["warnings"]:
+            st.warning(warning)
         # Archive exactly what the builder receives, rather than only pre-budget data.
         with open(os.path.join(save_dir, "builder_input_contents.json"), "w", encoding="utf-8") as f:
             json.dump(all_text_content_limit, f, ensure_ascii=False, indent=2)
@@ -128,7 +144,7 @@ class ReconstructionService:
                 limited_content.append(item)
                 total_length += item_length
             else:
-                break
+                continue
         
         logging.info("Length of All_Text_Content String: %d", sum(len(c) for c in content_list))
         logging.info("Length of All_Text_Content_Limit String: %d", total_length)
