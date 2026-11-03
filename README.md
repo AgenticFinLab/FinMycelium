@@ -82,14 +82,17 @@ FinMycelium relies on the [lmbase](https://github.com/AgenticFinLab/lmbase) repo
 
 #### Build From Prepared Text
 
-For an opt-in SparseRagBuilder workflow without web search, PDF parsing or MySQL,
-see [Sparse text reconstruction](docs/workflows/sparse-rag-build.md). Start with an offline check:
+Use the [build-only entry](docs/workflows/build-only.md) to choose the original
+AgentEventBuilder or SparseRagBuilder, without web search, PDF parsing or a database.
+Start with an offline check:
 
 ```bash
-python -m finmy.runner.sparse_build_runner --input examples/sparse_input.json
+python -m finmy.runner.build_only_runner --config configs/build_only_sparse.yml --input examples/sparse_input.json
 ```
 
-Actual model calls require `--execute`; this command alone does not generate a graph.
+Use `configs/build_only_agent.yml` for the original builder. Actual model calls
+require `--execute`; these checks alone do not generate a graph. The existing
+[sparse-only entry](docs/workflows/sparse-rag-build.md) remains available.
 
 #### Using the Pipeline
 ```python

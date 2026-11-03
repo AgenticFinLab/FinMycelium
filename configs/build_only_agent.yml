@@ -1,0 +1,22 @@
+builder_config:
+  builder_type: AgentEventBuilder
+  lm_type: api
+  lm_name: ark/doubao-seed-2-0-pro-260215
+  generation_config:
+    max_new_tokens: 12288
+    temperature: 0.2
+    top_p: 0.95
+  save_folder: output/build-only/agent
+  graph_config:
+    recursion_limit: 150
+  build_only_config:
+    max_calls: 40
+    request_timeout_seconds: 900
+  agents:
+    SkeletonReconstructor: {}
+    SkeletonChecker: {}
+    ParticipantReconstructor: {}
+    TransactionReconstructor: {}
+    EpisodeReconstructor: {}
+    StageDescriptionReconstructor: {}
+    EventDescriptionReconstructor: {}
