@@ -123,7 +123,7 @@ class EventPromptInputsTest(unittest.TestCase):
         self.assertIn("EPISODE EXECUTION MODE", user_msg)
         self.assertIn("alpha transfer evidence", user_msg)
 
-    def test_run_uses_mock_inference_without_external_api(self):
+    def test_run_rejects_empty_skeleton_without_external_api(self):
         from finmy.builder.sparse_build.main_build import SparseRagBuilder
 
         class FakeInference:
@@ -154,21 +154,12 @@ class EventPromptInputsTest(unittest.TestCase):
         builder.build_config = {"sparse_builder_config": {"max_context_chars": 400}}
         builder.agents_lm = FakeInference()
 
-        output = builder.run(build_input)
-
-        self.assertEqual(output.event_cascades["event_id"], "EVT-1")
-        self.assertEqual(output.extras["builder_type"], "SparseRagBuilder")
-        self.assertEqual(
-            output.extras["agent_executed"],
-            [
-                "SkeletonReconstructor",
-                "SkeletonChecker",
-                "EventDescriptionReconstructor",
-            ],
-        )
+        with self.assertRaisesRegex(ValueError, "stage"):
+            builder.run(build_input)
         self.assertEqual(len(builder.agents_lm.calls), 3)
-        self.assertIn("RetrievedContext", builder.agents_lm.calls[0][1])
-        self.assertIn("ProposedSkeleton", builder.agents_lm.calls[1][1])
+        self.assertIn("RETRIEVED CONTEXT BEGIN", builder.agents_lm.calls[0][0].user_msg)
+        self.assertIn("OUTPUT RECOVERY", builder.agents_lm.calls[1][0].user_msg)
+        self.assertEqual(builder.agents_lm.calls[0][1], {})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,25 @@
+builder_config:
+  builder_type: SparseRagBuilder
+  lm_type: api
+  lm_name: ark/doubao-seed-2-0-pro-260215
+  generation_config:
+    max_new_tokens: 12288
+    temperature: 0.2
+    top_p: 0.95
+  save_folder: output/build-only/sparse
+  sparse_builder_config:
+    enable_sparse_routing: true
+    enable_context_assets: false
+    output_language: English
+    max_json_attempts: 3
+    max_calls: 40
+    request_timeout_seconds: 900
+    evidence_policy: report
+  agents:
+    SkeletonReconstructor: {}
+    SkeletonChecker: {}
+    ParticipantReconstructor: {}
+    TransactionReconstructor: {}
+    EpisodeReconstructor: {}
+    StageDescriptionReconstructor: {}
+    EventDescriptionReconstructor: {}

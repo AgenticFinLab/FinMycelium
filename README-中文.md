@@ -32,6 +32,7 @@
 - **多源数据收集**：从多种来源收集相关数据，包括新闻文章、社交媒体、官方报告和其他公共文档。
 - **数据匹配与总结**：识别、对齐和压缩异构来源中的有用信息，直接支持金融事件重建。
 - **事件重建**：利用基于大模型的多智能体系统，自主整合、连接和重建来自碎片化金融数据的连贯事件叙述。
+  支持 AgentEventBuilder 和 SparseRagBuilder 两种构建方法；后者结合稀疏路由、可选局部检索增强及角色结果复用。
 - **结构化呈现**：使用甘特图和[事件发展序列](docs/reference/the_organizational_and_interorganizational_development_of_disasters.pdf)可视化重建的时间线，提供清晰、结构化的事件概览。
 - **Web 界面**：提供直观的、基于 Streamlit 的交互式 UI，用于实时金融事件分析、探索和可视化。
 
@@ -100,14 +101,14 @@ pipeline.lm_build_pipeline_main(
 
 #### Web 界面
 ```bash
-streamlit run examples/utest/test_web_interface.py
+streamlit run examples/uTEST/test_web_interface.py
 ```
 
 ---
 
 
 #### 详细指南
-- [使用指南](celium/docs/usage_guidance.md) - 关于使用 FinMycelium 的全面指南
+- [数据准备指南](docs/instruction.md) - PDF 处理、关键词检索与数据导入
 
 
 ---
