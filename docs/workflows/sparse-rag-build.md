@@ -1,10 +1,11 @@
 # Sparse Text Reconstruction
 
-This opt-in workflow builds a full draft EPG from prepared source texts. It keeps
-stages, episodes, participants, actions, relationships, transactions when supported,
-and source quotations. Outcomes remain in action details and descriptions, as in
-the shared `agent_build/structure.py` contract. Review the draft before treating it
-as a final dataset record.
+SparseRagBuilder combines sparse routing with optional local retrieval augmentation
+for multi-agent event reconstruction. It selects detail tiers by stage and episode,
+uses compact context and reuses role results to reduce repeated generation.
+The draft EPG contains stages, episodes, participants, actions, relationships,
+supported transactions and source quotations. Outcomes remain in action details
+and descriptions, following the shared `agent_build/structure.py` contract.
 
 ## Install and Configure
 
@@ -52,9 +53,10 @@ a unique `sample_id`, a `raw_data_id` and nonempty `content`. Optional sample fi
 follow `finmy/generic.py`. Keep source URL, acquisition date and licence metadata in
 `user_query.extras.source_registry`, indexed by `raw_data_id`.
 
-The runner does not retrieve, summarize, translate or truncate the source text.
-Every role sees the complete content with source IDs. Local context cards supplement
-that text; their character limit is not a limit on total input tokens. If the
+The runner does not fetch external sources, summarize, translate or truncate the
+input text. Every role sees the complete content with source IDs. When enabled,
+local retrieval selects evidence cards from those inputs for the current role and
+stage or episode; it supplements rather than replaces the full text. If the
 combined prompt exceeds the model context, the request fails rather than silently
 discarding evidence. Check source size and provider limits before a real run.
 
@@ -92,9 +94,9 @@ artifact, not a substitute for the JSON or content review.
 4. `StageDescriptionReconstructor` describes each completed stage.
 5. `EventDescriptionReconstructor` describes the assembled event.
 
-Participants from completed episodes are supplied to later roles. Stage and event
-descriptions see assembled content, not just names. This helps identity continuity
-but does not prove that the model has resolved every alias correctly.
+Later roles receive a compact participant identity registry, not accumulated
+action histories. Stage and event descriptions use value-only views of assembled
+content. Original role results and their evidence remain saved unchanged.
 
 `enable_sparse_routing: false` requests standard detail in all roles. With routing
 enabled, local evidence signals select detail tiers. `minimal` transactions still
@@ -103,17 +105,16 @@ evidence should produce an empty array, not an invented financial transaction.
 `EpisodeExecutionPlan-Result.json` records the actual plan. Locators use stage and
 episode positions plus original IDs, so locally repeated episode IDs do not collide.
 
-An Episode may return complete participant/transaction arrays or the exact strings
+For new runs, Episode must return the exact placeholders
 `Results of ParticipantReconstructor` and `Results of TransactionReconstructor`.
-Complete participant arrays are retained. For compatibility with historical
-assembly, an empty transaction array reuses a nonempty transaction-role result;
-an explicit skipped transaction role always yields an empty array. Raw role outputs
-are preserved so changes can be inspected.
+Assembly reuses the preceding role arrays unchanged; Episode generates the remaining
+fields and relationships within the checked skeleton's scope. Historical replay
+retains the recorded assembly contract.
 
 `output_language` controls narrative text and reasons; entity names and verbatim
 quotes retain their original language. Structural field names do not change.
-The shared schema still contains financial examples, but the prompts explicitly
-allow non-financial events and do not prescribe a fixed stage count.
+Role schemas are derived from the shared dataclasses. Prompts allow non-financial
+events and do not prescribe a fixed stage count.
 
 ## Bounds and Failure Handling
 
@@ -125,6 +126,10 @@ allow non-financial events and do not prescribe a fixed stage count.
 | `request_timeout_seconds` | One request timeout, at most 3600 seconds; default 900 |
 | `enable_context_assets` | Add local evidence cards; default true |
 | `evidence_policy` | `report` by default: save the draft and quote diagnostics; `strict` optionally blocks unmatched quotes |
+
+The `sparse_pipeline.yml` example allows up to 300 requests and enables evidence
+cards. The [build-only](build-only.md) sparse example allows up to 40 and disables
+cards. Both use the same builder and default to `report`.
 
 A structurally invalid response can trigger a bounded, recorded retry. Balanced
 JSON recovery and removal of outer Markdown fences are deterministic parsing, not
@@ -143,7 +148,10 @@ or resubmit automatically. These limits are not a monetary budget guarantee.
 | `ROLE-*.json` | Actual messages and original provider response; retry attempts have separate names |
 | `ROLE-*-Result.json` | Parsed role outputs and episode locators |
 | `EpisodeExecutionPlan-Result.json` | Effective episode routing and detail tiers |
-| `EvidenceCheck.json` | Quote-to-source matches and fields without quotations |
+| `ParticipantIdentityMap.json`, `ConstructionCheck.json` | Identity bindings, episode time checks and repeated-action candidates |
+| `EvidenceCheck.json` | Quote locations in sources, unmatched quotations and fields without quotations |
+| `QualityReview.json` | Local review hints for dates, payment status, relation endpoints and uncited paragraphs |
+| `CandidateEventCascade.json`, `AcceptanceDecision.json` | Assembled draft before final validation, and the save decision after checks |
 | `FinalEventCascade.json` | Completed graph after structure/reference checks and the configured evidence policy |
 
 Total tokens remain `null` if any call's usage is missing. Known subtotals and
@@ -152,17 +160,17 @@ retained when the provider supplies it. No currency price is assumed. A hard pro
 kill may leave a `running` manifest or `pending` ledger entry: that is incomplete,
 not successful, and must not be automatically retried.
 
-Structural validation checks shared dataclass shapes, meaningful skeleton names,
-ordered indices, unique IDs within their scope and participant endpoints. Evidence
-checking maps exact source quotations to sample IDs. In `strict` mode a quotation
-absent from all supplied texts prevents publication of the final graph. Empty
-evidence lists are reported, not filled with invented citations or rejected as
-facts: unknown values and inferred summaries still need human review.
+Structural checks cover dataclass shapes, skeleton names, indices, IDs and endpoints.
+Identity bindings and known episode time bounds are checked; unknown or unparsed
+dates remain unchecked. Quotation matching allows exact text or whitespace-only
+normalization and records source IDs, hashes and original character offsets.
+Query metadata, unmatched quotes and fields without quotes are reported separately.
 
-**Exact quotation presence is not semantic support.** Check whether each quote
-supports its field, whether participants were merged correctly, whether actions and
-outcomes were omitted, whether chronology is plausible, and whether source coverage
-is sufficient. The automatic checks do not certify factual quality.
+Default `report` mode preserves the final draft despite unmatched quotes; optional
+`strict` mode blocks its save. Local diagnostics do not rewrite the graph or call a
+model. Quality hints use English cues and can misidentify aliases or date wording.
+**A located quote is not proof of factual correctness**, and uncited paragraphs are
+not a measure of omitted facts. Review the draft before dataset publication.
 
 Strict replay requires a completed manifest and unchanged artifacts, validates
 the role sequence, locators and graph, and compares assembly against the saved
@@ -198,8 +206,3 @@ stages, source preservation, context opt-out, schema/reference failures, bounded
 calls, missing usage, SQLite text ingestion and deterministic replay. They do not
 measure live model quality, speed or cost. Run a separately approved small real-data
 comparison before adopting this entry for large-scale construction.
-
-Relative to the historical builder, the repaired entry intentionally adds local
-context cards by default, explicit output/structure checks, call accounting and
-strict replay. Set `enable_context_assets: false` for a build-only comparison;
-this alone does not make prompts, routing or generation identical to a historical run.
