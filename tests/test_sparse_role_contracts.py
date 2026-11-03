@@ -81,8 +81,9 @@ class RoleContractTest(unittest.TestCase):
         state = self.state()
         state["agent_executed"].append("StageDescriptionReconstructor")
         _, user = self.render(state, "ParticipantReconstructor")
-        self.assertIn('"participant_id": "P_1"', user)
-        self.assertIn("action-detail-marker", user)
+        self.assertIn('"participant_id":"P_1"', user)
+        self.assertIn('"name":"Local service"', user)
+        self.assertNotIn("action-detail-marker", user)
         self.assertIn("Recovery", user)
 
     def test_stage_and_event_descriptions_see_completed_graph_content(self):

@@ -173,7 +173,9 @@ class SparseRagBuilderFullFlowTest(unittest.TestCase):
             output.event_cascades["descriptions"],
             event_description["descriptions"],
         )
-        self.assertIn(json.dumps(skeleton, ensure_ascii=False), builder.agents_lm.calls[1][0].user_msg)
+        from finmy.builder.sparse_build.contracts import compact_values
+        self.assertIn(json.dumps(compact_values(skeleton), ensure_ascii=False, separators=(",", ":")),
+                      builder.agents_lm.calls[1][0].user_msg)
         self.assertEqual(builder.agents_lm.calls[1][1], {})
         self.assertFalse(builder.agents_lm.responses)
 

@@ -124,7 +124,7 @@ allow non-financial events and do not prescribe a fixed stage count.
 | `max_json_attempts` | 1 to 3 attempts per role invocation, default 3 |
 | `request_timeout_seconds` | One request timeout, at most 3600 seconds; default 900 |
 | `enable_context_assets` | Add local evidence cards; default true |
-| `evidence_policy` | `strict` in the example; `report` remains available for diagnostic runs |
+| `evidence_policy` | `report` by default: save the draft and quote diagnostics; `strict` optionally blocks unmatched quotes |
 
 A structurally invalid response can trigger a bounded, recorded retry. Balanced
 JSON recovery and removal of outer Markdown fences are deterministic parsing, not
