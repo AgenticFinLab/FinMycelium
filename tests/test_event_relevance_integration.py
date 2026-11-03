@@ -130,6 +130,54 @@ class WebRelevanceIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Context budget admitted no documents"):
             self.run_service(budget=1)
 
+    def test_person_scope_reaches_search_filter_and_builder_configuration(self):
+        subject = {"subject_id": "person_warren_buffett", "name": "Warren Buffett",
+                   "aliases": ["巴菲特"], "coverage_start": "2022", "coverage_end": "2023",
+                   "scope": "Occidental investment activities only"}
+        config = {"output_dir": str(self.path), "all_content_config": {"max_content_length": 60000},
+                  "builder_config": {"reconstruction": {"mode": "person", "subject": subject}}}
+        service = self.service.ReconstructionService(config)
+        built = []
+        service._run_pipeline = lambda *args: built.append((args, service.config)) or {}
+        searches, classifications = [], []
+        original_bocha = self.collector.DataCollectorService.collect_bocha_search_results
+        original_baidu = self.collector.DataCollectorService.collect_baidu_search_results
+
+        def search(original):
+            def call(collector, query, keywords):
+                searches.append(query)
+                return original(collector, query, keywords)
+            return call
+
+        def complete(system, payload):
+            classifications.append(payload)
+            return self.completion(system, payload)
+
+        def run_filter(*args, **kwargs):
+            return filter_documents(*args, **kwargs, completion=complete)
+
+        with patch.object(self.collector.DataCollectorService, "collect_bocha_search_results", search(original_bocha)), \
+             patch.object(self.collector.DataCollectorService, "collect_baidu_search_results", search(original_baidu)), \
+             patch.object(self.service, "filter_documents", run_filter):
+            service.run_reconstruction("OXY statements", ["OXY"], None)
+        self.assertEqual(len(searches), 2)
+        for query in searches:
+            self.assertIn("Warren Buffett", query)
+            self.assertIn(subject["scope"], query)
+            self.assertIn("2022", query)
+        self.assertTrue(classifications)
+        self.assertEqual(classifications[0]["reconstruction"]["subject"], subject)
+        args, received_config = built[0]
+        self.assertEqual(args[1], "OXY statements")
+        self.assertEqual(received_config["builder_config"]["reconstruction"]["subject"], subject)
+
+    def test_invalid_person_scope_fails_before_search(self):
+        with patch.object(self.collector.DataCollectorService, "collect_bocha_search_results") as search:
+            with self.assertRaises(ValueError):
+                self.service.ReconstructionService({"builder_config": {
+                    "reconstruction": {"mode": "person", "subject": {}}}})
+            search.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

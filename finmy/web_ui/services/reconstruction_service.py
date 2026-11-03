@@ -16,6 +16,7 @@ from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
 from finmy.runner.relevance_filter import filter_documents
 from finmy.runner.context_budget import allocate_context
+from finmy.reconstruction_scope import read_reconstruction, search_query
 
 
 class ReconstructionService:
@@ -29,6 +30,8 @@ class ReconstructionService:
             config: Configuration dictionary
         """
         self.config = config
+        # Reject malformed person scope before starting any search or model call.
+        read_reconstruction(config)
     
     def run_reconstruction(
         self, main_input: str, keywords: List[str], structured_data: Any
@@ -46,7 +49,7 @@ class ReconstructionService:
         """
         keywords = keywords or []
         # Prepare search query
-        search_query_content = f"{main_input} \n\nkeywords: {' '.join(keywords)}"
+        search_query_content = search_query(main_input, keywords, self.config)
         st.write(f"**{format_timestamp()}** - Input has been processed.")
         
         # Create output directory
