@@ -1,12 +1,16 @@
-"""Sparse RAG enhanced financial event reconstruction builder."""
+"""Sparse RAG enhanced event reconstruction builder."""
 
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
+import tempfile
+import time
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -26,13 +30,23 @@ from .execution_budget import (
     episode_budget_prompt_vars,
 )
 from .local_context_builder import LocalContextBuilder, LocalContextRequest
-from .prompts import get_agent_prompts
+from .prompts import get_agent_prompts, structure_spec
 from .renderers import render_context_asset_summary
+from .runtime import run_identity, summarize_calls, validate_config, validate_input
+from .validation import (
+    evidence_report, validate_cascade, validate_endpoints, validate_episode, validate_role,
+)
 
 
 _REPLAY_STAGE_EPISODE_SUFFIX = re.compile(
     r"-Stage(?P<stage>\d+)-Episode(?P<episode>\d+)-Result\.json$"
 )
+
+
+class SparseAgentState(AgentState):
+    context_assets: EvidenceAssetBundle
+    episode_execution_plan: dict[str, Any]
+    stage_sparse_cache: dict[str, Any]
 
 
 class SparseRagBuilder(BaseBuilder):
@@ -65,6 +79,42 @@ class SparseRagBuilder(BaseBuilder):
         "StageDescriptionReconstructor",
     }
 
+    def define_agent_models(self):
+        from .inference import SparseAPIInference
+
+        validate_config(self.build_config)
+        if self.build_config["lm_type"].lower() != "api":
+            raise ValueError("SparseRagBuilder currently supports API inference only")
+        timeout = self._event_config_value("request_timeout_seconds", 900)
+        if type(timeout) not in (int, float) or not 0 < timeout <= 3600:
+            raise ValueError("request_timeout_seconds must be in (0, 3600]")
+        self.agents_lm = SparseAPIInference(
+            self.build_config["lm_name"], self.build_config["generation_config"], timeout=timeout
+        )
+
+    def _save_call_ledger(self):
+        if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
+            self.save_traces(self._call_records, "CallLedger", "json")
+
+    def save_traces(self, traces, save_name, file_format, **kwargs):
+        if file_format != "json":
+            return super().save_traces(traces, save_name, file_format, **kwargs)
+        destination = Path(self.save_dir) / f"{save_name}.json"
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.save_dir,
+                                         prefix=".writing-", suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                json.dump(traces, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            except BaseException:
+                temporary.unlink(missing_ok=True)
+                raise
+        try:
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def _get_agent_prompts(self) -> tuple[dict[str, str], dict[str, str]]:
         """Return system and user prompt templates for all event agents."""
 
@@ -87,6 +137,8 @@ class SparseRagBuilder(BaseBuilder):
     ) -> EvidenceAssetBundle:
         """Derive private context assets from the existing BuildInput shape."""
 
+        if not self._event_config_value("enable_context_assets", True):
+            return EvidenceAssetBundle.empty()
         policy = EvidenceRetrievalPolicy(
             max_cards=self._event_config_value("context_top_k", 8),
             excerpt_char_limit=self._event_config_value("excerpt_char_limit", 240),
@@ -99,7 +151,10 @@ class SparseRagBuilder(BaseBuilder):
         )
 
     def _content_from_samples(self, build_input: BuildInput) -> str:
-        return "\n\n".join(sample.content or "" for sample in build_input.samples)
+        return "\n\n".join(
+            f"SOURCE {json.dumps({'sample_id': sample.sample_id, 'raw_data_id': sample.raw_data_id}, ensure_ascii=False)}\n{sample.content or ''}"
+            for sample in build_input.samples
+        )
 
     def _build_local_context_package(
         self,
@@ -172,7 +227,10 @@ class SparseRagBuilder(BaseBuilder):
             "StageSkeleton": "",
             "EventCascade": "",
             "ReconstructedParticipants": "",
-            "STRUCTURE_SPEC": "",
+            "StageSparseCache": "",
+            "ParticipantDetailTier": str((episode_budget or {}).get("participant_tier", "standard")),
+            "OutputLanguage": str(self._event_config_value("output_language", "English")),
+            "STRUCTURE_SPEC": structure_spec(agent_name),
         }
         kwargs.update(budget_vars)
         kwargs.update(
@@ -287,39 +345,95 @@ class SparseRagBuilder(BaseBuilder):
         user_msg: str,
         prompt_kwargs: dict[str, str],
         savename: str,
+        validator=None,
     ) -> Any:
-        max_attempts = 3 if agent_name in self._JSON_PARSE_RETRY_AGENTS else 1
+        max_attempts = self._event_config_value("max_json_attempts", 3)
+        max_calls = self._event_config_value("max_calls", 300)
+        if type(max_attempts) is not int or not 1 <= max_attempts <= 3:
+            raise ValueError("max_json_attempts must be an integer in [1, 3]")
+        if type(max_calls) is not int or max_calls < 1:
+            raise ValueError("max_calls must be a positive integer")
+        if agent_name not in self._JSON_PARSE_RETRY_AGENTS:
+            max_attempts = 1
         current_user_msg = user_msg
         last_error: Exception | None = None
 
         for attempt in range(1, max_attempts + 1):
-            output = run_single_inference(
-                self.agents_lm,
-                InferInput(system_msg=sys_msg, user_msg=current_user_msg),
-                **prompt_kwargs,
+            if not hasattr(self, "_call_records"):
+                self._call_records = []
+            if len(self._call_records) >= max_calls:
+                raise RuntimeError("Configured model call limit reached")
+            record = {
+                "agent": agent_name, "attempt": attempt, "save_name": savename,
+                "status": "pending", "prompt_tokens": None, "completion_tokens": None,
+                "reasoning_tokens": None, "cached_tokens": None, "elapsed_seconds": None,
+            }
+            self._call_records.append(record)
+            self._save_call_ledger()
+            started = time.perf_counter()
+            # Messages already contain source text and JSON; never interpolate twice.
+            try:
+                output = run_single_inference(
+                    self.agents_lm,
+                    InferInput(system_msg=sys_msg, user_msg=current_user_msg),
+                )
+            except Exception as exc:
+                record.update(status="transport_error", error_type=type(exc).__name__)
+                raise
+            finally:
+                record["elapsed_seconds"] = time.perf_counter() - started
+                self._save_call_ledger()
+            cost = getattr(output, "cost", None)
+            details = getattr(output, "extras", None) or {}
+            record.update(
+                status="response_received",
+                prompt_tokens=getattr(cost, "prompt_tokens", None),
+                completion_tokens=getattr(cost, "completion_tokens", None),
+                reasoning_tokens=details.get("reasoning_tokens"),
+                cached_tokens=details.get("cached_tokens"),
+                finish_reason=details.get("finish_reason"),
             )
+            self._save_call_ledger()
             response_text = str(getattr(output, "response", output))
             self._save_agent_trace(agent_name, output, savename, attempt)
+            if ("finish_reason" in details and details["finish_reason"] != "stop") or details.get("refusal") or details.get("tool_calls"):
+                record["status"] = "incomplete_response"
+                self._save_call_ledger()
+                raise ValueError(f"{agent_name}: incomplete or non-text completion")
+            if not response_text.strip():
+                record["status"] = "empty_response"
+                self._save_call_ledger()
+                raise ValueError(f"{agent_name}: empty completion")
             try:
                 parsed = self._parse_json_response(response_text)
                 if isinstance(parsed, str):
                     raise ValueError("Response did not contain JSON")
+                if validator is not None:
+                    validator(parsed)
                 self._save_agent_result(parsed, savename)
+                record["status"] = "accepted"
+                self._save_call_ledger()
                 return parsed
             except (TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
                 if agent_name in self._JSON_SYNTACTIC_RECOVERY_AGENTS:
                     try:
                         recovered = self._recover_syntactic_json_response(response_text)
+                        if validator is not None:
+                            validator(recovered)
                         self._save_agent_result(recovered, savename)
+                        record["status"] = "recovered"
+                        self._save_call_ledger()
                         return recovered
                     except ValueError as recovery_exc:
                         last_error = recovery_exc
+                record.update(status="invalid_output", error_type=type(last_error).__name__)
+                self._save_call_ledger()
                 if attempt >= max_attempts:
                     raise ValueError(
-                        f"{agent_name} returned invalid JSON after {attempt} attempt(s): {last_error}"
+                        f"{agent_name} returned invalid output after {attempt} attempt(s): {last_error}"
                     ) from exc
-                current_user_msg = self._build_json_retry_user_msg(user_msg, agent_name)
+                current_user_msg = self._build_json_retry_user_msg(user_msg, agent_name) + f"\nValidation issue: {last_error}\n"
 
         raise ValueError(f"{agent_name} returned invalid JSON: {last_error}")
 
@@ -413,6 +527,8 @@ class SparseRagBuilder(BaseBuilder):
 
         total_episodes = 0
         for stage_index, stage in enumerate(stages):
+            if not isinstance(stage, dict):
+                return False, f"Stage {stage_index} must be a JSON object."
             if self._is_unknown_value(self._field_value(stage.get("name"))):
                 return False, f"Stage {stage_index} name is missing or unknown."
             episodes = stage.get("episodes")
@@ -420,6 +536,8 @@ class SparseRagBuilder(BaseBuilder):
                 return False, f"Stage {stage_index} must contain at least one episode."
             total_episodes += len(episodes)
             for episode_index, episode in enumerate(episodes):
+                if not isinstance(episode, dict):
+                    return False, f"Episode {stage_index}/{episode_index} must be a JSON object."
                 if self._is_unknown_value(self._field_value(episode.get("name"))):
                     return (
                         False,
@@ -494,9 +612,14 @@ class SparseRagBuilder(BaseBuilder):
         event_skeleton: dict[str, Any],
         context_assets: EvidenceAssetBundle | None = None,
     ) -> dict[str, object]:
+        budget_skeleton = copy.deepcopy(event_skeleton)
+        for si, stage in enumerate(budget_skeleton.get("stages", [])):
+            stage["stage_id"] = f"stage-{si}"
+            for ei, episode in enumerate(stage.get("episodes", [])):
+                episode["episode_id"] = f"episode-{ei}"
         budget = build_stage_aware_execution_budget(
             build_input,
-            event_skeleton,
+            budget_skeleton,
             context_assets=context_assets,
         )
         plan_entries: list[dict[str, object]] = []
@@ -505,7 +628,15 @@ class SparseRagBuilder(BaseBuilder):
         ):
             stage_id = self._scalar_value(stage.get("stage_id"))
             episode_id = self._scalar_value(episode.get("episode_id"))
-            budget_entry = budget.get("episodes", {}).get((stage_id, episode_id), {})
+            budget_entry = dict(budget.get("episodes", {}).get(
+                (f"stage-{stage_index}", f"episode-{episode_index}"), {}
+            ))
+            if not self._event_config_value("enable_sparse_routing", True):
+                budget_entry.update(
+                    mode="full", participant_tier="standard", transaction_tier="standard",
+                    episode_detail_tier="standard", transaction_step_skipped=False,
+                    compactness_hint="Retain all supported process details without inventing facts.",
+                )
             entry = {
                 **budget_entry,
                 "locator": locator,
@@ -515,7 +646,10 @@ class SparseRagBuilder(BaseBuilder):
                 "episode_index": episode_index,
             }
             plan_entries.append(entry)
-        return {"stages": budget.get("stages", []), "episodes": plan_entries}
+        stages = budget.get("stages", [])
+        for si, stage in enumerate(stages):
+            stage["stage_id"] = self._scalar_value(event_skeleton["stages"][si].get("stage_id"))
+        return {"stages": stages, "episodes": plan_entries}
 
     def _get_episode_execution_plan_entry(
         self,
@@ -543,7 +677,8 @@ class SparseRagBuilder(BaseBuilder):
         if str((plan_entry or {}).get("transaction_tier") or "").lower() == "skip":
             return True
         mode = execution_mode or (plan_entry or {}).get("mode")
-        return mode == "light"
+        # Old checkpoints sometimes only stored mode. Explicit tiers take priority.
+        return mode == "light" and not (plan_entry or {}).get("transaction_tier")
 
     def _episode_execution_mode(self, plan_entry: dict[str, object] | None) -> str:
         return str((plan_entry or {}).get("mode") or "light")
@@ -610,7 +745,7 @@ class SparseRagBuilder(BaseBuilder):
 
         if agent_name == "StageDescriptionReconstructor":
             stage_index = state["agent_executed"].count("StageDescriptionReconstructor")
-            stage = (event_skeleton.get("stages", []) or [])[stage_index]
+            stage = self.integrate_results(state)["stages"][stage_index]
             return self._scalar_value(stage.get("name")), "", None, {"TargetStage": stage}
 
         if agent_name in {
@@ -634,9 +769,30 @@ class SparseRagBuilder(BaseBuilder):
                 episode_index,
             )
             target_episode = copy.deepcopy(episode)
+            known_participants = {}
+            for result in state["agent_results"]:
+                payload = result.get("ParticipantReconstructor", {})
+                for participant in payload.get("participants", []):
+                    if isinstance(participant, dict) and participant.get("participant_id"):
+                        known_participants[participant["participant_id"]] = participant
+            completed_stage_episodes = []
+            completed_graph = self.integrate_results(state)
+            for item in state["agent_results"]:
+                if "EpisodeReconstructor" not in item:
+                    continue
+                loc = (item.get("_meta") or {}).get("episode_locator")
+                if not loc:
+                    continue
+                completed = completed_graph["stages"][loc["stage_index"]]["episodes"][loc["episode_index"]]
+                for participant in completed.get("participants", []):
+                    known_participants[participant["participant_id"]] = participant
+                if loc["stage_index"] == stage_index:
+                    completed_stage_episodes.append(completed)
             extra: dict[str, Any] = {
                 "EpisodeLocator": locator,
                 "StageSkeleton": stage,
+                "StageSparseCache": completed_stage_episodes,
+                "ReconstructedParticipants": list(known_participants.values()),
                 "TargetEpisode": target_episode,
             }
             if agent_name in {"TransactionReconstructor", "EpisodeReconstructor"}:
@@ -664,6 +820,37 @@ class SparseRagBuilder(BaseBuilder):
 
         return "", "", None, {}
 
+    def _validate_agent_output(self, state: AgentState, agent_name: str, payload: Any) -> None:
+        if agent_name in {"SkeletonReconstructor", "SkeletonChecker"}:
+            valid, reason = self._validate_event_skeleton(payload)
+            if not valid:
+                raise ValueError(reason)
+        validate_role(agent_name, payload)
+        if agent_name not in {"TransactionReconstructor", "EpisodeReconstructor"}:
+            return
+        participants = self._latest_agent_result(state, "ParticipantReconstructor")["participants"]
+        participant_ids = {p["participant_id"] for p in participants}
+        if agent_name == "TransactionReconstructor":
+            validate_endpoints(payload["transactions"], participant_ids, "transactions")
+            return
+        skeleton = self._get_event_skeleton(state)
+        si, ei, _, target, _ = self._get_episode_by_sequence_index(
+            skeleton, self._current_episode_sequence_index(state)
+        )
+        if payload["episode_id"] != target["episode_id"] or payload["index_in_stage"] != ei:
+            raise ValueError("Episode identity must match the target skeleton")
+        assembled = copy.deepcopy(payload)
+        if isinstance(assembled["participants"], str):
+            assembled["participants"] = participants
+        plan = self._get_episode_execution_plan_entry(state.get("episode_execution_plan"), si, ei)
+        if self._transaction_step_skipped(plan):
+            if isinstance(assembled["transactions"], list) and assembled["transactions"]:
+                raise ValueError("Skipped transaction role cannot introduce transactions")
+            assembled["transactions"] = []
+        elif isinstance(assembled["transactions"], str) or not assembled["transactions"]:
+            assembled["transactions"] = self._latest_agent_result(state, "TransactionReconstructor")["transactions"]
+        validate_episode(assembled)
+
     def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
         """Execute one event reconstruction agent stage."""
 
@@ -689,6 +876,7 @@ class SparseRagBuilder(BaseBuilder):
             user_msg,
             prompt_kwargs,
             savename,
+            validator=lambda payload: self._validate_agent_output(state, agent_name, payload),
         )
 
         meta: dict[str, Any] | None = None
@@ -724,12 +912,15 @@ class SparseRagBuilder(BaseBuilder):
                     if key in plan_entry:
                         meta[key] = plan_entry[key]
         self._append_agent_result(state, agent_name, parsed_result, meta)
+        if meta:
+            self._save_agent_result({agent_name: parsed_result, "_meta": meta}, savename)
         if agent_name == "SkeletonChecker":
             state["episode_execution_plan"] = self._build_episode_execution_plan(
                 build_input,
                 parsed_result,
                 context_assets=context_assets,
             )
+            self._save_agent_result(state["episode_execution_plan"], "EpisodeExecutionPlan")
         return state
 
     def _route_after_participant_reconstructor(self, state: AgentState):
@@ -791,7 +982,7 @@ class SparseRagBuilder(BaseBuilder):
     def graph(self):
         """Construct the context-aware event reconstruction graph when available."""
 
-        graph = StateGraph(AgentState)
+        graph = StateGraph(SparseAgentState)
         if not hasattr(graph, "add_conditional_edges"):
             return None
         for agent_name in (
@@ -941,12 +1132,20 @@ class SparseRagBuilder(BaseBuilder):
 
                 if isinstance(episode_result, dict):
                     episode.update(episode_result)
-                if isinstance(participant_result, dict):
+                if isinstance(participant_result, dict) and (
+                    not isinstance(episode_result, dict)
+                    or not isinstance(episode_result.get("participants"), list)
+                ):
                     episode["participants"] = participant_result.get("participants", [])
                 if transaction_skipped:
                     episode["transactions"] = []
                 elif isinstance(transaction_result, dict):
-                    episode["transactions"] = transaction_result.get("transactions", [])
+                    if (
+                        not isinstance(episode_result, dict)
+                        or not isinstance(episode_result.get("transactions"), list)
+                        or not episode_result["transactions"]
+                    ):
+                        episode["transactions"] = transaction_result.get("transactions", [])
                     if not transaction_locator_map:
                         transaction_idx += 1
                 else:
@@ -989,11 +1188,22 @@ class SparseRagBuilder(BaseBuilder):
             self._scalar_value((episode or {}).get("episode_id")),
         )
 
-    def integrate_from_files(self) -> dict[str, Any]:
+    def integrate_from_files(self, *, strict=False) -> dict[str, Any]:
         """Reconstruct the final EventCascade from saved agent result files."""
 
         if not hasattr(self, "save_dir") or not os.path.exists(self.save_dir):
             raise FileNotFoundError(f"Save directory {getattr(self, 'save_dir', None)} does not exist.")
+
+        if strict:
+            manifest = json.loads((Path(self.save_dir) / "RunManifest.json").read_text(encoding="utf-8"))
+            if manifest.get("status") != "completed":
+                raise ValueError("Strict replay requires a completed run")
+            recorded = manifest.get("artifact_sha256")
+            if not isinstance(recorded, dict) or not recorded:
+                raise ValueError("Strict replay requires artifact hashes")
+            actual = self._artifact_hashes()
+            if actual != recorded:
+                raise ValueError("Replay artifacts are incomplete or changed (hash mismatch)")
 
         indexed_files: list[tuple[int, str, str]] = []
         for filename in os.listdir(self.save_dir):
@@ -1028,7 +1238,7 @@ class SparseRagBuilder(BaseBuilder):
 
         agent_results: list[dict[str, Any]] = []
         for _, agent_name, filename, payload, result in loaded_results:
-            entry: dict[str, Any] = {agent_name: result}
+            entry: dict[str, Any] = {agent_name: result, "_replay_filename": filename}
             meta = (
                 dict(payload.get("_meta", {}))
                 if isinstance(payload, dict) and isinstance(payload.get("_meta"), dict)
@@ -1044,16 +1254,94 @@ class SparseRagBuilder(BaseBuilder):
                 entry["_meta"] = meta
             agent_results.append(entry)
 
+        plan_path = os.path.join(self.save_dir, "EpisodeExecutionPlan-Result.json")
+        plan = {"episodes": []}
+        if os.path.isfile(plan_path):
+            with open(plan_path, encoding="utf-8") as fh:
+                plan = json.load(fh)
         dummy_state: AgentState = {
             "agent_results": agent_results,
             "agent_executed": [next(iter(item)) for item in agent_results],
-            "episode_execution_plan": {"episodes": []},
+            "episode_execution_plan": plan,
         }
-        return self.integrate_results(dummy_state)
+        if strict or os.path.isfile(plan_path):
+            self._validate_replay_completeness(dummy_state)
+        cascade = self.integrate_results(dummy_state)
+        if strict or os.path.isfile(plan_path):
+            validate_cascade(cascade)
+        return cascade
+
+    def _artifact_hashes(self):
+        return {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted(Path(self.save_dir).glob("*.json"))
+                if path.name not in {"RunManifest.json", "GanttStatus.json"}}
+
+    def _validate_replay_completeness(self, state):
+        skeleton = self._get_event_skeleton(state)
+        validate_role("SkeletonChecker", skeleton)
+        expected = ["SkeletonReconstructor", "SkeletonChecker"]
+        for si, stage in enumerate(skeleton["stages"]):
+            for ei, _ in enumerate(stage["episodes"]):
+                expected.append("ParticipantReconstructor")
+                plan = self._get_episode_execution_plan_entry(state["episode_execution_plan"], si, ei)
+                if not plan:
+                    raise ValueError("Replay is missing an episode execution plan")
+                if not self._transaction_step_skipped(plan):
+                    expected.append("TransactionReconstructor")
+                expected.append("EpisodeReconstructor")
+            expected.append("StageDescriptionReconstructor")
+        expected.append("EventDescriptionReconstructor")
+        if sorted(state["agent_executed"]) != sorted(expected):
+            raise ValueError("Replay role sequence is incomplete or duplicated")
+        queues = {role: [item for item in state["agent_results"] if role in item] for role in set(expected)}
+        ordered = [queues[role].pop(0) for role in expected]
+        state["agent_results"] = ordered
+        state["agent_executed"] = expected
+        replay = {"agent_results": [], "agent_executed": [],
+                  "episode_execution_plan": state["episode_execution_plan"]}
+        for role, item in zip(expected, state["agent_results"]):
+            if item["_replay_filename"] != self._agent_save_name(replay, role) + "-Result.json":
+                raise ValueError("Replay filename does not match its role or episode")
+            self._validate_agent_output(replay, role, item[role])
+            if role in {"ParticipantReconstructor", "TransactionReconstructor", "EpisodeReconstructor"}:
+                _, _, _, _, locator = self._get_episode_by_sequence_index(
+                    skeleton, replay["agent_executed"].count("EpisodeReconstructor"))
+                if item.get("_meta", {}).get("episode_locator") != locator:
+                    raise ValueError("Replay locator does not match the checked skeleton")
+            replay["agent_results"].append(item)
+            replay["agent_executed"].append(role)
 
     def run(self, build_input: BuildInput) -> BuildOutput:
         """Run the full context-aware event reconstruction pipeline."""
 
+        validate_input(build_input)
+        if getattr(self, "_run_started", False):
+            raise RuntimeError("Create a new builder for each run; implicit resume is not supported")
+        self._run_started = True
+        self._call_records = []
+        inputs, manifest = run_identity(build_input, self.build_config)
+        persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
+        if persist:
+            if os.path.exists(os.path.join(self.save_dir, "RunManifest.json")):
+                raise RuntimeError("Run directory already contains a manifest")
+            self.save_traces(inputs, "BuildInput", "json")
+            self.save_traces(manifest, "RunManifest", "json")
+        started = time.perf_counter()
+        try:
+            output = self._run_validated(build_input)
+            manifest.update(status="completed", event_id=output.event_cascades["event_id"])
+            return output
+        except BaseException as exc:
+            manifest.update(status="failed", error_type=type(exc).__name__)
+            raise
+        finally:
+            manifest.update(elapsed_seconds=time.perf_counter() - started,
+                            usage=summarize_calls(self._call_records))
+            if persist:
+                manifest["artifact_sha256"] = self._artifact_hashes()
+                self.save_traces(manifest, "RunManifest", "json")
+
+    def _run_validated(self, build_input):
         context_assets = self._build_private_context_assets(build_input)
         agent_system_msgs, agent_user_msgs = self._get_agent_prompts()
         state: AgentState = {
@@ -1068,7 +1356,15 @@ class SparseRagBuilder(BaseBuilder):
             "stage_sparse_cache": {},
         }
         final_state = self._run_state_machine(state)
+        final_state["cost"] = copy.deepcopy(self._call_records)
         cascade_dict = self.integrate_results(final_state)
+        validate_cascade(cascade_dict)
+        evidence = evidence_report(cascade_dict, build_input.samples)
+        if hasattr(self, "save_dir") and getattr(self, "save_dir", None):
+            if os.path.isdir(self.save_dir):
+                self.save_traces(evidence, "EvidenceCheck", "json")
+        if self._event_config_value("evidence_policy", "report") == "strict" and evidence["unmatched_quote_count"]:
+            raise ValueError("Final graph contains quotes absent from the supplied source texts")
         if hasattr(self, "save_dir") and getattr(self, "save_dir", None):
             if os.path.isdir(self.save_dir):
                 self.save_traces(cascade_dict, "FinalEventCascade", "json")
@@ -1081,5 +1377,6 @@ class SparseRagBuilder(BaseBuilder):
                 "agent_executed": list(final_state["agent_executed"]),
                 "context_asset_summary": summarize_context_assets(context_assets),
                 "episode_execution_plan": final_state.get("episode_execution_plan"),
+                "calls": copy.deepcopy(self._call_records),
             },
         )
