@@ -45,7 +45,7 @@ def recover_run(run_dir, output_dir=None):
     if not report['valid']:
         raise ValueError('Recovery failed; original files unchanged: ' + json.dumps(report['errors'], ensure_ascii=False))
     projection = to_event_cascade(graph)
-    html = render_subject_graph(graph)
+    html = render_subject_graph(graph, event_cascade=projection)
     destination.mkdir(parents=True, exist_ok=False)
     artifacts = {'FinalSubjectGraph': graph, 'FinalEventCascade': projection,
                  'IntegratedEventCascade': projection, 'subject_graph_validation': report,

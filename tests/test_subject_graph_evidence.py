@@ -13,6 +13,46 @@ import test_subject_graph_builder as builder_tests
 
 
 class QuoteRestorationTests(unittest.TestCase):
+    def test_adjacent_excerpt_offsets_restore_an_exact_input_span(self):
+        from finmy.runner.context_budget import EXCERPT_NOTE
+        left, right = "这是连续的原文，", "其中描述了一次交易。"
+        source = EXCERPT_NOTE + f"[Source chars 100:{100+len(left)}]\n{left}\n\n" + \
+            f"[Source chars {100+len(left)}:{100+len(left)+len(right)}]\n{right}\n"
+        original = {"evidence_source_contents": [left + right]}
+        restored, changes = restore_source_quotes(original, [source])
+        self.assertEqual(len(changes), 1)
+        self.assertIn(restored["evidence_source_contents"][0], source)
+        self.assertIn("[Source chars", restored["evidence_source_contents"][0])
+        self.assertEqual(original["evidence_source_contents"], [left + right])
+
+    def test_real_gaps_reversed_ranges_and_bad_lengths_are_never_joined(self):
+        from finmy.runner.context_budget import EXCERPT_NOTE
+        for first_end, second_start in ((4, 10), (4, 0), (5, 5)):
+            source = EXCERPT_NOTE + f"[Source chars 0:{first_end}]\n甲乙丙丁\n\n" + \
+                f"[Source chars {second_start}:{second_start+4}]\n戊己庚辛\n"
+            original = {"evidence_source_contents": ["甲乙丙丁戊己庚辛"]}
+            self.assertEqual(restore_source_quotes(original, [source]), (original, []))
+
+    def test_long_pdf_passage_restores_missing_word_spaces_only(self):
+        quote = "We did, though, make reasonable progress in increasing the intrinsic value of your shares."
+        source = quote.replace("the intrinsic", "theintrinsic")
+        restored, changes = restore_source_quotes({"evidence_source_contents": [quote]}, [source])
+        self.assertEqual(restored["evidence_source_contents"], [source])
+        self.assertEqual(len(changes), 1)
+        for changed in (source.replace("progress", "no progress"),
+                        source.replace("shares", "bonds")):
+            original = {"evidence_source_contents": [quote]}
+            self.assertEqual(restore_source_quotes(original, [changed]), (original, []))
+
+    def test_compact_matching_does_not_change_numbers_or_pick_ambiguous_text(self):
+        quote = "The company reported that it had purchased 1 650 shares in this transaction during the year."
+        original = {"evidence_source_contents": [quote]}
+        self.assertEqual(restore_source_quotes(original, [quote.replace("1 650", "1650")]), (original, []))
+        quote = "We did, though, make reasonable progress in increasing the intrinsic value of your shares."
+        original = {"evidence_source_contents": [quote]}
+        sources = [quote.replace("the intrinsic", "theintrinsic"), quote.replace("your shares", "yourshares")]
+        self.assertEqual(restore_source_quotes(original, sources), (original, []))
+
     def test_chinese_comma_and_html_spacing_restore_exact_original(self):
         source = "2022年，伯克希尔与 苹果 公司进行了回购。"
         graph = {"value": "Summary", "evidence_source_contents": ["2022年,伯克希尔与苹果公司进行了回购。"]}
@@ -120,13 +160,13 @@ class BuildFormattingTests(unittest.TestCase):
         self.events[0]["actions"][0]["actor_id"] = "wrong"
         def complete(name, system, payload):
             if name == "SubjectGraphRepair":
-                graph = copy.deepcopy(payload["ProposedGraph"])
-                graph["events"][0]["actions"][0]["actor_id"] = "buffett"
-                graph["coverage_start"], graph["coverage_end"] = "1900", "2099"
-                return graph
+                return {"patches": [
+                    {"op": "replace", "path": "/events/0/actions/0/actor_id", "value": "buffett"},
+                    {"op": "replace", "path": "/coverage_start", "value": "1900"}]}
             return self.complete(name, system, payload)
         from finmy.subject_graph.build import run_subject_build
-        graph, _, report = run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
-        self.assertTrue(report["valid"])
+        with self.assertRaisesRegex(ValueError, "failed validation"):
+            run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
+        graph = self.saved["SubjectGraphAfterRepair"]
         self.assertEqual((graph["coverage_start"], graph["coverage_end"]), ("2023", "2023"))
-        self.assertEqual(len(self.saved["subject_repair_metadata_restoration"]), 2)
+        self.assertIn("identity/coverage", self.saved["subject_repair_error"]["error"])

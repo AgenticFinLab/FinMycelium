@@ -5,6 +5,7 @@ Search and parse are injected adapters. No model calls and no recursive searches
 import hashlib
 import ipaddress
 import json
+import logging
 import re
 import math
 import time
@@ -46,18 +47,34 @@ def _gap(text, title, topic, minimum):
     return None
 
 
-def collect_subject_sources(query, keywords, subject, options, search, parse, save_dir, progress=None):
+def _critical_topic(title, text=""):
+    # Classify retrieved evidence only; never use categories to split discovery.
+    value = title + " " + text[:500]
+    for topic, pattern in (
+        ("meeting", r"annual\s+meeting|shareholder\w*\s+meeting|股东大会|股東大會"),
+        ("letter", r"shareholder\w*\s+letter|annual\s+letter|股东信|股東信|致股东|致股東"),
+        ("interview", r"interview|访谈|訪談|采访|採訪"),
+        ("succession", r"success(?:ion|or)|接班|继任|繼任"),
+    ):
+        if re.search(pattern, value, re.I):
+            return topic
+    return None
+
+
+def collect_subject_sources(query, keywords, subject, options, search, parse, save_dir, progress=None,
+                            *, followup_tasks=None, known_urls=()):
     options = options or {}
+    known_urls = {_url(url) for url in known_urls}
     plan = plan_search(query, keywords, subject, options)
     providers = options.get("providers", ["bocha", "baidu"])
     if not providers or any(p not in ("bocha", "baidu") for p in providers):
         raise ValueError("subject_search.providers must contain bocha and/or baidu")
     providers = list(dict.fromkeys(providers))
     limits = {}
-    for key, default in (("results_per_query", 4), ("max_parse_calls", 40),
+    for key, default in (("max_parse_calls", 40),
                          ("max_followup_queries", 3), ("max_links_per_index", 2), ("min_body_chars", 600)):
         value = options.get(key, default)
-        if isinstance(value, bool) or not isinstance(value, int) or value < (1 if key in ("results_per_query", "min_body_chars") else 0):
+        if isinstance(value, bool) or not isinstance(value, int) or value < (1 if key == "min_body_chars" else 0):
             raise ValueError(key + " has an invalid limit")
         limits[key] = value
     report = {"plan": plan, "queries": [], "candidates": [], "gaps": [],
@@ -75,6 +92,11 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
     detail_reserve = min(limits["max_parse_calls"] // 4, limits["max_followup_queries"] * 2)
     detail_spent = 0
 
+    def log_progress(message):
+        logging.info("%s", message)
+        if progress:
+            progress(message)
+
     def save():
         report["summary"]["accepted_documents"] = len(documents)
         report["gaps"] = [{**value, "resolved": key in good} for key, value in gaps.items()]
@@ -83,15 +105,19 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
 
     def candidate(row, task, provider, child=False):
         nonlocal detail_spent
-        key = (task["year"], task["topic"])
         record = {"url": row.get("url"), "title": row.get("title", ""), "provider": provider,
-                  "published_at": row.get("published_at"), "year": task["year"], "topic": task["topic"],
+                  "published_at": row.get("published_at"), "start": task["start"], "end": task["end"],
                   "status": "rejected", "linked_body": child}
         report["candidates"].append(record)
         url = _url(row.get("url"))
         if not url:
             record["reason"] = "invalid_public_url"
             return
+        if url in known_urls:
+            record["reason"] = "already_collected"
+            return
+        key = task.get("gap_id") or url
+        topic = task.get("topic") or _critical_topic(row.get("title", ""))
         # Search result publication metadata must pass BEFORE any expensive fetch.
         if not child:
             allowed, reason = publication_allowed(row.get("published_at"), task["start"], task["end"])
@@ -109,12 +135,13 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
                 detail_spent += 1
             fetched.add(url)
             report["summary"]["parse_calls"] += 1
+            log_progress(f"{provider.title()} Search: Parsing {url}")
             try:
                 cache[url] = parse(url)
             except Exception as exc:
                 record["reason"] = "parse_error: " + type(exc).__name__
-                if task["topic"] in ("meeting", "interview", "letter", "succession"):
-                    gaps.setdefault(key, {**task, "reason": "body_fetch_failed", "title": row.get("title", "")[:160]})
+                if topic:
+                    gaps.setdefault(key, {**task, "gap_id": key, "topic": topic, "reason": "body_fetch_failed", "title": row.get("title", "")[:160]})
                 return
         body = cache.get(url)
         if not isinstance(body, dict):
@@ -129,16 +156,17 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
             record["reason"] = reason
             return
         text = body.get("text") or ""
-        reason = _gap(text, row.get("title", ""), task["topic"], limits["min_body_chars"])
+        topic = topic or _critical_topic(row.get("title", ""), text)
+        reason = _gap(text, row.get("title", ""), topic, limits["min_body_chars"])
         if reason:
             record["reason"] = reason
-            if task["topic"] in ("meeting", "interview", "letter", "succession"):
-                gaps.setdefault(key, {**task, "reason": reason, "title": row.get("title", "")[:160]})
+            if topic:
+                gaps.setdefault(key, {**task, "gap_id": key, "topic": topic, "reason": reason, "title": row.get("title", "")[:160]})
             if not child:
                 links = [link for link in body.get("links", []) if isinstance(link, dict)
                          and re.search(r"transcript|full.text|read.more|实录|全文|文字|访谈|股东信", str(link.get("text", "")), re.I)]
                 for link in links[:limits["max_links_per_index"]]:
-                    candidate({"url": link.get("url"), "title": link.get("text", ""), "published_at": None}, task, provider, child=True)
+                    candidate({"url": link.get("url"), "title": link.get("text", ""), "published_at": None}, {**task, "gap_id": key, "topic": topic}, provider, child=True)
             return
         good.add(key)
         digest = hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode()).hexdigest()
@@ -157,27 +185,54 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
         report["queries"].append(entry)
         if time.monotonic() - started >= max_seconds:
             entry["error"] = "elapsed_budget_exhausted"
+            log_progress(f"{provider.title()} Search: Skipped {phase} search: elapsed time limit reached.")
             return
         if phase == "initial":
-            # Reserve a fair share for later years/topics and a few detail fetches.
+            # Reserve a fair share for later providers and a few detail fetches.
             reserve = detail_reserve - detail_spent
             available = max(0, limits["max_parse_calls"] - report["summary"]["parse_calls"] - reserve)
             call_ceiling = report["summary"]["parse_calls"] + math.ceil(available / max(1, remaining_initial))
             remaining_initial -= 1
         else:
             call_ceiling = limits["max_parse_calls"]
-        if progress:
-            progress(f"Search: {task['year']} / {task['topic']} / {provider}" + (" (detail follow-up)" if phase == "followup" else ""))
+        label = f"{provider.title()} Search"
+        suffix = {"followup": " (detail follow-up)", "decision_followup": " (decision follow-up)"}.get(phase, "")
+        log_progress(f"Start: {label}{suffix}")
+        if phase != "initial":
+            reasons = {
+                "body_too_short": "Retrieved body is too short.",
+                "index_without_body": "Index page found; full text is missing.",
+                "missing_speech_details": "Meeting or interview coverage lacks speech details.",
+                "body_fetch_failed": "Failed to retrieve the source body.",
+            }
+            log_progress(f"{label}: Reason: {reasons.get(task.get('reason'), task.get('reason', 'Missing source details.'))}")
+        log_progress(f"{label}: Query: {task['query']}")
+        log_progress(f"{label}: Publication date range: {task['start']} to {task['end']}.")
         try:
-            rows = search(provider, task["query"], limits["results_per_query"], task["start"], task["end"])
+            count = {"bocha": 10, "baidu": 20}[provider]
+            rows = search(provider, task["query"], count, task["start"], task["end"])
             entry["result_count"] = len(rows)
-            for row in rows[:limits["results_per_query"]]:
+            log_progress(f"{label}: Get {len(rows)} search results.")
+            for row in rows[:count]:
                 candidate(row, task, provider)
         except Exception as exc:
             entry["error"] = type(exc).__name__ + ": search failed"
+            log_progress(f"{label}: Search failed ({type(exc).__name__}).")
         save()
 
     try:
+        if followup_tasks is not None:
+            # One fixed decision-search round. Do not recursively fill gaps found here.
+            for task in followup_tasks:
+                task = {**task, "start": plan[0]["start"], "end": plan[0]["end"]}
+                for provider in providers:
+                    if report["summary"]["followup_queries"] >= limits["max_followup_queries"]:
+                        break
+                    report["summary"]["followup_queries"] += 1
+                    run(task, provider, "decision_followup")
+            log_progress(f"Decision follow-up: Retrieved {len(documents)} new source(s); "
+                         "no further search rounds. Missing details remain undocumented.")
+            return documents
         for task in plan:
             for provider in providers:
                 run(task, provider, "initial")
@@ -186,7 +241,7 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
         for key, gap in list(gaps.items()):
             if key in good:
                 continue
-            task = {k: gap[k] for k in ("query", "start", "end", "year", "topic")}
+            task = {k: gap[k] for k in ("query", "start", "end", "gap_id", "topic", "reason")}
             title = gap.get("title", "").replace('"', "")
             task["query"] += f' "{title}" transcript full text questions answers 全文 实录 问答'
             for provider in providers:
@@ -194,6 +249,16 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
                     break
                 report["summary"]["followup_queries"] += 1
                 run(task, provider, "followup")
+        unresolved = sum(key not in good for key in gaps)
+        if any("error" in entry for entry in report["queries"]):
+            log_progress("Detail follow-up: Search incomplete; see search errors above.")
+        elif not gaps or not unresolved:
+            log_progress("Detail follow-up: No additional search needed."
+                         if not report["summary"]["followup_queries"]
+                         else "Detail follow-up: Completed; observed source gaps resolved.")
+        else:
+            log_progress(f"Detail follow-up: Stopped with {unresolved} unresolved source gap(s); "
+                         "follow-up round or configured limit reached.")
     finally:
         save()
     return documents

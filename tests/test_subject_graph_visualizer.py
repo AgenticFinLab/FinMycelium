@@ -4,6 +4,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from finmy.subject_graph.visualizer import render_subject_graph, SubjectGraphVisualizer
 
@@ -66,6 +67,28 @@ class SubjectGraphVisualizerTests(unittest.TestCase):
         self.assertNotIn("背景关系未画为事件内连线", page)
         self.assertNotIn("人物经历 Gantt：", page)
 
+    def test_precomputed_cascade_reuses_identical_render_input(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = fixture()
+        graph["entities"][0]["name"]["value"] = "Warren <Buffett>"
+        cascade = to_event_cascade(graph)
+        original = copy.deepcopy(cascade)
+        rendered = []
+
+        def plot(value, target, **kwargs):
+            rendered.append((copy.deepcopy(value), kwargs))
+            Path(target).write_text("<html>same gantt</html>", encoding="utf-8")
+
+        with patch.object(EventCascadeGanttVisualizer, "plot_cascade", side_effect=plot):
+            expected = render_subject_graph(graph)
+            with patch("finmy.subject_graph.visualizer.to_event_cascade") as convert:
+                actual = render_subject_graph(graph, event_cascade=cascade)
+                convert.assert_not_called()
+        self.assertEqual(actual, expected)
+        self.assertEqual(rendered[0], rendered[1])
+        self.assertEqual(cascade, original)
+
     def test_unknown_dates_render(self):
         graph = fixture()
         for event in graph["events"]:
@@ -89,6 +112,100 @@ class SubjectGraphVisualizerTests(unittest.TestCase):
         fig = EventCascadeGanttVisualizer().plot_cascade(to_event_cascade(fixture()))
         self.assertEqual(fig.layout.yaxis.title.text, "Episodes (Staggered)")
         self.assertEqual(fig.layout.legend.title.text, "Participants")
+
+    def test_actions_are_distinct_activities_with_the_actual_actor(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        graph = fixture()
+        event = graph["events"][1]
+        event["actions"][0]["action_type"] = vf("Explained cash reserve policy")
+        second = copy.deepcopy(event["actions"][0])
+        second.update(action_id="A3", action_type=vf("Discussed investment risks"))
+        event["actions"].append(second)
+        original = copy.deepcopy(graph)
+        stage = to_event_cascade(graph)["stages"][1]
+        context, first, second = stage["episodes"]
+        self.assertEqual(context["name"]["value"], "Event participation")
+        self.assertNotEqual(context["descriptions"], event["descriptions"])
+        self.assertEqual([first["name"]["value"], second["name"]["value"]],
+                         ["Explained cash reserve policy", "Discussed investment risks"])
+        for episode, action in zip((first, second), event["actions"]):
+            self.assertEqual(episode["descriptions"], action["details"])
+            self.assertEqual(episode["start_time"], action["timestamp"])
+            self.assertEqual([p["name"]["value"] for p in episode["participants"]], ["Warren Buffett"])
+            self.assertEqual(len(episode["participants"][0]["actions"]), 1)
+            self.assertEqual(episode["participant_relations"], [])
+        company_action = to_event_cascade(graph)["stages"][0]["episodes"][1]
+        self.assertEqual(company_action["participants"][0]["name"]["value"], "Berkshire Hathaway")
+        self.assertEqual(graph, original)
+
+    def test_single_day_event_is_a_marker_and_duration_event_stays_a_bar(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = fixture()
+        graph["events"][1]["start_time"] = vf("2023-05-06")
+        graph["events"][1]["end_time"] = vf("2023-05-06")
+        graph["events"][1]["actions"][0]["timestamp"] = vf("2023-05-06")
+        cascade = to_event_cascade(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(cascade, subject_name="Warren Buffett")
+        event_traces = [t for t in fig.data if t.name.startswith("Event:")]
+        self.assertEqual([t.name for t in event_traces], ["Event: S1", "Event: S2"])
+        self.assertEqual(event_traces[0].type, "bar")
+        self.assertEqual(event_traces[0].x[0], 2 * 86400000)
+        self.assertEqual(event_traces[1].type, "scatter")
+        self.assertEqual(str(event_traces[1].x[0])[:10], "2023-05-06")
+        labels = " ".join(t.name or "" for t in fig.data)
+        self.assertNotIn("STAGE:", labels)
+        self.assertNotIn("Activitys", labels)
+        self.assertIn("Activities", labels)
+        legacy = EventCascadeGanttVisualizer().plot_cascade(cascade)
+        self.assertEqual([t.type for t in legacy.data if t.name.startswith("Stage:")],
+                         ["bar", "bar"])
+
+    def test_equivalent_role_labels_share_one_legend_entry(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        from test_subject_graph_schema import graph_fixture
+        graph = graph_fixture()
+        graph["relations"][0]["relation_type"]["value"] = "Chairman and CEO"
+        other = copy.deepcopy(graph["relations"][0])
+        other["relation_id"] = "R_alias"
+        other["relation_type"]["value"] = "Chief Executive Officer and Chairman"
+        graph["relations"].append(other)
+        original = copy.deepcopy(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett")
+        names = [t.name for t in fig.data if t.showlegend]
+        self.assertEqual(names.count("Chairman and CEO"), 1)
+        self.assertFalse(any("Chief Executive" in name for name in names))
+        self.assertEqual(graph, original)
+
+    def test_person_hover_includes_action_details_time_and_event_context(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = fixture()
+        graph["events"][1]["descriptions"] = [vf("The discussion concerned liquidity needs.")]
+        graph["events"][1]["actions"][0]["details"] = [vf("Cash was retained to meet obligations.")]
+        original = copy.deepcopy(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett")
+        hovers = [text for trace in fig.data for text in (trace.hovertext or [])]
+        person_hover = next(text for text in hovers if "Name: Warren Buffett" in text)
+        self.assertIn("Cash was retained to meet obligations.", person_hover)
+        self.assertIn("Time: 2023-05", person_hover)
+        self.assertIn("Event context:<br>The discussion", person_hover.replace("- ", ""))
+        activity = next(text for text in hovers if text.startswith("Activity: public statement"))
+        self.assertIn("Cash was retained to meet obligations.", activity)
+        self.assertIn("The discussion concerned liquidity needs.", activity)
+        self.assertEqual(graph, original)
+        graph["events"][1]["actions"][0]["details"] = []
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett")
+        self.assertTrue(any("Details:<br>Not documented in supplied sources." in text
+                            for trace in fig.data for text in (trace.hovertext or [])
+                            if "Name: Warren Buffett" in text))
+        legacy = EventCascadeGanttVisualizer().plot_cascade(to_event_cascade(original))
+        self.assertFalse(any("Event context:" in text for trace in legacy.data
+                             for text in (trace.hovertext or [])))
 
     def test_legacy_input_rejected(self):
         with self.assertRaisesRegex(ValueError, "SubjectGraph"):

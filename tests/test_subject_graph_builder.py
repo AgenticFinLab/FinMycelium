@@ -62,6 +62,8 @@ class NativeBuildTests(unittest.TestCase):
         self.calls.append((name, system, copy.deepcopy(payload)))
         if name == "SubjectPlanner":
             return copy.deepcopy(self.plan)
+        if name in ("SubjectCoverageReviewer", "SubjectEventReviewer"):
+            return {"event_additions": [], "missing_events": []}
         return {"event": copy.deepcopy(next(e for e in self.events if e["event_id"] == payload["TargetEvent"]["event_id"])),
                 "relations": []}
 
@@ -73,7 +75,8 @@ class NativeBuildTests(unittest.TestCase):
         self.assertEqual(len(graph["entities"]), 2)
         self.assertEqual([e["actions"][0]["actor_id"] for e in graph["events"]], ["buffett", "berkshire"])
         self.assertEqual([e["start_time"]["value"] for e in graph["events"]], ["2023-05", "2023-06"])
-        self.assertEqual(state["agent_executed"], ["SubjectPlanner", "SubjectEventReconstructor", "SubjectEventReconstructor"])
+        self.assertEqual(state["agent_executed"], ["SubjectPlanner", "SubjectEventReconstructor", "SubjectEventReconstructor",
+                                                  "SubjectEventReviewer", "SubjectEventReviewer", "SubjectCoverageReviewer"])
         self.assertEqual(self.saved["subject_build_input"]["Sources"][0]["content"], SOURCE)
         self.assertNotIn("Sources", graph)
         self.assertEqual(self.calls[1][2]["EntityRegistry"], self.calls[2][2]["EntityRegistry"])
@@ -82,6 +85,34 @@ class NativeBuildTests(unittest.TestCase):
         graph, _, report = run_subject_build(input_(), config("company"), self.complete, self.save)
         self.assertTrue(report["valid"], report)
         self.assertEqual((graph["subject_type"], graph["subject_id"]), ("organization", "berkshire"))
+
+    def test_configured_subject_type_is_restored_for_matching_identity(self):
+        for proposed in ("person", "Person", "human", "organization", None, {"value": "individual"}):
+            with self.subTest(proposed=proposed):
+                self.plan["entities"][0]["entity_type"] = proposed
+                graph, _, report = run_subject_build(input_(), config(), self.complete, self.save)
+                self.assertTrue(report["valid"], report)
+                self.assertEqual(graph["entities"][0]["entity_type"], "individual")
+                self.assertEqual(graph["entities"][1]["entity_type"], "organization")
+                self.assertEqual(self.saved["subject_identity_normalization"]["before"], proposed)
+                self.assertEqual(self.saved["SubjectPlanner-1-Result"]["entities"][0]["entity_type"], proposed)
+                self.assertEqual(self.calls[-1][2]["EntityRegistry"][0]["entity_type"], "individual")
+
+    def test_configured_alias_can_anchor_type_normalization(self):
+        cfg = config()
+        cfg["reconstruction"]["subject"]["aliases"] = ["巴菲特"]
+        self.plan["entities"][0].update(name=vf("巴菲特"), entity_type="person")
+        graph, _, report = run_subject_build(input_(), cfg, self.complete, self.save)
+        self.assertTrue(report["valid"], report)
+        self.assertEqual(graph["entities"][0]["name"]["value"], "巴菲特")
+        self.assertEqual(graph["entities"][0]["entity_type"], "individual")
+
+    def test_type_normalization_does_not_turn_another_entity_into_the_person(self):
+        self.plan["entities"][0].update(name=vf("Berkshire Hathaway"), entity_type="organization")
+        with self.assertRaisesRegex(ValueError, "unrecognized name"):
+            run_subject_build(input_(), config(), self.complete, self.save)
+        self.assertEqual(len(self.calls), 1)
+        self.assertNotIn("subject_identity_normalization", self.saved)
 
     def test_dangling_actor_fails_without_final_export(self):
         self.events[0]["actions"][0]["actor_id"] = "invented"
@@ -96,7 +127,7 @@ class NativeBuildTests(unittest.TestCase):
         def complete(name, system, payload):
             if name == "SubjectGraphRepair":
                 self.calls.append((name, system, payload))
-                return copy.deepcopy(payload["ProposedGraph"])
+                return {"patches": []}
             return self.complete(name, system, payload)
         graph, _, report = run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
         self.assertEqual(sum(name == "SubjectGraphRepair" for name, _, _ in self.calls), 1)
@@ -113,28 +144,52 @@ class NativeBuildTests(unittest.TestCase):
         self.events[0]["actions"][0]["actor_id"] = "wrong"
         def complete(name, system, payload):
             if name == "SubjectGraphRepair":
-                graph = copy.deepcopy(payload["ProposedGraph"])
-                graph["events"][0]["actions"][0]["actor_id"] = "buffett"
-                graph["subject_id"], graph["subject_type"] = "berkshire", "organization"
-                return graph
+                return {"patches": [
+                    {"op": "replace", "path": "/events/0/actions/0/actor_id", "value": "buffett"},
+                    {"op": "replace", "path": "/subject_id", "value": "berkshire"}]}
+
             return self.complete(name, system, payload)
         with self.assertRaisesRegex(ValueError, "failed validation"):
             run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
-        self.assertTrue(any("identity/coverage" in e["message"] for e in self.saved["subject_graph_validation"]["errors"]))
+        self.assertIn("identity/coverage", self.saved["subject_repair_error"]["error"])
 
     def test_bounded_repair_can_fix_reference_and_preserve_correct_content(self):
         self.events[0]["actions"][0]["actor_id"] = "wrong"
         def complete(name, system, payload):
             if name == "SubjectGraphRepair":
-                graph = copy.deepcopy(payload["ProposedGraph"])
-                graph["events"][0]["actions"][0]["actor_id"] = "buffett"
-                return graph
+                self.assertIn('"patches"', system)
+                self.assertNotIn("returning ONE complete", system)
+                return {"patches": [{"op": "replace", "path": "/events/0/actions/0/actor_id", "value": "buffett"}]}
             return self.complete(name, system, payload)
         graph, state, report = run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
         self.assertTrue(report["valid"])
-        self.assertEqual(state["agent_executed"][-1], "SubjectGraphRepair")
+        self.assertEqual(state["agent_executed"][-4:], ["SubjectGraphRepair", "SubjectEventReviewer",
+                                                       "SubjectEventReviewer", "SubjectCoverageReviewer"])
         self.assertEqual(graph["events"][1], self.events[1])
         self.assertEqual(self.saved["RawSubjectGraph"]["events"][0]["actions"][0]["actor_id"], "wrong")
+
+    def test_invalid_repair_response_preserves_evidence_only_graph_for_review(self):
+        self.events[0]["descriptions"][0]["evidence_source_contents"] = ["Unmatched quote"]
+        def complete(name, system, payload):
+            if name == "SubjectGraphRepair":
+                raise ValueError("Model JSON is incomplete")
+            return self.complete(name, system, payload)
+        graph, _, report = run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
+        self.assertTrue(report["valid"])
+        self.assertEqual(graph["events"][0]["descriptions"][0]["evidence_status"], "needs_review")
+        self.assertEqual(graph["events"][1], self.events[1])
+        self.assertIn("subject_repair_error", self.saved)
+
+    def test_invalid_repair_does_not_bypass_structural_errors(self):
+        self.events[0]["actions"][0]["actor_id"] = "wrong"
+        def complete(name, system, payload):
+            if name == "SubjectGraphRepair":
+                raise ValueError("Model JSON is incomplete")
+            return self.complete(name, system, payload)
+        with self.assertRaisesRegex(ValueError, "failed validation"):
+            run_subject_build(input_(), config(repair_attempts=1), complete, self.save)
+        self.assertEqual(self.saved["SubjectGraphAfterRepair"]["events"][0], self.events[0])
+        self.assertFalse(self.saved["subject_graph_validation"]["valid"])
 
     def test_configured_identity_does_not_invent_personal_participation(self):
         self.plan["entities"] = [self.plan["entities"][1]]
@@ -144,6 +199,64 @@ class NativeBuildTests(unittest.TestCase):
         subject = next(e for e in graph["entities"] if e["entity_id"] == "buffett")
         self.assertEqual(subject["name"]["reasons"], ["configured_identity"])
         self.assertEqual([p["entity_id"] for p in graph["events"][0]["participations"]], ["berkshire"])
+
+    def test_existing_review_corrects_time_before_coverage_without_extra_calls(self):
+        self.events[0]["actions"][0]["timestamp"] = vf("2023-05-31")
+        corrected = vf("2023-05")
+        corrected["reasons"] = ["Source states May, not its last day."]
+        def complete(name, system, payload):
+            if name == "SubjectEventReviewer" and payload["TargetEvent"]["event_id"] == "E1":
+                self.calls.append((name, system, copy.deepcopy(payload)))
+                self.assertIn("information dates", system)
+                return {"corrections": [{"reason": "Invented month-end date", "patches": [
+                    {"op": "replace", "path": "/event/actions/0/timestamp", "value": corrected}]}],
+                        "event_additions": [], "missing_events": []}
+            if name == "SubjectCoverageReviewer":
+                self.assertEqual(payload["ConstructedGraph"]["events"][0]["actions"][0]["timestamp"], corrected)
+            return self.complete(name, system, payload)
+        graph, state, report = run_subject_build(input_(), config(), complete, self.save)
+        self.assertTrue(report["valid"], report)
+        self.assertEqual(graph["events"][0]["actions"][0]["timestamp"], corrected)
+        self.assertEqual(graph["events"][1], self.events[1])
+        self.assertEqual(len(state["agent_executed"]), 6)
+        self.assertIn("corrections", state["agent_results"][3]["SubjectEventReviewer"])
+        self.assertTrue(self.saved["subject_event_detail_review"][0]["corrections"]["accepted"])
+        self.assertEqual(self.saved["RawSubjectGraph"]["events"][0]["actions"][0]["timestamp"]["value"], "2023-05-31")
+
+    def test_failed_consistency_correction_is_visible_without_losing_graph(self):
+        def complete(name, system, payload):
+            if name == "SubjectEventReviewer":
+                return {"corrections": [{"reason": "Wrong scope", "patches": [
+                    {"op": "replace", "path": "/subject_id", "value": "other"}]}],
+                        "event_additions": [], "missing_events": []}
+            return self.complete(name, system, payload)
+        graph, _, report = run_subject_build(input_(), config(), complete, self.save)
+        self.assertTrue(report["valid"], report)
+        self.assertEqual(graph["events"], self.events)
+        self.assertTrue(any("review incomplete" in w["message"] for w in report["warnings"]))
+
+    def test_coverage_cannot_reintroduce_corrected_future_price_claim(self):
+        source = input_()
+        quote = "Shares were purchased in May 2023. In November 2023 the price was 59 dollars."
+        source.samples[0].content += " " + quote
+        wrong = vf("The May purchase followed the November price decline to 59 dollars.", quote)
+        corrected = vf("The price was 59 dollars in November, a later observation, not a May decision input.", quote)
+        self.events[0]["actions"][0]["details"] = [wrong]
+        def complete(name, system, payload):
+            if name == "SubjectEventReviewer" and payload["TargetEvent"]["event_id"] == "E1":
+                return {"corrections": [{"reason": "Later price misused as prior information", "patches": [
+                    {"op": "replace", "path": "/event/actions/0/details/0", "value": corrected}]}],
+                        "event_additions": [], "missing_events": []}
+            if name == "SubjectCoverageReviewer":
+                self.assertTrue(payload["ExcludedRecords"])
+                return {"event_additions": [{"event_id": "E1", "action_details": [
+                    {"action_id": "E1_A1", "details": [wrong]}]}], "missing_events": []}
+            return self.complete(name, system, payload)
+        graph, _, report = run_subject_build(source, config(), complete, self.save)
+        self.assertTrue(report["valid"], report)
+        self.assertEqual(graph["events"][0]["actions"][0]["details"], [corrected])
+        self.assertEqual(graph["events"][0]["start_time"]["value"], "2023-05")
+        self.assertIn("reintroduces", self.saved["subject_coverage_review"]["rejected"][0]["reason"])
 
     def test_empty_sources_and_event_cap_stop_before_detail_calls(self):
         empty = input_(); empty.samples = []
@@ -180,15 +293,18 @@ class NativeBuilderIntegrationTests(unittest.TestCase):
             calls.append(payload)
             answer = plan if "TargetEvent" not in payload else {
                 "event": next(e for e in events if e["event_id"] == payload["TargetEvent"]["event_id"]), "relations": []}
+            if "ConstructedGraph" in payload or "Review ONLY TargetEvent" in formatted_system:
+                answer = {"event_additions": [], "missing_events": []}
             return types.SimpleNamespace(response=json.dumps(answer), to_dict=lambda: {"response": json.dumps(answer)})
         source_input = input_()
         source_input.samples[0].content += ' Literal source syntax: {payload}, {other}, {"key": "value"}.'
         with patch.dict(self.builder._run_subject.__globals__, {
             "InferInput": types.SimpleNamespace, "run_single_inference": infer,
             "extract_json_response": json.loads,
-        }):
+        }), patch("finmy.subject_graph.visualizer.to_event_cascade") as render_conversion:
             result = self.builder.run(source_input)
-        self.assertEqual(len(calls), 3)
+        render_conversion.assert_not_called()
+        self.assertEqual(len(calls), 6)
         self.assertTrue(all(call["Sources"][0]["content"] == source_input.samples[0].content for call in calls))
         archived = json.loads((self.path / "subject_build_input.json").read_text())
         self.assertEqual(archived["Sources"][0]["content"], source_input.samples[0].content)

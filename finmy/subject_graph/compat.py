@@ -1,6 +1,6 @@
 """A derived EventCascade view for existing consumers; SubjectGraph is canonical.
 
-Each independent event receives its own stage and episode. Global relationships
+Each independent event receives a stage; its actions become separate episodes. Global relationships
 without event references are not invented as episode relationships. Entity IDs
 are mapped consistently to P_ IDs inside this view only.
 """
@@ -90,16 +90,34 @@ def to_event_cascade(graph):
                 item[side + "_participant_id"] = party
             transactions.append(item)
         episode = {
-            "episode_id": f"E{index + 1}", "name": copy.deepcopy(event["title"]), "index_in_stage": 0,
+            "episode_id": f"E{index + 1}",
+            "name": _metadata("Event participation", "Event-level participants, relations and transactions"),
+            "index_in_stage": 0,
             "start_time": copy.deepcopy(event["start_time"]), "end_time": copy.deepcopy(event["end_time"]),
-            "descriptions": copy.deepcopy(event["descriptions"] + [event["subject_relevance"]]),
+            "descriptions": [copy.deepcopy(event["subject_relevance"])],
             "participants": participants,
             "participant_relations": relations, "transactions": transactions,
         }
+        episodes = [episode]
+        for action_index, action in enumerate(event["actions"], 1):
+            actor = copy.deepcopy(next(p for p in participants
+                                       if p["participant_id"] == mapping[action["actor_id"]]))
+            actor["actions"] = [{"name": copy.deepcopy(action["action_type"]),
+                                 "timestamp": copy.deepcopy(action["timestamp"]),
+                                 "details": copy.deepcopy(action["details"])}]
+            episodes.append({
+                "episode_id": f"E{index + 1}_A{action_index}",
+                "name": copy.deepcopy(action["action_type"]), "index_in_stage": action_index,
+                "start_time": copy.deepcopy(action["timestamp"]),
+                "end_time": copy.deepcopy(action["timestamp"]),
+                "descriptions": copy.deepcopy(action["details"]), "participants": [actor],
+                # Event-level relations/trades stay in the participation episode.
+                "participant_relations": [], "transactions": [],
+            })
         stages.append({
             "stage_id": f"S{index + 1}", "name": copy.deepcopy(event["title"]), "index_in_event": index,
             "start_time": copy.deepcopy(event["start_time"]), "end_time": copy.deepcopy(event["end_time"]),
-            "descriptions": copy.deepcopy(event["descriptions"]), "episodes": [episode],
+            "descriptions": copy.deepcopy(event["descriptions"]), "episodes": episodes,
         })
     def extreme(key, minimum):
         candidates = [(date_interval(e[key]), e[key]) for e in graph["events"]]

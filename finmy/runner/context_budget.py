@@ -122,6 +122,14 @@ def _fit(document: dict[str, Any], candidates, allowance: int, metadata: bool):
     if sum(end - start for start, end in selected) < min(128, len(text)) or not text:
         return "", []
     selected.sort()
+    # Adjacent slices are one original passage. Keep wrappers only at real gaps.
+    merged = []
+    for start, end in selected:
+        if merged and merged[-1][1] == start:
+            merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    selected = merged
     rendered = prefix + "".join(_block(text, start, end) for start, end in selected)
     if len(rendered) > allowance:
         raise AssertionError("Internal context budget overflow")

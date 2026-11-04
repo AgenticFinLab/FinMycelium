@@ -1,4 +1,4 @@
-"""Deterministic year/topic queries and strict publication-window checks.
+"""Single-range queries and strict publication-window checks.
 
 Search operators are only hints to providers. Call publication_allowed on every
 result before fetching it; unknown dates do not silently pass the window.
@@ -19,15 +19,6 @@ _DATES = re.compile(
     rf"|[-/]\d{{1,2}}(?:[-/]\d{{1,2}})?|\s+{_MONTH_WORD}\.?)?(?!\d)",
     re.I,
 )
-_TOPICS = {
-    "meeting": (r"annual\s+meeting|shareholder\w*\s+meeting|股东大会|股東大會", "annual shareholders meeting transcript 股东大会 实录"),
-    "letter": (r"shareholder\w*\s+letter|annual\s+letter|股东信|股東信|致股东|致股東", "shareholder letter full text 致股东信 全文"),
-    "interview": (r"interview|访谈|訪談|采访|採訪", "interview transcript 采访 实录"),
-    "investment": (r"invest|投资|投資|持仓|持倉|增持|减持|減持", "investment decisions purchases sales 投资 决策"),
-    "philanthropy": (r"philanthrop|donat|慈善|捐赠|捐贈", "philanthropy donation 慈善 捐赠"),
-    "succession": (r"success(?:ion|or)|接班|继任|繼任", "succession statements 接班人 发言"),
-    "visit": (r"visit|访日|訪日|访问|訪問|日本", "visit 访问"),
-}
 
 
 def publication_bounds(value):
@@ -91,18 +82,6 @@ def _request_dates(query):
     return []
 
 
-def _topic_scope(query):
-    """Keep literal topic restrictions; never invent an organization or place."""
-    clauses = []
-    pattern = r"(?:related\s+to|about|focus(?:ed)?\s+on|visits?\s+to|关于|關於|围绕|圍繞|聚焦|访问|訪問)\s*([^.;。；\n]+)"
-    for match in re.finditer(pattern, query or "", re.I):
-        clause = re.split(r"\b(?:between|from|during|through)\b|(?<!\d)(?:19|20)\d{2}|[，,]", match[1], maxsplit=1, flags=re.I)[0]
-        clause = clause.strip(" ：:，,。;；-")
-        if clause:
-            clauses.append(clause[:160])
-    return " ".join(dict.fromkeys(clauses))
-
-
 def search_window(query, subject, options=None):
     """Explicit configuration wins; otherwise read dates from the request."""
     options = options or {}
@@ -121,47 +100,19 @@ def search_window(query, subject, options=None):
 
 
 def plan_search(query, keywords, subject, options=None):
-    """Plan bounded year/topic queries without using model-generated identity."""
+    """One original request over the full publication window, per provider.
+
+    Legacy topics/max_queries settings do not split or restrict the request.
+    """
     options = options or {}
     name = subject.get("name", "").strip()
     if not name:
         raise ValueError("Scoped search requires a subject name")
     start, end = search_window(query, subject, options)
-    cap = options.get("max_queries", 16)
-    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
-        raise ValueError("max_queries must be a positive integer")
-    years = list(range(start.year, end.year + 1))
-    if len(years) > cap:
-        raise ValueError("Publication period has more years than max_queries; increase the query budget or narrow the requested period")
-    topics = options.get("topics")
-    if topics is None:
-        text = " ".join([query or "", " ".join(keywords or [])])
-        topics = [key for key, (pattern, _) in _TOPICS.items() if re.search(pattern, text, re.I)]
-    elif not isinstance(topics, list) or any(not isinstance(x, str) or not x.strip() for x in topics):
-        raise ValueError("topics must be a list of nonempty topic strings")
-    topics = list(dict.fromkeys(topics or ["activities"]))
-    if len(years) * len(topics) > cap:
-        raise ValueError("Requested years and topics exceed max_queries; increase the query budget or narrow the requested scope")
     scope = (options.get("scope") or subject.get("scope") or "").strip()
-    # The normal subject scope is boilerplate, not a query constraint. Preserve
-    # explicitly configured topic scope (e.g. Occidental Petroleum / OXY).
     if scope.startswith(("Documented activities and experiences across events", "Documented company history and activities across events")):
         scope = ""
-    scope = " ".join(dict.fromkeys(filter(None, (scope, _topic_scope(query)))))
-    result = []
-    # Round-robin years: the budget must never omit the later requested years.
-    for topic in topics:
-        for year in years:
-            low, high = max(start, dt.date(year, 1, 1)), min(end, dt.date(year, 12, 31))
-            terms = _TOPICS.get(topic, (None, topic))[1]
-            if topic == "visit" and re.search(r"Japan|日本|访日|訪日", " ".join([query or "", " ".join(keywords or [])]), re.I):
-                terms += " Japan 日本"
-            query_text = (f'"{name.replace(chr(34), "")}" {year} {terms} {scope} '
-                          f'published {low.isoformat()} to {high.isoformat()} '
-                          f'after:{(low - dt.timedelta(days=1)).isoformat()} '
-                          f'before:{(high + dt.timedelta(days=1)).isoformat()}')
-            result.append({"query": query_text, "start": low.isoformat(), "end": high.isoformat(),
-                           "year": year, "topic": topic})
-            if len(result) == cap:
-                return result
-    return result
+    keyword_text = keywords if isinstance(keywords, str) else " ".join(keywords or [])
+    terms = [f'"{name.replace(chr(34), "")}"', query or "", keyword_text, scope]
+    return [{"query": " ".join(term.strip() for term in terms if term.strip()),
+             "start": start.isoformat(), "end": end.isoformat()}]

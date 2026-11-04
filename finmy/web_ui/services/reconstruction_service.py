@@ -125,6 +125,25 @@ class ReconstructionService:
         if not filtered["contents"]:
             raise ValueError("No relevant sources remain. Inspect relevance_decisions.json or refine the search.")
 
+        if scoped and reconstruction["mode"] == "person":
+            from finmy.runner.decision_followup import collect_decision_followup
+            extra = collect_decision_followup(
+                filtered, main_input, keywords, reconstruction["subject"], self.config, save_dir,
+                progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"),
+                known_urls=[d.get("url") for d in documents],
+            )
+            if extra:
+                # Reuse the relevance cache for old documents and assign unique
+                # IDs across the combined source list before the context budget.
+                filtered = filter_documents(
+                    documents + extra, main_input, keywords, self.config, save_dir, progress=st.write,
+                )
+                summary = filtered["summary"]
+                st.write(f"Relevance filter after decision follow-up: kept {summary['kept']}/"
+                         f"{summary['retrieved']} documents.")
+                for warning in filtered["warnings"]:
+                    st.warning(warning)
+
         # Budget retained evidence before building: CORE/CONTEXT first, long
         # sources as verbatim excerpts. No extra model call is needed here.
         budgeted = allocate_context(

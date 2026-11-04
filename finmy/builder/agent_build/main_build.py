@@ -76,9 +76,7 @@ from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
 from finmy.builder.agent_build.validation import validate_event_cascade
 from finmy.builder.agent_build.prompts import *
-from finmy.builder.agent_build.person_prompts import get_person_prompts, schema_for_agent
-from finmy.reconstruction_scope import read_reconstruction, render_scope
-from finmy.person_index import build_person_index
+from finmy.reconstruction_scope import read_reconstruction
 from finmy.subject_graph.build import run_subject_build
 from finmy.subject_graph.compat import to_event_cascade
 
@@ -178,8 +176,6 @@ class AgentEventBuilder(BaseBuilder):
 
     def _get_agent_prompts(self):
         """Initialize system and user prompts for all agents."""
-        if read_reconstruction(self.build_config)["mode"] == "person":
-            return get_person_prompts()
         agent_system_msgs = {}
         agent_user_msgs = {}
 
@@ -330,8 +326,6 @@ class AgentEventBuilder(BaseBuilder):
             AgentState: Updated state with the new agent result appended.
         """
         t0 = time.time()
-        reconstruction = read_reconstruction(self.build_config)
-        is_person = reconstruction["mode"] == "person"
         build_ipt = state["build_input"]
 
         # Common prompt arguments
@@ -340,12 +334,6 @@ class AgentEventBuilder(BaseBuilder):
             "Keywords": build_ipt.user_query.key_words,
             "Content": "\n".join([sample.content for sample in build_ipt.samples]),
         }
-
-        if is_person:
-            prompt_kwargs["SubjectScope"] = render_scope(self.build_config)
-
-        def schema(legacy_spec):
-            return schema_for_agent(_STRUCTURE_SPEC_FULL, agent_name) if is_person else legacy_spec
 
         # Retrieve templates
         sys_msg_template = state["agent_system_msgs"][agent_name]
@@ -356,7 +344,7 @@ class AgentEventBuilder(BaseBuilder):
 
         # Logic branching based on agent_name
         if agent_name == "SkeletonReconstructor":
-            sys_msg = sys_msg_template.format(STRUCTURE_SPEC=schema(_SKELETON_SPEC))
+            sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
         elif agent_name == "SkeletonChecker":
             # Pass the previous Skeleton as context
@@ -365,7 +353,7 @@ class AgentEventBuilder(BaseBuilder):
             prompt_kwargs["ProposedSkeleton"] = json.dumps(
                 skeleton_result, default=str, indent=2
             )
-            sys_msg = sys_msg_template.format(STRUCTURE_SPEC=schema(_SKELETON_SPEC))
+            sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_SKELETON_SPEC)
 
         elif agent_name == "StageDescriptionReconstructor":
             # Identify which stage we just finished
@@ -415,7 +403,7 @@ class AgentEventBuilder(BaseBuilder):
                 )
 
             sys_msg = sys_msg_template.format(
-                STRUCTURE_SPEC=schema(_STAGE_DESCRIPTION_SPEC),
+                STRUCTURE_SPEC=_STAGE_DESCRIPTION_SPEC,
             )
 
         elif agent_name == "EventDescriptionReconstructor":
@@ -461,7 +449,7 @@ class AgentEventBuilder(BaseBuilder):
             )
 
             sys_msg = sys_msg_template.format(
-                STRUCTURE_SPEC=schema(_EVENT_DESCRIPTION_SPEC),
+                STRUCTURE_SPEC=_EVENT_DESCRIPTION_SPEC,
             )
 
         elif agent_name in [
@@ -487,7 +475,7 @@ class AgentEventBuilder(BaseBuilder):
             savename_suffix = f"-Stage{belong_state['index_in_event']}-Episode{target_episode.index_in_stage}"
 
             if agent_name == "ParticipantReconstructor":
-                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=schema(_PARTICIPANT_SPEC))
+                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_PARTICIPANT_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
                 prompt_kwargs["ReconstructedParticipants"] = (
                     self._collect_reconstructed_participants_structure(state)
@@ -499,7 +487,7 @@ class AgentEventBuilder(BaseBuilder):
                 participants_data = last_result["ParticipantReconstructor"]
                 target_episode.participants = participants_data["participants"]
 
-                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=schema(_TRANSACTION_SPEC))
+                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_TRANSACTION_SPEC)
                 prompt_kwargs["TargetEpisode"] = target_episode
 
             elif agent_name == "EpisodeReconstructor":
@@ -513,7 +501,7 @@ class AgentEventBuilder(BaseBuilder):
                 participants_data = second_last_result["ParticipantReconstructor"]
                 target_episode.participants = participants_data["participants"]
 
-                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=schema(_EPISODE_SPEC))
+                sys_msg = sys_msg_template.format(STRUCTURE_SPEC=_EPISODE_SPEC)
                 prompt_kwargs["StageSkeleton"] = belong_state
                 prompt_kwargs["TargetEpisode"] = target_episode
 
@@ -539,30 +527,12 @@ class AgentEventBuilder(BaseBuilder):
 
         parsed_result = extract_json_response(result)
         self.save_traces(parsed_result, f"{savename}-Result", "json")
-        if is_person and agent_name == "SkeletonChecker":
-            self._check_person_skeleton(parsed_result)
 
         # Update state
         state["agent_results"].append({agent_name: parsed_result})
         state["cost"].append({agent_name: {"latency": time.time() - t0}})
         state["agent_executed"].append(agent_name)
         return state
-
-    @staticmethod
-    def _check_person_skeleton(skeleton):
-        """Stop with an actionable error when evidence produced no usable episode plan."""
-        stages = skeleton.get("stages") if isinstance(skeleton, dict) else None
-        if not isinstance(stages, list) or not stages:
-            raise ValueError(
-                "Person reconstruction produced no supported in-scope episodes. "
-                "Review the saved SkeletonChecker result, source coverage, and person scope."
-            )
-        if any(not isinstance(stage, dict) or not isinstance(stage.get("episodes"), list)
-               or not stage["episodes"] for stage in stages):
-            raise ValueError(
-                "Person reconstruction contains an empty or invalid stage. "
-                "Review the saved SkeletonChecker result before continuing."
-            )
 
     def graph(self) -> CompiledStateGraph:
         """
@@ -953,7 +923,8 @@ class AgentEventBuilder(BaseBuilder):
         self.save_traces(projection, "FinalEventCascade", "json")
         self.save_traces(projection, "IntegratedEventCascade", "json")
         from finmy.subject_graph.visualizer import render_subject_graph
-        render_subject_graph(graph, output_path=Path(self.save_dir) / "FinalSubjectGraph.html")
+        render_subject_graph(graph, output_path=Path(self.save_dir) / "FinalSubjectGraph.html",
+                             event_cascade=projection)
         return BuildOutput(
             subject_graph=graph, event_cascades=projection, result=state,
             logs=state["agent_executed"],
@@ -1000,10 +971,6 @@ class AgentEventBuilder(BaseBuilder):
             file_format="json",
         )
         extras = {"epg_validation": validation_report}
-        if reconstruction["mode"] == "person":
-            person_index = build_person_index(cascade_dict, self.build_config)
-            self.save_traces(person_index, "person_index", "json")
-            extras["person_index"] = person_index
         restored_cascade = self.integrate_from_files()
         self.save_traces(
             restored_cascade,
