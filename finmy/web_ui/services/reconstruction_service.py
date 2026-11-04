@@ -7,6 +7,7 @@ import logging
 import traceback
 import datetime
 import json
+import copy
 from typing import Dict, Any, List
 import streamlit as st
 
@@ -29,7 +30,7 @@ class ReconstructionService:
         Args:
             config: Configuration dictionary
         """
-        self.config = config
+        self.config = copy.deepcopy(config)
         # Reject malformed person scope before starting any search or model call.
         read_reconstruction(config)
     
@@ -48,6 +49,25 @@ class ReconstructionService:
             Reconstruction results dictionary
         """
         keywords = keywords or []
+        reconstruction = read_reconstruction(self.config)
+        scoped = reconstruction["mode"] != "event" and self.config.get("subject_search", {}).get("enabled", True)
+        if scoped:
+            from finmy.runner.scoped_search import plan_search, search_window
+            # Validate the plan before any network call. Prompt dates become
+            # structured event coverage; publication overrides stay search-only.
+            plan_search(main_input, keywords, reconstruction["subject"], self.config.get("subject_search", {}))
+            subject = self.config["builder_config"]["reconstruction"]["subject"]
+            if not subject.get("coverage_start") or not subject.get("coverage_end"):
+                try:
+                    start, end = search_window(main_input, reconstruction["subject"])
+                except ValueError:
+                    # An explicit publication-only window need not assert event dates.
+                    # plan_search above already validated that the search is bounded.
+                    pass
+                else:
+                    subject["coverage_start"] = subject.get("coverage_start") or start.isoformat()
+                    subject["coverage_end"] = subject.get("coverage_end") or end.isoformat()
+            reconstruction = read_reconstruction(self.config)
         # Prepare search query
         search_query_content = search_query(main_input, keywords, self.config)
         st.write(f"**{format_timestamp()}** - Input has been processed.")
@@ -61,12 +81,13 @@ class ReconstructionService:
         collector = DataCollectorService(self.config, save_dir)
         
         # Collect data from all sources
-        bocha_content = collector.collect_bocha_search_results(
-            search_query_content, keywords
-        )
-        baidu_content = collector.collect_baidu_search_results(
-            search_query_content, keywords
-        )
+        if scoped:
+            bocha_content, baidu_content = collector.collect_subject_search_results(
+                main_input, keywords, reconstruction["subject"]
+            )
+        else:
+            bocha_content = collector.collect_bocha_search_results(search_query_content, keywords)
+            baidu_content = collector.collect_baidu_search_results(search_query_content, keywords)
         url_content, filepath_content = collector.collect_structured_data(
             structured_data, keywords
         )
@@ -183,21 +204,22 @@ class ReconstructionService:
             )
             logging.info("config: %s", self.config)
             
-            pipeline = FinmyPipeline(self.config)
-            logging.info("Pipeline is initialized")
-            st.write(f"**{format_timestamp()}** - Building pipeline is initialized")
-            
-            logging.info("Building......")
-            st.write(f"**{format_timestamp()}** - Building......")
-            
-            pipeline_result = pipeline.lm_build_pipeline_with_contents(
-                contents=contents, query_text=query_text, key_words=keywords
-            )
-            
-            st.session_state.save_builder_dir_path = pipeline.save_builder_dir_path
-            logging.info("pipeline save_builder_dir_path: %s", pipeline.save_builder_dir_path)
-            logging.info("st.session_state.save_builder_dir_path: %s", st.session_state.save_builder_dir_path)
-            
+            if read_reconstruction(self.config)["mode"] != "event":
+                # Filtered evidence goes directly to the native subject builder.
+                # Legacy financial matching/summarization can drop person/company history.
+                from finmy.subject_graph.runner import build_from_contents
+                pipeline_result, builder_save_path = build_from_contents(
+                    contents, query_text, keywords, self.config,
+                )
+            else:
+                pipeline = FinmyPipeline(self.config)
+                pipeline_result = pipeline.lm_build_pipeline_with_contents(
+                    contents=contents, query_text=query_text, key_words=keywords
+                )
+                builder_save_path = pipeline.save_builder_dir_path
+            st.session_state.save_builder_dir_path = builder_save_path
+            logging.info("builder save directory: %s", builder_save_path)
+
             logging.info("type of pipeline_result: %s", type(pipeline_result))
             logging.info("pipeline_result:\n %s", pipeline_result)
             
@@ -206,6 +228,8 @@ class ReconstructionService:
                 st.write(f"**{format_timestamp()}** - Building completed.")
                 
                 # Return appropriate result format
+                if getattr(pipeline_result, "subject_graph", None) is not None:
+                    return pipeline_result.subject_graph
                 if isinstance(pipeline_result, dict):
                     return pipeline_result
                 elif hasattr(pipeline_result, "event_cascades"):

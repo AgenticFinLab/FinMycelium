@@ -135,6 +135,7 @@ class WebRelevanceIntegrationTest(unittest.TestCase):
                    "aliases": ["巴菲特"], "coverage_start": "2022", "coverage_end": "2023",
                    "scope": "Occidental investment activities only"}
         config = {"output_dir": str(self.path), "all_content_config": {"max_content_length": 60000},
+                  "subject_search": {"enabled": False},
                   "builder_config": {"reconstruction": {"mode": "person", "subject": subject}}}
         service = self.service.ReconstructionService(config)
         built = []

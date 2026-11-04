@@ -44,14 +44,14 @@ class PersonScopeTests(unittest.TestCase):
         self.assertEqual(value, original)
 
     def test_rejects_malformed_scope_dates_modes_and_wrong_location(self):
-        for key, val in (("subject_id", ""), ("name", None), ("scope", " "),
+        for key, val in (("subject_id", ""), ("name", None), ("scope", None),
                          ("aliases", "Buffett"), ("coverage_start", "2023-02-29"),
                          ("coverage_end", 2023), ("coverage_start", "2024")):
             value = config()
             value["builder_config"]["reconstruction"]["subject"][key] = val
             with self.subTest(key=key, value=val), self.assertRaises(ValueError):
                 read_reconstruction(value)
-        for bad in ({"reconstruction": {"mode": "company"}},
+        for bad in ({"reconstruction": {"mode": "unsupported"}},
                     {"builder_config": {}, "reconstruction": {"mode": "person"}},
                     {"builder_type": "ClassEventBuilder", "reconstruction": {"mode": "person"}},
                     {"reconstruction": False}):

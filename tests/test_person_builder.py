@@ -49,7 +49,7 @@ def outputs():
 class PersonBuilderTest(unittest.TestCase):
     setUp = integration.IntegrationTest.setUp
 
-    def test_all_agents_execute_and_person_sidecar_is_saved(self):
+    def test_legacy_person_prompt_helpers_remain_usable(self):
         self.builder.build_config = configuration()
         self.builder.agents_lm = object()
         self.builder.get_save_name = lambda name, index: f"{name}-{index}"
@@ -77,7 +77,11 @@ class PersonBuilderTest(unittest.TestCase):
         with patch.dict(globals_, {"InferInput": types.SimpleNamespace,
                                  "run_single_inference": infer,
                                  "_STRUCTURE_SPEC_FULL": SOURCE}):
-            result = self.builder.run(build_input)
+            system, user = self.builder._get_agent_prompts()
+            state = {"build_input": build_input, "agent_results": [], "agent_executed": [],
+                     "cost": [], "agent_system_msgs": system, "agent_user_msgs": user}
+            invoke(state, {})
+            final = self.builder.integrate_results(state)
         self.assertEqual(len(captured), 7)
         for agent, system, user in captured:
             with self.subTest(agent=agent):
@@ -86,14 +90,7 @@ class PersonBuilderTest(unittest.TestCase):
                 self.assertNotIn("financial-event type identification", system)
                 self.assertNotIn("Collapse of FTX", system)
                 self.assertIn("task, not factual evidence", system)
-        final = result.event_cascades
         self.assertEqual(final["stages"][0]["episodes"][0]["transactions"], [])
-        sidecar = json.loads((self.path / "person_index.json").read_text())
-        self.assertEqual(sidecar, result.extras["person_index"])
-        self.assertEqual(sidecar["participant_links"][0]["participant_id"], "P_4")
-        self.assertEqual(sidecar["subject"]["subject_id"], "person_warren_buffett")
-        self.assertEqual(json.loads((self.path / "FinalEventCascade.json").read_text()), final)
-        self.assertEqual(json.loads((self.path / "IntegratedEventCascade.json").read_text()), final)
 
     def test_event_prompt_strings_are_unchanged(self):
         actual_system, actual_user = self.builder._get_agent_prompts()

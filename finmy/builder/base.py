@@ -38,6 +38,8 @@ class BuildOutput(BaseContainer):
     result: Optional[Any] = None
     logs: List[str] = field(default_factory=list)
     extras: Dict[str, Any] = field(default_factory=dict)
+    # Native person/company result; event_cascades remains an explicit legacy projection.
+    subject_graph: Optional[Dict[str, Any]] = None
 
 
 class AgentState(MessagesState):

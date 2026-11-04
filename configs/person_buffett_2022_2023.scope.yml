@@ -1,0 +1,11 @@
+# Overlay for the complete pipeline config; no preselected investment/event.
+builder_config:
+  reconstruction:
+    mode: person
+    subject:
+      subject_id: person_warren_buffett
+      name: Warren Buffett
+      aliases: ["Warren E. Buffett", "沃伦·巴菲特", "巴菲特"]
+      coverage_start: "2022-01-01"
+      coverage_end: "2023-12-31"
+      scope: ""

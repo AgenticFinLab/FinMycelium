@@ -26,8 +26,9 @@ def date_bounds(value):
 def read_reconstruction(config=None):
     """Read either a complete pipeline config or its builder_config mapping.
 
-Absent configuration preserves event mode. Person mode requires an explicit
-identity and scope so a topic-specific request cannot silently become a bio.
+Absent configuration preserves event mode. Subject modes require an explicit
+identity. An empty topic scope covers documented activities in the given period;
+an explicit topic or original request can narrow that scope.
 """
     if config is None:
         config = {}
@@ -43,25 +44,35 @@ identity and scope so a topic-specific request cannot silently become a bio.
     if not isinstance(options, dict):
         raise ValueError("reconstruction must be a mapping")
     mode = options.get("mode", "event")
-    if mode not in ("event", "person"):
-        raise ValueError("reconstruction.mode must be event or person")
+    if mode not in ("event", "person", "company"):
+        raise ValueError("reconstruction.mode must be event, person, or company")
     if mode == "event":
         if options.get("subject"):
-            raise ValueError("A subject requires reconstruction.mode: person")
+            raise ValueError("A subject requires reconstruction.mode: person or company")
         return {"mode": "event"}
     if config.get("builder_type", "AgentEventBuilder") != "AgentEventBuilder":
-        raise ValueError("Person reconstruction currently requires builder_type: AgentEventBuilder")
+        raise ValueError("Subject reconstruction currently requires builder_type: AgentEventBuilder")
     subject = options.get("subject")
     if not isinstance(subject, dict):
-        raise ValueError("Person mode requires a subject mapping")
+        raise ValueError("Subject mode requires a subject mapping")
     normalized = {}
-    for key in ("subject_id", "name", "scope"):
+    for key in ("subject_id", "name"):
         value = subject.get(key)
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"Person mode requires nonempty subject.{key}")
+            raise ValueError(f"Subject mode requires nonempty subject.{key}")
         normalized[key] = value.strip()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", normalized["subject_id"]):
         raise ValueError("subject_id must be a stable identifier using letters, digits, _, ., :, or -")
+    scope = subject.get("scope", "")
+    if not isinstance(scope, str):
+        raise ValueError("subject.scope must be a string")
+    normalized["scope"] = scope.strip() or (
+        "Documented activities and experiences across events and organizations within the requested period. "
+        "Discover relevant events from the sources."
+        if mode == "person" else
+        "Documented company history and activities across events within the requested period. "
+        "Discover relevant events from the sources."
+    )
     aliases = subject.get("aliases", [])
     if not isinstance(aliases, list) or any(not isinstance(a, str) or not a.strip() for a in aliases):
         raise ValueError("subject.aliases must be a list of nonempty strings")
@@ -74,7 +85,7 @@ identity and scope so a topic-specific request cannot silently become a bio.
     start, end = normalized["coverage_start"], normalized["coverage_end"]
     if start and end and date_bounds(start)[0] > date_bounds(end)[1]:
         raise ValueError("subject.coverage_start must not be after coverage_end")
-    return {"mode": "person", "subject": normalized}
+    return {"mode": mode, "subject": normalized}
 
 
 def render_scope(config=None):
@@ -83,7 +94,7 @@ def render_scope(config=None):
     if reconstruction["mode"] == "event":
         return ""
     return (
-        "PERSON RECONSTRUCTION SCOPE (task metadata, not evidence):\n"
+        f"{reconstruction['mode'].upper()} RECONSTRUCTION SCOPE (task metadata, not evidence):\n"
         + json.dumps(reconstruction["subject"], ensure_ascii=False, sort_keys=True)
         + "\nUse only supplied source evidence within this scope. The original request may "
         "narrow this scope further; do not expand a selected topic to the whole biography. "
@@ -92,7 +103,7 @@ def render_scope(config=None):
 
 
 def search_query(query, keywords, config=None):
-    """Keep the legacy event query exact; add concise person scope for search."""
+    """Keep the legacy event query exact; add concise subject scope for search."""
     reconstruction = read_reconstruction(config)
     original = f"{query} \n\nkeywords: {' '.join(keywords or [])}"
     if reconstruction["mode"] == "event":

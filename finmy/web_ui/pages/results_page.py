@@ -38,12 +38,33 @@ class ResultsPage:
 
         build_mode = st.session_state.get("build_mode")
 
-        if build_mode == "agent_build":
+        if st.session_state.analysis_results.get("schema_version") == "subject-graph-1.0":
+            ResultsPage._render_subject_results()
+        elif build_mode == "agent_build":
             ResultsPage._render_agent_results()
         elif build_mode == "class_build" or build_mode is None:
             ResultsPage._render_class_results()
         else:
             st.error(f"Unknown build mode: {build_mode}")
+
+    @staticmethod
+    def _render_subject_results():
+        """Offer the native JSON and existing Gantt HTML for download."""
+        from finmy.subject_graph.validation import validate_subject_graph
+        from finmy.subject_graph.visualizer import render_subject_graph
+
+        graph = st.session_state.analysis_results
+        report = validate_subject_graph(graph)
+        if not report["valid"]:
+            st.error("Subject graph validation failed. Load a valid FinalSubjectGraph.json.")
+            st.json(report)
+            return
+        rendered = render_subject_graph(graph)
+        st.download_button("Download SubjectGraph JSON",
+                           data=json.dumps(graph, ensure_ascii=False, indent=2),
+                           file_name="FinalSubjectGraph.json", mime="application/json")
+        st.download_button("Download Gantt HTML",
+                           data=rendered, file_name="subject_timeline.html", mime="text/html")
 
     @staticmethod
     def _render_agent_results():
@@ -71,6 +92,7 @@ class ResultsPage:
             key="result_file_path_input",
             help=(
                 "Enter the full path to result file:\n"
+                "- Person/Company: FinalSubjectGraph.json\n"
                 "- Agent Build: FinalEventCascade.json\n"
                 "- Class Build: Class_Build_Event_Cascade_*.json\n"
                 "Or enter the directory path containing the result file"
@@ -83,6 +105,7 @@ class ResultsPage:
                     # Check if it's a valid result file or directory
                     is_valid_file = result_file_path.endswith(".json") and (
                         "FinalEventCascade.json" in result_file_path
+                        or "FinalSubjectGraph.json" in result_file_path
                         or "Class_Build_Event_Cascade_" in result_file_path
                     )
                     is_valid_dir = os.path.isdir(result_file_path)
@@ -94,7 +117,7 @@ class ResultsPage:
                     else:
                         st.error(
                             "❌ Please provide a valid result file path or directory.\n"
-                            "Supported files: FinalEventCascade.json or Class_Build_Event_Cascade_*.json"
+                            "Supported files: FinalSubjectGraph.json, FinalEventCascade.json or Class_Build_Event_Cascade_*.json"
                         )
                 else:
                     st.error(f"❌ Path not found: {result_file_path}")
@@ -127,9 +150,10 @@ class ResultsPage:
                 file_name = os.path.basename(result_path)
                 if os.path.isdir(result_path):
                     # Find the actual file name
-                    for item in os.listdir(result_path):
+                    for item in sorted(os.listdir(result_path), key=lambda name: name != "FinalSubjectGraph.json"):
                         if item.endswith(".json") and (
                             "FinalEventCascade" in item
+                            or "FinalSubjectGraph" in item
                             or "Class_Build_Event_Cascade_" in item
                         ):
                             file_name = item
