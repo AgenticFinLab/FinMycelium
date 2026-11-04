@@ -2,6 +2,20 @@
 
 SUBJECT_TEMPORAL_POLICY = """
 Temporal reasoning for subject histories:
+- Native SubjectGraph supports optional time_window on a time VerifiableField:
+  {"start": "2022-07-21", "end": "2022-07-31", "original": "2022年7月下旬",
+   "approximate": true}. This overrides the shared single-timestamp fallback to unknown.
+  Normalize ordinary natural dates using their source context and calendar convention.
+  Keep the source phrase in original and exact supporting text in evidence_source_contents.
+  For an imprecise date, store the usable bounds in time_window and set approximate=true;
+  value may use the supported year/month or a positioning boundary. For a named exact
+  day, use equal bounds and approximate=false. Derive the year from the source context.
+  Use the same format for event bounds, participation dates, actions and transactions.
+  Unknown is reserved for dates whose range genuinely cannot be resolved. Do not hide
+  an understood interval only in reasons. No candidate-date lists or extra search.
+  For Chinese month periods, 上旬=1–10, 中旬=11–20, 下旬=21–month end; apply leap years.
+  Other natural periods and calendar conversions use their applicable general rule.
+  Calendar conversion alone does not make an exact named day approximate.
 - Apply the shared calendar policy to ordinary named dates and periods; do not mark
   a date unknown merely because the source uses natural language. For example,
   Christmas Day 2022 is 2022-12-25 under the established Gregorian convention.
@@ -12,8 +26,8 @@ Temporal reasoning for subject histories:
 - A quarter-end holding snapshot establishes a position at that date, not a purchase
   on that date. For a purchase known only to calendar Q3, use July-September event
   bounds. Do not assign September 30 to its action timestamp. If its supported
-  interval cannot fit the existing single timestamp field, retain unknown there
-  and the actual supported interval in reasons. Do not broaden to an arbitrary year.
+  interval cannot fit a single timestamp, preserve it in time_window as described
+  below. Do not broaden to an arbitrary year.
 - Separate when an act occurred, when its information became available, and when a
   later source reported or explained it. A later source may establish an earlier
   act, but its later prices, results and commentary are not earlier decision inputs.

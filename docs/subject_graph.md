@@ -205,3 +205,27 @@ subject_search:
 `subject_search_report.json` 保存查询范围、逐条取舍及未解决的缺失；
 `subject_search_sources.json` 保存正文和来源清单。
 Event 模式沿用原有检索；`subject_search.enabled: false` 可显式恢复旧检索。
+
+### 模糊时间的定位与原文显示
+
+时间字段可选携带 `time_window`，由模型依据原文和上下文转换。例如：
+
+```json
+{
+  "value": "2022-07",
+  "evidence_source_contents": ["2022年7月下旬，公司购入股份。"],
+  "reasons": ["下旬按21日至当月末定位。"],
+  "time_window": {
+    "start": "2022-07-21",
+    "end": "2022-07-31",
+    "original": "2022年7月下旬",
+    "approximate": true
+  }
+}
+```
+
+校验和兼容投影统一读取这个范围；图面保留原有日期标签。原表达“2022年7月下旬（约）”、
+转换范围及“发生于该范围内，具体日期不详。”仅显示在悬浮框中。命名日期能确定到日时，
+两端相同且 approximate=false。年份使用资料上下文，不使用运行年份。
+没有新增必填项、搜索或复查轮次。旧字段继续兼容；已有 JSON 不会自动补出缺失的
+time_window，需要用新 Prompt 重新构建，或补入有依据的时间窗口后重新渲染。
