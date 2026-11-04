@@ -4,14 +4,23 @@ from finmy.runner.scoped_search import plan_search, publication_allowed, publica
 
 
 class ScopedSearchTests(unittest.TestCase):
-    def test_full_name_year_topics_and_query_bounds(self):
-        plans = plan_search("Buffett activities from January 2022 through December 2023: shareholder letters, annual meeting discussions, interviews, investment decisions, philanthropy, succession and Japan visits", [], {"name": "Warren Buffett"})
-        self.assertEqual(len(plans), 14)
-        self.assertEqual({p["year"] for p in plans}, {2022, 2023})
-        self.assertEqual(len({p["topic"] for p in plans}), 7)
-        self.assertTrue(all('"Warren Buffett"' in p["query"] for p in plans))
-        self.assertIn("before:2023-01-01", plans[0]["query"])
-        self.assertIn("after:2021-12-31", plans[0]["query"])
+    def test_original_request_and_keywords_use_one_full_range(self):
+        query = "Buffett activities from January 2022 through December 2023: shareholder letters, annual meeting discussions, interviews, investment decisions, philanthropy, succession and Japan visits"
+        plans = plan_search(query, ["OXY", "Berkshire Hathaway"], {"name": "Warren Buffett"},
+                            {"topics": ["meeting", "letter"], "max_queries": 1})
+        self.assertEqual(len(plans), 1)
+        self.assertEqual((plans[0]["start"], plans[0]["end"]), ("2022-01-01", "2023-12-31"))
+        self.assertIn(query, plans[0]["query"])
+        self.assertIn("OXY Berkshire Hathaway", plans[0]["query"])
+        self.assertIn('"Warren Buffett"', plans[0]["query"])
+        self.assertNotIn("topic", plans[0])
+        self.assertNotIn("year", plans[0])
+
+    def test_no_unsolicited_topics_and_no_year_count_limit(self):
+        plans = plan_search("1900 through 2023 biography", [], {"name": "Buffett"},
+                            {"topics": ["meeting", "letter"]})
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["query"], '\"Buffett\" 1900 through 2023 biography')
 
     def test_partial_month_ranges_chinese_and_english(self):
         for query in ("巴菲特2022年3月至2023年6月的股东大会", "Buffett from March 2022 through June 2023 annual meeting"):
@@ -26,10 +35,9 @@ class ScopedSearchTests(unittest.TestCase):
         plans = plan_search("2022 to 2023", [], {"name": "Buffett", "coverage_start": "2021", "coverage_end": "2021"}, {"publication_start": "2020-03", "publication_end": "2020-04"})
         self.assertEqual((plans[0]["start"], plans[0]["end"]), ("2020-03-01", "2020-04-30"))
 
-    def test_no_year_or_oversized_scope_never_runs_unbounded(self):
-        for query, options in (("Buffett biography", {}), ("1900 through 2023", {}), ("2022 to 2023 interviews and philanthropy", {"max_queries": 3})):
-            with self.subTest(query=query), self.assertRaises(ValueError):
-                plan_search(query, [], {"name": "Buffett"}, options)
+    def test_missing_range_never_runs_unbounded(self):
+        with self.assertRaises(ValueError):
+            plan_search("Buffett biography", [], {"name": "Buffett"})
 
     def test_publication_scope_rejects_future_unknown_and_ambiguous_dates(self):
         for value in ("2026-11-01", "", None, "today", "2023", "2023-05", "2023-02-30"):
@@ -61,9 +69,9 @@ class ScopedSearchTests(unittest.TestCase):
 
     def test_reference_year_does_not_expand_requested_range(self):
         plans = plan_search("2022–2023 interviews; compare with his 2019 letter", [], {"name": "Warren Buffett"})
-        self.assertEqual({p["year"] for p in plans}, {2022, 2023})
+        self.assertEqual([(p["start"], p["end"]) for p in plans], [("2022-01-01", "2023-12-31")])
         plans = plan_search("Background from 2019; reconstruct between January 2022 and December 2023 interviews", [], {"name": "Warren Buffett"})
-        self.assertEqual({p["year"] for p in plans}, {2022, 2023})
+        self.assertEqual([(p["start"], p["end"]) for p in plans], [("2022-01-01", "2023-12-31")])
         with self.assertRaisesRegex(ValueError, "Ambiguous"):
             plan_search("2022 shareholder letter published in 2023", [], {"name": "Warren Buffett"})
 

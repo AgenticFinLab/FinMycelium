@@ -25,6 +25,18 @@ def config(limit=60000, cap=12000, seed=2000):
 
 
 class ContextBudgetTest(unittest.TestCase):
+    def test_packing_merges_only_adjacent_source_slices(self):
+        from finmy.runner.context_budget import _fit
+        text = "abcdefghij" * 100
+        value, ranges = _fit(document("D1", text), [(0, 130, True), (130, 260, True)], 500, False)
+        self.assertEqual(ranges, [(0, 260)])
+        self.assertEqual(value.count("[Source chars"), 1)
+        self.assertIn(text[:260], value)
+        self.assertLessEqual(len(value), 500)
+        value, ranges = _fit(document("D1", text), [(0, 130, True), (140, 270, True)], 500, False)
+        self.assertEqual(ranges, [(0, 130), (140, 270)])
+        self.assertEqual(value.count("[Source chars"), 2)
+
     def assert_valid(self, result, docs, maximum, cap=12000, metadata=True):
         report = result["report"]
         self.assertLessEqual(sum(map(len, result["contents"])), maximum)

@@ -222,6 +222,7 @@ class EventCascadeGanttVisualizer:
 
         stage_label = "Event" if subject_name else "Stage"
         episode_label = "Activity" if subject_name else "Episode"
+        episodes_label = "Activities" if subject_name else "Episodes"
 
         # --- Helpers ---
 
@@ -330,17 +331,18 @@ class EventCascadeGanttVisualizer:
                         desc_lines.append(f"- {d['value']}")
                     elif isinstance(d, str):
                         desc_lines.append(f"- {d}")
-            desc_str = "<br>".join(desc_lines) if desc_lines else "None"
+            desc_str = "<br>".join(desc_lines) if desc_lines else (
+                "Not documented in supplied sources." if subject_name else "None")
 
             stage_start = parse_date(stage_start_raw)
             stage_end = parse_date(stage_end_raw)
             gran_levels.append(gran_code_for(stage_start_raw))
             gran_levels.append(gran_code_for(stage_end_raw))
 
-            stage_label = f"STAGE: {stage_id}"
+            stage_task = f"{stage_label}: {stage_id}"
             rows.append(
                 {
-                    "Task": stage_label,
+                    "Task": stage_task,
                     "Start": stage_start,
                     "Finish": stage_end,
                     "StartRaw": stage_start_raw,
@@ -351,7 +353,7 @@ class EventCascadeGanttVisualizer:
                     "Group": stage_id,
                     "StageName": stage_name,
                     "ID": stage_id,
-                    "Description": f"{stage_label}: {stage_name}<br>Descriptions:<br>{desc_str}",
+                    "Description": f"{stage_task}: {stage_name}<br>Descriptions:<br>{desc_str}",
                 }
             )
 
@@ -373,7 +375,8 @@ class EventCascadeGanttVisualizer:
                             ep_desc_lines.append(f"- {d['value']}")
                         elif isinstance(d, str):
                             ep_desc_lines.append(f"- {d}")
-                ep_desc_str = "<br>".join(ep_desc_lines) if ep_desc_lines else "None"
+                ep_desc_str = "<br>".join(ep_desc_lines) if ep_desc_lines else (
+                    "Not documented in supplied sources." if subject_name else "None")
 
                 ep_index = ep.get("index_in_stage", ep_i)
 
@@ -423,6 +426,13 @@ class EventCascadeGanttVisualizer:
                                 and "value" in act["name"]
                             ):
                                 act_lines.append(f"- {act['name']['value']}")
+                                if subject_name:
+                                    timestamp = act.get("timestamp", {}).get("value", "unknown")
+                                    act_lines.append(f"Time: {timestamp}")
+                                    details = [d["value"] for d in act.get("details", [])
+                                               if isinstance(d, dict) and d.get("value")]
+                                    act_lines.append("Details:<br>" + ("<br>".join(details)
+                                                     if details else "Not documented in supplied sources."))
                     p_act_str = "<br>".join(act_lines) if act_lines else "None"
 
                     parsed_parts.append(
@@ -449,8 +459,19 @@ class EventCascadeGanttVisualizer:
                     rel_name = r["relation_name"]["value"]
                     rel_type = r["relation_type"]["value"]
 
+                    if subject_name:
+                        # Equivalent display labels only; keep evidence/data untouched.
+                        aliases = {
+                            "chief executive officer and chairman": "Chairman and CEO",
+                            "chairman and chief executive officer": "Chairman and CEO",
+                            "ceo and chairman": "Chairman and CEO",
+                            "chairman and ceo": "Chairman and CEO",
+                        }
+                        rel_name = aliases.get(rel_name.strip().lower(), rel_name)
+                        rel_type = aliases.get(rel_type.strip().lower(), rel_type)
                     full_rel_name = rel_name
-                    if rel_type and rel_type.lower() != "unspecified":
+                    if (rel_type and rel_type.lower() != "unspecified"
+                            and (not subject_name or rel_type != rel_name)):
                         full_rel_name = f"{rel_name} ({rel_type})"
 
                     if src and dst:
@@ -474,7 +495,10 @@ class EventCascadeGanttVisualizer:
                         "Group": stage_id,
                         "ID": ep_id,
                         "IndexInStage": ep_index,
-                        "Description": f"{episode_label}: {ep_title}<br>Descriptions:<br>{ep_desc_str}",
+                        "Description": (f"{episode_label}: {ep_title}<br>Details:<br>{ep_desc_str}"
+                                        f"<br>Event context:<br>{desc_str}" if subject_name else
+                                        f"{episode_label}: {ep_title}<br>Descriptions:<br>{ep_desc_str}"),
+                        "EventContext": desc_str,
                         "Title": ep_title,
                         "Participants": parsed_parts,
                         "Relations": parsed_rels,
@@ -670,6 +694,10 @@ class EventCascadeGanttVisualizer:
                 total_span = 3600  # 1 hour fallback
             default_dur_sec = total_span / 20.0
             target_dur_ms = None
+
+            # A known instantaneous subject event has no invented duration.
+            if subject_name and rtype == "Stage" and start is not None and start == finish:
+                return start, 0, False
 
             # Special sizing for unknown cases
             both_unknown = (start is None and finish is None) and (
@@ -921,7 +949,7 @@ class EventCascadeGanttVisualizer:
                     )
                 else:
                     offset_td = pd.Timedelta(0)
-            elif same_times:
+            elif same_times and not subject_name:
                 if placed_last_end is not None:
                     required_start = placed_last_end + gap_td
                     min_raw_start = min(raw_starts)
@@ -954,7 +982,7 @@ class EventCascadeGanttVisualizer:
                     max_chars = max(10, (L + 1) // 2)
                 else:
                     bar_frac = min(max(dur / total_span_ms, 0.0), 1.0)
-                    max_chars = max(10, int(70 * bar_frac))
+                    max_chars = 30 if subject_name and dur == 0 else max(10, int(70 * bar_frac))
 
                 words = str(lbl).split(" ")
                 lines = []
@@ -979,8 +1007,16 @@ class EventCascadeGanttVisualizer:
 
                 texts.append(wrapped)
 
+            instant_event = subject_name and all(d == 0 for d in x_durs)
             fig.add_trace(
-                go.Bar(
+                go.Scatter(
+                    x=x_starts, y=[y_stage] * len(x_starts), mode="markers+text",
+                    marker=dict(symbol="diamond", size=12, color="#ADD8E6",
+                                line=dict(color="black", width=1)),
+                    text=texts, textposition="top center",
+                    hovertext=hovers, hovertemplate="%{hovertext}<extra></extra>",
+                    name=f"{stage_label}: {sid}", legendgroup=sid, showlegend=False,
+                ) if instant_event else go.Bar(
                     x=x_durs,
                     y=[y_stage] * len(x_durs),
                     base=x_starts,
@@ -1287,6 +1323,8 @@ class EventCascadeGanttVisualizer:
                             f"Attributes:<br>{p['attributes']}<br>"
                             f"Actions:<br>{p['actions']}"
                         )
+                        if subject_name:
+                            hover_content += f"<br>Event context:<br>{r['EventContext']}"
                         part_hovers.append(hover_content)
 
                         local_p_coords[p["id"]] = (p_x, p_y)
@@ -1460,7 +1498,7 @@ class EventCascadeGanttVisualizer:
                         y=bar_y_pos,
                         base=bar_x_starts,
                         orientation="h",
-                        name=f"{episode_label}s ({sid})",
+                        name=f"{episodes_label} ({sid})",
                         marker=dict(
                             color="#e6f5c9",
                             line=dict(color="black", width=1),
@@ -1482,7 +1520,7 @@ class EventCascadeGanttVisualizer:
                         y=inst_y_pos,
                         base=inst_x_starts,
                         orientation="h",
-                        name=f"{episode_label}s ({sid})",
+                        name=f"{episodes_label} ({sid})",
                         marker=dict(
                             color="rgba(0,0,0,0)", line=dict(width=0), opacity=1.0
                         ),

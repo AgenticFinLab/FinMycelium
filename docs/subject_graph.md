@@ -43,7 +43,7 @@ Python 定义和 JSON Schema 位于 `finmy/subject_graph/schema.py`，版本为 
 1. `SubjectPlanner` 根据全部输入资料发现独立事件，并建立统一实体表。
 2. `SubjectEventReconstructor` 逐事件填入参与、行为和交易，引用已注册实体。
 3. 确定性校验检查 schema、ID 唯一性、引用、参与归属、时间冲突及证据原文。
-4. 默认最多一次 `SubjectGraphRepair`，仅修复当前资料能支持的内容。结构或引用关系仍不合格则终止；仅有证据出处问题时，保留图并给对应字段添加 `evidence_status: needs_review` 标记，展示醒目提示。
+4. 默认最多一轮 `SubjectGraphRepair`，只返回出错字段的局部 JSON Patch，由程序合并回原图再校验，不重新输出整张图。修复响应无法使用时保存 `subject_repair_error.json`，保留已构建的图继续校验。结构或引用关系仍不合格则终止；仅有证据出处问题时，保留图并给对应字段添加 `evidence_status: needs_review` 标记，展示醒目提示。
 5. 保存原生 JSON 和 HTML，再生成旧 EventCascade 兼容投影。
 
 已核实事实字段必须提供输入资料中的原文片段；待核实内容保留原值和模型引用，但不会视作已验证证据。配置中的主体名称可以以 `configured_identity` 标记，但它不能证明人物参与或行动。原文校验只核对出处，不保证片段在语义上足以支持结论；仍需抽查行为内容、归属和材料覆盖。
@@ -144,10 +144,24 @@ python -m finmy.subject_graph.recover /path/to/build_output_20261103215915661838
 
 `subject_evidence_review.json` 列出待核实字段；待核实字段保留在 JSON 中，兼容导出保留待核实说明。自动校验的 `valid` 表示结构可使用，不能单独当作事实全部已核实；严格原文检查仍可用 `validate_subject_graph(graph, sources)`，只有明确传入 `allow_unverified_evidence=True` 才允许带标记的证据问题作为警告。
 
+现有逐事件 `SubjectEventReviewer` 同时检查时间逻辑、个人归属和遗漏：允许用局部
+`corrections` 修正已有字段，再处理补充内容，不增加模型调用轮次。日期转换沿用原有
+日历规则：保留原表达与推导理由；季节和季度表示发生窗口，不取区间端点作为行为日期。
+后来的报道可证明此前的行为，但后来的价格或结果不能自动成为此前的决策依据。
+错误归属应保留推测措辞或公司行为，不能由职位、投资规模推定个人决策。
 
-### 按年份和主题检索
+修正仅作用于当前事件，引用限定在其已分配资料中；不合格修正保留原图并记录警告。
+`subject_event_detail_review.json` 保存接受／拒绝的修正及原记录。最终覆盖复查可提出
+`event_merges`，目前接受同日且有共同事件证据的重复股东信／会议，保留互补内容、来源和关系引用；
+仅同日或主题相近不会自动合并。记录见 `subject_coverage_review.json`。
+已纠正的原记录会传入后续覆盖复查，原样重新加入会被拒绝。不同措辞的行为仍保留，
+不因事件合并而删除互补细节。这些检查不调用搜索；语义判断仍由当前模型完成，
+离线测试验证的是修正和合并机制。
 
-Person 流程默认从描述提取时间范围，按年份与所选主题拆分查询。Bocha 使用
+
+### 按完整时间范围检索
+
+Person 流程默认从描述提取时间范围，使用整个范围、原始描述与关键词查询，每个搜索源首次查询一次。Bocha 使用
 `freshness`，Baidu 使用 `search_filter.range.page_time` 传递发布时间边界；
 返回结果在抓取前再次核对日期，日期缺失或超范围不会进入自动搜索的构建输入。
 事件发生时间仍由正文提取，不能用发布时间替代。手动上传的材料保持原有流程。
@@ -159,16 +173,14 @@ Person 流程默认从描述提取时间范围，按年份与所选主题拆分�
 最多进行一轮定向补搜。判断使用长度与发言标记启发式，不代表内容已经语义完备；
 没有搜索命中的年份不会自动触发补搜。
 
-默认最多 16 个年份×主题组合，每组合分别查询两个搜索源、各取 4 条结果；
-全程最多 40 次正文抓取，补搜最多 3 次搜索调用，并向后续年份/主题分配抓取额度。
+首次分别查询两个搜索源，Bocha 取 10 条、Baidu 取 20 条；旧配置中的 topics / max_queries 不再拆分或限定查询。
+全程最多 40 次正文抓取，补搜最多 3 次搜索调用，并向后续搜索源分配抓取额度。
 默认经过 300 秒后不再启动新请求，正在执行的请求仍受自身超时限制。
 这些参数可在现有配置顶层按需调整，无需增加输入字段：
 
 ```yaml
 subject_search:
   enabled: true
-  max_queries: 16
-  results_per_query: 4
   max_parse_calls: 40
   max_followup_queries: 3
   max_links_per_index: 2
@@ -176,7 +188,7 @@ subject_search:
 ```
 
 需要扩大“资料发布时间”但不扩大事件时期时，可另配 `publication_start` /
-`publication_end`。查询范围缺失、含糊或超过组合预算时直接报错，不静默扩大搜索。
+`publication_end`。查询范围缺失或含糊时直接报错，不静默扩大搜索。
 `subject_search_report.json` 保存查询范围、逐条取舍及未解决的缺失；
 `subject_search_sources.json` 保存正文和来源清单。
 Event 模式沿用原有检索；`subject_search.enabled: false` 可显式恢复旧检索。

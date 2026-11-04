@@ -41,13 +41,16 @@ class DataCollectorService:
         )
 
     def collect_subject_search_results(self, query, keywords, subject):
-        """Collect bounded year/topic searches; keep the existing document contract."""
+        """Collect publication-range searches; keep the existing document contract."""
         from finmy.runner.subject_search import collect_subject_sources
         from finmy.runner.scoped_search_api import search
         from finmy.runner.scoped_page import parse
         options = self.config.get("subject_search", {})
+        def progress(message):
+            st.write(f"**{format_timestamp()}** - {message}")
+
         docs = collect_subject_sources(query, keywords, subject, options,
-                                       search, parse, self.save_dir, progress=st.write)
+                                       search, parse, self.save_dir, progress=progress)
         for doc in docs:
             self.documents[doc["source"]].append(doc)
         return ([d["raw_text"] for d in self.documents["bocha"]],
