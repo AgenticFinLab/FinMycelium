@@ -1,0 +1,182 @@
+# 原生主体图：人物与公司
+
+`person` / `company` 模式直接生成 `SubjectGraph`。图的根是稳定主体，一个时期内的多段经历独立组织，共享实体注册表。原事件模式仍生成原来的 EventCascade。
+
+这版适配覆盖 schema、构图、校验、前端和历史读取。它不增加补搜；已有资料可以直接重新构图。它也不证明现有资料足以覆盖人物完整生平。
+
+## 结构
+
+```mermaid
+flowchart TD
+    G[SubjectGraph] --> S[主体实体]
+    G --> E[独立事件]
+    G --> R[实体注册表]
+    E --> P[参与记录]
+    E --> A[具体行为]
+    E --> T[交易]
+    P -->|entity_id| R
+    A -->|actor_id| R
+    T -->|交易双方| R
+    G --> L[带有效期的关系]
+    L -->|两个端点| R
+```
+
+Python 定义和 JSON Schema 位于 `finmy/subject_graph/schema.py`，版本为 `subject-graph-1.0`。
+
+| 组件 | 关键字段与语义 |
+| --- | --- |
+| SubjectGraph | `subject_id` 指向实体表；`subject_type` 为 individual / organization；`coverage_start/end` 是请求范围 |
+| Entity | `entity_id`、`name`、`aliases`、`entity_type`、`attributes`；同一实体跨事件复用同一个 ID |
+| Event | `event_id`、标题、起止时间、`subject_relevance`、描述，以及参与、行为、交易列表；允许重叠与空档 |
+| Participation | `entity_id`、本事件中的角色及参与时间；不自动从其他事件继承 |
+| Action | `actor_id`、行为类型、时间、具体内容；发言归发言人，购股归实际公司 |
+| Transaction | 实际转移双方、时间、标的和细节；非交易经历使用空列表，未知对手方为 unknown |
+| Relation | `from_entity_id/to_entity_id`、关系类型、有效期、关联事件 ID；一般背景关系可不绑定事件 |
+| VerifiableField | `value`、`evidence_source_contents`、`reasons`、可选 `confidence`；保留支持原文 |
+
+每个事件必须填写有证据的 `subject_relevance`，说明为什么属于该主体经历。人物无需出现在每个事件的参与表中。公司背景可以相关，但相关性不等于个人决策归属，领导身份也不等于控制性持股。
+
+日期保留 `YYYY`、`YYYY-MM`、`YYYY-MM-DD` 或明确时间戳的原始精度。未知日期写 unknown；不得为了连贯或填满时间线补造日期。关系的有效期可早于研究窗口。关系的 event_ids 可指向提供依据或背景的事件；两端实体未同时列为参与者时仅警告，不阻断生成，也不自动补造参与记录。不存在的实体或事件引用仍会阻断。兼容投影仅导出双方均有参与记录的事件内关系，其他关系保留在原生图中。
+
+## 构图与校验
+
+1. `SubjectPlanner` 根据全部输入资料发现独立事件，并建立统一实体表。
+2. `SubjectEventReconstructor` 逐事件填入参与、行为和交易，引用已注册实体。
+3. 确定性校验检查 schema、ID 唯一性、引用、参与归属、时间冲突及证据原文。
+4. 默认最多一次 `SubjectGraphRepair`，仅修复当前资料能支持的内容。结构或引用关系仍不合格则终止；仅有证据出处问题时，保留图并给对应字段添加 `evidence_status: needs_review` 标记，展示醒目提示。
+5. 保存原生 JSON 和 HTML，再生成旧 EventCascade 兼容投影。
+
+已核实事实字段必须提供输入资料中的原文片段；待核实内容保留原值和模型引用，但不会视作已验证证据。配置中的主体名称可以以 `configured_identity` 标记，但它不能证明人物参与或行动。原文校验只核对出处，不保证片段在语义上足以支持结论；仍需抽查行为内容、归属和材料覆盖。
+
+可选构图限制：
+
+```yaml
+builder_config:
+  subject_graph:
+    max_events: 60       # 1..200；超限明确报错，不静默截断
+    repair_attempts: 1   # 0 或 1
+```
+
+一次正常构图调用模型 `1 + 事件数` 次，必要时再修复一次，不触发新的检索。默认上限是工程保护，不是目标事件数量。
+
+## 配置与界面
+
+沿用完整配置中的模型和保存目录，加入如下块。主体模式目前使用 `AgentEventBuilder`。
+
+```yaml
+builder_config:
+  builder_type: AgentEventBuilder
+  reconstruction:
+    mode: person
+    subject:
+      subject_id: person_warren_buffett
+      name: Warren Buffett
+      aliases: ["Warren E. Buffett", "巴菲特"]
+      coverage_start: "2022-01-01"
+      coverage_end: "2023-12-31"
+      scope: ""
+```
+
+`subject_id` 和 `name` 必填；scope 留空表示该人物在所选时期内有资料支持的各项活动。原始请求也应写人物与时期；如果继续输入 OXY 限定请求，构图仍会尊重这个范围。公司模式改为 `mode: company` 并填写实际公司身份。日期可为 null，或带引号的年、年月、日期。
+
+Pipeline 页只提供 Event / Person。Person 沿用原描述、关键词和资料上传，只增加一个 Person name；ID 自动生成，同一配置中的同一人物复用原 ID。时间和专题要求直接写在描述里，界面不再使用旧配置中的隐藏时间、别名或专题限制，也没有高级表单。结果页提供 HTML 下载，下载后查看 EventCascadeGanttVisualizer 原有 Gantt，包括参与者标记、关系连线和时间窗口控件；只调整人物标题、图例和说明。卡片时间线已删除。未能表达为事件内连线的背景关系保留在原生 JSON。历史读取优先选择同目录的 `FinalSubjectGraph.json`。
+
+Web 主体模式在资料筛选后直接调用原生构图，跳过旧金融匹配和查询总结链路。Web 检索阶段仍可能联网；只复用已有输入时使用下面的 CLI。
+
+直接调用旧 `FinmyPipeline` 也会保留返回对象中的 `subject_graph`，但仍会初始化数据库、检索器和其他旧前处理组件。复用文本时优先使用这里的 CLI 或 `build_from_contents`。
+
+## 复用现有巴菲特输入
+
+在已安装项目依赖、已配置模型 API 的仓库环境执行。将输入路径改为实际保存的 `builder_input_contents.json`；该文件必须是非空字符串列表。这个入口不检索资料，但构图仍需要模型 API。
+
+```bash
+python -m finmy.subject_graph.runner \
+  --config configs/pipline.yml \
+  --scope-config configs/person_buffett_2022_2023.scope.yml \
+  --input /path/to/saved_buffett_run/builder_input_contents.json \
+  --output-dir outputs/subject_graph_runs
+```
+
+旧的 `configs/person_buffett_oxy.scope.yml` 仍可用于主动限定 OXY 专题。仅有 OXY 资料时，即使配置扩大范围，也不会自动获得其他经历。
+
+每轮构图保存：
+
+| 文件 | 用途 |
+| --- | --- |
+| `FinalSubjectGraph.json` | 原生主图，后续分析以它为准 |
+| `FinalSubjectGraph.html` | 可离线打开的主体经历视图，无外部脚本或 CDN |
+| `FinalEventCascade.json` / `IntegratedEventCascade.json` | 兼容旧工具的投影，不代替原生主图 |
+| `subject_build_input.json` / `reconstruction_scope.json` | 本次实际输入、来源文本及任务范围 |
+| `RawSubjectGraph.json` / 各 Agent 结果 | 原始构图和修复过程 |
+| `subject_graph_validation.json` | 最后一次结构与出处校验结果 |
+
+原始检索来源清单仍在旧运行目录，需与新输出一起保留。这里不会重新获取或覆盖原网页。
+
+原生 JSON 可以完全离线重新渲染，输出到新目录：
+
+```bash
+python -m finmy.subject_graph.runner \
+  --render-only /path/to/FinalSubjectGraph.json \
+  --output-dir outputs/subject_preview
+```
+
+兼容投影将一个原生 Event 映射为一个 Stage / Episode。它不表示发现了因果阶段；全局实体、参与时间及未绑定事件的关系不能由旧格式完整表达，因此不要把投影再当作原生结果回填。
+
+## 验证与迁移边界
+
+在完整依赖环境运行 `python -m unittest discover -s tests -v`。新增测试覆盖原生模型调用链、证据与引用校验、行动归属、人物/公司配置、原生展示、历史读取、服务路由和兼容导出；模型返回使用可控样例，不检验真实历史完整性。
+
+本次开发环境的可运行测试全部通过；`test_infer_input_compat` 因缺少外部 `lmbase` 无法导入。尚未运行真实 API 构图，也未完成实际浏览器截图检查。旧 HTML 不能无损还原出证据齐全的新 schema；需要使用原始输入重新构图。
+
+本补丁基于上一版人物模式补丁及对应上游 UI 文件。应用前在你的仓库运行 `git apply --check /path/to/finmycelium_subject_graph.patch`，成功后再 `git apply`。现有未提交修改如与补丁重叠，应先保留并合并，不要强制覆盖。
+
+## 从已保存的失败结果恢复
+
+引用中的中英文标点（如逗号、冒号、引号）或网页空格差异会先还原为输入中的原文片段，再执行严格校验；文字、数字和否定含义不会模糊匹配。`subject_quote_restoration.json` 保存每处还原及原文位置。模型修复不能更改配置中的 coverage 边界。
+
+对于已保存的 `RawSubjectGraph.json` 和 `subject_build_input.json`，可完全离线恢复：
+
+```bash
+python -m finmy.subject_graph.recover /path/to/build_output_20261103215915661838
+```
+
+结果写入相邻的 `build_output_20261103215915661838_recovered` 新目录；原文件保留。结构错误仍会阻止发布；仅有证据匹配问题时，在 JSON 和页面中保留待核实标记。恢复过程不调用模型或重新搜索。在 Results 页加载新目录中的 `FinalSubjectGraph.json`。
+
+`subject_evidence_review.json` 列出待核实字段；待核实字段保留在 JSON 中，兼容导出保留待核实说明。自动校验的 `valid` 表示结构可使用，不能单独当作事实全部已核实；严格原文检查仍可用 `validate_subject_graph(graph, sources)`，只有明确传入 `allow_unverified_evidence=True` 才允许带标记的证据问题作为警告。
+
+
+### 按年份和主题检索
+
+Person 流程默认从描述提取时间范围，按年份与所选主题拆分查询。Bocha 使用
+`freshness`，Baidu 使用 `search_filter.range.page_time` 传递发布时间边界；
+返回结果在抓取前再次核对日期，日期缺失或超范围不会进入自动搜索的构建输入。
+事件发生时间仍由正文提取，不能用发布时间替代。手动上传的材料保持原有流程。
+
+正文读取仅处理 HTML，有限超时、最多 4 MiB、无 Selenium 回退。
+索引页尝试进入带“全文／实录／transcript”链接的正文；子页面必须提供自己的
+发布时间。读不到正文的 PDF、视频或受限页面保留失败记录，不把搜索摘要当正文。
+大会、访谈、股东信及接班发言的资料过短、只有索引或缺少发言线索时，
+最多进行一轮定向补搜。判断使用长度与发言标记启发式，不代表内容已经语义完备；
+没有搜索命中的年份不会自动触发补搜。
+
+默认最多 16 个年份×主题组合，每组合分别查询两个搜索源、各取 4 条结果；
+全程最多 40 次正文抓取，补搜最多 3 次搜索调用，并向后续年份/主题分配抓取额度。
+默认经过 300 秒后不再启动新请求，正在执行的请求仍受自身超时限制。
+这些参数可在现有配置顶层按需调整，无需增加输入字段：
+
+```yaml
+subject_search:
+  enabled: true
+  max_queries: 16
+  results_per_query: 4
+  max_parse_calls: 40
+  max_followup_queries: 3
+  max_links_per_index: 2
+  max_elapsed_seconds: 300
+```
+
+需要扩大“资料发布时间”但不扩大事件时期时，可另配 `publication_start` /
+`publication_end`。查询范围缺失、含糊或超过组合预算时直接报错，不静默扩大搜索。
+`subject_search_report.json` 保存查询范围、逐条取舍及未解决的缺失；
+`subject_search_sources.json` 保存正文和来源清单。
+Event 模式沿用原有检索；`subject_search.enabled: false` 可显式恢复旧检索。

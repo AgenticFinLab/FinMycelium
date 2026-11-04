@@ -201,7 +201,7 @@ class EventCascadeGanttVisualizer:
             self.relation_style_map[rel_name] = (color, dash)
         return self.relation_style_map[rel_name]
 
-    def plot_cascade(self, cascade_data, output_path=None):
+    def plot_cascade(self, cascade_data, output_path=None, subject_name=None):
         """
         Generates an interactive Gantt chart from the event cascade data.
 
@@ -219,6 +219,9 @@ class EventCascadeGanttVisualizer:
         Returns:
             plotly.graph_objects.Figure: The generated Plotly figure object.
         """
+
+        stage_label = "Event" if subject_name else "Stage"
+        episode_label = "Activity" if subject_name else "Episode"
 
         # --- Helpers ---
 
@@ -348,7 +351,7 @@ class EventCascadeGanttVisualizer:
                     "Group": stage_id,
                     "StageName": stage_name,
                     "ID": stage_id,
-                    "Description": f"Stage: {stage_name}<br>Descriptions:<br>{desc_str}",
+                    "Description": f"{stage_label}: {stage_name}<br>Descriptions:<br>{desc_str}",
                 }
             )
 
@@ -471,7 +474,7 @@ class EventCascadeGanttVisualizer:
                         "Group": stage_id,
                         "ID": ep_id,
                         "IndexInStage": ep_index,
-                        "Description": f"Episode: {ep_title}<br>Descriptions:<br>{ep_desc_str}",
+                        "Description": f"{episode_label}: {ep_title}<br>Descriptions:<br>{ep_desc_str}",
                         "Title": ep_title,
                         "Participants": parsed_parts,
                         "Relations": parsed_rels,
@@ -982,7 +985,7 @@ class EventCascadeGanttVisualizer:
                     y=[y_stage] * len(x_durs),
                     base=x_starts,
                     orientation="h",
-                    name=f"Stage: {sid}",
+                    name=f"{stage_label}: {sid}",
                     marker=dict(color="#ADD8E6", line=dict(color="black", width=1)),
                     hovertext=hovers,
                     hoverinfo="text",
@@ -1069,7 +1072,7 @@ class EventCascadeGanttVisualizer:
                 fig.add_annotation(
                     x=mid_x,
                     y=bottom_y,
-                    text=f"Stage: {sid}",
+                    text=f"{stage_label}: {sid}",
                     showarrow=False,
                     align="center",
                     yanchor="top",
@@ -1457,7 +1460,7 @@ class EventCascadeGanttVisualizer:
                         y=bar_y_pos,
                         base=bar_x_starts,
                         orientation="h",
-                        name=f"Episodes ({sid})",
+                        name=f"{episode_label}s ({sid})",
                         marker=dict(
                             color="#e6f5c9",
                             line=dict(color="black", width=1),
@@ -1479,7 +1482,7 @@ class EventCascadeGanttVisualizer:
                         y=inst_y_pos,
                         base=inst_x_starts,
                         orientation="h",
-                        name=f"Episodes ({sid})",
+                        name=f"{episode_label}s ({sid})",
                         marker=dict(
                             color="rgba(0,0,0,0)", line=dict(width=0), opacity=1.0
                         ),
@@ -1867,7 +1870,7 @@ class EventCascadeGanttVisualizer:
                 fig.add_annotation(
                     x=mid_x,
                     y=bottom_y,
-                    text=f"Episode: {local_eps[j]['ID']}",
+                    text=f"{episode_label}: {local_eps[j]['ID']}",
                     showarrow=False,
                     align="center",
                     yanchor="top",
@@ -1986,7 +1989,7 @@ class EventCascadeGanttVisualizer:
                 )
 
         fig.update_layout(
-            title=chart_title,
+            title=(f"{subject_name} · {chart_title}" if subject_name else chart_title),
             dragmode="pan",
             xaxis=dict(
                 type="date",
@@ -1998,10 +2001,10 @@ class EventCascadeGanttVisualizer:
                 showticklabels=False if all_unknown_time else True,
             ),
             yaxis=dict(
-                title="Episodes (Staggered)",
+                title="Activities (Staggered)" if subject_name else "Episodes (Staggered)",
                 tickmode="array",
                 tickvals=[y_stage],
-                ticktext=["STAGES"],
+                ticktext=["EVENTS" if subject_name else "STAGES"],
                 showgrid=True,
                 zeroline=False,
                 fixedrange=False,
@@ -2022,7 +2025,7 @@ class EventCascadeGanttVisualizer:
             margin=dict(l=50, r=50, t=80, b=90),
             showlegend=True,
             legend=dict(
-                title="Participants",
+                title="People / organizations" if subject_name else "Participants",
                 orientation="v",
                 yanchor="top",
                 y=1,

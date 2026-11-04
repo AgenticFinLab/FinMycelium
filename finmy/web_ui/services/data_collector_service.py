@@ -40,6 +40,19 @@ class DataCollectorService:
             delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
         )
 
+    def collect_subject_search_results(self, query, keywords, subject):
+        """Collect bounded year/topic searches; keep the existing document contract."""
+        from finmy.runner.subject_search import collect_subject_sources
+        from finmy.runner.scoped_search_api import search
+        from finmy.runner.scoped_page import parse
+        options = self.config.get("subject_search", {})
+        docs = collect_subject_sources(query, keywords, subject, options,
+                                       search, parse, self.save_dir, progress=st.write)
+        for doc in docs:
+            self.documents[doc["source"]].append(doc)
+        return ([d["raw_text"] for d in self.documents["bocha"]],
+                [d["raw_text"] for d in self.documents["baidu"]])
+
     def collect_bocha_search_results(
         self, search_query: str, keywords: List[str]
     ) -> List[str]:

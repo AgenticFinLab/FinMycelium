@@ -17,6 +17,8 @@ from finmy.web_ui.utils.validators import validate_analysis_inputs
 from finmy.web_ui.services.reconstruction_service import ReconstructionService
 from finmy.web_ui.state import SessionStateManager
 from finmy.web_ui.utils.formatters import format_timestamp
+from finmy.web_ui.components.subject_scope_form import render_subject_scope
+from finmy.web_ui.utils.history_loader import detect_build_mode
 
 
 class PipelinePage:
@@ -53,6 +55,11 @@ class PipelinePage:
             return
         else:
             st.session_state.is_processing_blocked = False
+
+        run_config = render_subject_scope(config)
+        st.session_state.reconstruction_run_config = run_config
+        subject_mode = (run_config.get("builder_config", {}).get("reconstruction", {}).get("mode", "event")
+                        if run_config is not None else "person")
         
         # Main input area
         prev_text = st.session_state.get("main_input", "")
@@ -60,11 +67,14 @@ class PipelinePage:
         dynamic_height = min(600, max(100, visible_lines * 24))
         
         main_input = st.text_area(
-            "Event Description",
+            "Event Description" if subject_mode == "event" else "Description",
             value=prev_text,
             placeholder=(
                 "Enter a detailed description of the event case, including key details, "
                 "suspicious activities, involved parties, timeline, and any other relevant information..."
+                if subject_mode == "event" else
+                "Describe the subject's documented activities and experiences to reconstruct. "
+                "Include any desired period or topic here, e.g. Warren Buffett's activities during 2022–2023."
             ),
             height="content",
             key=f"main_input_{dynamic_height}",
@@ -97,7 +107,10 @@ class PipelinePage:
         should_start = AnalysisControls.render(validate_analysis_inputs)
         
         if should_start:
-            PipelinePage._run_analysis()
+            if run_config is None:
+                st.error("Enter a person name before starting.")
+            else:
+                PipelinePage._run_analysis()
         
         # Option to reset configuration
         if st.button(
@@ -111,6 +124,10 @@ class PipelinePage:
     @staticmethod
     def _run_analysis():
         """Execute the event reconstruction pipeline."""
+        if ("reconstruction_run_config" in st.session_state
+                and st.session_state.reconstruction_run_config is None):
+            st.error("Enter a person name before starting.")
+            return
         # Check if results already exist
         if (
             hasattr(st.session_state, "analysis_results")
@@ -159,7 +176,8 @@ class PipelinePage:
                 st.write(f"**{format_timestamp()}** - Starting reconstruction...")
                 
                 # Run reconstruction service
-                reconstruction_service = ReconstructionService(st.session_state.config)
+                run_config = st.session_state.get("reconstruction_run_config") or st.session_state.config
+                reconstruction_service = ReconstructionService(run_config)
                 results = reconstruction_service.run_reconstruction(
                     main_input=analysis_inputs["main_input"],
                     keywords=analysis_inputs["keywords"],
@@ -168,6 +186,7 @@ class PipelinePage:
                 
                 if results:
                     st.session_state.analysis_results = results
+                    st.session_state.build_mode = detect_build_mode(results)
                     st.write(f"**{format_timestamp()}** - Reconstruction completed.")
                     st.session_state.processing_status = "completed"
                     st.session_state.is_processing_blocked = False
