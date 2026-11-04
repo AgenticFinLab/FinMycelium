@@ -32,6 +32,41 @@ def _failed_review(exc):
     return {"status": "failed", "error": str(exc), "accepted": [], "rejected": []}
 
 
+def _unique_record_ids(graph):
+    """Resolve assembled record ID collisions before review; preserve entity/event IDs.
+
+    These four record types have no inbound references in SubjectGraph. Review
+    requests receive the normalized graph and therefore use its updated IDs.
+    """
+    result, changes = copy.deepcopy(graph), []
+    groups = {"relation_id": [(f"/relations/{i}", row)
+                              for i, row in enumerate(result.get("relations", []))]}
+    for collection, key in (("participations", "participation_id"),
+                            ("actions", "action_id"), ("transactions", "transaction_id")):
+        groups[key] = [(f"/events/{ei}/{collection}/{i}", row)
+                       for ei, event in enumerate(result.get("events", []))
+                       if isinstance(event, dict)
+                       for i, row in enumerate(event.get(collection, []))]
+    for key, rows in groups.items():
+        reserved = {row[key] for _, row in rows
+                    if isinstance(row, dict) and isinstance(row.get(key), str)}
+        seen = set()
+        for path, row in rows:
+            identifier = row.get(key) if isinstance(row, dict) else None
+            if not isinstance(identifier, str) or not identifier:
+                continue  # Missing/malformed identities still go through schema validation.
+            if identifier in seen:
+                suffix = 2
+                while f"{identifier}_{suffix}" in reserved:
+                    suffix += 1
+                row[key] = f"{identifier}_{suffix}"
+                reserved.add(row[key])
+                changes.append({"path": f"{path}/{key}",
+                                "before": identifier, "after": row[key]})
+            seen.add(row[key])
+    return result, changes
+
+
 def _options(config):
     builder = config.get("builder_config", config)
     opts = builder.get("subject_graph", {})
@@ -167,6 +202,8 @@ def run_subject_build(build_input, config, complete, save):
         graph["events"].append(event)
         graph["relations"].extend(relations)
     save(graph, "RawSubjectGraph")
+    graph, id_changes = _unique_record_ids(graph)
+    save(id_changes, "subject_record_id_normalization")
     graph, quote_changes = restore_source_quotes(graph, source_texts)
     save(quote_changes, "subject_quote_restoration")
     graph, event_review = restrict_event_evidence(graph, targets, event_sources, sources)
@@ -224,6 +261,8 @@ def run_subject_build(build_input, config, complete, save):
             # Evidence-only issues may still use the existing review fallback;
             # structural errors remain blocking after full validation below.
             save({"error": str(exc)}, "subject_repair_error")
+        graph, additional_ids = _unique_record_ids(graph)
+        save(id_changes + additional_ids, "subject_record_id_normalization")
         save(graph, "SubjectGraphAfterRepair")
         graph, repair_quote_changes = restore_source_quotes(graph, source_texts)
         save(quote_changes + repair_quote_changes, "subject_quote_restoration")

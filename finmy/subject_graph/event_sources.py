@@ -2,6 +2,7 @@
 import copy
 
 from finmy.subject_graph.evidence import restore_source_quotes
+from finmy.subject_graph.time_display import time_label
 from finmy.subject_graph.validation import date_interval, outside_coverage
 
 
@@ -36,7 +37,7 @@ def exclude_outside_coverage(graph):
                          "record": copy.deepcopy(event)})
         fields = [event["title"], event["start_time"], event["end_time"],
                   *event.get("descriptions", [])]
-        start, end = (event[key]["value"] for key in ("start_time", "end_time"))
+        start, end = (time_label(event[key]) or event[key]["value"] for key in ("start_time", "end_time"))
         dates = start if start == end else f"{start} to {end}"
         context = {
             "value": f"Background ({dates}): {event['title']['value']}"

@@ -20,6 +20,14 @@ def _value(value):
 
 def date_interval(value):
     """Read supported precision without replacing an unknown day with the first."""
+    if isinstance(value, dict) and "time_window" in value:
+        window = value["time_window"]
+        if not isinstance(window, dict):
+            return None
+        start, end = date_interval(window.get("start")), date_interval(window.get("end"))
+        if start and end and start[0] <= end[1]:
+            return start[0], end[1], "day" if start == end and start[2] == "day" else "range"
+        return None
     value = _value(value)
     if not isinstance(value, str):
         return None
@@ -74,6 +82,7 @@ def _shape(value, schema, path, errors):
         matches = {
             "object": isinstance(value, dict), "array": isinstance(value, list),
             "string": isinstance(value, str), "null": value is None,
+            "boolean": isinstance(value, bool),
             "number": isinstance(value, (int, float)) and not isinstance(value, bool),
         }
         if not any(matches.get(kind, False) for kind in types):
@@ -134,7 +143,8 @@ def validate_subject_graph(graph, source_texts=None, allow_unverified_evidence=F
         raw = _value(value)
         if nullable and raw is None:
             return None
-        if isinstance(raw, str) and raw.lower().strip() in _UNKNOWN:
+        if (isinstance(raw, str) and raw.lower().strip() in _UNKNOWN
+                and not (isinstance(value, dict) and "time_window" in value)):
             return None
         result = date_interval(value)
         if result is None:
@@ -233,7 +243,8 @@ def validate_subject_graph(graph, source_texts=None, allow_unverified_evidence=F
                         elif not any(quote in source for source in source_texts):
                             issue(path + f"/evidence_source_contents/{qi}", "Evidence quote is absent from supplied sources", warning=pending)
                     configured = path in subject_name_paths and "configured_identity" in value["reasons"]
-                    if path != "/title" and not configured and value["value"].lower().strip() not in _UNKNOWN and not quotes:
+                    if (path != "/title" and not configured and not quotes
+                            and (value["value"].lower().strip() not in _UNKNOWN or "time_window" in value)):
                         issue(path, "Known factual value requires a source quote", warning=pending)
                 elif isinstance(value, dict):
                     for key, item in value.items():

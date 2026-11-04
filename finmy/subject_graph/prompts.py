@@ -172,7 +172,7 @@ Use add with /- to append a native record or detail, e.g. /event/actions/<action
 ExcludedRecords is an archive, not part of TargetEvent: never target it for deletion.
 Preserve IDs and event identity. Do not replace whole records or lists, widen an event
 to fit an unrelated action, or invent a precise time. If only a quarter/season is known,
-correct the single action timestamp to unknown and retain its supported range in reasons.
+retain its normalized bounds and original wording in the optional time_window.
 Correct claim, time, evidence and attribution together. actor_id may be changed only
 to an existing participant with a supporting action_type/details correction. Keep
 company acts attributed to the company. When reliable correction is impossible, remove
@@ -301,5 +301,5 @@ The schema below describes graph data, NOT the response envelope. Output JSON on
 def system_prompt(task):
     """Schema is plain JSON; the caller escapes template braces for the live adapter."""
     if task == REPAIR:
-        return _TEMPORAL_NORMALIZATION_POLICY + task + "\nGraph schema (reference only):\n" + json.dumps(JSON_SCHEMA, ensure_ascii=False)
+        return _TEMPORAL_NORMALIZATION_POLICY + SUBJECT_TEMPORAL_POLICY + task + "\nGraph schema (reference only):\n" + json.dumps(JSON_SCHEMA, ensure_ascii=False)
     return COMMON + task + "\nNative SubjectGraph schema:\n" + json.dumps(JSON_SCHEMA, ensure_ascii=False)

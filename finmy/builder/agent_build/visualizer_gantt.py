@@ -226,6 +226,8 @@ class EventCascadeGanttVisualizer:
 
         # --- Helpers ---
 
+        from finmy.subject_graph.time_display import time_note
+
         def parse_date(d_obj):
             """
             Parse date from a dictionary with a 'value' key or a direct string.
@@ -334,6 +336,9 @@ class EventCascadeGanttVisualizer:
             desc_str = "<br>".join(desc_lines) if desc_lines else (
                 "Not documented in supplied sources." if subject_name else "None")
 
+            note = time_note(stage_start_raw, stage_end_raw)
+            if note:
+                desc_str = note + "<br>" + desc_str
             stage_start = parse_date(stage_start_raw)
             stage_end = parse_date(stage_end_raw)
             gran_levels.append(gran_code_for(stage_start_raw))
@@ -378,6 +383,9 @@ class EventCascadeGanttVisualizer:
                 ep_desc_str = "<br>".join(ep_desc_lines) if ep_desc_lines else (
                     "Not documented in supplied sources." if subject_name else "None")
 
+                note = time_note(ep_start_raw, ep_end_raw)
+                if note:
+                    ep_desc_str = note + "<br>" + ep_desc_str
                 ep_index = ep.get("index_in_stage", ep_i)
 
                 ep_start = parse_date(ep_start_raw)
@@ -428,7 +436,7 @@ class EventCascadeGanttVisualizer:
                                 act_lines.append(f"- {act['name']['value']}")
                                 if subject_name:
                                     timestamp = act.get("timestamp", {}).get("value", "unknown")
-                                    act_lines.append(f"Time: {timestamp}")
+                                    act_lines.append(time_note(act.get("timestamp")) or f"Time: {timestamp}")
                                     details = [d["value"] for d in act.get("details", [])
                                                if isinstance(d, dict) and d.get("value")]
                                     act_lines.append("Details:<br>" + ("<br>".join(details)

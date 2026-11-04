@@ -7,6 +7,7 @@ are mapped consistently to P_ IDs inside this view only.
 import copy
 
 from finmy.subject_graph.evidence import review_fields
+from finmy.subject_graph.time_display import project_time
 from finmy.subject_graph.validation import date_interval, validate_subject_graph
 
 
@@ -77,8 +78,8 @@ def to_event_cascade(graph):
                 "relation_name": copy.deepcopy(relation["relation_type"]),
                 "relation_type": copy.deepcopy(relation["relation_type"]),
                 "descriptions": [],
-                "start_time": copy.deepcopy(relation["valid_from"]),
-                "end_time": copy.deepcopy(relation["valid_to"]),
+                "start_time": project_time(relation["valid_from"], "start"),
+                "end_time": project_time(relation["valid_to"], "end"),
             })
         transactions = []
         for transaction in event["transactions"]:
@@ -93,7 +94,7 @@ def to_event_cascade(graph):
             "episode_id": f"E{index + 1}",
             "name": _metadata("Event participation", "Event-level participants, relations and transactions"),
             "index_in_stage": 0,
-            "start_time": copy.deepcopy(event["start_time"]), "end_time": copy.deepcopy(event["end_time"]),
+            "start_time": project_time(event["start_time"], "start"), "end_time": project_time(event["end_time"], "end"),
             "descriptions": [copy.deepcopy(event["subject_relevance"])],
             "participants": participants,
             "participant_relations": relations, "transactions": transactions,
@@ -108,15 +109,15 @@ def to_event_cascade(graph):
             episodes.append({
                 "episode_id": f"E{index + 1}_A{action_index}",
                 "name": copy.deepcopy(action["action_type"]), "index_in_stage": action_index,
-                "start_time": copy.deepcopy(action["timestamp"]),
-                "end_time": copy.deepcopy(action["timestamp"]),
+                "start_time": project_time(action["timestamp"], "start"),
+                "end_time": project_time(action["timestamp"], "end"),
                 "descriptions": copy.deepcopy(action["details"]), "participants": [actor],
                 # Event-level relations/trades stay in the participation episode.
                 "participant_relations": [], "transactions": [],
             })
         stages.append({
             "stage_id": f"S{index + 1}", "name": copy.deepcopy(event["title"]), "index_in_event": index,
-            "start_time": copy.deepcopy(event["start_time"]), "end_time": copy.deepcopy(event["end_time"]),
+            "start_time": project_time(event["start_time"], "start"), "end_time": project_time(event["end_time"], "end"),
             "descriptions": copy.deepcopy(event["descriptions"]), "episodes": episodes,
         })
     def extreme(key, minimum):

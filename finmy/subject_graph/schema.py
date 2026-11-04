@@ -32,6 +32,10 @@ DEFINITIONS = {
         "reasons": _array({"type": "string"}),
         "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
         "evidence_status": {"enum": ["needs_review"]},
+        "time_window": _object({
+            "start": TEXT, "end": TEXT, "original": TEXT,
+            "approximate": {"type": "boolean"},
+        }),
     }, ["value", "evidence_source_contents", "reasons"]),
     "Entity": _object({
         "entity_id": ID, "name": VF, "aliases": _array(TEXT), "entity_type": TEXT,
