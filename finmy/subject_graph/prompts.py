@@ -36,6 +36,11 @@ insufficient. Contextual relevance does not make the subject an action's perform
 Actions should contain supported statements, questions/answers, decisions and concrete
 behavior, not just 'attended' when the sources already provide specific content. Never
 invent a missing speech or rationale. Existing background traits are not new actions.
+Preserve a report's qualification when it compares prices from different dates. A
+pre-announcement quote and a later offer price do not establish the actual entry price
+or information used for a later purchase. Label such comparisons as reported context;
+claim a trade price or personal rationale only when explicitly documented. Reposted
+versions of the same passage are not independent corroboration.
 
 Relations have real endpoints and source-supported validity dates. Repeated observations
 do not prove uninterrupted validity. Keep employment, ownership, control, representation,
@@ -157,10 +162,14 @@ These are optional aspects: add only material information explicitly in the text
 
 Return {"corrections": [], "event_additions": [], "missing_events": []} when no changes
 are supported. corrections is a list of at most 16 objects, each with reason and patches.
-Use local JSON Patch paths rooted at /event, e.g. /event/actions/0/timestamp.
-All indices refer to the ORIGINAL TargetEvent; all corrections are applied atomically.
+Use local paths rooted at /event, preferably /event/actions/<action_id>/timestamp
+(participation_id and transaction_id work likewise). Numeric indices refer to the
+ORIGINAL TargetEvent. Each correction group is atomic and independent; put related
+date/claim/attribution edits in the same group. Do not reuse an edited path across groups.
 Use replace for a complete VerifiableField (value, evidence_source_contents, reasons),
 or remove for one unsupported description/detail/action/transaction/participation.
+Use add with /- to append a native record or detail, e.g. /event/actions/<action_id>/details/-.
+ExcludedRecords is an archive, not part of TargetEvent: never target it for deletion.
 Preserve IDs and event identity. Do not replace whole records or lists, widen an event
 to fit an unrelated action, or invent a precise time. If only a quarter/season is known,
 correct the single action timestamp to unknown and retain its supported range in reasons.
@@ -170,7 +179,8 @@ company acts attributed to the company. When reliable correction is impossible, 
 only the unsupported item and explain why; preserve independent supported content.
 Do not output evidence_status. Replacements need exact evidence from supplied Sources;
 an unknown value must explain the unresolved information. No extra model/search round.
-Additions must not touch a record removed or changed by corrections in this response.
+Put a dependent addition in the same correction group; unrelated event_additions may
+supplement unaffected records. Every edit must target the actual supplied TargetEvent.
 
 For omissions, event_additions contains ONE object for TargetEvent.event_id with
 any of descriptions, participations, actions, transactions, or
@@ -203,7 +213,7 @@ Read source passages, not just source titles. Do not add every company mention o
 any fields. Include corporate context only with an evidenced concrete subject connection;
 do not convert company earnings or transactions into personal decisions.
 
-Return {"event_additions": [], "missing_events": [], "event_merges": []} when nothing
+Return {"event_additions": [], "missing_events": [], "event_merges": [], "statement_merges": []} when nothing
 material can be supported. Otherwise return ONLY concise edits, never the full graph:
 - event_additions: objects with event_id and any of descriptions, participations, actions,
   transactions (arrays of native schema records). To enrich an existing action use
@@ -221,12 +231,23 @@ material can be supported. Otherwise return ONLY concise edits, never the full g
   Route additions to the surviving ID. Do not introduce a missing event that duplicates
   either side of a proposed merge. Return only additions grounded in the survivor's
   existing sources; sources are combined after additions are processed.
+- statement_merges: [{"keep_event_id": "actual appearance event ID",
+  "keep_action_id": "surviving speech action ID", "remove_event_id": "other event ID",
+  "remove_action_id": "duplicate speech action ID", "reason": "same utterance, why it belongs here"}].
+  Review PossibleDuplicateStatements against the source context. A shared quote alone
+  does not prove identical speech. Merge only the same speaker's same precisely dated
+  utterance; keep it in its actual meeting/interview/letter occurrence, not the investment
+  period it discusses. Both IDs must refer to existing actions. The application preserves
+  distinct details and source evidence and removes only the duplicate action; the trade
+  event and its transactions remain. Different appearances/repeated opinions stay separate.
+  Use at most 12 proposals. Leave uncertain candidates untouched. Use IDs from the
+  supplied graph; statement merges are applied before event merges.
 Use at most 12 event groups, highest-value omissions first. Keep quotations concise but
 long enough to establish occurrence and meaning; avoid repeating complete transcripts.
 Use separate quotations across actual gaps in source excerpts. Adjacent Source chars
 offsets indicate a continuous passage, but nonadjacent offsets must never be joined.
 
-Except for explicitly proposed duplicate event merges, preserve existing IDs and dates.
+Except for explicitly proposed event/statement merges, preserve existing IDs and dates.
 Do not duplicate events, actions or
 details already expressed in different words. New IDs must be globally unique. Use only
 the existing EntityRegistry; if an entity is missing, retain a supported fact as a
@@ -256,6 +277,9 @@ facts and preserve quotes verbatim. Never invent evidence or a person's particip
 When EventSourceIds is supplied, event claims must use that event's allowed source IDs.
 Preserve the occurrence described by the source; do not attach another year's remarks
 to this event's date or change only a quotation while leaving an unsupported claim.
+Do not erase a known date to make a misplaced participation/action fit its event.
+Remove the unsupported assignment with its dependent records, or correct it using
+evidence for this occurrence. Date conflicts require checking event membership.
 
 Use JSON pointer paths (escape ~ as ~0 and / as ~1). Allowed operations:
 - replace: change an existing field; include its corrected value.

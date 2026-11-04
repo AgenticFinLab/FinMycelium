@@ -45,6 +45,16 @@ def date_interval(value):
     return None
 
 
+def outside_coverage(event, coverage_start, coverage_end):
+    """Exclude only dated events wholly outside coverage; retain uncertain overlaps."""
+    start = date_interval(event.get("start_time"))
+    end = date_interval(event.get("end_time"))
+    low, high = date_interval(coverage_start), date_interval(coverage_end)
+    if not start or not end or start[0] > end[1]:
+        return False  # Unknown/invalid bounds remain available for review.
+    return bool((low and end[1] < low[0]) or (high and start[0] > high[1]))
+
+
 def _pointer(path, key):
     return path + "/" + str(key).replace("~", "~0").replace("/", "~1")
 
@@ -163,7 +173,8 @@ def validate_subject_graph(graph, source_texts=None, allow_unverified_evidence=F
         if event["subject_relevance"]["value"].lower().strip() in _UNKNOWN:
             issue(path + "/subject_relevance", "Event requires an explicit connection to the subject")
         event_bounds = bounds(event, "start_time", "end_time", path)
-        within(*event_bounds, coverage, path, warning=True)
+        if outside_coverage(event, graph["coverage_start"], graph["coverage_end"]):
+            issue(path, "Event is wholly outside configured coverage; retain it as dated background")
         unique(event["participations"], "participation_id", path + "/participations", global_participations)
         unique(event["actions"], "action_id", path + "/actions", global_actions)
         unique(event["transactions"], "transaction_id", path + "/transactions", global_transactions)

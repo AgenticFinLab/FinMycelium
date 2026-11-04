@@ -2,7 +2,7 @@
 import copy
 
 from finmy.subject_graph.evidence import restore_source_quotes
-from finmy.subject_graph.validation import date_interval
+from finmy.subject_graph.validation import date_interval, outside_coverage
 
 
 def _quotes(value):
@@ -16,6 +16,51 @@ def _quotes(value):
     elif isinstance(value, list):
         for child in value:
             yield from _quotes(child)
+
+
+def exclude_outside_coverage(graph):
+    """Keep dated background in descriptions, outside the reconstructed event list.
+
+    Original date precision and source evidence are retained. Undated events and
+    intervals overlapping coverage stay in the graph; this does not guess dates.
+    """
+    result = copy.deepcopy(graph)
+    kept, excluded = [], []
+    for index, event in enumerate(result.get("events", [])):
+        if not isinstance(event, dict) or not outside_coverage(
+                event, result.get("coverage_start"), result.get("coverage_end")):
+            kept.append(event)
+            continue
+        excluded.append({"event_id": event["event_id"], "path": f"/events/{index}",
+                         "message": "Event outside configured coverage retained as dated background",
+                         "record": copy.deepcopy(event)})
+        fields = [event["title"], event["start_time"], event["end_time"],
+                  *event.get("descriptions", [])]
+        start, end = (event[key]["value"] for key in ("start_time", "end_time"))
+        dates = start if start == end else f"{start} to {end}"
+        context = {
+            "value": f"Background ({dates}): {event['title']['value']}"
+                     + "".join(f". {item['value']}" for item in event.get("descriptions", [])),
+            "evidence_source_contents": list(dict.fromkeys(_quotes(fields))),
+            "reasons": list(dict.fromkeys(reason for item in fields
+                                          for reason in item.get("reasons", []))),
+        }
+        if any(item.get("evidence_status") == "needs_review" for item in fields):
+            context["evidence_status"] = "needs_review"
+        result.setdefault("descriptions", []).append(context)
+    result["events"] = kept
+    removed_ids = {item["event_id"] for item in excluded}
+    relations = []
+    for relation in result.get("relations", []):
+        links = relation.get("event_ids") if isinstance(relation, dict) else None
+        if isinstance(links, list) and removed_ids.intersection(links):
+            relation["event_ids"] = [eid for eid in links if eid not in removed_ids]
+            if not relation["event_ids"]:
+                continue
+        relations.append(relation)
+    if "relations" in result:
+        result["relations"] = relations
+    return result, excluded
 
 
 def select_event_sources(target, sources, source_ids=None):
@@ -95,18 +140,18 @@ def restrict_event_evidence(graph, targets, event_sources, sources):
                 if isinstance(row, dict):
                     if key == "actions":
                         dependent = row.get("actor_id") in removed_participants
-                        instant = date_interval(row.get("timestamp"))
-                        outside = bool(instant and (
-                            event_start and instant[1] < event_start[0] or
-                            event_end and instant[0] > event_end[1]))
                     elif key == "transactions":
                         dependent = any(isinstance(row.get(side), dict) and
                                         row[side].get("value") in removed_participants
                                         for side in ("from_entity_id", "to_entity_id"))
+                    start = date_interval(row.get("start_time" if key == "participations" else "timestamp"))
+                    end = date_interval(row.get("end_time" if key == "participations" else "timestamp"))
+                    outside = bool(start and event_end and start[0] > event_end[1] or
+                                   end and event_start and end[1] < event_start[0])
                 if bad or dependent or outside:
                     reason = ("Evidence belongs to sources outside this event" if bad else
                               "Participation evidence was excluded for this event" if dependent else
-                              "Action date is outside the event interval; event attribution needs review")
+                              "Record date is outside the event interval; event attribution needs review")
                     record(f"{path}/{key}/{index}", row, bad, reason)
                     if key == "participations" and isinstance(row, dict):
                         removed_participants.add(row.get("entity_id"))

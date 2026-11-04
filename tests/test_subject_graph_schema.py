@@ -195,8 +195,8 @@ class SubjectGraphSchemaTest(unittest.TestCase):
         self.assertTrue(validate_subject_graph(graph)["valid"])
         graph["coverage_start"], graph["coverage_end"] = "2024", "2024"
         report = validate_subject_graph(graph)
-        self.assertTrue(report["valid"])
-        self.assertEqual(len(report["warnings"]), 2)
+        self.assertFalse(report["valid"])
+        self.assertEqual(len(report["errors"]), 2)
 
     def test_global_relation_is_preserved_natively_without_fabricated_event_membership(self):
         graph = graph_fixture()

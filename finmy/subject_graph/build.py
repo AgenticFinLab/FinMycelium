@@ -6,13 +6,30 @@ import logging
 
 from finmy.reconstruction_scope import read_reconstruction
 from finmy.subject_graph.prompts import COVERAGE, EVENT, EVENT_REVIEW, PLANNER, REPAIR, system_prompt
-from finmy.subject_graph.coverage_review import apply_coverage_additions, find_statement_duplicates
+from finmy.subject_graph.coverage_review import (apply_coverage_additions, apply_statement_merges,
+                                               find_statement_duplicates)
 from finmy.subject_graph.consistency_review import apply_event_corrections, apply_event_merges, correction_exclusions
 from finmy.subject_graph.schema import SCHEMA_VERSION
 from finmy.subject_graph.repair import apply_graph_patch
 from finmy.subject_graph.validation import validate_subject_graph
 from finmy.subject_graph.evidence import restore_source_quotes, flag_evidence_issues
-from finmy.subject_graph.event_sources import select_event_sources, restrict_event_evidence
+from finmy.subject_graph.event_sources import (select_event_sources, restrict_event_evidence,
+                                             exclude_outside_coverage)
+
+
+def _review_list(response, field):
+    """Normalize optional review envelopes without relaxing record validation."""
+    value = response.get(field, [])
+    if isinstance(value, dict):
+        return [value]
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be a list or an object")
+    return value
+
+
+def _failed_review(exc):
+    logging.warning("Review could not be applied: %s", exc)
+    return {"status": "failed", "error": str(exc), "accepted": [], "rejected": []}
 
 
 def _options(config):
@@ -112,9 +129,16 @@ def run_subject_build(build_input, config, complete, save):
              "subject_id": subject["subject_id"], "subject_type": kind,
              "coverage_start": subject["coverage_start"], "coverage_end": subject["coverage_end"],
              "title": copy.deepcopy(plan.get("title")), "descriptions": copy.deepcopy(plan.get("descriptions", [])),
-             "entities": entities, "events": [], "relations": copy.deepcopy(plan.get("relations", []))}
+             "entities": entities, "events": copy.deepcopy(events),
+             "relations": copy.deepcopy(plan.get("relations", []))}
     if not isinstance(graph["relations"], list):
         raise ValueError("SubjectPlanner relations must be a list")
+    graph, scope_review = exclude_outside_coverage(graph)
+    events = graph["events"]
+    graph["events"] = []
+    save(scope_review, "subject_scope_review")
+    if not events:
+        raise ValueError("Subject reconstruction produced no supported in-scope events; inspect subject_scope_review.json")
     targets = {event["event_id"]: event for event in events}
     planned_sources = plan.get("event_sources", {})
     if not isinstance(planned_sources, dict):
@@ -146,6 +170,9 @@ def run_subject_build(build_input, config, complete, save):
     graph, quote_changes = restore_source_quotes(graph, source_texts)
     save(quote_changes, "subject_quote_restoration")
     graph, event_review = restrict_event_evidence(graph, targets, event_sources, sources)
+    graph, excluded = exclude_outside_coverage(graph)
+    scope_review.extend(excluded)
+    save(scope_review, "subject_scope_review")
     save(event_review, "subject_event_evidence_review")
 
     def validate(candidate, allow_unverified_evidence=False):
@@ -154,6 +181,9 @@ def run_subject_build(build_input, config, complete, save):
         report["warnings"].extend({"path": item["path"],
                                    "message": item["message"] + "; original record saved in subject_event_evidence_review.json"}
                                   for item in event_review)
+        report["warnings"].extend({"path": item["path"], "message": item["message"] +
+                                   "; original record saved in subject_scope_review.json"}
+                                  for item in scope_review)
         report["warnings"].extend({"path": f"/events/{i}",
                                    "message": "Planner omitted event_sources; allocation used identifying passages only"}
                                   for i, event in enumerate(events)
@@ -217,65 +247,94 @@ def run_subject_build(build_input, config, complete, save):
     for target in list(graph["events"]):
         eid = target["event_id"]
         logging.info("Event detail review: %s; checking chronology, attribution and omissions once. No search.", eid)
-        correction_report = {"accepted": [], "rejected": []}
         try:
-            additions = call("SubjectEventReviewer", EVENT_REVIEW,
-                             {**context, "Sources": event_sources[eid], "TargetEvent": target,
-                              "EntityRegistry": entities, "ExcludedRecords": event_review})
-            additions = dict(additions)  # Keep the raw response in execution state intact.
-            if set(additions) - {"corrections", "event_additions", "missing_events"}:
-                raise ValueError("Unexpected detail review fields")
-            if (additions.get("missing_events") != []
-                    or not isinstance(additions.get("event_additions"), list)
-                    or len(additions["event_additions"]) > 1
-                    or any(not isinstance(row, dict) or row.get("event_id") != eid
-                           for row in additions["event_additions"])):
-                raise ValueError("Detail review may supplement only its target event")
+            review = call("SubjectEventReviewer", EVENT_REVIEW,
+                          {**context, "Sources": event_sources[eid], "TargetEvent": target,
+                           "EntityRegistry": entities,
+                           "ExcludedRecords": event_review + scope_review + corrected_records})
+        except Exception as exc:
+            detail_reviews.append({"event_id": eid, **_failed_review(exc),
+                                   "corrections": {"accepted": [], "rejected": []}})
+            save(detail_reviews, "subject_event_detail_review")
+            continue
+        # A malformed supplement must not discard independent factual corrections.
+        try:
             graph, correction_report = apply_event_corrections(
-                graph, eid, additions.pop("corrections", []), event_sources, sources)
+                graph, eid, _review_list(review, "corrections"), event_sources, sources)
             corrected_records.extend(correction_exclusions(eid, correction_report))
-            logging.info("Event consistency: %s; %s correction group(s) accepted; %s rejected.",
-                         eid, len(correction_report["accepted"]), len(correction_report["rejected"]))
+            scope_review.extend(correction_report.get("scope_exclusions", []))
+            save(scope_review, "subject_scope_review")
+        except ValueError as exc:
+            correction_report = _failed_review(exc)
+        logging.info("Event consistency: %s; %s correction group(s) accepted; %s rejected.",
+                     eid, len(correction_report["accepted"]), len(correction_report["rejected"]))
+        try:
+            additions = {key: _review_list(review, key)
+                         for key in ("event_additions", "missing_events")}
+            if additions["missing_events"]:
+                raise ValueError("Detail review missing_events must be empty")
+            if any(not isinstance(row, dict) or row.get("event_id") != eid
+                   for row in additions["event_additions"]):
+                raise ValueError("Detail review event_additions must target " + eid)
             graph, event_sources, detail_report = apply_coverage_additions(
                 graph, additions, event_sources, sources, max_events, corrected_records)
-        except Exception as exc:
-            detail_report = {"status": "failed", "error": str(exc), "accepted": [], "rejected": []}
-            logging.warning("Event detail review: %s unavailable; keeping existing content. No further review.", eid)
+        except ValueError as exc:
+            detail_report = _failed_review(exc)
         detail_reviews.append({"event_id": eid, **detail_report, "corrections": correction_report})
         save(detail_reviews, "subject_event_detail_review")
-    # One final check for omitted occurrences, using the enriched graph.
-    logging.info("Coverage review: Checking existing sources for material omissions. No search.")
+    # The existing global review also resolves evidenced duplicate statements.
+    logging.info("Coverage review: Checking existing sources for material omissions and duplicates. No search.")
     try:
-        additions = call("SubjectCoverageReviewer", COVERAGE,
-                         {**context, "ConstructedGraph": graph, "EntityRegistry": entities,
-                          "EventSourceIds": source_scope, "ExcludedRecords": event_review + corrected_records})
-        additions = dict(additions)
-        merges = additions.pop("event_merges", [])
-        graph, event_sources, coverage = apply_coverage_additions(
-            graph, additions, event_sources, sources, max_events, corrected_records)
-        graph, event_sources, merge_report = apply_event_merges(
-            graph, merges, event_sources, sources)
-        coverage["event_merges"] = merge_report
-        logging.info("Event merge review: %s accepted; %s rejected. No search.",
-                     len(merge_report["accepted"]), len(merge_report["rejected"]))
-        save({eid: [s["source_id"] for s in selected] for eid, selected in event_sources.items()},
-             "subject_event_sources")
+        review = call("SubjectCoverageReviewer", COVERAGE,
+                      {**context, "ConstructedGraph": graph, "EntityRegistry": entities,
+                       "EventSourceIds": {eid: [s["source_id"] for s in selected]
+                                          for eid, selected in event_sources.items()},
+                       "PossibleDuplicateStatements": find_statement_duplicates(graph),
+                       "ExcludedRecords": event_review + scope_review + corrected_records})
     except Exception as exc:
-        coverage = {"status": "failed", "error": str(exc), "accepted": [], "rejected": []}
-        logging.warning("Coverage review: Unavailable; keeping existing graph. No further review.")
+        review, coverage = None, _failed_review(exc)
+    if review is not None:
+        try:
+            additions = {key: _review_list(review, key)
+                         for key in ("event_additions", "missing_events")}
+            graph, event_sources, coverage = apply_coverage_additions(
+                graph, additions, event_sources, sources, max_events, corrected_records)
+        except ValueError as exc:
+            coverage = _failed_review(exc)
+        for field, apply in (("statement_merges", apply_statement_merges),
+                             ("event_merges", apply_event_merges)):
+            try:
+                graph, event_sources, merge_report = apply(
+                    graph, _review_list(review, field), event_sources, sources)
+            except ValueError as exc:
+                merge_report = _failed_review(exc)
+            coverage[field] = merge_report
+            logging.info("Coverage review: %s; %s accepted; %s rejected.",
+                         field, len(merge_report["accepted"]), len(merge_report["rejected"]))
+    save({eid: [s["source_id"] for s in selected] for eid, selected in event_sources.items()},
+         "subject_event_sources")
     save(coverage, "subject_coverage_review")
     duplicates = find_statement_duplicates(graph)
     save(duplicates, "subject_statement_duplicates")
     report = validate(graph, allow_unverified_evidence=True)
     for item in detail_reviews:
-        if item.get("status") == "failed" or item["corrections"].get("rejected"):
+        if (item.get("status") == "failed" or item.get("rejected")
+                or item["corrections"].get("status") == "failed" or item["corrections"].get("rejected")):
             report["warnings"].append({"path": "/events", "message":
                 f"Chronology/attribution review incomplete for {item['event_id']}; see subject_event_detail_review.json"})
-    if coverage.get("event_merges", {}).get("rejected"):
+    for field in ("event_merges", "statement_merges"):
+        merge_report = coverage.get(field, {})
+        if merge_report.get("rejected") or merge_report.get("status") == "failed":
+            report["warnings"].append({"path": "/events", "message":
+                f"Some {field} could not be applied; see subject_coverage_review.json"})
+    if coverage.get("status") == "failed" or coverage.get("rejected"):
         report["warnings"].append({"path": "/events", "message":
-            "Some duplicate event merges were rejected; see subject_coverage_review.json"})
+            "Some coverage additions could not be applied; see subject_coverage_review.json"})
     report["warnings"].extend({"path": "/events", "message":
         f"Possible repeated statement {item['event_id']}/{item['action_id']}; see subject_statement_duplicates.json"}
         for item in duplicates)
     save(report, "subject_graph_validation")
+    if not report["valid"]:
+        details = "; ".join(f"{e['path']}: {e['message']}" for e in report["errors"][:3])
+        raise ValueError(f"SubjectGraph failed validation: {details}. See subject_graph_validation.json")
     return graph, state, report

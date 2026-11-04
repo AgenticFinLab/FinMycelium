@@ -155,7 +155,8 @@ class SubjectSearchIntegrationTests(unittest.TestCase):
         collect_subject_sources("Buffett activities 2022–2023", [], SUBJECT, self.options,
                                 search, lambda url: {"text": "Watch video", "links": []},
                                 self.directory, messages.append)
-        self.assertEqual([call[2] for call in calls], [10, 20, 10, 20])
+        self.assertEqual([call[2] for call in calls], [10, 20, 2, 5])
+        self.assertEqual([q["requested_count"] for q in self.report()["queries"]], [10, 20, 2, 5])
         for provider, query, _, start, end in calls[2:]:
             label = provider.title() + " Search"
             self.assertIn(f"Start: {label} (detail follow-up)", messages)
@@ -165,6 +166,26 @@ class SubjectSearchIntegrationTests(unittest.TestCase):
         self.assertIn("Detail follow-up: Stopped with 1 unresolved source gap(s); "
                       "follow-up round or configured limit reached.", messages)
         self.assertNotIn("Detail follow-up: No additional search needed.", messages)
+
+    def test_followup_caps_provider_overflow_and_marks_source_phase(self):
+        self.options.update(providers=["bocha", "baidu"], max_followup_queries=2)
+        calls = []
+
+        def search(provider, query, count, start, end):
+            calls.append((provider, count))
+            if len(calls) <= 2:
+                return [result("https://www.example.com/index")]
+            return [result(f"https://www.example.com/{provider}/{i}", title="Detailed evidence")
+                    for i in range(count + 3)]
+
+        def parse(url):
+            return {"text": "Watch video" if url.endswith("index") else BODY + url, "links": []}
+
+        docs = self.run_search(search, parse)
+        # The first usable follow-up resolves this gap, so no Baidu request is needed.
+        self.assertEqual(calls, [("bocha", 10), ("baidu", 20), ("bocha", 2)])
+        self.assertEqual(len(docs), 2)
+        self.assertTrue(all(doc["search_phase"] == "followup" for doc in docs))
 
     def test_search_failure_is_visible_and_not_reported_as_no_gap(self):
         messages = []
