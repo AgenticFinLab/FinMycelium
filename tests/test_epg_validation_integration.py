@@ -100,19 +100,17 @@ class IntegrationTest(unittest.TestCase):
         self.builder.graph = lambda: types.SimpleNamespace(invoke=lambda *a, **kw: state)
         return self.builder.run(None)
 
-    def test_final_return_and_file_reintegration_are_both_validated(self):
-        result = self.run_builder()
+    def test_event_output_and_file_reintegration_preserve_both_transactions(self):
+        with patch("finmy.builder.agent_build.validation.validate_event_cascade") as validate:
+            result = self.run_builder()
+        validate.assert_not_called()
         final = result.event_cascades
-        episodes = final["stages"][0]["episodes"]
-        self.assertEqual([len(e["transactions"]) for e in episodes], [0, 1])
+        self.assertEqual([len(e["transactions"]) for e in final["stages"][0]["episodes"]], [1, 1])
         for filename in ("FinalEventCascade.json", "IntegratedEventCascade.json"):
             self.assertEqual(json.loads((self.path / filename).read_text()), final)
-        raw = json.loads((self.path / "RawEventCascade.json").read_text())
-        self.assertEqual(sum(len(e["transactions"]) for e in raw["stages"][0]["episodes"]), 2)
-        report = json.loads((self.path / "epg_validation_report.json").read_text())
-        self.assertEqual(result.extras["epg_validation"], report)
-        self.assertEqual(final["descriptions"], raw["descriptions"])
-        self.assertEqual(final["stages"][0]["descriptions"], raw["stages"][0]["descriptions"])
+        self.assertFalse((self.path / "RawEventCascade.json").exists())
+        self.assertFalse((self.path / "epg_validation_report.json").exists())
+        self.assertIsNone(result.extras)
 
     def test_integration_does_not_mutate_agent_results(self):
         state = state_fixture()
@@ -120,27 +118,7 @@ class IntegrationTest(unittest.TestCase):
         self.builder.integrate_results(state)
         self.assertEqual(state, original)
 
-    def test_disable_switch_preserves_legacy_result(self):
-        self.builder.build_config["epg_validation"] = {"enabled": False}
-        output = self.run_builder()
-        self.assertEqual([len(e["transactions"]) for e in output.event_cascades["stages"][0]["episodes"]], [1, 1])
-        self.assertFalse((self.path / "epg_validation_report.json").exists())
-
-    def test_check_only_preserves_transactions_and_produces_report(self):
-        self.builder.build_config["epg_validation"] = {"deduplicate": False}
-        output = self.run_builder()
-        self.assertEqual([len(e["transactions"]) for e in output.event_cascades["stages"][0]["episodes"]], [1, 1])
-        self.assertTrue((self.path / "epg_validation_report.json").exists())
-
-    def test_invalid_config_fails_explicitly(self):
-        for options in (False, {"enabled": "false"}, {"deduplicate": "true"}):
-            with self.subTest(options=options):
-                self.builder.build_config["epg_validation"] = options
-                with self.assertRaises(ValueError):
-                    self.builder.integrate_results(state_fixture())
-
     def test_cli_keeps_input_bytes_and_refuses_overwrite(self):
-        self.builder.build_config["epg_validation"] = {"enabled": False}
         original = self.builder.integrate_results(state_fixture())
         source = self.path / "source.json"
         source.write_text(json.dumps(original), encoding="utf-8")
