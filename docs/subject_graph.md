@@ -142,6 +142,8 @@ python -m finmy.subject_graph.recover /path/to/build_output_20261103215915661838
 
 结果写入相邻的 `build_output_20261103215915661838_recovered` 新目录；原文件保留。结构错误仍会阻止发布；仅有证据匹配问题时，在 JSON 和页面中保留待核实标记。恢复过程不调用模型或重新搜索。在 Results 页加载新目录中的 `FinalSubjectGraph.json`。
 
+已有 `FinalSubjectGraph.json` 时，恢复优先使用该图并保留审核记录和警告，不退回修订前的原始图。只有原始图时，恢复会用保存的 planner 和 `subject_event_sources.json` 重做事件证据隔离及范围检查；存在隔离记录却缺少分配信息时停止恢复。已有被接受的后续修订或合并但缺少最终图时，也停止恢复，避免丢失这些决定。仅包含上述两个文件的旧运行仍可恢复查看，但会明确提示事件证据归属尚待审核。
+
 `subject_evidence_review.json` 列出待核实字段；待核实字段保留在 JSON 中，兼容导出保留待核实说明。自动校验的 `valid` 表示结构可使用，不能单独当作事实全部已核实；严格原文检查仍可用 `validate_subject_graph(graph, sources)`，只有明确传入 `allow_unverified_evidence=True` 才允许带标记的证据问题作为警告。
 
 现有逐事件 `SubjectEventReviewer` 同时检查时间逻辑、个人归属和遗漏：允许用局部

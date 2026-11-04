@@ -22,7 +22,7 @@ class BuilderModeTests(unittest.TestCase):
     def test_event_run_does_not_emit_person_artifacts(self):
         self.write_results = lambda state: integration.IntegrationTest.write_results(self, state)
         result = integration.IntegrationTest.run_builder(self)
-        self.assertNotIn("person_index", result.extras)
+        self.assertIsNone(result.extras)
         self.assertFalse((self.path / "person_index.json").exists())
 
     def test_invalid_person_config_stops_before_graph_or_model(self):
