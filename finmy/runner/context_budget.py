@@ -6,12 +6,14 @@ import json
 import math
 import re
 from collections import Counter
+from itertools import groupby
 from pathlib import Path
 from typing import Any
 
 from finmy.runner.relevance_filter import render_document
 
 PRIORITY = {"CORE": 0, "CONTEXT": 1, "REVIEW": 2, "UNCLASSIFIED": 2}
+SEARCH_PHASE = {"initial": 0, "followup": 1, "decision_followup": 2}
 EXCERPT_NOTE = (
     "Verbatim source excerpts follow; gaps are omitted. Offsets refer to raw_text "
     "(Python character offsets, end exclusive), not event times.\n"
@@ -142,8 +144,9 @@ def allocate_context(
 ) -> dict[str, Any]:
     """Reserve a small share for CORE/CONTEXT before expanding any long source.
 
-    Fill higher-priority documents up to their per-document cap, then consider
-    REVIEW documents. P0 labels are reused as-is; source quality is not rescored.
+    Allocate each search phase before the next, so follow-ups use only remaining
+    space and never shrink earlier excerpts. Within each phase, fill CORE/CONTEXT
+    before REVIEW. P0 labels are reused as-is; source quality is not rescored.
     The limit is a CHARACTER budget for source content, not a model token limit.
     """
     options = config.get("all_content_config", {}) or {}
@@ -170,16 +173,20 @@ def allocate_context(
             label = "REVIEW"
         chunks = decision_by_id.get(doc_id, {}).get("chunks", [])
         prepared.append({"document": doc, "label": label, "index": index,
+                         "phase": SEARCH_PHASE.get(doc.get("search_phase"), 0),
                          "candidates": _ranges(doc["raw_text"], chunks or [])})
     if unlimited:
         limit = sum(len(render_document(p["document"]) if include_metadata else
                         p["document"]["raw_text"]) for p in prepared)
-    ordered = sorted(prepared, key=lambda p: (PRIORITY.get(p["label"], 3), p["index"]))
-    high = [p for p in ordered if p["label"] in {"CORE", "CONTEXT"}]
-    review = [p for p in ordered if p["label"] in {"REVIEW", "UNCLASSIFIED"}]
+    ordered = sorted(prepared, key=lambda p: (p["phase"], PRIORITY.get(p["label"], 3), p["index"]))
+    groups = []
+    for _, phase in groupby(ordered, key=lambda p: p["phase"]):
+        phase = list(phase)
+        groups.extend([p for p in phase if p["label"] in labels]
+                      for labels in ({"CORE", "CONTEXT"}, {"REVIEW", "UNCLASSIFIED"}))
     selected: dict[str, tuple[str, list[tuple[int, int]]]] = {}
     remaining = limit
-    for group in (high, review):
+    for group in groups:
         # First secure breadth within the group, then expand. CONTEXT gets a seed
         # before long CORE documents can consume the entire remaining budget.
         for target in (seed, cap):
@@ -205,6 +212,7 @@ def allocate_context(
         records.append({
             "document_id": doc["document_id"], "title": doc.get("title", ""),
             "url": doc.get("url", ""), "relevance": item["label"],
+            "search_phase": doc.get("search_phase", "initial"),
             "original_chars": len(doc["raw_text"]), "included_source_chars": chars,
             "builder_chars": len(value), "included": bool(value),
             "truncated": bool(value) and chars < len(doc["raw_text"]),

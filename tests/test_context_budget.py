@@ -25,6 +25,33 @@ def config(limit=60000, cap=12000, seed=2000):
 
 
 class ContextBudgetTest(unittest.TestCase):
+    def test_followups_never_shrink_earlier_excerpts(self):
+        initial = [document("core", "Original dated evidence. " * 500),
+                   document("review", "Original uncertain evidence. " * 500, "REVIEW")]
+        body = document("body", "Recovered meeting text. " * 500, search_phase="followup")
+        extra = document("extra", "Additional investment details. " * 500,
+                         search_phase="decision_followup")
+        settings = config(7500, cap=2200)
+        first = allocate_context(initial, [], settings)
+        second = allocate_context([body] + initial, [], settings)
+        final = allocate_context([extra, body] + initial, [], settings)
+        self.assertEqual(second["contents"][:2], first["contents"])
+        self.assertEqual(final["contents"][:3], second["contents"])
+        self.assertEqual(final["report"]["documents"][:3], second["report"]["documents"])
+        self.assertEqual(len(final["contents"]), 4)
+        self.assert_valid(final, initial + [body, extra], 7500, cap=2200)
+
+    def test_full_initial_budget_omits_followup_without_displacing_sources(self):
+        initial = [document("core", "Original dated evidence. " * 500)]
+        extra = document("extra", "Additional investment details. " * 500,
+                         search_phase="decision_followup")
+        settings = config(2000)
+        first = allocate_context(initial, [], settings)
+        final = allocate_context([extra] + initial, [], settings)
+        self.assertEqual(first["contents"], final["contents"])
+        self.assertEqual(first["report"]["documents"], final["report"]["documents"][:1])
+        self.assertFalse(final["report"]["documents"][-1]["included"])
+
     def test_packing_merges_only_adjacent_source_slices(self):
         from finmy.runner.context_budget import _fit
         text = "abcdefghij" * 100

@@ -168,7 +168,7 @@ def collect_decision_followup(filtered, query, keywords, subject, config, save_d
         docs = collect_subject_sources(
             query, keywords, subject, {**options, "max_followup_queries": limit},
             search, parse, target, progress=progress, followup_tasks=tasks,
-            known_urls=known_urls,
+            known_urls=known_urls, known_documents=filtered["documents"],
         )
         report.update(status="sources_found" if docs else "no_new_sources", new_sources=len(docs))
         # A usable page is not proof the semantic gap was resolved. The builder

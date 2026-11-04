@@ -96,7 +96,7 @@ class ScopedServiceTests(unittest.TestCase):
              patch("finmy.runner.decision_followup._live_completion",
                    return_value=lambda *args: {"gaps": [gap()]}):
             contents = service.run_reconstruction("Buffett investments 2022–2023", [], None)
-        self.assertEqual([c[2] for c in calls], [10, 20, 10, 20])
+        self.assertEqual([c[2] for c in calls], [10, 20, 2, 5])
         self.assertTrue(all(c[3:] == ("2022-01-01", "2023-12-31") for c in calls))
         self.assertTrue(any(QUOTE in text for text in contents))
         self.assertTrue(any(reason in text for text in contents))

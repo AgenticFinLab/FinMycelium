@@ -3,24 +3,14 @@ import copy
 import re
 
 from finmy.subject_graph.evidence import restore_source_quotes
-from finmy.subject_graph.event_sources import _quotes, restrict_event_evidence
-from finmy.subject_graph.repair import apply_graph_patch
-from finmy.subject_graph.validation import date_interval, validate_subject_graph
+from finmy.subject_graph.event_sources import _quotes, exclude_outside_coverage
+from finmy.subject_graph.coverage_review import validate_review
+from finmy.subject_graph.repair import _tokens, apply_graph_patch
+from finmy.subject_graph.validation import date_interval
 
 
 def _report():
     return {"accepted": [], "rejected": []}
-
-
-def _checked(graph, allocation, sources):
-    report = validate_subject_graph(graph, [s["content"] for s in sources],
-                                    allow_unverified_evidence=True)
-    if not report["valid"]:
-        raise ValueError("; ".join(e["message"] for e in report["errors"][:3]))
-    checked, conflicts = restrict_event_evidence(
-        graph, {e["event_id"]: e for e in graph["events"]}, allocation, sources)
-    if conflicts or checked != graph:
-        raise ValueError("Correction conflicts with event source allocation or dates")
 
 
 def _strict_field(field, sources):
@@ -36,71 +26,163 @@ def _strict_field(field, sources):
         raise ValueError("Known correction requires evidence")
 
 
-def apply_event_corrections(graph, event_id, corrections, event_sources, sources):
-    """Apply one event's correction groups atomically, using original array indices.
+_REPLACE_FIELD = re.compile(
+    r"(?:title|subject_relevance|start_time|end_time|descriptions/\d+|"
+    r"participations/\d+/(?:role|start_time|end_time)|"
+    r"actions/\d+/(?:action_type|timestamp|details/\d+)|"
+    r"transactions/\d+/(?:name|timestamp|from_entity_id|to_entity_id|details/\d+))")
+_RECORD_IDS = {"actions": "action_id", "transactions": "transaction_id",
+               "participations": "participation_id"}
+_LIST_ITEM = r"(?:descriptions|participations|actions|transactions)/{item}|(?:actions|transactions)/\d+/details/{item}"
 
-    Paths are /event/... . Only complete VF replacements, evidenced actor changes,
-    and removal of individual records are allowed. Unchanged fields remain intact.
+
+def _event_pointer(event, path, append=False):
+    """Resolve indices or stable row IDs against the unchanged review input."""
+    parts = _tokens(path)
+    if parts[0] != "event" or len(parts) < 2:
+        raise ValueError("Correction path must start with /event/")
+    value, resolved = event, []
+    for position, token in enumerate(parts[1:]):
+        if isinstance(value, list):
+            if append and token == "-" and position == len(parts) - 2:
+                return "/".join([*resolved, "-"]), value
+            if token.isdecimal():
+                key = int(token)
+            else:
+                id_key = _RECORD_IDS.get(resolved[-1])
+                matches = [i for i, row in enumerate(value)
+                           if isinstance(row, dict) and id_key and row.get(id_key) == token]
+                if len(matches) != 1:
+                    raise ValueError("Correction row ID does not identify one original record")
+                key = matches[0]
+            if key >= len(value):
+                raise ValueError("Correction target does not exist in the reviewed event")
+        elif isinstance(value, dict) and token in value:
+            key = token
+        else:
+            raise ValueError("Correction target does not exist in the reviewed event")
+        resolved.append(str(key))
+        value = value[key]
+    return "/".join(resolved), value
+
+
+def _strict_value(value, sources):
+    """Apply the same evidence rule to a field or every field of an added row."""
+    if isinstance(value, dict):
+        if "value" in value:
+            _strict_field(value, sources)
+        else:
+            for child in value.values():
+                _strict_value(child, sources)
+    elif isinstance(value, list):
+        for child in value:
+            _strict_value(child, sources)
+
+
+def _correction_operations(event, group, sources):
+    if (not isinstance(group, dict) or set(group) != {"reason", "patches"}
+            or not isinstance(group["reason"], str) or not group["reason"].strip()
+            or not isinstance(group["patches"], list) or not group["patches"]):
+        raise ValueError("Each correction requires reason and nonempty patches")
+    operations = []
+    for patch in group["patches"]:
+        if not isinstance(patch, dict):
+            raise ValueError("Correction patch must be an object")
+        op = patch.get("op")
+        required = {"op", "path"} if op == "remove" else {"op", "path", "value"}
+        if op not in ("replace", "remove", "add") or set(patch) != required:
+            raise ValueError("Correction requires replace, remove or append with its matching fields")
+        suffix, _ = _event_pointer(event, patch["path"], append=op == "add")
+        operations.append({**copy.deepcopy(patch), "path": suffix})
+    for operation in operations:
+        op, path = operation["op"], operation["path"]
+        actor = re.fullmatch(r"actions/(\d+)/actor_id", path)
+        if op == "remove":
+            if not re.fullmatch(_LIST_ITEM.format(item=r"\d+"), path):
+                raise ValueError("Only individual event records or details may be removed")
+            continue
+        if op == "replace" and actor:
+            if operation["value"] not in {p["entity_id"] for p in event["participations"]}:
+                raise ValueError("Corrected actor must already participate")
+            prefix = f"actions/{actor[1]}/"
+            if not any(p["op"] in ("replace", "add") and
+                       (p["path"] == prefix + "action_type" or p["path"].startswith(prefix + "details/"))
+                       for p in operations):
+                raise ValueError("Actor correction requires an evidenced action correction in the same group")
+            continue
+        if op == "add":
+            if not re.fullmatch(_LIST_ITEM.format(item="-"), path):
+                raise ValueError("Correction add must append one event record or detail using /-")
+        elif not _REPLACE_FIELD.fullmatch(path):
+            raise ValueError("Correction cannot replace records, collections or IDs")
+        value, _ = restore_source_quotes(operation["value"], [s["content"] for s in sources])
+        if op == "replace":
+            _strict_field(value, sources)
+        else:
+            _strict_value(value, sources)
+        operation["value"] = value
+    return operations
+
+
+def _apply_corrections(graph, event_index, operations):
+    """Replay accepted groups on the original snapshot, preserving array indices."""
+    if len(operations) > 128:
+        raise ValueError("Corrections may contain at most 128 operations")
+    paths = []
+    for operation in operations:
+        parts = operation["path"].split("/")
+        if any((parts[:len(other)] == other or other[:len(parts)] == parts)
+               and not (parts == other and operation["op"] == "add" and parts[-1] == "-")
+               for other in paths):
+            raise ValueError("Correction paths overlap an accepted correction")
+        paths.append(parts)
+    candidate = copy.deepcopy(graph)
+    event = candidate["events"][event_index]
+    for operation in operations:
+        if operation["op"] == "add":
+            _, target = _event_pointer(event, "/event/" + operation["path"], append=True)
+            target.append(copy.deepcopy(operation["value"]))
+    edits = [{**operation, "path": f"/events/{event_index}/" + operation["path"]}
+             for operation in operations if operation["op"] != "add"]
+    return apply_graph_patch(candidate, {"patches": edits}, [{"path": f"/events/{event_index}"}])
+
+
+def apply_event_corrections(graph, event_id, corrections, event_sources, sources):
+    """Apply independent atomic groups; all paths refer to the original event.
+
+    Invalid groups are reported without discarding other accepted corrections.
+    Appends, full evidenced field replacements and record removals share the
+    same source and graph checks. Missing removal targets are never guessed.
     """
-    report = _report()
-    if corrections == []:
+    report = {**_report(), "unchanged": []}
+    if isinstance(corrections, dict):
+        corrections = [corrections]
+    if not isinstance(corrections, list) or len(corrections) > 16:
+        report["rejected"].append({"corrections": copy.deepcopy(corrections),
+                                   "reason": "corrections must contain at most 16 groups"})
         return graph, report
-    try:
-        if not isinstance(corrections, list) or len(corrections) > 16:
-            raise ValueError("corrections must contain at most 16 groups")
-        if any(not isinstance(group, dict) for group in corrections):
-            raise ValueError("Correction groups must be objects")
-        index = next(i for i, e in enumerate(graph["events"]) if e["event_id"] == event_id)
-        event = graph["events"][index]
-        allowed = event_sources.get(event_id, [])
-        operations = []
-        for group in corrections:
-            if (not isinstance(group, dict) or set(group) != {"reason", "patches"}
-                    or not isinstance(group["reason"], str) or not group["reason"].strip()
-                    or not isinstance(group["patches"], list) or not group["patches"]):
-                raise ValueError("Each correction requires reason and nonempty patches")
-            for operation in group["patches"]:
-                if not isinstance(operation, dict):
-                    raise ValueError("Correction patch must be an object")
-                op, path = operation.get("op"), operation.get("path", "")
-                if not isinstance(path, str) or not path.startswith("/event/"):
-                    raise ValueError("Correction path must start with /event/")
-                suffix = path[len("/event/"):]
-                if op == "replace":
-                    is_field = re.fullmatch(r"(?:title|subject_relevance|start_time|end_time|descriptions/\d+|"
-                        r"participations/\d+/(?:role|start_time|end_time)|"
-                        r"actions/\d+/(?:action_type|timestamp|details/\d+)|"
-                        r"transactions/\d+/(?:name|timestamp|from_entity_id|to_entity_id|details/\d+))", suffix)
-                    actor = re.fullmatch(r"actions/(\d+)/actor_id", suffix)
-                    operation = copy.deepcopy(operation)
-                    if is_field:
-                        value, _ = restore_source_quotes(operation.get("value"), [s["content"] for s in allowed])
-                        _strict_field(value, allowed)
-                        operation["value"] = value
-                    elif actor:
-                        if operation.get("value") not in {p["entity_id"] for p in event["participations"]}:
-                            raise ValueError("Corrected actor must already participate")
-                        prefix = f"/event/actions/{actor[1]}/"
-                        if not any(p.get("op") == "replace" and (p.get("path") == prefix + "action_type"
-                            or str(p.get("path", "")).startswith(prefix + "details/"))
-                            for g in corrections for p in g.get("patches", []) if isinstance(p, dict)):
-                            raise ValueError("Actor correction requires an evidenced action correction")
-                    else:
-                        raise ValueError("Correction cannot replace records, collections or IDs")
-                elif op == "remove":
-                    if not re.fullmatch(r"(?:descriptions|participations|actions|transactions)/\d+|(?:actions|transactions)/\d+/details/\d+", suffix):
-                        raise ValueError("Only individual event records or details may be removed")
-                else:
-                    raise ValueError("Corrections support replace and remove only")
-                operations.append({**operation, "path": f"/events/{index}/" + suffix})
-        candidate = apply_graph_patch(graph, {"patches": operations}, [{"path": f"/events/{index}"}])
-        _checked(candidate, event_sources, sources)
-        report["accepted"] = copy.deepcopy(corrections)
+    index = next((i for i, e in enumerate(graph["events"]) if e["event_id"] == event_id), None)
+    if index is None:
+        report["rejected"].append({"reason": "Correction event does not exist", "event_id": event_id})
+        return graph, report
+    event, result, accepted = graph["events"][index], graph, []
+    for group in corrections:
+        try:
+            operations = _correction_operations(event, group, event_sources.get(event_id, []))
+            candidate = _apply_corrections(graph, index, [*accepted, *operations])
+            candidate, scope_exclusions = exclude_outside_coverage(candidate)
+            validate_review(candidate, event_sources, sources)
+            if candidate == result:
+                report["unchanged"].append(copy.deepcopy(group))
+                continue
+            result, accepted = candidate, [*accepted, *operations]
+            report["accepted"].append(copy.deepcopy(group))
+            report["scope_exclusions"] = scope_exclusions
+        except (ValueError, KeyError, TypeError, IndexError) as exc:
+            report["rejected"].append({"correction": copy.deepcopy(group), "reason": str(exc)})
+    if report["accepted"]:
         report["original_event"] = copy.deepcopy(event)
-        return candidate, report
-    except (ValueError, KeyError, TypeError, StopIteration, IndexError) as exc:
-        report["rejected"].append({"corrections": copy.deepcopy(corrections), "reason": str(exc)})
-        return graph, report
+    return result, report
 
 
 def _family(event):
@@ -118,7 +200,10 @@ def correction_exclusions(event_id, report):
     records = []
     for group in report.get("accepted", []):
         for patch in group["patches"]:
-            parts = patch["path"].split("/")[2:]
+            if patch["op"] == "add":
+                continue
+            suffix, _ = _event_pointer(original, patch["path"])
+            parts = suffix.split("/")
             if parts[0] in ("actions", "transactions"):
                 paths = [parts[:2]]
                 if len(parts) == 4 and parts[2] == "details":
@@ -197,7 +282,7 @@ def apply_event_merges(graph, merges, event_sources, sources):
             selected = dict(allocation)
             selected[keep_id] = list({s["source_id"]: s for s in [*allocation.get(keep_id, []), *allocation.get(remove_id, [])]}.values())
             selected.pop(remove_id, None)
-            _checked(candidate, selected, sources)
+            validate_review(candidate, selected, sources)
             result, allocation = candidate, selected
             report["accepted"].append({**copy.deepcopy(proposal), "original_event": copy.deepcopy(remove)})
         except (ValueError, KeyError, TypeError, StopIteration) as exc:

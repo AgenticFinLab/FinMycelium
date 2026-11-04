@@ -58,13 +58,14 @@ class DecisionFollowupTests(unittest.TestCase):
         before = copy.deepcopy(self.filtered)
         docs = self.run_review({"gaps": [gap(), gap(missing=["personal_attribution"])]})
         self.assertEqual([(p, count, start, end) for p, q, count, start, end in self.calls],
-                         [("bocha", 10, "2022-01-01", "2023-12-31"),
-                          ("baidu", 20, "2022-01-01", "2023-12-31")])
+                         [("bocha", 2, "2022-01-01", "2023-12-31"),
+                          ("baidu", 5, "2022-01-01", "2023-12-31")])
         self.assertEqual(self.calls[0][1], self.calls[1][1])
         self.assertIn("rationale", self.calls[0][1])
         self.assertIn("who made", self.calls[0][1])
         self.assertEqual(len(self.parsed), 1)
         self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0]["search_phase"], "decision_followup")
         self.assertNotIn("known_details", docs[0]["raw_text"])
         self.assertEqual(before, self.filtered)
         report = json.loads((self.path / "decision_followup/decision_gap_review.json").read_text())
@@ -112,7 +113,29 @@ class DecisionFollowupTests(unittest.TestCase):
         self.config["subject_search"]["max_decision_followup_queries"] = 1
         self.run_review({"gaps": [gap(), gap(action="holding")]})
         self.assertEqual(len(self.calls), 1)
-        self.assertEqual(self.calls[0][2], 10)
+        self.assertEqual(self.calls[0][2], 2)
+
+    def test_duplicate_body_under_a_new_title_and_url_is_not_added(self):
+        original = self.filtered["documents"][0]
+        original["raw_text"] = "Title:\nOriginal report\n\nContent:\n" + QUOTE
+        docs = self.run_review({"gaps": [gap()]},
+                               parse=lambda url: {"text": QUOTE.replace(" ", "  "), "links": []})
+        self.assertEqual(docs, [])
+        self.assertEqual(len(self.calls), 2)
+        report = json.loads((self.path / "decision_followup/subject_search_report.json").read_text())
+        self.assertTrue(all(row["reason"] == "duplicate_body" for row in report["candidates"]))
+
+    def test_both_followups_clip_excess_provider_results(self):
+        def search(provider, query, count, start, end):
+            self.calls.append((provider, query, count, start, end))
+            return [{"url": f"https://example.com/{provider}/{i}", "title": "Explanation",
+                     "published_at": "2023-05-06"} for i in range(count + 3)]
+
+        docs = self.run_review({"gaps": [gap()]}, search=search,
+                               parse=lambda url: {"text": "Buffett explained the investment. " + url, "links": []})
+        self.assertEqual([call[2] for call in self.calls], [2, 5])
+        self.assertEqual(len(docs), 7)
+
 
     def test_bilingual_names_use_only_variants_anchored_in_quotes(self):
         for label, quote in (("比亚迪 (BYD)", "Berkshire sold BYD shares."),

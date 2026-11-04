@@ -16,6 +16,12 @@ from finmy.runner.relevance_filter import make_document
 from finmy.runner.scoped_search import plan_search, publication_allowed
 
 
+def _content_hash(text):
+    # Search archives include a title wrapper; deduplicate the actual body.
+    body = text.split("\n\nContent:\n", 1)[-1]
+    return hashlib.sha256(re.sub(r"\s+", " ", body).strip().encode()).hexdigest()
+
+
 def _url(value):
     try:
         p = urlsplit(value)
@@ -62,7 +68,7 @@ def _critical_topic(title, text=""):
 
 
 def collect_subject_sources(query, keywords, subject, options, search, parse, save_dir, progress=None,
-                            *, followup_tasks=None, known_urls=()):
+                            *, followup_tasks=None, known_urls=(), known_documents=()):
     options = options or {}
     known_urls = {_url(url) for url in known_urls}
     plan = plan_search(query, keywords, subject, options)
@@ -81,7 +87,8 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
               "summary": {"parse_calls": 0, "followup_queries": 0}}
     target = Path(save_dir)
     target.mkdir(parents=True, exist_ok=True)
-    documents, content_hashes = [], set()
+    documents = []
+    content_hashes = {_content_hash(doc["raw_text"]) for doc in known_documents}
     cache, fetched, good, gaps = {}, set(), set(), {}
     started = time.monotonic()
     max_seconds = options.get("max_elapsed_seconds", 300)
@@ -103,11 +110,11 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
         (target / "subject_search_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         (target / "subject_search_sources.json").write_text(json.dumps(documents, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def candidate(row, task, provider, child=False):
+    def candidate(row, task, provider, phase, child=False):
         nonlocal detail_spent
         record = {"url": row.get("url"), "title": row.get("title", ""), "provider": provider,
                   "published_at": row.get("published_at"), "start": task["start"], "end": task["end"],
-                  "status": "rejected", "linked_body": child}
+                  "status": "rejected", "linked_body": child, "phase": phase}
         report["candidates"].append(record)
         url = _url(row.get("url"))
         if not url:
@@ -166,16 +173,17 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
                 links = [link for link in body.get("links", []) if isinstance(link, dict)
                          and re.search(r"transcript|full.text|read.more|实录|全文|文字|访谈|股东信", str(link.get("text", "")), re.I)]
                 for link in links[:limits["max_links_per_index"]]:
-                    candidate({"url": link.get("url"), "title": link.get("text", ""), "published_at": None}, {**task, "gap_id": key, "topic": topic}, provider, child=True)
+                    candidate({"url": link.get("url"), "title": link.get("text", ""), "published_at": None}, {**task, "gap_id": key, "topic": topic}, provider, phase, child=True)
             return
         good.add(key)
-        digest = hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode()).hexdigest()
+        digest = _content_hash(text)
         if digest in content_hashes:
             record.update(status="duplicate", reason="duplicate_body")
             return
         content_hashes.add(digest)
         doc = make_document("Title:\n" + row.get("title", "") + "\n\nContent:\n" + text,
                             {"title": row.get("title", ""), "url": url, "datepublished": published}, provider)
+        doc["search_phase"] = phase
         documents.append(doc)
         record.update(status="accepted", reason="body_available")
 
@@ -210,11 +218,14 @@ def collect_subject_sources(query, keywords, subject, options, search, parse, sa
         log_progress(f"{label}: Publication date range: {task['start']} to {task['end']}.")
         try:
             count = {"bocha": 10, "baidu": 20}[provider]
+            if phase != "initial":
+                count //= 4
+            entry["requested_count"] = count
             rows = search(provider, task["query"], count, task["start"], task["end"])
             entry["result_count"] = len(rows)
             log_progress(f"{label}: Get {len(rows)} search results.")
             for row in rows[:count]:
-                candidate(row, task, provider)
+                candidate(row, task, provider, phase)
         except Exception as exc:
             entry["error"] = type(exc).__name__ + ": search failed"
             log_progress(f"{label}: Search failed ({type(exc).__name__}).")

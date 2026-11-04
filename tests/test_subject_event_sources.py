@@ -205,7 +205,7 @@ class EventSourceTests(unittest.TestCase):
                 self.assertEqual(graph["events"][0]["start_time"], self.plan["events"][0]["start_time"])
                 review = self.saved["subject_event_evidence_review"]
                 self.assertEqual(review[0]["record"], original)
-                self.assertIn("Action date is outside", review[0]["message"])
+                self.assertIn("date is outside", review[0]["message"])
                 self.assertEqual(self.saved["RawSubjectGraph"]["events"][0]["actions"][0], original)
                 self.assertTrue(any("event attribution needs review" in w["message"] for w in report["warnings"]))
                 self.assertNotIn("SubjectGraphRepair", state["agent_executed"])

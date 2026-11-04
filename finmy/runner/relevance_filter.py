@@ -320,7 +320,8 @@ def filter_documents(
             raise ValueError("Each document must have string raw_text")
         docs.append({**make_document(item["raw_text"], {
             **item, "datepublished": item.get("published_at", "")
-        }, str(item.get("source", "unknown"))), "document_id": f"DOC_{index:04d}"})
+        }, str(item.get("source", "unknown"))), "document_id": f"DOC_{index:04d}",
+            "search_phase": item.get("search_phase", "initial")})
     destination = Path(save_dir)
     _write_json(destination / "retrieved_documents.json", docs)
     if subject_mode:

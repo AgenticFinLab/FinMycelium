@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from finmy.runner.relevance_filter import filter_documents, make_document
+from finmy.runner.context_budget import allocate_context
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -109,6 +110,26 @@ class ContextBudgetIntegrationTest(unittest.TestCase):
     def test_legacy_helper_skips_one_oversized_document(self):
         instance = self.service.ReconstructionService({"all_content_config": {"max_content_length": 20}})
         self.assertEqual(instance._limit_content_length(["x" * 50, "later", "doc"]), ["later", "doc"])
+
+    def test_filter_preserves_search_phases_before_budgeting(self):
+        docs = [{**make_document("Evidence. " * 500, {"title": "CORE " + phase}, "bocha"),
+                 "search_phase": phase}
+                for phase in ("initial", "followup", "decision_followup")]
+        for enabled in (False, True):
+            with self.subTest(filter_enabled=enabled):
+                config = {"relevance_filter": {"enabled": enabled},
+                          "all_content_config": {"max_content_length": 4000}}
+                first = filter_documents(docs[:1], "fixture", [], config, self.path,
+                                         completion=self.completion)
+                combined = filter_documents(docs, "fixture", [], config, self.path,
+                                            completion=self.completion)
+                self.assertEqual([d["search_phase"] for d in combined["documents"]],
+                                 [d["search_phase"] for d in docs])
+                before = allocate_context(first["documents"], first["decisions"], config,
+                                          include_metadata=enabled)
+                after = allocate_context(combined["documents"], combined["decisions"], config,
+                                         include_metadata=enabled)
+                self.assertEqual(before["contents"], after["contents"])
 
 
 if __name__ == "__main__":

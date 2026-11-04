@@ -2,6 +2,8 @@
 import copy
 import re
 
+from finmy.subject_graph.validation import date_interval
+
 
 _PROTECTED = {"schema_version", "graph_id", "subject_id", "subject_type",
               "coverage_start", "coverage_end"}
@@ -37,7 +39,7 @@ def apply_graph_patch(graph, response, errors):
     patches = response['patches']
     if not isinstance(patches, list) or len(patches) > 128:
         raise ValueError("Repair patches must be a list of at most 128 operations")
-    scopes = []
+    scopes, temporal_scopes = [], []
     for error in errors:
         path = error.get('path', '')
         if path and path != '/':
@@ -45,6 +47,8 @@ def apply_graph_patch(graph, response, errors):
             # A reference/date error may need a related field in the same record.
             scopes.append(parts[:2] if parts[0] in ('events', 'entities', 'relations', 'descriptions')
                           and len(parts) >= 2 else parts[:1])
+            if error.get('message') in ('Time is wholly outside the containing interval', 'Start is after end'):
+                temporal_scopes.append(parts[:2])
     operations, paths = [], []
     result = copy.deepcopy(graph)
     for patch in patches:
@@ -75,6 +79,14 @@ def apply_graph_patch(graph, response, errors):
                 raise ValueError("Repair target does not exist")
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Repair target does not exist") from exc
+        if op == 'replace' and (isinstance(parent[key], list) or
+                                isinstance(parent[key], dict) and 'value' not in parent[key]):
+            raise ValueError("Repair must replace individual fields, not records or collections")
+        field = parts[-2] if parts[-1] == 'value' and len(parts) > 1 else parts[-1]
+        if (op == 'replace' and field in ('start_time', 'end_time', 'timestamp')
+                and any(parts[:len(scope)] == scope for scope in temporal_scopes)
+                and date_interval(parent[key]) and not date_interval(patch['value'])):
+            raise ValueError("Temporal repair cannot erase a known date to bypass an interval conflict; correct the occurrence assignment")
         paths.append(parts)
         operations.append((op, parent, key, patch.get('value')))
     # Resolve every target before mutation. Delete array elements from the end

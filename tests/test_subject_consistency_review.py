@@ -4,7 +4,7 @@ import unittest
 import test_subject_graph_builder as fixtures
 from test_subject_graph_builder import config, input_, vf, SOURCE
 from finmy.subject_graph.build import run_subject_build
-from finmy.subject_graph.consistency_review import apply_event_corrections, apply_event_merges
+from finmy.subject_graph.consistency_review import apply_event_corrections, apply_event_merges, correction_exclusions
 
 class ConsistencyReviewTests(unittest.TestCase):
     def setUp(self):
@@ -73,13 +73,73 @@ class ConsistencyReviewTests(unittest.TestCase):
         self.assertTrue(report["accepted"])
         self.assertIn("unconfirmed", result["events"][0]["actions"][0]["action_type"]["value"])
 
-    def test_failed_group_does_not_partially_remove_supported_content(self):
+    def test_failed_group_does_not_discard_independent_corrections(self):
         result, report = apply_event_corrections(self.graph, "E1", [
             {"reason": "Unsupported context", "patches": [{"op": "remove", "path": "/event/descriptions/0"}]},
-            {"reason": "Invalid precision", "patches": [{"op": "replace", "path": "/event/actions/0/timestamp", "value": vf("2024")}]}], self.allocation, self.sources)
+            {"reason": "Invalid precision", "patches": [{"op": "replace", "path": "/event/actions/0/timestamp", "value": vf("2024")}]},
+            {"reason": "Add supported explanation", "patches": [{"op": "add", "path": "/event/actions/0/details/-", "value": vf("The person expressed a view")}]}], self.allocation, self.sources)
+        self.assertEqual(result["events"][0]["descriptions"], [])
+        self.assertEqual(result["events"][0]["actions"][0]["timestamp"], self.graph["events"][0]["actions"][0]["timestamp"])
+        self.assertEqual(len(result["events"][0]["actions"][0]["details"]), 2)
+        self.assertEqual(len(report["accepted"]), 2)
+        self.assertEqual(len(report["rejected"]), 1)
+
+    def test_one_group_remains_atomic(self):
+        result, report = self.correct([
+            {"op": "remove", "path": "/event/descriptions/0"},
+            {"op": "replace", "path": "/event/actions/0/timestamp", "value": vf("2024")}])
         self.assertEqual(result, self.graph)
-        self.assertFalse(report["accepted"])
-        self.assertTrue(report["rejected"])
+        self.assertEqual(len(report["rejected"]), 1)
+
+    def test_stale_remove_rejects_only_its_group(self):
+        self.graph["events"][0]["actions"] = []
+        result, report = apply_event_corrections(self.graph, "E1", [
+            {"reason": "Already removed action", "patches": [{"op": "remove", "path": "/event/actions/0"}]},
+            {"reason": "Documented context", "patches": [{"op": "replace", "path": "/event/descriptions/0", "value": vf("Documented explanation")}]}], self.allocation, self.sources)
+        self.assertEqual(len(report["accepted"]), 1)
+        self.assertIn("does not exist", report["rejected"][0]["reason"])
+        self.assertEqual(result["events"][0]["descriptions"], [vf("Documented explanation")])
+
+    def test_stable_ids_and_exclusions_keep_original_targets_after_removal(self):
+        event = self.graph["events"][0]
+        action = copy.deepcopy(event["actions"][0])
+        action["action_id"] = "E1_A2"
+        action["details"] = [vf("Original second action")]
+        event["actions"].append(action)
+        result, report = apply_event_corrections(self.graph, "E1", [
+            {"reason": "Remove unsupported action", "patches": [{"op": "remove", "path": "/event/actions/E1_A1"}]},
+            {"reason": "Qualify second action", "patches": [{"op": "replace", "path": "/event/actions/E1_A2/details/0", "value": vf("Qualified second action")}]},
+            {"reason": "Add context", "patches": [{"op": "add", "path": "/event/actions/E1_A2/details/-", "value": vf("Context")}]}], self.allocation, self.sources)
+        self.assertEqual(len(report["accepted"]), 3, report)
+        self.assertEqual(result["events"][0]["actions"][0]["action_id"], "E1_A2")
+        exclusions = correction_exclusions("E1", report)
+        self.assertEqual([r["record"]["action_id"] for r in exclusions if "action_id" in r["record"]], ["E1_A1", "E1_A2"])
+        self.assertEqual(exclusions[-1]["record"], vf("Original second action"))
+
+    def test_appends_full_action_with_same_source_and_schema_guards(self):
+        action = copy.deepcopy(self.graph["events"][0]["actions"][0])
+        action["action_id"] = "E1_A2"
+        result, report = self.correct([
+            {"op": "add", "path": "/event/actions/-", "value": action},
+            {"op": "add", "path": "/event/descriptions/-", "value": vf("Context")},
+            {"op": "add", "path": "/event/descriptions/-", "value": vf("Further context")}])
+        self.assertTrue(report["accepted"], report)
+        self.assertEqual(len(result["events"][0]["actions"]), 2)
+        self.assertEqual(correction_exclusions("E1", report), [])
+        for invalid in ({**action, "actor_id": "missing"},
+                        {**action, "details": [vf("Unsupported", "Fabricated source")]},
+                        {**action, "action_id": "E1_A1"}):
+            result, report = self.correct([{"op": "add", "path": "/event/actions/-", "value": invalid}])
+            self.assertEqual(result, self.graph)
+            self.assertTrue(report["rejected"])
+
+    def test_conflicting_groups_do_not_overwrite_accepted_change(self):
+        result, report = apply_event_corrections(self.graph, "E1", [
+            {"reason": "First correction", "patches": [{"op": "replace", "path": "/event/actions/0/details/0", "value": vf("First")}]},
+            {"reason": "Conflicting correction", "patches": [{"op": "remove", "path": "/event/actions/E1_A1"}]}], self.allocation, self.sources)
+        self.assertEqual(result["events"][0]["actions"][0]["details"], [vf("First")])
+        self.assertEqual(len(report["accepted"]), 1)
+        self.assertEqual(len(report["rejected"]), 1)
 
     def letters(self):
         quote = "The annual shareholder letter was published on February 25, 2023."

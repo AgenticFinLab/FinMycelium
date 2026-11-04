@@ -90,6 +90,66 @@ def find_statement_duplicates(graph):
     return duplicates
 
 
+def validate_review(graph, allocation, sources):
+    """Use the same graph, date and assigned-evidence checks for every review edit."""
+    report = validate_subject_graph(graph, source_texts=[s["content"] for s in sources],
+                                    allow_unverified_evidence=True)
+    if not report["valid"]:
+        raise ValueError("; ".join(f"{e['path']}: {e['message']}" for e in report["errors"][:3]))
+    checked, conflicts = restrict_event_evidence(
+        graph, {e["event_id"]: e for e in graph["events"]}, allocation, sources)
+    if conflicts or checked != graph:
+        raise ValueError("Review edit conflicts with event evidence or dates")
+
+
+def apply_statement_merges(graph, proposals, event_sources, sources):
+    """Apply explicit duplicate-speech decisions from the existing global review.
+
+    A shared quote is only a candidate. The reviewer must identify the surviving
+    occurrence; its date, actor and source evidence are checked before any removal.
+    Events and transactions are preserved.
+    """
+    if not isinstance(proposals, list) or len(proposals) > 12:
+        raise ValueError("statement_merges must contain at most 12 objects")
+    result, allocation = copy.deepcopy(graph), dict(event_sources)
+    report = {"accepted": [], "rejected": []}
+    for item in proposals:
+        try:
+            required = {"keep_event_id", "keep_action_id", "remove_event_id", "remove_action_id", "reason"}
+            if (not isinstance(item, dict) or set(item) != required
+                    or any(not isinstance(v, str) or not v.strip() for v in item.values())):
+                raise ValueError("Statement merge requires both event/action IDs and a reason")
+            candidate, selected = copy.deepcopy(result), dict(allocation)
+            events = {e["event_id"]: e for e in candidate["events"]}
+            keep, remove = events[item["keep_event_id"]], events[item["remove_event_id"]]
+            kept = next(a for a in keep["actions"] if a["action_id"] == item["keep_action_id"])
+            removed = next(a for a in remove["actions"] if a["action_id"] == item["remove_action_id"])
+            if kept is removed:
+                raise ValueError("Statement merge must identify two different actions")
+            if not repeated_statement(removed, {"events": [{"event_id": keep["event_id"], "actions": [kept]}]}):
+                raise ValueError("Statements need the same speaker, precise date and shared identifying evidence")
+            when = date_interval(kept["timestamp"])
+            start, end = date_interval(keep["start_time"]), date_interval(keep["end_time"])
+            if (not start or start != end or start[2] != "day"
+                    or not start[0] <= when[0] <= when[1] <= end[1]):
+                raise ValueError("Surviving event must identify the statement's actual day")
+            details = list(removed["details"])
+            if _key(kept["action_type"]) != _key(removed["action_type"]):
+                details.append(removed["action_type"])
+            _check_review_flags(details)
+            _append_unique(kept["details"], details)
+            remove["actions"].remove(removed)
+            selected[keep["event_id"]] = list({s["source_id"]: s for s in
+                [*selected.get(keep["event_id"], []), *selected.get(remove["event_id"], [])]}.values())
+            validate_review(candidate, selected, sources)
+            result, allocation = candidate, selected
+            report["accepted"].append({**copy.deepcopy(item), "removed_record": copy.deepcopy(removed)})
+        except (ValueError, KeyError, TypeError, StopIteration) as exc:
+            report["rejected"].append({"record": copy.deepcopy(item),
+                                       "reason": str(exc) or "Statement merge target does not exist"})
+    return result, allocation, report
+
+
 def apply_coverage_additions(graph, proposal, event_sources, sources, max_events, excluded_records=()):
     """Validate each event's additions atomically; preserve all existing records.
 
@@ -193,14 +253,7 @@ def apply_coverage_additions(graph, proposal, event_sources, sources, max_events
             quotes = list(_quotes(item))
             if not quotes or any(not any(q in s["content"] for s in selected.get(eid, [])) for q in quotes):
                 raise ValueError("Supplement evidence is absent from this event's assigned sources")
-            targets = {e["event_id"]: e for e in candidate["events"]}
-            checked, conflicts = restrict_event_evidence(candidate, targets, selected, sources)
-            if conflicts or checked != candidate:
-                raise ValueError("Supplement conflicts with event evidence or dates")
-            report = validate_subject_graph(candidate, source_texts=[s["content"] for s in sources],
-                                            allow_unverified_evidence=True)
-            if not report["valid"]:
-                raise ValueError("; ".join(f"{e['path']}: {e['message']}" for e in report["errors"][:3]))
+            validate_review(candidate, selected, sources)
             if candidate == result:
                 raise ValueError("No new content")
             result, allocation = candidate, selected
