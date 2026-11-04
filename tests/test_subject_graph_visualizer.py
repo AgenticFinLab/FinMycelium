@@ -113,6 +113,23 @@ class SubjectGraphVisualizerTests(unittest.TestCase):
         self.assertEqual(fig.layout.yaxis.title.text, "Episodes (Staggered)")
         self.assertEqual(fig.layout.legend.title.text, "Participants")
 
+    def test_subject_time_notes_do_not_leak_into_event_rendering(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        cascade = to_event_cascade(fixture())
+        original = EventCascadeGanttVisualizer().plot_cascade(cascade).to_json()
+        window = {"start": "2023-10-21", "end": "2023-10-31",
+                  "original": "2023年10月下旬", "approximate": True}
+        for stage in cascade["stages"]:
+            stage["start_time"]["time_window"] = window
+            for episode in stage["episodes"]:
+                episode["start_time"]["time_window"] = window
+        event = EventCascadeGanttVisualizer().plot_cascade(cascade)
+        self.assertEqual(event.to_json(), original)
+        person = EventCascadeGanttVisualizer().plot_cascade(cascade, subject_name="Warren Buffett")
+        self.assertTrue(any("2023年10月下旬" in hover
+                            for trace in person.data for hover in (trace.hovertext or [])))
+
     def test_actions_are_distinct_activities_with_the_actual_actor(self):
         from finmy.subject_graph.compat import to_event_cascade
         graph = fixture()

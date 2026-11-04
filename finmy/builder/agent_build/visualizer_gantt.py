@@ -226,7 +226,8 @@ class EventCascadeGanttVisualizer:
 
         # --- Helpers ---
 
-        from finmy.subject_graph.time_display import time_note
+        if subject_name:
+            from finmy.subject_graph.time_display import time_note
 
         def parse_date(d_obj):
             """
@@ -336,7 +337,7 @@ class EventCascadeGanttVisualizer:
             desc_str = "<br>".join(desc_lines) if desc_lines else (
                 "Not documented in supplied sources." if subject_name else "None")
 
-            note = time_note(stage_start_raw, stage_end_raw)
+            note = time_note(stage_start_raw, stage_end_raw) if subject_name else None
             if note:
                 desc_str = note + "<br>" + desc_str
             stage_start = parse_date(stage_start_raw)
@@ -344,7 +345,7 @@ class EventCascadeGanttVisualizer:
             gran_levels.append(gran_code_for(stage_start_raw))
             gran_levels.append(gran_code_for(stage_end_raw))
 
-            stage_task = f"{stage_label}: {stage_id}"
+            stage_task = f"Event: {stage_id}" if subject_name else f"STAGE: {stage_id}"
             rows.append(
                 {
                     "Task": stage_task,
@@ -358,7 +359,8 @@ class EventCascadeGanttVisualizer:
                     "Group": stage_id,
                     "StageName": stage_name,
                     "ID": stage_id,
-                    "Description": f"{stage_task}: {stage_name}<br>Descriptions:<br>{desc_str}",
+                    "Description": (f"{stage_task}: {stage_name}<br>Descriptions:<br>{desc_str}" if subject_name else
+                                    f"Stage: {stage_name}<br>Descriptions:<br>{desc_str}"),
                 }
             )
 
@@ -383,7 +385,7 @@ class EventCascadeGanttVisualizer:
                 ep_desc_str = "<br>".join(ep_desc_lines) if ep_desc_lines else (
                     "Not documented in supplied sources." if subject_name else "None")
 
-                note = time_note(ep_start_raw, ep_end_raw)
+                note = time_note(ep_start_raw, ep_end_raw) if subject_name else None
                 if note:
                     ep_desc_str = note + "<br>" + ep_desc_str
                 ep_index = ep.get("index_in_stage", ep_i)
