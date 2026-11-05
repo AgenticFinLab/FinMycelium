@@ -27,7 +27,8 @@ def render_subject_graph(graph, output_path=None, *, event_cascade=None):
         with TemporaryDirectory() as directory:
             target = Path(directory) / "gantt.html"
             EventCascadeGanttVisualizer().plot_cascade(
-                safe(cascade), str(target), subject_name=escape(name))
+                safe(cascade), str(target), subject_name=escape(name),
+                subject_participant_id="P_1")  # to_event_cascade maps the subject first.
             page = target.read_text(encoding="utf-8")
     else:
         page = '<html><body><p>当前范围内没有已记录的经历。</p></body></html>'

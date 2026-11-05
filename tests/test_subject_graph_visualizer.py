@@ -59,6 +59,7 @@ class SubjectGraphVisualizerTests(unittest.TestCase):
         self.assertEqual(graph, original)
         self.assertIn("Plotly.newPlot", page)
         self.assertIn("initControls", page)
+        self.assertIn("plotly_clickannotation", page)
         self.assertIn("Warren Buffett", page)
         self.assertIn("Berkshire Hathaway", page)
         self.assertIn("Activities (Staggered)", page)
@@ -223,6 +224,129 @@ class SubjectGraphVisualizerTests(unittest.TestCase):
         legacy = EventCascadeGanttVisualizer().plot_cascade(to_event_cascade(original))
         self.assertFalse(any("Event context:" in text for trace in legacy.data
                              for text in (trace.hovertext or [])))
+
+    def test_subject_focus_survives_expansion_without_company_attribution(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = fixture()
+        extra = copy.deepcopy(graph["events"][1])
+        extra["event_id"] = "E3"
+        extra["participations"][0]["participation_id"] = "P3"
+        extra["actions"][0]["action_id"] = "A3"
+        extra["actions"][0]["action_type"] = vf("Discussed investment risks")
+        graph["events"].append(extra)
+        original = copy.deepcopy(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett", subject_participant_id="P_1")
+        from finmy.subject_graph.gantt_collapse import set_expanded_events
+        set_expanded_events(fig, [block["id"] for block in fig.layout.meta["subject_collapse"]["blocks"]])
+        self.assertLessEqual(fig.layout.xaxis.range[0].date().isoformat(), "2023-05-01")
+        self.assertGreaterEqual(fig.layout.xaxis.range[1].date().isoformat(), "2023-10-25")
+        points = [(hover, y, size) for trace in fig.data
+                  if trace.name.startswith("Participants (")
+                  for hover, y, size in zip(trace.hovertext, trace.y, trace.marker.size)]
+        actions = [(hover, y, size) for hover, y, size in points
+                   if "Name: Warren Buffett" in hover and "Role: speaker" in hover]
+        # Two simultaneous actions from different events occupy separate lanes.
+        subject_labels = [a for a in fig.layout.annotations if a.text in
+                          ("<b>public statement</b>", "<b>Discussed investment risks</b>")]
+        self.assertEqual(len(subject_labels), 2)
+        self.assertNotEqual(subject_labels[0].y, subject_labels[1].y)
+        company_y = [y for hover, y, size in points if "Name: Berkshire Hathaway" in hover]
+        self.assertGreater(min(a.y for a in subject_labels), max(company_y))
+        self.assertTrue(all(size >= 9 for _, _, size in actions))
+        self.assertTrue(all(hover.startswith("Actions:") for hover, _, _ in actions))
+        self.assertTrue(all(hover.index("Event context:") < hover.index("Role:")
+                            for hover, _, _ in actions))
+        legends = [t for t in fig.data if t.showlegend and t.legendgroup == "Participants"]
+        self.assertEqual(legends[0].name, "Warren Buffett (individual)")
+        self.assertFalse(any(a.text == "<b>purchase shares</b>" for a in fig.layout.annotations))
+        self.assertEqual(graph, original)
+
+    def test_subject_focus_uses_id_even_when_entity_names_match(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = fixture()
+        graph["entities"][1]["name"] = vf("Warren Buffett")
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett", subject_participant_id="P_1")
+        self.assertTrue(any(a.text == "<b>public statement</b>" for a in fig.layout.annotations))
+        self.assertFalse(any(a.text == "<b>purchase shares</b>" for a in fig.layout.annotations))
+
+    def test_person_event_titles_and_dates_do_not_pile_up_on_the_axis(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = fixture()
+        extra = copy.deepcopy(graph["events"][1])
+        extra["event_id"] = "E3"
+        extra["title"] = vf("Another public statement at the same time with a long descriptive title")
+        extra["participations"][0]["participation_id"] = "P3"
+        extra["actions"][0]["action_id"] = "A3"
+        graph["events"].append(extra)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett", subject_participant_id="P_1")
+        events = [t for t in fig.data if t.name.startswith("Event:")]
+        self.assertNotEqual(events[1].y[0], events[2].y[0])
+        self.assertTrue(all(t.text is None for t in events))  # No rotated/shrunken bar text.
+        titles = [a for a in fig.layout.annotations if " · " in a.text]
+        self.assertEqual(len(titles), 3)
+        self.assertTrue(all(a.font.size >= 12 and a.yanchor == "bottom" for a in titles))
+        self.assertTrue(any("long descriptive title" in a.text.replace("<br>", " ") for a in titles))
+        self.assertFalse(any(a.text.startswith("2023-") or a.text == "●" for a in fig.layout.annotations))
+        self.assertTrue(any("Time: 2023-05" in text for t in fig.data for text in (t.hovertext or [])))
+
+    def test_subject_lane_spacing_reserves_the_full_label_height(self):
+        import pandas as pd
+        from finmy.subject_graph.gantt_layout import arrange_subject_events, LABEL_LINE_HEIGHT, PIXELS_PER_UNIT
+        rows = [{"Type": "Episode", "Group": "S1", "ID": f"E{i}", "IndexInStage": i + 1,
+                 "Participants": [{"id": "P_1"}], "Title": "Discussed risk &amp; return " * (i + 1)}
+                for i in range(5)]
+        event = {"Type": "Stage", "Group": "S1", "ID": "S1", "StageName": "Meeting",
+                 "StartRaw": "2023-05-06", "FinishRaw": "2023-05-06"}
+        positions, _, upper = arrange_subject_events(
+            rows, "P_1", lambda row: (pd.Timestamp("2023-05-06"), 0, False), events=[event])
+        ordered = sorted(rows, key=lambda row: positions[(row["Group"], row["ID"])])
+        for lower, higher in zip(ordered, ordered[1:]):
+            bottom = positions[(lower["Group"], lower["ID"])]
+            top = bottom + 0.46 + (5 + (lower["LabelText"].count("<br>") + 1) * LABEL_LINE_HEIGHT) / PIXELS_PER_UNIT
+            next_bottom = positions[(higher["Group"], higher["ID"])] - 0.46 - 20 / PIXELS_PER_UNIT
+            self.assertLess(top, next_bottom)
+            self.assertIn("&amp;", lower["LabelText"])
+        self.assertGreater(upper, positions[(rows[-1]["Group"], rows[-1]["ID"])])
+
+    def test_collapsed_events_expand_below_their_header_and_restore_exactly(self):
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        from finmy.subject_graph.gantt_collapse import set_expanded_events, figure_items
+        graph = fixture()
+        original = copy.deepcopy(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett", subject_participant_id="P_1")
+        model = fig.layout.meta["subject_collapse"]
+        collapsed = fig.to_json()
+        items = figure_items(fig)
+        self.assertEqual([block["activity_count"] for block in model["blocks"]], [1, 1])
+        for block in model["blocks"]:
+            for kind, indices in block["header"].items():
+                self.assertTrue(all(items[kind][i].visible for i in indices))
+            for kind, indices in block["body"].items():
+                self.assertTrue(all(items[kind][i].visible is False for i in indices))
+        x_before = [trace.x for trace in fig.data]
+        x_window = fig.layout.xaxis.range
+        target = model["blocks"][0]
+        set_expanded_events(fig, [target["id"]])
+        self.assertEqual([trace.x for trace in fig.data], x_before)
+        self.assertEqual(fig.layout.xaxis.range, x_window)
+        header_y = fig.data[target["header"]["traces"][0]].y[0]
+        for i in target["body"]["traces"]:
+            self.assertTrue(fig.data[i].visible)
+            self.assertTrue(all(y < header_y for y in fig.data[i].y if y is not None))
+        self.assertTrue(fig.layout.annotations[target["header"]["annotations"][0]].text.startswith("▾ "))
+        for other in model["blocks"][1:]:
+            self.assertTrue(all(fig.data[i].visible is False for i in other["body"]["traces"]))
+        set_expanded_events(fig, [])
+        self.assertEqual(fig.to_json(), collapsed)
+        self.assertEqual(graph, original)
 
     def test_legacy_input_rejected(self):
         with self.assertRaisesRegex(ValueError, "SubjectGraph"):
