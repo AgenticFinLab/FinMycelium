@@ -201,7 +201,8 @@ class EventCascadeGanttVisualizer:
             self.relation_style_map[rel_name] = (color, dash)
         return self.relation_style_map[rel_name]
 
-    def plot_cascade(self, cascade_data, output_path=None, subject_name=None):
+    def plot_cascade(self, cascade_data, output_path=None, subject_name=None,
+                     subject_participant_id=None):
         """
         Generates an interactive Gantt chart from the event cascade data.
 
@@ -215,11 +216,13 @@ class EventCascadeGanttVisualizer:
         Args:
             cascade_data (dict): The event cascade JSON object containing 'stages' and 'episodes'.
             output_path (str, optional): Path to save the output HTML file.
+            subject_participant_id (str, optional): Projected subject ID for person-focused layout.
 
         Returns:
             plotly.graph_objects.Figure: The generated Plotly figure object.
         """
 
+        focus_subject = bool(subject_name and subject_participant_id)
         stage_label = "Event" if subject_name else "Stage"
         episode_label = "Activity" if subject_name else "Episode"
         episodes_label = "Activities" if subject_name else "Episodes"
@@ -509,6 +512,7 @@ class EventCascadeGanttVisualizer:
                                         f"<br>Event context:<br>{desc_str}" if subject_name else
                                         f"{episode_label}: {ep_title}<br>Descriptions:<br>{ep_desc_str}"),
                         "EventContext": desc_str,
+                        "EventName": stage_name,
                         "Title": ep_title,
                         "Participants": parsed_parts,
                         "Relations": parsed_rels,
@@ -809,6 +813,22 @@ class EventCascadeGanttVisualizer:
 
             return start_val, duration_ms, is_imputed
 
+        subject_positions = {}
+        if focus_subject:
+            # Start with the whole timeline so activities from later events are visible.
+            range_x_initial = [min_time - span_total * 0.20, max_time + span_total * 0.20]
+            window_sec = (range_x_initial[1] - range_x_initial[0]).total_seconds()
+            from finmy.subject_graph.gantt_layout import (
+                arrange_subject_events, add_subject_label, PIXELS_PER_UNIT)
+            from finmy.subject_graph.gantt_collapse import (
+                item_counts, item_indices, make_collapsible, COLLAPSE_SCRIPT)
+            subject_positions, subject_blocks, total_y_span = arrange_subject_events(
+                episode_rows, subject_participant_id,
+                lambda row: get_viz_coords(row, min_time),
+                events=stage_rows)
+            plot_height = max(700, int(170 + total_y_span * PIXELS_PER_UNIT))
+            px_per_unit = (plot_height - 170) / total_y_span
+
         # Time label format aligned with x-axis granularity
         gran_levels_clean = [g for g in gran_levels if g is not None]
         order_map = {"Y": 0, "YM": 1, "YMD": 2, "YMDH": 3, "YMDHM": 4, "YMDHMS": 5}
@@ -911,6 +931,8 @@ class EventCascadeGanttVisualizer:
             s_group_rows = [r for r in stage_rows if r["Group"] == sid]
             if not s_group_rows:
                 continue
+            if focus_subject:
+                stage_item_start = item_counts(fig)
 
             x_durs, x_starts, hovers, texts = [], [], [], []
 
@@ -1018,17 +1040,19 @@ class EventCascadeGanttVisualizer:
                 texts.append(wrapped)
 
             instant_event = subject_name and all(d == 0 for d in x_durs)
+            stage_ys = ([subject_positions[(r["Group"], r["ID"])] for r in s_group_rows]
+                        if focus_subject else [y_stage] * len(x_starts))
             fig.add_trace(
                 go.Scatter(
-                    x=x_starts, y=[y_stage] * len(x_starts), mode="markers+text",
+                    x=x_starts, y=stage_ys, mode="markers" if focus_subject else "markers+text",
                     marker=dict(symbol="diamond", size=12, color="#ADD8E6",
                                 line=dict(color="black", width=1)),
-                    text=texts, textposition="top center",
+                    text=None if focus_subject else texts, textposition="top center",
                     hovertext=hovers, hovertemplate="%{hovertext}<extra></extra>",
                     name=f"{stage_label}: {sid}", legendgroup=sid, showlegend=False,
                 ) if instant_event else go.Bar(
                     x=x_durs,
-                    y=[y_stage] * len(x_durs),
+                    y=stage_ys,
                     base=x_starts,
                     orientation="h",
                     name=f"{stage_label}: {sid}",
@@ -1036,7 +1060,7 @@ class EventCascadeGanttVisualizer:
                     hovertext=hovers,
                     hoverinfo="text",
                     hovertemplate="%{hovertext}<extra></extra>",
-                    text=texts,
+                    text=None if focus_subject else texts,
                     textposition="inside",
                     insidetextanchor="middle",
                     textfont=dict(color="black", size=12),
@@ -1061,6 +1085,12 @@ class EventCascadeGanttVisualizer:
                     if display_max_end is None or local_max_end > display_max_end
                     else display_max_end
                 )
+            if focus_subject:
+                for row, start, duration, y in zip(s_group_rows, x_starts, x_durs, stage_ys):
+                    middle = start + pd.to_timedelta(duration / 2, unit="ms")
+                    add_subject_label(fig, row, middle, y, event=True)
+                subject_blocks[sid]["header"] = item_indices(fig, stage_item_start)
+                continue
             for i in range(len(x_starts)):
                 start_ts = x_starts[i]
                 dur_ms = x_durs[i]
@@ -1179,9 +1209,12 @@ class EventCascadeGanttVisualizer:
             )
             if not local_eps:
                 continue
+            if focus_subject:
+                activity_item_start = item_counts(fig)
 
             x_durs, x_starts, y_pos, hovers, texts = [], [], [], [], []
             bar_x_durs, bar_x_starts, bar_y_pos, bar_hovers = [], [], [], []
+            bar_opacities, bar_borders = [], []
             inst_x_durs, inst_x_starts, inst_y_pos, inst_hovers = [], [], [], []
             axis_start_points = []
             axis_end_points = []
@@ -1199,6 +1232,7 @@ class EventCascadeGanttVisualizer:
             part_colors = []
             part_symbols = []
             part_hovers = []
+            part_is_subject = []
 
             # Store segments for relations: key=(color, dash, name) -> lists of x, y (with None breaks)
             relation_segments = {}
@@ -1208,7 +1242,8 @@ class EventCascadeGanttVisualizer:
                 s_val = s_val + stage_offset_map.get(sid, pd.Timedelta(0))
                 x_starts.append(s_val)
                 x_durs.append(dur)
-                y_val = episode_y_base + j * episode_y_step
+                y_val = (subject_positions[(sid, r["ID"])] if focus_subject
+                         else episode_y_base + j * episode_y_step)
                 y_pos.append(y_val)
                 episode_y_positions_global.append(y_val)
                 hovers.append(r["Description"])
@@ -1226,6 +1261,8 @@ class EventCascadeGanttVisualizer:
                     bar_x_durs.append(dur)
                     bar_y_pos.append(y_val)
                     bar_hovers.append(r["Description"])
+                    bar_opacities.append(0.95 if r.get("SubjectActivity") else 0.35)
+                    bar_borders.append(1.8 if r.get("SubjectActivity") else 0.5)
                 else:
                     margin_ms = int(max(1, round(dur * 0.08)))
                     margin_td = pd.to_timedelta(margin_ms, unit="ms")
@@ -1325,6 +1362,7 @@ class EventCascadeGanttVisualizer:
                         part_ys.append(p_y)
                         part_colors.append(color)
                         part_symbols.append(marker)
+                        part_is_subject.append(p["id"] == subject_participant_id)
                         hover_content = (
                             f"ID: {p['id']}<br>"
                             f"Name: {p['name']}<br>"
@@ -1333,7 +1371,15 @@ class EventCascadeGanttVisualizer:
                             f"Attributes:<br>{p['attributes']}<br>"
                             f"Actions:<br>{p['actions']}"
                         )
-                        if subject_name:
+                        if focus_subject:
+                            hover_content = (
+                                f"Actions:<br>{p['actions']}<br>"
+                                f"Event: {r['EventName']}<br>Event context:<br>{r['EventContext']}<br>"
+                                f"Name: {p['name']}<br>Role: {p['role']}<br>"
+                                f"Attributes:<br>{p['attributes']}<br>"
+                                f"ID: {p['id']}<br>Type: {p['type']}"
+                            )
+                        elif subject_name:
                             hover_content += f"<br>Event context:<br>{r['EventContext']}"
                         part_hovers.append(hover_content)
 
@@ -1423,7 +1469,8 @@ class EventCascadeGanttVisualizer:
 
                         rel_name = rel.get("name", "Relation")
                         r_color, r_dash = self._get_relation_style(rel_name)
-                        style_key = (r_color, r_dash, rel_name)
+                        primary_relation = focus_subject and subject_participant_id in (src_id, dst_id)
+                        style_key = (r_color, r_dash, rel_name, primary_relation)
 
                         if style_key not in relation_segments:
                             relation_segments[style_key] = {
@@ -1511,8 +1558,8 @@ class EventCascadeGanttVisualizer:
                         name=f"{episodes_label} ({sid})",
                         marker=dict(
                             color="#e6f5c9",
-                            line=dict(color="black", width=1),
-                            opacity=0.9,
+                            line=dict(color="black", width=bar_borders if focus_subject else 1),
+                            opacity=bar_opacities if focus_subject else 0.9,
                         ),
                         hovertext=bar_hovers,
                         hoverinfo="text",
@@ -1545,15 +1592,18 @@ class EventCascadeGanttVisualizer:
                 )
 
             # Draw Relations (BEFORE Participants so lines are below dots)
-            for (r_color, r_dash, r_name), segs in relation_segments.items():
+            for (r_color, r_dash, r_name, primary_relation), segs in relation_segments.items():
                 fig.add_trace(
                     go.Scatter(
                         x=segs["x"],
                         y=segs["y"],
                         mode="lines",
                         line=dict(
-                            color=r_color, width=adaptive_line_width, dash=r_dash
+                            color=r_color,
+                            width=(max(2, adaptive_line_width * 1.5) if primary_relation
+                                   else adaptive_line_width), dash=r_dash
                         ),
+                        opacity=(1.0 if primary_relation else 0.35) if focus_subject else None,
                         name=r_name,
                         legendgroup="Relations",
                         showlegend=False,  # We will add a manual legend entry later
@@ -1573,9 +1623,14 @@ class EventCascadeGanttVisualizer:
                         marker=dict(
                             color=part_colors,
                             symbol=part_symbols,
-                            size=adaptive_marker_size,
+                            size=([max(9, adaptive_marker_size * 2) if primary else adaptive_marker_size
+                                   for primary in part_is_subject] if focus_subject else adaptive_marker_size),
+                            opacity=([1.0 if primary else 0.45 for primary in part_is_subject]
+                                     if focus_subject else None),
                             line=dict(
-                                color="black", width=max(0.5, adaptive_line_width * 0.5)
+                                color="black",
+                                width=([1.8 if primary else 0.5 for primary in part_is_subject]
+                                       if focus_subject else max(0.5, adaptive_line_width * 0.5))
                             ),
                         ),
                         hovertext=part_hovers,
@@ -1591,6 +1646,20 @@ class EventCascadeGanttVisualizer:
                 dur_ms = x_durs[j]
                 end_ts = start_ts + pd.to_timedelta(dur_ms, unit="ms")
                 mid_x = start_ts + pd.to_timedelta(int(round(dur_ms / 2.0)), unit="ms")
+                if focus_subject:
+                    row = local_eps[j]
+                    if row["Start"] is not None and row["Start"] == row["Finish"]:
+                        margin = pd.to_timedelta(max(1, dur_ms * 0.08), unit="ms")
+                        fig.add_shape(
+                            type="circle", x0=start_ts - margin, x1=end_ts + margin,
+                            y0=y_pos[j] - 0.46, y1=y_pos[j] + 0.46,
+                            line=dict(color="#405a27" if row["SubjectActivity"] else "#e6f5c9",
+                                      width=1.5, dash="dash"),
+                            fillcolor="rgba(230,245,201,0.6)" if row["SubjectActivity"] else "rgba(230,245,201,0.25)",
+                            layer="below",
+                        )
+                    add_subject_label(fig, row, mid_x, y_pos[j])
+                    continue
                 total_span_ms = max((max_time - min_time).total_seconds() * 1000, 1)
                 bar_frac = min(max(dur_ms / total_span_ms, 0.0), 1.0)
                 max_chars = max(10, int(70 * bar_frac))
@@ -1925,6 +1994,9 @@ class EventCascadeGanttVisualizer:
                     font=dict(size=11, color="#333333"),
                 )
 
+            if focus_subject:
+                subject_blocks[sid]["body"] = item_indices(fig, activity_item_start)
+
         # --- 3. Configure Layout ---
         # If no concrete end times exist, extend right bound to cover imputed stage ends
         if not valid_ends and display_max_end is not None:
@@ -1957,7 +2029,9 @@ class EventCascadeGanttVisualizer:
                     unique_participants[p_id] = p
 
         sorted_parts = sorted(
-            unique_participants.values(), key=lambda x: (x["type"], x["name"])
+            unique_participants.values(),
+            key=lambda x: ((x["id"] != subject_participant_id, x["type"], x["name"])
+                           if focus_subject else (x["type"], x["name"]))
         )
 
         for p in sorted_parts:
@@ -1970,10 +2044,10 @@ class EventCascadeGanttVisualizer:
                         y=[None],
                         mode="markers",
                         marker=dict(
-                            size=5,
+                            size=9 if focus_subject and p_id == subject_participant_id else 5,
                             color=color,
                             symbol=marker,
-                            line=dict(color="black", width=0.5),
+                            line=dict(color="black", width=1.8 if focus_subject and p_id == subject_participant_id else 0.5),
                         ),
                         name=f"{p['name']} ({p['type']})",
                         legendgroup="Participants",
@@ -2051,12 +2125,13 @@ class EventCascadeGanttVisualizer:
             yaxis=dict(
                 title="Activities (Staggered)" if subject_name else "Episodes (Staggered)",
                 tickmode="array",
-                tickvals=[y_stage],
-                ticktext=["EVENTS" if subject_name else "STAGES"],
+                tickvals=[] if focus_subject else [y_stage],
+                ticktext=[] if focus_subject else ["EVENTS" if subject_name else "STAGES"],
+                automargin=True if focus_subject else None,
                 showgrid=True,
                 zeroline=False,
                 fixedrange=False,
-                range=[
+                range=[0, total_y_span] if focus_subject else [
                     -0.12,
                     (
                         max(episode_y_positions_global)
@@ -2085,6 +2160,9 @@ class EventCascadeGanttVisualizer:
             ),
         )
 
+        if focus_subject:
+            make_collapsible(fig, subject_blocks)
+
         # --- 4. Save Output ---
         # If an output path is provided, save the figure.
         # For HTML output, we inject custom JavaScript to add interactive controls:
@@ -2096,6 +2174,7 @@ class EventCascadeGanttVisualizer:
                 html = fig.to_html(
                     full_html=True,
                     include_plotlyjs="cdn",
+                    post_script=COLLAPSE_SCRIPT if focus_subject else None,
                     config={
                         "scrollZoom": False,
                         "doubleClick": "reset",
@@ -2238,13 +2317,13 @@ gd.on('plotly_relayout', function(e) {{
                     f.write(html)
             elif output_path.endswith(".png"):
                 html_path = output_path.replace(".png", ".html")
-                fig.write_html(html_path)
+                fig.write_html(html_path, post_script=COLLAPSE_SCRIPT if focus_subject else None)
                 print(f"Interactive HTML saved to {html_path}")
                 try:
                     fig.write_image(output_path)
                 except Exception as e:
                     print(f"Could not save static image: {e}")
             else:
-                fig.write_html(output_path + ".html")
+                fig.write_html(output_path + ".html", post_script=COLLAPSE_SCRIPT if focus_subject else None)
 
         return fig
