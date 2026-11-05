@@ -37,6 +37,7 @@ Key Features:
 
 import os
 import math
+from textwrap import wrap
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -231,6 +232,8 @@ class EventCascadeGanttVisualizer:
 
         if subject_name:
             from finmy.subject_graph.time_display import time_note
+            from finmy.subject_graph.gantt_hover import (
+                event_hover, episode_hover, participant_hover, relation_hover, hover_text)
 
         def parse_date(d_obj):
             """
@@ -343,6 +346,8 @@ class EventCascadeGanttVisualizer:
             note = time_note(stage_start_raw, stage_end_raw) if subject_name else None
             if note:
                 desc_str = note + "<br>" + desc_str
+            stage_details = (event_hover(stage["_subject"]["event"])
+                             if subject_name and "_subject" in stage else desc_str)
             stage_start = parse_date(stage_start_raw)
             stage_end = parse_date(stage_end_raw)
             gran_levels.append(gran_code_for(stage_start_raw))
@@ -362,7 +367,8 @@ class EventCascadeGanttVisualizer:
                     "Group": stage_id,
                     "StageName": stage_name,
                     "ID": stage_id,
-                    "Description": (f"{stage_task}: {stage_name}<br>Descriptions:<br>{desc_str}" if subject_name else
+                    "Description": (stage_details if subject_name and "_subject" in stage else
+                                    f"{stage_task}: {stage_name}<br>Descriptions:<br>{stage_details}" if subject_name else
                                     f"Stage: {stage_name}<br>Descriptions:<br>{desc_str}"),
                 }
             )
@@ -391,6 +397,8 @@ class EventCascadeGanttVisualizer:
                 note = time_note(ep_start_raw, ep_end_raw) if subject_name else None
                 if note:
                     ep_desc_str = note + "<br>" + ep_desc_str
+                if subject_name and "_subject" in ep:
+                    ep_desc_str = episode_hover(ep["_subject"])
                 ep_index = ep.get("index_in_stage", ep_i)
 
                 ep_start = parse_date(ep_start_raw)
@@ -456,6 +464,8 @@ class EventCascadeGanttVisualizer:
                             "role": p_role,
                             "attributes": p_attr_str,
                             "actions": p_act_str,
+                            "native_hover": (participant_hover(p["_subject"])
+                                             if subject_name and "_subject" in p else ""),
                         }
                     )
 
@@ -489,7 +499,9 @@ class EventCascadeGanttVisualizer:
 
                     if src and dst:
                         parsed_rels.append(
-                            {"src": src, "dst": dst, "name": full_rel_name}
+                            {"src": src, "dst": dst, "name": full_rel_name,
+                             "native_hover": (relation_hover(r["_subject"])
+                                              if subject_name and "_subject" in r else "")}
                         )
 
                 rel_count = len(parsed_rels)
@@ -508,7 +520,8 @@ class EventCascadeGanttVisualizer:
                         "Group": stage_id,
                         "ID": ep_id,
                         "IndexInStage": ep_index,
-                        "Description": (f"{episode_label}: {ep_title}<br>Details:<br>{ep_desc_str}"
+                        "Description": (ep_desc_str if subject_name and "_subject" in ep else
+                                        f"{episode_label}: {ep_title}<br>Details:<br>{ep_desc_str}"
                                         f"<br>Event context:<br>{desc_str}" if subject_name else
                                         f"{episode_label}: {ep_title}<br>Descriptions:<br>{ep_desc_str}"),
                         "EventContext": desc_str,
@@ -1381,6 +1394,10 @@ class EventCascadeGanttVisualizer:
                             )
                         elif subject_name:
                             hover_content += f"<br>Event context:<br>{r['EventContext']}"
+                        if p["native_hover"]:
+                            hover_content = (hover_text(f"Event: {r['EventName']}") + "<br>"
+                                             + hover_text(f"Role: {p['role']}") + "<br>"
+                                             + p["native_hover"])
                         part_hovers.append(hover_content)
 
                         local_p_coords[p["id"]] = (p_x, p_y)
@@ -1485,6 +1502,8 @@ class EventCascadeGanttVisualizer:
                         src_name = src_obj["name"] if src_obj else src_id
                         dst_name = dst_obj["name"] if dst_obj else dst_id
                         hover_txt = f"Relation: {rel_name}<br>{src_name} -> {dst_name}"
+                        if rel["native_hover"]:
+                            hover_txt += "<br>" + rel["native_hover"]
 
                         # Calculate curvature
                         # If there are multiple relations between the same pair, curve them.
@@ -2038,6 +2057,9 @@ class EventCascadeGanttVisualizer:
             p_id = p["id"]
             if p_id in self.participant_style_map:
                 color, marker = self.participant_style_map[p_id]
+                legend_name = f"{p['name']} ({p['type']})"
+                if focus_subject:
+                    legend_name = "<br>".join(wrap(legend_name, width=32, break_long_words=False))
                 fig.add_trace(
                     go.Scatter(
                         x=[None],
@@ -2049,7 +2071,7 @@ class EventCascadeGanttVisualizer:
                             symbol=marker,
                             line=dict(color="black", width=1.8 if focus_subject and p_id == subject_participant_id else 0.5),
                         ),
-                        name=f"{p['name']} ({p['type']})",
+                        name=legend_name,
                         legendgroup="Participants",
                         legendrank=1000,
                         showlegend=True,
@@ -2090,6 +2112,9 @@ class EventCascadeGanttVisualizer:
             sorted_rel_names = sorted(present_relations)
 
             for rel_name in sorted_rel_names:
+                legend_name = rel_name
+                if focus_subject:
+                    legend_name = "<br>".join(wrap(rel_name, width=32, break_long_words=False))
                 # Get style if exists, otherwise generate/default
                 if rel_name in self.relation_style_map:
                     r_color, r_dash = self.relation_style_map[rel_name]
@@ -2103,7 +2128,7 @@ class EventCascadeGanttVisualizer:
                         y=[None],
                         mode="lines",
                         line=dict(color=r_color, width=1.5, dash=r_dash),
-                        name=rel_name,
+                        name=legend_name,
                         legendgroup="Relations",
                         legendrank=2001,
                         showlegend=True,

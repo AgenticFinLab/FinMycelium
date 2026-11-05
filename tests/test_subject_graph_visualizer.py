@@ -348,6 +348,89 @@ class SubjectGraphVisualizerTests(unittest.TestCase):
         self.assertEqual(fig.to_json(), collapsed)
         self.assertEqual(graph, original)
 
+    def test_subject_relations_remain_visible_when_events_are_collapsed(self):
+        from test_subject_graph_schema import graph_fixture
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        from finmy.subject_graph.gantt_collapse import set_expanded_events
+        graph = graph_fixture()
+        duplicate = copy.deepcopy(graph["relations"][0])
+        duplicate["relation_id"] = "REL_repeat"
+        graph["relations"].append(duplicate)
+        original = copy.deepcopy(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett", subject_participant_id="P_1")
+        blocks = {b["id"]: b for b in fig.layout.meta["subject_collapse"]["blocks"]}
+        meeting, purchase = blocks["S1"], blocks["S2"]
+        label = fig.layout.annotations[meeting["header"]["annotations"][0]]
+        text = label.text.replace("<br>", " ")
+        self.assertTrue(label.visible)
+        self.assertIn("Warren Buffett — chairman of → Berkshire Hathaway", text)
+        self.assertEqual(text.count("chairman of"), 1)
+        self.assertEqual(meeting["activity_count"], 1)
+        self.assertNotIn("chairman of", fig.layout.annotations[purchase["header"]["annotations"][0]].text)
+        relations = [fig.data[i] for i in meeting["body"]["traces"]
+                     if fig.data[i].legendgroup == "Relations"]
+        self.assertTrue(relations)
+        self.assertTrue(all(t.visible is False for t in relations))
+        set_expanded_events(fig, ["S1"])
+        self.assertTrue(all(t.visible for t in relations))
+        self.assertIn("chairman of", label.text)
+        set_expanded_events(fig, [])
+        self.assertTrue(label.visible)
+        self.assertEqual(label.text.replace("<br>", " "), text)
+        self.assertEqual(graph, original)
+
+    def test_relation_summary_preserves_all_edges_and_prioritizes_subject(self):
+        from finmy.subject_graph.gantt_layout import event_relation_summaries
+        rows = [{"Relations": [
+            {"src": "P2", "dst": "P3", "name": "owns"},
+            {"src": "P2", "dst": "P1", "name": "advises"},
+            {"src": "P2", "dst": "P1", "name": "advises"},
+            {"src": "P1", "dst": "P2", "name": "advises"},
+            {"src": "P2", "dst": "P3", "name": "owns"},
+        ]}]
+        summaries = event_relation_summaries(rows, "P1", {"P1": "Subject", "P2": "Other", "P3": "Company"})
+        self.assertEqual(summaries, ["Other — advises → Subject", "Subject — advises → Other",
+                                     "Other — owns → Company"])
+
+    def test_person_and_company_relations_survive_folding(self):
+        from test_subject_graph_schema import graph_fixture, entity, participation
+        from finmy.subject_graph.compat import to_event_cascade
+        from finmy.subject_graph.gantt_collapse import set_expanded_events
+        from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+        graph = graph_fixture()
+        graph["entities"].append(entity("person_munger", "Charlie Munger", "individual"))
+        graph["events"][0]["participations"].append(
+            participation("PAR_munger", "person_munger", "speaker"))
+        for identifier, source, target, label in [
+            ("R_partner", graph["subject_id"], "person_munger", "Colleague and partner at Berkshire Hathaway"),
+            ("R_vice", "person_munger", "org_berkshire", "Vice Chairman"),
+        ]:
+            relation = copy.deepcopy(graph["relations"][0])
+            relation.update(relation_id=identifier, from_entity_id=source,
+                            to_entity_id=target, relation_type=vf(label))
+            graph["relations"].append(relation)
+        original = copy.deepcopy(graph)
+        fig = EventCascadeGanttVisualizer().plot_cascade(
+            to_event_cascade(graph), subject_name="Warren Buffett", subject_participant_id="P_1")
+        block = next(b for b in fig.layout.meta["subject_collapse"]["blocks"] if b["id"] == "S1")
+        label = fig.layout.annotations[block["header"]["annotations"][0]]
+        text = label.text.replace("<br>", " ")
+        self.assertIn("Warren Buffett — Colleague and partner at Berkshire Hathaway → Charlie Munger", text)
+        self.assertIn("Charlie Munger — Vice Chairman → Berkshire Hathaway", text)
+        legends = [t.name for t in fig.data if t.showlegend and t.legendgroup == "Relations"]
+        self.assertIn("Colleague and partner at<br>Berkshire Hathaway", legends)
+        relations = [fig.data[i] for i in block["body"]["traces"]
+                     if fig.data[i].legendgroup == "Relations"]
+        self.assertEqual(len(relations), 3)
+        self.assertTrue(all(t.visible is False for t in relations))
+        set_expanded_events(fig, ["S1"])
+        self.assertTrue(all(t.visible for t in relations))
+        set_expanded_events(fig, [])
+        self.assertEqual(label.text.replace("<br>", " "), text)
+        self.assertEqual(graph, original)
+
     def test_legacy_input_rejected(self):
         with self.assertRaisesRegex(ValueError, "SubjectGraph"):
             render_subject_graph({"stages": []})

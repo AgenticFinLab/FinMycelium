@@ -9,6 +9,18 @@ LABEL_LINE_HEIGHT = 18
 PIXELS_PER_UNIT = 30
 
 
+def event_relation_summaries(rows, subject_id, names):
+    """Show every event relation, with the subject's direct relations first."""
+    relations = {}
+    for row in rows:
+        for relation in row.get("Relations", []):
+            source, target, label = relation["src"], relation["dst"], relation["name"]
+            relations[(source, target, label)] = (
+                f"{names.get(source, source)} — {label} → {names.get(target, target)}")
+    return [relations[key] for key in sorted(
+        relations, key=lambda key: subject_id not in key[:2])]
+
+
 def arrange_subject_events(rows, subject_id, coordinates, *, events):
     """Place each event above its activities, reserving space for full labels.
 
@@ -21,19 +33,24 @@ def arrange_subject_events(rows, subject_id, coordinates, *, events):
         row["SubjectActivity"] = focused
         row["ContextActivity"] = context
 
-    def set_label(row, title, extra=None):
+    def set_label(row, title, extra=None, relations=()):
         # Wrap plain text first so HTML entities are never split across lines.
         lines = wrap(unescape(str(title)), width=34) or [""]
         if extra:
             lines.extend(wrap(unescape(extra), width=34))
         row["LabelText"] = "<br>".join(escape(line) for line in lines)
+        relation_lines = [line for relation in relations for line in wrap(unescape(relation), width=34)]
+        if relation_lines:
+            row["LabelText"] += '<br><span style="color:#1f5f8a">' + "<br>".join(
+                escape(line) for line in relation_lines) + "</span>"
         half_bar = 0.7 if row["Type"] == "Stage" else 0.46
-        return half_bar * 2 + (len(lines) * LABEL_LINE_HEIGHT + 38) / PIXELS_PER_UNIT
+        return half_bar * 2 + ((len(lines) + len(relation_lines)) * LABEL_LINE_HEIGHT + 38) / PIXELS_PER_UNIT
 
     def raw_time(value):
         return str(value.get("value", "unknown") if isinstance(value, dict) else value)
 
     positions, blocks = {}, {}
+    names = {p["id"]: p.get("name", p["id"]) for row in rows for p in row["Participants"]}
     base = 1.2
     for event in reversed(sorted(events, key=lambda r: coordinates(r)[0])):
         sid = event["Group"]
@@ -52,7 +69,8 @@ def arrange_subject_events(rows, subject_id, coordinates, *, events):
         first, last = raw_time(event["StartRaw"]), raw_time(event["FinishRaw"])
         date = first if first == last else f"{first} → {last}"
         summary = f"{date} · {count} {'activity' if count == 1 else 'activities'}"
-        base += set_label(event, f"{sid} · {event['StageName']}", summary) + 0.6
+        relations = event_relation_summaries(children, subject_id, names)
+        base += set_label(event, f"{sid} · {event['StageName']}", summary, relations) + 0.6
         event["Expandable"] = bool(children)
         blocks[sid] = {"id": sid, "start": start, "body_height": body_height,
                        "height": base - start, "activity_count": count,

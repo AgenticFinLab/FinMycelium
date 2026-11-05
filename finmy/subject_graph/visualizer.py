@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from finmy.subject_graph.compat import to_event_cascade
+from finmy.subject_graph.gantt_projection import prepare_gantt_cascade
 
 
 def render_subject_graph(graph, output_path=None, *, event_cascade=None):
@@ -11,6 +12,7 @@ def render_subject_graph(graph, output_path=None, *, event_cascade=None):
     if graph.get("schema_version") != "subject-graph-1.0":
         raise ValueError("Expected a SubjectGraph")
     cascade = to_event_cascade(graph) if event_cascade is None else event_cascade
+    cascade = prepare_gantt_cascade(graph, cascade)
     subject = next(e for e in graph["entities"] if e["entity_id"] == graph["subject_id"])
     name = subject["name"]["value"]
 
