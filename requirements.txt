@@ -5,6 +5,7 @@ openai==2.8.1
 python-dotenv==1.0.1
 loguru==0.7.3
 pandas==2.2.3
+plotly==6.6.0
 numpy==2.2.6
 requests==2.32.5
 httpx==0.28.1
