@@ -1,0 +1,2255 @@
+{
+  "tables": [
+    {
+      "name": "subject_graph",
+      "group": "core",
+      "description": "One native SubjectGraph; graph-local IDs are preserved verbatim.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "schema_version",
+          "type": "VARCHAR(32)",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "subject_entity_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "subject_type",
+          "type": "VARCHAR(32)",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "coverage_start",
+          "type": "VARCHAR(32)",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "coverage_end",
+          "type": "VARCHAR(32)",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "descriptions",
+          "type": "JSON",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT ck_person_subject CHECK (subject_type = 'individual')"
+      ]
+    },
+    {
+      "name": "entity",
+      "group": "core",
+      "description": "An entity identity within one graph, with descriptive scalar attributes.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "entity_type",
+          "type": "VARCHAR(64)",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "attributes",
+          "type": "JSON",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "entity_alias",
+      "group": "core",
+      "description": "Aliases are rows, not relationship arrays.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "alias",
+          "type": "VARCHAR(255)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "occurrence",
+      "group": "core",
+      "description": "Independent occurrence; start/end reference temporal values, not renderer coordinates.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "subject_relevance",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "start_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "end_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "descriptions",
+          "type": "JSON",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "occurrence_participant",
+      "group": "core",
+      "description": "Membership only: permits actions/transactions to reference actual participants without selecting a role record.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "participation",
+      "group": "core",
+      "description": "Role and temporal details of an occurrence participant; multiple role records remain valid.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "participation_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "start_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "end_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "action",
+      "group": "core",
+      "description": "Native actor_id and occurrence_id refer to occurrence membership; no role-interval inference.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "action_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "actor_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "action_type",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "timestamp_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "financial_transaction",
+      "group": "core",
+      "description": "Transaction occurrence and optional known entity parties; unknown parties are NULL.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "transaction_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "from_entity_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "to_entity_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "timestamp_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "details",
+          "type": "JSON",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "transaction_instrument",
+      "group": "core",
+      "description": "Ordered native instrument descriptions; no invented global instrument identity.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "transaction_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "ordinal",
+          "type": "INT UNSIGNED",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "entity_relation",
+      "group": "core",
+      "description": "Time-qualified entity relationship independent of joint participation in any occurrence.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "relation_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "from_entity_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "to_entity_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "relation_type",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "valid_from_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "valid_to_time_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "relation_occurrence",
+      "group": "core",
+      "description": "Contextual M:N relation/occurrence association, without a co-participation requirement.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "relation_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "source_document",
+      "group": "evidence",
+      "description": "Exact source text when available; no source is fabricated for unresolved quotations.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "document_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "source_url",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "published_at",
+          "type": "DATETIME(6)",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "content",
+          "type": "LONGTEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "evidence_span",
+      "group": "evidence",
+      "description": "Verbatim quote; document and half-open Unicode offsets are jointly known or jointly unknown.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "span_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "document_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": true
+        },
+        {
+          "name": "char_start",
+          "type": "BIGINT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "char_end",
+          "type": "BIGINT UNSIGNED",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "quote",
+          "type": "LONGTEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT `ck_span_location` CHECK ((`document_id` IS NULL AND `char_start` IS NULL AND `char_end` IS NULL) OR (`document_id` IS NOT NULL AND `char_start` IS NOT NULL AND `char_end` IS NOT NULL AND `char_end` > `char_start`))",
+        "CONSTRAINT `uq_resolved_span` UNIQUE (`graph_id`, `document_id`, `char_start`, `char_end`)"
+      ]
+    },
+    {
+      "name": "evidence_set",
+      "group": "evidence",
+      "description": "Metadata contains reasons, confidence and evidence_status by local field path; no copied values or quotes.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "field_metadata",
+          "type": "JSON",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "evidence_link",
+      "group": "evidence",
+      "description": "M:N field-to-quote references; actual FKs anchor every evidence container and span.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "field_path",
+          "type": "VARCHAR(255)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "quote_order",
+          "type": "INT UNSIGNED",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "span_id",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": true,
+          "nullable": false
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "time_value",
+      "group": "time",
+      "description": "Native value plus an optional explicitly supplied time_window; no inferred date bounds are cached.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "time_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "type": "VARCHAR(128)",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        },
+        {
+          "name": "window_start",
+          "type": "DATE",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "window_end",
+          "type": "DATE",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "original_text",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "is_approximate",
+          "type": "BOOLEAN",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        },
+        {
+          "name": "window_semantics",
+          "type": "VARCHAR(16)",
+          "pk": false,
+          "fk": false,
+          "nullable": true
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT `ck_time_window` CHECK ((`window_start` IS NULL AND `window_end` IS NULL AND `original_text` IS NULL AND `is_approximate` IS NULL) OR (`window_start` IS NOT NULL AND `window_end` IS NOT NULL AND `original_text` IS NOT NULL AND `is_approximate` IS NOT NULL AND `window_start` <= `window_end` AND `is_approximate` IN (0,1)))",
+        "CONSTRAINT ck_window_semantics CHECK (window_semantics IS NULL OR (window_start IS NOT NULL AND window_semantics IN ('uncertainty','duration')))"
+      ]
+    },
+    {
+      "name": "occurrence_label",
+      "group": "organization",
+      "description": "Optional graph-wide shorter label for an existing occurrence; original title is preserved.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "occurrence_id",
+          "type": "VARCHAR(128)",
+          "pk": true,
+          "fk": true,
+          "nullable": false
+        },
+        {
+          "name": "label",
+          "type": "TEXT",
+          "pk": false,
+          "fk": false,
+          "nullable": false
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "activity",
+      "group": "facts",
+      "description": "One activity handle per existing action, transaction or contextual occurrence. No copied fact values.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "activity_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": false
+        },
+        {
+          "name": "action_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "transaction_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "context_occurrence_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT ck_activity_one_fact CHECK ((CASE WHEN action_id IS NULL THEN 0 ELSE 1 END + CASE WHEN transaction_id IS NULL THEN 0 ELSE 1 END + CASE WHEN context_occurrence_id IS NULL THEN 0 ELSE 1 END) = 1)",
+        "CONSTRAINT uq_activity_action UNIQUE (graph_id, action_id)",
+        "CONSTRAINT uq_activity_transaction UNIQUE (graph_id, transaction_id)",
+        "CONSTRAINT uq_activity_context UNIQUE (graph_id, context_occurrence_id)"
+      ]
+    },
+    {
+      "name": "activity_detail",
+      "group": "facts",
+      "description": "Canonical ordered details. Native action detail indices and evidence remain unchanged.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "activity_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "detail_index",
+          "type": "INT UNSIGNED",
+          "nullable": false,
+          "pk": true,
+          "fk": false
+        },
+        {
+          "name": "value",
+          "type": "TEXT",
+          "nullable": false,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "domain",
+      "group": "organization",
+      "description": "Task-specific domain label for one person graph.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "domain_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": false
+        },
+        {
+          "name": "label",
+          "type": "TEXT",
+          "nullable": false,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "summary",
+          "type": "TEXT",
+          "nullable": true,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "nullable": false,
+          "pk": false,
+          "fk": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "event",
+      "group": "organization",
+      "description": "An ongoing matter organized around the focal person; one primary domain.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "event_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": false
+        },
+        {
+          "name": "domain_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "label",
+          "type": "TEXT",
+          "nullable": false,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "summary",
+          "type": "TEXT",
+          "nullable": true,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "nullable": false,
+          "pk": false,
+          "fk": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "stage",
+      "group": "organization",
+      "description": "Evidence-supported period of the person's involvement. stage_id is local to its event.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "event_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "stage_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": false
+        },
+        {
+          "name": "label",
+          "type": "TEXT",
+          "nullable": false,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "summary",
+          "type": "TEXT",
+          "nullable": true,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "boundary_reason",
+          "type": "TEXT",
+          "nullable": true,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "nullable": false,
+          "pk": false,
+          "fk": false,
+          "default": "0"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "event_activity",
+      "group": "organization",
+      "description": "M:N placement; nullable stage permits unsegmented events. It never changes the actor.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "event_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "activity_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "stage_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "display_title",
+          "type": "TEXT",
+          "nullable": true,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "detail_mode",
+          "type": "VARCHAR(16)",
+          "nullable": false,
+          "pk": false,
+          "fk": false,
+          "default": "'all'"
+        },
+        {
+          "name": "sort_order",
+          "type": "INT UNSIGNED",
+          "nullable": false,
+          "pk": false,
+          "fk": false,
+          "default": "0"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT ck_detail_mode CHECK (detail_mode IN ('all','selected'))"
+      ]
+    },
+    {
+      "name": "event_activity_detail",
+      "group": "organization",
+      "description": "Optional selection of existing detail rows for one placement, with FKs to both sides.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "event_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "activity_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "detail_index",
+          "type": "INT UNSIGNED",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "activity_relation",
+      "group": "relations",
+      "description": "Graph-wide semantic edge between canonical activities; evidence for the edge is separate from endpoint evidence.",
+      "columns": [
+        {
+          "name": "graph_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "link_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": true,
+          "fk": false
+        },
+        {
+          "name": "from_activity_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "to_activity_id",
+          "type": "VARCHAR(128)",
+          "nullable": false,
+          "pk": false,
+          "fk": true
+        },
+        {
+          "name": "relation_type",
+          "type": "VARCHAR(32)",
+          "nullable": false,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "basis",
+          "type": "VARCHAR(16)",
+          "nullable": false,
+          "pk": false,
+          "fk": false
+        },
+        {
+          "name": "evidence_set_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "pk": false,
+          "fk": true
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT ck_link_not_self CHECK (from_activity_id <> to_activity_id)",
+        "CONSTRAINT ck_activity_relation_type CHECK (relation_type IN ('precedes','overlaps','executed_by','explains','responds_to','context_for'))",
+        "CONSTRAINT ck_relation_basis CHECK (basis IN ('source','inferred','temporal'))",
+        "CONSTRAINT ck_semantic_link_evidence CHECK (relation_type IN ('precedes','overlaps') OR evidence_set_id IS NOT NULL)",
+        "CONSTRAINT uq_activity_link UNIQUE (graph_id, from_activity_id, to_activity_id, relation_type)",
+        "CONSTRAINT ck_temporal_basis CHECK (basis <> 'temporal' OR relation_type IN ('precedes','overlaps'))"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "child": "entity",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "belongs to graph"
+    },
+    {
+      "child": "occurrence",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "belongs to graph"
+    },
+    {
+      "child": "source_document",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "belongs to graph"
+    },
+    {
+      "child": "evidence_span",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "belongs to graph"
+    },
+    {
+      "child": "evidence_set",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "belongs to graph"
+    },
+    {
+      "child": "time_value",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "belongs to graph"
+    },
+    {
+      "child": "subject_graph",
+      "parent": "entity",
+      "child_columns": [
+        "graph_id",
+        "subject_entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "configured focal entity"
+    },
+    {
+      "child": "entity_alias",
+      "parent": "entity",
+      "child_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "alias of entity"
+    },
+    {
+      "child": "occurrence_participant",
+      "parent": "occurrence",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "occurrence membership"
+    },
+    {
+      "child": "occurrence_participant",
+      "parent": "entity",
+      "child_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "participating entity"
+    },
+    {
+      "child": "participation",
+      "parent": "occurrence_participant",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id",
+        "entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id",
+        "entity_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "role of occurrence participant"
+    },
+    {
+      "child": "action",
+      "parent": "occurrence_participant",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id",
+        "actor_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id",
+        "entity_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "actor participates in this occurrence"
+    },
+    {
+      "child": "financial_transaction",
+      "parent": "occurrence",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "transaction occurrence"
+    },
+    {
+      "child": "financial_transaction",
+      "parent": "occurrence_participant",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id",
+        "from_entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id",
+        "entity_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "from party; NULL when unknown"
+    },
+    {
+      "child": "financial_transaction",
+      "parent": "occurrence_participant",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id",
+        "to_entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id",
+        "entity_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "to party; NULL when unknown"
+    },
+    {
+      "child": "transaction_instrument",
+      "parent": "financial_transaction",
+      "child_columns": [
+        "graph_id",
+        "transaction_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "transaction_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "transaction instrument"
+    },
+    {
+      "child": "entity_relation",
+      "parent": "entity",
+      "child_columns": [
+        "graph_id",
+        "from_entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "from endpoint"
+    },
+    {
+      "child": "entity_relation",
+      "parent": "entity",
+      "child_columns": [
+        "graph_id",
+        "to_entity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "entity_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "to endpoint"
+    },
+    {
+      "child": "relation_occurrence",
+      "parent": "entity_relation",
+      "child_columns": [
+        "graph_id",
+        "relation_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "relation_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "contextual relationship"
+    },
+    {
+      "child": "relation_occurrence",
+      "parent": "occurrence",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "referenced occurrence"
+    },
+    {
+      "child": "evidence_span",
+      "parent": "source_document",
+      "child_columns": [
+        "graph_id",
+        "document_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "document_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "known source; unresolved quote allowed"
+    },
+    {
+      "child": "evidence_link",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "evidence for local field"
+    },
+    {
+      "child": "evidence_link",
+      "parent": "evidence_span",
+      "child_columns": [
+        "graph_id",
+        "span_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "span_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "supporting quote"
+    },
+    {
+      "child": "subject_graph",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "entity",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "occurrence",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "participation",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "action",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "financial_transaction",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "transaction_instrument",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "entity_relation",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "field evidence metadata"
+    },
+    {
+      "child": "occurrence",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "start_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "start time"
+    },
+    {
+      "child": "occurrence",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "end_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "end time"
+    },
+    {
+      "child": "participation",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "start_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "start time"
+    },
+    {
+      "child": "participation",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "end_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "end time"
+    },
+    {
+      "child": "action",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "timestamp_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "timestamp time"
+    },
+    {
+      "child": "financial_transaction",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "timestamp_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "timestamp time"
+    },
+    {
+      "child": "entity_relation",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "valid_from_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "valid from time"
+    },
+    {
+      "child": "entity_relation",
+      "parent": "time_value",
+      "child_columns": [
+        "graph_id",
+        "valid_to_time_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "time_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "valid to time"
+    },
+    {
+      "child": "occurrence_label",
+      "parent": "occurrence",
+      "child_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "display label of occurrence"
+    },
+    {
+      "child": "activity",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "activity",
+      "parent": "action",
+      "child_columns": [
+        "graph_id",
+        "action_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "action_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "activity",
+      "parent": "financial_transaction",
+      "child_columns": [
+        "graph_id",
+        "transaction_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "transaction_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "activity",
+      "parent": "occurrence",
+      "child_columns": [
+        "graph_id",
+        "context_occurrence_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "occurrence_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "activity_detail",
+      "parent": "activity",
+      "child_columns": [
+        "graph_id",
+        "activity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "activity_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "activity_detail",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "domain",
+      "parent": "subject_graph",
+      "child_columns": [
+        "graph_id"
+      ],
+      "parent_columns": [
+        "graph_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "event",
+      "parent": "domain",
+      "child_columns": [
+        "graph_id",
+        "domain_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "domain_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "event",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "stage",
+      "parent": "event",
+      "child_columns": [
+        "graph_id",
+        "event_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "event_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "stage",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "event_activity",
+      "parent": "event",
+      "child_columns": [
+        "graph_id",
+        "event_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "event_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "event_activity",
+      "parent": "activity",
+      "child_columns": [
+        "graph_id",
+        "activity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "activity_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "event_activity",
+      "parent": "stage",
+      "child_columns": [
+        "graph_id",
+        "event_id",
+        "stage_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "event_id",
+        "stage_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "event_activity_detail",
+      "parent": "event_activity",
+      "child_columns": [
+        "graph_id",
+        "event_id",
+        "activity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "event_id",
+        "activity_id"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "event_activity_detail",
+      "parent": "activity_detail",
+      "child_columns": [
+        "graph_id",
+        "activity_id",
+        "detail_index"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "activity_id",
+        "detail_index"
+      ],
+      "nullable": false,
+      "identifying": true,
+      "label": "references"
+    },
+    {
+      "child": "activity_relation",
+      "parent": "activity",
+      "child_columns": [
+        "graph_id",
+        "from_activity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "activity_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "activity_relation",
+      "parent": "activity",
+      "child_columns": [
+        "graph_id",
+        "to_activity_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "activity_id"
+      ],
+      "nullable": false,
+      "identifying": false,
+      "label": "references"
+    },
+    {
+      "child": "activity_relation",
+      "parent": "evidence_set",
+      "child_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "parent_columns": [
+        "graph_id",
+        "evidence_set_id"
+      ],
+      "nullable": true,
+      "identifying": false,
+      "label": "references"
+    }
+  ],
+  "views": [
+    {
+      "name": "v_activity_facts",
+      "description": "Dereference the canonical fact and retain original actors, parties and occurrence context.",
+      "sql": "SELECT a.graph_id, a.activity_id, 'action' AS fact_type, x.action_id AS fact_id,\n x.occurrence_id, x.actor_id, NULL AS from_entity_id, NULL AS to_entity_id,\n x.action_type AS title, x.timestamp_time_id AS start_time_id, x.timestamp_time_id AS end_time_id, x.evidence_set_id\nFROM activity a JOIN action x ON x.graph_id=a.graph_id AND x.action_id=a.action_id\nUNION ALL\nSELECT a.graph_id,a.activity_id,'transaction',t.transaction_id,t.occurrence_id,NULL,t.from_entity_id,t.to_entity_id,\n t.name,t.timestamp_time_id,t.timestamp_time_id,t.evidence_set_id\nFROM activity a JOIN financial_transaction t ON t.graph_id=a.graph_id AND t.transaction_id=a.transaction_id\nUNION ALL\nSELECT a.graph_id,a.activity_id,'context',e.occurrence_id,e.occurrence_id,NULL,NULL,NULL,e.title,e.start_time_id,e.end_time_id,e.evidence_set_id\nFROM activity a JOIN occurrence e ON e.graph_id=a.graph_id AND e.occurrence_id=a.context_occurrence_id"
+    },
+    {
+      "name": "v_person_timeline",
+      "description": "One row per event/activity placement, with typed hierarchy; no organization decisions in the renderer.",
+      "sql": "SELECT g.graph_id,g.subject_entity_id,p.name AS person_name,\n d.domain_id,d.label AS domain_label,d.sort_order AS domain_order,\n s.event_id,s.label AS event_label,s.summary AS event_summary,s.sort_order AS event_order,\n st.stage_id,st.label AS stage_label,st.summary AS stage_summary,st.boundary_reason,st.sort_order AS stage_order,\n sa.activity_id,sa.sort_order AS activity_order,sa.detail_mode,COALESCE(sa.display_title,f.title) AS display_title,\n f.fact_type,f.fact_id,f.occurrence_id,f.actor_id,f.from_entity_id,f.to_entity_id,\n e.title AS occurrence_title,COALESCE(el.label,e.title) AS occurrence_display_label,e.descriptions AS occurrence_descriptions,e.subject_relevance,\n f.start_time_id,f.end_time_id,ts.value AS start_value,te.value AS end_value,\n ts.window_start AS start_window_start,ts.window_end AS start_window_end,\n ts.original_text AS start_original_text,ts.is_approximate AS start_is_approximate,ts.window_semantics AS start_window_semantics,\n te.window_start AS end_window_start,te.window_end AS end_window_end,\n te.original_text AS end_original_text,te.is_approximate AS end_is_approximate,te.window_semantics AS end_window_semantics,f.evidence_set_id,\n CASE WHEN f.actor_id=g.subject_entity_id THEN 'personal' WHEN f.fact_type='action' THEN 'other_actor' WHEN f.fact_type='transaction' THEN 'transaction' ELSE 'context' END AS activity_role\nFROM event_activity sa\nJOIN event s ON s.graph_id=sa.graph_id AND s.event_id=sa.event_id\nJOIN domain d ON d.graph_id=s.graph_id AND d.domain_id=s.domain_id\nJOIN subject_graph g ON g.graph_id=sa.graph_id\nJOIN entity p ON p.graph_id=g.graph_id AND p.entity_id=g.subject_entity_id\nLEFT JOIN stage st ON st.graph_id=sa.graph_id AND st.event_id=sa.event_id AND st.stage_id=sa.stage_id\nJOIN v_activity_facts f ON f.graph_id=sa.graph_id AND f.activity_id=sa.activity_id\nJOIN occurrence e ON e.graph_id=f.graph_id AND e.occurrence_id=f.occurrence_id\nLEFT JOIN occurrence_label el ON el.graph_id=e.graph_id AND el.occurrence_id=e.occurrence_id\nLEFT JOIN time_value ts ON ts.graph_id=f.graph_id AND ts.time_id=f.start_time_id\nLEFT JOIN time_value te ON te.graph_id=f.graph_id AND te.time_id=f.end_time_id"
+    },
+    {
+      "name": "v_activity_hover_details",
+      "description": "All or explicitly selected details for each placement.",
+      "sql": "SELECT sa.graph_id,sa.event_id,sa.activity_id,d.detail_index,d.value,d.evidence_set_id\nFROM event_activity sa JOIN activity_detail d ON d.graph_id=sa.graph_id AND d.activity_id=sa.activity_id\nWHERE sa.detail_mode='all' OR EXISTS\n (SELECT 1 FROM event_activity_detail sd WHERE sd.graph_id=sa.graph_id AND sd.event_id=sa.event_id AND sd.activity_id=sa.activity_id AND sd.detail_index=d.detail_index)"
+    },
+    {
+      "name": "v_event_links",
+      "description": "Edges whose two endpoints belong to the same event. Cross-event edges remain in activity_relation.",
+      "sql": "SELECT l.graph_id,a.event_id,l.link_id,l.from_activity_id,l.to_activity_id,l.relation_type,l.description,l.basis,l.evidence_set_id\nFROM activity_relation l\nJOIN event_activity a ON a.graph_id=l.graph_id AND a.activity_id=l.from_activity_id\nJOIN event_activity b ON b.graph_id=l.graph_id AND b.activity_id=l.to_activity_id AND b.event_id=a.event_id"
+    },
+    {
+      "name": "v_event_entity_relations",
+      "description": "Distinct occurrence-context entity relations; there is no joint-participation requirement.",
+      "sql": "SELECT DISTINCT sa.graph_id,sa.event_id,r.relation_id,r.from_entity_id,r.to_entity_id,r.relation_type,r.valid_from_time_id,r.valid_to_time_id,r.evidence_set_id\nFROM event_activity sa\nJOIN v_activity_facts f ON f.graph_id=sa.graph_id AND f.activity_id=sa.activity_id\nJOIN relation_occurrence re ON re.graph_id=f.graph_id AND re.occurrence_id=f.occurrence_id\nJOIN entity_relation r ON r.graph_id=re.graph_id AND r.relation_id=re.relation_id"
+    },
+    {
+      "name": "v_evidence",
+      "description": "Field-specific evidence and known source locations.",
+      "sql": "SELECT l.graph_id,l.evidence_set_id,l.field_path,l.quote_order,s.span_id,s.quote,s.document_id,s.char_start,s.char_end,d.source_url,d.title AS source_title,d.published_at\nFROM evidence_link l JOIN evidence_span s ON s.graph_id=l.graph_id AND s.span_id=l.span_id\nLEFT JOIN source_document d ON d.graph_id=s.graph_id AND d.document_id=s.document_id"
+    }
+  ]
+}
