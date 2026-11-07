@@ -110,6 +110,7 @@ class IntegrationTest(unittest.TestCase):
             self.assertEqual(json.loads((self.path / filename).read_text()), final)
         self.assertFalse((self.path / "RawEventCascade.json").exists())
         self.assertFalse((self.path / "epg_validation_report.json").exists())
+        self.assertFalse((self.path / "FinalPersonEPG.json").exists())
         self.assertIsNone(result.extras)
 
     def test_integration_does_not_mutate_agent_results(self):

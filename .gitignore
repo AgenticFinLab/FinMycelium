@@ -219,3 +219,4 @@ EXPERIMENT/
 
 /output
 *.patch
+person_epg_backup.*/*

@@ -892,9 +892,15 @@ class AgentEventBuilder(BaseBuilder):
             build_input, self.build_config, complete,
             lambda value, name: self.save_traces(value, name, "json"),
         )
+        person_epg = None
+        if graph["subject_type"] == "individual":
+            from finmy.person_epg.adapter import from_subject_graph
+            person_epg = from_subject_graph(graph)
         # Never publish a final graph until evidence/reference validation succeeds.
         projection = to_event_cascade(graph)
         self.save_traces(graph, "FinalSubjectGraph", "json")
+        if person_epg is not None:
+            self.save_traces(person_epg, "FinalPersonEPG", "json")
         self.save_traces(projection, "FinalEventCascade", "json")
         self.save_traces(projection, "IntegratedEventCascade", "json")
         from finmy.subject_graph.visualizer import render_subject_graph
@@ -904,6 +910,7 @@ class AgentEventBuilder(BaseBuilder):
             subject_graph=graph, event_cascades=projection, result=state,
             logs=state["agent_executed"],
             extras={"subject_graph": graph, "subject_graph_validation": report,
+                    **({"person_epg": person_epg} if person_epg is not None else {}),
                     "event_cascade_is_projection": True},
         )
 

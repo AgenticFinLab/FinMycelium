@@ -1,5 +1,7 @@
 # 原生主体图：人物与公司
 
+人物模式新增并行导出 `FinalPersonEPG.json`（`person-epg-3.0`）。新的关系模型、字段字典及旧格式转换见 [人物 EPG Schema](person_epg_schema.md)。下文仍描述供现有构建与 HTML 使用的 `subject-graph-1.0`。
+
 `person` / `company` 模式直接生成 `SubjectGraph`。图的根是稳定主体，一个时期内的多段经历独立组织，共享实体注册表。原事件模式仍生成原来的 EventCascade。
 
 这版适配覆盖 schema、构图、校验、前端和历史读取。它不增加补搜；已有资料可以直接重新构图。它也不证明现有资料足以覆盖人物完整生平。

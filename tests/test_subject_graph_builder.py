@@ -277,6 +277,28 @@ class NativeBuildTests(unittest.TestCase):
 class NativeBuilderIntegrationTests(unittest.TestCase):
     setUp = integration.IntegrationTest.setUp
 
+    def test_company_export_does_not_invoke_person_adapter(self):
+        self.builder.build_config = config(mode="company")
+        plan, events = fixture()
+        graph = {
+            "schema_version": "subject-graph-1.0", "graph_id": "company_fixture",
+            "subject_id": "berkshire", "subject_type": "organization",
+            "coverage_start": "2023", "coverage_end": "2023",
+            "title": plan["title"], "descriptions": [],
+            "entities": plan["entities"], "events": events, "relations": [],
+        }
+        with patch.dict(self.builder._run_subject.__globals__, {
+            "run_subject_build": lambda *args: (
+                graph, {"agent_executed": []}, {"valid": True, "errors": []}
+            )
+        }), patch("finmy.person_epg.adapter.from_subject_graph") as convert:
+            result = self.builder.run(input_())
+        convert.assert_not_called()
+        self.assertEqual(result.subject_graph, graph)
+        self.assertNotIn("person_epg", result.extras)
+        self.assertFalse((self.path / "FinalPersonEPG.json").exists())
+        self.assertTrue((self.path / "FinalSubjectGraph.html").is_file())
+
     def test_run_dispatches_native_and_exports_primary_and_legacy_artifacts(self):
         self.builder.build_config = config()
         self.builder.agents_lm = object()
@@ -311,6 +333,14 @@ class NativeBuilderIntegrationTests(unittest.TestCase):
         self.assertTrue(result.extras["event_cascade_is_projection"])
         self.assertEqual(result.subject_graph["schema_version"], "subject-graph-1.0")
         self.assertEqual(json.loads((self.path/"FinalSubjectGraph.json").read_text()), result.subject_graph)
+        from finmy.person_epg.adapter import to_subject_graph
+        person_epg = json.loads((self.path/"FinalPersonEPG.json").read_text())
+        self.assertEqual(person_epg, result.extras["person_epg"])
+        self.assertEqual(person_epg["schema_version"], "person-epg-3.0")
+        self.assertEqual(to_subject_graph(person_epg), result.subject_graph)
+        self.assertEqual(person_epg["occurrence"][0]["occurrence_id"], result.subject_graph["events"][0]["event_id"])
+        for table in ("domain", "event", "stage", "event_activity"):
+            self.assertEqual(person_epg[table], [])
         self.assertEqual(json.loads((self.path/"FinalEventCascade.json").read_text()), result.event_cascades)
         self.assertEqual(len(result.event_cascades["stages"]), 2)
         self.assertTrue((self.path/"FinalSubjectGraph.html").is_file())
