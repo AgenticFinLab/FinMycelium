@@ -240,16 +240,17 @@ def validate_graph(graph):
         raise ValueError("图缺少 event_id")
     if not unwrap(graph.get("title")) or not isinstance(graph.get("stages"), list) or not graph["stages"]:
         raise ValueError("图需要 title 和非空 stages")
-    stage_ids, episode_ids = set(), set()
+    stage_ids = set()
     for stage in graph["stages"]:
         sid = stage.get("stage_id") if isinstance(stage, dict) else None
         if not isinstance(sid, str) or not sid or sid in stage_ids or not isinstance(stage.get("episodes"), list):
             raise ValueError("stage_id 重复或阶段结构不完整")
         stage_ids.add(sid)
+        episode_ids = set()
         for episode in stage["episodes"]:
             eid = episode.get("episode_id") if isinstance(episode, dict) else None
             if not isinstance(eid, str) or not eid or eid in episode_ids:
-                raise ValueError("episode_id 缺失或重复")
+                raise ValueError("episode_id 缺失或在同一阶段内重复")
             episode_ids.add(eid)
             participants = episode.get("participants", [])
             if not isinstance(participants, list):

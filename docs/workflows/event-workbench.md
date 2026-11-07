@@ -59,7 +59,9 @@ and URLs are included in exported event packages.
 
 Graph import preserves the supplied event ID and requires explicit association
 with the workspace event and its current evidence. Import checks cover basic
-structure, nested IDs and edge references. Graph edits create immutable revisions;
+structure, nested IDs and edge references. Episode IDs must be unique within each
+stage; different stages may reuse an episode ID, matching the Builder contract.
+Graph edits create immutable revisions;
 IDs and structural indices are read-only. Gantt displays partial dates as intervals
 and omits entries with unknown dates.
 
