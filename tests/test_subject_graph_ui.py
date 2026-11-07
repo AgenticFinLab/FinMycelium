@@ -69,7 +69,12 @@ class SubjectUITest(unittest.TestCase):
             download_button=Mock(), rerun=Mock(), spinner=lambda *a, **k: nullcontext())
         self.agent_renderer = Mock()
         self.class_renderer = Mock()
+        self.history = load("subject_history_test", "finmy/web_ui/utils/history_loader.py")
         fake = {
+            "finmy.web_ui": module("web_ui", __path__=[]),
+            "finmy.web_ui.utils": module("utils", __path__=[]),
+            "finmy.web_ui.components": module("components", __path__=[str(ROOT / "finmy/web_ui/components")]),
+            "finmy.web_ui.utils.history_loader": self.history,
             "streamlit": self.st, "streamlit.components": components, "streamlit.components.v1": v1,
             "finmy.web_ui.styles": module("styles", BASE_STYLES="", CLASS_BUILD_STYLES=""),
             "finmy.web_ui.pages.results.agent_results": module("agent", AgentResultsRenderer=self.agent_renderer),
@@ -188,6 +193,30 @@ class SubjectUITest(unittest.TestCase):
             page.render()
         self.agent_renderer.render.assert_called_once_with(self.state.analysis_results)
         self.html.assert_not_called()
+
+    def test_person_epg_result_downloads_json_and_native_hover_html(self):
+        package = json.loads((ROOT / 'examples/data/person_epg/buffett_2022_2023.json').read_text())
+        self.state.analysis_results = package
+        with patch.object(self.results.ResultsPage, '_render_history_file_selector'):
+            self.results.ResultsPage.render()
+        self.html.assert_not_called()
+        self.agent_renderer.render.assert_not_called()
+        self.class_renderer.render.assert_not_called()
+        downloads = self.st.download_button.call_args_list
+        self.assertEqual([c.kwargs['file_name'] for c in downloads],
+                         ['FinalPersonEPG.json', 'person_timeline.html'])
+        self.assertEqual(json.loads(downloads[0].kwargs['data']), package)
+        self.assertIn('Plotly.newPlot', downloads[1].kwargs['data'])
+        self.st.error.assert_not_called()
+
+    def test_unorganized_person_epg_reports_missing_memberships(self):
+        from finmy.person_epg.adapter import from_subject_graph
+        from test_subject_graph_schema import graph_fixture
+        self.state.analysis_results = from_subject_graph(graph_fixture())
+        with patch.object(self.results.ResultsPage, '_render_history_file_selector'):
+            self.results.ResultsPage.render()
+        self.assertIn('Store domain/event organization', self.st.error.call_args.args[0])
+        self.assertEqual(self.st.download_button.call_count, 1)
 
     def test_history_prefers_native_graph_and_detects_mode(self):
         (self.path / "FinalSubjectGraph.json").write_text(json.dumps(graph()))

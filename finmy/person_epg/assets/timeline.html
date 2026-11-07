@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>@@TITLE@@</title>
+  <style>
+    html, body { margin: 0; background: white; font-family: Arial, "Microsoft YaHei", sans-serif; color: #2a3f5f; }
+    * { box-sizing: border-box; }
+    #chart-scroll { width: 100%; overflow-x: auto; }
+    #gantt { min-width: 1180px; width: 100%; }
+    .controls { margin: 6px 48px 18px; font-size: 13px; color: #555; }
+    .control-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+    .control-row input { flex: 1; min-width: 80px; }
+    .control-row label { width: 76px; }
+    .control-row output { min-width: 154px; text-align: right; }
+    .control-row button { font: 13px Arial, sans-serif; border: 1px solid #c9d2db; background: white; border-radius: 2px; padding: 6px 10px; color: #2a3f5f; cursor: pointer; }
+    #time-window-label { text-align: center; color: #666; font-size: 13px; margin-top: 7px; }
+  </style>
+  <script>@@PLOTLY@@</script>
+</head>
+<body>
+  <div id="chart-scroll"><div id="gantt"></div></div>
+  <div class="controls">
+    <div class="control-row">
+      <button id="collapse">Collapse events</button><button id="expand">Expand events</button>
+    </div>
+    <div class="control-row">
+      <label for="compactness">Time scale</label><input id="compactness" type="range" min="1" max="800" value="800"><output id="scale-label"></output>
+    </div>
+    <div class="control-row">
+      <label for="time-window">Time window</label><input id="time-window" type="range" min="0" max="1000" value="0">
+    </div>
+    <div id="time-window-label"></div>
+  </div>
+  <script id="epg-data" type="application/json">@@DATA@@</script>
+  <script>@@SCRIPT@@</script>
+</body>
+</html>

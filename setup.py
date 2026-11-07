@@ -37,7 +37,9 @@ setuptools.setup(
     install_requires=get_requirements(),
     extras_require={"tests": ["pytest"]},
     include_package_data=True,
-    package_data={"finmy.person_epg": ["schema_model.json", "schema.json", "mysql.sql"]},
+    package_data={"finmy.person_epg": [
+        "schema_model.json", "schema.json", "mysql.sql", "assets/*.html", "assets/*.js",
+    ]},
     options={"bdist_wheel": {"python_tag": "py311"}},
     classifiers=[
         "Development Status :: 3 - Alpha",

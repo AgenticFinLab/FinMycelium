@@ -14,6 +14,8 @@ from finmy.web_ui.pages.results.class_results import ClassResultsRenderer
 from finmy.web_ui.utils.history_loader import (
     load_history_result,
     detect_build_mode,
+    NATIVE_RESULT_FILES,
+    preferred_result_file,
 )
 
 
@@ -38,7 +40,9 @@ class ResultsPage:
 
         build_mode = st.session_state.get("build_mode")
 
-        if st.session_state.analysis_results.get("schema_version") == "subject-graph-1.0":
+        if st.session_state.analysis_results.get("schema_version") == "person-epg-3.0":
+            ResultsPage._render_person_epg_results()
+        elif st.session_state.analysis_results.get("schema_version") == "subject-graph-1.0":
             ResultsPage._render_subject_results()
         elif build_mode == "agent_build":
             ResultsPage._render_agent_results()
@@ -46,6 +50,23 @@ class ResultsPage:
             ResultsPage._render_class_results()
         else:
             st.error(f"Unknown build mode: {build_mode}")
+
+    @staticmethod
+    def _render_person_epg_results():
+        """Download the stored hierarchy and its native-hover Gantt."""
+        from finmy.person_epg.visualizer import render_person_epg
+
+        package = st.session_state.analysis_results
+        st.download_button("Download Person EPG JSON",
+                           data=json.dumps(package, ensure_ascii=False, indent=2),
+                           file_name="FinalPersonEPG.json", mime="application/json")
+        try:
+            rendered = render_person_epg(package)
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+        st.download_button("Download Gantt HTML",
+                           data=rendered, file_name="person_timeline.html", mime="text/html")
 
     @staticmethod
     def _render_subject_results():
@@ -92,6 +113,7 @@ class ResultsPage:
             key="result_file_path_input",
             help=(
                 "Enter the full path to result file:\n"
+                "- Organized Person EPG: FinalPersonEPG.json (or example JSON)\n"
                 "- Person/Company: FinalSubjectGraph.json\n"
                 "- Agent Build: FinalEventCascade.json\n"
                 "- Class Build: Class_Build_Event_Cascade_*.json\n"
@@ -103,11 +125,7 @@ class ResultsPage:
             if result_file_path:
                 if os.path.exists(result_file_path):
                     # Check if it's a valid result file or directory
-                    is_valid_file = result_file_path.endswith(".json") and (
-                        "FinalEventCascade.json" in result_file_path
-                        or "FinalSubjectGraph.json" in result_file_path
-                        or "Class_Build_Event_Cascade_" in result_file_path
-                    )
+                    is_valid_file = os.path.isfile(result_file_path) and result_file_path.endswith(".json")
                     is_valid_dir = os.path.isdir(result_file_path)
 
                     if is_valid_file or is_valid_dir:
@@ -117,7 +135,7 @@ class ResultsPage:
                     else:
                         st.error(
                             "❌ Please provide a valid result file path or directory.\n"
-                            "Supported files: FinalSubjectGraph.json, FinalEventCascade.json or Class_Build_Event_Cascade_*.json"
+                            "Supported files: Person EPG JSON, FinalSubjectGraph.json, FinalEventCascade.json or Class_Build_Event_Cascade_*.json"
                         )
                 else:
                     st.error(f"❌ Path not found: {result_file_path}")
@@ -150,10 +168,10 @@ class ResultsPage:
                 file_name = os.path.basename(result_path)
                 if os.path.isdir(result_path):
                     # Find the actual file name
-                    for item in sorted(os.listdir(result_path), key=lambda name: name != "FinalSubjectGraph.json"):
+                    preferred = os.path.basename(preferred_result_file(result_path))
+                    for item in sorted(os.listdir(result_path), key=lambda name: name != preferred):
                         if item.endswith(".json") and (
-                            "FinalEventCascade" in item
-                            or "FinalSubjectGraph" in item
+                            item in NATIVE_RESULT_FILES
                             or "Class_Build_Event_Cascade_" in item
                         ):
                             file_name = item

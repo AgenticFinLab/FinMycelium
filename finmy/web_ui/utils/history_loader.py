@@ -9,6 +9,18 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
+NATIVE_RESULT_FILES = ("FinalSubjectGraph.json", "FinalPersonEPG.json", "FinalEventCascade.json")
+
+
+def preferred_result_file(directory):
+    """Keep legacy run selection; support directories containing only Person EPG."""
+    return next(
+        (os.path.join(directory, name) for name in NATIVE_RESULT_FILES
+         if os.path.isfile(os.path.join(directory, name))),
+        os.path.join(directory, "FinalEventCascade.json"),
+    )
+
+
 def scan_history_files(save_folder: str) -> List[Dict[str, str]]:
     """
     Scan for historical result directories.
@@ -32,9 +44,7 @@ def scan_history_files(save_folder: str) -> List[Dict[str, str]]:
 
             # Check if it's a directory and matches the pattern
             if os.path.isdir(item_path) and item.startswith("build_output_"):
-                result_file = os.path.join(item_path, "FinalSubjectGraph.json")
-                if not os.path.exists(result_file):
-                    result_file = os.path.join(item_path, "FinalEventCascade.json")
+                result_file = preferred_result_file(item_path)
 
                 # Check if result file exists
                 if os.path.exists(result_file):
@@ -78,9 +88,7 @@ def load_history_result(result_dir_or_file: str) -> Optional[Dict[str, Any]]:
     else:
         # Try to find the result file in the directory
         # Prefer the native graph over the lossy legacy projection beside it.
-        result_file = os.path.join(result_dir_or_file, "FinalSubjectGraph.json")
-        if not os.path.exists(result_file):
-            result_file = os.path.join(result_dir_or_file, "FinalEventCascade.json")
+        result_file = preferred_result_file(result_dir_or_file)
 
         # If not found, try to find class_build format files
         if not os.path.exists(result_file):
@@ -110,7 +118,14 @@ def load_history_result(result_dir_or_file: str) -> Optional[Dict[str, Any]]:
 
         if not isinstance(result_data, dict):
             raise ValueError("A reconstruction result must be a JSON object")
-        if (os.path.basename(result_file) == "FinalSubjectGraph.json"
+        if (os.path.basename(result_file) == "FinalPersonEPG.json"
+                or str(result_data.get("schema_version", "")).startswith("person-epg-")):
+            from finmy.person_epg.validation import validate_person_epg
+            report = validate_person_epg(result_data)
+            if not report["valid"]:
+                logging.error("Invalid Person EPG: %s", report["errors"])
+                return None
+        elif (os.path.basename(result_file) == "FinalSubjectGraph.json"
                 or str(result_data.get("schema_version", "")).startswith("subject-graph-")):
             from finmy.subject_graph.validation import validate_subject_graph
             report = validate_subject_graph(result_data)
@@ -136,6 +151,8 @@ def detect_build_mode(result_data: Dict[str, Any]) -> str:
     Returns:
         Build mode string: "subject_graph", "agent_build", or "class_build"
     """
+    if result_data.get("schema_version") == "person-epg-3.0":
+        return "person_epg"
     if result_data.get("schema_version") == "subject-graph-1.0":
         return "subject_graph"
     # Agent build typically has "stages" with nested structure

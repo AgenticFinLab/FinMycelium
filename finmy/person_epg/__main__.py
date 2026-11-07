@@ -1,4 +1,4 @@
-"""Offline conversion and validation: python -m finmy.person_epg --help."""
+"""Offline conversion, validation and HTML rendering of Person EPG JSON."""
 
 import argparse
 import json
@@ -10,7 +10,7 @@ from .validation import validate_person_epg
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("convert", "validate", "export-legacy"):
+    for command in ("convert", "validate", "export-legacy", "render"):
         sub = commands.add_parser(command)
         sub.add_argument("input", type=Path)
         if command != "validate":
@@ -22,6 +22,12 @@ def main(argv=None):
             report = validate_person_epg(data)
             print(json.dumps(report, ensure_ascii=False, indent=2))
             return 0 if report["valid"] else 1
+        if args.command == "render":
+            from .visualizer import render_person_epg
+
+            render_person_epg(data, args.output)
+            print(args.output)
+            return 0
         from .adapter import from_subject_graph, to_subject_graph
 
         converter = (
