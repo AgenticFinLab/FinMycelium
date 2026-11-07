@@ -191,6 +191,30 @@ def test_duplicate_ids(graph):
         validate_graph(graph)
 
 
+def test_stage_local_episode_ids_survive_import_and_export(store, event, graph):
+    from finmy.builder.sparse_build.validation import validate_cascade
+
+    graph["stages"][0]["episodes"][0]["descriptions"] = []
+    second = copy.deepcopy(graph["stages"][0])
+    second.update(stage_id="S2", index_in_event=1)
+    graph["stages"].append(second)
+    validate_cascade(graph)
+    original = copy.deepcopy(graph)
+
+    store.add_source(event, "Source", "The port reopened.")
+    store.add_graph(event, graph_from_bytes(json.dumps(graph).encode()))
+    store.review(event, "graph", "approved", "Reviewer", "Checked", store.target(event, "graph"))
+    assert store.graphs(event)[0]["body"] == original
+    with zipfile.ZipFile(io.BytesIO(store.export_zip([event]))) as archive:
+        assert json.loads(archive.read(f"{event}/FinalEPG.json")) == original
+
+
+def test_duplicate_episode_ids_within_stage_are_rejected(graph):
+    graph["stages"][0]["episodes"].append(copy.deepcopy(graph["stages"][0]["episodes"][0]))
+    with pytest.raises(ValueError, match="episode_id"):
+        validate_graph(graph)
+
+
 def test_edit_fields_protect_ids(graph):
     paths = [path for path, value in editable_fields(graph)]
     assert ("title", "value") in paths
