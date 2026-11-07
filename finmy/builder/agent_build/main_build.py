@@ -69,10 +69,14 @@ from finmy.builder.utils import (
     load_python_text,
     filter_dataclass_fields,
     extract_json_response,
+    run_single_inference,
 )
 from finmy.builder.base import AgentState
 from finmy.builder.agent_build.structure import Episode
 from finmy.builder.agent_build.prompts import *
+from finmy.reconstruction_scope import read_reconstruction
+from finmy.subject_graph.build import run_subject_build
+from finmy.subject_graph.compat import to_event_cascade
 
 # Obtain all text content under the structure.py
 _STRUCTURE_SPEC_FULL = load_python_text(
@@ -505,8 +509,9 @@ class AgentEventBuilder(BaseBuilder):
         # Since we just injected a JSON schema containing braces, we must escape them.
         sys_msg = sys_msg.replace("{", "{{").replace("}", "}}")
 
-        out: InferOutput = self.agents_lm.run(
-            infer_input=InferInput(system_msg=sys_msg, user_msg=user_msg_template),
+        out: InferOutput = run_single_inference(
+            self.agents_lm,
+            InferInput(system_msg=sys_msg, user_msg=user_msg_template),
             **prompt_kwargs,
         )
         result = out.response
@@ -847,8 +852,73 @@ class AgentEventBuilder(BaseBuilder):
 
         return self.integrate_results(dummy_state)
 
+    def _run_subject(self, build_input: BuildInput) -> BuildOutput:
+        """Build a native subject graph; legacy EventCascade is an export only."""
+        calls = []
+
+        def complete(agent_name, system, payload):
+            # The existing inference adapter formats both templates once.
+            system = system.replace("{", "{{").replace("}", "}}")
+            request = json.dumps(payload, ensure_ascii=False)
+            for attempt in range(2):
+                out = run_single_inference(
+                    self.agents_lm,
+                    InferInput(system_msg=system, user_msg="{payload}"),
+                    payload=request,
+                )
+                calls.append(agent_name)
+                self.save_traces({agent_name: out.to_dict()}, f"{agent_name}-{len(calls)}", "json")
+                try:
+                    return extract_json_response(out.response)
+                except ValueError as exc:
+                    self.save_traces({"agent": agent_name, "attempt": attempt + 1,
+                                      "error": str(exc)},
+                                     f"{agent_name}-{len(calls)}-json-error", "json")
+                    if attempt:
+                        raise ValueError(
+                            f"{agent_name}: invalid JSON after one retry; inspect saved response traces. "
+                            f"If truncated, increase max_new_tokens. {exc}"
+                        ) from exc
+                    request = json.dumps(payload, ensure_ascii=False) + (
+                        "\n\nYour previous response could not be parsed: " + str(exc) +
+                        "\nGenerate the COMPLETE requested JSON again from the original input. "
+                        "Return only valid JSON, with commas between members/items. "
+                        "Keep it concise enough to finish within the output limit. "
+                        "Preserve evidence quotes verbatim; do not invent facts."
+                    )
+
+
+        graph, state, report = run_subject_build(
+            build_input, self.build_config, complete,
+            lambda value, name: self.save_traces(value, name, "json"),
+        )
+        person_epg = None
+        if graph["subject_type"] == "individual":
+            from finmy.person_epg.adapter import from_subject_graph
+            person_epg = from_subject_graph(graph)
+        # Never publish a final graph until evidence/reference validation succeeds.
+        projection = to_event_cascade(graph)
+        self.save_traces(graph, "FinalSubjectGraph", "json")
+        if person_epg is not None:
+            self.save_traces(person_epg, "FinalPersonEPG", "json")
+        self.save_traces(projection, "FinalEventCascade", "json")
+        self.save_traces(projection, "IntegratedEventCascade", "json")
+        from finmy.subject_graph.visualizer import render_subject_graph
+        render_subject_graph(graph, output_path=Path(self.save_dir) / "FinalSubjectGraph.html",
+                             event_cascade=projection)
+        return BuildOutput(
+            subject_graph=graph, event_cascades=projection, result=state,
+            logs=state["agent_executed"],
+            extras={"subject_graph": graph, "subject_graph_validation": report,
+                    **({"person_epg": person_epg} if person_epg is not None else {}),
+                    "event_cascade_is_projection": True},
+        )
+
     def run(self, build_input: BuildInput) -> BuildOutput:
         """Run the builder pipeline."""
+        reconstruction = read_reconstruction(self.build_config)
+        if reconstruction["mode"] in ("person", "company"):
+            return self._run_subject(build_input)
         # 1. Get prompts
         agent_system_msgs, agent_user_msgs = self._get_agent_prompts()
 

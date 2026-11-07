@@ -28,3 +28,4 @@ llama-index==0.14.10
 llama-index-llms-openai-like==0.5.3
 httpx[socks]
 openpyxl
+jsonschema>=4.18,<5

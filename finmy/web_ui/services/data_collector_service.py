@@ -18,6 +18,7 @@ from finmy.url_collector.url_parser_clean import extract_content_from_parsed_con
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.web_ui.utils.formatters import format_timestamp
+from finmy.runner.relevance_filter import make_document
 
 
 class DataCollectorService:
@@ -32,11 +33,28 @@ class DataCollectorService:
             save_dir: Directory to save collected data
         """
         self.config = config
+        self.documents = {name: [] for name in ("url", "file", "bocha", "baidu")}
         self.save_dir = save_dir
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.parser = URLParser(
             delay=2.0, use_selenium_fallback=True, selenium_wait_time=5
         )
+
+    def collect_subject_search_results(self, query, keywords, subject):
+        """Collect publication-range searches; keep the existing document contract."""
+        from finmy.runner.subject_search import collect_subject_sources
+        from finmy.runner.scoped_search_api import search
+        from finmy.runner.scoped_page import parse
+        options = self.config.get("subject_search", {})
+        def progress(message):
+            st.write(f"**{format_timestamp()}** - {message}")
+
+        docs = collect_subject_sources(query, keywords, subject, options,
+                                       search, parse, self.save_dir, progress=progress)
+        for doc in docs:
+            self.documents[doc["source"]].append(doc)
+        return ([d["raw_text"] for d in self.documents["bocha"]],
+                [d["raw_text"] for d in self.documents["baidu"]])
 
     def collect_bocha_search_results(
         self, search_query: str, keywords: List[str]
@@ -109,6 +127,7 @@ class DataCollectorService:
                     f"{extract_content_from_parsed_content(item['parsed_content'])}\n\n\n"
                 )
                 formatted_content.append(item_content)
+                self.documents["bocha"].append(make_document(item_content, item, "bocha"))
 
             st.write(f"**{format_timestamp()}** - Success: Bocha Search")
         except (
@@ -204,6 +223,7 @@ class DataCollectorService:
                     f"{extract_content_from_parsed_content(item['parsed_content'])}\n\n\n"
                 )
                 formatted_content.append(item_content)
+                self.documents["baidu"].append(make_document(item_content, item, "baidu"))
 
             st.write(f"**{format_timestamp()}** - Success: Baidu Search")
         except (
@@ -353,6 +373,7 @@ class DataCollectorService:
                         f"{extract_content_from_parsed_content(item.get('parsed_content', []))}"
                     )
                     url_link_content.append(item_content)
+                    self.documents["url"].append(make_document(item_content, item, "url"))
 
             # Save and format filepath data
             if structure_data_filepath:
@@ -376,6 +397,7 @@ class DataCollectorService:
                                 f"content:\n{f.read()}"
                             )
                             filepath_content.append(item_content)
+                            self.documents["file"].append(make_document(item_content, item, "file"))
         except (
             KeyError,
             ValueError,

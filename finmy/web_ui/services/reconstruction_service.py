@@ -7,6 +7,7 @@ import logging
 import traceback
 import datetime
 import json
+import copy
 from typing import Dict, Any, List
 import streamlit as st
 
@@ -14,6 +15,9 @@ from finmy.pipeline import FinmyPipeline
 from finmy.builder.utils import estimate_complete_time
 from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
+from finmy.runner.relevance_filter import filter_documents
+from finmy.runner.context_budget import allocate_context
+from finmy.reconstruction_scope import read_reconstruction, search_query
 
 
 class ReconstructionService:
@@ -26,7 +30,9 @@ class ReconstructionService:
         Args:
             config: Configuration dictionary
         """
-        self.config = config
+        self.config = copy.deepcopy(config)
+        # Reject malformed person scope before starting any search or model call.
+        read_reconstruction(config)
     
     def run_reconstruction(
         self, main_input: str, keywords: List[str], structured_data: Any
@@ -42,8 +48,28 @@ class ReconstructionService:
         Returns:
             Reconstruction results dictionary
         """
+        keywords = keywords or []
+        reconstruction = read_reconstruction(self.config)
+        scoped = reconstruction["mode"] != "event" and self.config.get("subject_search", {}).get("enabled", True)
+        if scoped:
+            from finmy.runner.scoped_search import plan_search, search_window
+            # Validate the plan before any network call. Prompt dates become
+            # structured event coverage; publication overrides stay search-only.
+            plan_search(main_input, keywords, reconstruction["subject"], self.config.get("subject_search", {}))
+            subject = self.config["builder_config"]["reconstruction"]["subject"]
+            if not subject.get("coverage_start") or not subject.get("coverage_end"):
+                try:
+                    start, end = search_window(main_input, reconstruction["subject"])
+                except ValueError:
+                    # An explicit publication-only window need not assert event dates.
+                    # plan_search above already validated that the search is bounded.
+                    pass
+                else:
+                    subject["coverage_start"] = subject.get("coverage_start") or start.isoformat()
+                    subject["coverage_end"] = subject.get("coverage_end") or end.isoformat()
+            reconstruction = read_reconstruction(self.config)
         # Prepare search query
-        search_query_content = f"{main_input} \n\nkeywords: {' '.join(keywords)}"
+        search_query_content = search_query(main_input, keywords, self.config)
         st.write(f"**{format_timestamp()}** - Input has been processed.")
         
         # Create output directory
@@ -55,12 +81,13 @@ class ReconstructionService:
         collector = DataCollectorService(self.config, save_dir)
         
         # Collect data from all sources
-        bocha_content = collector.collect_bocha_search_results(
-            search_query_content, keywords
-        )
-        baidu_content = collector.collect_baidu_search_results(
-            search_query_content, keywords
-        )
+        if scoped:
+            bocha_content, baidu_content = collector.collect_subject_search_results(
+                main_input, keywords, reconstruction["subject"]
+            )
+        else:
+            bocha_content = collector.collect_bocha_search_results(search_query_content, keywords)
+            baidu_content = collector.collect_baidu_search_results(search_query_content, keywords)
         url_content, filepath_content = collector.collect_structured_data(
             structured_data, keywords
         )
@@ -81,8 +108,64 @@ class ReconstructionService:
         logging.info("All_Text_Content: %s", all_text_content)
         logging.info("Length of All_Text_Content List: %d", len(all_text_content))
         
-        # Limit content length
-        all_text_content_limit = self._limit_content_length(all_text_content)
+        # P0: classify sources BEFORE the existing context-length budget is applied.
+        # Keep the original All_Text_Content and formatted search archives unchanged.
+        documents = [doc for source in ("url", "file", "bocha", "baidu")
+                     for doc in collector.documents[source]]
+        if [d["raw_text"] for d in documents] != all_text_content:
+            raise ValueError("Collected source metadata/content are out of sync")
+        filtered = filter_documents(
+            documents, main_input, keywords, self.config, save_dir, progress=st.write,
+        )
+        summary = filtered["summary"]
+        st.write(f"Relevance filter: kept {summary['kept']}/{summary['retrieved']} "
+                 f"documents; removed {summary['removed']}.")
+        for warning in filtered["warnings"]:
+            st.warning(warning)
+        if not filtered["contents"]:
+            raise ValueError("No relevant sources remain. Inspect relevance_decisions.json or refine the search.")
+
+        if scoped and reconstruction["mode"] == "person":
+            from finmy.runner.decision_followup import collect_decision_followup
+            extra = collect_decision_followup(
+                filtered, main_input, keywords, reconstruction["subject"], self.config, save_dir,
+                progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"),
+                known_urls=[d.get("url") for d in documents],
+            )
+            if extra:
+                # Reuse the relevance cache for old documents and assign unique
+                # IDs across the combined source list before the context budget.
+                filtered = filter_documents(
+                    documents + extra, main_input, keywords, self.config, save_dir, progress=st.write,
+                )
+                summary = filtered["summary"]
+                st.write(f"Relevance filter after decision follow-up: kept {summary['kept']}/"
+                         f"{summary['retrieved']} documents.")
+                for warning in filtered["warnings"]:
+                    st.warning(warning)
+
+        # Budget retained evidence before building: CORE/CONTEXT first, long
+        # sources as verbatim excerpts. No extra model call is needed here.
+        budgeted = allocate_context(
+            filtered["documents"], filtered["decisions"], self.config,
+            include_metadata=summary["enabled"],
+        )
+        all_text_content_limit = budgeted["contents"]
+        budget_report = budgeted["report"]
+        with open(os.path.join(save_dir, "context_budget_report.json"), "w", encoding="utf-8") as f:
+            json.dump(budget_report, f, ensure_ascii=False, indent=2)
+        budget_summary = budget_report["summary"]
+        st.write(f"Context budget: {budget_summary['included_documents']}/"
+                 f"{budget_summary['candidate_documents']} sources; "
+                 f"{budget_summary['used_chars']}/{budget_summary['max_content_length']} chars; "
+                 f"{budget_summary['truncated_documents']} excerpted.")
+        for warning in budget_report["warnings"]:
+            st.warning(warning)
+        # Archive exactly what the builder receives, rather than only pre-budget data.
+        with open(os.path.join(save_dir, "builder_input_contents.json"), "w", encoding="utf-8") as f:
+            json.dump(all_text_content_limit, f, ensure_ascii=False, indent=2)
+        if not all_text_content_limit:
+            raise ValueError("Context budget admitted no documents. Inspect filtered_contents.json.")
         
         # Run pipeline
         return self._run_pipeline(
@@ -104,7 +187,7 @@ class ReconstructionService:
                 limited_content.append(item)
                 total_length += item_length
             else:
-                break
+                continue
         
         logging.info("Length of All_Text_Content String: %d", sum(len(c) for c in content_list))
         logging.info("Length of All_Text_Content_Limit String: %d", total_length)
@@ -140,21 +223,22 @@ class ReconstructionService:
             )
             logging.info("config: %s", self.config)
             
-            pipeline = FinmyPipeline(self.config)
-            logging.info("Pipeline is initialized")
-            st.write(f"**{format_timestamp()}** - Building pipeline is initialized")
-            
-            logging.info("Building......")
-            st.write(f"**{format_timestamp()}** - Building......")
-            
-            pipeline_result = pipeline.lm_build_pipeline_with_contents(
-                contents=contents, query_text=query_text, key_words=keywords
-            )
-            
-            st.session_state.save_builder_dir_path = pipeline.save_builder_dir_path
-            logging.info("pipeline save_builder_dir_path: %s", pipeline.save_builder_dir_path)
-            logging.info("st.session_state.save_builder_dir_path: %s", st.session_state.save_builder_dir_path)
-            
+            if read_reconstruction(self.config)["mode"] != "event":
+                # Filtered evidence goes directly to the native subject builder.
+                # Legacy financial matching/summarization can drop person/company history.
+                from finmy.subject_graph.runner import build_from_contents
+                pipeline_result, builder_save_path = build_from_contents(
+                    contents, query_text, keywords, self.config,
+                )
+            else:
+                pipeline = FinmyPipeline(self.config)
+                pipeline_result = pipeline.lm_build_pipeline_with_contents(
+                    contents=contents, query_text=query_text, key_words=keywords
+                )
+                builder_save_path = pipeline.save_builder_dir_path
+            st.session_state.save_builder_dir_path = builder_save_path
+            logging.info("builder save directory: %s", builder_save_path)
+
             logging.info("type of pipeline_result: %s", type(pipeline_result))
             logging.info("pipeline_result:\n %s", pipeline_result)
             
@@ -163,6 +247,8 @@ class ReconstructionService:
                 st.write(f"**{format_timestamp()}** - Building completed.")
                 
                 # Return appropriate result format
+                if getattr(pipeline_result, "subject_graph", None) is not None:
+                    return pipeline_result.subject_graph
                 if isinstance(pipeline_result, dict):
                     return pipeline_result
                 elif hasattr(pipeline_result, "event_cascades"):

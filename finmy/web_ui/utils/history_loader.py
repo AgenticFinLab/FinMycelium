@@ -32,7 +32,9 @@ def scan_history_files(save_folder: str) -> List[Dict[str, str]]:
 
             # Check if it's a directory and matches the pattern
             if os.path.isdir(item_path) and item.startswith("build_output_"):
-                result_file = os.path.join(item_path, "FinalEventCascade.json")
+                result_file = os.path.join(item_path, "FinalSubjectGraph.json")
+                if not os.path.exists(result_file):
+                    result_file = os.path.join(item_path, "FinalEventCascade.json")
 
                 # Check if result file exists
                 if os.path.exists(result_file):
@@ -75,8 +77,10 @@ def load_history_result(result_dir_or_file: str) -> Optional[Dict[str, Any]]:
         result_file = result_dir_or_file
     else:
         # Try to find the result file in the directory
-        # First try agent_build format
-        result_file = os.path.join(result_dir_or_file, "FinalEventCascade.json")
+        # Prefer the native graph over the lossy legacy projection beside it.
+        result_file = os.path.join(result_dir_or_file, "FinalSubjectGraph.json")
+        if not os.path.exists(result_file):
+            result_file = os.path.join(result_dir_or_file, "FinalEventCascade.json")
 
         # If not found, try to find class_build format files
         if not os.path.exists(result_file):
@@ -104,6 +108,16 @@ def load_history_result(result_dir_or_file: str) -> Optional[Dict[str, Any]]:
         with open(result_file, "r", encoding="utf-8") as f:
             result_data = json.load(f)
 
+        if not isinstance(result_data, dict):
+            raise ValueError("A reconstruction result must be a JSON object")
+        if (os.path.basename(result_file) == "FinalSubjectGraph.json"
+                or str(result_data.get("schema_version", "")).startswith("subject-graph-")):
+            from finmy.subject_graph.validation import validate_subject_graph
+            report = validate_subject_graph(result_data)
+            if not report["valid"]:
+                logging.error("Invalid SubjectGraph: %s", report["errors"])
+                return None
+
         logging.info("Successfully loaded result from: %s", result_file)
         return result_data
 
@@ -120,8 +134,10 @@ def detect_build_mode(result_data: Dict[str, Any]) -> str:
         result_data: The loaded result dictionary
 
     Returns:
-        Build mode string: "agent_build" or "class_build"
+        Build mode string: "subject_graph", "agent_build", or "class_build"
     """
+    if result_data.get("schema_version") == "subject-graph-1.0":
+        return "subject_graph"
     # Agent build typically has "stages" with nested structure
     if "stages" in result_data and isinstance(result_data["stages"], list):
         # Check if it has the agent build structure

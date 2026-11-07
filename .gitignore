@@ -218,3 +218,5 @@ docs/files/.$data-pipeline.drawio.bkp
 EXPERIMENT/
 
 /output
+*.patch
+person_epg_backup.*/*

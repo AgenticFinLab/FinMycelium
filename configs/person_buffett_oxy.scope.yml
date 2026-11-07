@@ -1,0 +1,15 @@
+# Scope overlay: merge builder_config.reconstruction into your existing config.
+# This is not a replacement for the complete pipeline/model configuration.
+builder_config:
+  reconstruction:
+    mode: person
+    subject:
+      subject_id: person_warren_buffett
+      name: Warren Buffett
+      aliases: ["Warren E. Buffett", "沃伦·巴菲特", "巴菲特"]
+      coverage_start: "2022-01-01"
+      coverage_end: "2023-12-31"
+      scope: >-
+        围绕西方石油（Occidental Petroleum / OXY）的投资活动与公开表态；
+        包括与该专题直接相关的伯克希尔购股、持股变化、披露和监管批准。
+        区分巴菲特本人行为和伯克希尔公司行为，不扩展为完整生平。
