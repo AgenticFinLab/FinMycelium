@@ -8,8 +8,12 @@ builder_config:
     top_p: 0.95
   save_folder: output/build-only/sparse
   sparse_builder_config:
+    context_top_k: 8
+    max_context_chars: 6000
+    excerpt_char_limit: 240
+    max_card_tokens: 48
     enable_sparse_routing: true
-    enable_context_assets: false
+    enable_context_assets: true
     output_language: English
     max_json_attempts: 3
     max_calls: 40
