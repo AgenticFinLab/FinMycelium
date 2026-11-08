@@ -11,21 +11,26 @@ python -m finmy.workbench --port 8537
 Open `http://localhost:8537`. The server listens on the local loopback interface.
 The initial workspace is empty. SQLite records are stored in the Git-ignored
 `output/workbench/` directory. Set `FINMY_WORKBENCH_HOME` to use another local
-directory. Back up that directory separately from the source repository.
+directory. Back up that directory separately from the source repository. Local
+database files and their journal/WAL/SHM sidecars are ignored by Git. Keep custom
+workspace directories outside the repository or in an ignored runtime directory.
 
 ## Pages
 
 - **Data:** event tables, source material, graph versions and exports.
+- **Search:** configure retrieval, run or pause searches, inspect sources and
+  export reviewed Builder input; see the [search workflow](search-enhancement.md).
+  Historical experiment viewing is optional under **辅助工具**, separate from daily tasks.
 - **Tasks:** save batch configurations and cancel unstarted tasks.
 - **Review:** confirm scope, review evidence and graphs, and record revisions.
 - **Settings:** choose Sparse or Agent, an Ark model and concurrency; check
   credential presence. Store credentials in `.env`.
 
-This release supports local data management and review. Search, URL fetching,
-API checks, model execution and post-run usage/cost reporting are planned for
-the execution integration. Until then, tasks remain saved configurations and
-execution controls stay disabled. Shared-server deployment requires
-authentication and worker integration.
+Search has its own execution controls, progress records and model usage display.
+Builder execution uses the separate build-only entry; the **Tasks** page still
+saves configurations without launching builds. Settings show credential presence,
+not verified API connectivity. Shared-server deployment requires authentication
+and worker integration.
 
 ## Workflow
 

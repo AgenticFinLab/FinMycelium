@@ -112,15 +112,17 @@ streamlit run examples/uTEST/test_web_interface.py
 python -m finmy.workbench --port 8537
 ```
 
-打开 `http://localhost:8537`。当前版本提供数据管理和审核功能，检索与重构执行将在后续接入。
+打开 `http://localhost:8537`，进行数据管理、检索和审核。构建使用独立入口。
 
 ---
 
 
 #### 详细指南
+
 - [数据准备指南](docs/instruction.md) - PDF 处理、关键词检索与数据导入
 - [事件工作台](docs/workflows/event-workbench.md) - 本地工作区与审核流程
 - [事件主表规范](docs/workflows/event-master.md) - 字段、范围与表格导入规则
+- [检索工作流](docs/workflows/search-enhancement.md) - 来源获取与构建输入交接
 
 
 ---
