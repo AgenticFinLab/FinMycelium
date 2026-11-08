@@ -20,6 +20,7 @@ from finmy.workbench.domain import (
     extract_text, graph_from_bytes, read_matrix, read_table, unwrap,
 )
 from finmy.workbench.store import Store
+from finmy.workbench.search_page import search_page
 
 
 def notice(text):
@@ -474,7 +475,7 @@ def settings_page(store):
     envfile = ROOT / ".env"
     env = dotenv_values(envfile) if envfile.is_file() else {}
     rows = []
-    for name, key in [("Ark", "ARK_API_KEY"), ("Bocha", "BOCHA_API_KEY"), ("Baidu", "BAIDUSEARCH_API_KEY")]:
+    for name, key in [("Ark", "ARK_API_KEY"), ("Bocha", "BOCHA_API_KEY"), ("Baidu", "BAIDUSEARCH_API_KEY"), ("Exa", "EXA_API_KEY")]:
         configured = bool(os.environ.get(key, env.get(key)))
         rows.append({"服务": name, "配置": "已配置" if configured else "未配置", "连接": "未检查"})
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
@@ -505,13 +506,13 @@ def main():
     with st.sidebar:
         st.header("FinMycelium")
         st.caption("事件工作台")
-        page = st.radio("导航", ["数据", "任务", "待审", "设置"], label_visibility="collapsed")
+        page = st.radio("导航", ["数据", "检索", "任务", "待审", "设置"], label_visibility="collapsed")
         st.divider()
         st.caption("本地工作区")
     message = st.empty()
     if "notice" in st.session_state:
         message.success(st.session_state["notice"])
-    {"数据": data_page, "任务": tasks_page, "待审": review_page, "设置": settings_page}[page](store)
+    {"数据": data_page, "检索": search_page, "任务": tasks_page, "待审": review_page, "设置": settings_page}[page](store)
 
 
 if __name__ == "__main__":
