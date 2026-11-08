@@ -28,11 +28,13 @@ def normalize_followup_config(config):
     from finmy.runner.draft_event_search import draft_event_options
     result["event_followup"] = draft_event_options(result)[0]
     result.get("builder_config", result).setdefault("builder_type", "SparseRagBuilder")
-    options = result.get("subject_search") or {}
-    search = result.get("search_config", {}) or {}
-    for provider, default in (("bocha", 10), ("baidu", 20)):
-        options.setdefault(provider + "_count", search.get(provider + "_count", default))
-    result["subject_search"] = validate_subject_search_options(options)
+    from finmy.runner.enhanced_subject_search import enhanced_search_enabled
+    if not enhanced_search_enabled(result):
+        options = result.get("subject_search") or {}
+        search = result.get("search_config", {}) or {}
+        for provider, default in (("bocha", 10), ("baidu", 20)):
+            options.setdefault(provider + "_count", search.get(provider + "_count", default))
+        result["subject_search"] = validate_subject_search_options(options)
     content = result.setdefault("all_content_config", {})
     if not isinstance(content, dict):
         raise ValueError("all_content_config must be a mapping")

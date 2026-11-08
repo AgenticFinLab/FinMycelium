@@ -6,6 +6,7 @@ inject a completion function and never access a network or credentials.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import time
@@ -338,7 +339,7 @@ def filter_documents(
     # Existing callers retain their shared acquisition clock unless they opt in
     # to a separate relevance limit AND supply that phase's own usage clock.
     elapsed_limit = options.get("max_elapsed_seconds",
-                                config.get("subject_search", {}).get("max_elapsed_seconds", 300))
+                                (config.get("subject_search") or {}).get("max_elapsed_seconds", 300))
     if "max_elapsed_seconds" in options and (
             isinstance(elapsed_limit, bool) or not isinstance(elapsed_limit, (int, float))
             or not math.isfinite(elapsed_limit) or elapsed_limit <= 0):
@@ -352,6 +353,14 @@ def filter_documents(
             **item, "datepublished": item.get("published_at", "")
         }, str(item.get("source", "unknown"))), "document_id": f"DOC_{index:04d}",
             "search_phase": item.get("search_phase", "initial")})
+        # Retain acquisition identity through P0 so the native builder can
+        # cite the inspected version rather than only its search-page URL.
+        for key in ("source_id", "source_version", "source_status", "search_run_directory", "published_at_raw"):
+            if isinstance(item.get(key), str):
+                docs[-1][key] = item[key]
+        for key in ("discoveries", "publication_candidates"):
+            if isinstance(item.get(key), list):
+                docs[-1][key] = copy.deepcopy(item[key])
         # Search associations are routing hints, never classifier evidence.
         for key in ("event_ids", "event_labels", "event_terms"):
             value = item.get(key, [])

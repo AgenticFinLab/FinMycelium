@@ -65,6 +65,22 @@ url_collector_config:
   selenium_wait_time: 5
 
 search_config:
+  mode: agent  # Set simple to use the historical Bocha/Baidu collector.
+  enhancement:
+    allow_network: true
+    providers: [bocha]
+    lm_name: deepseek/deepseek-chat  # Independent search model; explicit, not inherited.
+    generation_config:
+      max_tokens: 4096
+      temperature: 0
+    max_results: 5
+    max_search_requests: 12
+    max_read_sources: 40
+    max_model_calls: 30
+    max_read_chars: 12000
+    max_builder_material_chars: 60000
+    max_model_context_chars: 100000
+    timeout: 120
   bocha_count: 15
   baidu_count: 15
   merge_strategy: interleave
@@ -85,6 +101,20 @@ pdf_collector_config:
 
 all_content_config:
   max_content_length: 60000
+  max_document_chars: 12000
+
+# Shared across all existing events, independently of initial acquisition.
+event_followup:
+  enabled: true
+  max_content_length: 60000
+  max_document_chars: 12000
+  max_search_calls: 12
+  max_parse_calls: 40
+  max_search_model_calls: 30
+  max_elapsed_seconds: 300
+  max_relevance_elapsed_seconds: 300
+  max_relevance_model_calls: 12
+  max_model_calls: 24
 
 
 # ----------------------------------------------------------------------------

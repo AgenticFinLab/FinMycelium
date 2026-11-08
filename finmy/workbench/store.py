@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from finmy.subject_graph.runner import _publication_timestamp
 from finmy.workbench.domain import DEFAULT_MODEL, SCOPE_FIELDS, digest, encoded, event_record, export_table, stored_record, validate_graph, validate_url
 
 
@@ -36,6 +37,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id),
                     title TEXT, url TEXT, published TEXT, text TEXT, sha256 TEXT, raw BLOB,
                     included INTEGER NOT NULL, created TEXT);
+                CREATE TABLE IF NOT EXISTS source_metadata (source_id TEXT PRIMARY KEY REFERENCES sources(id),
+                    body TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS graphs (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id),
                     body TEXT, sha256 TEXT, parent_id TEXT, note TEXT, input_hash TEXT, created TEXT);
                 CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id),
@@ -94,7 +97,7 @@ class Store:
                 raise ValueError("记录已更新，请刷新后再保存")
             db.execute("INSERT INTO event_history VALUES(?,?,?,?)", (event_id, expected_revision + 1, encoded(row), stamp))
 
-    def add_source(self, event_id, title, text="", url="", published="", raw=b""):
+    def add_source(self, event_id, title, text="", url="", published="", raw=b"", *, metadata=None):
         self.event(event_id)
         if not title.strip() or (not text.strip() and not url):
             raise ValueError("请填写来源标题，以及正文或 URL")
@@ -107,6 +110,10 @@ class Store:
         with self.connection() as db:
             db.execute("INSERT INTO sources VALUES(?,?,?,?,?,?,?,?,?,?)",
                        (sid, event_id, title, url, published, text, sha, raw, int(bool(text.strip())), now()))
+            if metadata is not None:
+                if not isinstance(metadata, dict):
+                    raise ValueError("Source metadata must be an object")
+                db.execute("INSERT INTO source_metadata VALUES(?,?)", (sid, encoded(metadata)))
         return sid
 
     def sources(self, event_id):
@@ -123,11 +130,24 @@ class Store:
     def input_bundle(self, event_id):
         event = self.event(event_id)
         sources = [s for s in self.sources(event_id) if s["included"] and s["text"].strip()]
+        with self.connection() as db:
+            metadata = {row["source_id"]: json.loads(row["body"]) for row in db.execute(
+                "SELECT m.source_id,m.body FROM source_metadata m JOIN sources s ON s.id=m.source_id WHERE s.event_id=?",
+                (event_id,))}
+        registry = {}
+        for source in sources:
+            entry = metadata.get(source["id"], {})
+            entry.update({key: source[key] for key in ("title", "url", "published", "sha256")})
+            publication = entry.get("published_at", source["published"])
+            entry["published_at"] = _publication_timestamp(publication)
+            if source["published"]:
+                entry.setdefault("published_at_raw", source["published"])
+            registry[source["id"]] = entry
         return {"user_query": {"user_query_id": event_id,
                 "query_text": "\n".join(f"{k}: {encoded(event[k]) if isinstance(event[k], list) else event[k]}" for k in SCOPE_FIELDS if event[k]),
                 "key_words": event["keywords"],
                 "extras": {"search_language": event["search_language"], "source_hints": event["source_hints"],
-                           "source_registry": {s["id"]: {k: s[k] for k in ("title", "url", "published", "sha256")} for s in sources}}},
+                           "source_registry": registry}},
                 "samples": [{"sample_id": s["id"], "raw_data_id": s["id"], "content": s["text"]} for s in sources]}
 
     def graphs(self, event_id):

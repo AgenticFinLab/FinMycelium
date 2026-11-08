@@ -1,6 +1,29 @@
 """Copy located original passages into the unchanged Builder input contract."""
+import copy
+
+from finmy.subject_graph.runner import _publication_timestamp
+
 from .state import write_json
 from .sources import SourceStore
+
+
+def _source_metadata(source, document, version):
+    """Snapshot known source metadata beside, never inside, evidence text."""
+    candidates = [document.get('published_at'), source.get('published_at')]
+    if not any(value is not None for value in candidates):
+        candidates = [item.get('published_at') for item in source.get('discoveries', [])
+                      if isinstance(item, dict)]
+    candidates = list(dict.fromkeys(value for value in candidates
+                                   if isinstance(value, str) and value.strip()))
+    publication = candidates[0] if len(candidates) == 1 else None
+    metadata = dict(source_id=source['source_id'], version=version, source_version=version,
+                    title=source.get('title'), url=source.get('url'), source_url=source.get('url'),
+                    source_status=document['status'], published_at=_publication_timestamp(publication))
+    if publication is not None:
+        metadata['published_at_raw'] = publication
+    elif candidates:
+        metadata['publication_candidates'] = candidates
+    return metadata
 
 
 def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
@@ -9,6 +32,7 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
         raise ValueError('Material character limit must be positive')
     store = SourceStore(state)
     samples, adopted, omitted, seen = [], [], [], set()
+    registry = {}
     used = 0
     for selection in selections:
         sid, version = selection['source_id'], selection['version']
@@ -39,9 +63,19 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
             continue  # Never silently cut an evidence passage mid-sentence.
         used += len(content)
         samples.append(dict(sample_id=f'{sid}-{len(samples)}',raw_data_id=sid,content=content))
+        metadata = registry.setdefault(sid, _source_metadata(entry, doc, version))
+        metadata.setdefault('sample_versions', {})[samples[-1]['sample_id']] = version
+        versions = list(dict.fromkeys(metadata['sample_versions'].values()))
+        if len(versions) > 1:
+            # Legacy passage selections can contain multiple versions of one URL.
+            metadata.pop('version', None)
+            metadata.pop('source_version', None)
+            metadata['versions'] = versions
+            metadata['published_at'] = None
         adopted.append(selection)
     task = state.data['task']
-    payload = dict(user_query=dict(query_text=task['query_text'],key_words=task.get('key_words',[])), samples=samples)
+    payload = dict(user_query=dict(query_text=task['query_text'],key_words=task.get('key_words',[]),
+                                   extras=dict(source_registry=registry)), samples=samples)
     record = dict(selected=adopted, omitted=omitted, gaps=gaps or [], reason=reason,
                   material_chars=used, max_material_chars=limit,
                   unselected_sources=sorted(set(state.data['sources']) - {s['source_id'] for s in adopted}))
@@ -88,7 +122,7 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     source_ids = list(dict.fromkeys(source_ids))
     store = SourceStore(state)
     documents, cleanup, duplicates, omitted, fingerprints = [], [], [], [], {}
-    selected_versions = {}
+    selected_versions, registry = {}, {}
     for sid in source_ids:
         if sid not in state.data['sources']:
             raise ValueError('Unknown source ID: ' + sid)
@@ -113,13 +147,15 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
         header = f"[source={sid} version={version} status={document['status']}]\n{entry['url']}\n{entry['title']}\n"
         documents.append(dict(source_id=sid, version=version, blocks=blocks, header=header,
                               full_chars=len(header)+len(body), source_status=document['status']))
+        registry[sid] = _source_metadata(entry, document, version)
 
     selected = [dict(source_id=d['source_id'], version=d['version'],
                      blocks=[i for i, _ in d['blocks']], header=d['header'],
                      material_chars=d['full_chars'], source_status=d['source_status']) for d in documents]
     task = state.data['task']
     record = dict(mode='complete_sources', source_ids=source_ids, source_versions=selected_versions,
-                  user_query=dict(query_text=task['query_text'], key_words=task.get('key_words', [])),
+                  user_query=dict(query_text=task['query_text'], key_words=task.get('key_words', []),
+                                  extras=dict(source_registry=registry)),
                   selected=selected, omitted=omitted, cleanup=cleanup, duplicates=duplicates,
                   gaps=list(gaps or []), reason=reason, material_chars=sum(d['full_chars'] for d in documents),
                   unselected_sources=sorted(set(state.data['sources'])-set(source_ids)), review_required=True,
@@ -150,7 +186,7 @@ def materialize_complete(state, record):
         if len(content) != entry['material_chars']:
             raise ValueError('Complete material length mismatch')
         samples.append(dict(sample_id=entry['source_id']+'-document',raw_data_id=entry['source_id'],content=content))
-    return dict(user_query=record['user_query'], samples=samples)
+    return dict(user_query=copy.deepcopy(record['user_query']), samples=samples)
 
 
 def derive_input(state, complete, *, max_chars=None, budget_policy='balanced'):
@@ -163,6 +199,7 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced'):
     query = complete['user_query']
     queries = complete.get('retrieval_queries', [query['query_text'], ' '.join(query.get('key_words', []))])
     payload, allocation = shared_input(state, complete, limit, queries)
+    payload['user_query'] = copy.deepcopy(payload['user_query'])
     entries = {e['source_id']: e for e in complete['selected']}
     selected = [dict(e, source_status=entries[e['source_id']]['source_status']) for e in allocation['selected']]
     omitted = list(complete['omitted']) + [dict(e, version=entries[e['source_id']]['version'],

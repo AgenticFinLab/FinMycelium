@@ -4,21 +4,31 @@
 人物、公司、事件名称或阶段数量均未写死。参考 HTML 用于说明过程细节，
 不作为固定的活动数或阶段模板。
 
-## 应用基线
+## 搜索与人物构图入口
 
-当前 `FinMycelium_event_relevance_clock_fix.patch` 直接叠加在已安装
-`FinMycelium_incremental_event_enrichment.patch` 的代码上，无需撤销上一版：
+本流程已与 main 的共享搜索实现合并，无需另行应用历史 patch。
+`configs/search_pipeline.yml` 使用 `search_config.mode: agent`，
+模型、provider 和搜索限制在 `search_config.enhancement` 中独立配置；
+示例明确选择 DeepSeek 和 Bocha，并允许联网，运行前需要配置对应密钥。
+设置 `mode: simple` 可继续使用旧采集器。
 
-```bash
-git apply --check FinMycelium_event_relevance_clock_fix.patch
-git apply FinMycelium_event_relevance_clock_fix.patch
-```
+CLI 的 `run_search_pipeline` 和现有重建页面均读取
+`builder_config.reconstruction`：person 使用人物组织、Person EPG schema、
+规范 JSON 与专用 HTML；company 保持 AgentEventBuilder 的原生公司路径。
+选择公司时须同时配置 `builder_type: AgentEventBuilder`。
+搜索的 `target_type` 不替代 builder 的主体、覆盖期和范围配置。
 
-如果工作目录仍停在“第一步完成后”，先应用已交付的
-`FinMycelium_postbuild_event_followup.patch`，再应用
-`FinMycelium_incremental_event_enrichment.patch`，最后应用这份计时修复；
-不要在旧的 `event_centered_search` 或 `unbounded` 方案上直接叠加。
-有本地修改导致 check 失败时先处理冲突，不能用强制覆盖代替检查。
+初次搜索使用原始请求和配置主体，完成后将选中的原文送入 P0 与初版预算分配。
+随后直接读取初版已经存在的 event，为每个 event 调用同一套共享搜索算法；
+薄事件只有名称也可以检索。新算法自行决定搜索、阅读、补缺与停止，
+不再叠加旧的 decision-followup 搜索。
+事件覆盖期是检索范围提示，只有显式的搜索发表日期配置才过滤页面发表时间。
+
+共享搜索保存选中来源的完整正文与版本；初版和补充阶段分别进行一次最终证据分配。
+来源标题、URL、发表时间和版本随筛选、预算重排进入 builder，
+不会按输入序号错配。发表日期不是事件日期；不完整日期不会补成虚构时间戳。
+搜索暂停、失败、额度耗尽且未完成交付、或无可用原文时，初版不启动构图。
+补搜部分完成时只接收已完成 event 的原文，并报告未完成的 event。
 
 ## 流程与预算
 
@@ -44,6 +54,7 @@ event_followup:
   max_document_chars: 12000
   max_search_calls: 12
   max_parse_calls: 40
+  max_search_model_calls: 30  # agent 搜索决策总次数，与增补提议/审核独立
   max_elapsed_seconds: 300  # 补搜采集阶段，不含后续模型处理
   max_relevance_elapsed_seconds: 300  # 补充 P0 单独从筛选开始计时
   max_relevance_model_calls: 12
@@ -51,6 +62,11 @@ event_followup:
   max_output_tokens: 8192  # 单次输出还受原 generation_config 较小上限约束
   queries_per_event: 2
 ```
+
+`queries_per_event` 仅用于 simple 采集器；agent 模式由共享搜索模型安排查询。
+搜索、阅读、搜索模型调用上限由所有 event 共用，不会按 event 数倍增。
+每次查询消耗所选 provider 数量的请求额度；额度不足的 event 会明确跳过。
+补搜任务的配额与累计消耗落盘，暂停后重新进入同一目录不会重置预算。
 
 字符按 Python Unicode 字符计算，包含分配后的来源包装，不是 token。
 60,000 是本阶段去重后的证据池容量，不是所有模型调用累计输入量：
@@ -66,9 +82,7 @@ event_followup:
 
 ## 从现有资料续跑
 
-本次日志显示：补搜获得 9 篇、45,327 字符原始资料，但搜索耗尽计时后，
-旧代码把同一个过期计时器传给 P0。P0 零调用，全部资料标成 REVIEW，
-随后被 wrapper 排除，误报 `no_new_relevant_sources`。本补丁修正这条链路。
+补搜采集与补充 P0 分别计时，采集耗尽时间不会导致 P0 在开始前就被阻塞。
 
 可复用本次已完成的初版和补搜资料，不再执行搜索、网页解析或初始构图：
 
@@ -139,5 +153,6 @@ python -m finmy.runner.resume_event_enrichment \
 回归验证覆盖：完整 builder 仅执行一次、旧行原样保留、独立预算与耗尽行为、
 来源/局部引用/日期、重复交易数值量级、审核失败、跨事件事实复用，以及 UI/CLI 同一路径。
 测试使用离线模型适配器与现有有效 EPG fixture，不调用真实搜索或付费模型。
-本次计时修复后的相关检查共 257 项测试、236 个子测试通过；展示测试运行实际页面 JavaScript。
+搜索衔接回归还覆盖新旧入口路由、暂停/空交付、跨事件共享配额、来源版本传递，
+以及实际 Person EPG 校验与 JSON/HTML 输出。
 这些测试证明实现约束，不等同于真实重建结果已达到参考 HTML 的细节质量。

@@ -2,6 +2,7 @@
 import argparse
 import copy
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from finmy.reconstruction_scope import read_reconstruction
@@ -14,6 +15,68 @@ SPARSE_ROLES = (
 )
 
 
+def _publication_timestamp(value):
+    """Keep only explicit, timezone-aware publication instants in the schema.
+
+    A date without a time or timezone is still useful search metadata, but it
+    must not become an invented midnight or an event time.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        instant = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        if instant.tzinfo is None or instant.utcoffset() is None:
+            return None
+        instant = instant.astimezone(timezone.utc)
+        if instant.year < 1000:
+            return None
+        return instant.isoformat().replace("+00:00", "Z")
+    except (ValueError, OverflowError):
+        return None
+
+
+def with_source_registry(config, documents, packed):
+    """Attach source metadata to the exact saved samples emitted by the budget.
+
+    Allocation can reorder or omit documents, so source metadata is joined by
+    document ID and then indexed by included report order, never input order.
+    The registry stays outside builder settings and source text is untouched.
+    """
+    by_id = {}
+    for index, document in enumerate(documents):
+        document_id = document.get("document_id", f"DOC_{index + 1:04d}")
+        if not isinstance(document_id, str) or not document_id or document_id in by_id:
+            raise ValueError("Source registry requires unique nonempty document IDs")
+        by_id[document_id] = document
+    included = [row for row in packed["report"]["documents"] if row.get("included")]
+    if len(included) != len(packed["contents"]):
+        raise ValueError("Source registry does not match allocated contents")
+    registry = {}
+    for index, row in enumerate(included):
+        document_id = row.get("document_id")
+        if document_id not in by_id:
+            raise ValueError(f"Allocated source is missing its document metadata: {document_id}")
+        metadata = copy.deepcopy({key: value for key, value in by_id[document_id].items()
+                                  if key != "raw_text"})
+        metadata["document_id"] = document_id
+        if not isinstance(metadata.get("title"), str):
+            if metadata.get("title") is not None:
+                metadata["title_raw"] = metadata["title"]
+            metadata["title"] = None
+        source_url = metadata.get("source_url")
+        if not isinstance(source_url, str):
+            source_url = metadata.get("url")
+        metadata["source_url"] = source_url if isinstance(source_url, str) else None
+        publication = metadata.get("published_at")
+        if publication is not None:
+            metadata.setdefault("published_at_raw", publication)
+        metadata["published_at"] = _publication_timestamp(publication)
+        registry[f"saved_{index}"] = metadata
+    result = copy.deepcopy(config)
+    result["source_registry"] = registry
+    return result
+
+
 def subject_builder_config(config):
     """Select the person default without mutating the caller's configuration.
 
@@ -22,6 +85,7 @@ def subject_builder_config(config):
     that unambiguous shape is normalized here.
     """
     build_config = copy.deepcopy(config.get("builder_config", config))
+    build_config.pop("source_registry", None)
     scope = read_reconstruction(build_config)
     default = "AgentEventBuilder" if scope["mode"] == "company" else "SparseRagBuilder"
     build_config.setdefault("builder_type", default)
@@ -49,7 +113,10 @@ def build_from_contents(contents, query, keywords, config):
     else:
         from finmy.builder.agent_build.main_build import AgentEventBuilder
         builder_class = AgentEventBuilder
-    user_query = UserQueryInput(query_text=query, key_words=keywords or [])
+    extras = {}
+    if isinstance(config.get("source_registry"), dict):
+        extras["source_registry"] = copy.deepcopy(config["source_registry"])
+    user_query = UserQueryInput(query_text=query, key_words=keywords or [], extras=extras)
     samples = [DataSample(sample_id=f"saved_{i}", raw_data_id=f"saved_{i}", content=text)
                for i, text in enumerate(contents)]
     builder = builder_class(build_config=build_config)

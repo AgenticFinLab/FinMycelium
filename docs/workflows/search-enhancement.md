@@ -5,10 +5,10 @@ and material allocation within a 60,000-character Builder input budget.
 It prepares material for draft EPG construction and review. It does not change Builder
 algorithms, EPG schemas or visualization formats.
 
-The original full runner still defaults to `simple`; enhanced search is opt-in with
-`search_config.mode: agent`. Event, person and company research tasks share acquisition.
-This branch provides ordinary event construction through AgentEventBuilder and
-SparseRagBuilder; person-specific construction remains in its separate implementation.
+The runner defaults to `simple` when no mode is specified; the maintained
+`configs/search_pipeline.yml` explicitly selects `search_config.mode: agent`.
+Event, person and company research tasks share acquisition, with the configured
+reconstruction mode selecting the native downstream schema and HTML pipeline.
 
 ## Workflow and code layout
 
@@ -195,12 +195,23 @@ optional Matcher processing and database storage before the Builder. With Matche
 material may be selected again. The build-only route is the direct route for a reviewed
 search package: it retains the search sample IDs and text without those extra stages.
 
-For a separate person-EPG implementation, use the same source-text payload and set
-its Builder reconstruction mode, identity, period and topic explicitly. Search
-`target_type: person` does not configure that Builder. URLs and titles are retained
-in sample text and search records; this export does not yet populate
-`user_query.extras.source_registry` for structured person-source metadata.
-Cross-branch scope/metadata wiring is separate from this event-search integration.
+For person/company reconstruction, set `builder_config.reconstruction` with the
+mode, identity, period and topic. Search `target_type` alone does not configure the
+Builder. The full runner and reconstruction UI dispatch these modes through the
+native subject builder, retaining organization, schema validation and JSON/HTML
+rendering. Person defaults to SparseRagBuilder; company requires AgentEventBuilder.
+`configs/search_pipeline.yml` now selects agent acquisition with an explicit search
+model/provider; `mode: simple` retains historical acquisition.
+
+The subject bridge reads the version-pinned complete material, preserves provenance
+through P0, and performs one final 60,000-character initial allocation. Selected
+source metadata is joined by document ID into `user_query.extras.source_registry`.
+The first person EPG then supplies its existing events directly to the same search
+algorithm. All supplementary events share finite search/read/model ceilings and
+one separate 60,000-character evidence pool. The persisted task ledger prevents
+resume from multiplying those budgets. Only completed, valid search handoffs enter
+construction; partial supplementary runs retain the initial EPG and report gaps.
+See [event enrichment](../person_draft_event_followup.md) for limits and outputs.
 
 ## Storage and verification
 

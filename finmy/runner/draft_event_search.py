@@ -14,7 +14,9 @@ import time
 from pathlib import Path
 
 from finmy.runner.scoped_search import search_window
-from finmy.runner.subject_search import collect_subject_sources, validate_subject_search_options
+from finmy.runner.subject_search import (
+    collect_subject_sources, validate_subject_search_options, _url as _canonical_source_url,
+)
 
 
 # Source-type terms are a fallback only. Concrete activity wording takes priority.
@@ -45,7 +47,8 @@ def draft_event_options(config):
     options.setdefault("enabled", True)
     for key, default, minimum in (("max_search_calls", 12, 0), ("max_parse_calls", 40, 0),
                                   ("max_content_length", 60000, 1), ("max_document_chars", 12000, 1),
-                                  ("max_relevance_model_calls", 12, 0), ("max_model_calls", 24, 0)):
+                                  ("max_relevance_model_calls", 12, 0), ("max_model_calls", 24, 0),
+                                  ("max_search_model_calls", 30, 0)):
         value = options.get(key, default)
         if type(value) is not int or value < minimum:
             raise ValueError(f"event_followup.{key} must be a finite integer >= {minimum}")
@@ -60,6 +63,11 @@ def draft_event_options(config):
     if type(count) is not int or not 1 <= count <= len(INTENTS):
         raise ValueError(f"event_followup.queries_per_event must be in 1..{len(INTENTS)}")
     options["queries_per_event"] = count
+    from finmy.runner.enhanced_subject_search import enhanced_search_enabled
+    if enhanced_search_enabled(config):
+        # The shared agent validates its own provider and publication policy.
+        # Legacy Bocha/Baidu-only options do not govern agent acquisition.
+        return options, {}
     search_options = dict(config.get("subject_search", {}) or {})
     configured_counts = config.get("search_config", {}) or {}
     for provider in ("bocha", "baidu"):
@@ -267,6 +275,27 @@ invalidate that initial result. Failures are recorded and return no new sources.
             report["status"] = "no_draft_events"
             _log(progress, "Event follow-up: Initial EPG has no labelled events; kept the initial result.")
             return []
+        from finmy.runner.enhanced_subject_search import enhanced_search_enabled, collect_enhanced_sources
+        if enhanced_search_enabled(config):
+            acquired = collect_enhanced_sources(
+                query, keywords, subject, config, target / "draft_event_sources",
+                events=events, usage=usage, progress=progress,
+            )
+            # Each source remains attached to the existing event searched by the
+            # shared agent; new event discovery is not an admission requirement.
+            documents = acquired["documents"]
+            known = {_canonical_source_url(doc.get("url")) for doc in known_documents if doc.get("url")}
+            documents = [doc for doc in documents if _canonical_source_url(doc.get("url")) not in known]
+            report.update(status=acquired["status"], backend="agent", search_reports=acquired["reports"],
+                          new_documents=len(documents))
+            outcomes = {row.get("event_id"): row for row in acquired["reports"]}
+            for event in events:
+                outcome = outcomes.get(event["event_id"], {})
+                event.update(status=outcome.get("status", "not_searched"),
+                             search_calls=outcome.get("usage", {}).get("search_calls", 0),
+                             accepted_documents=sum(event["event_id"] in doc.get("event_ids", [])
+                                                    for doc in documents))
+            return documents
         first, last = search_window(query, subject, shared)
         start, end = first.isoformat(), last.isoformat()
         report["publication_window"] = {"start": start, "end": end}

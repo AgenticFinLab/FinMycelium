@@ -95,7 +95,7 @@ class SparsePersonRoutingTests(unittest.TestCase):
             self.assertEqual(calls[-1][0], "Legacy")
 
     def test_standard_and_person_configs_default_to_valid_seven_role_shape(self):
-        for name in ("pipline.yml", "search_pipeline.yml", "sparse_pipeline.yml", "person_sparse.yml"):
+        for name in ("search_pipeline.yml", "sparse_pipeline.yml", "person_sparse.yml"):
             with self.subTest(config=name):
                 config = yaml.safe_load((ROOT / "configs" / name).read_text())
                 builder = config["builder_config"]
@@ -108,6 +108,10 @@ class SparsePersonRoutingTests(unittest.TestCase):
                             self.assertEqual(role[key], builder[key])
         self.assertEqual(read_reconstruction(yaml.safe_load(
             (ROOT / "configs/person_sparse.yml").read_text()))["mode"], "person")
+
+    def test_main_legacy_pipeline_retains_explicit_builder(self):
+        config = yaml.safe_load((ROOT / "configs/pipline.yml").read_text())
+        self.assertEqual(subject_builder_config(config)["builder_type"], "AgentEventBuilder")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,33 @@ class DataCollectorService:
         return ([d["raw_text"] for d in self.documents["bocha"]],
                 [d["raw_text"] for d in self.documents["baidu"]])
 
+    def collect_enhanced_search_results(self, query, keywords, subject):
+        """Use shared search while retaining source provenance and handoff order."""
+        from finmy.runner.enhanced_subject_search import collect_enhanced_sources
+
+        result = collect_enhanced_sources(
+            query, keywords, subject, self.config, self.save_dir,
+            progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"),
+            usage=self.evidence_usage,
+        )
+        self.enhanced_search_result = result
+        documents = result.get("documents", [])
+        if result.get("status") != "finished" or not documents:
+            raise ValueError(
+                "Enhanced search did not finish with usable source text "
+                f"(status={result.get('status', 'unknown')}); inspect the saved search run."
+            )
+        if any(not isinstance(doc, dict) or not isinstance(doc.get("raw_text"), str)
+               or not doc["raw_text"].strip() for doc in documents):
+            raise ValueError("Enhanced search returned an invalid source document")
+        # The provider set includes Exa and may mix providers. Preserve the
+        # handoff sequence separately from the display/provider buckets.
+        self.enhanced_documents = documents
+        for doc in documents:
+            source = doc.get("source") or "enhanced"
+            self.documents.setdefault(source, []).append(doc)
+        return [doc["raw_text"] for doc in documents]
+
     def collect_bocha_search_results(
         self, search_query: str, keywords: List[str]
     ) -> List[str]:

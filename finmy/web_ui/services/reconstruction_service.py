@@ -51,8 +51,10 @@ class ReconstructionService:
         """
         keywords = keywords or []
         reconstruction = read_reconstruction(self.config)
-        scoped = reconstruction["mode"] != "event" and self.config.get("subject_search", {}).get("enabled", True)
-        if scoped:
+        scoped = reconstruction["mode"] != "event" and (self.config.get("subject_search") or {}).get("enabled", True)
+        from finmy.runner.enhanced_subject_search import enhanced_search_enabled
+        enhanced = reconstruction["mode"] != "event" and enhanced_search_enabled(self.config)
+        if scoped and not enhanced:
             from finmy.runner.scoped_search import plan_search, search_window
             # Validate the plan before any network call. Prompt dates become
             # structured event coverage; publication overrides stay search-only.
@@ -82,20 +84,26 @@ class ReconstructionService:
         collector = DataCollectorService(self.config, save_dir)
         
         # Collect data from all sources
-        if scoped:
+        if enhanced:
+            search_content = collector.collect_enhanced_search_results(
+                main_input, keywords, reconstruction["subject"]
+            )
+        elif scoped:
             bocha_content, baidu_content = collector.collect_subject_search_results(
                 main_input, keywords, reconstruction["subject"]
             )
+            search_content = bocha_content + baidu_content
         else:
             bocha_content = collector.collect_bocha_search_results(search_query_content, keywords)
             baidu_content = collector.collect_baidu_search_results(search_query_content, keywords)
+            search_content = bocha_content + baidu_content
         url_content, filepath_content = collector.collect_structured_data(
             structured_data, keywords
         )
         
         # Combine all content
         all_text_content = (
-            url_content + filepath_content + bocha_content + baidu_content
+            url_content + filepath_content + search_content
         )
         
         # Save combined content
@@ -111,8 +119,12 @@ class ReconstructionService:
         
         # P0: classify sources BEFORE the existing context-length budget is applied.
         # Keep the original All_Text_Content and formatted search archives unchanged.
-        documents = [doc for source in ("url", "file", "bocha", "baidu")
-                     for doc in collector.documents[source]]
+        documents = [doc for source in ("url", "file") for doc in collector.documents[source]]
+        if enhanced:
+            documents += collector.enhanced_documents
+        else:
+            documents += [doc for source in ("bocha", "baidu")
+                          for doc in collector.documents[source]]
         if [d["raw_text"] for d in documents] != all_text_content:
             raise ValueError("Collected source metadata/content are out of sync")
         from finmy.runner.event_followup_config import followup_enabled, initial_search_options
@@ -129,7 +141,7 @@ class ReconstructionService:
         if not filtered["contents"]:
             raise ValueError("No relevant sources remain. Inspect relevance_decisions.json or refine the search.")
 
-        if scoped and reconstruction["mode"] == "person":
+        if scoped and not enhanced and reconstruction["mode"] == "person":
             from finmy.runner.decision_followup import collect_decision_followup
             initial_config = copy.deepcopy(self.config)
             initial_config["subject_search"] = initial_search_options(self.config)
@@ -178,9 +190,19 @@ class ReconstructionService:
         
         # Run pipeline
         self._draft_evidence = {"filtered": filtered, "documents": documents, "usage": usage}
-        return self._run_pipeline(
-            all_text_content_limit, main_input, keywords, save_dir
-        )
+        pipeline_config = self.config
+        if enhanced:
+            from finmy.subject_graph.runner import with_source_registry
+            self.config = with_source_registry(self.config, filtered["documents"], budgeted)
+        try:
+            return self._run_pipeline(
+                all_text_content_limit, main_input, keywords, save_dir
+            )
+        finally:
+            # A reused Streamlit service must not attach this run's sources to
+            # a subsequent reconstruction, including a switch to simple mode.
+            if enhanced:
+                self.config = pipeline_config
     
     def _limit_content_length(self, content_list: List[str]) -> List[str]:
         """Limit content to maximum allowed length."""

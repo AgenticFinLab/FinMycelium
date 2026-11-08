@@ -38,10 +38,19 @@ def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
     assert calls==[1]
     assert controller.inspect(tid)['usage']['model']==0
     assert any(x.value=='资料与交接' for x in app.subheader)
-    find(app.number_input,'交付材料字符上限').set_value(1)
+    # The source-preview form has another input with the same visible label.
+    # Reassembly reads the separately keyed existing-handoff budget.
+    app.number_input(key='length-'+tid).set_value(1)
     find(app.button,'重新组装').click().run()
     assert not app.exception
     assert controller.inspect(tid)['builder_input']['samples']==[]
+    assert controller.inspect(tid)['selection']['max_material_chars']==1
+    assert controller.inspect(tid)['selection']['omitted']
+    # Legacy passage manifests can restore excluded passages without new calls.
+    controller.reassemble(tid,60000)
+    assert controller.inspect(tid)['builder_input']['samples']
+    assert calls==[1]
+    assert controller.inspect(tid)['usage']['model']==0
 
 def test_invalid_form_does_not_create_task(tmp_path,monkeypatch):
     monkeypatch.setenv('FINMY_WORKBENCH_HOME',str(tmp_path))

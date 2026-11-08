@@ -625,6 +625,15 @@ def run_search_pipeline(
     mode = (config.get("search_config") or {}).get("mode", "simple")
     if mode not in {"simple", "agent"}:
         raise ValueError("search_config.mode must be simple or agent")
+    from finmy.reconstruction_scope import read_reconstruction
+    from finmy.runner.event_followup_config import normalize_followup_config
+    scope = read_reconstruction(config)
+    if scope["mode"] != "event" and (mode == "agent" or
+            (config.get("subject_search") or {}).get("enabled", True)):
+        return _run_person_draft_followup(
+            normalize_followup_config(config), main_input, keywords, save_dir, parser,
+            search_task=search_task, search_dependencies=search_dependencies,
+        )
     if mode == "agent":
         from finmy.search.pipeline import run_search
 
@@ -685,7 +694,8 @@ def run_search_pipeline(
     }
 
 
-def _run_person_draft_followup(config, main_input, keywords, save_dir, parser):
+def _run_person_draft_followup(config, main_input, keywords, save_dir, parser,
+                               *, search_task=None, search_dependencies=None):
     """Original subject retrieval and draft build, then retrieve around its events."""
     import copy
     from finmy.reconstruction_scope import read_reconstruction
@@ -696,15 +706,19 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser):
     from finmy.runner.relevance_filter import filter_documents
     from finmy.runner.context_budget import allocate_context
     from finmy.runner.decision_followup import collect_decision_followup
-    from finmy.runner.event_followup_config import initial_search_options
+    from finmy.runner.event_followup_config import initial_search_options, followup_enabled
     from finmy.runner.event_refinement import build_with_draft_event_followup
+    from finmy.runner.enhanced_subject_search import enhanced_search_enabled, collect_enhanced_sources
 
     keywords = keywords or []
+    config = copy.deepcopy(config)
     reconstruction = read_reconstruction(config)
-    options = initial_search_options(config)
-    plan_search(main_input, keywords, reconstruction["subject"], options)
-    subject = config["builder_config"]["reconstruction"]["subject"]
-    if not subject.get("coverage_start") or not subject.get("coverage_end"):
+    enhanced = enhanced_search_enabled(config)
+    options = {} if enhanced else initial_search_options(config)
+    if not enhanced:
+        plan_search(main_input, keywords, reconstruction["subject"], options)
+    subject = config.get("builder_config", config)["reconstruction"]["subject"]
+    if not enhanced and (not subject.get("coverage_start") or not subject.get("coverage_end")):
         try:
             start, end = search_window(main_input, reconstruction["subject"])
         except ValueError:
@@ -727,15 +741,29 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser):
     target = Path(save_dir)
     target.mkdir(parents=True, exist_ok=True)
     usage = {}
-    documents = collect_subject_sources(main_input, keywords, reconstruction["subject"], options,
-        search, parse, target, progress=logger.info, usage=usage)
+    if enhanced:
+        acquired = collect_enhanced_sources(
+            main_input, keywords, reconstruction["subject"], config, target,
+            progress=logger.info, usage=usage, dependencies=search_dependencies,
+            task=search_task,
+        )
+        if acquired["status"] != "finished" or not acquired["documents"]:
+            return {"status": acquired["status"], "search_reports": acquired["reports"],
+                    "pipeline_result": None, "save_dir": str(target)}
+        documents = acquired["documents"]
+    else:
+        documents = collect_subject_sources(main_input, keywords, reconstruction["subject"], options,
+            search, parse, target, progress=logger.info, usage=usage)
     contents = [doc["raw_text"] for doc in documents]
     _write_json(target / f"All_Text_Content_{_timestamp()}.json", contents)
     filtered = filter_documents(documents, main_input, keywords, config, target,
                                 progress=logger.info, usage=usage)
     initial_config = copy.deepcopy(config)
     initial_config["subject_search"] = options
-    extra = collect_decision_followup(filtered, main_input, keywords, reconstruction["subject"],
+    # The shared agent already owns gap-driven search and its cumulative ledger.
+    # Starting the old follow-up collector here would open an unaccounted budget.
+    extra = [] if enhanced or reconstruction["mode"] != "person" else collect_decision_followup(
+        filtered, main_input, keywords, reconstruction["subject"],
         initial_config, target, logger.info, search=search, parse=parse, usage=usage,
         known_urls=[d.get("url") for d in documents])
     if extra:
@@ -748,9 +776,17 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser):
     _write_json(target / "builder_input_contents.json", packed["contents"])
     if not packed["contents"]:
         raise ValueError("No relevant source text fits the initial context budget.")
-    result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
-        config, target, filtered=filtered, documents=documents, usage=usage,
-        search=search, parse=parse, progress=logger.info)
+    if enhanced:
+        from finmy.subject_graph.runner import with_source_registry
+        config = with_source_registry(config, filtered["documents"], packed)
+    if followup_enabled(config):
+        result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
+            config, target, filtered=filtered, documents=documents, usage=usage,
+            search=None if enhanced else search, parse=None if enhanced else parse,
+            progress=logger.info)
+    else:
+        from finmy.subject_graph.runner import build_from_contents
+        result, directory = build_from_contents(packed["contents"], main_input, keywords, config)
     final_input = json.loads((target / "builder_input_contents.json").read_text(encoding="utf-8"))
     return {"all_text_content": contents, "search_query": build_search_query(main_input, keywords),
             "limited_content_count": len(final_input), "pipeline_result": result,
