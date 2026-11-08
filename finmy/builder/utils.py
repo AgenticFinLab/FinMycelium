@@ -449,12 +449,13 @@ def extract_json_response(response_text: str) -> Dict[str, Any]:
     return parse_json_response(response_text)
 
 
-def estimate_complete_time(str_list: List[str], build_type: str) -> int:
+def estimate_complete_time(str_list: List[str], build_type: str | BuildType) -> int:
     """Estimate the time to complete the reconstruction based on the content strings.
 
     Parameters:
     - str_list: The list of the content in strings.
-    - build_type: The type of build, either "ClassEventBuilder" or "AgentEventBuilder".
+    - build_type: "ClassEventBuilder", "AgentEventBuilder", or "SparseRagBuilder".
+      Sparse RAG uses the existing agent heuristic; actual time depends on routed calls.
 
     Returns:
     - The estimated time to complete the reconstruction in minutes.
@@ -486,7 +487,7 @@ def estimate_complete_time(str_list: List[str], build_type: str) -> int:
             (build_input_length + OTHER_TOKEN_NUM)
             * CLASS_BUILD_ESTIMATE_PER_TOKEN_TIME_COST
         )
-    if build_type == BuildType.AGENT_BUILD:
+    if build_type in (BuildType.AGENT_BUILD, BuildType.SPARSE_BUILD):
         return round(
             (build_input_length + OTHER_TOKEN_NUM)
             * AGENT_BUILD_ESTIMATE_PER_TOKEN_TIME_COST

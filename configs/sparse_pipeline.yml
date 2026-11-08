@@ -1,6 +1,6 @@
 # Pipeline configuration example for SparseRagBuilder.
 #
-# This file is opt-in and does not change configs/pipline.yml.
+# Standard pipeline configs also default to SparseRagBuilder.
 # Paths are relative to the working directory. Full Pipeline adds query
 # summarization calls; the text runner uses builder_config only.
 

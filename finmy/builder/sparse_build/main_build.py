@@ -18,6 +18,7 @@ from lmbase.inference.base import InferInput
 
 from finmy.builder.base import AgentState, BaseBuilder, BuildInput, BuildOutput
 from finmy.builder.utils import run_single_inference
+from finmy.reconstruction_scope import read_reconstruction, render_scope
 
 from .context_assets import (
     EvidenceAssetBundle,
@@ -38,7 +39,7 @@ from .local_context_builder import LocalContextBuilder, LocalContextRequest
 from .grounding import EVIDENCE_CONTRACT_VERSION, grounded_evidence_report, quality_review_report
 from .prompts import get_agent_prompts, structure_spec
 from .renderers import render_context_asset_summary
-from .runtime import run_identity, summarize_calls, validate_config, validate_input
+from .runtime import PERSON_SCOPE_GUIDANCE, digest, run_identity, sparse_options, summarize_calls, validate_config, validate_input
 from .validation import (
     validate_cascade, validate_endpoints, validate_episode, validate_role,
 )
@@ -71,6 +72,7 @@ class SparseRagBuilder(BaseBuilder):
     event_config_key = "sparse_builder_config"
     legacy_event_config_key = "event_builder_config"
     _JSON_PARSE_RETRY_AGENTS = {
+        "PersonOrganization",
         "SkeletonReconstructor",
         "SkeletonChecker",
         "ParticipantReconstructor",
@@ -129,11 +131,7 @@ class SparseRagBuilder(BaseBuilder):
 
     def _event_config(self) -> dict[str, Any]:
         build_config = getattr(self, "build_config", None) or {}
-        return (
-            build_config.get(self.event_config_key)
-            or build_config.get(self.legacy_event_config_key)
-            or {}
-        )
+        return sparse_options(build_config)
 
     def _event_config_value(self, key: str, default: Any) -> Any:
         return self._event_config().get(key, default)
@@ -262,10 +260,11 @@ class SparseRagBuilder(BaseBuilder):
         system_prompts, user_prompts = self._get_agent_prompts()
         if agent_name not in system_prompts or agent_name not in user_prompts:
             raise ValueError(f"Unknown SparseRagBuilder agent: {agent_name}")
-        return (
-            system_prompts[agent_name].format(**prompt_kwargs),
-            user_prompts[agent_name].format(**prompt_kwargs),
-        )
+        system = system_prompts[agent_name].format(**prompt_kwargs)
+        config = getattr(self, "build_config", None)
+        if read_reconstruction(config)["mode"] == "person":
+            system += "\n\n" + render_scope(config) + "\n" + PERSON_SCOPE_GUIDANCE
+        return system, user_prompts[agent_name].format(**prompt_kwargs)
 
     def _parse_json_response(self, response_text: str) -> Any:
         clean_text = (response_text or "").strip()
@@ -1344,6 +1343,7 @@ class SparseRagBuilder(BaseBuilder):
         """Run the full context-aware event reconstruction pipeline."""
 
         validate_input(build_input)
+        reconstruction = read_reconstruction(self.build_config)
         if getattr(self, "_run_started", False):
             raise RuntimeError("Create a new builder for each run; implicit resume is not supported")
         self._run_started = True
@@ -1352,6 +1352,9 @@ class SparseRagBuilder(BaseBuilder):
         manifest["builder_type"] = self.builder_type
         manifest["construction_contract_version"] = CONSTRUCTION_CONTRACT_VERSION
         manifest["evidence_contract_version"] = EVIDENCE_CONTRACT_VERSION
+        if reconstruction["mode"] == "person":
+            from .person_organization import ORGANIZATION_CONTRACT_VERSION
+            manifest["person_organization_contract_version"] = ORGANIZATION_CONTRACT_VERSION
         persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
         if persist:
             if os.path.exists(os.path.join(self.save_dir, "RunManifest.json")):
@@ -1362,6 +1365,8 @@ class SparseRagBuilder(BaseBuilder):
         output = None
         try:
             output = self._run_validated(build_input)
+            if reconstruction["mode"] == "person":
+                output = self._complete_person(build_input, output, reconstruction["subject"])
             manifest.update(status="completed", event_id=output.event_cascades["event_id"])
             return output
         except BaseException as exc:
@@ -1379,6 +1384,118 @@ class SparseRagBuilder(BaseBuilder):
                                      run_directory=getattr(self, "save_dir", None),
                                      elapsed_seconds=manifest["elapsed_seconds"],
                                      usage=copy.deepcopy(manifest["usage"]))
+
+    def _complete_person(self, build_input, output, subject):
+        """Finish the person target before the enclosing run can be completed."""
+        from finmy.person_epg.sparse_adapter import build_person_facts, ground_person_evidence
+        from finmy.person_epg.compat_projection import project_person_epg
+        from finmy.person_epg.validation import validate_person_epg
+        from .person_organization import (
+            ORGANIZATION_SYSTEM_PROMPT, organization_request, apply_organization,
+            validate_organization,
+        )
+        package, mapping = build_person_facts(output.event_cascades, build_input, subject)
+        request = organization_request(package, output.event_cascades, subject)
+        request["output_language"] = self._event_config_value("output_language", "English")
+        plan = self._infer_and_parse_json(
+            "PersonOrganization", ORGANIZATION_SYSTEM_PROMPT,
+            json.dumps(request, ensure_ascii=False), {}, "PersonOrganization",
+            validator=lambda value: validate_organization(value, package),
+        )
+        person, organization = apply_organization(package, plan)
+        evidence = ground_person_evidence(person)
+        validation = validate_person_epg(person)
+        policy = self._event_config_value("evidence_policy", "report")
+        blocked = policy == "strict" and evidence["unmatched_quote_count"] > 0
+        acceptance = {
+            "contract_version": 1, "policy": policy,
+            "structure_passed": validation["valid"],
+            "quote_check_passed": evidence["unmatched_quote_count"] == 0,
+            "unmatched_quotes": evidence["unmatched_quote_count"],
+            "fields_without_quotes": len(evidence["fields_without_quotes"]),
+            "semantic_approval": False,
+            "final_artifact_allowed": validation["valid"] and not blocked,
+            "status": "quote_gate_blocked" if blocked else "draft_requires_content_review",
+        }
+        persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
+        if persist:
+            for name, data in (("CandidatePersonEPG", person), ("PersonMappingReport", mapping),
+                               ("PersonOrganizationReport", organization),
+                               ("PersonEvidenceCheck", evidence), ("PersonAcceptance", acceptance)):
+                self.save_traces(data, name, "json")
+        if not validation["valid"]:
+            raise ValueError("Person EPG validation failed: " + json.dumps(validation["errors"][:5]))
+        if blocked:
+            raise ValueError("Person EPG contains quotes absent or ambiguous in the supplied sources")
+        projection = project_person_epg(person)
+        if persist:
+            self.save_traces(person, "FinalPersonEPG", "json")
+            self.save_traces(projection, "FinalSubjectGraph", "json")
+            # Rendering is an independent presentation outcome, not a fact mutation.
+            render_status = {"status": "completed"}
+            try:
+                from finmy.subject_graph.visualizer import render_subject_graph
+                render_subject_graph(projection, Path(self.save_dir) / "FinalSubjectGraph.html")
+            except Exception as exc:
+                render_status = {"status": "failed", "error_type": type(exc).__name__}
+            self.save_traces(render_status, "PersonRenderStatus", "json")
+        output.subject_graph = projection
+        output.logs.append("PersonOrganization")
+        output.extras["agent_executed"] = [*output.extras.get("agent_executed", []), "PersonOrganization"]
+        output.extras.update(person_epg=person, subject_graph=projection,
+                             person_acceptance=acceptance, person_organization=organization,
+                             calls=copy.deepcopy(self._call_records))
+        if isinstance(output.result, dict):
+            output.result["cost"] = copy.deepcopy(self._call_records)
+        return output
+
+    def integrate_person_from_files(self, *, strict=True):
+        """Rebuild the person package from source artifacts without model calls."""
+        from finmy.person_epg.sparse_adapter import build_person_facts, ground_person_evidence
+        from finmy.person_epg.compat_projection import project_person_epg
+        from finmy.person_epg.validation import validate_person_epg
+        from finmy.generic import UserQueryInput, DataSample
+        from .person_organization import apply_organization, ORGANIZATION_CONTRACT_VERSION
+
+        root = Path(self.save_dir)
+        manifest = json.loads((root / "RunManifest.json").read_text(encoding="utf-8"))
+        version = manifest.get("person_organization_contract_version")
+        if type(version) is not int or version != ORGANIZATION_CONTRACT_VERSION:
+            raise ValueError("Unsupported person organization contract version")
+        config = {"builder_type": "SparseRagBuilder", **manifest["effective_config"]}
+        reconstruction = read_reconstruction(config)
+        if reconstruction["mode"] != "person":
+            raise ValueError("This run does not record a Sparse person reconstruction")
+        cascade = self.integrate_from_files(strict=strict)
+        inputs = json.loads((root / "BuildInput.json").read_text(encoding="utf-8"))
+        if strict and (digest(inputs) != manifest.get("input_sha256")
+                       or digest(manifest["effective_config"]) != manifest.get("config_sha256")):
+            raise ValueError("Replay input or effective configuration hash mismatch")
+        build_input = BuildInput(UserQueryInput(**inputs["user_query"]),
+                                 [DataSample(**item) for item in inputs["samples"]])
+        package, mapping = build_person_facts(cascade, build_input, reconstruction["subject"])
+        plan = json.loads((root / "PersonOrganization-Result.json").read_text(encoding="utf-8"))
+        person, organization = apply_organization(package, plan)
+        evidence = ground_person_evidence(person)
+        if not validate_person_epg(person)["valid"]:
+            raise ValueError("Replayed Person EPG is invalid")
+        # Run provenance stores absent optional sections as null.
+        replay_config = {key: value for key, value in config.items()
+                         if key not in {"sparse_builder_config", "event_builder_config"} or value is not None}
+        policy = sparse_options(replay_config)
+        if policy.get("evidence_policy", "report") not in {"report", "strict"}:
+            raise ValueError("Unsupported replay evidence policy")
+        if policy.get("evidence_policy", "report") == "strict" and evidence["unmatched_quote_count"]:
+            raise ValueError("Replayed Person EPG fails the strict evidence policy")
+        if strict:
+            for name, actual in (("FinalPersonEPG", person), ("PersonEvidenceCheck", evidence),
+                                 ("PersonMappingReport", mapping),
+                                 ("PersonOrganizationReport", organization),
+                                 ("FinalSubjectGraph", project_person_epg(person))):
+                recorded = json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
+                if recorded != actual:
+                    raise ValueError(f"Replayed {name} does not match the saved artifact")
+        return person
 
     def _run_validated(self, build_input):
         context_assets = self._build_private_context_assets(build_input)

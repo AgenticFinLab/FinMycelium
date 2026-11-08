@@ -13,7 +13,9 @@ class BuildType(Enum):
 
     - CLASS_BUILD: Used for reconstructing class definitions.
     - AGENT_BUILD: Used for reconstructing agent or workflow logic.
+    - SPARSE_BUILD: Used for sparse RAG reconstruction.
     """
 
     CLASS_BUILD = "ClassEventBuilder"
     AGENT_BUILD = "AgentEventBuilder"
+    SPARSE_BUILD = "SparseRagBuilder"

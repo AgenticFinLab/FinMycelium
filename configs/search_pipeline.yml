@@ -119,6 +119,7 @@ matcher_config: &matcher_config
 # ----------------------------------------------------------------------------
 # builder_config: Configuration for builder components.
 #   These settings will be passed to the builder instance responsible for constructing event representations.
+#   SparseRagBuilder is the default; select AgentEventBuilder explicitly for the legacy builder.
 #   - builder_type: Specifies the type of builder to use (e.g., "AgentEventBuilder", "ClassEventBuilder").
 #   - lm_type/lm_name: Indicates the language model type and name if LLM-based building is needed.
 #   - inference_config/generation_config: Provides inference and generation settings for LLMs used by the builder.
@@ -128,7 +129,7 @@ matcher_config: &matcher_config
 #       Each agent can have individual LLM, inference, and generation parameters, or use shared defaults.
 # ----------------------------------------------------------------------------
 builder_config:
-  builder_type: "AgentEventBuilder"
+  builder_type: "SparseRagBuilder"
   lm_type: *lm_type
   lm_name: *lm_name
   inference_config: *infer
@@ -138,50 +139,59 @@ builder_config:
 
   save_folder: "EXPERIMENT/uTEST/Pipline"
 
-  # Agent Configuration (for AgentEventBuilder type)
+  sparse_builder_config:
+    enable_sparse_routing: true
+    enable_context_assets: true
+    max_calls: 300
+    max_json_attempts: 3
+    request_timeout_seconds: 900
+    evidence_policy: report
+    output_language: English
+
+  # Agent Configuration (shared Sparse RAG backend)
   # agents: Define agents participating in event reconstruction and their
   #         configurations
   #   Each agent can be independently configured with language model parameters,
   #   or reference the common configurations defined above (using * reference)
   agents:
-  SkeletonReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    SkeletonReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config
 
-  SkeletonChecker:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    SkeletonChecker:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config
 
-  ParticipantReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    ParticipantReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config
 
-  TransactionReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    TransactionReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config
 
-  EpisodeReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    EpisodeReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config
 
-  StageDescriptionReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    StageDescriptionReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config
 
-  EventDescriptionReconstructor:
-    lm_type: *lm_type
-    lm_name: *lm_name
-    inference_config: *infer
-    generation_config: *generation_config
+    EventDescriptionReconstructor:
+      lm_type: *lm_type
+      lm_name: *lm_name
+      inference_config: *infer
+      generation_config: *generation_config

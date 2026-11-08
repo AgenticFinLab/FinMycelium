@@ -7,6 +7,31 @@ from pathlib import Path
 from finmy.reconstruction_scope import read_reconstruction
 
 
+SPARSE_ROLES = (
+    "SkeletonReconstructor", "SkeletonChecker", "ParticipantReconstructor",
+    "TransactionReconstructor", "EpisodeReconstructor",
+    "StageDescriptionReconstructor", "EventDescriptionReconstructor",
+)
+
+
+def subject_builder_config(config):
+    """Select the person default without mutating the caller's configuration.
+
+    Explicit builder choices and explicit role settings remain authoritative.
+    Older pipeline YAML put role settings beside a null ``agents`` key; only
+    that unambiguous shape is normalized here.
+    """
+    build_config = copy.deepcopy(config.get("builder_config", config))
+    scope = read_reconstruction(build_config)
+    default = "AgentEventBuilder" if scope["mode"] == "company" else "SparseRagBuilder"
+    build_config.setdefault("builder_type", default)
+    if build_config["builder_type"] == "SparseRagBuilder" and build_config.get("agents") is None:
+        build_config["agents"] = {
+            role: build_config.pop(role, {}) for role in SPARSE_ROLES
+        }
+    return build_config
+
+
 def build_from_contents(contents, query, keywords, config):
     """Return (BuildOutput, output_directory); dependencies load only for live build."""
     if read_reconstruction(config)["mode"] == "event":
@@ -17,12 +42,17 @@ def build_from_contents(contents, query, keywords, config):
         raise ValueError("Saved contents must be a nonempty list of nonempty strings")
     from finmy.generic import UserQueryInput, DataSample
     from finmy.builder.base import BuildInput
-    from finmy.builder.agent_build.main_build import AgentEventBuilder
-    build_config = copy.deepcopy(config.get("builder_config", config))
+    build_config = subject_builder_config(config)
+    if build_config["builder_type"] == "SparseRagBuilder":
+        from finmy.builder.sparse_build.main_build import SparseRagBuilder
+        builder_class = SparseRagBuilder
+    else:
+        from finmy.builder.agent_build.main_build import AgentEventBuilder
+        builder_class = AgentEventBuilder
     user_query = UserQueryInput(query_text=query, key_words=keywords or [])
     samples = [DataSample(sample_id=f"saved_{i}", raw_data_id=f"saved_{i}", content=text)
                for i, text in enumerate(contents)]
-    builder = AgentEventBuilder(build_config=build_config)
+    builder = builder_class(build_config=build_config)
     return builder.run(BuildInput(user_query=user_query, samples=samples)), builder.save_dir
 
 

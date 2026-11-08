@@ -1,6 +1,7 @@
 """Build an EPG from prepared local text, without search or a database."""
 
 import argparse
+import copy
 import json
 from pathlib import Path
 import sys
@@ -16,7 +17,8 @@ from finmy.runner.sparse_build_runner import load_inputs, preflight
 def select_builder(config):
     if not isinstance(config, dict):
         raise ValueError("builder_config must be an object")
-    kind = config.get("builder_type")
+    config = copy.deepcopy(config)
+    kind = config.setdefault("builder_type", "SparseRagBuilder")
     if kind == "AgentEventBuilder":
         return BuildOnlyAgentEventBuilder, validated_config(config)
     if kind == "SparseRagBuilder":
@@ -37,6 +39,8 @@ def replay(directory):
         builder.save_dir = str(directory)
         builder.build_config = {}
         cascade = builder.integrate_from_files(strict=True)
+        if manifest.get("effective_config", {}).get("reconstruction", {}).get("mode") == "person":
+            builder.integrate_person_from_files(strict=True)
     else:
         raise ValueError("Unsupported recorded builder_type")
     if cascade != json.loads((directory / "FinalEventCascade.json").read_text(encoding="utf-8")):
@@ -67,6 +71,7 @@ def main(argv=None):
             raise ValueError("Requested dotenv file does not exist")
         load_dotenv(args.env_file, override=False)
     config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))["builder_config"]
+    config.setdefault("builder_type", "SparseRagBuilder")
     builder_class, checked_config = select_builder(config)
     build_input, input_hash = load_inputs(args.input)
     report = preflight(checked_config, build_input)
@@ -81,9 +86,13 @@ def main(argv=None):
     if args.gantt:
         render = {"status": "completed"}
         try:
-            from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
-            EventCascadeGanttVisualizer().plot_cascade(
-                output.event_cascades, output_path=str(Path(builder.save_dir) / "gantt.html"))
+            if output.subject_graph is not None:
+                from finmy.subject_graph.visualizer import render_subject_graph
+                render_subject_graph(output.subject_graph, Path(builder.save_dir) / "gantt.html")
+            else:
+                from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualizer
+                EventCascadeGanttVisualizer().plot_cascade(
+                    output.event_cascades, output_path=str(Path(builder.save_dir) / "gantt.html"))
         except Exception as exc:
             render = {"status": "failed", "error_type": type(exc).__name__}
         builder.save_traces(render, "GanttStatus", "json")

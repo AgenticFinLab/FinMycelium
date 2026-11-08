@@ -1,0 +1,38 @@
+# Direct text entry: user_query + samples in --input.
+# Change this explicit person scope for a different subject or period.
+builder_config:
+  builder_type: SparseRagBuilder
+  lm_type: api
+  lm_name: deepseek/deepseek-chat
+  generation_config:
+    max_new_tokens: 8192
+    temperature: 0.2
+    top_p: 0.95
+  save_folder: output/person-sparse
+  reconstruction:
+    mode: person
+    subject:
+      subject_id: person_warren_buffett
+      name: Warren Buffett
+      aliases: ["Warren E. Buffett", "沃伦·巴菲特", "巴菲特"]
+      coverage_start: "2022-01-01"
+      coverage_end: "2023-12-31"
+      scope: >-
+        Documented activities and experiences in this period. Distinguish
+        Buffett's personal decisions and statements from Berkshire's actions.
+  sparse_builder_config:
+    enable_sparse_routing: true
+    enable_context_assets: true
+    max_calls: 300
+    max_json_attempts: 3
+    request_timeout_seconds: 900
+    evidence_policy: report
+    output_language: Chinese
+  agents:
+    SkeletonReconstructor: {}
+    SkeletonChecker: {}
+    ParticipantReconstructor: {}
+    TransactionReconstructor: {}
+    EpisodeReconstructor: {}
+    StageDescriptionReconstructor: {}
+    EventDescriptionReconstructor: {}

@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 
 from .prompts import get_agent_prompts
+from finmy.reconstruction_scope import read_reconstruction, render_scope
 
 
 def digest(value):
@@ -34,7 +35,16 @@ def validate_input(build_input):
             raise ValueError("sample content must be nonempty text")
 
 
+def sparse_options(config):
+    """Use the same explicit-option precedence for validation, execution and replay."""
+    options = config.get("sparse_builder_config", config.get("event_builder_config", {}))
+    if not isinstance(options, dict):
+        raise ValueError("sparse_builder_config must be an object")
+    return options
+
+
 def validate_config(config):
+    read_reconstruction(config)
     roles = set(get_agent_prompts()[0])
     required = {"agents", "lm_type", "lm_name", "generation_config", "save_folder"}
     if not required <= config.keys():
@@ -70,9 +80,7 @@ def validate_config(config):
     extra = generation.get("extra_body", {})
     if not isinstance(extra, dict) or set(extra) - {"thinking", "enable_thinking", "thinking_budget"}:
         raise ValueError("extra_body only supports provider thinking controls")
-    options = config.get("sparse_builder_config", config.get("event_builder_config", {}))
-    if not isinstance(options, dict):
-        raise ValueError("sparse_builder_config must be an object")
+    options = sparse_options(config)
     allowed = {"enable_sparse_routing", "enable_context_assets", "max_calls", "context_top_k",
                "max_context_chars", "excerpt_char_limit", "max_card_tokens", "max_json_attempts",
                "request_timeout_seconds", "evidence_policy", "output_language"}
@@ -106,7 +114,12 @@ def code_identity():
         dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True))
     except (OSError, subprocess.CalledProcessError):
         head, dirty = None, None
-    sources = list(Path(__file__).parent.glob("*.py")) + [root / "finmy/builder/agent_build/structure.py"]
+    sources = (list(Path(__file__).parent.glob("*.py"))
+               + list((root / "finmy/person_epg").glob("*.py"))
+               + [root / "finmy/builder/agent_build/structure.py",
+                  root / "finmy/reconstruction_scope.py",
+                  root / "finmy/person_epg/schema.json",
+                  root / "finmy/person_epg/schema_model.json"])
     hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sources if p.is_file()}
     from lmbase.inference.api_call import LangChainAPIInference
@@ -120,9 +133,27 @@ def run_identity(build_input, config):
     # Never serialize arbitrary config sections, environment variables or endpoints.
     safe_config = {key: config.get(key) for key in ("lm_type", "lm_name", "generation_config",
                                                   "sparse_builder_config", "event_builder_config")}
+    reconstruction = read_reconstruction(config)
+    safe_config["reconstruction"] = reconstruction
+    prompts = get_agent_prompts()
+    if reconstruction["mode"] == "person":
+        from .person_organization import ORGANIZATION_SYSTEM_PROMPT
+        prompts = {"event_roles": prompts, "scope": render_scope(config),
+                   "person_guidance": PERSON_SCOPE_GUIDANCE,
+                   "organization": ORGANIZATION_SYSTEM_PROMPT}
     return inputs, {"status": "running", "input_sha256": digest(inputs),
                     "effective_config": safe_config, "config_sha256": digest(safe_config),
-                    "code": code_identity(), "prompt_sha256": digest(get_agent_prompts())}
+                    "code": code_identity(), "prompt_sha256": digest(prompts)}
+
+
+PERSON_SCOPE_GUIDANCE = (
+    "Reconstruct the named person's documented involvement within the requested scope. "
+    "Keep company actions assigned to the company, and personal actions to their actual actor. "
+    "Each episode should identify one concrete occurrence, not a topic spanning unrelated scenes. "
+    "Distinguish the date of a statement from the historical action it recalls. "
+    "Stages here are extraction candidates; later organization determines personal stages. "
+    "Do not change the supplied output fields or quote task metadata as evidence."
+)
 
 
 def summarize_calls(records):

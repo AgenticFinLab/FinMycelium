@@ -50,8 +50,12 @@ an explicit topic or original request can narrow that scope.
         if options.get("subject"):
             raise ValueError("A subject requires reconstruction.mode: person or company")
         return {"mode": "event"}
-    if config.get("builder_type", "AgentEventBuilder") != "AgentEventBuilder":
-        raise ValueError("Subject reconstruction currently requires builder_type: AgentEventBuilder")
+    default_builder = "AgentEventBuilder" if mode == "company" else "SparseRagBuilder"
+    builder_type = config.get("builder_type", default_builder)
+    if builder_type not in {"AgentEventBuilder", "SparseRagBuilder"}:
+        raise ValueError("Subject reconstruction requires AgentEventBuilder or SparseRagBuilder")
+    if mode == "company" and builder_type == "SparseRagBuilder":
+        raise ValueError("SparseRagBuilder supports person mode; company mode requires AgentEventBuilder")
     subject = options.get("subject")
     if not isinstance(subject, dict):
         raise ValueError("Subject mode requires a subject mapping")
