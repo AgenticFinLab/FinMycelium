@@ -114,6 +114,12 @@ do not hide the issue by changing an actor/date or manufacturing a new occurrenc
 Domain labels are organizational categories, not assertions of undocumented facts.
 Use the requested output language for labels, summaries and reasons; keep quotes
 verbatim in their original language.
+Use compact JSON without indentation. Keep explanations concise and use the
+shortest exact quotes sufficient to support each assertion, with one concise
+reason when sufficient. Omit optional stage
+summaries, confidence, repeated display titles and null detail_indices unless
+they add needed meaning. Omitting detail_indices preserves all original details.
+Never shorten the response by omitting required activities or occurrences.
 
 Private JSON contract:
 """.strip() + "\n" + json.dumps(PLAN_SCHEMA, ensure_ascii=False, separators=(",", ":"))
@@ -130,17 +136,24 @@ _ORGANIZATION_TABLES = (
 )
 
 
-def organization_request(package, cascade, subject):
-    """Project facts and complete sources, excluding existing organization answers."""
+def organization_request(package, cascade, subject, *, include_context_activities=False):
+    """Project facts and complete sources, excluding existing organization answers.
+
+    Bounded reorganization can retain context Activity identities and their
+    details/evidence to account for every existing ID, without reusing their
+    previous memberships or relevance answers.
+    """
     skeleton = []
     for stage in cascade.get("stages", []):
         skeleton.append({key: copy.deepcopy(stage[key]) for key in
                          ("stage_id", "name", "start_time", "end_time") if key in stage})
     facts = {name: copy.deepcopy(package[name]) for name in _FACT_TABLES}
     # A full regression package may already contain organization output.  Keep
-    # the underlying scenes but do not feed its background selections, relevance
-    # answers or organization-only evidence sets back into the organizer.
-    facts["activity"] = [row for row in facts["activity"] if row.get("context_occurrence_id") is None]
+    # the underlying scenes but do not feed its relevance answers or unrelated
+    # organization-only evidence sets back into the organizer. Context identities
+    # are opt-in for a caller that must account for already existing Activities.
+    if not include_context_activities:
+        facts["activity"] = [row for row in facts["activity"] if row.get("context_occurrence_id") is None]
     activity_ids = {row["activity_id"] for row in facts["activity"]}
     facts["activity_detail"] = [row for row in facts["activity_detail"] if row["activity_id"] in activity_ids]
     relevance_sets = set()

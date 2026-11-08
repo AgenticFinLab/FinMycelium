@@ -138,9 +138,11 @@ def run_identity(build_input, config):
     prompts = get_agent_prompts()
     if reconstruction["mode"] == "person":
         from .person_organization import ORGANIZATION_SYSTEM_PROMPT
+        from .organization_batches import ORGANIZATION_BATCH_PROMPT_IDENTITY
         prompts = {"event_roles": prompts, "scope": render_scope(config),
                    "person_guidance": PERSON_SCOPE_GUIDANCE,
-                   "organization": ORGANIZATION_SYSTEM_PROMPT}
+                   "organization": ORGANIZATION_SYSTEM_PROMPT,
+                   "organization_batches": ORGANIZATION_BATCH_PROMPT_IDENTITY}
     return inputs, {"status": "running", "input_sha256": digest(inputs),
                     "effective_config": safe_config, "config_sha256": digest(safe_config),
                     "code": code_identity(), "prompt_sha256": digest(prompts)}

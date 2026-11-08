@@ -196,6 +196,29 @@ COMMON_USER_INPUT_BLOCK = """
 """.strip()
 
 
+EPISODE_FACT_SCOPE_POLICY = """
+Scene and time selection:
+TargetEpisode defines this response's factual and temporal scope. The broader
+person coverage period, TargetStage and other episodes do not expand that scope.
+Read all Content for evidence, but do not extract every scene mentioned in it
+into this episode. A later document can support an earlier action without making
+the document's publication date the action's date. A later statement describing
+that action is a separate occurrence, with its own supported statement date.
+Match each action or transfer verb to the time of that occurrence, not merely
+the year discussed in its text or the source's publication date.
+
+Keep subsequent reports, explanations and recollections in their own scene.
+Exclude supported out-of-scope occurrences from this response; their original
+source text remains available unchanged for other episodes. Preserve genuine
+in-scope actions and transfers with their actual actors, including company acts.
+Do not relabel a statement as its described action, replace its actor or date,
+or remove a known date / use unknown to make an out-of-scope occurrence fit.
+In person mode the focal person need not act in every episode. A source-supported
+participant with no in-scope action may have actions=[]; do not manufacture a
+personal action or discard the company's action to center the focal person.
+""".strip()
+
+
 EventLayoutReconstructorSys = COMMON_SYSTEM_PROMPT
 EventLayoutReconstructorUser = (
     "Reconstruct the event skeleton only, then output raw JSON. Choose episode boundaries "
@@ -242,6 +265,7 @@ ParticipantReconstructorUser = (
     "Include supported failures to communicate and other non-actions as such. Check "
     "each source for distinct in-scope facts before returning; verbosity tiers do not "
     "permit omission of relevant actors or intermediate steps.\n\n"
+    + EPISODE_FACT_SCOPE_POLICY + "\n\n"
     + COMMON_USER_INPUT_BLOCK
     + "\n\n=== CANONICAL PARTICIPANT IDENTITIES (NO PREVIOUS ACTIONS) ===\n{ReconstructedParticipants}"
     + "\n\n=== PARTICIPANT DETAIL TIER ===\n{ParticipantDetailTier}"
@@ -263,6 +287,7 @@ TransactionReconstructorUser = (
     "not merely an amount approved, due, planned, waived or agreed. A moratorium or "
     "missed payment is not a completed cash transfer. Do not infer execution from a "
     "participant action if the original source only establishes approval.\n\n"
+    + EPISODE_FACT_SCOPE_POLICY + "\n\n"
     + COMMON_USER_INPUT_BLOCK
 )
 

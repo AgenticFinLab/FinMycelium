@@ -17,6 +17,21 @@ EPISODE_SCOPE_FIELDS = ("episode_id", "name", "index_in_stage", "start_time", "e
 UNKNOWN = {None, "", "unknown", "unspecified", "null", "none", "n/a"}
 
 
+class TemporalScopeError(ValueError):
+    """A validly parsed candidate contains facts outside its target Episode.
+
+    Keep every conflicting item for targeted feedback and review. This report
+    does not relocate, remove or rewrite any candidate fact.
+    """
+
+    def __init__(self, report):
+        self.report = copy.deepcopy(report)
+        first = self.report["violations"][0]
+        super().__init__(
+            f"Episode scope: {first['path']}.timestamp {first['timestamp']!r} is outside target bounds"
+        )
+
+
 def compact_values(value):
     """Project verified-field values, retaining all facts, order and identifiers."""
     if isinstance(value, dict):
@@ -115,20 +130,29 @@ def check_temporal_scope(target, *, participants=(), transactions=()):
     lower, upper = start[0] if start else None, end[1] if end else None
     if lower and upper and lower > upper:
         raise ValueError("Episode scope: start_time is later than end_time")
-    checks = []
-    items = [(f"participants[{pi}].actions[{ai}]", action)
+    checks, violations = [], []
+    items = [(f"participants[{pi}].actions[{ai}]", action,
+              {"participant_id": participant.get("participant_id")})
              for pi, participant in enumerate(participants)
              for ai, action in enumerate(participant.get("actions", []))]
-    items += [(f"transactions[{ti}]", transaction) for ti, transaction in enumerate(transactions)]
-    for path, item in items:
+    items += [(f"transactions[{ti}]", transaction, {}) for ti, transaction in enumerate(transactions)]
+    for path, item, identity in items:
         stamp = scalar(item.get("timestamp"))
         interval = date_interval(stamp)
         status = "unchecked"
         if interval and (lower or upper):
             if (lower and interval[1] < lower) or (upper and interval[0] > upper):
-                raise ValueError(f"Episode scope: {path}.timestamp {stamp!r} is outside target bounds")
+                violations.append({"path": path, "timestamp": stamp,
+                                   "item": copy.deepcopy(item), **identity})
             status = "overlaps_known_bounds"
         checks.append({"path": path, "timestamp": stamp, "status": status})
+    if violations:
+        raise TemporalScopeError({
+            "scope": episode_scope(target),
+            "bounds": {"start": lower.isoformat() if lower else None,
+                       "end": upper.isoformat() if upper else None},
+            "violations": violations,
+        })
     return {"scope": episode_scope(target), "start_checked": lower is not None,
             "end_checked": upper is not None, "items": checks}
 

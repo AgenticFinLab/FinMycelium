@@ -1,0 +1,259 @@
+{
+  "provenance": "Extracted from the supplied failed run 20261108151414478497. Model output is a regression input, not verified factual ground truth.",
+  "target_episode": {
+    "episode_id": "E10",
+    "name": {
+      "value": "Berkshire 2022 share repurchases",
+      "evidence_source_contents": [
+        "2022年，伯克希尔回购金额达到了80亿美元。"
+      ],
+      "reasons": [
+        "Company repurchase amount for 2022; not a personal Buffett action."
+      ],
+      "confidence": 0.8
+    },
+    "index_in_stage": 2,
+    "start_time": {
+      "value": "2022",
+      "evidence_source_contents": [
+        "2022年"
+      ],
+      "reasons": [
+        "Year-level only."
+      ],
+      "confidence": 0.6
+    },
+    "end_time": {
+      "value": "2022",
+      "evidence_source_contents": [
+        "2022年"
+      ],
+      "reasons": [
+        "Year-level only."
+      ],
+      "confidence": 0.6
+    }
+  },
+  "neighbor_episode": {
+    "episode_id": "E9",
+    "name": {
+      "value": "Release of 2022 annual report and shareholder letter",
+      "evidence_source_contents": [
+        "2023年2月25日，巴菲特发布了伯克希尔•哈撒韦公司2022年度报告，以及《致股东信》。"
+      ],
+      "reasons": [
+        "Explicit release date and actor (Buffett released)."
+      ],
+      "confidence": 0.9
+    },
+    "index_in_stage": 1,
+    "start_time": {
+      "value": "2023-02-25",
+      "evidence_source_contents": [
+        "2023年2月25日"
+      ],
+      "reasons": [
+        "Explicit date."
+      ],
+      "confidence": 0.9
+    },
+    "end_time": {
+      "value": "2023-02-25",
+      "evidence_source_contents": [
+        "2023年2月25日"
+      ],
+      "reasons": [
+        "Single dated release."
+      ],
+      "confidence": 0.9
+    }
+  },
+  "rejected_candidate": {
+    "participants": [
+      {
+        "participant_id": "P_1",
+        "name": {
+          "value": "Warren Buffett",
+          "evidence_source_contents": [
+            "沃伦·巴菲特（Warren Buffett）"
+          ],
+          "reasons": [
+            "Named directly in the source as the Berkshire chairman/CEO and letter author."
+          ],
+          "confidence": 0.98
+        },
+        "participant_type": {
+          "value": "individual",
+          "evidence_source_contents": [
+            "股神巴菲特（Warren Buffett）"
+          ],
+          "reasons": [
+            "Source identifies him as a person, the '股神' investor."
+          ],
+          "confidence": 0.97
+        },
+        "base_role": {
+          "value": "chairman and CEO of Berkshire Hathaway",
+          "evidence_source_contents": [
+            "伯克希尔·哈撒韦公司发出的第45封致股东信",
+            "伯克希尔-哈撒韦(BRK.A, BRK.B)CEO沃伦·巴菲特(Warren Buffett)"
+          ],
+          "reasons": [
+            "Source states the letter was issued by Berkshire and identifies Buffett as Berkshire's CEO."
+          ],
+          "confidence": 0.95
+        },
+        "attributes": {
+          "age": {
+            "value": "92",
+            "evidence_source_contents": [
+              "今年已经是92岁高龄"
+            ],
+            "reasons": [
+              "Explicit age stated in the 2023 shareholder-letter coverage."
+            ],
+            "confidence": 0.95
+          }
+        },
+        "actions": [
+          {
+            "name": {
+              "value": "describe 2022 share repurchases in shareholder letter",
+              "evidence_source_contents": [
+                "2022年，伯克希尔哈撒韦与我们重仓的苹果、美国运通公司都进行了股份回购",
+                "通过回购1.2%的公司已发行股份，直接提高了您在我们投资组合中的权益"
+              ],
+              "reasons": [
+                "Buffett's letter text recounts Berkshire's 2022 buyback of 1.2% of shares outstanding."
+              ],
+              "confidence": 0.9
+            },
+            "timestamp": {
+              "value": "2023-02-25",
+              "evidence_source_contents": [
+                "2023年2月25日，巴菲特发布了伯克希尔•哈撒韦公司2022年度报告，以及《致股东信》"
+              ],
+              "reasons": [
+                "Date the letter containing the buyback account was released."
+              ],
+              "confidence": 0.9
+            },
+            "details": [
+              {
+                "value": "Letter states Berkshire repurchased 1.2% of its outstanding shares in 2022, raising shareholders' interest in the portfolio.",
+                "evidence_source_contents": [
+                  "在伯克希尔哈撒韦，通过回购1.2%的公司已发行股份，直接提高了您在我们投资组合中的权益"
+                ],
+                "reasons": [
+                  "Direct statement of the 2022 repurchase size and its stated effect."
+                ],
+                "confidence": 0.9
+              },
+              {
+                "value": "Letter notes Apple and American Express buybacks also increased Berkshire's stakes at no cost.",
+                "evidence_source_contents": [
+                  "苹果和美国运通的回购也增加了伯克希尔的持股权益，而我们没有支付任何成本"
+                ],
+                "reasons": [
+                  "Explicit statement about the effect of investees' buybacks."
+                ],
+                "confidence": 0.88
+              },
+              {
+                "value": "Letter argues buybacks benefit all shareholders if repurchase price is below intrinsic value.",
+                "evidence_source_contents": [
+                  "如果回购价格低于公司内在价值，那么每一分钱回购对股东都有益处"
+                ],
+                "reasons": [
+                  "Direct statement of Buffett's stated buyback principle."
+                ],
+                "confidence": 0.9
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "participant_id": "P_2",
+        "name": {
+          "value": "Berkshire Hathaway",
+          "evidence_source_contents": [
+            "伯克希尔•哈撒韦公司2022年度报告"
+          ],
+          "reasons": [
+            "Named as the company whose 2022 annual report was released."
+          ],
+          "confidence": 0.97
+        },
+        "participant_type": {
+          "value": "organization",
+          "evidence_source_contents": [
+            "伯克希尔•哈撒韦公司"
+          ],
+          "reasons": [
+            "Identified as a company."
+          ],
+          "confidence": 0.96
+        },
+        "base_role": {
+          "value": "company repurchasing its own shares",
+          "evidence_source_contents": [
+            "伯克希尔哈撒韦与我们重仓的苹果、美国运通公司都进行了股份回购"
+          ],
+          "reasons": [
+            "Source states Berkshire conducted share repurchases in 2022."
+          ],
+          "confidence": 0.9
+        },
+        "attributes": {
+          "2022 share repurchases": {
+            "value": "1.2% of shares outstanding",
+            "evidence_source_contents": [
+              "通过回购1.2%的公司已发行股份"
+            ],
+            "reasons": [
+              "Explicit repurchase percentage for 2022."
+            ],
+            "confidence": 0.9
+          }
+        },
+        "actions": [
+          {
+            "name": {
+              "value": "repurchase own shares",
+              "evidence_source_contents": [
+                "2022年，伯克希尔哈撒韦与我们重仓的苹果、美国运通公司都进行了股份回购"
+              ],
+              "reasons": [
+                "Direct statement that Berkshire carried out share buybacks in 2022."
+              ],
+              "confidence": 0.9
+            },
+            "timestamp": {
+              "value": "2022",
+              "evidence_source_contents": [
+                "2022年，伯克希尔哈撒韦与我们重仓的苹果、美国运通公司都进行了股份回购"
+              ],
+              "reasons": [
+                "Year explicitly given for the repurchases."
+              ],
+              "confidence": 0.9
+            },
+            "details": [
+              {
+                "value": "Repurchased 1.2% of outstanding shares, increasing continuing shareholders' interest.",
+                "evidence_source_contents": [
+                  "通过回购1.2%的公司已发行股份，直接提高了您在我们投资组合中的权益"
+                ],
+                "reasons": [
+                  "Explicit size and stated effect of the buyback."
+                ],
+                "confidence": 0.9
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -26,8 +26,9 @@ from .context_assets import (
     build_evidence_assets,
     summarize_context_assets,
 )
+from .completion_errors import IncompleteCompletionError
 from .contracts import (
-    CONSTRUCTION_CONTRACT_VERSION, check_temporal_scope, compact_values,
+    CONSTRUCTION_CONTRACT_VERSION, TemporalScopeError, check_temporal_scope, compact_values,
     construction_report, episode_scope, participant_registry, stage_scope,
     validate_episode_reuse, validate_participant_identity,
 )
@@ -40,6 +41,8 @@ from .grounding import EVIDENCE_CONTRACT_VERSION, grounded_evidence_report, qual
 from .prompts import get_agent_prompts, structure_spec
 from .renderers import render_context_asset_summary
 from .runtime import PERSON_SCOPE_GUIDANCE, digest, run_identity, sparse_options, summarize_calls, validate_config, validate_input
+from .temporal_recovery import build_temporal_retry_user_msg
+from .organization_errors import OrganizationValidationError, build_organization_retry_user_msg
 from .validation import (
     validate_cascade, validate_endpoints, validate_episode, validate_role,
 )
@@ -104,6 +107,37 @@ class SparseRagBuilder(BaseBuilder):
     def _save_call_ledger(self):
         if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
             self.save_traces(self._call_records, "CallLedger", "json")
+
+    def _record_temporal_conflict(self, agent_name, savename, attempt, error, candidate):
+        """Retain rejected scene facts for review without rewriting or relocating them."""
+        if not hasattr(self, "_temporal_conflicts"):
+            self._temporal_conflicts = []
+        self._temporal_conflicts.append({
+            "agent": agent_name, "save_name": savename, "attempt": attempt,
+            "status": "needs_scope_review", "automatic_reassignment": False,
+            "issue": copy.deepcopy(error.report),
+            "rejected_candidate": copy.deepcopy(candidate),
+        })
+        if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
+            self.save_traces({
+                "contract_version": 1, "semantic_support_checked": False,
+                "conflicts": self._temporal_conflicts,
+            }, "EpisodeScopeConflicts", "json")
+
+    def _record_organization_error(self, agent_name, savename, attempt, error, candidate):
+        """Retain rejected organization candidates without silently rewriting them."""
+        if not hasattr(self, "_organization_validation_errors"):
+            self._organization_validation_errors = []
+        self._organization_validation_errors.append({
+            "agent": agent_name, "save_name": savename, "attempt": attempt,
+            "status": "rejected_candidate", "issue": copy.deepcopy(error.report),
+            "rejected_candidate": copy.deepcopy(candidate),
+        })
+        if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
+            self.save_traces({
+                "contract_version": 1, "semantic_support_checked": False,
+                "errors": self._organization_validation_errors,
+            }, "PersonOrganizationValidationErrors", "json")
 
     def save_traces(self, traces, save_name, file_format, **kwargs):
         if file_format != "json":
@@ -266,17 +300,25 @@ class SparseRagBuilder(BaseBuilder):
             system += "\n\n" + render_scope(config) + "\n" + PERSON_SCOPE_GUIDANCE
         return system, user_prompts[agent_name].format(**prompt_kwargs)
 
+    @staticmethod
+    def _load_finite_json(text: str) -> Any:
+        value = json.loads(text)
+        # Python also accepts NaN/Infinity and overflowing floats. Reject these
+        # before validators or strict diagnostic writers see a candidate.
+        json.dumps(value, allow_nan=False)
+        return value
+
     def _parse_json_response(self, response_text: str) -> Any:
         clean_text = (response_text or "").strip()
         code_block_match = re.search(r"```(?:json)?\s*(.*?)\s*```", clean_text, re.S)
         if code_block_match:
             clean_text = code_block_match.group(1).strip()
         try:
-            return json.loads(clean_text)
+            return self._load_finite_json(clean_text)
         except json.JSONDecodeError:
             object_match = re.search(r"(\{.*\}|\[.*\])", clean_text, re.S)
             if object_match:
-                return json.loads(object_match.group(1))
+                return self._load_finite_json(object_match.group(1))
             return response_text
 
     def _build_json_retry_user_msg(self, base_user_msg: str, agent_name: str) -> str:
@@ -339,7 +381,7 @@ class SparseRagBuilder(BaseBuilder):
                 continue
             seen_candidates.add(candidate)
             try:
-                return json.loads(candidate)
+                return self._load_finite_json(candidate)
             except json.JSONDecodeError:
                 continue
         raise ValueError("Failed to recover a balanced JSON fragment from response")
@@ -367,7 +409,7 @@ class SparseRagBuilder(BaseBuilder):
         for attempt in range(1, max_attempts + 1):
             if not hasattr(self, "_call_records"):
                 self._call_records = []
-            if len(self._call_records) >= max_calls:
+            if len(self._call_records) + getattr(self, "_prior_call_count", 0) >= max_calls:
                 raise RuntimeError("Configured model call limit reached")
             record = {
                 "agent": agent_name, "attempt": attempt, "save_name": savename,
@@ -404,27 +446,49 @@ class SparseRagBuilder(BaseBuilder):
             self._save_agent_trace(agent_name, output, savename, attempt)
             if ("finish_reason" in details and details["finish_reason"] != "stop") or details.get("refusal") or details.get("tool_calls"):
                 record["status"] = "incomplete_response"
+                record["refusal"] = bool(details.get("refusal"))
+                record["tool_calls"] = bool(details.get("tool_calls"))
                 self._save_call_ledger()
-                raise ValueError(f"{agent_name}: incomplete or non-text completion")
+                generation = (getattr(self, "build_config", None) or {}).get("generation_config", {})
+                limit = next((generation[key] for key in
+                              ("max_new_tokens", "max_tokens", "max_completion_tokens")
+                              if key in generation), None)
+                raise IncompleteCompletionError(
+                    agent_name, finish_reason=details.get("finish_reason"),
+                    refusal=details.get("refusal"), tool_calls=details.get("tool_calls"),
+                    completion_tokens=record["completion_tokens"], output_limit=limit)
             if not response_text.strip():
                 record["status"] = "empty_response"
                 self._save_call_ledger()
                 raise ValueError(f"{agent_name}: empty completion")
+            parsed = None
             try:
                 parsed = self._parse_json_response(response_text)
                 if isinstance(parsed, str):
                     raise ValueError("Response did not contain JSON")
                 if validator is not None:
-                    validator(parsed)
+                    try:
+                        validator(parsed)
+                    except (TypeError, ValueError) as validation_error:
+                        if agent_name != "PersonOrganization" or isinstance(validation_error, OrganizationValidationError):
+                            raise
+                        raise OrganizationValidationError({
+                            "phase": savename, "violations": [{
+                                "path": "$", "code": "organization_contract",
+                                "message": str(validation_error),
+                            }],
+                        }) from validation_error
                 self._save_agent_result(parsed, savename)
                 record["status"] = "accepted"
                 self._save_call_ledger()
                 return parsed
             except (TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
-                if agent_name in self._JSON_SYNTACTIC_RECOVERY_AGENTS:
+                if (agent_name in self._JSON_SYNTACTIC_RECOVERY_AGENTS
+                        and not isinstance(last_error, TemporalScopeError)):
                     try:
                         recovered = self._recover_syntactic_json_response(response_text)
+                        parsed = recovered
                         if validator is not None:
                             validator(recovered)
                         self._save_agent_result(recovered, savename)
@@ -434,12 +498,25 @@ class SparseRagBuilder(BaseBuilder):
                     except ValueError as recovery_exc:
                         last_error = recovery_exc
                 record.update(status="invalid_output", error_type=type(last_error).__name__)
+                if isinstance(last_error, TemporalScopeError):
+                    record["validation_kind"] = "episode_temporal_scope"
+                    self._record_temporal_conflict(agent_name, savename, attempt, last_error, parsed)
+                elif isinstance(last_error, OrganizationValidationError):
+                    record["validation_kind"] = "organization_semantic"
+                    self._record_organization_error(agent_name, savename, attempt, last_error, parsed)
                 self._save_call_ledger()
                 if attempt >= max_attempts:
                     raise ValueError(
                         f"{agent_name} returned invalid output after {attempt} attempt(s): {last_error}"
-                    ) from exc
-                current_user_msg = self._build_json_retry_user_msg(user_msg, agent_name) + f"\nValidation issue: {last_error}\n"
+                    ) from last_error
+                if isinstance(last_error, TemporalScopeError):
+                    current_user_msg = build_temporal_retry_user_msg(
+                        user_msg, agent_name, last_error, parsed)
+                elif isinstance(last_error, OrganizationValidationError):
+                    current_user_msg = build_organization_retry_user_msg(
+                        user_msg, agent_name, last_error, parsed)
+                else:
+                    current_user_msg = self._build_json_retry_user_msg(user_msg, agent_name) + f"\nValidation issue: {last_error}\n"
 
         raise ValueError(f"{agent_name} returned invalid JSON: {last_error}")
 
@@ -1348,13 +1425,18 @@ class SparseRagBuilder(BaseBuilder):
             raise RuntimeError("Create a new builder for each run; implicit resume is not supported")
         self._run_started = True
         self._call_records = []
+        self._prior_call_count = 0
+        self._temporal_conflicts = []
+        self._organization_validation_errors = []
         inputs, manifest = run_identity(build_input, self.build_config)
         manifest["builder_type"] = self.builder_type
         manifest["construction_contract_version"] = CONSTRUCTION_CONTRACT_VERSION
         manifest["evidence_contract_version"] = EVIDENCE_CONTRACT_VERSION
         if reconstruction["mode"] == "person":
             from .person_organization import ORGANIZATION_CONTRACT_VERSION
+            from .organization_batches import ORGANIZATION_EXECUTION_VERSION
             manifest["person_organization_contract_version"] = ORGANIZATION_CONTRACT_VERSION
+            manifest["organization_execution_version"] = ORGANIZATION_EXECUTION_VERSION
         persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
         if persist:
             if os.path.exists(os.path.join(self.save_dir, "RunManifest.json")):
@@ -1390,18 +1472,17 @@ class SparseRagBuilder(BaseBuilder):
         from finmy.person_epg.sparse_adapter import build_person_facts, ground_person_evidence
         from finmy.person_epg.compat_projection import project_person_epg
         from finmy.person_epg.validation import validate_person_epg
-        from .person_organization import (
-            ORGANIZATION_SYSTEM_PROMPT, organization_request, apply_organization,
-            validate_organization,
-        )
+        from .person_organization import apply_organization
+        from .organization_batches import organize_person_plan
         package, mapping = build_person_facts(output.event_cascades, build_input, subject)
-        request = organization_request(package, output.event_cascades, subject)
-        request["output_language"] = self._event_config_value("output_language", "English")
-        plan = self._infer_and_parse_json(
-            "PersonOrganization", ORGANIZATION_SYSTEM_PROMPT,
-            json.dumps(request, ensure_ascii=False), {}, "PersonOrganization",
-            validator=lambda value: validate_organization(value, package),
+        plan = organize_person_plan(
+            package, output.event_cascades, subject,
+            self._event_config_value("output_language", "English"),
+            infer=lambda system, user, name, validator: self._infer_and_parse_json(
+                "PersonOrganization", system, user, {}, name, validator=validator),
+            save=self._save_agent_result,
         )
+        self._save_agent_result(plan, "PersonOrganization")
         person, organization = apply_organization(package, plan)
         evidence = ground_person_evidence(person)
         validation = validate_person_epg(person)
@@ -1413,6 +1494,7 @@ class SparseRagBuilder(BaseBuilder):
             "quote_check_passed": evidence["unmatched_quote_count"] == 0,
             "unmatched_quotes": evidence["unmatched_quote_count"],
             "fields_without_quotes": len(evidence["fields_without_quotes"]),
+            "episode_scope_conflicts": len(getattr(self, "_temporal_conflicts", [])),
             "semantic_approval": False,
             "final_artifact_allowed": validation["valid"] and not blocked,
             "status": "quote_gate_blocked" if blocked else "draft_requires_content_review",
@@ -1552,6 +1634,7 @@ class SparseRagBuilder(BaseBuilder):
                 "context_asset_summary": summarize_context_assets(context_assets),
                 "episode_execution_plan": final_state.get("episode_execution_plan"),
                 "calls": copy.deepcopy(self._call_records),
+                "episode_scope_conflicts": copy.deepcopy(getattr(self, "_temporal_conflicts", [])),
                 "acceptance": acceptance,
             },
         )
