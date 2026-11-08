@@ -79,7 +79,7 @@ def _supported_names(gap, source):
 
 def collect_decision_followup(filtered, query, keywords, subject, config, save_dir,
                               progress=None, *, completion=None, search=None, parse=None,
-                              known_urls=()):
+                              known_urls=(), usage=None):
     """Return new raw documents; caller filters/budgets them before graph building.
 
     Review/search failures are nonfatal. No re-review or recursive follow-up.
@@ -119,6 +119,8 @@ def collect_decision_followup(filtered, query, keywords, subject, config, save_d
         complete = completion or _live_completion(
             config.get("relevance_filter", {}).get("lm_name") or config.get("lm_name")
             or config.get("builder_config", {}).get("lm_name") or "deepseek/deepseek-chat", {})
+        if usage is not None:
+            usage["decision_review_calls"] = usage.get("decision_review_calls", 0) + 1
         result = complete(PROMPT, payload)
         if isinstance(result, str):
             result = _json_object(result)
@@ -166,9 +168,11 @@ def collect_decision_followup(filtered, query, keywords, subject, config, save_d
         if parse is None:
             from finmy.runner.scoped_page import parse
         docs = collect_subject_sources(
-            query, keywords, subject, {**options, "max_followup_queries": limit},
+            query, keywords, subject, {**options, "max_followup_queries":
+                (usage.get("followup_queries", 0) if usage is not None else 0) + limit},
             search, parse, target, progress=progress, followup_tasks=tasks,
             known_urls=known_urls, known_documents=filtered["documents"],
+            usage=usage,
         )
         report.update(status="sources_found" if docs else "no_new_sources", new_sources=len(docs))
         # A usable page is not proof the semantic gap was resolved. The builder

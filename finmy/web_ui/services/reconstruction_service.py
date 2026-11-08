@@ -30,7 +30,8 @@ class ReconstructionService:
         Args:
             config: Configuration dictionary
         """
-        self.config = copy.deepcopy(config)
+        from finmy.runner.event_followup_config import normalize_followup_config
+        self.config = normalize_followup_config(config)
         # Reject malformed person scope before starting any search or model call.
         read_reconstruction(config)
     
@@ -114,9 +115,12 @@ class ReconstructionService:
                      for doc in collector.documents[source]]
         if [d["raw_text"] for d in documents] != all_text_content:
             raise ValueError("Collected source metadata/content are out of sync")
-        filtered = filter_documents(
-            documents, main_input, keywords, self.config, save_dir, progress=st.write,
-        )
+        from finmy.runner.event_followup_config import followup_enabled, initial_search_options
+        follow_events = followup_enabled(self.config)
+        usage = getattr(collector, "evidence_usage", {})
+        filter_kwargs = {"usage": usage} if follow_events else {}
+        filtered = filter_documents(documents, main_input, keywords, self.config, save_dir,
+                                    progress=st.write, **filter_kwargs)
         summary = filtered["summary"]
         st.write(f"Relevance filter: kept {summary['kept']}/{summary['retrieved']} "
                  f"documents; removed {summary['removed']}.")
@@ -127,17 +131,22 @@ class ReconstructionService:
 
         if scoped and reconstruction["mode"] == "person":
             from finmy.runner.decision_followup import collect_decision_followup
+            initial_config = copy.deepcopy(self.config)
+            initial_config["subject_search"] = initial_search_options(self.config)
             extra = collect_decision_followup(
-                filtered, main_input, keywords, reconstruction["subject"], self.config, save_dir,
+                filtered, main_input, keywords, reconstruction["subject"], initial_config, save_dir,
                 progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"),
                 known_urls=[d.get("url") for d in documents],
+                **filter_kwargs,
             )
             if extra:
                 # Reuse the relevance cache for old documents and assign unique
                 # IDs across the combined source list before the context budget.
                 filtered = filter_documents(
                     documents + extra, main_input, keywords, self.config, save_dir, progress=st.write,
+                    **filter_kwargs,
                 )
+                documents = documents + extra
                 summary = filtered["summary"]
                 st.write(f"Relevance filter after decision follow-up: kept {summary['kept']}/"
                          f"{summary['retrieved']} documents.")
@@ -168,6 +177,7 @@ class ReconstructionService:
             raise ValueError("Context budget admitted no documents. Inspect filtered_contents.json.")
         
         # Run pipeline
+        self._draft_evidence = {"filtered": filtered, "documents": documents, "usage": usage}
         return self._run_pipeline(
             all_text_content_limit, main_input, keywords, save_dir
         )
@@ -227,9 +237,16 @@ class ReconstructionService:
                 # Filtered evidence goes directly to the native subject builder.
                 # Legacy financial matching/summarization can drop person/company history.
                 from finmy.subject_graph.runner import build_from_contents
-                pipeline_result, builder_save_path = build_from_contents(
-                    contents, query_text, keywords, self.config,
-                )
+                from finmy.runner.event_followup_config import followup_enabled
+                if followup_enabled(self.config) and hasattr(self, "_draft_evidence"):
+                    from finmy.runner.event_refinement import build_with_draft_event_followup
+                    pipeline_result, builder_save_path = build_with_draft_event_followup(
+                        contents, query_text, keywords, self.config, save_dir,
+                        **self._draft_evidence, build=build_from_contents,
+                        progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"))
+                else:
+                    pipeline_result, builder_save_path = build_from_contents(
+                        contents, query_text, keywords, self.config)
             else:
                 pipeline = FinmyPipeline(self.config)
                 pipeline_result = pipeline.lm_build_pipeline_with_contents(

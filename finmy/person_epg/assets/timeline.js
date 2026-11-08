@@ -205,6 +205,53 @@ function fact(member) {
   };
 }
 
+// Enrichment appends canonical rows so earlier facts and their stored order stay
+// intact. Only these added rows may move in the display, and only when their
+// recorded time range is wholly before a later row. Unknown/overlapping dates
+// do not justify inventing an order. No package row is modified here.
+function insertEnrichmentByTime(rows, isAdded, rangeFor) {
+  const stored = ordered(rows),
+    result = stored.filter(row => !isAdded(row)),
+    undated = [];
+  for (const row of stored.filter(isAdded)) {
+    const range = rangeFor(row);
+    if (!range || !Number.isFinite(range.lo) || !Number.isFinite(range.hi)) {
+      undated.push(row);
+      continue;
+    }
+    const before = result.findIndex(other => {
+      const next = rangeFor(other);
+      return next && Number.isFinite(next.lo) && range.hi < next.lo;
+    });
+    if (before < 0) result.push(row);
+    else result.splice(before, 0, row);
+  }
+  return result.concat(undated);
+}
+
+const addedMember = member => member.activity_id.startsWith('EF_ACTIVITY_');
+const displayMembers = members => insertEnrichmentByTime(members, addedMember,
+  member => fact(member).time);
+
+function displayBlocks(members, stages) {
+  const blocks = [...stages.map(stage => ({sort_order: stage.sort_order, stage})),
+    ...members.filter(member => !member.stage_id).map(member => ({
+      sort_order: member.sort_order, member
+    }))];
+  const rangeFor = block => {
+    if (block.member) return fact(block.member).time;
+    const ranges = members.filter(member => member.stage_id === block.stage.stage_id)
+      .map(member => fact(member).time)
+      .filter(range => range && Number.isFinite(range.lo) && Number.isFinite(range.hi));
+    // The earliest documented activity locates a stage; it does not assert an
+    // undocumented stage boundary or reassign existing activities.
+    return ranges.sort((a, b) => a.lo - b.lo || a.hi - b.hi)[0] || null;
+  };
+  return insertEnrichmentByTime(blocks,
+    block => block.stage ? block.stage.stage_id.startsWith('EF_STAGE_') : addedMember(block.member),
+    rangeFor);
+}
+
 function evidence(setIds) {
   const ids = new Set(setIds.filter(Boolean)), seen = new Set(), quotes = [];
   for (const link of epg.evidence_link) {
@@ -597,16 +644,10 @@ function build() {
       y += 66;
       if (!opened) continue;
       const positions = new Map();
-      const blocks = ordered([...stages.map(s => ({
-        sort_order: s.sort_order,
-        stage: s
-      })), ...members.filter(m => !m.stage_id).map(m => ({
-        sort_order: m.sort_order,
-        member: m
-      }))]);
+      const blocks = displayBlocks(members, stages);
       for (const b of blocks) {
         if (b.stage) {
-          const ms = members.filter(m => m.stage_id === b.stage.stage_id);
+          const ms = displayMembers(members.filter(m => m.stage_id === b.stage.stage_id));
           summary(data, shapes, ms, y,
             `<h3>${esc(b.stage.label)}</h3><p>${esc(b.stage.summary)}</p><p>${esc(b.stage.boundary_reason)}</p>${evidence([b.stage.evidence_set_id])}`,
             null, true);

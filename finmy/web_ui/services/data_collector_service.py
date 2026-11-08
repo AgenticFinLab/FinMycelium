@@ -7,6 +7,7 @@ import logging
 import datetime
 import json
 import traceback
+import time
 from typing import List, Dict, Any
 import streamlit as st
 
@@ -19,6 +20,7 @@ from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.runner.relevance_filter import make_document
+from finmy.runner.event_followup_config import followup_enabled
 
 
 class DataCollectorService:
@@ -33,6 +35,7 @@ class DataCollectorService:
             save_dir: Directory to save collected data
         """
         self.config = config
+        self.evidence_usage = {}
         self.documents = {name: [] for name in ("url", "file", "bocha", "baidu")}
         self.save_dir = save_dir
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -45,12 +48,14 @@ class DataCollectorService:
         from finmy.runner.subject_search import collect_subject_sources
         from finmy.runner.scoped_search_api import search
         from finmy.runner.scoped_page import parse
-        options = self.config.get("subject_search", {})
+        from finmy.runner.event_followup_config import followup_enabled, initial_search_options
+        options = initial_search_options(self.config)
         def progress(message):
             st.write(f"**{format_timestamp()}** - {message}")
 
+        extra = {"usage": self.evidence_usage} if followup_enabled(self.config) else {}
         docs = collect_subject_sources(query, keywords, subject, options,
-                                       search, parse, self.save_dir, progress=progress)
+                                       search, parse, self.save_dir, progress=progress, **extra)
         for doc in docs:
             self.documents[doc["source"]].append(doc)
         return ([d["raw_text"] for d in self.documents["bocha"]],
@@ -300,6 +305,30 @@ class DataCollectorService:
 
                     # Check if URL is a web link or local file path
                     if url.startswith(("http://", "https://", "www.")):
+                        if followup_enabled(self.config):
+                            from finmy.runner.subject_search import _url
+                            normalized_url = _url("https://" + url if url.startswith("www.") else url)
+                            usage = self.evidence_usage
+                            usage.setdefault("started_at", time.monotonic())
+                            attempted = usage.setdefault("attempted_urls", [])
+                            options = self.config["subject_search"]
+                            reason = None
+                            if not normalized_url:
+                                reason = "invalid_public_url"
+                            elif normalized_url in attempted:
+                                reason = "already_attempted"
+                            elif usage.get("parse_calls", 0) >= options["max_parse_calls"]:
+                                reason = "parse_budget_exhausted"
+                            elif time.monotonic() - usage["started_at"] >= options["max_elapsed_seconds"]:
+                                reason = "elapsed_budget_exhausted"
+                            record = {"url": url, "status": reason or "attempted"}
+                            usage.setdefault("structured_urls", []).append(record)
+                            if reason:
+                                st.write(f"Structure Data: Skipped URL ({reason}).")
+                                continue
+                            attempted.append(normalized_url)
+                            usage["parse_calls"] = usage.get("parse_calls", 0) + 1
+                            url = normalized_url
                         # Process web URL
                         collector_input = URLCollectorInput(urls=[url])
                         output = self.parser.run(collector_input)

@@ -620,6 +620,10 @@ def run_search_pipeline(
     save_dir: str | Path,
     parser=None,
 ) -> Dict[str, Any]:
+    from finmy.runner.event_followup_config import normalize_followup_config, followup_enabled
+    config = normalize_followup_config(config)
+    if followup_enabled(config):
+        return _run_person_draft_followup(config, main_input, keywords, save_dir, parser)
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -655,3 +659,75 @@ def run_search_pipeline(
         "pipeline_result": pipeline_result,
         "save_dir": str(save_dir),
     }
+
+
+def _run_person_draft_followup(config, main_input, keywords, save_dir, parser):
+    """Original subject retrieval and draft build, then retrieve around its events."""
+    import copy
+    from finmy.reconstruction_scope import read_reconstruction
+    from finmy.runner.scoped_search import plan_search, search_window
+    from finmy.runner.scoped_search_api import search
+    from finmy.runner.scoped_page import parse
+    from finmy.runner.subject_search import collect_subject_sources
+    from finmy.runner.relevance_filter import filter_documents
+    from finmy.runner.context_budget import allocate_context
+    from finmy.runner.decision_followup import collect_decision_followup
+    from finmy.runner.event_followup_config import initial_search_options
+    from finmy.runner.event_refinement import build_with_draft_event_followup
+
+    keywords = keywords or []
+    reconstruction = read_reconstruction(config)
+    options = initial_search_options(config)
+    plan_search(main_input, keywords, reconstruction["subject"], options)
+    subject = config["builder_config"]["reconstruction"]["subject"]
+    if not subject.get("coverage_start") or not subject.get("coverage_end"):
+        try:
+            start, end = search_window(main_input, reconstruction["subject"])
+        except ValueError:
+            pass
+        else:
+            subject["coverage_start"] = subject.get("coverage_start") or start.isoformat()
+            subject["coverage_end"] = subject.get("coverage_end") or end.isoformat()
+            reconstruction = read_reconstruction(config)
+    if parser is not None:
+        if callable(parser):
+            parse = parser
+        else:
+            def parse(url):
+                output = parser.run(URLCollectorInput(urls=[url]))
+                row = output.results[0] if output.results else {}
+                content = row.get("content", [])
+                return {"text": content if isinstance(content, str) else _render_parsed_content(content),
+                        "published_at": row.get("published_at") or row.get("datepublished"),
+                        "links": row.get("links", [])}
+    target = Path(save_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    usage = {}
+    documents = collect_subject_sources(main_input, keywords, reconstruction["subject"], options,
+        search, parse, target, progress=logger.info, usage=usage)
+    contents = [doc["raw_text"] for doc in documents]
+    _write_json(target / f"All_Text_Content_{_timestamp()}.json", contents)
+    filtered = filter_documents(documents, main_input, keywords, config, target,
+                                progress=logger.info, usage=usage)
+    initial_config = copy.deepcopy(config)
+    initial_config["subject_search"] = options
+    extra = collect_decision_followup(filtered, main_input, keywords, reconstruction["subject"],
+        initial_config, target, logger.info, search=search, parse=parse, usage=usage,
+        known_urls=[d.get("url") for d in documents])
+    if extra:
+        documents += extra
+        filtered = filter_documents(documents, main_input, keywords, config, target,
+                                    progress=logger.info, usage=usage)
+    packed = allocate_context(filtered["documents"], filtered["decisions"], config,
+                              include_metadata=filtered["summary"]["enabled"])
+    _write_json(target / "context_budget_report.json", packed["report"])
+    _write_json(target / "builder_input_contents.json", packed["contents"])
+    if not packed["contents"]:
+        raise ValueError("No relevant source text fits the initial context budget.")
+    result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
+        config, target, filtered=filtered, documents=documents, usage=usage,
+        search=search, parse=parse, progress=logger.info)
+    final_input = json.loads((target / "builder_input_contents.json").read_text(encoding="utf-8"))
+    return {"all_text_content": contents, "search_query": build_search_query(main_input, keywords),
+            "limited_content_count": len(final_input), "pipeline_result": result,
+            "save_dir": str(target), "builder_save_dir": directory}

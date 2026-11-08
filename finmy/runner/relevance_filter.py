@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import time
 import logging
 import math
 import re
@@ -23,6 +24,19 @@ PROMPT_VERSION = "event-relevance-v1"
 PERSON_PROMPT_VERSION = "person-relevance-v1"
 COMPANY_PROMPT_VERSION = "company-relevance-v1"
 LABELS = {"CORE", "CONTEXT", "IRRELEVANT"}
+
+
+class _RelevanceBudgetExhausted(ValueError):
+    """A safe internal reason code, distinct from provider/model failures."""
+
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
+
+def _failure_code(exc):
+    # Never persist arbitrary exception strings: HTTP errors can contain keys.
+    return exc.code if isinstance(exc, _RelevanceBudgetExhausted) else "processing_failed"
 
 PROFILE_PROMPT = """Return only a JSON object describing the reconstruction task.
 Extract scope ONLY from the original request and keywords. Do not add facts,
@@ -298,6 +312,8 @@ def filter_documents(
     config: dict[str, Any], save_dir: str | Path,
     *, completion: Completion | None = None,
     progress: Callable[[str], None] | None = None,
+    document_id_offset: int = 0,
+    usage: dict | None = None,
 ) -> dict[str, Any]:
     """Keep CORE/CONTEXT/uncertain documents; drop only fully reviewed negatives.
 
@@ -314,14 +330,43 @@ def filter_documents(
     enabled = options.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValueError("relevance_filter.enabled must be a YAML boolean")
+    if type(document_id_offset) is not int or document_id_offset < 0:
+        raise ValueError("document_id_offset must be a nonnegative integer")
+    model_limit = options.get("max_model_calls")
+    if model_limit is not None:
+        model_limit = _positive_int(model_limit, "max_model_calls", 0)
+    # Existing callers retain their shared acquisition clock unless they opt in
+    # to a separate relevance limit AND supply that phase's own usage clock.
+    elapsed_limit = options.get("max_elapsed_seconds",
+                                config.get("subject_search", {}).get("max_elapsed_seconds", 300))
+    if "max_elapsed_seconds" in options and (
+            isinstance(elapsed_limit, bool) or not isinstance(elapsed_limit, (int, float))
+            or not math.isfinite(elapsed_limit) or elapsed_limit <= 0):
+        raise ValueError("relevance_filter.max_elapsed_seconds must be positive and finite")
+    budget_usage = usage if usage is not None else {}
     docs = []
-    for index, item in enumerate(documents, 1):
+    for index, item in enumerate(documents, document_id_offset + 1):
         if not isinstance(item, dict) or not isinstance(item.get("raw_text"), str):
             raise ValueError("Each document must have string raw_text")
         docs.append({**make_document(item["raw_text"], {
             **item, "datepublished": item.get("published_at", "")
         }, str(item.get("source", "unknown"))), "document_id": f"DOC_{index:04d}",
             "search_phase": item.get("search_phase", "initial")})
+        # Search associations are routing hints, never classifier evidence.
+        for key in ("event_ids", "event_labels", "event_terms"):
+            value = item.get(key, [])
+            if key in item and isinstance(value, list) and all(isinstance(v, str) for v in value):
+                docs[-1][key] = list(dict.fromkeys(value))
+        if "event_routes" in item:
+            routes = item["event_routes"]
+            if (isinstance(routes, list) and all(isinstance(r, dict)
+                    and isinstance(r.get("event_id"), str)
+                    and isinstance(r.get("event_label", ""), str)
+                    and isinstance(r.get("event_terms"), list)
+                    and all(isinstance(t, str) for t in r["event_terms"]) for r in routes)):
+                docs[-1]["event_routes"] = [{"event_id": r["event_id"],
+                    "event_label": r.get("event_label", ""), "event_terms": list(r["event_terms"])}
+                    for r in routes]
     destination = Path(save_dir)
     _write_json(destination / "retrieved_documents.json", docs)
     if subject_mode:
@@ -342,7 +387,9 @@ def filter_documents(
     cache_dir = destination / ".relevance_cache"
     cache_enabled = options.get("cache", True)
     errors: list[str] = []
-    counters = {"model_calls": 0, "cache_hits": 0}
+    counters = {"model_calls": 0, "cache_hits": 0, "failed_batches": 0,
+                "processing_failed_batches": 0, "blocked_reasons": {}}
+    failures = []
 
     def request(system: str, payload: dict[str, Any]) -> dict[str, Any]:
         digest = hashlib.sha256(json.dumps(
@@ -358,7 +405,16 @@ def filter_documents(
                 return cached
             except (OSError, ValueError):
                 pass
+        if model_limit is not None and budget_usage.get("relevance_model_calls", 0) >= model_limit:
+            code = "call_budget_exhausted"
+            counters["blocked_reasons"][code] = counters["blocked_reasons"].get(code, 0) + 1
+            raise _RelevanceBudgetExhausted(code)
+        if usage is not None and "started_at" in usage and time.monotonic() - usage["started_at"] >= elapsed_limit:
+            code = "time_budget_exhausted"
+            counters["blocked_reasons"][code] = counters["blocked_reasons"].get(code, 0) + 1
+            raise _RelevanceBudgetExhausted(code)
         counters["model_calls"] += 1
+        budget_usage["relevance_model_calls"] = budget_usage.get("relevance_model_calls", 0) + 1
         result = _json_object(complete(system, payload))
         if cache_enabled:
             _write_json(cache_file, result)
@@ -371,8 +427,9 @@ def filter_documents(
                 request(PROFILE_PROMPT, {"original_request": query, "keywords": keywords})
             )
         except Exception as exc:
-            # Do not log exception strings: HTTP exceptions may contain credentials.
-            errors.append(f"Profile failed ({type(exc).__name__}); all documents retained for review.")
+            code = _failure_code(exc)
+            failures.append({"stage": "profile", "code": code, "error_type": type(exc).__name__})
+            errors.append(f"Profile failed ({code}); all documents retained for review.")
     profile_record = {
         "original_request": query, "keywords": keywords, "profile": profile,
         "status": "ok" if profile is not None else "review",
@@ -412,7 +469,13 @@ def filter_documents(
                         matches[0] if len(matches) == 1 else None, chunk, threshold,
                     )
             except Exception as exc:
-                message = f"Batch {start // batch_size + 1} failed ({type(exc).__name__}); retained for review."
+                code = _failure_code(exc)
+                counters["failed_batches"] += 1
+                counters["processing_failed_batches"] += code == "processing_failed"
+                failures.append({"stage": "batch", "batch": start // batch_size + 1,
+                                 "code": code, "error_type": type(exc).__name__,
+                                 "chunk_ids": [chunk["chunk_id"] for chunk in batch]})
+                message = f"Batch {start // batch_size + 1} failed ({code}); retained for review."
                 errors.append(message)
                 for chunk in batch:
                     decisions[chunk["chunk_id"]] = _review(message)
@@ -441,7 +504,7 @@ def filter_documents(
     review_chunks = sum(p["relevance"] == "REVIEW" for r in report for p in r["chunks"])
     summary = {"enabled": True, "retrieved": len(docs), "kept": len(kept),
                "removed": len(docs) - len(kept), "labels": dict(counts),
-               "review_chunks": review_chunks, **counters}
+               "review_chunks": review_chunks, "failures": failures, **counters}
     if review_chunks or counts.get("REVIEW"):
         errors.append("Some evidence requires review; see relevance_decisions.json.")
     contents = [render_document(d) for d in kept]
