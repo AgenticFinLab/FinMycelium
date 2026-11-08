@@ -30,7 +30,7 @@ from test_sparse_rag_builder_full_flow import _vf
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_PHASES = ["Layout", "Assignments", "Assignments", "Relevance",
+EXPECTED_PHASES = ["Layout", "LayoutReview", "Assignments", "Assignments", "Relevance",
                    "Relations", "Relations", "RelationsReview"]
 
 
@@ -66,7 +66,7 @@ class RelationLifecycleInference:
 
     def organization_response(self, task, request):
         phase, ids = task["phase"], task.get("assigned_ids", [])
-        if phase == "Layout":
+        if phase in {"Layout", "LayoutReview"}:
             return {key: copy.deepcopy(organization_plan()[key])
                     for key in ("domains", "events", "stages")}
         if phase == "Assignments":
@@ -161,17 +161,23 @@ class SparseRelationReviewLifecycleTest(unittest.TestCase):
         self.assertFalse(output.extras["person_acceptance"]["semantic_approval"])
 
         ledger = self.artifact(builder, "CallLedger")
-        self.assertEqual(len(inference.calls), 14)
-        self.assertEqual(len(ledger), 14)
-        self.assertEqual([row["agent"] for row in ledger], ROLES[:7] + ["PersonOrganization"] * 7)
+        self.assertEqual(len(inference.calls), 15)
+        self.assertEqual(len(ledger), 15)
+        self.assertEqual([row["agent"] for row in ledger], ROLES[:7] + ["PersonOrganization"] * 8)
         self.assertTrue(all(row["status"] == "accepted" for row in ledger))
         self.assertEqual(ledger[-1]["save_name"], "PersonOrganization-RelationsReview-001")
         manifest = self.artifact(builder, "RunManifest")
         self.assertEqual(manifest["status"], "completed")
-        self.assertEqual(manifest["usage"]["calls"], 14)
-        self.assertEqual(manifest["usage"]["prompt_tokens"], 140)
-        self.assertEqual(manifest["usage"]["completion_tokens"], 70)
+        self.assertEqual(manifest["usage"]["calls"], 15)
+        self.assertEqual(manifest["usage"]["prompt_tokens"], 150)
+        self.assertEqual(manifest["usage"]["completion_tokens"], 75)
         self.assertEqual(output.extras["calls"], ledger)
+        self.assertEqual(manifest["organization_execution_version"], 4)
+        self.assertIn("PersonOrganization-Context-Result.json", manifest["artifact_sha256"])
+        context = self.artifact(builder, "PersonOrganization-Context-Result")
+        for task in inference.tasks:
+            if task["phase"] in {"Relations", "RelationsReview"}:
+                self.assertEqual(task["organization_context"], context)
         html = Path(builder.save_dir, "FinalPersonEPG.html").read_text()
         self.assertEqual(json.loads(EmbeddedPersonData(html).payload), person)
         self.assertEqual(self.artifact(builder, "PersonRenderStatus")["status"], "completed")
@@ -179,14 +185,31 @@ class SparseRelationReviewLifecycleTest(unittest.TestCase):
         replay.save_dir, replay.build_config = builder.save_dir, {}
         with patch.object(inference, "run", side_effect=AssertionError("Replay must be offline")):
             self.assertEqual(replay.integrate_person_from_files(strict=True), person)
+        context_path = Path(builder.save_dir, "PersonOrganization-Context-Result.json")
+        context_path.write_text(json.dumps({**context, "tampered": True}))
+        with self.assertRaisesRegex(ValueError, "hash mismatch"):
+            replay.integrate_person_from_files(strict=True)
+
+    def test_layout_review_obeys_original_call_budget_without_silent_acceptance(self):
+        self.config["sparse_builder_config"]["max_calls"] = 8
+        builder, inference = self.make_builder()
+        with self.assertRaisesRegex(RuntimeError, "call limit"):
+            builder.run(self.inputs)
+        self.assertEqual([task["phase"] for task in inference.tasks], ["Layout"])
+        self.assertEqual(len(inference.calls), 8)
+        self.assertEqual(self.artifact(builder, "RunManifest")["status"], "failed")
+        self.assertTrue(Path(builder.save_dir, "PersonOrganization-Layout-Plan-Result.json").exists())
+        self.assertTrue(Path(builder.save_dir, "FinalEventCascade.json").exists())
+        self.assertFalse(Path(builder.save_dir, "PersonOrganization-Result.json").exists())
+        self.assertFalse(Path(builder.save_dir, "FinalPersonEPG.json").exists())
 
     def test_budget_exhausted_before_review_keeps_candidates_without_final_person(self):
-        self.config["sparse_builder_config"]["max_calls"] = 13
+        self.config["sparse_builder_config"]["max_calls"] = 14
         builder, inference = self.make_builder()
         with self.assertRaisesRegex(RuntimeError, "call limit"):
             builder.run(self.inputs)
         self.assertEqual([task["phase"] for task in inference.tasks], EXPECTED_PHASES[:-1])
-        self.assertEqual(len(inference.calls), 13)
+        self.assertEqual(len(inference.calls), 14)
         audit = self.artifact(builder, "PersonOrganization-RelationCandidates-Result")
         candidate = self.assert_collected_both_origins(audit, inference)
         self.assertEqual(audit["status"], "failed")
@@ -196,9 +219,9 @@ class SparseRelationReviewLifecycleTest(unittest.TestCase):
         self.assertFalse(audit["semantic_approval"])
         manifest = self.artifact(builder, "RunManifest")
         self.assertEqual(manifest["status"], "failed")
-        self.assertEqual(manifest["usage"]["calls"], 13)
+        self.assertEqual(manifest["usage"]["calls"], 14)
         ledger = self.artifact(builder, "CallLedger")
-        self.assertEqual(len(ledger), 13)
+        self.assertEqual(len(ledger), 14)
         self.assertEqual(ledger[-1]["save_name"], "PersonOrganization-Relations-002")
         for name in ("PersonOrganization-Result.json", "FinalPersonEPG.json", "FinalPersonEPG.html"):
             self.assertFalse(Path(builder.save_dir, name).exists())

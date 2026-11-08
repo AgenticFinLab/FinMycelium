@@ -42,6 +42,13 @@ executed_by must connect a decision or instruction to its execution; a meeting
 containing a statement, or a person speaking during a meeting, is not executed_by.
 Non-temporal links require a quote supporting the link itself, not just its two
 endpoints. Do not infer causality from order. Preserve company/personal actors.
+Use organization_context to inspect the selected details and final memberships
+across scenes, stages and themes. These are organizational hypotheses, not source
+evidence. Shared membership or a diagnostic hint does not establish a relation.
+Detail selection controls display only; consult the complete underlying facts
+and sources when evaluating a relation, including details not selected for display.
+Consider cross-theme links on their evidence; never force a connected chain or
+accept a candidate merely to improve coverage or connectivity.
 Your decisions are model proposals for content review, not proof of entailment."""
 
 
@@ -180,7 +187,7 @@ class RelationCandidatePool:
         self._owner = {aid: name for name, ids in self.owners for aid in ids}
         self._candidates = {}
         self.audit = {
-            "execution_version": 3, "status": "collecting",
+            "execution_version": 4, "status": "collecting",
             "semantic_support_checked": False, "semantic_approval": False,
             "generation_batches": [], "review_batches": [], "rejected_attempts": [],
         }
@@ -242,7 +249,8 @@ class RelationCandidatePool:
 
 
 def collect_reviewed_relations(package, activity_ids, layout, backgrounds,
-                               call, save, is_splittable, *, batch_size=20):
+                               call, save, is_splittable, *, batch_size=20,
+                               organization_context=None):
     """Collect every generating batch, then review whole variant groups by owner."""
     pool = RelationCandidatePool(activity_ids, batch_size)
 
@@ -260,6 +268,8 @@ def collect_reviewed_relations(package, activity_ids, layout, backgrounds,
     def generate(ids, name):
         task = {"assigned_ids": ids, "layout": layout,
                 "allowed_activity_ids": list(activity_ids), "background_activities": backgrounds}
+        if organization_context is not None:
+            task["organization_context"] = copy.deepcopy(organization_context)
         try:
             result = call("Relations", task, name,
                 lambda value: checked("Relations", name, ids, value,
@@ -279,6 +289,8 @@ def collect_reviewed_relations(package, activity_ids, layout, backgrounds,
         task = {"assigned_ids": assigned_ids, "layout": layout,
                 "allowed_activity_ids": list(activity_ids), "owner_batch": owner,
                 "background_activities": backgrounds, "candidates": candidates}
+        if organization_context is not None:
+            task["organization_context"] = copy.deepcopy(organization_context)
         try:
             result = call("RelationsReview", task, name,
                 lambda value: checked("RelationsReview", name, assigned_ids, value,

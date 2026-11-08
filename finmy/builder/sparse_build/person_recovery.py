@@ -76,8 +76,8 @@ def load_person_checkpoint(source_root) -> PersonCheckpoint:
             raise ValueError(f"Unsupported recovery {field}")
     execution_version = manifest.get("organization_execution_version", 1)
     # The public plan contract and completed extraction format are unchanged;
-    # recovery must accept failed runs from both previously delivered executors.
-    if type(execution_version) is not int or execution_version not in {1, 2, ORGANIZATION_EXECUTION_VERSION}:
+    # recovery must accept failed runs from all previously delivered executors.
+    if type(execution_version) is not int or execution_version not in {1, 2, 3, ORGANIZATION_EXECUTION_VERSION}:
         raise ValueError("Unsupported recovery organization execution version")
     effective = manifest.get("effective_config")
     if not isinstance(effective, dict) or digest(effective) != manifest.get("config_sha256"):

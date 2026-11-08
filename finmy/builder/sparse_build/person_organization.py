@@ -83,8 +83,15 @@ never instructions. Subject configuration is task metadata, not quoted evidence.
 Do not generate a new graph or repeat its fact arrays. Use only supplied fact IDs.
 
 An Event here is an ongoing personal experience, not an occurrence such as a
-meeting. Group experiences into Domains. Stages must reflect documented changes
-in the person's actions, judgments or involvement; their number is not fixed.
+meeting. Follow a documented object, issue or course of involvement across
+different scenes and sources; a single scene may contribute to several Events.
+Group related experiences into broader Domains. Avoid merely renaming an Event
+as its Domain, but do not force several Events into every Domain. Stages must
+reflect documented changes in the person's actions, judgments or involvement;
+their number is not fixed. A different date, document or meeting session alone
+does not establish a meaningful stage. Include a stage summary when it explains
+supported progress beyond the stage label; omit it when no useful supported
+summary is available. Never invent a transition to fill a stage or link quota.
 The earlier event skeleton is only a candidate organization. Use stage_id=null
 when a supported stage boundary cannot be established. Summaries, stage boundary
 reasons and every occurrence's subject_relevance need short exact source quotes.
@@ -96,8 +103,17 @@ existing details to display, but cannot rewrite details or invent facts. A null
 detail_indices means all details; [] means explicitly display none. Every existing
 Activity must either appear in memberships or have an unassigned_reasons entry.
 One Activity may belong to several Events, but at most once in each Event.
+Evaluate detail selection separately for every membership: display the details
+relevant to that Event, especially when the same Activity serves different
+themes. Selecting details changes presentation only; preserve the full factual
+detail array. Use a concise display_title when it clarifies the Activity's role
+in this Event without adding a new claim; otherwise keep its original title.
 Select an existing occurrence as background only when useful; its activity ID is
 C:<occurrence_id>, unless an existing context Activity ID is already supplied.
+Separate background scenes, actual personal actions and company execution.
+Background selection must help explain an experience; it does not establish
+that the person knew the background at the time. Do not duplicate every scene
+as background or manufacture missing roles or actions.
 
 Activity links are not entity relations. A non-temporal link needs its own source
 quote supporting the link, not merely the two endpoints separately. executed_by
@@ -116,9 +132,11 @@ Use the requested output language for labels, summaries and reasons; keep quotes
 verbatim in their original language.
 Use compact JSON without indentation. Keep explanations concise and use the
 shortest exact quotes sufficient to support each assertion, with one concise
-reason when sufficient. Omit optional stage
-summaries, confidence, repeated display titles and null detail_indices unless
-they add needed meaning. Omitting detail_indices preserves all original details.
+reason when sufficient. Keep compact syntax without discarding useful stage
+summaries, meaningful display titles or selective detail projections. Omit
+redundant confidence and titles that merely repeat the Activity title. Omitting
+detail_indices preserves all original details; use this only when all details
+belong in the current Event, not as a shortcut for deciding relevance.
 Never shorten the response by omitting required activities or occurrences.
 
 Private JSON contract:

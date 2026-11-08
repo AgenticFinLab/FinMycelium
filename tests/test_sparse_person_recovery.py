@@ -100,7 +100,7 @@ class SparsePersonRecoveryTest(unittest.TestCase):
 
         source = self.failed_checkpoint()
         manifest = self.read(source, "RunManifest")
-        for version in (None, 1, 2, ORGANIZATION_EXECUTION_VERSION):
+        for version in (None, 1, 2, 3, ORGANIZATION_EXECUTION_VERSION):
             with self.subTest(supported=version):
                 candidate = copy.deepcopy(manifest)
                 if version is None:

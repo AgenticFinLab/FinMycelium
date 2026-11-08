@@ -13,6 +13,9 @@ import json
 from jsonschema import Draft202012Validator
 
 from .completion_errors import IncompleteCompletionError
+from .organization_context import (
+    ORGANIZATION_CONTEXT_POLICY_IDENTITY, build_organization_context,
+)
 from .person_organization import (
     ORGANIZATION_SYSTEM_PROMPT, PLAN_SCHEMA,
     _require_quotes, _require_valid, _unique, organization_request,
@@ -24,13 +27,14 @@ from .relation_candidates import (
 )
 
 
-ORGANIZATION_EXECUTION_VERSION = 3
+ORGANIZATION_EXECUTION_VERSION = 4
 ACTIVITY_BATCH_SIZE = 20
 OCCURRENCE_BATCH_SIZE = 5
 TASK_SEPARATOR = "\n\nBATCH TASK:\n"
 
 _PHASE_FIELDS = {
     "Layout": ("domains", "events", "stages"),
+    "LayoutReview": ("domains", "events", "stages"),
     "Assignments": ("memberships", "unassigned_reasons"),
     "Relevance": ("occurrence_relevance", "background_occurrence_ids",
                   "memberships", "occurrence_issues"),
@@ -41,26 +45,57 @@ _PHASE_INSTRUCTIONS = {
     "Layout": """Propose only Domains, Events and Stages over the complete supplied
 facts. Do not output memberships or relevance yet. Every Event must be useful
 for at least one supplied Activity; do not create empty speculative experiences.
-Use stages only for documented changes in involvement, not one per occurrence.
-Later phases must use these exact Event and Stage IDs without changing them.""",
+Follow supported personal experiences across scenes and sources. Domains group
+related experiences; do not merely repeat Event labels as broader categories.
+Use stages only for documented changes in involvement, not one per occurrence
+or document. Include useful evidence-backed progress summaries. This is the
+candidate layout; a single LayoutReview precedes fixed downstream assignments.""",
+    "LayoutReview": """Review candidate_layout against the complete supplied
+facts and sources, then return the complete corrected Domains, Events and Stages
+using the same layout contract. If no correction is needed, return it unchanged.
+Check for scene containers mistaken for continuing experiences, duplicated or
+fragmented themes, Domain labels that merely repeat an Event, and stage boundaries
+based only on date/document/session rather than changes in involvement. Combine
+or separate themes only when supplied facts justify doing so. Keep a useful
+evidence-backed stage summary when it explains progress beyond the label.
+There is no target number of Domains, Events or Stages; a single Event in a Domain
+or an Event without stages can be appropriate. Every Event must accommodate at
+least one supplied Activity. Never create actions, actors, occurrences, dates or
+evidence, and do not copy a reference example's structure. Existing facts are
+immutable. Return only the reviewed layout, not memberships, links or a new graph.
+This is one bounded review, not a recursive redesign. Later phases use the
+returned Event and Stage IDs exactly.""",
     "Assignments": """Assign every assigned_ids Activity to one or more supplied
 Events, or give exactly one unassigned_reasons entry. Never both. Multiple Event
 memberships for one Activity are allowed. Only these assigned_ids may appear in
 this response. Reuse the fixed layout IDs. Do not add background activities here.
-Omit display_title when it merely repeats the existing Activity title; omit
-detail_indices to display all original details. Do not drop an Activity to save
-space. Existing background activities, if any, are assigned here as ordinary IDs.""",
+Choose detail_indices for each Event separately, especially for cross-theme
+memberships; do not mechanically copy all details into every Event. None/omitted
+means all details and [] means intentionally display none. Selection must not
+rewrite or delete factual details. Use display_title when a supported concise
+title clarifies the Activity's role in this Event; omit it when it merely repeats
+the original title. Do not drop an Activity to save space. Existing background
+activities, if any, are assigned here as ordinary IDs.""",
     "Relevance": """Return subject_relevance exactly once for each assigned_ids
 occurrence, including occurrences whose activities were unassigned. Preserve
 actual actors and support indirect relevance with source quotes. Select useful
 background occurrences only from assigned_ids, and only when no context Activity
-already exists. For every newly selected background, return at least one
+already exists. Select a background when it explains a supported experience;
+neither duplicate every scene nor infer the person's knowledge from public
+information. Preserve the distinction between personal action, company execution
+and external context. For every newly selected background, return at least one
 membership for C:<occurrence_id> using the fixed layout. No other memberships or
 occurrence IDs may be returned. Existing context activities were assigned in the
 Assignments phase. If a scene needs reconstruction, report occurrence_issues;
 do not manufacture relevance or silently change the scene.""",
     "Relations": """Consider supported Activity relations across the ENTIRE
 request, including relations between different occurrences, Events and batches.
+Use organization_context to understand the reviewed themes, fixed memberships,
+stage placement and selected details. It is derived organizational context, not
+new source evidence or permission to alter facts. Check supported connections
+across scenes and roles within a theme, and across themes when warranted. An
+unconnected node or a short chain alone is not a missing relation; never force
+connectivity, causality or a prescribed process pattern.
 Generate from_activity_id entries belonging to assigned_ids. to_activity_id may be ANY
 allowed_activity_ids entry, even outside this batch. Do not limit targets to this
 batch. Include each justified relation once; an empty list is allowed when none
@@ -105,6 +140,8 @@ ORGANIZATION_BATCH_PROMPT_IDENTITY = {
     "occurrence_batch_size": OCCURRENCE_BATCH_SIZE,
     "small_run": "activities<=20 and occurrences<=5; length falls back to phases",
     "length_policy": "only length without refusal/tools; binary split until singleton; layout fails",
+    "layout_review_policy": "one full-contract review before fixed assignments on phased execution; small complete-plan execution retains one call",
+    "organization_context_policy": ORGANIZATION_CONTEXT_POLICY_IDENTITY,
     "relation_policy": "collect all generation batches; globally valid cross-batch sources become candidates; canonical exact dedup retains origins; retain key variants; owner review decides every candidate; at most one accepted variant per key; review length splits whole key groups only; reject audit retained; semantic approval remains false",
     "task_separator": TASK_SEPARATOR,
     "system": _BATCH_SYSTEM_PROMPT,
@@ -198,7 +235,7 @@ def _splittable(error):
 
 
 def organize_person_plan(package, cascade, subject, output_language, infer, save):
-    """Generate a complete v1 plan through bounded v3 execution.
+    """Generate a complete v1 plan through bounded v4 execution.
 
     ``infer(system, user, savename, validator)`` must use the caller's common
     attempt/call budget and propagate incomplete completions. No partial JSON
@@ -227,6 +264,7 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
             result = infer(ORGANIZATION_SYSTEM_PROMPT, json.dumps(request, ensure_ascii=False), "PersonOrganization",
                            lambda value: validate_organization(value, package))
             validate_organization(result, package)
+            save(build_organization_context(package, result), "PersonOrganization-Context")
             return result
         except IncompleteCompletionError as error:
             if not _splittable(error):
@@ -241,6 +279,8 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
         return result
 
     layout = call("Layout", {}, "PersonOrganization-Layout", _validate_layout)
+    layout = call("LayoutReview", {"candidate_layout": copy.deepcopy(layout)},
+                  "PersonOrganization-LayoutReview", _validate_layout)
     plan = {**copy.deepcopy(layout), "memberships": [], "occurrence_relevance": [],
             "background_occurrence_ids": [], "activity_relations": [],
             "occurrence_issues": [], "unassigned_reasons": []}
@@ -269,12 +309,15 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
 
     # Validate all assignments/relevance globally before spending calls on links.
     validate_organization(plan, package)
+    organization_context = build_organization_context(package, plan)
+    save(copy.deepcopy(organization_context), "PersonOrganization-Context")
     backgrounds = [{"activity_id": "C:" + oid, "context_occurrence_id": oid}
                    for oid in plan["background_occurrence_ids"]]
     relation_package = {**package, "activity": [*package["activity"], *backgrounds]}
     all_ids = activity_ids + [row["activity_id"] for row in backgrounds]
     plan["activity_relations"] = collect_reviewed_relations(
         relation_package, all_ids, layout, backgrounds, call, save, _splittable,
-        batch_size=ACTIVITY_BATCH_SIZE)
+        batch_size=ACTIVITY_BATCH_SIZE, organization_context=organization_context)
     validate_organization(plan, package)
+    save(build_organization_context(package, plan), "PersonOrganization-FinalContext")
     return plan

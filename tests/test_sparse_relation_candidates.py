@@ -68,7 +68,7 @@ class SparseRelationCandidatesTest(unittest.TestCase):
         self.assertLess(max(i for i, phase in enumerate(phases) if phase == "Relations"),
                         min(i for i, phase in enumerate(phases) if phase == "RelationsReview"))
         audit = self.audit()
-        self.assertEqual(audit["execution_version"], 3)
+        self.assertEqual(audit["execution_version"], 4)
         self.assertEqual(audit["status"], "reviewed_requires_content_review")
         self.assertFalse(audit["semantic_approval"])
         self.assertFalse(audit["semantic_support_checked"])

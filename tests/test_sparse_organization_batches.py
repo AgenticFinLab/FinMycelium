@@ -76,6 +76,8 @@ class OrganizationResponses:
             if self.shared:
                 result["events"].append({**copy.deepcopy(result["events"][0]), "event_id": "E2"})
             return result
+        if phase == "LayoutReview":
+            return copy.deepcopy(task["candidate_layout"])
         if phase == "Assignments":
             members = [{"event_id": "E", "activity_id": aid, "stage_id": "S"}
                        for aid in ids if aid != self.unassigned]
@@ -274,12 +276,12 @@ class SparseOrganizationBatchesTest(unittest.TestCase):
                 with self.assertRaises(IncompleteCompletionError):
                     self.organize(many_facts(), responses)
                 self.assertEqual([call["task"]["phase"] for call in responses.calls],
-                                 ["Layout", "Assignments"])
+                                 ["Layout", "LayoutReview", "Assignments"])
 
     def test_layout_and_single_item_length_fail_without_unbounded_splitting(self):
         from finmy.builder.sparse_build.completion_errors import IncompleteCompletionError
 
-        for fail_phase in ("Layout", "Assignments"):
+        for fail_phase in ("Layout", "LayoutReview", "Assignments"):
             with self.subTest(phase=fail_phase):
                 def fail(task, value):
                     if task["phase"] == fail_phase:
