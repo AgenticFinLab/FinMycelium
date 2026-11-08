@@ -7,6 +7,7 @@ or the lmbase transport; missing lmbase receives explicit local container double
 import copy
 from contextlib import ExitStack
 import json
+from html.parser import HTMLParser
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -34,6 +35,26 @@ SOURCE = (
 ROLES = ["SkeletonReconstructor", "SkeletonChecker", "ParticipantReconstructor",
          "TransactionReconstructor", "EpisodeReconstructor", "StageDescriptionReconstructor",
          "EventDescriptionReconstructor", "PersonOrganization"]
+
+
+class EmbeddedPersonData(HTMLParser):
+    def __init__(self, page):
+        super().__init__()
+        self.capture = False
+        self.payload = ""
+        self.feed(page)
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.capture = dict(attrs).get("id") == "epg-data"
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self.capture = False
+
+    def handle_data(self, text):
+        if self.capture:
+            self.payload += text
 
 
 def cited(value, quote=SOURCE):
@@ -161,6 +182,11 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         self.assertTrue(output.extras["person_acceptance"]["quote_check_passed"])
         self.assertFalse(output.extras["person_acceptance"]["semantic_approval"])
         self.assertGreater(output.extras["person_acceptance"]["fields_without_quotes"], 0)
+        page = Path(builder.save_dir, "FinalPersonEPG.html").read_text(encoding="utf-8")
+        self.assertEqual(json.loads(EmbeddedPersonData(page).payload), person)
+        self.assertIn("Collapse events", page)
+        self.assertEqual(self.artifact(builder, "PersonRenderStatus"), {"status": "completed"})
+        self.assertFalse(Path(builder.save_dir, "FinalSubjectGraph.html").exists())
 
     def test_invalid_organization_retries_in_shared_ledger(self):
         invalid = organization_plan()
@@ -297,7 +323,7 @@ class SparsePersonFullFlowTest(unittest.TestCase):
 
     def test_renderer_failure_is_recorded_without_discarding_completed_data(self):
         builder, _ = self.builder()
-        with patch("finmy.subject_graph.visualizer.render_subject_graph", side_effect=RuntimeError("Synthetic render failure")):
+        with patch("finmy.person_epg.visualizer.render_person_epg", side_effect=RuntimeError("Synthetic render failure")):
             output = builder.run(self.inputs)
         self.assertEqual(self.artifact(builder, "PersonRenderStatus"),
                          {"status": "failed", "error_type": "RuntimeError"})

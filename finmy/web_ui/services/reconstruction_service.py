@@ -247,6 +247,11 @@ class ReconstructionService:
                 st.write(f"**{format_timestamp()}** - Building completed.")
                 
                 # Return appropriate result format
+                extras = getattr(pipeline_result, "extras", None)
+                if isinstance(extras, dict) and extras.get("person_epg") is not None:
+                    # Keep the stored hierarchy for the Person EPG renderer.
+                    # A legacy projection cannot restore domains or memberships.
+                    return extras["person_epg"]
                 if getattr(pipeline_result, "subject_graph", None) is not None:
                     return pipeline_result.subject_graph
                 if isinstance(pipeline_result, dict):

@@ -93,7 +93,11 @@ def main(argv=None):
     if args.gantt:
         render = {"status": "completed"}
         try:
-            if output.subject_graph is not None:
+            person = (getattr(output, "extras", None) or {}).get("person_epg")
+            if person is not None:
+                from finmy.person_epg.visualizer import render_person_epg
+                render_person_epg(person, Path(builder.save_dir) / "gantt.html")
+            elif output.subject_graph is not None:
                 from finmy.subject_graph.visualizer import render_subject_graph
                 render_subject_graph(output.subject_graph, Path(builder.save_dir) / "gantt.html")
             else:

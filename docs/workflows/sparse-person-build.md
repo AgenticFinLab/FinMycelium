@@ -1,22 +1,25 @@
 # Sparse RAG person construction
 
-The standard `configs/pipline.yml` and `configs/search_pipeline.yml` now select
-`SparseRagBuilder`. Person reconstruction uses the seven existing sparse roles,
+Use `configs/search_pipeline.yml` for the full pipeline with `SparseRagBuilder`.
+The current branch's `configs/pipline.yml` still explicitly selects the legacy
+builder; a local copy must select Sparse explicitly to run this workflow.
+Person reconstruction uses the seven existing sparse roles,
 then organizes their extracted facts into the existing `person-epg-3.0` contract.
 The schema, fixed Buffett JSON and HTML renderers keep their existing formats.
-This patch is based on PR #18 commit
-`e6e3b51e2cce4b5c75fefe41b419e12a0581d057`.
+The rendering-routing follow-up is based on PR #18 commit
+`28fad8fda4e5f04ab8ee0151bf2c3f6a3c5e68e4` and connects the native renderer
+introduced in `a712ece7279bac790063c5a35a2ac3c94cef9265`.
 
 Apply from the repository root on that commit or a compatible descendant:
 
 ```sh
-git apply --check FinMycelium_sparse_person_default.patch
-git apply FinMycelium_sparse_person_default.patch
+git apply --check FinMycelium_person_html_routing_fix.patch
+git apply FinMycelium_person_html_routing_fix.patch
 ```
 
-No dependency, public schema, existing JSON, HTML, renderer or Web UI files are
-changed. The included Buffett fixture is a byte-for-byte copy of the supplied
-preview. This patch does not push commits or publish a deployment.
+The follow-up changes result routing and export selection. Public schemas,
+existing JSON data, HTML/JS assets and renderer implementations remain unchanged.
+The Buffett fixture is a byte-for-byte copy of the supplied preview.
 
 ## Direct source-text input
 
@@ -60,7 +63,7 @@ The saved-content CLI keeps its existing list-of-strings input:
 
 ```sh
 python -m finmy.subject_graph.runner \
-  --config configs/pipline.yml \
+  --config configs/search_pipeline.yml \
   --scope-config configs/person_buffett_oxy.scope.yml \
   --input path/to/builder_input_contents.json \
   --query 'Reconstruct Buffett’s documented involvement in the Occidental investment.'
@@ -78,9 +81,20 @@ from those strings; use the full BuildInput entry to retain source registration.
   events, stages, activity membership and supported activity links.
 - `FinalSubjectGraph.json` is a display projection for the existing person view;
   it is not a replacement for the full Person EPG.
-- The existing renderer can produce `FinalSubjectGraph.html`. It displays the
-  facts supported by its current interface; it does not gain new Domain/Stage
-  rendering features from this patch.
+- `FinalPersonEPG.html` uses the native hierarchical renderer over the complete
+  Person EPG. CLI `--gantt` writes the same format to `gantt.html`.
+
+Web results prefer `BuildOutput.extras.person_epg`, then fall back to the legacy
+SubjectGraph/Event paths when a Person EPG is absent. Historical directories
+prefer `FinalPersonEPG.json` over `FinalSubjectGraph.json` and `FinalEventCascade.json`.
+Explicit file selection still opens exactly that file. Invalid Person EPG data
+is reported rather than silently replaced with a legacy projection.
+
+Existing completed results can use the new renderer without additional model calls:
+
+```sh
+python -m finmy.person_epg render path/to/FinalPersonEPG.json --output person_timeline.html
+```
 
 The organizer references existing fact IDs. It does not invent actors, transactions,
 dates or background occurrences to fill a hierarchy. Unassigned activities remain

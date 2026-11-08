@@ -1434,8 +1434,8 @@ class SparseRagBuilder(BaseBuilder):
             # Rendering is an independent presentation outcome, not a fact mutation.
             render_status = {"status": "completed"}
             try:
-                from finmy.subject_graph.visualizer import render_subject_graph
-                render_subject_graph(projection, Path(self.save_dir) / "FinalSubjectGraph.html")
+                from finmy.person_epg.visualizer import render_person_epg
+                render_person_epg(person, Path(self.save_dir) / "FinalPersonEPG.html")
             except Exception as exc:
                 render_status = {"status": "failed", "error_type": type(exc).__name__}
             self.save_traces(render_status, "PersonRenderStatus", "json")

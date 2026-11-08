@@ -195,7 +195,7 @@ class SubjectUITest(unittest.TestCase):
         self.html.assert_not_called()
 
     def test_person_epg_result_downloads_json_and_native_hover_html(self):
-        package = json.loads((ROOT / 'examples/data/person_epg/buffett_2022_2023.json').read_text())
+        package = json.loads((ROOT / 'tests/fixtures/buffett_person_epg_preview.json').read_text())
         self.state.analysis_results = package
         with patch.object(self.results.ResultsPage, '_render_history_file_selector'):
             self.results.ResultsPage.render()
@@ -207,6 +207,8 @@ class SubjectUITest(unittest.TestCase):
                          ['FinalPersonEPG.json', 'person_timeline.html'])
         self.assertEqual(json.loads(downloads[0].kwargs['data']), package)
         self.assertIn('Plotly.newPlot', downloads[1].kwargs['data'])
+        self.assertIn('id="epg-data"', downloads[1].kwargs['data'])
+        self.assertIn('Collapse events', downloads[1].kwargs['data'])
         self.st.error.assert_not_called()
 
     def test_unorganized_person_epg_reports_missing_memberships(self):

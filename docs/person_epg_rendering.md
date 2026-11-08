@@ -4,12 +4,12 @@
 
 ## 使用
 
-先应用 `finmycelium_person_schema_json.patch`，再应用本补丁。在仓库根目录、当前 Python 环境中执行：
+当前分支已包含 schema 和渲染器。在仓库根目录、当前 Python 环境中执行：
 
 ```sh
 python -m pip install 'plotly>=5.15,<7' 'jsonschema>=4.18,<5'
-python -m finmy.person_epg validate examples/data/person_epg/buffett_2022_2023.json
-python -m finmy.person_epg render examples/data/person_epg/buffett_2022_2023.json --output buffett_person_epg.html
+python -m finmy.person_epg validate tests/fixtures/buffett_person_epg_preview.json
+python -m finmy.person_epg render tests/fixtures/buffett_person_epg_preview.json --output buffett_person_epg.html
 ```
 
 校验应返回 `{"valid": true, "errors": []}`，渲染命令输出 HTML 路径。直接用浏览器打开 `buffett_person_epg.html`；不需要 API、数据库、Web 服务或网络连接。Plotly JS 和输入 JSON 均嵌入文件。
@@ -21,13 +21,13 @@ import json
 from pathlib import Path
 from finmy.person_epg.visualizer import render_person_epg
 
-package = json.loads(Path('examples/data/person_epg/buffett_2022_2023.json').read_text(encoding='utf-8'))
+package = json.loads(Path('tests/fixtures/buffett_person_epg_preview.json').read_text(encoding='utf-8'))
 html = render_person_epg(package, 'buffett_person_epg.html')
 ```
 
 Web UI 的 Results → Load Historical Results 可以输入任意命名的 Person EPG JSON 路径，然后下载 JSON 和 Gantt HTML。页面不嵌入新的展示组件。
 
-目录加载保留原来的 `FinalSubjectGraph.json` 优先级；只有 Person EPG 的目录也可以加载。若旧文件和 `FinalPersonEPG.json` 同时存在，要查看新版组织请直接输入 `FinalPersonEPG.json` 的文件路径。
+目录加载优先选择 `FinalPersonEPG.json`，其次为 `FinalSubjectGraph.json` 和 `FinalEventCascade.json`。显式指定文件路径仍加载指定文件；无效的 Person EPG 会明确报错，不会静默回退到旧格式。
 
 ## 存储字段与画面
 
@@ -54,22 +54,27 @@ Web UI 的 Results → Load Historical Results 可以输入任意命名的 Perso
 
 `render` 只消费已存储的组织，不分类、不补搜、不生成 Stage。旧版 `SubjectGraph` 的 `convert` 命令只迁移事实，其 `domain/event/stage/event_activity` 通常为空。此时渲染命令明确提示先填写组织关系，不会生成看似成功的空图。
 
-本补丁不改搜索、模型调用、数据库 DDL、事实抽取或旧 Event Gantt 渲染器。既有构建流程继续使用原来的结果展示；自动组织写入 JSON 后，即可使用相同的 `render_person_epg` 接口。
+Sparse 人物构建完成组织后，直接将完整 Person EPG 传给 `render_person_epg`，保存 `FinalPersonEPG.html`；两个构建 CLI 的 `--gantt` 同样使用新版渲染器。Web 服务优先返回 `extras.person_epg`，供既有 Results 页面分支下载新版 JSON 和 HTML。旧 SubjectGraph 和事件结果继续使用各自的渲染器。
+
+已有运行无需重新搜索或调用模型：直接加载 `FinalPersonEPG.json`，或执行 `python -m finmy.person_epg render path/to/FinalPersonEPG.json --output person_timeline.html`。
 
 ## 样例与内容来源
 
-`buffett_2022_2023.json` 是已确认完整 HTML 对应的输入：3 个 Domain、10 个 Event、6 个 Stage、45 条活动归属（43 个独立展示 Activity）。西方石油部分有 16 条展示记录、3 个 Stage 和 9 条行为联系。
+当前可运行的固定输入为 `tests/fixtures/buffett_person_epg_preview.json`：3 个 Domain、10 个 Event、6 个 Stage、45 条活动归属（43 个独立展示 Activity）。西方石油部分有 16 条展示记录、3 个 Stage 和 9 条行为联系。
 
-西方石油补充内容来自用户提供的中文 PDF 校对转录，`field_metadata.provenance = supplied_pdf`。来源编号原样保留，转录不冒充原始网页引文。其余内容保留既有 JSON。两个未纳入新版西方石油组织的旧事实仍留在数据中，但不会作为额外行绘制。小样例 `buffett_oxy.json` 继续保留供 schema 测试使用。
+西方石油补充内容来自用户提供的中文 PDF 校对转录，`field_metadata.provenance = supplied_pdf`。来源编号原样保留，转录不冒充原始网页引文。其余内容保留既有 JSON。两个未纳入新版西方石油组织的旧事实仍留在数据中，但不会作为额外行绘制。部分旧测试引用的 `examples/data/person_epg/` 未包含在当前提交中；本轮路由回归使用已提交的固定 fixture，不以替换原样例的方式声称这些旧测试通过。
 
 ## 验证
 
 ```sh
-python -m unittest discover -s tests -p 'test_person_epg*.py' -v
+python -m unittest discover -s tests -p 'test_person_*render*.py' -v
 python -m unittest discover -s tests -p 'test_subject_graph_ui.py' -v
+python -m unittest discover -s tests -p 'test_sparse_person_full_flow.py' -v
 ```
 
-测试覆盖 JSON 结构与外键校验、命令行实际导出、嵌入数据无损、选定细节、共享 Activity、时间范围、未知时间、模式路由和历史加载。Node.js 可用时，还会执行随补丁提供的 JS 运行测试；Node.js 仅用于测试，不是生成或浏览 HTML 的依赖。
+测试覆盖构建器自动导出、两种 CLI 实际导出、嵌入数据无损、Web 结果分发、三种结果文件共存时的历史选择，以及旧格式回退和无效输入。Node.js 可用时，还会执行随补丁提供的 JS 运行测试，核对全部活动归属与折叠状态；Node.js 仅用于测试，不是生成或浏览 HTML 的依赖。
+
+2026-11-08 的选定离线回归共 76 项测试通过，包括上述路径及既有事实转换、组织、投影和 Sparse 流程测试。模型响应使用测试替身；未进行真实模型或真实浏览器 SVG/hover 验证。
 
 浏览器检查：
 

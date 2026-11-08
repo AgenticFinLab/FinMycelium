@@ -9,11 +9,11 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
-NATIVE_RESULT_FILES = ("FinalSubjectGraph.json", "FinalPersonEPG.json", "FinalEventCascade.json")
+NATIVE_RESULT_FILES = ("FinalPersonEPG.json", "FinalSubjectGraph.json", "FinalEventCascade.json")
 
 
 def preferred_result_file(directory):
-    """Keep legacy run selection; support directories containing only Person EPG."""
+    """Prefer the complete person package, then retain legacy run fallbacks."""
     return next(
         (os.path.join(directory, name) for name in NATIVE_RESULT_FILES
          if os.path.isfile(os.path.join(directory, name))),
