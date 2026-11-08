@@ -116,16 +116,18 @@ Manage event tables, source material and graph reviews in a local workspace.
 python -m finmy.workbench --port 8537
 ```
 
-Open `http://localhost:8537`. This release provides data management and review;
-search and reconstruction execution will be connected in a later release.
+Open `http://localhost:8537` for data management, search and review.
+Builder execution uses a separate entry.
 
 ---
 
 
 #### Detailed Guidance
+
 - [Data Preparation Guide](docs/instruction.md) - PDF processing, keyword search, and data import
 - [Event Workbench](docs/workflows/event-workbench.md) - Local workspace and review workflow
 - [Event Master](docs/workflows/event-master.md) - Fields, scope and table import rules
+- [Search Workflow](docs/workflows/search-enhancement.md) - Source acquisition and Builder handoff
 
 
 ---
