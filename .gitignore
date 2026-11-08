@@ -220,3 +220,18 @@ EXPERIMENT/
 /output
 *.patch
 person_epg_backup.*/*
+
+# Local planning and raw search experiments (not shared repository assets)
+/localdocs/
+/.local-experiments/
+
+# Local databases and transaction sidecars, including custom workspace locations
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.duckdb
+*.duckdb.wal
+*.duckdb-*

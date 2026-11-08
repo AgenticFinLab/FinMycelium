@@ -619,11 +619,35 @@ def run_search_pipeline(
     keywords: List[str],
     save_dir: str | Path,
     parser=None,
+    search_task=None,
+    search_dependencies=None,
 ) -> Dict[str, Any]:
-    from finmy.runner.event_followup_config import normalize_followup_config, followup_enabled
-    config = normalize_followup_config(config)
-    if followup_enabled(config):
-        return _run_person_draft_followup(config, main_input, keywords, save_dir, parser)
+    mode = (config.get("search_config") or {}).get("mode", "simple")
+    if mode not in {"simple", "agent"}:
+        raise ValueError("search_config.mode must be simple or agent")
+    if mode == "agent":
+        from finmy.search.pipeline import run_search
+
+        task = search_task or dict(target_type="event", target_name=main_input,
+                                   query_text=main_input, key_words=keywords)
+        search_result = run_search(
+            task, root=Path(save_dir) / "search", task_id="task",
+            config=(config.get("search_config") or {}).get("enhancement", {}),
+            **(search_dependencies or {}),
+        )
+        if search_result["status"] != "finished":
+            return {**search_result, "pipeline_result": None, "save_dir": str(save_dir)}
+        payload = json.loads(Path(search_result["builder_input_path"]).read_text(encoding="utf-8"))
+        contents = [sample["content"] for sample in payload["samples"]]
+        # The full legacy entry owns the optional downstream build; common search does not.
+        pipeline = _create_pipeline(config)
+        result = pipeline.lm_build_pipeline_with_contents(
+            contents=contents, query_text=payload["user_query"]["query_text"],
+            key_words=payload["user_query"].get("key_words", []),
+        )
+        return {**search_result, "all_text_content": contents,
+                "limited_content_count": len(contents), "pipeline_result": result,
+                "save_dir": str(save_dir)}
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
