@@ -116,6 +116,10 @@ def build_from_contents(contents, query, keywords, config):
     extras = {}
     if isinstance(config.get("source_registry"), dict):
         extras["source_registry"] = copy.deepcopy(config["source_registry"])
+    if config.get("storyline_plan") is not None:
+        from finmy.builder.sparse_build.storyline_context import candidate_storylines
+        candidate_storylines(config["storyline_plan"])
+        extras["storyline_plan"] = copy.deepcopy(config["storyline_plan"])
     user_query = UserQueryInput(query_text=query, key_words=keywords or [], extras=extras)
     samples = [DataSample(sample_id=f"saved_{i}", raw_data_id=f"saved_{i}", content=text)
                for i, text in enumerate(contents)]

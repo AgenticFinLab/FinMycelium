@@ -32,7 +32,7 @@ class SearchConfig:
     max_read_sources: int = 12
     max_model_calls: int = 30
     max_read_chars: int = 12000
-    max_builder_material_chars: int = 60000
+    max_builder_material_chars: int = 120000
     include_domains: list = field(default_factory=list)
     exclude_domains: list = field(default_factory=list)
     publication_start: str | None = None
@@ -50,7 +50,9 @@ class SearchConfig:
             raise ValueError('Select unique providers')
         if set(self.providers) - {'baidu', 'bocha', 'exa'}:
             raise ValueError('Unknown search provider')
-        for name in ('max_results', 'max_search_requests', 'max_read_sources',
+        if type(self.max_search_requests) is not int or self.max_search_requests < 0:
+            raise ValueError('max_search_requests must be a nonnegative integer')
+        for name in ('max_results', 'max_read_sources',
                      'max_model_calls', 'max_read_chars', 'max_builder_material_chars',
                      'timeout', 'max_download_bytes', 'max_model_context_chars'):
             value = getattr(self, name)

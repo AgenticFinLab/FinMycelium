@@ -1475,12 +1475,15 @@ class SparseRagBuilder(BaseBuilder):
         from .person_organization import apply_organization
         from .organization_batches import organize_person_plan
         package, mapping = build_person_facts(output.event_cascades, build_input, subject)
+        storyline_plan = (getattr(build_input.user_query, "extras", None) or {}).get("storyline_plan")
+        organization_options = {"storyline_plan": storyline_plan} if storyline_plan is not None else {}
         plan = organize_person_plan(
             package, output.event_cascades, subject,
             self._event_config_value("output_language", "English"),
             infer=lambda system, user, name, validator: self._infer_and_parse_json(
                 "PersonOrganization", system, user, {}, name, validator=validator),
             save=self._save_agent_result,
+            **organization_options,
         )
         self._save_agent_result(plan, "PersonOrganization")
         person, organization = apply_organization(package, plan)

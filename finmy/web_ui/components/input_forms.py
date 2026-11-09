@@ -193,7 +193,7 @@ class AnalysisControls:
     """Analysis control buttons component."""
 
     @staticmethod
-    def render(validate_fn):
+    def render(validate_fn, *, disabled=False):
         """
         Render analysis control buttons.
 
@@ -204,7 +204,7 @@ class AnalysisControls:
             "🚀 Start Reconstructing",
             type="primary",
             width="stretch",
-            disabled=st.session_state.is_processing_blocked,
+            disabled=st.session_state.is_processing_blocked or disabled,
         ):
             if validate_fn():
                 st.session_state.analysis_results = None

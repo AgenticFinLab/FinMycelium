@@ -50,6 +50,9 @@ class ReconstructionService:
             Reconstruction results dictionary
         """
         keywords = keywords or []
+        # Coverage belongs to this run, never to a previous person or Event result.
+        st.session_state.search_coverage = None
+        self.search_coverage = None
         reconstruction = read_reconstruction(self.config)
         scoped = reconstruction["mode"] != "event" and (self.config.get("subject_search") or {}).get("enabled", True)
         from finmy.runner.enhanced_subject_search import enhanced_search_enabled
@@ -88,6 +91,8 @@ class ReconstructionService:
             search_content = collector.collect_enhanced_search_results(
                 main_input, keywords, reconstruction["subject"]
             )
+            self._search_acquisition = collector.enhanced_search_result
+            self.search_coverage = collector.search_coverage
         elif scoped:
             bocha_content, baidu_content = collector.collect_subject_search_results(
                 main_input, keywords, reconstruction["subject"]
@@ -144,7 +149,11 @@ class ReconstructionService:
                 documents = prepare_documents(documents + extra, main_input, keywords,
                                               self.config, save_dir)
 
-        budgeted = allocate_context(documents, [], self.config, include_metadata=True)
+        budget_config = copy.deepcopy(self.config)
+        storyline_plan = getattr(collector, "enhanced_search_result", {}).get("storyline_plan") if enhanced else None
+        if storyline_plan:
+            budget_config.setdefault("all_content_config", {})["allocation_strategy"] = "event"
+        budgeted = allocate_context(documents, [], budget_config, include_metadata=True)
         all_text_content_limit = budgeted["contents"]
         budget_report = budgeted["report"]
         with open(os.path.join(save_dir, "context_budget_report.json"), "w", encoding="utf-8") as f:
@@ -168,6 +177,8 @@ class ReconstructionService:
         if enhanced:
             from finmy.subject_graph.runner import with_source_registry
             self.config = with_source_registry(self.config, documents, budgeted)
+            if storyline_plan:
+                self.config["storyline_plan"] = copy.deepcopy(storyline_plan)
         try:
             return self._run_pipeline(
                 all_text_content_limit, main_input, keywords, save_dir
@@ -250,6 +261,12 @@ class ReconstructionService:
                 )
                 builder_save_path = pipeline.save_builder_dir_path
             st.session_state.save_builder_dir_path = builder_save_path
+            if getattr(self, "search_coverage", None) is not None:
+                from finmy.runner.search_status import record_search_coverage
+                self.search_coverage = record_search_coverage(
+                    self._search_acquisition, save_dir, builder_directory=builder_save_path,
+                    build_completed=pipeline_result is not None)
+                st.session_state.search_coverage = self.search_coverage if pipeline_result is not None else None
             logging.info("builder save directory: %s", builder_save_path)
 
             logging.info("type of pipeline_result: %s", type(pipeline_result))

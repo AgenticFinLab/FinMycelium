@@ -188,7 +188,7 @@ def _allocate_events(documents, decisions, options, include_metadata):
     """Spend one finite input budget on event passages before general background."""
     if options.get("preserve_all", False):
         raise ValueError("Event allocation does not support preserve_all")
-    limit = _integer(options.get("max_content_length", 60000), "max_content_length", 0)
+    limit = _integer(options.get("max_content_length", 120000), "max_content_length", 0)
     cap = _integer(options.get("max_document_chars", 12000), "max_document_chars")
     seed = min(cap, _integer(options.get("min_document_chars", 2000), "min_document_chars"))
     prepared, ids = [], set()
@@ -392,7 +392,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("--input-dir", required=True)
     parser.add_argument("--output-dir", help="Default: INPUT_DIR/budget_review")
-    parser.add_argument("--max-chars", type=int, default=60000)
+    parser.add_argument("--max-chars", type=int, default=120000)
     parser.add_argument("--max-document-chars", type=int, default=12000)
     parser.add_argument("--allocation-strategy", choices=("phase_order", "event"), default="phase_order")
     args = parser.parse_args()

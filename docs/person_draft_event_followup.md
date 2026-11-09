@@ -9,7 +9,7 @@
 本流程已与 main 的共享搜索实现合并，无需另行应用历史 patch。
 `configs/search_pipeline.yml` 使用 `search_config.mode: agent`，
 模型、provider 和搜索限制在 `search_config.enhancement` 中独立配置；
-示例明确选择 DeepSeek 和 Bocha，并允许联网，运行前需要配置对应密钥。
+示例明确选择 DeepSeek 和 Bocha/Baidu 双源，并允许联网，运行前需要配置对应密钥。
 设置 `mode: simple` 可继续使用旧采集器。
 
 CLI 的 `run_search_pipeline` 和现有重建页面均读取
@@ -18,8 +18,9 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 选择公司时须同时配置 `builder_type: AgentEventBuilder`。
 搜索的 `target_type` 不替代 builder 的主体、覆盖期和范围配置。
 
-初次搜索使用原始请求和配置主体，完成后将选中的原文直接送入初版预算分配。
-随后直接读取初版已经存在的 event，为每个 event 调用同一套共享搜索算法；
+人物初次搜索默认先发现 domain/storyline，再逐 event 调用共享搜索，
+完成后将选中的原文直接送入初版预算分配。详见[主线发现入口](person_storyline_discovery.md)。
+仅在显式启用构图后补搜时，随后读取初版已经存在的 event，为每个 event 调用同一套共享搜索算法；
 薄事件只有名称也可以检索。新算法自行决定搜索、阅读、补缺与停止，
 不再叠加旧的 decision-followup 搜索。
 事件覆盖期是检索范围提示，只有显式的搜索发表日期配置才过滤页面发表时间。
@@ -27,13 +28,14 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 共享搜索保存选中来源的完整正文与版本；初版和补充阶段分别进行一次最终证据分配。
 来源标题、URL、发表时间和版本随筛选、预算重排进入 builder，
 不会按输入序号错配。发表日期不是事件日期；不完整日期不会补成虚构时间戳。
-搜索暂停、失败、额度耗尽且未完成交付、或无可用原文时，初版不启动构图。
+单个搜索任务暂停、失败或未完成交付时，其内容不进入构图；人物初搜中其他完成的 event
+仍可进入初版，未完成项另行报告。完全无可用原文时不启动构图。
 补搜部分完成时只接收已完成 event 的原文，并报告未完成的 event。
 
 ## 流程与预算
 
-1. 原始搜索与 builder 正常生成初版 Person EPG；原初始检索额度保持完整。
-2. 读取初版已有 event，以名称、实体、具体活动和年份线索进行补搜。
+1. 发现候选主线、逐事件搜索与 builder 正常生成初版 Person EPG；发现与初搜共用初始额度。
+2. 仅在 `event_followup.enabled: true` 时，读取初版已有 event，以名称、实体、具体活动和年份线索进行补搜。
    只有名称的薄事件也可检索，无需用户预先填写 event 列表。
 3. 补搜使用独立的检索计数，只处理新增来源；相关性由搜索 Agent 判断。
 4. 新资料进入单独约 60,000 字符证据池，不重新截断或替换第一轮证据。
@@ -49,7 +51,7 @@ all_content_config:
   max_document_chars: 12000
 
 event_followup:
-  enabled: true
+  enabled: false  # 显式设为 true 才执行下述构图后补搜
   max_content_length: 60000  # 额外新增证据池，所有 event 共用
   max_document_chars: 12000
   max_search_calls: 12

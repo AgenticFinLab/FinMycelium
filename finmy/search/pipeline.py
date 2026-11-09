@@ -5,11 +5,11 @@ from .agent import run_agent
 
 
 def _run_search(task=None, *, root='output/search', task_id, run_id='initial', config=None,
-               model=None, transport=None, fetcher=None, max_steps=None):
+               model=None, transport=None, fetcher=None, max_steps=None, source_pool=None):
     if isinstance(config,dict):
         config=SearchConfig(**config)
     state=SearchState(root,task_id,run_id,task=task,config=config)
-    tools=SearchTools(state,transport=transport,fetcher=fetcher)
+    tools=SearchTools(state,transport=transport,fetcher=fetcher,source_pool=source_pool)
     if not state.data.get('seeds_imported'):
         for url in state.data['task'].get('seed_urls',[]):
             tools.sources.register(url)

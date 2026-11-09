@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from finmy.runner.draft_event_search import collect_draft_event_sources, draft_event_options
-from finmy.runner.event_followup_config import initial_search_options, normalize_followup_config
+from finmy.runner.event_followup_config import initial_search_options, normalize_followup_config, followup_enabled
 
 
 SUBJECT = {"name": "Warren Buffett", "coverage_start": "2022", "coverage_end": "2023"}
@@ -20,7 +20,7 @@ class DraftEventSearchTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.config = {"subject_search": {"providers": ["bocha"], "max_followup_queries": 0},
-                       "event_followup": {"queries_per_event": 1}}
+                       "event_followup": {"enabled": True, "queries_per_event": 1}}
         self.calls, self.parses = [], []
         self.usage = {}
 
@@ -48,6 +48,14 @@ class DraftEventSearchTests(unittest.TestCase):
         self.assertEqual(docs[0]["event_ids"], ["oxy"])
         self.assertEqual(self.report()["event_discovery_model_calls"], 0)
         self.assertEqual(self.report()["events"][0]["source"], "initial_person_epg")
+
+    def test_omitted_followup_does_not_search_or_parse(self):
+        self.config.pop("event_followup")
+        docs = self.collect([{"event_id": "oxy", "label": "西方石油投资"}])
+        self.assertEqual(docs, [])
+        self.assertFalse(self.calls)
+        self.assertFalse(self.parses)
+        self.assertEqual(self.report()["status"], "disabled")
 
     def test_no_events_returns_without_search_and_keeps_original_available(self):
         docs = self.collect([])
@@ -163,7 +171,7 @@ class DraftEventSearchTests(unittest.TestCase):
         config = {"reconstruction": {"mode": "person", "subject": {**SUBJECT, "subject_id": "buffett"}},
                   "subject_search": {"max_search_calls": 7, "max_parse_calls": 19,
                                      "max_elapsed_seconds": 91},
-                  "event_followup": {"max_search_calls": 11, "max_parse_calls": 29,
+                  "event_followup": {"enabled": True, "max_search_calls": 11, "max_parse_calls": 29,
                                      "max_elapsed_seconds": 123}}
         normalized = normalize_followup_config(config)
         first = initial_search_options(normalized)
@@ -172,8 +180,8 @@ class DraftEventSearchTests(unittest.TestCase):
                          (7, 19, 91))
         self.assertEqual((search_options["max_search_calls"], search_options["max_parse_calls"],
                           search_options["max_elapsed_seconds"]), (11, 29, 123))
-        self.assertEqual(normalized["all_content_config"]["max_content_length"], 60000)
-        self.assertEqual(second["max_content_length"], 60000)
+        self.assertEqual(normalized["all_content_config"]["max_content_length"], 120000)
+        self.assertEqual(second["max_content_length"], 120000)
         self.assertNotIn("all_content_config", config)
 
     def test_separate_default_supplement_is_not_capped_by_initial_limits(self):
@@ -225,20 +233,32 @@ class DraftEventSearchTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     draft_event_options({"event_followup": {"max_elapsed_seconds": invalid}})
 
+    def test_post_build_followup_requires_explicit_opt_in(self):
+        base = {"reconstruction": {"mode": "person", "subject": {**SUBJECT, "subject_id": "buffett"}}}
+        for settings in (None, {}, {"max_model_calls": 24}, {"enabled": False}):
+            with self.subTest(settings=settings):
+                config = {**base, "event_followup": settings}
+                self.assertFalse(followup_enabled(config))
+                self.assertFalse(draft_event_options(config)[0]["enabled"])
+                self.assertEqual(normalize_followup_config(config), config)
+        enabled = {**base, "event_followup": {"enabled": True}}
+        self.assertTrue(followup_enabled(enabled))
+        self.assertTrue(normalize_followup_config(enabled)["event_followup"]["enabled"])
+
     def test_repair_round_defaults_and_overrides_survive_normalization(self):
         base = {"reconstruction": {"mode": "person", "subject": {**SUBJECT, "subject_id": "buffett"}}}
         for configured in (None, 0, 1, 3):
             with self.subTest(configured=configured):
-                config = {**base, "event_followup": {} if configured is None else
-                          {"max_repair_rounds_per_event": configured}}
+                config = {**base, "event_followup": {"enabled": True} if configured is None else
+                          {"enabled": True, "max_repair_rounds_per_event": configured}}
                 normalized = normalize_followup_config(config)
                 options, _ = draft_event_options(normalized)
                 self.assertEqual(options["max_repair_rounds_per_event"], 1 if configured is None else configured)
                 self.assertEqual(options["max_model_calls"], 24)
-                self.assertEqual(options["max_content_length"], 60000)
-                self.assertEqual(normalized["all_content_config"]["max_content_length"], 60000)
-                self.assertEqual(config["event_followup"], {} if configured is None else
-                                 {"max_repair_rounds_per_event": configured})
+                self.assertEqual(options["max_content_length"], 120000)
+                self.assertEqual(normalized["all_content_config"]["max_content_length"], 120000)
+                self.assertEqual(config["event_followup"], {"enabled": True} if configured is None else
+                                 {"enabled": True, "max_repair_rounds_per_event": configured})
 
     def test_repair_round_cap_rejects_unbounded_or_mistyped_values(self):
         for value in (None, True, False, -1, 4, 1.0, "1", float("inf"), float("nan")):

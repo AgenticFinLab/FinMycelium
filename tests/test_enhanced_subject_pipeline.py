@@ -97,10 +97,9 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                 self.assertEqual(result["builder_save_dir"], "native-output")
                 self.assertEqual(json.loads((destination / "builder_input_contents.json").read_text()), contents)
 
-    def test_unfinished_or_empty_acquisition_never_calls_relevance_or_builder(self):
+    def test_empty_acquisition_never_calls_relevance_or_builder(self):
         self.forbid_legacy()
-        for status, documents in [("paused", self.documents), ("limit", self.documents),
-                                  ("failed", []), ("insufficient", []), ("finished", [])]:
+        for status, documents in [(status, []) for status in ("partial", "paused", "limit", "failed", "insufficient", "finished")]:
             with self.subTest(status=status), \
                  patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources",
                        return_value={"status": status, "reports": [], "documents": documents}), \
@@ -113,6 +112,47 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                 relevance.assert_not_called()
                 build.assert_not_called()
                 followup.assert_not_called()
+
+    def test_partial_search_builds_native_result_and_keeps_coverage_separate(self):
+        self.forbid_legacy()
+        reports = [{"event_id": "E1", "status": "finished"},
+                   {"event_id": "E2", "status": "budget_exhausted", "gaps": ["closing date"]}]
+        report_path = str(self.root / "initial_event_search" / "phase_report.json")
+        native = {"schema_version": "person-epg-3.0", "event": []}
+        output = SimpleNamespace(extras={"person_epg": native})
+        builder_dir = self.root / "native"
+        builder_dir.mkdir()
+        for status in ("partial", "insufficient", "paused", "failed"):
+            with self.subTest(status=status):
+                acquired = {"status": status, "reports": reports,
+                            "documents": self.documents, "report_path": report_path,
+                            "usage": {"search_calls": 6, "search_model_calls": 12}}
+                with patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", return_value=acquired), \
+                     patch("finmy.subject_graph.runner.build_from_contents", return_value=(output, str(builder_dir))) as build:
+                    result = run_search_pipeline(self.config(), self.query, self.keywords, self.root)
+                build.assert_called_once()
+                self.assertEqual(build.call_args.args[0][0].split("\n\n", 1)[1], self.documents[0]["raw_text"])
+                self.assertIs(result["pipeline_result"], output)
+                self.assertEqual(result["status"], "partial")
+                self.assertEqual(result["search_status"], status)
+                self.assertFalse(result["search_complete"])
+                self.assertEqual(result["unresolved_events"], ["E2"])
+                self.assertEqual(result["retained_document_count"], 1)
+                self.assertEqual(result["search_report_path"], report_path)
+                self.assertEqual(result["usage"], acquired["usage"])
+                saved = json.loads(Path(result["search_coverage_report_path"]).read_text())
+                self.assertEqual(saved["builder_status"], "completed")
+                self.assertEqual(saved["events"][1]["gaps"], ["closing date"])
+                self.assertEqual(json.loads((builder_dir / "search_coverage_report.json").read_text()), saved)
+                self.assertNotIn("search_status", native)
+
+    def test_invalid_partial_material_cannot_reach_builder(self):
+        with patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources",
+                   return_value={"status": "partial", "documents": [{"raw_text": " "}]}), \
+             patch("finmy.subject_graph.runner.build_from_contents") as build:
+            with self.assertRaisesRegex(ValueError, "invalid source document"):
+                run_search_pipeline(self.config(), self.query, self.keywords, self.root)
+        build.assert_not_called()
 
     def test_explicit_agent_mode_is_not_disabled_by_legacy_subject_search_switch(self):
         self.forbid_legacy()

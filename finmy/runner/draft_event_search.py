@@ -44,11 +44,11 @@ def draft_event_options(config):
     options = dict(options)
     options.pop("max_relevance_model_calls", None)
     options.pop("max_relevance_elapsed_seconds", None)
-    if not isinstance(options.get("enabled", True), bool):
+    if not isinstance(options.get("enabled", False), bool):
         raise ValueError("event_followup.enabled must be a YAML boolean")
-    options.setdefault("enabled", True)
+    options.setdefault("enabled", False)
     for key, default, minimum in (("max_search_calls", 12, 0), ("max_parse_calls", 40, 0),
-                                  ("max_content_length", 60000, 1), ("max_document_chars", 12000, 1),
+                                  ("max_content_length", 120000, 1), ("max_document_chars", 12000, 1),
                                   ("max_model_calls", 24, 0),
                                   ("max_search_model_calls", 30, 0)):
         value = options.get(key, default)

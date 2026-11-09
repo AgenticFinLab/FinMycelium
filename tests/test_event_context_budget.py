@@ -151,7 +151,7 @@ class EventContextBudgetTest(unittest.TestCase):
 
     def test_finite_default_and_explicit_unbounded_values_rejected(self):
         result = allocate_context([], [], {"all_content_config": {"allocation_strategy": "event"}})
-        self.assertEqual(result["report"]["summary"]["max_content_length"], 60000)
+        self.assertEqual(result["report"]["summary"]["max_content_length"], 120000)
         for limit in (None, math.inf, -math.inf, math.nan, True, "60000", -1):
             with self.subTest(limit=limit), self.assertRaises(ValueError):
                 allocate_context([], [], settings(limit))

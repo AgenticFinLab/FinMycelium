@@ -125,11 +125,40 @@ class EnhancedSubjectUI(unittest.TestCase):
         self.assertNotIn("raw_text", registry["saved_2"])
         self.assertNotIn("source_registry", service.config)
 
-    def test_unfinished_or_empty_search_never_reaches_filter_or_builder(self):
+    def test_storyline_plan_reaches_builder_separately_from_evidence_and_does_not_leak(self):
+        discovery = {"version": "person-storylines-v1", "candidate_only": True,
+            "domains": [{"domain_id": "D", "label": "Investments"}],
+            "events": [{"event_id": "E", "domain_id": "D", "label": "A specific investment",
+                        "summary": "UNVERIFIED CANDIDATE ONLY"}]}
+        self.search_result["storyline_plan"] = discovery
+        for doc in self.search_result["documents"]:
+            doc["event_ids"] = ["E"]
+        config = self.config()
+        service = self.service.ReconstructionService(config)
+        captured = []
+
+        def build(contents, *args):
+            captured.append((copy.deepcopy(service.config), contents))
+            return {"person_epg": "native downstream"}
+
+        service._run_pipeline = build
+        with patch.object(self.service, "allocate_context", wraps=self.service.allocate_context) as allocate:
+            service.run_reconstruction("Research subject 2022-2023", [], None)
+        self.assertEqual(allocate.call_args.args[2]["all_content_config"]["allocation_strategy"], "event")
+        build_config, contents = captured[0]
+        self.assertEqual(build_config["storyline_plan"], discovery)
+        self.assertIn("source_registry", build_config)
+        self.assertNotIn("UNVERIFIED CANDIDATE", "".join(contents))
+        self.assertNotIn("storyline_plan", service.config)
+        self.assertNotIn("storyline_plan", config)
+        self.search_result.pop("storyline_plan")
+        service.run_reconstruction("Another request", [], None)
+        self.assertNotIn("storyline_plan", captured[1][0])
+
+    def test_empty_search_never_reaches_filter_or_builder(self):
         self.forbid_legacy()
-        for status, documents in [("paused", self.search_result["documents"]),
-                                  ("failed", []), ("limit", []),
-                                  ("insufficient", []), ("finished", [])]:
+        for status, documents in [(status, []) for status in
+                                  ("partial", "paused", "failed", "limit", "insufficient", "finished")]:
             with self.subTest(status=status):
                 self.search_result = {"status": status, "documents": documents, "reports": []}
                 service = self.service.ReconstructionService(self.config())
@@ -139,6 +168,56 @@ class EnhancedSubjectUI(unittest.TestCase):
                         service.run_reconstruction("Trace documented experiences", [], None)
                     build.assert_not_called()
                     relevance.assert_not_called()
+
+    def test_partial_search_warns_and_builds_native_result_without_schema_changes(self):
+        self.forbid_legacy()
+        self.search_result.update(
+            status="partial", complete=False,
+            reports=[{"event_id": "E1", "status": "finished"},
+                     {"event_id": "E2", "status": "limit", "gaps": ["closing date"]}],
+            report_path=str(self.path / "initial_event_search" / "phase_report.json"))
+        service = self.service.ReconstructionService(self.config())
+        native = {"schema_version": "person-epg-3.0", "event": [{"event_id": "E1"}]}
+        builder_dir = self.path / "native"
+        builder_dir.mkdir()
+        with patch("finmy.subject_graph.runner.build_from_contents",
+                   return_value=(types.SimpleNamespace(extras={"person_epg": native}), str(builder_dir))) as build:
+            result = service.run_reconstruction("Trace documented experiences", [], None)
+        build.assert_called_once()
+        self.assertIs(result, native)
+        coverage = self.service.st.session_state.search_coverage
+        self.assertEqual(coverage["status"], "partial")
+        self.assertEqual(coverage["builder_status"], "completed")
+        self.assertFalse(coverage["search_complete"])
+        self.assertEqual(coverage["unresolved_events"], ["E2"])
+        self.assertEqual(coverage["retained_document_count"], 3)
+        self.assertEqual(coverage["search_report_path"], self.search_result["report_path"])
+        self.assertEqual(json.loads((builder_dir / "search_coverage_report.json").read_text()), coverage)
+        self.assertTrue(any(coverage["search_coverage_report_path"] in warning for warning in self.warnings))
+        self.assertNotIn("search_status", result)
+        self.assertFalse(self.errors)
+
+        # A subsequent complete run must replace the partial coverage metadata.
+        self.search_result.update(status="finished", complete=True, reports=[])
+        with patch("finmy.subject_graph.runner.build_from_contents",
+                   return_value=(types.SimpleNamespace(extras={"person_epg": native}), str(builder_dir))):
+            service.run_reconstruction("Another subject", [], None)
+        self.assertTrue(self.service.st.session_state.search_coverage["search_complete"])
+        service.config["builder_config"]["reconstruction"] = {"mode": "event"}
+        with patch.object(self.collector.DataCollectorService, "collect_bocha_search_results", return_value=[]), \
+             patch.object(self.collector.DataCollectorService, "collect_baidu_search_results", return_value=[]), \
+             patch.object(self.collector.DataCollectorService, "collect_structured_data", return_value=([], [])):
+            with self.assertRaisesRegex(ValueError, "Context budget admitted no documents"):
+                service.run_reconstruction("An event", [], None)
+        self.assertIsNone(self.service.st.session_state.search_coverage)
+
+    def test_malformed_partial_material_never_reaches_builder(self):
+        self.search_result.update(status="partial", documents=[{"raw_text": None}])
+        service = self.service.ReconstructionService(self.config())
+        with patch.object(service, "_run_pipeline") as build:
+            with self.assertRaisesRegex(ValueError, "invalid source document"):
+                service.run_reconstruction("A subject", [], None)
+        build.assert_not_called()
 
     def test_explicit_agent_mode_selects_shared_search_for_each_subject_type(self):
         self.forbid_legacy()

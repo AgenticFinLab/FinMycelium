@@ -72,14 +72,16 @@ class DataCollectorService:
         )
         self.enhanced_search_result = result
         documents = result.get("documents", [])
-        if result.get("status") != "finished" or not documents:
-            raise ValueError(
-                "Enhanced search did not finish with usable source text "
-                f"(status={result.get('status', 'unknown')}); inspect the saved search run."
+        from finmy.runner.search_status import has_search_material, incomplete_search_result, IncompleteSearchError, record_search_coverage
+        if not has_search_material(result):
+            raise IncompleteSearchError(incomplete_search_result(result, self.save_dir))
+        self.search_coverage = record_search_coverage(result, self.save_dir)
+        if not self.search_coverage["search_complete"]:
+            st.warning(
+                f"Search coverage is partial. Building from {len(documents)} retained sources; "
+                f"{len(self.search_coverage['unresolved_events'])} storylines remain unresolved. "
+                f"Coverage report: {self.search_coverage['search_coverage_report_path']}"
             )
-        if any(not isinstance(doc, dict) or not isinstance(doc.get("raw_text"), str)
-               or not doc["raw_text"].strip() for doc in documents):
-            raise ValueError("Enhanced search returned an invalid source document")
         # The provider set includes Exa and may mix providers. Preserve the
         # handoff sequence separately from the display/provider buckets.
         self.enhanced_documents = documents

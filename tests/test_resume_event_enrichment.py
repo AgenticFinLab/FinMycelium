@@ -33,14 +33,12 @@ def setup_run(tmp_path):
     for name, value in values.items():
         (source / name).write_text(json.dumps(value))
     config = {"builder_config": {"builder_type": "SparseRagBuilder", "lm_name": "test/model"},
-              "event_followup": {"max_model_calls": 2}, "relevance_filter": {"cache": False}}
+              "event_followup": {"enabled": True, "max_model_calls": 2}, "relevance_filter": {"cache": False}}
     return source, config, package
 
 
-def classify(system, payload):
-    return json.dumps({"decisions": [{"chunk_id": c["chunk_id"], "relevance": "CORE",
-        "confidence": .99, "event_time": None, "matched_entities": [],
-        "reason": "Fixture evidence", "evidence": c["text"][:60]} for c in payload["chunks"]]})
+def no_classification(*args, **kwargs):
+    raise AssertionError("Saved evidence must not invoke the removed relevance classifier")
 
 
 def test_resume_reuses_original_and_found_sources_with_no_search_or_builder(tmp_path):
@@ -52,7 +50,7 @@ def test_resume_reuses_original_and_found_sources_with_no_search_or_builder(tmp_
         return current, {"model_calls": 1, "status": "no_changes"}
     with patch("finmy.runner.draft_event_search.collect_draft_event_sources", side_effect=AssertionError("No new search")):
         result, directory = resume_event_enrichment(source, config, tmp_path / "resumed",
-                                                    completion=classify, enrich=enrich)
+                                                    completion=no_classification, enrich=enrich)
     assert result.extras["person_epg"] == package
     assert len(seen) == 1
     assert seen[0][1][0]["content"]
@@ -61,7 +59,8 @@ def test_resume_reuses_original_and_found_sources_with_no_search_or_builder(tmp_
     assert report["acquisition_reused"] is True
     assert report["resume"]["new_initial_builder_calls"] == 0
     assert report["supplemental_usage"]["search_calls"] == report["supplemental_usage"]["parse_calls"] == 0
-    assert report["relevance"]["summary"]["model_calls"] == 1
+    assert "relevance" not in report
+    assert report["supplemental_usage"].get("relevance_model_calls", 0) == 0
     assert {p.name: p.read_bytes() for p in source.iterdir()} == before
     assert "reconstruction" not in config["builder_config"]
 

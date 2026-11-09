@@ -63,7 +63,7 @@ def resume_event_enrichment(input_dir, config, output_dir, *, completion=None,
     builder.setdefault("builder_type", "SparseRagBuilder")
     # The initial input is a saved artifact, so its prior limit is descriptive;
     # only the separately configured follow-up limits govern new submissions.
-    effective.setdefault("all_content_config", {})["max_content_length"] = previous_report.get("budgets", {}).get("initial_content_limit", 60000)
+    effective.setdefault("all_content_config", {})["max_content_length"] = previous_report.get("budgets", {}).get("initial_content_limit", 120000)
     effective = normalize_followup_config(effective)
     if not followup_enabled(effective):
         raise ValueError("Resume requires enabled person event follow-up with SparseRagBuilder configuration")

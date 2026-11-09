@@ -49,14 +49,15 @@ def _task(query, keywords, subject, config, event=None, supplied=None):
     if event is not None:
         eid, label = event.get("event_id"), event.get("event_label") or event.get("label")
         if not isinstance(eid, str) or not eid.strip() or not isinstance(label, str) or not label.strip():
-            raise ValueError("Supplementary search needs an existing event ID and label")
+            raise ValueError("Event search needs an event ID and label")
         result.update(target_type="event", target_name=label, original_query=query,
                       event_id=eid,
-                      query_text=query + "\nResearch only this existing event involving "
+                      query_text=query + "\nResearch this " + ("candidate storyline" if event.get("discovery_candidate") else "existing event") + " involving "
                       + subject["name"] + ": " + label,
                       existing_event={key: copy.deepcopy(event[key]) for key in
                           ("event_id", "event_label", "label", "summary", "event_terms",
-                           "entity_clues", "activity_clues", "year_clues") if key in event},
+                           "entity_clues", "activity_clues", "year_clues", "domain_id",
+                           "scope", "person_connection", "questions") if key in event},
                       event_clues_are_evidence=False)
     if supplied is not None:
         if event is not None or not isinstance(supplied, dict):
@@ -77,13 +78,17 @@ def _task(query, keywords, subject, config, event=None, supplied=None):
 
 def _documents(root, task_id, result, event):
     """Validate the handoff, then export full inspected bodies with provenance."""
-    if result.get("status") != "finished":
+    if result.get("status") not in {"finished", "insufficient"}:
         return []
     state = SearchState(root, task_id)
     handoff = state.run_dir / "builder_input.json"
     if not handoff.exists():
+        if result.get("status") == "insufficient":
+            return []
         raise ValueError("Finished search has no saved Builder handoff")
     payload = json.loads(handoff.read_text(encoding="utf-8"))
+    if isinstance(payload, dict) and payload.get("samples") == [] and result.get("status") == "insufficient":
+        return []
     if (not isinstance(payload, dict) or not isinstance(payload.get("samples"), list)
             or not payload["samples"] or any(not isinstance(s, dict)
                 or not isinstance(s.get("content"), str) or not s["content"].strip()
@@ -113,6 +118,8 @@ def _documents(root, task_id, result, event):
         for row in selection["selected"]:
             sid, version = row["source_id"], row["version"]
             doc = store.document(sid, version)
+            if doc.get("status") not in {"success", "partial"}:
+                continue
             block, start, end = row["block"], row["start"], row["end"]
             if any(type(v) is not int for v in (block, start, end)) or not 0 <= block < len(doc["blocks"]):
                 raise ValueError("Invalid legacy search selection")
@@ -143,6 +150,8 @@ def _documents(root, task_id, result, event):
         for entry in complete["selected"]:
             sid, version = entry["source_id"], entry["version"]
             doc = store.document(sid, version)
+            if doc.get("status") not in {"success", "partial"}:
+                continue
             if not any(r["version"] == version and r["end"] > r["start"]
                        for r in state.data["sources"][sid].get("read_ranges", [])):
                 raise ValueError("Selected source was not inspected")
@@ -165,9 +174,10 @@ def _documents(root, task_id, result, event):
                "url": metadata.get("url", source["url"]),
                "published_at": published, "source": "enhanced", "source_id": sid,
                "source_version": version, "source_status": status,
+               "event_search_status": result["status"],
                "search_run_directory": str(state.run_dir),
                "discoveries": copy.deepcopy(discoveries)}
-        for key in ("published_at_raw", "publication_candidates"):
+        for key in ("published_at_raw", "publication_candidates", "reused_from"):
             if key in metadata:
                 row[key] = copy.deepcopy(metadata[key])
         if event is not None:
@@ -175,14 +185,15 @@ def _documents(root, task_id, result, event):
             terms = event.get("event_terms", [label])
             row.update(event_ids=[event["event_id"]], event_labels=[label], event_terms=list(terms),
                        event_routes=[{"event_id": event["event_id"], "event_label": label,
-                                      "event_terms": list(terms)}])
+                                      "event_terms": list(terms), "search_task_id": task_id,
+                                      "search_status": result["status"]}])
         output.append(row)
     return output
 
 
-def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
+def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                              progress=None, usage=None, events=None, dependencies=None,
-                             task=None):
+                             task=None, initial_events=False):
     """Acquire original sources under one persisted phase budget.
 
     Supplementary tasks share search/read/model ceilings; creating one task per
@@ -208,11 +219,20 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
     supplied_transport = dependencies.pop("transport", None)
     supplied_fetcher = dependencies.pop("fetcher", None)
     usage = usage if usage is not None else {}
-    supplemental = events is not None
-    if supplemental and (not isinstance(events, list) or any(not isinstance(e, dict) for e in events)):
+    event_tasks = events is not None
+    supplemental = event_tasks and not initial_events
+    if event_tasks and (not isinstance(events, list) or any(not isinstance(e, dict) for e in events)):
         raise ValueError("Existing events must be a list of event descriptors")
-    entries = events if supplemental else [None]
-    tasks = [_task(query, keywords, subject, config, e, task) for e in entries]
+    entries = events if event_tasks else [None]
+    if initial_events and task is not None:
+        supplied = _task(query, keywords, subject, config, supplied=task)
+        tasks = [_task(query, keywords, subject, config, e) for e in entries]
+        for child in tasks:
+            for key in ("seed_urls", "local_files"):
+                if key in supplied:
+                    child[key] = supplied[key]
+    else:
+        tasks = [_task(query, keywords, subject, config, e, task) for e in entries]
     if len({t.get("event_id") for t in tasks}) != len(tasks):
         raise ValueError("Existing event IDs must be unique")
     options = config.get("event_followup", {}) or {}
@@ -220,13 +240,13 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
         raise ValueError("event_followup must be a mapping")
     caps = {"search_calls": shared.max_search_requests, "parse_calls": shared.max_read_sources,
             "search_model_calls": shared.max_model_calls}
-    content_limit = (config.get("all_content_config") or {}).get("max_content_length", 60000)
+    content_limit = (config.get("all_content_config") or {}).get("max_content_length", 120000)
     seconds = None
     if supplemental:
         caps = {"search_calls": options.get("max_search_calls", 12),
                 "parse_calls": options.get("max_parse_calls", 40),
                 "search_model_calls": options.get("max_search_model_calls", 30)}
-        content_limit = options.get("max_content_length", 60000)
+        content_limit = options.get("max_content_length", 120000)
         seconds = options.get("max_elapsed_seconds", 300)
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds <= 0:
             raise ValueError("event_followup.max_elapsed_seconds must be positive and finite")
@@ -234,10 +254,20 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
         _integer(value, key)
     _integer(content_limit, "max_content_length", 1)
     shared = replace(shared, max_builder_material_chars=min(shared.max_builder_material_chars, content_limit))
-    root = Path(save_dir) / ("enhanced_event_search" if supplemental else "enhanced_subject_search")
+    if initial_events:
+        from finmy.runner.initial_event_search import collect_initial_events
+        return collect_initial_events(tasks=tasks, events=entries, shared=shared,
+            config=config, save_dir=save_dir, usage=usage, content_limit=content_limit,
+            runner=runner, dependencies={**dependencies, "model": supplied_model,
+                "transport": supplied_transport, "fetcher": supplied_fetcher},
+            documents_for=_documents, progress=progress)
+    root = Path(save_dir) / ("enhanced_event_search" if supplemental else "initial_event_search" if initial_events else "enhanced_subject_search")
     report_path = root / "phase_report.json"
-    fingerprint = digest({"tasks": tasks, "config": asdict(shared), "caps": caps,
-                          "seconds": seconds, "content_limit": content_limit})
+    identity_fields = {"tasks": tasks, "config": asdict(shared), "caps": caps,
+                       "seconds": seconds, "content_limit": content_limit}
+    if initial_events:
+        identity_fields["initial_events"] = True
+    fingerprint = digest(identity_fields)
     if report_path.exists():
         report = json.loads(report_path.read_text(encoding="utf-8"))
         if report.get("identity") != fingerprint:
@@ -300,7 +330,7 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                           "status": "pending", "usage": {key: 0 for key in caps}}
                 report["tasks"][task_id] = record
                 minimums = (("search_calls", len(shared.providers)), ("parse_calls", 1),
-                            ("search_model_calls", 3)) if supplemental else ((k, 1) for k in caps)
+                            ("search_model_calls", 3)) if event_tasks else ((k, 1) for k in caps)
                 if any(quotas[k] < minimum for k, minimum in minimums):
                     record["status"] = "budget_exhausted"
                     persist()
@@ -358,10 +388,10 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                     record.update(status="failed", error_type=type(exc).__name__)
                 finally:
                     persist()
-            if record["status"] == "finished":
+            if record["status"] in {"finished", "insufficient"}:
                 try:
-                    found = _documents(root, task_id, {"status": "finished"}, event)
-                    if not found:
+                    found = _documents(root, task_id, {"status": record["status"]}, event)
+                    if not found and record["status"] == "finished":
                         record["status"] = "insufficient"
                     documents.extend(found)
                     record["document_count"] = len(found)
@@ -382,13 +412,140 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                             prior[name].append(value)
         documents = list(unique.values())
         outcomes = list(report["tasks"].values())
-        status = (outcomes[0]["status"] if not supplemental else
+        status = (outcomes[0]["status"] if not event_tasks else
                   "finished" if outcomes and all(r["status"] == "finished" for r in outcomes) else
                   "partial" if documents else "insufficient")
-        report.update(status=status, document_count=len(documents),
+        report.update(status=status, complete=bool(outcomes) and all(r["status"] == "finished" for r in outcomes),
+                      document_count=len(documents),
                       archived_content_chars=sum(len(d["raw_text"]) for d in documents))
         write_json(root / "sources.json", documents)
         return {"documents": documents, "status": status, "reports": outcomes,
                 "usage": counters(), "report_path": str(report_path)}
     finally:
         persist()
+
+
+def storyline_discovery_enabled(config):
+    """Default discovery for person-mode agent search; explicit false replays old flow."""
+    settings = (config.get("search_config") or {}).get("storyline_discovery", {})
+    if settings is None:
+        settings = {}
+    if not isinstance(settings, dict) or type(settings.get("enabled", True)) is not bool:
+        raise ValueError("search_config.storyline_discovery.enabled must be a boolean")
+    builder = config.get("builder_config", config)
+    return (enhanced_search_enabled(config) and settings.get("enabled", True)
+            and (builder.get("reconstruction") or {}).get("mode") == "person")
+
+
+def storyline_search_identity(query, keywords, subject, config, task=None):
+    """Version the accounting contract; old combined-budget runs need migration."""
+    return digest({"version": "person-storyline-search-v2", "query": query,
+                   "keywords": keywords, "subject": subject,
+                   "search_config": config.get("search_config"), "task": task,
+                   "content_config": config.get("all_content_config")})
+
+
+def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
+                             progress=None, usage=None, events=None, dependencies=None, task=None):
+    """Discover candidates independently, then research them under one phase budget.
+
+    Existing-EPG supplementary calls retain their separate explicitly enabled budget.
+    Discovery output is planning metadata only, never appended as source evidence.
+    """
+    dependencies = dict(dependencies or {})
+    discovery_completion = dependencies.pop("discovery_completion", None)
+    if events is not None or not storyline_discovery_enabled(config):
+        return _collect_enhanced_sources(query, keywords, subject, config, save_dir,
+            progress=progress, usage=usage, events=events, dependencies=dependencies, task=task)
+    from finmy.search.control import task_lock
+    # Protect discovery as well as reservations: two same-output invocations
+    # must not duplicate a model call before the event scheduler starts.
+    with task_lock(Path(save_dir), "storyline_search"):
+        return _collect_storyline_sources(query, keywords, subject, config, save_dir,
+            progress=progress, usage=usage, dependencies=dependencies, task=task,
+            discovery_completion=discovery_completion)
+
+
+def _collect_storyline_sources(query, keywords, subject, config, save_dir, *,
+                              progress, usage, dependencies, task, discovery_completion):
+    from finmy.runner.storyline_discovery import discover_storylines, StorylineDiscoveryError
+    from finmy.runner.initial_event_search import event_search_options
+    shared = SearchConfig(**copy.deepcopy((config.get("search_config") or {}).get("enhancement", {})))
+    event_options = event_search_options(config)
+    # Reject invalid scheduler settings before discovery costs anything.
+    if event_options["max_search_requests"] < len(shared.providers):
+        raise ValueError("Event search allowance must fund one query across all selected providers")
+    settings = (config.get("search_config") or {}).get("storyline_discovery") or {}
+    discovery_limit = _integer(settings.get("max_model_calls", 2), "storyline_discovery.max_model_calls")
+    _integer(settings.get("max_events", 8), "storyline_discovery.max_events", 1)
+    usage = usage if usage is not None else {}
+    state_path = Path(save_dir) / "storyline_search_state.json"
+    identity = storyline_search_identity(query, keywords, subject, config, task)
+    if state_path.exists():
+        discovery_state = json.loads(state_path.read_text(encoding="utf-8"))
+        if discovery_state.get("version") != "person-storyline-search-v2" or discovery_state.get("identity") != identity:
+            raise ValueError("Storyline search scope/config changed; use a new output directory or explicitly migrate the saved run")
+    else:
+        discovery_state = {"version": "person-storyline-search-v2", "identity": identity,
+            "base_discovery_model_calls": _integer(usage.get("discovery_model_calls", 0), "discovery_model_calls"),
+            "base_usage": {
+            key: _integer(usage.get(key, 0), key) for key in
+            ("search_calls", "parse_calls", "search_model_calls")}}
+        write_json(state_path, discovery_state)
+    base_usage = discovery_state["base_usage"]
+    for key, ceiling in (("search_calls", shared.max_search_requests),
+                         ("parse_calls", shared.max_read_sources),
+                         ("search_model_calls", shared.max_model_calls)):
+        if _integer(base_usage[key], key) > ceiling:
+            raise ValueError("Saved base usage exceeds the configured search budget")
+    base_discovery_calls = _integer(discovery_state["base_discovery_model_calls"], "discovery_model_calls")
+    if base_discovery_calls > discovery_limit:
+        raise ValueError("Saved base usage exceeds the configured discovery budget")
+    discovery_config = copy.deepcopy(config)
+    discovery_settings = dict(settings)
+    discovery_settings["max_model_calls"] = discovery_limit - base_discovery_calls
+    discovery_config.setdefault("search_config", {})["storyline_discovery"] = discovery_settings
+    report_path = Path(save_dir) / "storyline_search_report.json"
+
+    def accounted(search_usage, discovery_calls):
+        result = dict(search_usage)
+        result["discovery_model_calls"] = base_discovery_calls + discovery_calls
+        result["total_model_calls"] = result["search_model_calls"] + result["discovery_model_calls"]
+        usage.update({key: max(usage.get(key, 0), value) for key, value in result.items()})
+        return result
+
+    if progress:
+        progress("Discovering domains and storylines before event research.")
+    try:
+        plan = discover_storylines(query, keywords, subject, discovery_config, save_dir,
+                                  completion=discovery_completion, progress=progress)
+    except StorylineDiscoveryError as exc:
+        report = {"version": "person-storyline-search-v2", "status": "discovery_failed",
+                  "documents": [], "reports": [], "complete": False,
+                  "usage": accounted(base_usage, exc.usage.get("model_calls", 0)),
+                  "usage_accounting": "separate_discovery_and_search",
+                  "error_type": type(exc).__name__}
+        write_json(report_path, report)
+        return report
+    # Candidate count depends only on discovery settings, never on today's search
+    # allowance. Unfunded candidates remain explicitly queued in the phase report.
+    phase_usage = dict(base_usage)
+    candidates = [{**event, "discovery_candidate": True} for event in plan["events"]]
+    result = _collect_enhanced_sources(query, keywords, subject, config, save_dir,
+        progress=progress, usage=phase_usage, events=candidates, dependencies=dependencies,
+        task=task, initial_events=True)
+    result["usage"] = accounted(result["usage"], plan["usage"]["model_calls"])
+    result["storyline_plan"] = plan
+    report = {"version": "person-storyline-search-v2", "status": result["status"],
+              "complete": result["complete"], "usage_accounting": "separate_discovery_and_search",
+              "discovery_model_calls": result["usage"]["discovery_model_calls"], "usage": result["usage"],
+              "discovery_model_call_limit": discovery_limit,
+              "limits": {"search_calls": shared.max_search_requests,
+                         "parse_calls": shared.max_read_sources, "search_model_calls": shared.max_model_calls},
+              "event_search": event_search_options(config),
+              "event_count": len(candidates), "events": result["reports"],
+              "unresolved_events": [r["event_id"] for r in result["reports"] if r["status"] != "finished"],
+              "document_count": len(result["documents"]),
+              "content_limit": (config.get("all_content_config") or {}).get("max_content_length", 120000)}
+    write_json(report_path, report)
+    return result

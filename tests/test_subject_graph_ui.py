@@ -94,7 +94,7 @@ class SubjectUITest(unittest.TestCase):
         self.form = load("subject_form_test", "finmy/web_ui/components/subject_scope_form.py")
         self.results = load("subject_results_test", "finmy/web_ui/pages/results_page.py")
 
-    def test_name_only_form_drops_hidden_constraints_without_mutating_config(self):
+    def test_name_and_period_form_drops_hidden_constraints_without_mutating_config(self):
         original = config()
         original["builder_config"]["reconstruction"]["subject"]["scope"] = "OXY only"
         snapshot = copy.deepcopy(original)
@@ -104,16 +104,20 @@ class SubjectUITest(unittest.TestCase):
             effective = self.form.render_subject_scope(original)
         self.assertEqual(selector.call_args.args[1], ["event", "person"])
         self.assertTrue(selector.call_args.kwargs["key"].startswith("person_input_"))
-        self.assertEqual([call.args[0] for call in inputs.call_args_list], ["Person name"])
+        self.assertEqual([call.args[0] for call in inputs.call_args_list], ["Person name", "Period"])
         areas.assert_not_called()
         subject = effective["builder_config"]["reconstruction"]["subject"]
         self.assertEqual(subject["name"], "Warren Buffett")
         self.assertEqual(subject["subject_id"], "person_buffett")
         self.assertEqual(subject["aliases"], [])
-        self.assertIsNone(subject["coverage_start"])
-        self.assertIsNone(subject["coverage_end"])
+        self.assertEqual(subject["coverage_start"], "2022")
+        self.assertEqual(subject["coverage_end"], "2023")
         self.assertNotIn("OXY", subject["scope"])
         self.assertEqual(effective["builder_config"]["lm_name"], "test-model")
+        self.assertEqual(effective["search_config"]["mode"], "agent")
+        self.assertTrue(effective["search_config"]["storyline_discovery"]["enabled"])
+        self.assertFalse(effective["event_followup"]["enabled"])
+        self.assertEqual(effective["all_content_config"]["max_content_length"], 120000)
         self.assertEqual(original, snapshot)
         self.assertIsNot(effective, original)
 
@@ -127,12 +131,20 @@ class SubjectUITest(unittest.TestCase):
         self.assertEqual(result["builder_config"]["lm_name"], "test-model")
         self.assertEqual(original["builder_config"]["reconstruction"]["mode"], "company")
 
-    def test_hidden_malformed_fields_do_not_block_name_only_form(self):
+    def test_hidden_malformed_fields_do_not_block_corrected_period(self):
         original = config()
         original["builder_config"]["reconstruction"]["subject"].update(
             aliases=[123], coverage_start="invalid", coverage_end=False, scope=None)
-        self.assertIsNotNone(self.form.render_subject_scope(original))
+        with patch.object(self.st, "text_input", side_effect=["Buffett", "2023-05"]):
+            effective = self.form.render_subject_scope(original)
+        self.assertIsNotNone(effective)
+        self.assertEqual(effective["builder_config"]["reconstruction"]["subject"]["coverage_start"], "2023-05")
         self.st.error.assert_not_called()
+
+    def test_invalid_period_reports_error_without_creating_run_config(self):
+        with patch.object(self.st, "text_input", side_effect=["Buffett", "2023-02-30"]):
+            self.assertIsNone(self.form.render_subject_scope(config()))
+        self.st.error.assert_called_once()
 
     def test_generated_identity_is_stable_and_changes_with_person(self):
         original = config()
@@ -146,10 +158,11 @@ class SubjectUITest(unittest.TestCase):
         effective = self.form.apply_subject_scope(original, "person", new)
         self.assertEqual(effective["builder_config"]["reconstruction"]["subject"]["name"], "张三")
 
-    def test_blank_name_keeps_description_keywords_visible_and_cannot_start(self):
+    def test_blank_name_hides_event_fields_clears_stale_inputs_and_cannot_start(self):
         pipeline = load("subject_pipeline_blank_test", "finmy/web_ui/pages/pipeline_page.py")
         uploaded = config()
-        self.state.update(config=uploaded, config_file_name="config.yml", main_input="Existing description")
+        self.state.update(config=uploaded, config_file_name="config.yml", main_input="Existing description",
+                          keywords=["old event"], structured_data=[{"text": "old source"}])
         keywords = Mock()
         controls = Mock()
         controls.render.return_value = True
@@ -165,9 +178,12 @@ class SubjectUITest(unittest.TestCase):
              patch.object(self.st, "success", Mock(), create=True), \
              patch.object(self.st, "multiselect", return_value=["Keywords"], create=True):
             pipeline.PipelinePage.render()
-            self.assertEqual(areas.call_args.args[0], "Description")
-            keywords.render.assert_called_once()
-            self.assertEqual(self.state.main_input, "Existing description")
+            areas.assert_not_called()
+            keywords.render.assert_not_called()
+            self.assertEqual(self.state.main_input, "")
+            self.assertEqual(self.state.keywords, [])
+            self.assertIsNone(self.state.structured_data)
+            self.assertTrue(controls.render.call_args.kwargs["disabled"])
             self.assertIsNone(self.state.reconstruction_run_config)
             pipeline.PipelinePage._run_analysis()
             service.assert_not_called()
@@ -250,18 +266,20 @@ class SubjectUITest(unittest.TestCase):
     def test_pipeline_passes_effective_scope_and_sets_native_result_mode(self):
         pipeline = load("subject_pipeline_test", "finmy/web_ui/pages/pipeline_page.py")
         uploaded = config()
-        effective = self.form.apply_subject_scope(uploaded, "person", self.form.person_subject(uploaded, "Warren Buffett"))
+        effective = self.form.apply_subject_scope(uploaded, "person", self.form.person_subject(uploaded, "Warren Buffett", "2022–2023"))
         self.state.update(config=uploaded, reconstruction_run_config=effective,
-                          main_input="Reconstruct Buffett's activities in 2022–2023", keywords=[], structured_data=None)
+                          main_input="A stale event request", keywords=["stale keyword"], structured_data=[{"old": "data"}])
         received = []
         class Service:
             def __init__(self, cfg):
                 received.append(cfg)
             def run_reconstruction(self, **kwargs):
+                received.append(kwargs)
                 return graph()
         with patch.object(pipeline, "ReconstructionService", Service):
             pipeline.PipelinePage._run_analysis()
         self.assertIs(received[0], effective)
+        self.assertEqual(received[1], {"main_input": "Warren Buffett 2022 – 2023", "keywords": [], "structured_data": None})
         self.assertEqual(self.state.build_mode, "subject_graph")
         self.assertEqual(self.state.processing_status, "completed")
         self.assertEqual(uploaded["builder_config"]["reconstruction"]["mode"], "person")

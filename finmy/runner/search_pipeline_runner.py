@@ -747,10 +747,14 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser,
             progress=logger.info, usage=usage, dependencies=search_dependencies,
             task=search_task,
         )
-        if acquired["status"] != "finished" or not acquired["documents"]:
-            return {"status": acquired["status"], "search_reports": acquired["reports"],
-                    "pipeline_result": None, "save_dir": str(target)}
+        from finmy.runner.search_status import has_search_material, incomplete_search_result, record_search_coverage
+        if not has_search_material(acquired):
+            return incomplete_search_result(acquired, target)
+        record_search_coverage(acquired, target)
         documents = acquired["documents"]
+        if acquired.get("storyline_plan"):
+            config["storyline_plan"] = copy.deepcopy(acquired["storyline_plan"])
+            config.setdefault("all_content_config", {})["allocation_strategy"] = "event"
     else:
         documents = collect_subject_sources(main_input, keywords, reconstruction["subject"], options,
             search, parse, target, progress=logger.info, usage=usage)
@@ -784,6 +788,8 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser,
         from finmy.subject_graph.runner import build_from_contents
         result, directory = build_from_contents(packed["contents"], main_input, keywords, config)
     final_input = json.loads((target / "builder_input_contents.json").read_text(encoding="utf-8"))
-    return {"all_text_content": contents, "search_query": build_search_query(main_input, keywords),
+    coverage = record_search_coverage(acquired, target, builder_directory=directory,
+                                      build_completed=result is not None) if enhanced else {}
+    return {**coverage, "all_text_content": contents, "search_query": build_search_query(main_input, keywords),
             "limited_content_count": len(final_input), "pipeline_result": result,
             "save_dir": str(target), "builder_save_dir": directory}

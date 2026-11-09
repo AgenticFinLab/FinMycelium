@@ -57,7 +57,7 @@ class EventRefinementTests(unittest.TestCase):
                     "coverage_start": "2022", "coverage_end": "2023"}}},
             "subject_search": {"providers": ["bocha"], "max_parse_calls": 40,
                 "max_search_calls": 12, "max_elapsed_seconds": 300, "max_followup_queries": 0},
-            "event_followup": {"max_search_calls": 2, "max_parse_calls": 4,
+            "event_followup": {"enabled": True, "max_search_calls": 2, "max_parse_calls": 4,
                 "max_content_length": 60000, "max_model_calls": 24},
             "all_content_config": {"max_content_length": 6000, "max_document_chars": 3000},
             "relevance_filter": {"max_model_calls": 12, "cache": False},
@@ -231,6 +231,14 @@ class EventRefinementTests(unittest.TestCase):
         self.assertIs(result, self.draft)
         self.assertEqual(self.report()["status"], "no_existing_events")
         self.assertEqual(len(self.build_calls), 1)
+
+    def test_omitted_followup_builds_once_without_post_build_work(self):
+        self.config.pop("event_followup")
+        result, _ = self.run_flow(search=lambda *a: self.fail("Post-build search must be opt-in"),
+                                  enrich=lambda *a, **k: self.fail("Post-build enrichment must be opt-in"))
+        self.assertIs(result, self.draft)
+        self.assertEqual(len(self.build_calls), 1)
+        self.assertEqual(self.report()["status"], "disabled_or_unsupported_builder")
 
     def test_disabled_or_other_builder_keeps_original_single_call(self):
         for disabled in (True, False):

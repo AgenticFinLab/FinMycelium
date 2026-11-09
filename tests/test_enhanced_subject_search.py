@@ -16,7 +16,8 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.subject = {"subject_id": "person_example", "name": "Example Person",
                         "coverage_start": "2022", "coverage_end": "2023", "scope": "Investments"}
-        self.config = {"search_config": {"mode": "agent", "enhancement": {
+        self.config = {"search_config": {"mode": "agent",
+            "storyline_discovery": {"enabled": False}, "enhancement": {
             "providers": ["bocha"], "max_search_requests": 6, "max_read_sources": 6,
             "max_model_calls": 12, "max_builder_material_chars": 60000}},
             "all_content_config": {"max_content_length": 60000},
@@ -162,6 +163,28 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         result = self.collect()
         self.assertEqual(result["status"], "insufficient")
         self.assertEqual(result["documents"], [])
+
+    def test_insufficient_selection_exports_reviewed_material_and_keeps_incomplete_status(self):
+        def partial(context):
+            action = self.model(context)
+            if action["action"] == "finish":
+                action.update(reason="insufficient", gaps=["The later disposal remains unverified."])
+            return action
+
+        result = self.collect(dependencies={"model": partial})
+        self.assertEqual(result["status"], "insufficient")
+        self.assertEqual(len(result["documents"]), 1)
+        row = result["documents"][0]
+        self.assertEqual(row["raw_text"], self.body)
+        self.assertEqual(row["event_search_status"], "insufficient")
+        selection = json.loads((Path(row["search_run_directory"]) / "selection.json").read_text())
+        self.assertEqual(selection["reason"], "insufficient")
+        self.assertEqual(selection["gaps"], ["The later disposal remains unverified."])
+        counts = len(self.requests), len(self.fetches), len(self.contexts)
+        repeated = self.collect(dependencies={"model": partial})
+        self.assertEqual(repeated["documents"], result["documents"])
+        self.assertEqual(repeated["status"], "insufficient")
+        self.assertEqual(counts, (len(self.requests), len(self.fetches), len(self.contexts)))
 
     def test_tampered_complete_manifest_fails_closed(self):
         def tamper(*args, **kwargs):

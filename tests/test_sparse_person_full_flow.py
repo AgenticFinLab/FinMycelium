@@ -188,6 +188,30 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         self.assertEqual(self.artifact(builder, "PersonRenderStatus"), {"status": "completed"})
         self.assertFalse(Path(builder.save_dir, "FinalSubjectGraph.html").exists())
 
+    def test_storyline_hints_reach_organization_json_html_and_offline_replay(self):
+        discovery = {"version": "person-storylines-v1", "candidate_only": True,
+            "domains": [{"domain_id": "domain:planned", "label": "Financial activities"}],
+            "events": [{"event_id": "storyline:planned", "domain_id": "domain:planned",
+                        "label": "Transfer involvement", "summary": "CANDIDATE_ONLY_SCOPE"},
+                       {"event_id": "storyline:unverified", "domain_id": "domain:planned",
+                        "label": "Unverified project", "summary": "CANDIDATE_ONLY_SCOPE"}]}
+        self.inputs.user_query.extras = {"storyline_plan": discovery}
+        builder, sequence = self.builder()
+        output = builder.run(self.inputs)
+        person = output.extras["person_epg"]
+        self.assertEqual(len(sequence.calls), 8)
+        self.assertTrue(all("CANDIDATE_ONLY_SCOPE" not in call[0].user_msg for call in sequence.calls[:-1]))
+        self.assertIn("CANDIDATE_ONLY_SCOPE", sequence.calls[-1][0].user_msg)
+        self.assertEqual([row["event_id"] for row in person["event"]], ["storyline:planned"])
+        self.assertNotIn("CANDIDATE_ONLY_SCOPE", json.dumps(person))
+        self.assertEqual(validate_person_epg(person), {"valid": True, "errors": []})
+        self.assertEqual(self.artifact(builder, "PersonStorylineResolution-Result")["represented_event_count"], 1)
+        self.assertEqual(self.artifact(builder, "FinalPersonEPG"), person)
+        page = Path(builder.save_dir, "FinalPersonEPG.html").read_text(encoding="utf-8")
+        self.assertEqual(json.loads(EmbeddedPersonData(page).payload), person)
+        with patch.object(sequence, "run", side_effect=AssertionError("Replay must stay offline")):
+            self.assertEqual(builder.integrate_person_from_files(strict=True), person)
+
     def test_invalid_organization_retries_in_shared_ledger(self):
         invalid = organization_plan()
         invalid["memberships"][0]["activity_id"] = "INVENTED"

@@ -1,7 +1,7 @@
 # Search enhancement
 
 Enhanced search combines Baidu / Bocha / Exa acquisition, source-level handoff,
-and material allocation within a 60,000-character Builder input budget.
+and material allocation within a 120,000-character Builder input budget.
 It prepares material for draft EPG construction and review. It does not change Builder
 algorithms, EPG schemas or visualization formats.
 
@@ -64,7 +64,7 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | `max_read_sources` | 12 distinct sources; rereading a source does not consume a new source slot |
 | `max_model_calls` | 30 attempted search-side model requests, including failures |
 | `max_read_chars` | 12,000 per source-read operation |
-| `max_builder_material_chars` | 60,000 across sample contents, including source labels and omission markers |
+| `max_builder_material_chars` | 120,000 across sample contents, including source labels and omission markers |
 | `max_model_context_chars` | 100,000 for the serialized decision context and system prompt |
 | `generation_config.max_tokens` | 4,096 answer tokens on the current Ark Seed model; reasoning is separate |
 | `timeout` | 120 seconds per request |
@@ -204,13 +204,25 @@ rendering. Person defaults to SparseRagBuilder; company requires AgentEventBuild
 model/provider; `mode: simple` retains historical acquisition.
 
 The subject bridge reads the version-pinned complete material, preserves provenance
-without a second relevance classifier, and performs one final 60,000-character initial allocation. Selected
+without a second relevance classifier, and performs one final 120,000-character initial allocation. Selected
 source metadata is joined by document ID into `user_query.extras.source_registry`.
-The first person EPG then supplies its existing events directly to the same search
-algorithm. All supplementary events share finite search/read/model ceilings and
-one separate 60,000-character evidence pool. The persisted task ledger prevents
-resume from multiplying those budgets. Only completed, valid search handoffs enter
-construction; partial supplementary runs retain the initial EPG and report gaps.
+Person agent search first discovers candidate domains/storylines under a separate
+discovery call ceiling, then uses that same search algorithm for each event. The
+adapter reserves per-event allowances within global search/read/model limits,
+using smaller remaining allowances when useful; concurrency defaults to two and is configurable.
+It does not divide every remaining budget by the candidate count. Unfunded candidates stay pending.
+An original-source pool avoids duplicate downloads across events; the current event must
+inspect and select imported sources itself. Valid nonempty partial handoffs can start the person Builder.
+Search coverage and unresolved events remain explicit in `search_coverage_report.json`
+and the UI, independently of successful graph construction. Empty evidence still stops construction.
+The candidate plan reaches organization separately from source evidence. See the
+[short-request entry point](../person_storyline_discovery.md) for `Buffett 2022-2023`.
+Post-build enrichment now defaults to disabled (`event_followup.enabled: false`).
+When explicitly enabled, the first person EPG supplies its existing events to the
+search algorithm. All supplementary events share finite search/read/model ceilings and
+one separate 120,000-character evidence pool. The persisted task ledger prevents
+resume from multiplying those budgets. Only validated original material enters
+construction; incomplete supplementary coverage is reported separately.
 See [event enrichment](../person_draft_event_followup.md) for limits and outputs.
 
 ## Storage and verification

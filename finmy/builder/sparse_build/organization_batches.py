@@ -13,6 +13,9 @@ import json
 from jsonschema import Draft202012Validator
 
 from .completion_errors import IncompleteCompletionError
+from .storyline_context import (
+    STORYLINE_GUIDANCE, candidate_storylines, align_storyline_ids, storyline_resolution,
+)
 from .organization_context import (
     ORGANIZATION_CONTEXT_POLICY_IDENTITY, build_organization_context,
 )
@@ -234,7 +237,7 @@ def _splittable(error):
             and not error.refusal and not error.tool_calls)
 
 
-def organize_person_plan(package, cascade, subject, output_language, infer, save):
+def organize_person_plan(package, cascade, subject, output_language, infer, save, *, storyline_plan=None):
     """Generate a complete v1 plan through bounded v4 execution.
 
     ``infer(system, user, savename, validator)`` must use the caller's common
@@ -245,6 +248,25 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
     _require_valid(package)
     request = organization_request(package, cascade, subject, include_context_activities=True)
     request["output_language"] = output_language
+    candidates = candidate_storylines(storyline_plan)
+    if candidates is not None:
+        request["candidate_storylines"] = candidates
+        request["storyline_instructions"] = STORYLINE_GUIDANCE
+        save(copy.deepcopy(candidates), "PersonStorylineCandidates")
+
+    remaps = {"domain_id_remaps": [], "event_id_remaps": []}
+
+    def align_ids(value):
+        aligned, changes = align_storyline_ids(value, candidates)
+        for key, rows in changes.items():
+            for row in rows:
+                if row not in remaps[key]:
+                    remaps[key].append(row)
+        return aligned
+
+    def record_resolution(value):
+        if candidates is not None:
+            save(storyline_resolution(candidates, value, remaps), "PersonStorylineResolution")
     # Mark existing context IDs explicitly. Their facts/details and reachable
     # evidence are also retained above, without prior memberships or relevance.
     contexts = [copy.deepcopy(row) for row in package["activity"]
@@ -263,8 +285,10 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
         try:
             result = infer(ORGANIZATION_SYSTEM_PROMPT, json.dumps(request, ensure_ascii=False), "PersonOrganization",
                            lambda value: validate_organization(value, package))
+            result = align_ids(result)
             validate_organization(result, package)
             save(build_organization_context(package, result), "PersonOrganization-Context")
+            record_resolution(result)
             return result
         except IncompleteCompletionError as error:
             if not _splittable(error):
@@ -274,6 +298,8 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
         task = {"phase": phase, "instructions": _PHASE_INSTRUCTIONS[phase],
                 "response_schema": _phase_schema(phase), **task}
         result = infer(_BATCH_SYSTEM_PROMPT, prefix + TASK_SEPARATOR + _json(task), name, validator)
+        if phase in {"Layout", "LayoutReview"}:
+            result = align_ids(result)
         validator(result)
         save(copy.deepcopy(result), name + "-Plan")
         return result
@@ -320,4 +346,5 @@ def organize_person_plan(package, cascade, subject, output_language, infer, save
         batch_size=ACTIVITY_BATCH_SIZE, organization_context=organization_context)
     validate_organization(plan, package)
     save(build_organization_context(package, plan), "PersonOrganization-FinalContext")
+    record_resolution(plan)
     return plan

@@ -13,14 +13,22 @@ ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', '
 BAIDU_QUERY_UNITS = 72
 
 
+class QueryLimitError(ValueError):
+    def __init__(self, provider, units, limit):
+        self.provider, self.units, self.limit = provider, units, limit
+        super().__init__(f'{provider.title()} query uses {units} units; shorten or split it to at most {limit} units')
+
+
 def search_constraints(config):
     """Expose the same limits used by payload validation to the decision model."""
     return dict(providers=config.providers, requests_per_new_query=len(config.providers),
+                search_enabled=config.max_search_requests > 0,
                 follow_up_requires_gap=True,
                 max_results_per_provider=config.max_results,
                 query_max_units=BAIDU_QUERY_UNITS if 'baidu' in config.providers else None,
                 query_unit_rule='U+4E00..U+9FFF counts 2; each other character counts 1',
-                strategy='All selected providers receive the same short question; split distinct questions.')
+                strategy=('Read shared candidates and finish without provider requests.' if not config.max_search_requests
+                          else 'All selected providers receive the same short question; split distinct questions.'))
 
 
 def request_payload(provider, query, config):
@@ -28,8 +36,9 @@ def request_payload(provider, query, config):
         raise ValueError('Query must be nonempty')
     start, end = config.publication_start, config.publication_end
     if provider == 'baidu':
-        if sum(2 if '\u4e00' <= c <= '\u9fff' else 1 for c in query) > BAIDU_QUERY_UNITS:
-            raise ValueError('Shorten or split query to Baidu 72-unit limit')
+        units = sum(2 if '\u4e00' <= c <= '\u9fff' else 1 for c in query)
+        if units > BAIDU_QUERY_UNITS:
+            raise QueryLimitError(provider, units, BAIDU_QUERY_UNITS)
         if bool(start) != bool(end):
             raise ValueError('Baidu requires both publication bounds')
         payload = dict(messages=[{'role':'user','content':query}], edition='standard',
@@ -105,10 +114,14 @@ def normalize(provider, response):
 
 
 class SearchTools:
-    def __init__(self, state, *, transport=None, fetcher=None):
+    def __init__(self, state, *, transport=None, fetcher=None, source_pool=None):
         self.state = state
         self.sources = SourceStore(state, fetcher)
         self.transport = transport or http_transport
+        self.source_pool = source_pool
+
+    def refresh_shared_sources(self):
+        return self.source_pool.refresh(self.state) if self.source_pool is not None else []
 
     def search(self, query):
         config = self.state.config
@@ -162,5 +175,7 @@ class SearchTools:
         started = time.monotonic()
         self.state.trace(dict(action='read_started',source=source,location=location or {}))
         result = self.sources.read(source, **(location or {}))
+        if self.source_pool is not None:
+            self.source_pool.publish(self.state)
         self.state.trace(dict(action='read_source',source=source,result=result,duration_seconds=round(time.monotonic()-started,3)))
         return result

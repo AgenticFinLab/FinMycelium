@@ -4,7 +4,50 @@ import copy
 from finmy.subject_graph.runner import _publication_timestamp
 
 from .state import write_json
-from .sources import SourceStore
+from .sources import SourceStore, document_is_usable
+
+
+class SourceSelectionError(ValueError):
+    """A repairable selection error, distinct from damaged evidence or offsets."""
+
+    def __init__(self, invalid, eligible):
+        self.invalid_source_ids = invalid
+        self.eligible_source_ids = eligible
+        first, reason = next(iter(invalid.items()))
+        if reason == 'unknown_source':
+            message = 'Unknown source ID: ' + first
+        elif reason == 'not_inspected':
+            message = 'Inspected source required: ' + first + '; remove this ID when finalizing'
+        else:
+            message = 'Source has no usable original body: ' + first
+        super().__init__(message)
+
+
+def source_selection_status(state, sid, version=None):
+    """Check inspection and usable original text; integrity failures remain fatal."""
+    entry = state.data['sources'].get(sid)
+    if entry is None:
+        return 'unknown_source'
+    version = version or entry.get('version')
+    ranges = [r for r in entry.get('read_ranges', []) if r.get('version') == version]
+    if not version or not ranges:
+        return 'not_inspected'
+    document = SourceStore(state).document(sid, version)
+    inspected = False
+    for row in ranges:
+        block, start, end = (row.get(key) for key in ('block', 'start', 'end'))
+        if (any(type(value) is not int for value in (block, start, end))
+                or not 0 <= block < len(document['blocks'])
+                or not 0 <= start <= end <= len(document['blocks'][block]['text'])):
+            raise ValueError('Invalid inspected source range: ' + sid)
+        inspected = inspected or end > start
+    if not inspected:
+        return 'not_inspected'
+    return None if document_is_usable(document) else 'unusable_body'
+
+
+def eligible_source_ids(state):
+    return [sid for sid in state.data['sources'] if source_selection_status(state, sid) is None]
 
 
 def _source_metadata(source, document, version):
@@ -23,6 +66,8 @@ def _source_metadata(source, document, version):
         metadata['published_at_raw'] = publication
     elif candidates:
         metadata['publication_candidates'] = candidates
+    if source.get('reused_from'):
+        metadata['reused_from'] = copy.deepcopy(source['reused_from'])
     return metadata
 
 
@@ -38,6 +83,8 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
         sid, version = selection['source_id'], selection['version']
         entry = state.data['sources'][sid]
         doc = store.document(sid, version)
+        if not document_is_usable(doc):
+            raise ValueError('Selected source has no usable original body: ' + sid)
         block, start, end = selection['block'], selection['start'], selection['end']
         if any(type(v) is not int for v in (block,start,end)) or not 0 <= block < len(doc['blocks']):
             raise ValueError('Invalid selection block')
@@ -120,16 +167,16 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     if not isinstance(source_ids, list) or any(not isinstance(s, str) for s in source_ids):
         raise ValueError('Finish needs source_ids: a list of inspected source IDs')
     source_ids = list(dict.fromkeys(source_ids))
+    invalid = {sid: status for sid in source_ids
+               if (status := source_selection_status(state, sid, (versions or {}).get(sid))) is not None}
+    if invalid:
+        raise SourceSelectionError(invalid, eligible_source_ids(state))
     store = SourceStore(state)
     documents, cleanup, duplicates, omitted, fingerprints = [], [], [], [], {}
     selected_versions, registry = {}, {}
     for sid in source_ids:
-        if sid not in state.data['sources']:
-            raise ValueError('Unknown source ID: ' + sid)
         entry = state.data['sources'][sid]
         version = (versions or {}).get(sid) or entry.get('version')
-        if not version or not any(r['version'] == version and r['end'] > r['start'] for r in entry.get('read_ranges', [])):
-            raise ValueError('Inspect this source before keeping it: ' + sid)
         document = store.document(sid, version)
         selected_versions[sid] = version
         blocks, removed = _clean_blocks(document)
@@ -165,10 +212,15 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     trace = state.run_dir / 'trace.jsonl'
     if trace.exists():
         import json
-        for line in trace.read_text(encoding='utf-8').splitlines():
-            event = json.loads(line)
-            if event.get('action') == 'provider_started' and event.get('query'):
-                queries.append(event['query'])
+        # JSONL records end at literal newlines. Unicode paragraph/line separators
+        # inside a saved source string are data, not additional record boundaries.
+        with trace.open(encoding='utf-8') as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                event = json.loads(line)
+                if event.get('action') == 'provider_started' and event.get('query'):
+                    queries.append(event['query'])
     record['retrieval_queries'] = list(dict.fromkeys(q for q in queries if q.strip()))
     record['complete_id'] = digest(record)
     return materialize_complete(state, record), record

@@ -403,7 +403,7 @@ def enrich_events(package, sources, config, save_dir, *, completion=None, progre
     repair_limit = options.get("max_repair_rounds_per_event", 1)
     if type(repair_limit) is not int or not 0 <= repair_limit <= 3:
         raise ValueError("event_followup.max_repair_rounds_per_event must be an integer in [0, 3]")
-    content_limit = options.get("max_content_length", 60000)
+    content_limit = options.get("max_content_length", 120000)
     if type(content_limit) is not int or content_limit < 1:
         raise ValueError("event_followup.max_content_length must be positive and finite")
     reconstruction = read_reconstruction(config)

@@ -21,7 +21,7 @@ class EnhancedEventFollowupTests(unittest.TestCase):
             "search_config": {"mode": "agent", "enhancement": {"providers": ["bocha", "baidu"]}},
             # These old collector settings must not block the shared algorithm.
             "subject_search": {"providers": ["legacy-does-not-support-exa"], "max_search_calls": 999},
-            "event_followup": {"max_search_calls": 6, "max_parse_calls": 3,
+            "event_followup": {"enabled": True, "max_search_calls": 6, "max_parse_calls": 3,
                                "max_search_model_calls": 9, "max_content_length": 60000},
         }
         self.tasks, self.requests, self.models = [], [], []

@@ -65,20 +65,33 @@ url_collector_config:
   selenium_wait_time: 5
 
 search_config:
+  # Discover person domains/storylines, then research each with the shared search agent.
+  storyline_discovery:
+    enabled: true
+    max_model_calls: 2  # Independent discovery ceiling; reported separately.
+    max_events: 8       # Candidate cap only; search budgets never delete candidates.
+  event_search:
+    # Per-event ceilings; remaining global capacity and cached originals can also be used.
+    max_search_requests: 12  # Both providers: up to six query rounds per event.
+    max_read_sources: 12
+    max_model_calls: 24      # Includes query/read decisions and native finish retries.
+    max_concurrent_events: 2
+    reuse_sources: true     # Other events inspect cached originals without downloading again.
   mode: agent  # Set simple to use the historical Bocha/Baidu collector.
   enhancement:
     allow_network: true
-    providers: [bocha]
+    providers: [bocha, baidu]
     lm_name: deepseek/deepseek-chat  # Independent search model; explicit, not inherited.
     generation_config:
       max_tokens: 4096
       temperature: 0
     max_results: 5
-    max_search_requests: 12
-    max_read_sources: 40
-    max_model_calls: 30
+    # Global initial-search ceilings, shared by all events (not per-event budgets).
+    max_search_requests: 96
+    max_read_sources: 96
+    max_model_calls: 192
     max_read_chars: 12000
-    max_builder_material_chars: 60000
+    max_builder_material_chars: 120000
     max_model_context_chars: 100000
     timeout: 120
   bocha_count: 15
@@ -100,13 +113,14 @@ pdf_collector_config:
   env_file: ".env"
 
 all_content_config:
-  max_content_length: 60000
+  max_content_length: 120000
   max_document_chars: 12000
 
-# Shared across all existing events, independently of initial acquisition.
+# Optional post-build enrichment; disabled for the initial event-search evaluation.
+# Its budget is independent of initial acquisition when explicitly enabled.
 event_followup:
-  enabled: true
-  max_content_length: 60000
+  enabled: false
+  max_content_length: 120000
   max_document_chars: 12000
   max_search_calls: 12
   max_parse_calls: 40

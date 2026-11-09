@@ -24,7 +24,7 @@ def configuration(output):
         "subject_search": {"providers": ["bocha"], "max_search_calls": 6,
             "max_parse_calls": 8, "max_followup_queries": 0,
             "max_decision_followup_queries": 0},
-        "event_followup": {"max_search_calls": 2, "max_parse_calls": 2,
+        "event_followup": {"enabled": True, "max_search_calls": 2, "max_parse_calls": 2,
                            "queries_per_event": 1, "max_content_length": 60000,
                            "max_model_calls": 24},
         "builder_config": {"builder_type": "SparseRagBuilder",

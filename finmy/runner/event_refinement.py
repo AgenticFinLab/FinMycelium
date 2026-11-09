@@ -153,8 +153,8 @@ def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
               "initial_builder_directory": None, "selected_builder_directory": None,
               "refinement_attempted": False, "max_refinement_builds": 0,
               "supplementary_model_calls": 0, "semantic_improvement_verified": False,
-              "budgets": {"initial_content_limit": (config.get("all_content_config") or {}).get("max_content_length", 60000),
-                          "supplementary_content_limit": options.get("max_content_length", 60000),
+              "budgets": {"initial_content_limit": (config.get("all_content_config") or {}).get("max_content_length", 120000),
+                          "supplementary_content_limit": options.get("max_content_length", 120000),
                           "supplementary_search_model_call_limit": options.get("max_search_model_calls", 30),
                           "supplementary_model_call_limit": options.get("max_model_calls", 24)}}
     _save(target / "initial_builder_input_contents.json", contents)

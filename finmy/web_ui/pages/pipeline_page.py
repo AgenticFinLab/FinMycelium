@@ -17,7 +17,7 @@ from finmy.web_ui.utils.validators import validate_analysis_inputs
 from finmy.web_ui.services.reconstruction_service import ReconstructionService
 from finmy.web_ui.state import SessionStateManager
 from finmy.web_ui.utils.formatters import format_timestamp
-from finmy.web_ui.components.subject_scope_form import render_subject_scope
+from finmy.web_ui.components.subject_scope_form import render_subject_scope, person_input
 from finmy.web_ui.utils.history_loader import detect_build_mode
 
 
@@ -59,56 +59,42 @@ class PipelinePage:
         run_config = render_subject_scope(config)
         st.session_state.reconstruction_run_config = run_config
         subject_mode = (run_config.get("builder_config", {}).get("reconstruction", {}).get("mode", "event")
-                        if run_config is not None else "person")
-        
-        # Main input area
-        prev_text = st.session_state.get("main_input", "")
-        visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
-        dynamic_height = min(600, max(100, visible_lines * 24))
-        
-        main_input = st.text_area(
-            "Event Description" if subject_mode == "event" else "Description",
-            value=prev_text,
-            placeholder=(
-                "Enter a detailed description of the event case, including key details, "
-                "suspicious activities, involved parties, timeline, and any other relevant information..."
-                if subject_mode == "event" else
-                "Describe the subject's documented activities and experiences to reconstruct. "
-                "Include any desired period or topic here, e.g. Warren Buffett's activities during 2022–2023."
-            ),
-            height="content",
-            key=f"main_input_{dynamic_height}",
-            help="Provide a comprehensive description for better analysis results",
-            disabled=st.session_state.is_processing_blocked,
-        )
-        
-        st.session_state.main_input = main_input
-        
-        # Input method selection
-        input_methods = st.multiselect(
-            "Select Additional Input Methods",
-            options=["Keywords", "Structured Data"],
-            default=["Keywords", "Structured Data"],
-            help="Supplement your case description with additional data",
-            disabled=st.session_state.is_processing_blocked,
-        )
-        
-        # Keyword input
-        if "Keywords" in input_methods:
-            KeywordInput.render()
-        
-        # Structured data upload
-        if "Structured Data" in input_methods:
-            StructuredDataUpload.render()
+                        if run_config is not None else st.session_state.get("reconstruction_input_mode", "person"))
+        if subject_mode == "person":
+            # The two visible fields own this request. Never reuse a previously
+            # entered event description, keywords or uploaded source table.
+            st.session_state.main_input = person_input(run_config) if run_config is not None else ""
+            st.session_state.keywords = []
+            st.session_state.structured_data = None
+            st.session_state.uploaded_file_name = None
+        else:
+            prev_text = st.session_state.get("main_input", "")
+            visible_lines = max(prev_text.count("\n") + 1, len(prev_text) // 60 + 1)
+            dynamic_height = min(600, max(100, visible_lines * 24))
+            st.session_state.main_input = st.text_area(
+                "Event Description", value=prev_text,
+                placeholder="Enter a detailed description of the event case, including involved parties and timeline...",
+                height="content", key=f"main_input_{dynamic_height}",
+                help="Provide a comprehensive description for better analysis results",
+                disabled=st.session_state.is_processing_blocked)
+            input_methods = st.multiselect(
+                "Select Additional Input Methods", options=["Keywords", "Structured Data"],
+                default=["Keywords", "Structured Data"],
+                help="Supplement your case description with additional data",
+                disabled=st.session_state.is_processing_blocked)
+            if "Keywords" in input_methods:
+                KeywordInput.render()
+            if "Structured Data" in input_methods:
+                StructuredDataUpload.render()
         
         st.markdown("---")
         
         # Analysis controls
-        should_start = AnalysisControls.render(validate_analysis_inputs)
+        should_start = AnalysisControls.render(validate_analysis_inputs, disabled=run_config is None)
         
         if should_start:
             if run_config is None:
-                st.error("Enter a person name before starting.")
+                st.error("Enter a person name and a valid period before starting.")
             else:
                 PipelinePage._run_analysis()
         
@@ -126,7 +112,7 @@ class PipelinePage:
         """Execute the event reconstruction pipeline."""
         if ("reconstruction_run_config" in st.session_state
                 and st.session_state.reconstruction_run_config is None):
-            st.error("Enter a person name before starting.")
+            st.error("Enter a person name and a valid period before starting.")
             return
         # Check if results already exist
         if (
@@ -153,11 +139,15 @@ class PipelinePage:
         
         try:
             # Prepare input data
+            run_config = st.session_state.get("reconstruction_run_config") or st.session_state.config
+            person_mode = run_config.get("builder_config", {}).get("reconstruction", {}).get("mode") == "person"
             analysis_inputs = {
                 "main_input": st.session_state.get("main_input", ""),
                 "keywords": st.session_state.get("keywords", []),
                 "structured_data": st.session_state.get("structured_data", None),
             }
+            if person_mode:
+                analysis_inputs = {"main_input": person_input(run_config), "keywords": [], "structured_data": None}
             
             # Validate inputs
             if not analysis_inputs["main_input"]:
@@ -176,7 +166,6 @@ class PipelinePage:
                 st.write(f"**{format_timestamp()}** - Starting reconstruction...")
                 
                 # Run reconstruction service
-                run_config = st.session_state.get("reconstruction_run_config") or st.session_state.config
                 reconstruction_service = ReconstructionService(run_config)
                 results = reconstruction_service.run_reconstruction(
                     main_input=analysis_inputs["main_input"],

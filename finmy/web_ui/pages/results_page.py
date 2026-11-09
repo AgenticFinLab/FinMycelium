@@ -38,6 +38,7 @@ class ResultsPage:
                 st.rerun()
             return
 
+        ResultsPage._render_search_coverage()
         build_mode = st.session_state.get("build_mode")
 
         if st.session_state.analysis_results.get("schema_version") == "person-epg-3.0":
@@ -50,6 +51,20 @@ class ResultsPage:
             ResultsPage._render_class_results()
         else:
             st.error(f"Unknown build mode: {build_mode}")
+
+    @staticmethod
+    def _render_search_coverage():
+        """Show acquisition gaps without adding fields to the native graph schema."""
+        coverage = st.session_state.get("search_coverage")
+        if not coverage or coverage.get("search_complete", True):
+            return
+        unresolved = coverage.get("unresolved_event_labels") or coverage.get("unresolved_events", [])
+        suffix = f" Unresolved storylines: {', '.join(unresolved)}." if unresolved else ""
+        st.warning("Search coverage is partial. This graph uses the retained sources; "
+                   "some activities may be missing." + suffix)
+        st.download_button("Download search coverage report",
+                           data=json.dumps(coverage, ensure_ascii=False, indent=2),
+                           file_name="search_coverage_report.json", mime="application/json")
 
     @staticmethod
     def _render_person_epg_results():
@@ -160,6 +175,19 @@ class ResultsPage:
                     )
                 else:
                     st.session_state.save_builder_dir_path = result_path
+
+                # A historical graph must not inherit another run's coverage banner.
+                st.session_state.search_coverage = None
+                coverage_path = os.path.join(st.session_state.save_builder_dir_path,
+                                             "search_coverage_report.json")
+                if os.path.isfile(coverage_path):
+                    try:
+                        with open(coverage_path, encoding="utf-8") as handle:
+                            coverage = json.load(handle)
+                        if isinstance(coverage, dict):
+                            st.session_state.search_coverage = coverage
+                    except (OSError, ValueError):
+                        logging.warning("Could not load search coverage report: %s", coverage_path)
 
                 # Detect build mode from result structure
                 build_mode = detect_build_mode(result_data)
