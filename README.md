@@ -117,7 +117,7 @@ python -m finmy.workbench --port 8537
 ```
 
 Open `http://localhost:8537` for data management, search and review.
-Builder execution uses a separate entry.
+Builder tasks use confirmed inputs and a separate build-only worker.
 
 ---
 

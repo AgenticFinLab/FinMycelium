@@ -37,6 +37,7 @@ setuptools.setup(
     install_requires=get_requirements(),
     extras_require={"tests": ["pytest"]},
     include_package_data=True,
+    package_data={"finmy.workbench": ["style.css"]},
     options={"bdist_wheel": {"python_tag": "py311"}},
     classifiers=[
         "Development Status :: 3 - Alpha",

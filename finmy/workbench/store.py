@@ -40,6 +40,8 @@ class Store:
                     body TEXT, sha256 TEXT, parent_id TEXT, note TEXT, input_hash TEXT, created TEXT);
                 CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id),
                     kind TEXT, target TEXT, decision TEXT, reviewer TEXT, note TEXT, created TEXT);
+                CREATE TABLE IF NOT EXISTS handoffs (id TEXT PRIMARY KEY, event_id TEXT NOT NULL,
+                    input_hash TEXT NOT NULL, body TEXT NOT NULL, review_id TEXT NOT NULL, created TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, body TEXT, status TEXT, created TEXT);
                 CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT);
             """)
@@ -181,8 +183,24 @@ class Store:
         if decision == "approved" and kind == "graph":
             if self.graphs(event_id)[0]["input_hash"] != digest(self.input_bundle(event_id)):
                 raise ValueError("图对应的输入已变化，请基于当前输入重新导入或构建")
+        if decision == "approved" and kind != "scope" and self.decision(event_id, "scope") != "approved":
+            raise ValueError("请先确认研究范围")
+        if decision == "approved" and kind == "graph" and self.decision(event_id, "evidence") != "approved":
+            raise ValueError("请先审核当前资料与输入")
         with self.connection() as db:
-            db.execute("INSERT INTO reviews VALUES(?,?,?,?,?,?,?,?)", (identifier("REV-"), event_id, kind, current, decision, reviewer.strip(), note.strip(), now()))
+            review_id = identifier("REV-")
+            db.execute("INSERT INTO reviews VALUES(?,?,?,?,?,?,?,?)", (review_id, event_id, kind, current, decision, reviewer.strip(), note.strip(), now()))
+            if kind == "evidence" and decision == "approved":
+                bundle = self.input_bundle(event_id)
+                if digest(bundle) != current:
+                    raise ValueError("资料已更新，请重新审核")
+                db.execute("INSERT INTO handoffs VALUES(?,?,?,?,?,?)",
+                           (identifier("INPUT-"), event_id, current, encoded(bundle), review_id, now()))
+
+    def handoffs(self, event_id):
+        with self.connection() as db:
+            return [{**dict(r), "body": json.loads(r["body"])} for r in db.execute(
+                "SELECT * FROM handoffs WHERE event_id=? ORDER BY created DESC,id", (event_id,))]
 
     def decision(self, event_id, kind):
         try:
@@ -191,8 +209,13 @@ class Store:
             return None
         return next((r["decision"] for r in self.reviews(event_id) if r["kind"] == kind and r["target"] == target), None)
 
+    def accepted(self, event_id):
+        return all(self.decision(event_id, kind) == "approved" for kind in ("scope", "evidence", "graph"))
+
     def status(self, event_id):
         if self.graphs(event_id):
+            if self.decision(event_id, "graph") == "approved" and not self.accepted(event_id):
+                return "待审核资料" if self.decision(event_id, "scope") == "approved" else "待整理"
             return {"approved": "已收录", "returned": "待修订", "issue": "待修订"}.get(self.decision(event_id, "graph"), "待审核图")
         if self.input_bundle(event_id)["samples"]:
             return "待构建" if self.decision(event_id, "evidence") == "approved" else "待审核资料"
@@ -269,16 +292,29 @@ class Store:
             for row in rows:
                 eid = row["event_id"]
                 files = {"event.json": row, "input.json": self.input_bundle(eid), "sources.json": self.sources(eid),
-                         "reviews.json": self.reviews(eid)}
+                         "reviews.json": self.reviews(eid), "handoffs.json": self.handoffs(eid)}
                 with self.connection() as db:
                     files["event_history.json"] = [{**dict(r), "body": json.loads(r["body"])} for r in db.execute(
                         "SELECT revision,body,updated FROM event_history WHERE event_id=? ORDER BY revision", (eid,))]
                 graphs = self.graphs(eid)
                 for graph in graphs:
                     files[f"graphs/{graph['id']}.json"] = graph
+                from finmy.search.control import SearchController
+                searches = SearchController(self.root / "search")
+                files["search_runs.json"] = []
+                for tid in searches.tasks():
+                    data = searches.inspect(tid)
+                    if data["task"].get("event_id") == eid:
+                        files["search_runs.json"].append({"task_id": tid, **{k:data[k] for k in (
+                            "task", "config", "status", "usage", "code_sha256", "input_sha256", "selection") if k in data}})
                 files["runs.json"] = [{**job, "body": {**job["body"], "events": [e for e in job["body"]["events"] if e["event"]["event_id"] == eid]}}
                                      for job in self.jobs() if any(e["event"]["event_id"] == eid for e in job["body"]["events"])]
-                if self.decision(eid, "graph") == "approved":
+                with self.connection() as db:
+                    present = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='build_tasks'").fetchone()
+                    if present:
+                        files["build_runs.json"] = [{**dict(r), "body": json.loads(r["body"])} for r in db.execute(
+                            "SELECT * FROM build_tasks WHERE event_id=? ORDER BY created,id", (eid,))]
+                if self.accepted(eid):
                     files["FinalEPG.json"] = graphs[0]["body"]
                 for filename, payload in files.items():
                     content = encoded(payload).encode()
