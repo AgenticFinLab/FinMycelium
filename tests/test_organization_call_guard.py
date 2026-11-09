@@ -1,4 +1,4 @@
-"""The actual transaction-detail failure repairs through old or new validators."""
+"""Transaction-detail failures receive precise diagnostics without changing facts."""
 import copy
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ from sparse_test_dependencies import install_missing_lmbase_containers
 install_missing_lmbase_containers()
 
 from finmy.builder.sparse_build.main_build import SparseRagBuilder
-from finmy.builder.sparse_build.organization_batches import _validate_assignments
+from finmy.builder.sparse_build.organization_batches import _memberships
 from finmy.builder.sparse_build.organization_call_guard import (
     REFERENCE_SEPARATOR, guard_organization_call,
 )
@@ -51,7 +51,7 @@ class OrganizationCallGuardTests(unittest.TestCase):
             "PersonOrganization-Assignments-001", validator=validator)
 
     def validate(self, value):
-        _validate_assignments(value, self.case["task"]["assigned_ids"],
+        _memberships(value["memberships"], set(self.case["task"]["assigned_ids"]),
                               self.case["task"]["layout"], self.case["request"]["facts"])
 
     def corrected_response(self):

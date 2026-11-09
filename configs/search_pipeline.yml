@@ -72,12 +72,12 @@ search_config:
     max_events: 8       # Candidate cap only; search budgets never delete candidates.
   event_search:
     # Per-event ceilings; remaining global capacity and cached originals can also be used.
-    max_search_requests: 12  # Both providers: up to six query rounds per event.
+    max_search_requests: 12  # Provider requests shared across each event's queries.
     max_read_sources: 12
     max_model_calls: 24      # Includes query/read decisions and native finish retries.
     max_concurrent_events: 2
     reuse_sources: true     # Other events inspect cached originals without downloading again.
-  mode: agent  # Set simple to use the historical Bocha/Baidu collector.
+  # Shared search agent is the only acquisition algorithm.
   enhancement:
     early_stop_multiplier: 4  # Repeated no-progress/invalid-action threshold: 3 -> 12.
     source_languages: [en, zh]  # English first, Chinese fallback; exclude other bodies.
@@ -96,15 +96,6 @@ search_config:
     max_builder_material_chars: 120000
     max_model_context_chars: 100000
     timeout: 120
-  bocha_count: 15
-  baidu_count: 15
-  merge_strategy: interleave
-  quality_filter:
-    enabled: true
-    min_text_chars: 300
-    dedupe_url: true
-    reject_search_pages: true
-    reject_auth_pages: true
 
 pdf_collector_config:
   output_dir: "EXPERIMENT/uTEST/Pipline/input/pdf"

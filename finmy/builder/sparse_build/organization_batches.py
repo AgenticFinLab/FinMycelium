@@ -155,36 +155,6 @@ def _splittable(error):
             and not error.refusal and not error.tool_calls)
 
 
-def _validate_assignments(payload, ids, layout, package):
-    """Read-only validation of a saved pre-v6 placement artifact."""
-    _memberships(payload['memberships'], set(ids), layout, package, phase='Assignments')
-    assigned = {r['activity_id'] for r in payload['memberships']}
-    unassigned = {r['activity_id'] for r in payload['unassigned_reasons']}
-    if assigned & unassigned or assigned | unassigned != set(ids):
-        raise ValueError('Saved assignments must account for every Activity')
-
-
-def _validate_relevance(payload, ids, layout, package):
-    """Validate imported relevance rows; no legacy executor is retained."""
-    rows = payload['occurrence_relevance']
-    if {r['occurrence_id'] for r in rows} != set(ids) or len(rows) != len(ids):
-        raise ValueError('Saved relevance must cover every occurrence exactly once')
-    pending = set(payload.get('pending_occurrence_ids', []))
-    for row in rows:
-        value = row['subject_relevance']
-        if row['occurrence_id'] in pending:
-            if not pending_relevance(value):
-                raise ValueError('Pending relevance must be execution metadata')
-        elif not Draft202012Validator(_VF).is_valid(value) or not value.get('evidence_source_contents'):
-            # Old diagnostic fixtures can contain only reference tables. Their
-            # source grounding is checked when importing the complete checkpoint.
-            raise ValueError('Saved relevance needs source quotations')
-    backgrounds = payload.get('background_occurrence_ids', [])
-    if not set(backgrounds) <= set(ids):
-        raise ValueError('Unknown background occurrence')
-    _memberships(payload['memberships'], {'C:' + oid for oid in backgrounds}, layout, package, phase='Relevance')
-
-
 def _supported_field(value, package):
     if not Draft202012Validator(_VF).is_valid(value) or not value['evidence_source_contents']:
         return False

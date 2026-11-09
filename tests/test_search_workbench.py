@@ -9,6 +9,13 @@ APP=Path(__file__).resolve().parents[1]/'finmy/workbench/app.py'
 
 def find(items,label):return next(x for x in items if x.label==label)
 
+def evidence_model(context):
+    if not context['prior_actions']:
+        return {'action': 'search', 'query': 'Deal closing'}
+    if len(context['prior_actions']) == 1:
+        return {'action': 'read_source', 'source': context['sources'][0]['source_id']}
+    return {'action': 'finish', 'source_ids': context['eligible_source_ids'], 'gaps': [], 'reason': 'supported'}
+
 def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
     monkeypatch.setenv('FINMY_WORKBENCH_HOME',str(tmp_path))
     def blocked(*args):raise AssertionError('Unexpected network')
@@ -17,13 +24,13 @@ def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
     def transport(*args):
         calls.append(1)
         return {'data':{'webPages':{'value':[{'url':'https://example.org/deal','name':'Announcement'}]}}}
-    controller=SearchController(tmp_path/'search',transport=transport,
+    controller=SearchController(tmp_path/'search',transport=transport,model=evidence_model,
         fetcher=lambda u:(b'The deal closed after approval.','txt','utf-8'))
     monkeypatch.setattr(search_page,'get_controller',lambda root:controller)
     app=AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value('检索').run()
     assert not app.exception
-    find(app.selectbox,'检索模式').set_value('simple')
+    assert not any(widget.label == '检索模式' for widget in app.selectbox)
     find(app.text_input,'研究对象').set_value('Deal')
     find(app.text_area,'研究要求').set_value('Trace the closing')
     find(app.button,'保存检索任务').click().run()
@@ -36,7 +43,7 @@ def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
     assert not app.exception
     assert controller.inspect(tid)['status']=='finished'
     assert calls==[1]
-    assert controller.inspect(tid)['usage']['model']==0
+    assert controller.inspect(tid)['usage']['model']==3
     assert any(x.value=='资料与交接' for x in app.subheader)
     # The source-preview form has another input with the same visible label.
     # Reassembly reads the separately keyed existing-handoff budget.
@@ -46,11 +53,11 @@ def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
     assert controller.inspect(tid)['builder_input']['samples']==[]
     assert controller.inspect(tid)['selection']['max_material_chars']==1
     assert controller.inspect(tid)['selection']['omitted']
-    # Legacy passage manifests can restore excluded passages without new calls.
+    # Reassembly restores excluded passages without new search or model calls.
     controller.reassemble(tid,60000)
     assert controller.inspect(tid)['builder_input']['samples']
     assert calls==[1]
-    assert controller.inspect(tid)['usage']['model']==0
+    assert controller.inspect(tid)['usage']['model']==3
 
 def test_invalid_form_does_not_create_task(tmp_path,monkeypatch):
     monkeypatch.setenv('FINMY_WORKBENCH_HOME',str(tmp_path))
@@ -70,8 +77,8 @@ def test_adopt_preserves_review_and_deduplicates(tmp_path):
     from finmy.workbench.search_bridge import adopt_sources
     store=Store(tmp_path/'workbench')
     eid=store.create_events([{'event_name_en':'Deal'}])[0]
-    c=SearchController(tmp_path/'search',transport=lambda *a:{'data':{'webPages':{'value':[{'url':'https://example.org/a'}]}}},fetcher=lambda u:(b'Transaction closed.','txt','utf-8'))
-    tid=c.create(dict(target_type='event',target_name='Deal',query_text='Closing',event_id=eid),{},'simple')
+    c=SearchController(tmp_path/'search',model=evidence_model,transport=lambda *a:{'data':{'webPages':{'value':[{'url':'https://example.org/a'}]}}},fetcher=lambda u:(b'Transaction closed.','txt','utf-8'))
+    tid=c.create(dict(target_type='event',target_name='Deal',query_text='Closing',event_id=eid),{})
     c.start(tid);c.threads[tid].join(5)
     assert adopt_sources(c,tid,store)==1
     assert adopt_sources(c,tid,store)==0

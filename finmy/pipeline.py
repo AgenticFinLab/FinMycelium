@@ -16,6 +16,7 @@ framework for financial data processing and knowledge extraction.
 """
 
 import os
+import copy
 import uuid
 import logging
 from datetime import datetime
@@ -790,6 +791,22 @@ class FinmyPipeline:
             query_text=query_text,
             key_words=key_words,
         )
+
+        # Agent handoff metadata uses packed source positions. Bind it to the
+        # actual raw IDs before matching creates samples referencing those IDs.
+        source_registry = self.config.get("source_registry")
+        if isinstance(source_registry, dict):
+            user_query_input.extras = dict(user_query_input.extras or {})
+            user_query_input.extras["source_registry"] = {
+                raw.raw_data_id: copy.deepcopy(source_registry[f"saved_{index}"])
+                for index, raw in enumerate(raw_data_records)
+                if isinstance(source_registry.get(f"saved_{index}"), dict)
+            }
+            missing = [raw.raw_data_id for raw in raw_data_records
+                       if raw.raw_data_id not in user_query_input.extras["source_registry"]]
+            if missing:
+                user_query_input.extras["source_registry_missing"] = missing
+                self.logger.warning("Source metadata missing for %d input(s); preserving their text", len(missing))
 
         # Step 4: Summarize user query
         summarized_query = self.summarize_user_query(user_query_input)

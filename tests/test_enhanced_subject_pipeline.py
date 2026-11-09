@@ -1,6 +1,6 @@
 """Offline CLI integration from shared acquisition through native subject outputs.
 
-Only acquisition and model-produced graph changes are substituted. Relevance
+Only acquisition and model-produced graph changes are substituted. Source
 normalization, character allocation, event routing, validation, publishing and
 the final person HTML renderer run normally.
 """
@@ -36,7 +36,6 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                     "lm_name": "ark/explicit-search-model"}},
                 "all_content_config": {"max_content_length": 60000,
                                        "max_document_chars": 12000},
-                "relevance_filter": {"enabled": False},
                 "event_followup": {"enabled": followup, "max_content_length": 60000},
                 "builder_config": {"builder_type": "SparseRagBuilder" if mode == "person" else "AgentEventBuilder",
                     "lm_name": "deepseek/explicit-builder-model",
@@ -50,10 +49,7 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                 "documents": copy.deepcopy(self.documents)}
 
     def forbid_legacy(self):
-        for target in ("finmy.runner.scoped_search.plan_search",
-                       "finmy.runner.subject_search.collect_subject_sources",
-                       "finmy.runner.decision_followup.collect_decision_followup",
-                       "finmy.runner.search_pipeline_runner._create_pipeline"):
+        for target in ("finmy.runner.search_pipeline_runner._create_pipeline",):
             p = patch(target, side_effect=AssertionError("Unexpected legacy route: " + target))
             p.start()
             self.addCleanup(p.stop)
@@ -160,10 +156,11 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
         config["subject_search"] = {"enabled": False}
         with patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", self.acquired), \
              patch("finmy.subject_graph.runner.build_from_contents", return_value=({}, "native")) as build, \
-             patch("finmy.runner.event_refinement.build_with_draft_event_followup") as followup:
+             patch("finmy.runner.event_refinement.build_with_draft_event_followup",
+                   return_value=({}, "native")) as followup:
             run_search_pipeline(config, self.query, [], self.root)
-        build.assert_called_once()
-        followup.assert_not_called()
+        build.assert_not_called()
+        followup.assert_called_once()
         self.assertEqual(len(self.calls), 1)
 
     def test_budget_exhaustion_after_real_allocation_never_builds(self):
@@ -233,33 +230,14 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
         self.assertIn(DETAIL, (final_dir / "FinalPersonEPG.html").read_text())
         self.assertEqual(config, original_config)
 
-    def test_simple_subject_mode_retains_scoped_collector_and_native_builder(self):
+    def test_old_simple_and_disabled_flags_use_agent_and_native_builder(self):
         config = self.config()
-        config["search_config"] = {"mode": "simple"}
-        subject = config["builder_config"]["reconstruction"]["subject"]
-        subject.update(coverage_start="2022", coverage_end="2023")
-        with patch("finmy.runner.subject_search.collect_subject_sources", return_value=self.documents) as collect, \
-             patch("finmy.runner.decision_followup.collect_decision_followup", return_value=[]) as decisions, \
-             patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources") as enhanced, \
+        config["search_config"] = {"mode": "simple", "enabled": False}
+        config["subject_search"] = {"enabled": False}
+        with patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", self.acquired), \
              patch("finmy.subject_graph.runner.build_from_contents", return_value=({}, "native")) as build:
             result = run_search_pipeline(config, self.query, self.keywords, self.root)
-        collect.assert_called_once()
-        decisions.assert_called_once()
-        enhanced.assert_not_called()
-        build.assert_called_once()
-        self.assertEqual(result["builder_save_dir"], "native")
-
-    def test_simple_company_search_never_runs_personal_investment_followup(self):
-        config = self.config(mode="company")
-        config["search_config"] = {"mode": "simple"}
-        config["builder_config"]["reconstruction"]["subject"].update(
-            coverage_start="2022", coverage_end="2023")
-        with patch("finmy.runner.subject_search.collect_subject_sources", return_value=self.documents) as collect, \
-             patch("finmy.runner.decision_followup.collect_decision_followup") as decisions, \
-             patch("finmy.subject_graph.runner.build_from_contents", return_value=({}, "native")) as build:
-            result = run_search_pipeline(config, self.query, self.keywords, self.root)
-        collect.assert_called_once()
-        decisions.assert_not_called()
+        self.assertEqual(len(self.calls), 1)
         build.assert_called_once()
         self.assertEqual(result["builder_save_dir"], "native")
 

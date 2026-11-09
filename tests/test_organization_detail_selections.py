@@ -1,19 +1,14 @@
-"""Detail projection IDs stay local to immutable facts, including during retry."""
+"""Detail projection IDs stay local to immutable facts."""
 
 import copy
-import json
-from pathlib import Path
-import tempfile
-from types import SimpleNamespace
 import unittest
 
 from sparse_test_dependencies import install_missing_lmbase_containers
 
 install_missing_lmbase_containers()
 
-from finmy.builder.sparse_build.main_build import SparseRagBuilder
 from finmy.builder.sparse_build.organization_batches import (
-    _validate_assignments, _validate_relevance, organize_person_plan,
+    _memberships, organize_person_plan,
 )
 from finmy.builder.sparse_build.organization_details import (
     detail_index_catalog, validate_detail_selections,
@@ -24,22 +19,6 @@ from finmy.builder.sparse_build.person_organization import (
 )
 from test_sparse_organization_batches import OrganizationResponses, many_facts
 from test_sparse_person_organization import facts, plan, vf
-
-
-class Replies:
-    def __init__(self, values):
-        self.values = list(values)
-        self.calls = []
-
-    def run(self, infer_input=None, **kwargs):
-        self.calls.append(infer_input)
-        response = json.dumps(self.values.pop(0))
-        return SimpleNamespace(
-            response=response,
-            cost=SimpleNamespace(prompt_tokens=20, completion_tokens=10),
-            extras={"finish_reason": "stop"},
-            to_dict=lambda: {"response": response},
-        )
 
 
 class OrganizationDetailSelectionsTest(unittest.TestCase):
@@ -77,7 +56,7 @@ class OrganizationDetailSelectionsTest(unittest.TestCase):
         ]
         before = copy.deepcopy(rows)
         with self.assertRaises(OrganizationValidationError) as caught:
-            validate_detail_selections(rows, catalog, phase="Assignments", assigned_ids=["A1", "T1"])
+            validate_detail_selections(rows, catalog, phase="Placement", assigned_ids=["A1", "T1"])
         violations = caught.exception.report["violations"]
         self.assertEqual([row["path"] for row in violations], [
             "memberships[0].detail_indices[0]", "memberships[0].detail_indices[1]",
@@ -103,7 +82,7 @@ class OrganizationDetailSelectionsTest(unittest.TestCase):
             {"event_id": "E1", "activity_id": "T1", "detail_indices": []},
         ]
         before = copy.deepcopy(rows)
-        validate_detail_selections(rows, detail_index_catalog(self.catalog_package()), phase="Assignments")
+        validate_detail_selections(rows, detail_index_catalog(self.catalog_package()), phase="Placement")
         self.assertEqual(rows, before)
 
     def test_real_transaction_adapter_does_not_make_transaction_details_selectable(self):
@@ -124,11 +103,11 @@ class OrganizationDetailSelectionsTest(unittest.TestCase):
         self.assertEqual(organization_request(package, {"stages": []}, {})["available_detail_indices"][aid], [])
         with self.assertRaises(OrganizationValidationError) as caught:
             validate_detail_selections(
-                [{"event_id": "E", "activity_id": aid, "detail_indices": [0]}], catalog, phase="Assignments")
+                [{"event_id": "E", "activity_id": aid, "detail_indices": [0]}], catalog, phase="Placement")
         self.assertEqual(caught.exception.report["violations"][0]["allowed_detail_indices"], [])
         self.assertEqual(graph, before)
 
-    def test_new_background_relevance_rejects_nonexistent_detail(self):
+    def test_background_membership_rejects_nonexistent_detail(self):
         package = facts()
         before = copy.deepcopy(package)
         layout = {name: copy.deepcopy(plan()[name]) for name in ("domains", "events", "stages")}
@@ -139,12 +118,12 @@ class OrganizationDetailSelectionsTest(unittest.TestCase):
             "occurrence_issues": [],
         }
         with self.assertRaises(OrganizationValidationError) as caught:
-            _validate_relevance(value, ["O"], layout, package)
+            _memberships(value["memberships"], {"C:O"}, layout, package)
         violation = caught.exception.report["violations"][0]
         self.assertEqual(violation["activity_id"], "C:O")
         self.assertEqual(violation["allowed_detail_indices"], [])
         self.assertEqual(violation["invalid_detail_index"], 0)
-        self.assertEqual(caught.exception.report["phase"], "Relevance")
+        self.assertEqual(caught.exception.report["phase"], "Placement")
         self.assertEqual(package, before)
         self.assertEqual(value["memberships"][0]["detail_indices"], [0])
 
@@ -160,7 +139,7 @@ class OrganizationDetailSelectionsTest(unittest.TestCase):
         self.assertEqual(package, before)
         self.assertEqual(proposal["memberships"][0]["detail_indices"], [7])
 
-    def test_request_and_each_assignment_task_expose_actual_catalog(self):
+    def test_request_and_each_placement_task_expose_actual_catalog(self):
         package = many_facts()
         package["activity_detail"] = [row for row in package["activity_detail"] if row["activity_id"] != "A2"]
         package["activity_detail"].append({"activity_id": "A1", "detail_index": 4, "value": "Another detail"})
@@ -180,67 +159,6 @@ class OrganizationDetailSelectionsTest(unittest.TestCase):
             self.assertEqual(call['request']['available_detail_indices'], {aid: expected[aid] for aid in ids})
             self.assertEqual(set(call['request']['available_detail_refs']), ids)
         self.assertEqual(package, before)
-
-    def retry_fixture(self, directory, responses):
-        package = facts()
-        package["activity_detail"].append({**copy.deepcopy(package["activity_detail"][0]), "detail_index": 4})
-        layout = {name: copy.deepcopy(plan()[name]) for name in ("domains", "events", "stages")}
-        request = organization_request(package, {"stages": []}, {"name": "Example person"})
-        base = json.dumps(request) + "\n\nBATCH TASK:\n" + json.dumps({
-            "phase": "Assignments", "assigned_ids": ["A"], "layout": layout,
-            "available_detail_indices": detail_index_catalog(package, ["A"]),
-        })
-        builder = SparseRagBuilder.__new__(SparseRagBuilder)
-        builder.build_config = {"sparse_builder_config": {"max_json_attempts": 3, "max_calls": 10}}
-        builder.save_dir = directory
-        builder.agents_lm = Replies(responses)
-        return builder, package, layout, base
-
-    def test_assignment_retry_gets_all_legal_values_then_accepts_corrected_selection(self):
-        bad = {"memberships": [{"event_id": "E", "activity_id": "A", "stage_id": "S", "detail_indices": [1, 3]}],
-               "unassigned_reasons": []}
-        good = copy.deepcopy(bad)
-        good["memberships"][0]["detail_indices"] = [4, 0]
-        with tempfile.TemporaryDirectory() as directory:
-            builder, package, layout, base = self.retry_fixture(directory, [bad, good])
-            before = copy.deepcopy(package)
-            result = builder._infer_and_parse_json(
-                "PersonOrganization", "Return JSON.", base, {}, "PersonOrganization-Assignments-001",
-                validator=lambda value: _validate_assignments(value, ["A"], layout, package))
-            self.assertEqual(result, good)
-            self.assertEqual(package, before)
-            self.assertEqual(len(builder.agents_lm.calls), 2)
-            retry = builder.agents_lm.calls[1].user_msg
-            self.assertTrue(retry.startswith(base))
-            self.assertIn("unknown_activity_detail", retry)
-            self.assertIn("memberships[0].detail_indices[1]", retry)
-            self.assertIn('"allowed_detail_indices":[0,4]', retry)
-            self.assertIn("previous_candidate", retry)
-            self.assertNotIn("invalid or truncated JSON", retry)
-            report = json.loads(Path(directory, "PersonOrganizationValidationErrors.json").read_text())
-            self.assertEqual(report["errors"][0]["rejected_candidate"], bad)
-            self.assertEqual(len(report["errors"][0]["issue"]["violations"]), 2)
-            ledger = json.loads(Path(directory, "CallLedger.json").read_text())
-            self.assertEqual([row["status"] for row in ledger], ["invalid_output", "accepted"])
-            saved = json.loads(Path(directory, "PersonOrganization-Assignments-001-Result.json").read_text())
-            self.assertEqual(saved, good)
-
-    def test_exhausted_assignment_retries_keep_invalid_candidates_without_result(self):
-        bad = {"memberships": [{"event_id": "E", "activity_id": "A", "detail_indices": [99]}],
-               "unassigned_reasons": []}
-        with tempfile.TemporaryDirectory() as directory:
-            builder, package, layout, base = self.retry_fixture(directory, [bad, bad, bad])
-            before = copy.deepcopy(package)
-            with self.assertRaisesRegex(ValueError, "after 3 attempt"):
-                builder._infer_and_parse_json(
-                    "PersonOrganization", "Return JSON.", base, {}, "PersonOrganization-Assignments-001",
-                    validator=lambda value: _validate_assignments(value, ["A"], layout, package))
-            self.assertEqual(package, before)
-            self.assertEqual(len(builder.agents_lm.calls), 3)
-            report = json.loads(Path(directory, "PersonOrganizationValidationErrors.json").read_text())
-            self.assertEqual(len(report["errors"]), 3)
-            self.assertTrue(all(row["rejected_candidate"] == bad for row in report["errors"]))
-            self.assertFalse(Path(directory, "PersonOrganization-Assignments-001-Result.json").exists())
 
 
 if __name__ == "__main__":

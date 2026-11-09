@@ -5,10 +5,11 @@ and material allocation within a 120,000-character Builder input budget.
 It prepares material for draft EPG construction and review. It does not change Builder
 algorithms, EPG schemas or visualization formats.
 
-The runner defaults to `simple` when no mode is specified; the maintained
-`configs/search_pipeline.yml` explicitly selects `search_config.mode: agent`.
-Event, person and company research tasks share acquisition, with the configured
-reconstruction mode selecting the native downstream schema and HTML pipeline.
+Agent search is the only acquisition algorithm for the full runner, Pipeline UI,
+workbench, single-event tasks and person event enrichment. Configure it under
+`search_config.enhancement` in `configs/search_pipeline.yml`. Older `mode: simple`
+settings migrate to agent; they no longer select a fixed-query collector. Historical
+search states and saved source/output formats remain readable.
 
 ## Workflow and code layout
 
@@ -35,7 +36,7 @@ The agent assists relevance and gap decisions; it is not a factual completeness 
 | `finmy/search/budget.py` | Deterministic paragraph allocation; no model or network calls |
 | `finmy/search/control.py`, `pipeline.py`, `__main__.py` | Lifecycle, writer locks, Python and CLI entry points |
 | `finmy/workbench/search_*.py` | Search controls, progress, material review and local experiment history |
-| `finmy/runner/search_pipeline_runner.py` | Opt-in enhanced search alongside the original simple chain |
+| `finmy/runner/search_pipeline_runner.py` | Agent search → evidence handoff → event/person Builder |
 | `configs/search.yml` | Search-only defaults, independent of Builder configuration |
 
 ## Credentials and configuration
@@ -50,8 +51,10 @@ credentials when updating the example. Fill the selected services' keys:
 | `BOCHA_API_KEY` | Bocha Web Search |
 | `EXA_API_KEY` | Exa Search and the text returned by that search call |
 
-Search `lm_name` and `builder_config.lm_name` are independent. Search defaults to
-`ark/doubao-seed-2-1-lite-260915`; the existing build-only examples select their own model.
+An explicit `search_config.enhancement.lm_name` selects the search model. Older pipeline
+YAML without the `enhancement` section inherits its configured model for discovery
+and search; an existing agent section retains its independent model defaults. The standalone search CLI/workbench
+have independent defaults (`ark/doubao-seed-2-1-lite-260915`); build-only examples select their own model.
 Only selected providers need keys. The workbench loads the repository `.env` on an
 explicitly enabled start, without overriding existing environment variables. The search
 CLI reads process environment variables; it does not automatically load `.env`.
@@ -84,7 +87,7 @@ independent of event dates: later retrospective material can support an earlier 
 
 ## Prepare, run and review search
 
-A task JSON needs `target_type` (`event`, `person`, `company`), `target_name` and
+A task JSON needs `target_type` (`event` or `person` for the maintained workflows), `target_name` and
 `query_text`, the user's original research requirement. Optional `key_words`, `seed_urls`
 and `local_files` provide hints or starting material. Additional scope fields are kept
 for the decision model; they do not automatically set publication filters.
@@ -131,9 +134,9 @@ and context limit; stopped tasks can revise them under **调整运行上限**. S
 retain their configured values until explicitly changed.
 The handoff panel describes the recorded material allocation, and **设置 →
 接口状态** includes Ark, Baidu, Bocha and Exa configuration presence without displaying
-keys. Workbench simple mode runs fixed queries without a search model, using the common
-providers/readers and the existing span-based handoff. Enhanced mode uses source-level
-budget allocation. The original simple full runner keeps its own existing behavior.
+keys. Workbench execution uses the same agent and source-level handoff. Paused historical
+simple tasks continue through the agent with their saved material and usage intact;
+finished historical tasks can still be inspected and reassembled without model calls.
 Material adoption into an event's review list is explicit
 and does not automatically approve evidence or launch a Builder.
 
@@ -186,8 +189,7 @@ confirms the input/configuration contract, not online model compatibility or gra
 Actual build execution is a separate action requiring `--execute` and the configured
 model credentials; the build-only entry supports explicit `--env-file .env` loading.
 
-For the existing full runner, set `search_config.mode: agent` and supply search options
-under `search_config.enhancement`. Once search finishes, it passes the budgeted contents
+For the full runner, supply search options under `search_config.enhancement`. Once search finishes, it passes the budgeted contents
 and original query to `FinmyPipeline.lm_build_pipeline_with_contents`; the old search
 trimming policy is not applied again. Subject reconstruction can use validated partial
 material while separately reporting unfinished events. Empty evidence never starts a
@@ -196,13 +198,14 @@ optional Matcher processing and database storage before the Builder. With Matche
 material may be selected again. The build-only route is the direct route for a reviewed
 search package: it retains the search sample IDs and text without those extra stages.
 
-For person/company reconstruction, set `builder_config.reconstruction` with the
-mode, identity, period and topic. Search `target_type` alone does not configure the
-Builder. The full runner and reconstruction UI dispatch these modes through the
-native subject builder, retaining organization, schema validation and JSON/HTML
-rendering. Person defaults to SparseRagBuilder; company requires AgentEventBuilder.
-`configs/search_pipeline.yml` now selects agent acquisition with an explicit search
-model/provider; `mode: simple` retains historical acquisition.
+For person reconstruction, set `builder_config.reconstruction` with the mode, identity,
+period and topic. Search `target_type` alone does not configure the Builder. Person
+uses SparseRagBuilder by default, retaining native organization, schema validation and
+JSON/HTML rendering. Single-event construction keeps its existing Builder path.
+`configs/search_pipeline.yml` explicitly selects DeepSeek and Bocha. Other providers
+remain configurable. Legacy `subject_search` provider/budget settings migrate only
+when their modern equivalents are absent; obsolete decision/relevance controls have
+no execution path.
 
 The subject bridge reads the version-pinned complete material, preserves provenance
 without a second relevance classifier, and performs one final 120,000-character initial allocation. Selected

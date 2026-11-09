@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from finmy.runner.enhanced_subject_search import collect_enhanced_sources
 from finmy.runner.event_followup_config import followup_enabled
@@ -110,6 +112,43 @@ class InitialStorylineSearchTests(unittest.TestCase):
             self.assertTrue(doc["url"].startswith("https://example.test/"))
         self.assertTrue((self.root / "storyline_discovery/plan.json").exists())
         self.assertFalse((self.root / "enhanced_event_search").exists())
+
+    def test_legacy_person_yaml_uses_one_model_config_for_discovery_and_search(self):
+        del self.config["search_config"]["enhancement"]
+        self.config["lm_name"] = "deepseek/legacy-pipeline"
+        self.config["subject_search"] = {"providers": ["bocha"],
+            "max_search_calls": 4, "max_parse_calls": 2}
+        original = copy.deepcopy(self.config)
+        client = Mock()
+        client.with_options.return_value = client
+        client.chat.completions.create.return_value = SimpleNamespace(usage=None,
+            choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
+                content=json.dumps(self.candidates)))])
+        factory = Mock(return_value=SimpleNamespace(client=client, model_name="legacy-pipeline"))
+        with patch("lmbase.inference.api_call.LangChainAPIInference", factory), \
+             patch("dotenv.load_dotenv"):
+            result = self.collect(dependencies={"discovery_completion": None})
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(len(result["documents"]), 2)
+        self.assertEqual(factory.call_args.kwargs["lm_name"], "deepseek/legacy-pipeline")
+        client.chat.completions.create.assert_called_once()
+        self.assertEqual(len(self.requests), 2)
+        self.assertTrue(all(settings.allow_network for _, _, settings in self.requests))
+        self.assertTrue(all(settings.lm_name == "deepseek/legacy-pipeline"
+                            for _, _, settings in self.requests))
+        self.assertEqual(self.config, original)
+
+    def test_existing_agent_discovery_checkpoint_identity_remains_compatible(self):
+        from finmy.runner.storyline_discovery import discover_storylines
+        discover_storylines("Buffett 2022-2023", [], self.subject, self.config, self.root,
+                            completion=self.discovery)
+        checkpoint = self.root / "storyline_discovery/checkpoint.json"
+        previous = json.loads(checkpoint.read_text())["identity"]
+        result = self.collect(dependencies={"discovery_completion":
+            lambda *args: self.fail("Existing discovery checkpoint must be reused")})
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(json.loads(checkpoint.read_text())["identity"], previous)
+        self.assertEqual(len(self.discovery_calls), 1)
 
     def test_discovery_and_search_calls_have_separate_finite_budgets(self):
         result = self.collect()

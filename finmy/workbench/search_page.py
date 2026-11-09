@@ -56,7 +56,7 @@ def task_panel(controller, task_id, store, read_only=False):
                 controller.start(task_id)
                 st.rerun()
             except ValueError as exc:st.error(str(exc))
-        if b.button('执行一步',disabled=active or ended or data.get('mode')=='simple',key='step-'+task_id):
+        if b.button('执行一步',disabled=active or ended,key='step-'+task_id):
             try:
                 controller.start(task_id,steps=1)
                 st.rerun()
@@ -92,7 +92,7 @@ def task_panel(controller, task_id, store, read_only=False):
                     except ValueError as exc:st.error(str(exc))
     with st.expander('研究要求'):
         st.text(data['task']['query_text'])
-        st.caption('运行模型：' + str(data['config'].get('lm_name') or '简单搜索无需模型'))
+        st.caption('运行模型：' + str(data['config'].get('lm_name') or '使用默认模型'))
     try:
         render_process(controller, task_id, data, read_only=read_only)
     except LOCAL_RECORD_ERRORS as exc:
@@ -229,20 +229,17 @@ def search_page(store):
     event=events.get(event_id,{})
     with st.expander('新建检索任务',expanded=not controller.tasks()):
         with st.form('create-search'):
-            a,b=st.columns(2)
-            kind=a.selectbox('对象类型',['event','person','company'],format_func=lambda k:{'event':'事件','person':'人物','company':'公司'}[k])
-            mode=b.selectbox('检索模式',['agent','simple'],format_func=lambda k:'增强搜索' if k=='agent' else '简单搜索（固定查询）')
+            kind=st.selectbox('对象类型',['event','person'],format_func=lambda k:{'event':'事件','person':'人物'}[k])
             name=st.text_input('研究对象',display_name(event) if event else '')
             query=st.text_area('研究要求',event.get('description',''),height=100)
             providers=st.multiselect('搜索服务',['baidu','bocha','exa'],default=defaults['providers'])
             count=st.number_input('每次查询、每家服务的结果上限',min_value=1,max_value=50,value=defaults['max_results'])
-            lm_name=st.text_input('搜索侧模型',defaults.get('lm_name') or '',placeholder='provider/model；简单搜索无需填写')
+            lm_name=st.text_input('搜索侧模型',defaults.get('lm_name') or '',placeholder='provider/model')
             output_tokens=st.number_input('模型答案 token 上限',min_value=1,value=defaults['generation_config'].get('max_tokens',4096))
             st.caption('对当前 Ark Seed 模型，该参数仅限制答案，不包含推理 token。')
             with st.expander('范围、来源和高级配置'):
                 keywords=st.text_input('关键词（逗号分隔）',','.join(event.get('keywords',[])))
                 seeds=st.text_area('已有来源 URL（每行一个）','\n'.join(x for x in event.get('source_hints',[]) if x.startswith(('https://','http://'))))
-                fixed=st.text_area('简单搜索查询（每行一条；留空使用对象名称与关键词）')
                 options={}
                 for field,label in [('max_search_requests','累计搜索请求上限'),('max_read_sources','不同阅读来源上限'),
                                     ('max_model_calls','累计模型请求上限'),('max_read_chars','单次正文字符上限'),
@@ -268,11 +265,10 @@ def search_page(store):
                     task=dict(target_type=kind,target_name=name,query_text=query,
                               key_words=[s.strip() for s in keywords.split(',') if s.strip()],
                               seed_urls=[s.strip() for s in seeds.splitlines() if s.strip()])
-                    if fixed.strip():task['search_queries']=[s.strip() for s in fixed.splitlines() if s.strip()]
                     for key in ('coverage_start','coverage_end','scope_include','scope_exclude','aliases'):
                         if event.get(key):task[key]=event[key]
                     if event_id:task['event_id']=event_id
-                    tid=controller.create(task,config,mode)
+                    tid=controller.create(task,config)
                     write_json(profile,{**asdict(config),'allow_network':False})
                     st.session_state['search-selected']=tid
                     st.success('任务已保存，尚未发起调用。')

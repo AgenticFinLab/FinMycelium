@@ -153,41 +153,6 @@ def validate_relation_candidates(payload, assigned_ids, allowed_activity_ids, pa
     _raise("Relations", assigned_ids, allowed_activity_ids, issues)
 
 
-def validate_relation_review(payload, candidates, assigned_ids, allowed_activity_ids):
-    """Require a decision for each immutable candidate, at most one per key."""
-    issues = [_violation(".".join(map(str, error.absolute_path)) or "result",
-                         "invalid_shape", error.message)
-              for error in Draft202012Validator(RELATION_REVIEW_SCHEMA).iter_errors(payload)]
-    expected = {candidate["candidate_id"]: candidate for candidate in candidates}
-    if issues:
-        _raise("RelationsReview", assigned_ids, allowed_activity_ids, issues,
-               candidate_ids=list(expected))
-    seen, accepted = set(), {}
-    for index, decision in enumerate(payload["decisions"]):
-        cid = decision["candidate_id"]
-        path = f"decisions[{index}]"
-        if cid not in expected:
-            issues.append(_violation(path, "unknown_candidate", "Candidate is outside this review group", decision))
-            continue
-        if cid in seen:
-            issues.append(_violation(path, "duplicate_decision", "Candidate has more than one decision", decision))
-        seen.add(cid)
-        if decision["decision"] in {"accept", "reverse"}:
-            relation = copy.deepcopy(expected[cid]["relation"])
-            if decision["decision"] == "reverse":
-                if relation["relation_type"] in {"precedes", "overlaps"}:
-                    issues.append(_violation(path, "temporal_reversal", "Temporal relations require a new checked proposal"))
-                relation["from_activity_id"], relation["to_activity_id"] = relation["to_activity_id"], relation["from_activity_id"]
-            key = _key(relation)
-            if key in accepted:
-                issues.append(_violation(path, "conflicting_variants", "At most one variant of a relation key may be accepted", decision))
-            accepted[key] = cid
-    for cid in expected.keys() - seen:
-        issues.append(_violation("decisions", "missing_decision", f"Candidate requires exactly one decision: {cid}"))
-    _raise("RelationsReview", assigned_ids, allowed_activity_ids, issues,
-           candidate_ids=list(expected))
-
-
 class RelationCandidatePool:
     """Canonical exact deduplication with provenance and immutable variants."""
 
@@ -224,20 +189,6 @@ class RelationCandidatePool:
             ids.append(cid)
         self.audit["generation_batches"].append({"batch_name": batch_name,
             "assigned_ids": list(assigned_ids), "candidate_ids": ids, "status": "collected"})
-
-    def rejected(self, phase, name, assigned_ids, payload, error):
-        self.audit["rejected_attempts"].append({"phase": phase, "batch_name": name,
-            "assigned_ids": list(assigned_ids), "candidate": copy.deepcopy(payload),
-            "report": copy.deepcopy(error.report)})
-
-    def groups_by_owner(self):
-        for owner, ids in self.owners:
-            groups = {}
-            for candidate in self._candidates.values():
-                if candidate["owner_batch"] == owner:
-                    groups.setdefault(_key(candidate["relation"]), []).append(copy.deepcopy(candidate))
-            if groups:
-                yield owner, list(ids), list(groups.values())
 
     def decide(self, payload, review_batch):
         for decision in payload["decisions"]:

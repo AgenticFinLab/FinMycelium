@@ -30,16 +30,16 @@ class ContextBudgetIntegrationTest(unittest.TestCase):
             def __init__(self, *args):
                 self.timestamp = "fixture"
                 self.documents = {name: [] for name in ("url", "file", "bocha", "baidu")}
-            def collect_bocha_search_results(self, *args):
-                text = "CORE filing: purchase dates and quantities. " * 900
-                self.documents["bocha"].append(make_document(text,
-                    {"title": "CORE trade", "url": "https://example.test/trade"}, "bocha"))
-                return [text]
-            def collect_baidu_search_results(self, *args):
-                text = "CONTEXT annual letter: investment background. " * 900
-                self.documents["baidu"].append(make_document(text,
-                    {"title": "CONTEXT letter", "url": "https://example.test/letter"}, "baidu"))
-                return [text]
+            def collect_enhanced_search_results(self, *args):
+                self.enhanced_documents = [
+                    make_document("CORE filing: purchase dates and quantities. " * 900,
+                        {"title": "CORE trade", "url": "https://example.test/trade"}, "bocha"),
+                    make_document("CONTEXT annual letter: investment background. " * 900,
+                        {"title": "CONTEXT letter", "url": "https://example.test/letter"}, "baidu"),
+                ]
+                self.enhanced_search_result = {"status": "finished", "documents": self.enhanced_documents}
+                self.search_coverage = {"search_complete": True}
+                return [doc["raw_text"] for doc in self.enhanced_documents]
             def collect_structured_data(self, *args):
                 return [], []
         fake = {
@@ -104,10 +104,6 @@ class ContextBudgetIntegrationTest(unittest.TestCase):
         self.assertTrue(self.warnings)
         directory = next(self.path.glob("pipeline_output_*"))
         self.assertTrue((directory / "context_budget_report.json").exists())
-
-    def test_legacy_helper_skips_one_oversized_document(self):
-        instance = self.service.ReconstructionService({"all_content_config": {"max_content_length": 20}})
-        self.assertEqual(instance._limit_content_length(["x" * 50, "later", "doc"]), ["later", "doc"])
 
     def test_filter_preserves_search_phases_before_budgeting(self):
         docs = [{**make_document("Evidence. " * 500, {"title": "CORE " + phase}, "bocha"),

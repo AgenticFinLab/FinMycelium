@@ -10,17 +10,11 @@ import json
 import logging
 import math
 import re
-import time
 from pathlib import Path
 
-from finmy.runner.scoped_search import search_window
-from finmy.runner.subject_search import (
-    collect_subject_sources, validate_subject_search_options, _url as _canonical_source_url,
-)
+from finmy.search.sources import canonical_url
 
 
-# Source-type terms are a fallback only. Concrete activity wording takes priority.
-INTENTS = ("", "full text", "filing", "interview")
 _NAME_STOPWORDS = set("The In At On As From He She It A An January February March April May June July August "
                       "September October November December Monday Tuesday Wednesday Thursday Friday Saturday Sunday "
                       "First Second Third This That These Those His Her Their Both After Before During "
@@ -33,8 +27,8 @@ _QUERY_STOPWORDS = set("a an the of and or in on at to for with by from his her 
 def draft_event_options(config):
     """Return an independent, finite supplementary phase budget.
 
-    Provider/date policy comes from subject_search. Supplementary cost ceilings do
-    not inherit the initial phase's spent ledger or consume its evidence allowance.
+    The search agent owns provider and date policy. Supplementary cost ceilings
+    do not inherit the initial phase's spent ledger or consume its evidence allowance.
     """
     options = config.get("event_followup", {})
     if options is None:
@@ -42,8 +36,9 @@ def draft_event_options(config):
     if not isinstance(options, dict):
         raise ValueError("event_followup must be a mapping")
     options = dict(options)
-    options.pop("max_relevance_model_calls", None)
-    options.pop("max_relevance_elapsed_seconds", None)
+    for obsolete in ("max_relevance_model_calls", "max_relevance_elapsed_seconds",
+                     "queries_per_event", "max_followup_queries"):
+        options.pop(obsolete, None)
     if not isinstance(options.get("enabled", False), bool):
         raise ValueError("event_followup.enabled must be a YAML boolean")
     options.setdefault("enabled", False)
@@ -65,27 +60,7 @@ def draft_event_options(config):
                 or not math.isfinite(seconds) or seconds <= 0):
             raise ValueError(f"event_followup.{key} must be positive and finite")
         options[key] = seconds
-    count = options.get("queries_per_event", 2)
-    if type(count) is not int or not 1 <= count <= len(INTENTS):
-        raise ValueError(f"event_followup.queries_per_event must be in 1..{len(INTENTS)}")
-    options["queries_per_event"] = count
-    from finmy.runner.enhanced_subject_search import enhanced_search_enabled
-    if enhanced_search_enabled(config):
-        # The shared agent validates its own provider and publication policy.
-        # Legacy Bocha/Baidu-only options do not govern agent acquisition.
-        return options, {}
-    search_options = dict(config.get("subject_search", {}) or {})
-    configured_counts = config.get("search_config", {}) or {}
-    for provider in ("bocha", "baidu"):
-        key = provider + "_count"
-        if key in configured_counts:
-            search_options.setdefault(key, configured_counts[key])
-    for key in ("max_search_calls", "max_parse_calls", "max_elapsed_seconds"):
-        search_options[key] = options[key]
-    # Optional supplementary repair cap; other parser/date settings are shared policy.
-    if "max_followup_queries" in options:
-        search_options["max_followup_queries"] = options["max_followup_queries"]
-    return options, validate_subject_search_options(search_options)
+    return options
 
 
 def _text(value):
@@ -170,28 +145,6 @@ def _event_clues(package, row, event_id):
             "summary": summary}
 
 
-def _event_query(event, subject_name, round_index):
-    label = _compact(event["event_label"])
-    anchors = [label]
-    for name in event["entity_clues"]:
-        if len(anchors) >= 3:
-            break
-        if name.casefold() not in " ".join(anchors).casefold():
-            anchors.append(_compact(name, words=5, chars=60))
-    years = event["year_clues"]
-    date_clue = " ".join(years[:1] + years[-1:]) if len(years) > 1 else " ".join(years)
-    if round_index:
-        facts = event["activity_clues"]
-        if facts:
-            # Distinct known actions anchor follow-up questions; the exact text
-            # remains visible in the plan for checking query quality.
-            anchors = [label, _compact(facts[(round_index - 1) % len(facts)], words=10, chars=100)]
-        else:
-            anchors.append(INTENTS[round_index])
-    tokens = [f'"{_text(subject_name).replace(chr(34), "")}"'] + anchors + [date_clue]
-    return " ".join(dict.fromkeys(token for token in tokens if token))
-
-
 def _save(path, value):
     Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False),
                           encoding="utf-8")
@@ -233,27 +186,8 @@ def _events(package):
     return events, skipped
 
 
-def _summarize(events, directory):
-    path = Path(directory) / "subject_search_report.json"
-    report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    for event in events:
-        event_id = event["event_id"]
-        queries = [q for q in report.get("queries", []) if q.get("event_id") == event_id]
-        executed = [q for q in queries if "requested_count" in q]
-        accepted = [row for row in report.get("candidates", [])
-                    if event_id in row.get("event_ids", []) and row.get("status") == "accepted"]
-        reused = [row for row in report.get("candidates", [])
-                  if event_id in row.get("event_ids", []) and row.get("status") == "duplicate"]
-        event.update(search_calls=len(executed), search_errors=sum("error" in q for q in executed),
-                     accepted_documents=len(accepted), reused_documents=len(reused))
-        event["status"] = ("sources_found" if accepted else "sources_reused" if reused
-                           else "search_failed" if executed and all("error" in q for q in executed)
-                           else "searched_no_new_sources" if executed else "not_searched_budget")
-    return report.get("queries", [])
-
-
 def collect_draft_event_sources(package, query, keywords, subject, config, save_dir,
-                                progress=None, *, usage=None, search=None, parse=None,
+                                progress=None, *, usage=None,
                                 known_documents=()):
     """Use every existing event as a candidate within supplementary phase limits.
 
@@ -267,13 +201,13 @@ invalidate that initial result. Failures are recorded and return no new sources.
     events, skipped = _events(package)
     report = {"version": "draft-event-search-v2", "source": "initial_person_epg",
               "status": "planned", "events": events, "skipped_events": skipped,
-              "tasks": [], "queries": [], "new_documents": 0,
+              "backend": "agent", "new_documents": 0,
               "event_discovery_model_calls": 0, "semantic_support_checked": False,
               "budget_scope": "supplementary_phase"}
     documents = []
     try:
-        options, shared = draft_event_options(config)
-        report["limits"] = {"event_followup": options, "subject_search": shared}
+        options = draft_event_options(config)
+        report["limits"] = {"event_followup": options}
         if not options["enabled"]:
             report["status"] = "disabled"
             return []
@@ -281,80 +215,35 @@ invalidate that initial result. Failures are recorded and return no new sources.
             report["status"] = "no_draft_events"
             _log(progress, "Event follow-up: Initial EPG has no labelled events; kept the initial result.")
             return []
-        from finmy.runner.enhanced_subject_search import enhanced_search_enabled, collect_enhanced_sources
-        if enhanced_search_enabled(config):
-            acquired = collect_enhanced_sources(
-                query, keywords, subject, config, target / "draft_event_sources",
-                events=events, usage=usage, progress=progress,
-            )
-            # Each source remains attached to the existing event searched by the
-            # shared agent; new event discovery is not an admission requirement.
-            documents = acquired["documents"]
-            known = {_canonical_source_url(doc.get("url")) for doc in known_documents if doc.get("url")}
-            documents = [doc for doc in documents if _canonical_source_url(doc.get("url")) not in known]
-            report.update(status=acquired["status"], backend="agent", search_reports=acquired["reports"],
-                          new_documents=len(documents))
-            outcomes = {row.get("event_id"): row for row in acquired["reports"]}
-            for event in events:
-                outcome = outcomes.get(event["event_id"], {})
-                event.update(status=outcome.get("status", "not_searched"),
-                             search_calls=outcome.get("usage", {}).get("search_calls", 0),
-                             accepted_documents=sum(event["event_id"] in doc.get("event_ids", [])
-                                                    for doc in documents))
-            return documents
-        first, last = search_window(query, subject, shared)
-        start, end = first.isoformat(), last.isoformat()
-        report["publication_window"] = {"start": start, "end": end}
-        usage.setdefault("started_at", time.monotonic())
-        for key in ("search_calls", "parse_calls", "followup_queries"):
-            usage.setdefault(key, 0)
-            if type(usage[key]) is not int or usage[key] < 0:
-                raise ValueError("Invalid supplementary usage counter: " + key)
-        search_cap = shared["max_search_calls"]
-        parse_cap = shared["max_parse_calls"]
-        remaining_search = max(0, search_cap - usage["search_calls"])
-        remaining_parse = max(0, parse_cap - usage["parse_calls"])
-        report["cumulative_ceilings"] = {"search_calls": search_cap, "parse_calls": parse_cap}
-        name = subject.get("name", "")
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError("Event follow-up requires the existing subject name")
-        # A sparse event title is already sufficient to search. No source quote,
-        # predeclared scope, stage or minimum activity count is required.
-        tasks = [{"event_id": event["event_id"], "event_label": event["event_label"],
-                  "event_terms": list(event["event_terms"]), "start": start, "end": end,
-                  "query": _event_query(event, name, round_index),
-                  "intent_index": round_index}
-                 for round_index in range(options["queries_per_event"]) for event in events]
-        report["tasks"] = tasks
-        if (not remaining_search or not remaining_parse or
-                time.monotonic() - usage["started_at"] >= shared["max_elapsed_seconds"]):
-            report["status"] = "budget_exhausted"
-            for event in events:
-                event["status"] = "not_searched_budget"
-            return []
-        # Leave a small part of this same search subbudget for the collector's
-        # observed short-page/index-page repair; it never starts another round.
-        body_reserve = min(max(0, shared["max_followup_queries"] - usage["followup_queries"]),
-                           remaining_search // 4)
-        # Give every event one opportunity before deeper queries. Rotate providers
-        # across events and rounds, rather than exhausting provider 1 first.
-        providers = shared["providers"]
-        scheduled = [{**task, "provider": providers[(index % len(events) + task["intent_index"]) % len(providers)]}
-                     for index, task in enumerate(tasks)][:remaining_search - body_reserve]
-        report.update(scheduled_tasks=scheduled, body_search_reserve=body_reserve)
-        if search is None:
-            from finmy.runner.scoped_search_api import search
-        if parse is None:
-            from finmy.runner.scoped_page import parse
-        _log(progress, f"Event follow-up: Searching directly around {len(events)} existing EPG event(s).")
-        documents = collect_subject_sources(query, keywords, subject,
-            {**shared, "max_search_calls": search_cap, "max_parse_calls": parse_cap},
-            search, parse, target / "draft_event_sources", progress=progress,
-            usage=usage, initial_tasks=scheduled, phase="event_initial", auto_followup=True,
-            known_documents=known_documents,
-            known_urls=[doc.get("url") for doc in known_documents])
-        report["queries"] = _summarize(events, target / "draft_event_sources")
-        report.update(status="sources_found" if documents else "no_new_sources", new_documents=len(documents))
+        from finmy.runner.enhanced_subject_search import collect_enhanced_sources
+        acquired = collect_enhanced_sources(
+            query, keywords, subject, config, target / "draft_event_sources",
+            events=events, usage=usage, progress=progress,
+        )
+        # Normalize only for comparison. Saved source URLs and agent fingerprints
+        # remain unchanged, including when a previous run is resumed.
+        known = set()
+        for document in known_documents:
+            try:
+                known.add(canonical_url(document.get("url")))
+            except (AttributeError, TypeError, ValueError):
+                continue  # Local/older sources without a public URL still exist.
+        for doc in acquired["documents"]:
+            try:
+                duplicate = canonical_url(doc.get("url")) in known
+            except (AttributeError, TypeError, ValueError):
+                duplicate = False  # Locally supplied material has no public URL.
+            if not duplicate:
+                documents.append(doc)
+        report.update(status=acquired["status"], search_reports=acquired["reports"],
+                      new_documents=len(documents))
+        outcomes = {row.get("event_id"): row for row in acquired["reports"]}
+        for event in events:
+            outcome = outcomes.get(event["event_id"], {})
+            event.update(status=outcome.get("status", "not_searched"),
+                         search_calls=outcome.get("usage", {}).get("search_calls", 0),
+                         accepted_documents=sum(event["event_id"] in doc.get("event_ids", [])
+                                                for doc in documents))
         return documents
     except Exception as exc:
         report.update(status="failed", error=type(exc).__name__)

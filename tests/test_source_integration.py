@@ -48,13 +48,13 @@ class WebSourceIntegrationTest(unittest.TestCase):
             "finmy.url_collector.url_parser_clean": module("clean", extract_content_from_parsed_content=lambda x: x),
             "finmy.pdf_collector.pdf_collector": module("pdf", PDFCollector=object),
             "finmy.pdf_collector.base": module("pdfbase", PDFCollectorInput=object),
-            "finmy.url_collector.SearchCollector.bocha_search": module("bocha", bochasearch_api=lambda *a, **k: {
-                "data": {"webPages": {"value": [{"name": "OXY purchases", "url": "https://example.test/oxy",
-                "snippet": "OXY 2023", "summary": "OXY investment", "siteName": "Site",
-                "datePublished": "2023-10-26"}]}}}),
-            "finmy.url_collector.SearchCollector.baidu_search": module("baidu", baidusearch_api=lambda *a, **k: {
-                "references": [{"title": "Buffett diet", "url": "https://example.test/diet",
-                "snippet": "Food", "content": "Favorite foods", "website": "Site", "date": "2026-01-01"}]}),
+            "finmy.runner.enhanced_subject_search": module("agent_search", collect_enhanced_sources=lambda *a, **k: {
+                "status": "finished", "reports": [], "documents": [
+                    {"title": "OXY purchases", "url": "https://example.test/oxy",
+                     "published_at": "2023-10-26", "raw_text": "OXY original investment evidence.", "source": "bocha"},
+                    {"title": "Buffett diet", "url": "https://example.test/diet",
+                     "raw_text": "Buffett diet background.", "source": "baidu"},
+                ]}),
         }
         self.patcher = patch.dict("sys.modules", self.modules)
         self.patcher.start()
@@ -102,11 +102,11 @@ class WebSourceIntegrationTest(unittest.TestCase):
 
 
 
-    def test_exhausted_legacy_budget_does_not_build_empty_input(self):
+    def test_exhausted_budget_does_not_build_empty_input(self):
         with self.assertRaisesRegex(ValueError, "Context budget admitted no documents"):
             self.run_service(budget=1)
 
-        with patch.object(self.collector.DataCollectorService, "collect_bocha_search_results") as search:
+        with patch.object(self.collector.DataCollectorService, "collect_enhanced_search_results") as search:
             with self.assertRaises(ValueError):
                 self.service.ReconstructionService({"builder_config": {
                     "reconstruction": {"mode": "person", "subject": {}}}})

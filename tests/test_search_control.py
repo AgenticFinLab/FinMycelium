@@ -54,14 +54,33 @@ def test_pause_background_and_resume_preserves_count(tmp_path):
     c.start(tid,steps=1);c.threads[tid].join(3)
     assert c.inspect(tid)['usage']['model']==2
 
-def test_simple_task_does_not_call_model(tmp_path):
-    c=SearchController(tmp_path,model=lambda c:pytest.fail('No model in simple mode'),
+@pytest.mark.parametrize('historical_state', [False, True])
+def test_old_simple_mode_migrates_to_agent_without_losing_material(tmp_path, historical_state):
+    def model(context):
+        if context['eligible_source_ids']:
+            return dict(action='finish', source_ids=context['eligible_source_ids'], gaps=[], reason='supported')
+        if context['sources']:
+            return dict(action='read_source', source=context['sources'][0]['source_id'])
+        return dict(action='search', query='closing')
+    c=SearchController(tmp_path,model=model,
         transport=lambda *a:{'data':{'webPages':{'value':[{'url':'https://example.org/a'}]}}},
         fetcher=lambda u:(b'Closing was announced.','txt','utf-8'))
-    tid=c.create(TASK,{},mode='simple');c.start(tid);c.threads[tid].join(3)
+    tid=c.create(TASK,{},mode='simple')
+    if historical_state:
+        state=SearchState(tmp_path,tid)
+        state.data['mode']='simple'
+        state.data['status']='paused'
+        state.consume('model')
+        sid=SourceStore(state).register('https://example.org/a')
+        SourceStore(state).save_raw(sid,b'Closing was announced.','txt')
+        state.save()
+    c.start(tid);c.threads[tid].join(3)
     data=c.inspect(tid)
+    assert data['mode']=='agent'
     assert data['status']=='finished'
-    assert data['usage']['model']==0
+    assert data['usage']['model']==3
+    assert data['usage']['search']==(0 if historical_state else 1)
+    assert len(data['sources'])==1
     assert data['builder_input']['samples']
     assert c.reassemble(tid,5)['samples']==[]
 

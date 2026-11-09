@@ -1,10 +1,11 @@
 {
-  "fixture_version": 1,
+  "fixture_version": 2,
   "provenance": {
     "source": "FinalPersonEPG.html uploaded 2026-11-09",
-    "purpose": "A reduced real output used as faulty input for organization regressions. No new biographical assertions.",
+    "purpose": "Minimal real-output facts for duplicate identity, historic scene placement, recipient splitting, and response direction regressions. No new biographical assertions.",
     "source_text": "Verbatim cited excerpts; offsets recomputed for the excerpt fixture.",
-    "subject_typo": "Intentionally retained from the supplied run; outside repair scope."
+    "subject_typo": "Intentionally retained from the supplied run; outside repair scope.",
+    "reduction": "Peripheral actions/details and their unused entity/time/evidence closure removed. Duplicate-result differences and aggregate transaction details retained."
   },
   "package": {
     "schema_version": "person-epg-3.0",
@@ -53,22 +54,6 @@
         "evidence_set_id": null
       },
       {
-        "entity_id": "entity:P_9",
-        "name": "Microsoft",
-        "entity_type": "organization",
-        "attributes": {},
-        "sort_order": 9,
-        "evidence_set_id": null
-      },
-      {
-        "entity_id": "entity:P_10",
-        "name": "Charlie Munger",
-        "entity_type": "individual",
-        "attributes": {},
-        "sort_order": 10,
-        "evidence_set_id": null
-      },
-      {
         "entity_id": "entity:P_11",
         "name": "Greg Abel",
         "entity_type": "individual",
@@ -82,22 +67,6 @@
         "entity_type": "organization",
         "attributes": {},
         "sort_order": 12,
-        "evidence_set_id": null
-      },
-      {
-        "entity_id": "entity:P_13",
-        "name": "Michael Frerichs",
-        "entity_type": "individual",
-        "attributes": {},
-        "sort_order": 13,
-        "evidence_set_id": null
-      },
-      {
-        "entity_id": "entity:P_14",
-        "name": "CNBC",
-        "entity_type": "organization",
-        "attributes": {},
-        "sort_order": 14,
         "evidence_set_id": null
       },
       {
@@ -138,14 +107,6 @@
         "entity_type": "organization",
         "attributes": {},
         "sort_order": 19,
-        "evidence_set_id": null
-      },
-      {
-        "entity_id": "entity:P_30",
-        "name": "Bill Gates",
-        "entity_type": "individual",
-        "attributes": {},
-        "sort_order": 20,
         "evidence_set_id": null
       }
     ],
@@ -252,10 +213,6 @@
         "entity_id": "entity:P_8"
       },
       {
-        "occurrence_id": "O_S4_E1",
-        "entity_id": "entity:P_9"
-      },
-      {
         "occurrence_id": "O_S5_E1",
         "entity_id": "entity:P_1"
       },
@@ -273,23 +230,11 @@
       },
       {
         "occurrence_id": "O_S5_E2",
-        "entity_id": "entity:P_10"
-      },
-      {
-        "occurrence_id": "O_S5_E2",
         "entity_id": "entity:P_11"
       },
       {
         "occurrence_id": "O_S5_E2",
         "entity_id": "entity:P_12"
-      },
-      {
-        "occurrence_id": "O_S5_E2",
-        "entity_id": "entity:P_13"
-      },
-      {
-        "occurrence_id": "O_S5_E2",
-        "entity_id": "entity:P_14"
       },
       {
         "occurrence_id": "O_S5_E3",
@@ -305,15 +250,7 @@
       },
       {
         "occurrence_id": "O_S5_E3",
-        "entity_id": "entity:P_10"
-      },
-      {
-        "occurrence_id": "O_S5_E3",
         "entity_id": "entity:P_12"
-      },
-      {
-        "occurrence_id": "O_S5_E3",
-        "entity_id": "entity:P_13"
       },
       {
         "occurrence_id": "O_S6_E1",
@@ -342,10 +279,6 @@
       {
         "occurrence_id": "O_S6_E1",
         "entity_id": "entity:P_29"
-      },
-      {
-        "occurrence_id": "O_S6_E1",
-        "entity_id": "entity:P_30"
       },
       {
         "occurrence_id": "O_S6_E2",
@@ -449,15 +382,6 @@
         "evidence_set_id": "ES_00208"
       },
       {
-        "action_id": "ACT_O_S5_E2_P6_1",
-        "actor_id": "entity:P_13",
-        "action_type": "submit shareholder proposal on climate risk governance disclosure",
-        "timestamp_time_id": "TIME_00176",
-        "occurrence_id": "O_S5_E2",
-        "sort_order": 5,
-        "evidence_set_id": "ES_00210"
-      },
-      {
         "action_id": "ACT_O_S5_E3_P1_1",
         "actor_id": "entity:P_1",
         "action_type": "state succession view on Greg Abel at 2023 annual meeting",
@@ -485,33 +409,6 @@
         "evidence_set_id": "ES_00230"
       },
       {
-        "action_id": "ACT_O_S5_E3_P5_1",
-        "actor_id": "entity:P_12",
-        "action_type": "propose annual climate change reporting",
-        "timestamp_time_id": "REPAIR_TIME_473",
-        "occurrence_id": "O_S5_E3",
-        "sort_order": 7,
-        "evidence_set_id": "ES_00235"
-      },
-      {
-        "action_id": "ACT_O_S5_E3_P6_1",
-        "actor_id": "entity:P_13",
-        "action_type": "propose climate risk governance disclosure",
-        "timestamp_time_id": "REPAIR_TIME_474",
-        "occurrence_id": "O_S5_E3",
-        "sort_order": 8,
-        "evidence_set_id": "ES_00237"
-      },
-      {
-        "action_id": "ACT_O_S6_E1_P1_1",
-        "actor_id": "entity:P_1",
-        "action_type": "make annual charitable donation",
-        "timestamp_time_id": "REPAIR_TIME_465",
-        "occurrence_id": "O_S6_E1",
-        "sort_order": 0,
-        "evidence_set_id": "ES_00256"
-      },
-      {
         "action_id": "ACT_O_S6_E2_P1_1",
         "actor_id": "entity:P_1",
         "action_type": "convert Class A shares to Class B shares",
@@ -519,24 +416,6 @@
         "occurrence_id": "O_S6_E2",
         "sort_order": 0,
         "evidence_set_id": "ES_00291"
-      },
-      {
-        "action_id": "ACT_O_S6_E2_P1_2",
-        "actor_id": "entity:P_1",
-        "action_type": "donate Berkshire Hathaway Class B shares to family charities",
-        "timestamp_time_id": "REPAIR_TIME_464",
-        "occurrence_id": "O_S6_E2",
-        "sort_order": 1,
-        "evidence_set_id": "ES_00293"
-      },
-      {
-        "action_id": "ACT_O_S12_E1_P1_1",
-        "actor_id": "entity:P_1",
-        "action_type": "faced shareholder proposal to replace him as chairman",
-        "timestamp_time_id": "TIME_00312",
-        "occurrence_id": "O_S12_E1",
-        "sort_order": 0,
-        "evidence_set_id": "ES_00354"
       },
       {
         "action_id": "ACT_O_S12_E1_P2_1",
@@ -651,63 +530,56 @@
     "source_document": [
       {
         "document_id": "DOC_00003",
-        "content": "去年，美国加州公共部门养老基金（CalPERS）就曾呼吁更换伯克希尔的董事长，但这一提议支持者寥寥，最终这项提议在股东会上被否决。\n\n去年，美国加州公共部门养老基金（CalPERS）就曾呼吁更换伯克希尔的董事长\n\n最终这项提议在股东会上被否决\n\n但这一提议支持者寥寥，最终这项提议在股东会上被否决。",
+        "content": "去年，美国加州公共部门养老基金（CalPERS）就曾呼吁更换伯克希尔的董事长，但这一提议支持者寥寥，最终这项提议在股东会上被否决。",
         "title": "巴菲特2023年股东会5.5小时将会回答60个问题,带你直击现场!__财经头条",
         "source_url": "https://cj.sina.com.cn/articles/view/6041876758/1681fb916001011aru",
         "published_at": "2023-05-06T14:13:00Z"
       },
       {
         "document_id": "DOC_00006",
-        "content": "Abel一定会继承我现在做的一些工作。\n\nAbel将比我更加成功，如果和我说的有出入，我的鼻子就会变长。\n\n今年年度股东大会上，巴菲特又说\n\n今年年度股东大会上，巴菲特又说：",
+        "content": "Abel一定会继承我现在做的一些工作。\n\nAbel将比我更加成功，如果和我说的有出入，我的鼻子就会变长。\n\n今年年度股东大会上，巴菲特又说：",
         "title": "起底巴菲特接班人:Greg Abel做对了什么?巴菲特_新浪财经_新浪网",
         "source_url": "https://finance.sina.com.cn/stock/usstock/c/2023-12-25/doc-imzzfueu0656487.shtml",
         "published_at": "2023-12-25T10:52:00Z"
       },
       {
         "document_id": "DOC_00008",
-        "content": "The Q&A session with Buffett and Munger will begin at 10:15 a.m. ET. and run through 4:30 p.m. ET\n\nThe Q&A session with Buffett and Munger will begin at 10:15 a.m. ET.\n\nrun through 4:30 p.m. ET\n\nThe Q&A session with Buffett and Munger will begin at 10:15 a.m. ET. and run through 4:30 p.m. ET (with a one hour break for lunch).\n\nJust as it’s the exclusive broadcast home of the meeting, CNBC has the sole streaming rights.\n\nIt’s a three-day event that offers everything from shopping, to a 5K race, to a picnic, and draws as many as 40,000 people from around the world each year.\n\nThis is the first time the meeting has been broadcast.",
+        "content": "The Q&A session with Buffett and Munger will begin at 10:15 a.m. ET. and run through 4:30 p.m. ET\n\nIt’s a three-day event that offers everything from shopping, to a 5K race, to a picnic, and draws as many as 40,000 people from around the world each year.",
         "title": "Watch Warren Buffett's Q&A with shareholders live and without cable  Fortune",
         "source_url": "https://fortune.com/2023/05/06/warren-buffett-berkshire-hathaway-annual-meeting-free-without-cable-cnbc/",
         "published_at": "2023-05-06T02:01:13Z"
       },
       {
         "document_id": "DOC_00009",
-        "content": "Tens of thousands of investors are gathering in Omaha, Nebraska this weekend to hear from chairman and CEO Warren Buffett at Berkshire Hathaway's 59th annual meeting on Saturday.\n\nBuffett, with his 32% voting power, opposes the proposals.\n\nBerkshire Hathaway's 59th annual meeting on Saturday\n\nAnother proposal from Illinois state Treasurer Michael Frerichs seeks to have Berkshire's board disclose how the company governs climate risks.\n\nfor a third straight year wants Berkshire to report annually on how it addresses climate change\n\nare scheduled to take shareholder questions for about five hours\n\nBerkshire Hathaway shareholders will get down to business on a series of proposals that address issues including climate change, diversity and political advocacy\n\nBerkshire Hathaway shareholders will get down to business on a series of proposals\n\nJust over a quarter of votes in 2021 and 2022 supported the idea.\n\nAbel made headlines last fall after he bought nearly $70 million worth of stock in Berkshire Hathaway\n\nhe bought nearly $70 million worth of stock in Berkshire Hathaway\n\nTens of thousands of investors are gathering in Omaha, Nebraska this weekend\n\nseeks to have Berkshire's board disclose how the company governs climate risks\n\nThe largest U.S. public pension fund, the $455 billion California Public Employees' Retirement System (CalPERS), for a third straight year wants Berkshire to report annually on how it addresses climate change.\n\nchairman and CEO Warren Buffett at Berkshire Hathaway's 59th annual meeting on Saturday",
+        "content": "Tens of thousands of investors are gathering in Omaha, Nebraska this weekend to hear from chairman and CEO Warren Buffett at Berkshire Hathaway's 59th annual meeting on Saturday.\n\nBuffett, with his 32% voting power, opposes the proposals.\n\nfor a third straight year wants Berkshire to report annually on how it addresses climate change\n\nare scheduled to take shareholder questions for about five hours\n\nBerkshire Hathaway shareholders will get down to business on a series of proposals\n\nJust over a quarter of votes in 2021 and 2022 supported the idea.\n\nAbel made headlines last fall after he bought nearly $70 million worth of stock in Berkshire Hathaway",
         "title": "Warren Buffett's Berkshire Hathaway annual meeting: What to know  Fox Business",
         "source_url": "https://www.foxbusiness.com/markets/warren-buffett-berkshire-hathaway-annual-meeting-what-to-know",
         "published_at": "2023-05-05T08:09:00Z"
       },
       {
         "document_id": "DOC_00017",
-        "content": "于2021年第四季度花了近10亿美元购买了近1470万股动视暴雪的股票\n\n截至2021年12月31日，伯克希尔持有动视暴雪1466万股股票\n\n截至2021年12月31日，伯克希尔持有动视暴雪1466万股股票，价值9.75亿美元\n\n几周之后，这家以魔兽世界和使命召唤等游戏闻名全球的游戏制造商宣布以687亿美元的价格将自己出售给了微软\n\n也不清楚购买动视暴雪股票的是巴菲特还是他的两名投资副手的手笔\n\n花了近10亿美元购买了近1470万股动视暴雪的股票\n\n宣布以687亿美元的价格将自己出售给了微软\n\n以687亿美元的价格\n\n伯克希尔·哈撒韦公司在13F文件中披露，于2021年第四季度花了近10亿美元购买了近1470万股动视暴雪的股票\n\n于2021年第四季度\n\n购买了近1470万股动视暴雪的股票",
+        "content": "截至2021年12月31日，伯克希尔持有动视暴雪1466万股股票，价值9.75亿美元\n\n几周之后，这家以魔兽世界和使命召唤等游戏闻名全球的游戏制造商宣布以687亿美元的价格将自己出售给了微软\n\n也不清楚购买动视暴雪股票的是巴菲特还是他的两名投资副手的手笔\n\n伯克希尔·哈撒韦公司在13F文件中披露，于2021年第四季度花了近10亿美元购买了近1470万股动视暴雪的股票",
         "title": "巴菲特Q4持仓:抢在微软前入股动视暴雪!巴菲特_新浪财经_新浪网",
         "source_url": "https://finance.sina.com.cn/roll/2022-02-15/doc-ikyamrna0849284.shtml",
         "published_at": "2022-02-15T02:46:00Z"
       },
       {
         "document_id": "DOC_00021",
-        "content": "“The GAAP earnings are 100 percent misleading when viewed quarterly or even annually,” Buffett wrote in the shareholder letter.\n\nIn his annual  letter to shareholders published on Feb. 25, Buffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance.\n\nHis investment conglomerate Berkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022\n\nIn his annual  letter to shareholders published on Feb. 25\n\n“Capital gains, to be sure, have been hugely important to Berkshire over past decades, and we expect them to be meaningfully positive in future decades. But their quarter-by-quarter gyrations, regularly and mindlessly headlined by media, totally misinform investors.”\n\nUnder GAAP accounting, in 2022 Berkshire earned $112 billion less than the previous year, though Buffett thought it was good year for business, he said in the shareholder letter.\n\nBuffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance. They urge Berkshire’s shareholders to do the same\n\nBerkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022\n\nreported a net loss of $22.8 billion in 2022, driven by a nearly $54 billion decline in the value of its stock portfolio\n\nBerkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high and 12 percent more than the previous year’s $27.5 billion.\n\nHis investment conglomerate Berkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022, driven by a nearly $54 billion decline in the value of its stock portfolio.\n\nWhen excluding losses on stock investments, which were unrealized, Berkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high and 12 percent more than the previous year’s $27.5 billion.\n\nBut the 92-year-old investment guru said that figure is highly misleading and doesn’t reflect the true state of Berkshire’s financial performance.\n\nthough Buffett thought it was good year for business, he said in the shareholder letter\n\nBerkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high\n\nUnder GAAP accounting, in 2022 Berkshire earned $112 billion less than the previous year",
+        "content": "“The GAAP earnings are 100 percent misleading when viewed quarterly or even annually,” Buffett wrote in the shareholder letter.\n\nIn his annual  letter to shareholders published on Feb. 25, Buffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance.\n\nUnder GAAP accounting, in 2022 Berkshire earned $112 billion less than the previous year\n\nBuffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance. They urge Berkshire’s shareholders to do the same\n\nHis investment conglomerate Berkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022, driven by a nearly $54 billion decline in the value of its stock portfolio.\n\nWhen excluding losses on stock investments, which were unrealized, Berkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high and 12 percent more than the previous year’s $27.5 billion.\n\nBut the 92-year-old investment guru said that figure is highly misleading and doesn’t reflect the true state of Berkshire’s financial performance.",
         "title": "Warren Buffett Dismisses Berkshire Hathaway’s 23 Billion Paper Loss  Observer",
         "source_url": "https://observer.com/2023/02/warren-buffett-berkshire-hathaway-2022-earning/",
         "published_at": "2023-02-27T10:51:28Z"
       },
       {
         "document_id": "DOC_00022",
-        "content": "Warren Buffett has laid out plans for Berkshire Hathaway and his fortune in the event of his death in a letter published on the global conglomerate’s website.\n\n1,500,000 were gifted to the Susan Thompson Buffett Foundation\n\nBuffett, 93, converted 1,600 Class A shares into 2,400,000 Class B shares\n\nsubmitted to the SEC on Nov. 21\n\n300,000 shares were given to the Sherwood Foundation, the Howard G. Buffett Foundation, and NoVo Foundation, respectively.\n\n300,000 shares were given to the Sherwood Foundation, the Howard G. Buffett Foundation, and NoVo Foundation, respectively\n\n2,400,000 Class B shares\n\nconverted 1,600 Class A shares into 2,400,000 Class B shares\n\nAccording to calculations by news agency Reuters, this amounts to a total donation of $866 million in Berkshire Hathaway funds\n\nthis amounts to a total donation of $866 million in Berkshire Hathaway funds",
+        "content": "Warren Buffett has laid out plans for Berkshire Hathaway and his fortune in the event of his death in a letter published on the global conglomerate’s website.\n\n1,500,000 were gifted to the Susan Thompson Buffett Foundation\n\nBuffett, 93, converted 1,600 Class A shares into 2,400,000 Class B shares\n\nsubmitted to the SEC on Nov. 21\n\n300,000 shares were given to the Sherwood Foundation, the Howard G. Buffett Foundation, and NoVo Foundation, respectively.\n\nthis amounts to a total donation of $866 million in Berkshire Hathaway funds",
         "title": "Warren Buffett: Berkshire Hathaway CEO reveals details of will and succession plan in letter  Fortune",
         "source_url": "https://fortune.com/2023/11/22/warren-buffett-berkshire-hathaway-letter-donations/",
         "published_at": "2023-11-22T08:02:19Z"
       },
       {
-        "document_id": "DOC_00023",
-        "content": "Warren Buffett said he donated about $866m of Berkshire Hathaway stock to four family charities",
-        "title": "Warren Buffett, 93, donates more Berkshire stock",
-        "source_url": "https://www.rte.ie/news/business/2023/1122/1417946-buffett-donates-more-shares/",
-        "published_at": "2023-11-21T22:34:07Z"
-      },
-      {
         "document_id": "DOC_00024",
-        "content": "向五家机构捐赠了价值 46.3 亿美元\n\n巴菲特周三进行了年度慈善捐赠\n\n巴菲特将 9129 股 A 类股票转换为 1369.35 万股 B 类股票，以便向五个基金会捐赠 1369.34 万股。\n\n104.53 万股捐给了苏珊・汤普森・巴菲特基金会（Susan Thompson Buffett Foundation），73.17 万股捐给了谢伍德基金会（Sherwood Foundation）、霍华德・G・巴菲特基金会（Howard G. Buffett Foundation）和诺沃基金会（NoVo Foundation）。\n\n而这五个基金会收到的伯克希尔 B 股在收到时的价值约为 500 亿美元，这大大超过了他在 2006 年的全部净资产\n\n“我没有债务，我剩下的 A 股价值约 1120 亿美元，远远超过我净资产的 99%。”\n\n其中大部分捐给了比尔及梅琳达・盖茨基金会\n\n巴菲特向盖茨基金会捐赠了 35.4 亿美元（76%），并向他自己的三个孩子经营的四家慈善机构捐赠了总计近 10 亿美元\n\n巴菲特将 9129 股 A 类股票转换为 1369.35 万股 B 类股票，以便向五个基金会捐赠 1369.34 万股\n\n超过 1045 万股捐给了比尔及梅琳达・盖茨基金会信托，按照周三的收盘价，相当于近 35.4 亿美元。伯克希尔・哈撒韦公司的 B 类股票周三收盘价为 338.61 美元\n\n104.53 万股捐给了苏珊・汤普森・巴菲特基金会（Susan Thompson Buffett Foundation），73.17 万股捐给了谢伍德基金会（Sherwood Foundation）、霍华德・G・巴菲特基金会（Howard G. Buffett Foundation）和诺沃基金会（NoVo Foundation）\n\n巴菲特在一份声明中称，年度捐赠的时间表是在 2006 年 6 月 26 日做出的，此后又对五个受赠人中的四个进行了大量捐赠\n\n“最初作出时，我拥有 474,998 股伯克希尔 A 股，价值约 430 亿美元，这些股票占我净资产的 98% 以上。”\n\n巴菲特向盖茨基金会捐赠了 35.4 亿美元（76%）\n\n巴菲特周三进行了年度慈善捐赠，向五家机构捐赠了价值 46.3 亿美元（IT之家备注：当前约 332.43 亿元人民币）的伯克希尔股票\n\n伯克希尔・哈撒韦公司首席执行官沃伦・巴菲特周三进行了年度慈善捐赠\n\n并向他自己的三个孩子经营的四家慈善机构捐赠了总计近 10 亿美元\n\n超过 1045 万股捐给了比尔及梅琳达・盖茨基金会信托，按照周三的收盘价，相当于近 35.4 亿美元。伯克希尔・哈撒韦公司的 B 类股票周三收盘价为 338.61 美元。",
+        "content": "巴菲特将 9129 股 A 类股票转换为 1369.35 万股 B 类股票，以便向五个基金会捐赠 1369.34 万股。\n\n104.53 万股捐给了苏珊・汤普森・巴菲特基金会（Susan Thompson Buffett Foundation），73.17 万股捐给了谢伍德基金会（Sherwood Foundation）、霍华德・G・巴菲特基金会（Howard G. Buffett Foundation）和诺沃基金会（NoVo Foundation）。\n\n其中大部分捐给了比尔及梅琳达・盖茨基金会\n\n巴菲特向盖茨基金会捐赠了 35.4 亿美元（76%）\n\n并向他自己的三个孩子经营的四家慈善机构捐赠了总计近 10 亿美元\n\n巴菲特周三进行了年度慈善捐赠，向五家机构捐赠了价值 46.3 亿美元（IT之家备注：当前约 332.43 亿元人民币）的伯克希尔股票\n\n伯克希尔・哈撒韦公司首席执行官沃伦・巴菲特周三进行了年度慈善捐赠\n\n超过 1045 万股捐给了比尔及梅琳达・盖茨基金会信托，按照周三的收盘价，相当于近 35.4 亿美元。伯克希尔・哈撒韦公司的 B 类股票周三收盘价为 338.61 美元。",
         "title": "巴菲特:捐赠46亿美元伯克希尔股票-每日必读-极客网",
         "source_url": "https://news.fromgeek.com/latest/110806.html",
         "published_at": "2023-06-21T16:00:00Z"
@@ -750,13 +622,6 @@
         "quote": "In his annual  letter to shareholders published on Feb. 25, Buffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance."
       },
       {
-        "span_id": "SPAN_00035",
-        "document_id": "DOC_00023",
-        "char_start": 0,
-        "char_end": 95,
-        "quote": "Warren Buffett said he donated about $866m of Berkshire Hathaway stock to four family charities"
-      },
-      {
         "span_id": "SPAN_00036",
         "document_id": "DOC_00022",
         "char_start": 0,
@@ -773,8 +638,8 @@
       {
         "span_id": "SPAN_00060",
         "document_id": "DOC_00021",
-        "char_start": 328,
-        "char_end": 430,
+        "char_start": 607,
+        "char_end": 709,
         "quote": "His investment conglomerate Berkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022"
       },
       {
@@ -794,78 +659,78 @@
       {
         "span_id": "SPAN_00330",
         "document_id": "DOC_00017",
-        "char_start": 0,
-        "char_end": 35,
+        "char_start": 149,
+        "char_end": 184,
         "quote": "于2021年第四季度花了近10亿美元购买了近1470万股动视暴雪的股票"
       },
       {
         "span_id": "SPAN_00331",
         "document_id": "DOC_00017",
-        "char_start": 37,
-        "char_end": 69,
+        "char_start": 0,
+        "char_end": 32,
         "quote": "截至2021年12月31日，伯克希尔持有动视暴雪1466万股股票"
       },
       {
         "span_id": "SPAN_00334",
         "document_id": "DOC_00017",
-        "char_start": 71,
-        "char_end": 113,
+        "char_start": 0,
+        "char_end": 42,
         "quote": "截至2021年12月31日，伯克希尔持有动视暴雪1466万股股票，价值9.75亿美元"
       },
       {
         "span_id": "SPAN_00335",
         "document_id": "DOC_00017",
-        "char_start": 115,
-        "char_end": 166,
+        "char_start": 44,
+        "char_end": 95,
         "quote": "几周之后，这家以魔兽世界和使命召唤等游戏闻名全球的游戏制造商宣布以687亿美元的价格将自己出售给了微软"
       },
       {
         "span_id": "SPAN_00336",
         "document_id": "DOC_00017",
-        "char_start": 168,
-        "char_end": 198,
+        "char_start": 97,
+        "char_end": 127,
         "quote": "也不清楚购买动视暴雪股票的是巴菲特还是他的两名投资副手的手笔"
       },
       {
         "span_id": "SPAN_00337",
         "document_id": "DOC_00017",
-        "char_start": 10,
-        "char_end": 35,
+        "char_start": 159,
+        "char_end": 184,
         "quote": "花了近10亿美元购买了近1470万股动视暴雪的股票"
       },
       {
         "span_id": "SPAN_00339",
         "document_id": "DOC_00017",
-        "char_start": 145,
-        "char_end": 166,
+        "char_start": 74,
+        "char_end": 95,
         "quote": "宣布以687亿美元的价格将自己出售给了微软"
       },
       {
         "span_id": "SPAN_00347",
         "document_id": "DOC_00017",
-        "char_start": 147,
-        "char_end": 157,
+        "char_start": 76,
+        "char_end": 86,
         "quote": "以687亿美元的价格"
       },
       {
         "span_id": "SPAN_00349",
         "document_id": "DOC_00017",
-        "char_start": 262,
-        "char_end": 317,
+        "char_start": 129,
+        "char_end": 184,
         "quote": "伯克希尔·哈撒韦公司在13F文件中披露，于2021年第四季度花了近10亿美元购买了近1470万股动视暴雪的股票"
       },
       {
         "span_id": "SPAN_00350",
         "document_id": "DOC_00017",
-        "char_start": 0,
-        "char_end": 10,
+        "char_start": 149,
+        "char_end": 159,
         "quote": "于2021年第四季度"
       },
       {
         "span_id": "SPAN_00355",
         "document_id": "DOC_00017",
-        "char_start": 18,
-        "char_end": 35,
+        "char_start": 167,
+        "char_end": 184,
         "quote": "购买了近1470万股动视暴雪的股票"
       },
       {
@@ -876,45 +741,31 @@
         "quote": "In his annual  letter to shareholders published on Feb. 25"
       },
       {
-        "span_id": "SPAN_00420",
-        "document_id": "DOC_00021",
-        "char_start": 492,
-        "char_end": 759,
-        "quote": "“Capital gains, to be sure, have been hugely important to Berkshire over past decades, and we expect them to be meaningfully positive in future decades. But their quarter-by-quarter gyrations, regularly and mindlessly headlined by media, totally misinform investors.”"
-      },
-      {
-        "span_id": "SPAN_00421",
-        "document_id": "DOC_00021",
-        "char_start": 761,
-        "char_end": 939,
-        "quote": "Under GAAP accounting, in 2022 Berkshire earned $112 billion less than the previous year, though Buffett thought it was good year for business, he said in the shareholder letter."
-      },
-      {
         "span_id": "SPAN_00426",
         "document_id": "DOC_00021",
-        "char_start": 941,
-        "char_end": 1128,
+        "char_start": 418,
+        "char_end": 605,
         "quote": "Buffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance. They urge Berkshire’s shareholders to do the same"
       },
       {
         "span_id": "SPAN_00431",
         "document_id": "DOC_00021",
-        "char_start": 356,
-        "char_end": 430,
+        "char_start": 635,
+        "char_end": 709,
         "quote": "Berkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022"
       },
       {
         "span_id": "SPAN_00432",
         "document_id": "DOC_00021",
-        "char_start": 1206,
-        "char_end": 1326,
+        "char_start": 665,
+        "char_end": 785,
         "quote": "reported a net loss of $22.8 billion in 2022, driven by a nearly $54 billion decline in the value of its stock portfolio"
       },
       {
         "span_id": "SPAN_00433",
         "document_id": "DOC_00021",
-        "char_start": 1328,
-        "char_end": 1483,
+        "char_start": 855,
+        "char_end": 1010,
         "quote": "Berkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high and 12 percent more than the previous year’s $27.5 billion."
       },
       {
@@ -939,73 +790,38 @@
         "quote": "run through 4:30 p.m. ET"
       },
       {
-        "span_id": "SPAN_00439",
-        "document_id": "DOC_00008",
-        "char_start": 195,
-        "char_end": 327,
-        "quote": "The Q&A session with Buffett and Munger will begin at 10:15 a.m. ET. and run through 4:30 p.m. ET (with a one hour break for lunch)."
-      },
-      {
-        "span_id": "SPAN_00443",
-        "document_id": "DOC_00008",
-        "char_start": 329,
-        "char_end": 422,
-        "quote": "Just as it’s the exclusive broadcast home of the meeting, CNBC has the sole streaming rights."
-      },
-      {
-        "span_id": "SPAN_00448",
-        "document_id": "DOC_00009",
-        "char_start": 294,
-        "char_end": 437,
-        "quote": "Another proposal from Illinois state Treasurer Michael Frerichs seeks to have Berkshire's board disclose how the company governs climate risks."
-      },
-      {
         "span_id": "SPAN_00453",
         "document_id": "DOC_00009",
-        "char_start": 439,
-        "char_end": 534,
+        "char_start": 240,
+        "char_end": 335,
         "quote": "for a third straight year wants Berkshire to report annually on how it addresses climate change"
       },
       {
         "span_id": "SPAN_00456",
         "document_id": "DOC_00009",
-        "char_start": 536,
-        "char_end": 600,
+        "char_start": 337,
+        "char_end": 401,
         "quote": "are scheduled to take shareholder questions for about five hours"
       },
       {
         "span_id": "SPAN_00466",
         "document_id": "DOC_00008",
-        "char_start": 424,
-        "char_end": 579,
+        "char_start": 99,
+        "char_end": 254,
         "quote": "It’s a three-day event that offers everything from shopping, to a 5K race, to a picnic, and draws as many as 40,000 people from around the world each year."
-      },
-      {
-        "span_id": "SPAN_00468",
-        "document_id": "DOC_00008",
-        "char_start": 581,
-        "char_end": 635,
-        "quote": "This is the first time the meeting has been broadcast."
-      },
-      {
-        "span_id": "SPAN_00470",
-        "document_id": "DOC_00009",
-        "char_start": 602,
-        "char_end": 763,
-        "quote": "Berkshire Hathaway shareholders will get down to business on a series of proposals that address issues including climate change, diversity and political advocacy"
       },
       {
         "span_id": "SPAN_00475",
         "document_id": "DOC_00009",
-        "char_start": 602,
-        "char_end": 684,
+        "char_start": 403,
+        "char_end": 485,
         "quote": "Berkshire Hathaway shareholders will get down to business on a series of proposals"
       },
       {
         "span_id": "SPAN_00476",
         "document_id": "DOC_00009",
-        "char_start": 849,
-        "char_end": 914,
+        "char_start": 487,
+        "char_end": 552,
         "quote": "Just over a quarter of votes in 2021 and 2022 supported the idea."
       },
       {
@@ -1025,22 +841,22 @@
       {
         "span_id": "SPAN_00484",
         "document_id": "DOC_00006",
-        "char_start": 71,
-        "char_end": 87,
+        "char_start": 54,
+        "char_end": 70,
         "quote": "今年年度股东大会上，巴菲特又说："
       },
       {
         "span_id": "SPAN_00516",
         "document_id": "DOC_00009",
-        "char_start": 916,
-        "char_end": 1017,
+        "char_start": 554,
+        "char_end": 655,
         "quote": "Abel made headlines last fall after he bought nearly $70 million worth of stock in Berkshire Hathaway"
       },
       {
         "span_id": "SPAN_00518",
         "document_id": "DOC_00009",
-        "char_start": 952,
-        "char_end": 1017,
+        "char_start": 590,
+        "char_end": 655,
         "quote": "he bought nearly $70 million worth of stock in Berkshire Hathaway"
       },
       {
@@ -1051,136 +867,59 @@
         "quote": "Tens of thousands of investors are gathering in Omaha, Nebraska this weekend"
       },
       {
-        "span_id": "SPAN_00531",
-        "document_id": "DOC_00009",
-        "char_start": 358,
-        "char_end": 436,
-        "quote": "seeks to have Berkshire's board disclose how the company governs climate risks"
-      },
-      {
         "span_id": "SPAN_00547",
         "document_id": "DOC_00024",
-        "char_start": 0,
-        "char_end": 19,
+        "char_start": 329,
+        "char_end": 348,
         "quote": "向五家机构捐赠了价值 46.3 亿美元"
       },
       {
         "span_id": "SPAN_00548",
         "document_id": "DOC_00024",
-        "char_start": 21,
-        "char_end": 35,
+        "char_start": 314,
+        "char_end": 328,
         "quote": "巴菲特周三进行了年度慈善捐赠"
       },
       {
         "span_id": "SPAN_00552",
         "document_id": "DOC_00024",
-        "char_start": 37,
-        "char_end": 97,
+        "char_start": 0,
+        "char_end": 60,
         "quote": "巴菲特将 9129 股 A 类股票转换为 1369.35 万股 B 类股票，以便向五个基金会捐赠 1369.34 万股。"
       },
       {
         "span_id": "SPAN_00554",
         "document_id": "DOC_00024",
-        "char_start": 99,
-        "char_end": 265,
+        "char_start": 62,
+        "char_end": 228,
         "quote": "104.53 万股捐给了苏珊・汤普森・巴菲特基金会（Susan Thompson Buffett Foundation），73.17 万股捐给了谢伍德基金会（Sherwood Foundation）、霍华德・G・巴菲特基金会（Howard G. Buffett Foundation）和诺沃基金会（NoVo Foundation）。"
-      },
-      {
-        "span_id": "SPAN_00557",
-        "document_id": "DOC_00024",
-        "char_start": 267,
-        "char_end": 324,
-        "quote": "而这五个基金会收到的伯克希尔 B 股在收到时的价值约为 500 亿美元，这大大超过了他在 2006 年的全部净资产"
-      },
-      {
-        "span_id": "SPAN_00558",
-        "document_id": "DOC_00024",
-        "char_start": 326,
-        "char_end": 369,
-        "quote": "“我没有债务，我剩下的 A 股价值约 1120 亿美元，远远超过我净资产的 99%。”"
       },
       {
         "span_id": "SPAN_00561",
         "document_id": "DOC_00024",
-        "char_start": 371,
-        "char_end": 391,
+        "char_start": 230,
+        "char_end": 250,
         "quote": "其中大部分捐给了比尔及梅琳达・盖茨基金会"
-      },
-      {
-        "span_id": "SPAN_00567",
-        "document_id": null,
-        "char_start": null,
-        "char_end": null,
-        "quote": "巴菲特周三进行了年度慈善捐赠，向五家机构捐赠了价值 46.3 亿美元的伯克希尔股票"
-      },
-      {
-        "span_id": "SPAN_00569",
-        "document_id": null,
-        "char_start": null,
-        "char_end": null,
-        "quote": "向五家机构捐赠了价值 46.3 亿美元的伯克希尔股票，其中大部分捐给了比尔及梅琳达・盖茨基金会"
-      },
-      {
-        "span_id": "SPAN_00570",
-        "document_id": "DOC_00024",
-        "char_start": 393,
-        "char_end": 452,
-        "quote": "巴菲特向盖茨基金会捐赠了 35.4 亿美元（76%），并向他自己的三个孩子经营的四家慈善机构捐赠了总计近 10 亿美元"
-      },
-      {
-        "span_id": "SPAN_00571",
-        "document_id": "DOC_00024",
-        "char_start": 37,
-        "char_end": 96,
-        "quote": "巴菲特将 9129 股 A 类股票转换为 1369.35 万股 B 类股票，以便向五个基金会捐赠 1369.34 万股"
-      },
-      {
-        "span_id": "SPAN_00572",
-        "document_id": "DOC_00024",
-        "char_start": 515,
-        "char_end": 599,
-        "quote": "超过 1045 万股捐给了比尔及梅琳达・盖茨基金会信托，按照周三的收盘价，相当于近 35.4 亿美元。伯克希尔・哈撒韦公司的 B 类股票周三收盘价为 338.61 美元"
-      },
-      {
-        "span_id": "SPAN_00573",
-        "document_id": "DOC_00024",
-        "char_start": 99,
-        "char_end": 264,
-        "quote": "104.53 万股捐给了苏珊・汤普森・巴菲特基金会（Susan Thompson Buffett Foundation），73.17 万股捐给了谢伍德基金会（Sherwood Foundation）、霍华德・G・巴菲特基金会（Howard G. Buffett Foundation）和诺沃基金会（NoVo Foundation）"
-      },
-      {
-        "span_id": "SPAN_00574",
-        "document_id": "DOC_00024",
-        "char_start": 768,
-        "char_end": 829,
-        "quote": "巴菲特在一份声明中称，年度捐赠的时间表是在 2006 年 6 月 26 日做出的，此后又对五个受赠人中的四个进行了大量捐赠"
-      },
-      {
-        "span_id": "SPAN_00575",
-        "document_id": "DOC_00024",
-        "char_start": 831,
-        "char_end": 891,
-        "quote": "“最初作出时，我拥有 474,998 股伯克希尔 A 股，价值约 430 亿美元，这些股票占我净资产的 98% 以上。”"
       },
       {
         "span_id": "SPAN_00582",
         "document_id": "DOC_00024",
-        "char_start": 393,
-        "char_end": 419,
+        "char_start": 252,
+        "char_end": 278,
         "quote": "巴菲特向盖茨基金会捐赠了 35.4 亿美元（76%）"
       },
       {
         "span_id": "SPAN_00601",
         "document_id": "DOC_00024",
-        "char_start": 921,
-        "char_end": 987,
+        "char_start": 314,
+        "char_end": 380,
         "quote": "巴菲特周三进行了年度慈善捐赠，向五家机构捐赠了价值 46.3 亿美元（IT之家备注：当前约 332.43 亿元人民币）的伯克希尔股票"
       },
       {
         "span_id": "SPAN_00602",
         "document_id": "DOC_00024",
-        "char_start": 989,
-        "char_end": 1021,
+        "char_start": 382,
+        "char_end": 414,
         "quote": "伯克希尔・哈撒韦公司首席执行官沃伦・巴菲特周三进行了年度慈善捐赠"
       },
       {
@@ -1249,51 +988,37 @@
       {
         "span_id": "SPAN_00809",
         "document_id": "DOC_00021",
-        "char_start": 1485,
-        "char_end": 1664,
+        "char_start": 607,
+        "char_end": 786,
         "quote": "His investment conglomerate Berkshire Hathaway on Feb. 25 reported a net loss of $22.8 billion in 2022, driven by a nearly $54 billion decline in the value of its stock portfolio."
       },
       {
         "span_id": "SPAN_00810",
         "document_id": "DOC_00021",
-        "char_start": 1666,
-        "char_end": 1888,
+        "char_start": 788,
+        "char_end": 1010,
         "quote": "When excluding losses on stock investments, which were unrealized, Berkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high and 12 percent more than the previous year’s $27.5 billion."
       },
       {
         "span_id": "SPAN_00823",
         "document_id": "DOC_00021",
-        "char_start": 1890,
-        "char_end": 2036,
+        "char_start": 1012,
+        "char_end": 1158,
         "quote": "But the 92-year-old investment guru said that figure is highly misleading and doesn’t reflect the true state of Berkshire’s financial performance."
-      },
-      {
-        "span_id": "SPAN_00826",
-        "document_id": "DOC_00021",
-        "char_start": 851,
-        "char_end": 938,
-        "quote": "though Buffett thought it was good year for business, he said in the shareholder letter"
       },
       {
         "span_id": "SPAN_00828",
         "document_id": "DOC_00021",
-        "char_start": 1328,
-        "char_end": 1423,
+        "char_start": 855,
+        "char_end": 950,
         "quote": "Berkshire Hathaway actually recorded $30.8 billion in operating earnings in 2022, a record high"
       },
       {
         "span_id": "SPAN_00832",
         "document_id": "DOC_00021",
-        "char_start": 761,
-        "char_end": 849,
+        "char_start": 328,
+        "char_end": 416,
         "quote": "Under GAAP accounting, in 2022 Berkshire earned $112 billion less than the previous year"
-      },
-      {
-        "span_id": "PERSON_SPAN_00932",
-        "document_id": "DOC_00009",
-        "char_start": 1244,
-        "char_end": 1453,
-        "quote": "The largest U.S. public pension fund, the $455 billion California Public Employees' Retirement System (CalPERS), for a third straight year wants Berkshire to report annually on how it addresses climate change."
       },
       {
         "span_id": "PERSON_SPAN_00950",
@@ -1303,31 +1028,24 @@
         "quote": "converted 1,600 Class A shares into 2,400,000 Class B shares"
       },
       {
-        "span_id": "PERSON_SPAN_00963",
-        "document_id": "DOC_00022",
-        "char_start": 667,
-        "char_end": 793,
-        "quote": "According to calculations by news agency Reuters, this amounts to a total donation of $866 million in Berkshire Hathaway funds"
-      },
-      {
         "span_id": "PERSON_SPAN_00966",
         "document_id": "DOC_00024",
-        "char_start": 420,
-        "char_end": 452,
+        "char_start": 280,
+        "char_end": 312,
         "quote": "并向他自己的三个孩子经营的四家慈善机构捐赠了总计近 10 亿美元"
       },
       {
         "span_id": "PERSON_SPAN_00967",
         "document_id": "DOC_00024",
-        "char_start": 1057,
-        "char_end": 1142,
+        "char_start": 416,
+        "char_end": 501,
         "quote": "超过 1045 万股捐给了比尔及梅琳达・盖茨基金会信托，按照周三的收盘价，相当于近 35.4 亿美元。伯克希尔・哈撒韦公司的 B 类股票周三收盘价为 338.61 美元。"
       },
       {
         "span_id": "PERSON_SPAN_00972",
         "document_id": "DOC_00022",
-        "char_start": 717,
-        "char_end": 793,
+        "char_start": 456,
+        "char_end": 532,
         "quote": "this amounts to a total donation of $866 million in Berkshire Hathaway funds"
       },
       {
@@ -1387,30 +1105,6 @@
               "Single reporting-period snapshot."
             ],
             "confidence": 0.8
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Explicit purchase amount, share count and quarter are stated in the source."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Explicit holdings and valuation as of the period-end date."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Source states the acquisition announcement came a few weeks after the purchase and gives the $68.7 billion price."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "Directly states the attribution of the purchase is unresolved in the source."
-            ],
-            "confidence": 0.95
           }
         }
       },
@@ -1438,17 +1132,6 @@
               "Explicit amount and share count for the purchase."
             ],
             "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00139",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "The source states the sale announcement came a few weeks after the purchase."
-            ],
-            "confidence": 0.85
           }
         }
       },
@@ -1574,30 +1257,6 @@
               "Single publication event."
             ],
             "confidence": 0.9
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Direct statement of publication date and the letter's content regarding operating earnings."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Verbatim quotation from the shareholder letter."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Direct quotation from the shareholder letter."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "Direct statement attributing the view to Buffett in the shareholder letter."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -1626,39 +1285,6 @@
               "Direct statement of the letter's content and Buffett's recommendation to shareholders."
             ],
             "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00181",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Verbatim quotation attributed to Buffett in the shareholder letter."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00182",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Verbatim quotation from the letter explaining Buffett's view on capital gains reporting."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00183",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct statement of Buffett's assessment in the letter."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -1727,54 +1353,6 @@
               "Explicit end time on the same day."
             ],
             "confidence": 0.8
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "The source states the 59th annual meeting occurred on Saturday, and the article date (May 5, 2023) places it on May 6, 2023."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "The source gives the scheduled duration and exact time window for the Q&A."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Direct quotation of Buffett's stated plan and self-critique, plus the moderation and question-format details."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "The source explicitly states this was the first broadcast and that CNBC held exclusive rights."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/4": {
-            "reasons": [
-              "The source lists the expected topics for the Q&A."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/5": {
-            "reasons": [
-              "The source describes the shareholder proposals and Buffett's opposition with his voting power."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/6": {
-            "reasons": [
-              "The source details CalPERS's proposal and prior vote support."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/7": {
-            "reasons": [
-              "The source names Frerichs and his proposal."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -1801,39 +1379,6 @@
           "/value": {
             "reasons": [
               "Direct description of the event's scale and format."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00203",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Explicit schedule for the Q&A session."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00204",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct statements about the broadcast arrangement."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00205",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct statement of the agenda items."
             ],
             "confidence": 0.9
           }
@@ -1868,23 +1413,6 @@
         }
       },
       {
-        "evidence_set_id": "ES_00210",
-        "field_metadata": {
-          "/action_type": {
-            "reasons": [
-              "Direct statement of the proposal and its requester."
-            ],
-            "confidence": 0.9
-          },
-          "/timestamp": {
-            "reasons": [
-              "Proposal to be voted at the May 6, 2023 meeting; filing date not given."
-            ],
-            "confidence": 0.7
-          }
-        }
-      },
-      {
         "evidence_set_id": "ES_00213",
         "field_metadata": {
           "/title": {
@@ -1911,36 +1439,6 @@
               "No end boundary for the statement."
             ],
             "confidence": 0.3
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Direct quotation of Buffett's statement at the annual meeting, explicitly about Abel inheriting his work."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Direct quotation of Buffett's praise and joke about Abel's future success."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Direct quotation of Buffett's statement at the 2023 annual meeting about Abel's decision-making framework."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "Direct statement of Buffett's opposition and voting power, and the activist effort to oust him as chairman."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/4": {
-            "reasons": [
-              "Direct statements about Abel's succession status and current oversight role."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -2030,81 +1528,6 @@
         }
       },
       {
-        "evidence_set_id": "ES_00232",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Explicit agenda item for the meeting."
-            ],
-            "confidence": 0.85
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00235",
-        "field_metadata": {
-          "/action_type": {
-            "reasons": [
-              "Explicit proposal by CalPERS for Berkshire climate reporting."
-            ],
-            "confidence": 0.85
-          },
-          "/timestamp": {
-            "reasons": [
-              "Proposal was on the agenda for the 2023 annual meeting on May 6, 2023."
-            ]
-          },
-          "/actor_id": {
-            "reasons": [
-              "CalPERS is the actor proposing annual climate change reporting; actor already correct, no change needed."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00236",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Explicit prior support levels for the same proposal."
-            ],
-            "confidence": 0.85
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00237",
-        "field_metadata": {
-          "/action_type": {
-            "reasons": [
-              "Explicit proposal attributed to Frerichs."
-            ],
-            "confidence": 0.85
-          },
-          "/timestamp": {
-            "reasons": [
-              "Proposal was on the agenda for the 2023 annual meeting on May 6, 2023."
-            ]
-          },
-          "/actor_id": {
-            "reasons": [
-              "Frerichs is the actor submitting the climate risk governance proposal; actor already correct."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00238",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Explicit content of the proposal."
-            ],
-            "confidence": 0.85
-          }
-        }
-      },
-      {
         "evidence_set_id": "ES_00247",
         "field_metadata": {
           "/title": {
@@ -2131,177 +1554,6 @@
               "Single-day donation event."
             ],
             "confidence": 0.75
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Directly states the donor, timing, total value, number of recipients, and that most went to the Gates Foundation."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Explicitly breaks down the donation between the Gates Foundation and the four family-run charities."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Describes the share conversion and the number of shares donated."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "Provides the share count and valuation for the Gates Foundation portion."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/4": {
-            "reasons": [
-              "Specifies the share allocations to the other four recipient foundations."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/5": {
-            "reasons": [
-              "Directly quotes Buffett's statement about the donation schedule and past giving."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/6": {
-            "reasons": [
-              "Direct quotation of Buffett's statement about his 2006 baseline wealth."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/7": {
-            "reasons": [
-              "Directly states the cumulative value received by the five foundations."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/8": {
-            "reasons": [
-              "Direct quotation of Buffett's statement about his remaining wealth."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00256",
-        "field_metadata": {
-          "/action_type": {
-            "reasons": [
-              "Direct statement of the donation action, amount and recipients."
-            ],
-            "confidence": 0.95,
-            "evidence_status": "needs_review"
-          },
-          "/timestamp": {
-            "reasons": [
-              "The donation occurred on a Wednesday; the source published 2023-06-21/22 and the donation was that Wednesday. Keep the weekday-relative phrasing with the contextual date."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00257",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Explicit total amount and recipient emphasis."
-            ],
-            "confidence": 0.95,
-            "evidence_status": "needs_review"
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00258",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Explicit breakdown of the donation by recipient."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00259",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Documents the share conversion and donation mechanics."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00260",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Share-count and valuation detail for the Gates Foundation portion."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00261",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Recipient-level share allocations for the family foundations."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00262",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Buffett's statement about the donation program's origin and history."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00263",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct quotation of Buffett's statement about his 2006 baseline wealth."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00264",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Buffett's cumulative giving statement."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00265",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct quotation of Buffett's statement on remaining wealth as of the June 2023 donation."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -2396,34 +1648,6 @@
               "Single filing date."
             ],
             "confidence": 0.85
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Directly states the share conversion and the SEC filing date.",
-              "Preserves the filing date as the date of the conversion disclosure."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Directly states the recipient and share count.",
-              "Identifies the Susan Thompson Buffett Foundation as a recipient."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Directly states the share count and the three recipient foundations.",
-              "The word 'respectively' indicates 300,000 shares to each foundation."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "Directly states the $866 million total and the prior-year $759 million donation.",
-              "Attributes the calculation to Reuters."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -2444,51 +1668,6 @@
       },
       {
         "evidence_set_id": "ES_00292",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Detail text is accurate; no change needed."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00293",
-        "field_metadata": {
-          "/action_type": {
-            "reasons": [
-              "Action type is accurate; no change needed."
-            ]
-          },
-          "/timestamp": {
-            "reasons": [
-              "The filing date is Nov. 21; the donation is reported in connection with that filing. Preserve the filing date context rather than a bare date."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00294",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Detail text is accurate; no change needed."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00295",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Detail text is accurate; no change needed."
-            ]
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00296",
         "field_metadata": {
           "/value": {
             "reasons": [
@@ -2586,46 +1765,6 @@
               "Exact meeting date not given in source."
             ],
             "confidence": 0.65
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Direct statement that CalPERS called for replacing the chairman; '去年' indicates 2022 relative to the May 2023 article."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Direct statement of the proposal's low support and defeat at the shareholder meeting."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00354",
-        "field_metadata": {
-          "/action_type": {
-            "reasons": [
-              "The source states CalPERS called for replacing Berkshire's chairman, a proposal directed at Buffett's chairmanship."
-            ],
-            "confidence": 0.85
-          },
-          "/timestamp": {
-            "reasons": [
-              "'去年' relative to the May 2023 article indicates 2022."
-            ],
-            "confidence": 0.8
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00355",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct statement of the proposal's outcome."
-            ],
-            "confidence": 0.85
           }
         }
       },
@@ -2714,36 +1853,6 @@
               "Single-day reporting event."
             ],
             "confidence": 0.9
-          },
-          "/descriptions/0": {
-            "reasons": [
-              "Direct statement of the reported net loss and its stated driver."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/1": {
-            "reasons": [
-              "Direct statement of operating earnings, record status and year-over-year comparison."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/2": {
-            "reasons": [
-              "Verbatim quotation attributed to Buffett's shareholder letter."
-            ],
-            "confidence": 0.95
-          },
-          "/descriptions/3": {
-            "reasons": [
-              "Direct statement of Buffett's stated preference and his urging of shareholders."
-            ],
-            "confidence": 0.9
-          },
-          "/descriptions/4": {
-            "reasons": [
-              "Direct statement of the GAAP year-over-year decline and Buffett's characterization of the year."
-            ],
-            "confidence": 0.9
           }
         }
       },
@@ -2769,39 +1878,6 @@
           "/value": {
             "reasons": [
               "Direct statement attributing the characterization of the loss figure to Buffett."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00389",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Verbatim quotation attributed to Buffett's shareholder letter."
-            ],
-            "confidence": 0.95
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00390",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct statement of Buffett's stated preference and his urging of shareholders."
-            ],
-            "confidence": 0.9
-          }
-        }
-      },
-      {
-        "evidence_set_id": "ES_00391",
-        "field_metadata": {
-          "/value": {
-            "reasons": [
-              "Direct attribution of Buffett's assessment of the year."
             ],
             "confidence": 0.9
           }
@@ -2886,12 +1962,6 @@
       {
         "evidence_set_id": "ES_00138",
         "span_id": "SPAN_00337",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00139",
-        "span_id": "SPAN_00335",
         "field_path": "/value",
         "quote_order": 0
       },
@@ -2992,24 +2062,6 @@
         "quote_order": 0
       },
       {
-        "evidence_set_id": "ES_00181",
-        "span_id": "SPAN_00009",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00182",
-        "span_id": "SPAN_00420",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00183",
-        "span_id": "SPAN_00421",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
         "evidence_set_id": "ES_00184",
         "span_id": "SPAN_00060",
         "field_path": "/action_type",
@@ -3070,30 +2122,6 @@
         "quote_order": 0
       },
       {
-        "evidence_set_id": "ES_00203",
-        "span_id": "SPAN_00439",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00204",
-        "span_id": "SPAN_00468",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00204",
-        "span_id": "SPAN_00443",
-        "field_path": "/value",
-        "quote_order": 1
-      },
-      {
-        "evidence_set_id": "ES_00205",
-        "span_id": "SPAN_00470",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
         "evidence_set_id": "ES_00208",
         "span_id": "SPAN_00453",
         "field_path": "/action_type",
@@ -3109,18 +2137,6 @@
         "evidence_set_id": "ES_00209",
         "span_id": "SPAN_00476",
         "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00210",
-        "span_id": "SPAN_00448",
-        "field_path": "/action_type",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00210",
-        "span_id": "SPAN_00475",
-        "field_path": "/timestamp",
         "quote_order": 0
       },
       {
@@ -3196,36 +2212,6 @@
         "quote_order": 0
       },
       {
-        "evidence_set_id": "ES_00232",
-        "span_id": "SPAN_00470",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00235",
-        "span_id": "SPAN_00453",
-        "field_path": "/action_type",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00236",
-        "span_id": "SPAN_00476",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00237",
-        "span_id": "SPAN_00448",
-        "field_path": "/action_type",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00238",
-        "span_id": "SPAN_00531",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
         "evidence_set_id": "ES_00247",
         "span_id": "SPAN_00547",
         "field_path": "/title",
@@ -3241,66 +2227,6 @@
         "evidence_set_id": "ES_00247",
         "span_id": "SPAN_00548",
         "field_path": "/end_time",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00256",
-        "span_id": "SPAN_00567",
-        "field_path": "/action_type",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00257",
-        "span_id": "SPAN_00569",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00258",
-        "span_id": "SPAN_00570",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00259",
-        "span_id": "SPAN_00571",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00260",
-        "span_id": "SPAN_00572",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00261",
-        "span_id": "SPAN_00573",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00262",
-        "span_id": "SPAN_00574",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00263",
-        "span_id": "SPAN_00575",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00264",
-        "span_id": "SPAN_00557",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00265",
-        "span_id": "SPAN_00558",
-        "field_path": "/value",
         "quote_order": 0
       },
       {
@@ -3388,24 +2314,6 @@
         "quote_order": 0
       },
       {
-        "evidence_set_id": "ES_00354",
-        "span_id": "SPAN_00745",
-        "field_path": "/action_type",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00354",
-        "span_id": "SPAN_00745",
-        "field_path": "/timestamp",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00355",
-        "span_id": "SPAN_00748",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
         "evidence_set_id": "ES_00356",
         "span_id": "SPAN_00745",
         "field_path": "/action_type",
@@ -3478,24 +2386,6 @@
         "quote_order": 0
       },
       {
-        "evidence_set_id": "ES_00389",
-        "span_id": "SPAN_00009",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00390",
-        "span_id": "SPAN_00426",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
-        "evidence_set_id": "ES_00391",
-        "span_id": "SPAN_00826",
-        "field_path": "/value",
-        "quote_order": 0
-      },
-      {
         "evidence_set_id": "ES_00392",
         "span_id": "SPAN_00060",
         "field_path": "/action_type",
@@ -3550,70 +2440,22 @@
         "span_id": "SPAN_00335"
       },
       {
-        "evidence_set_id": "ES_00235",
-        "field_path": "/actor_id",
-        "quote_order": 0,
-        "span_id": "PERSON_SPAN_00932"
-      },
-      {
-        "evidence_set_id": "ES_00237",
-        "field_path": "/actor_id",
-        "quote_order": 0,
-        "span_id": "SPAN_00448"
-      },
-      {
-        "evidence_set_id": "ES_00293",
-        "field_path": "/timestamp",
-        "quote_order": 0,
-        "span_id": "SPAN_00612"
-      },
-      {
-        "evidence_set_id": "ES_00293",
-        "field_path": "/timestamp",
-        "quote_order": 1,
-        "span_id": "SPAN_00035"
-      },
-      {
         "evidence_set_id": "ES_00297",
         "field_path": "/to_entity_id",
         "quote_order": 0,
         "span_id": "SPAN_00124"
       },
       {
-        "evidence_set_id": "ES_00256",
-        "field_path": "/timestamp",
-        "quote_order": 0,
-        "span_id": "SPAN_00548"
-      },
-      {
         "evidence_set_id": "ES_00291",
         "field_path": "/timestamp",
         "quote_order": 0,
         "span_id": "SPAN_00612"
       },
       {
-        "evidence_set_id": "ES_00235",
-        "field_path": "/timestamp",
-        "quote_order": 0,
-        "span_id": "SPAN_00453"
-      },
-      {
-        "evidence_set_id": "ES_00237",
-        "field_path": "/timestamp",
-        "quote_order": 0,
-        "span_id": "SPAN_00448"
-      },
-      {
         "evidence_set_id": "ES_00291",
         "field_path": "/action_type",
         "quote_order": 0,
         "span_id": "PERSON_SPAN_00950"
-      },
-      {
-        "evidence_set_id": "ES_00293",
-        "field_path": "/action_type",
-        "quote_order": 0,
-        "span_id": "SPAN_00035"
       },
       {
         "evidence_set_id": "ES_00282",
@@ -3632,24 +2474,6 @@
         "field_path": "/value",
         "quote_order": 0,
         "span_id": "PERSON_SPAN_00950"
-      },
-      {
-        "evidence_set_id": "ES_00294",
-        "field_path": "/value",
-        "quote_order": 0,
-        "span_id": "SPAN_00124"
-      },
-      {
-        "evidence_set_id": "ES_00295",
-        "field_path": "/value",
-        "quote_order": 0,
-        "span_id": "SPAN_00616"
-      },
-      {
-        "evidence_set_id": "ES_00296",
-        "field_path": "/value",
-        "quote_order": 0,
-        "span_id": "PERSON_SPAN_00963"
       },
       {
         "evidence_set_id": "ES_00282",
@@ -3872,10 +2696,6 @@
         "value": "2023-05-06"
       },
       {
-        "time_id": "TIME_00176",
-        "value": "2023-05-06"
-      },
-      {
         "time_id": "TIME_00178",
         "value": "2023-05-06"
       },
@@ -3920,10 +2740,6 @@
         "value": "2022"
       },
       {
-        "time_id": "TIME_00312",
-        "value": "2022"
-      },
-      {
         "time_id": "TIME_00313",
         "value": "2022"
       },
@@ -3956,24 +2772,8 @@
         "value": "2022-01"
       },
       {
-        "time_id": "REPAIR_TIME_464",
-        "value": "2023-11-21 (SEC filing date; donation reported alongside)"
-      },
-      {
-        "time_id": "REPAIR_TIME_465",
-        "value": "2023-06-21 (Wednesday)"
-      },
-      {
         "time_id": "REPAIR_TIME_470",
         "value": "2023-11-21 (SEC filing date)"
-      },
-      {
-        "time_id": "REPAIR_TIME_473",
-        "value": "2023-05-06 (2023 annual meeting)"
-      },
-      {
-        "time_id": "REPAIR_TIME_474",
-        "value": "2023-05-06 (2023 annual meeting)"
       },
       {
         "time_id": "REPAIR_TIME_475",
@@ -4029,12 +2829,6 @@
         "context_occurrence_id": null
       },
       {
-        "activity_id": "A:ACT_O_S5_E2_P6_1",
-        "action_id": "ACT_O_S5_E2_P6_1",
-        "transaction_id": null,
-        "context_occurrence_id": null
-      },
-      {
         "activity_id": "A:ACT_O_S5_E3_P1_1",
         "action_id": "ACT_O_S5_E3_P1_1",
         "transaction_id": null,
@@ -4053,24 +2847,6 @@
         "context_occurrence_id": null
       },
       {
-        "activity_id": "A:ACT_O_S5_E3_P5_1",
-        "action_id": "ACT_O_S5_E3_P5_1",
-        "transaction_id": null,
-        "context_occurrence_id": null
-      },
-      {
-        "activity_id": "A:ACT_O_S5_E3_P6_1",
-        "action_id": "ACT_O_S5_E3_P6_1",
-        "transaction_id": null,
-        "context_occurrence_id": null
-      },
-      {
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "action_id": "ACT_O_S6_E1_P1_1",
-        "transaction_id": null,
-        "context_occurrence_id": null
-      },
-      {
         "activity_id": "T:TX_O_S6_E1_1",
         "action_id": null,
         "transaction_id": "TX_O_S6_E1_1",
@@ -4083,21 +2859,9 @@
         "context_occurrence_id": null
       },
       {
-        "activity_id": "A:ACT_O_S6_E2_P1_2",
-        "action_id": "ACT_O_S6_E2_P1_2",
-        "transaction_id": null,
-        "context_occurrence_id": null
-      },
-      {
         "activity_id": "T:TX_O_S6_E2_1",
         "action_id": null,
         "transaction_id": "TX_O_S6_E2_1",
-        "context_occurrence_id": null
-      },
-      {
-        "activity_id": "A:ACT_O_S12_E1_P1_1",
-        "action_id": "ACT_O_S12_E1_P1_1",
-        "transaction_id": null,
         "context_occurrence_id": null
       },
       {
@@ -4139,12 +2903,6 @@
         "evidence_set_id": "ES_00138"
       },
       {
-        "value": "The purchase preceded Microsoft's announced $68.7 billion acquisition of Activision by a few weeks.",
-        "activity_id": "A:ACT_O_S4_E1_P1_1",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00139"
-      },
-      {
         "value": "The announced acquisition price was $68.7 billion.",
         "activity_id": "A:ACT_O_S4_E1_P4_1",
         "detail_index": 0,
@@ -4155,24 +2913,6 @@
         "activity_id": "A:ACT_O_S5_E1_P1_1",
         "detail_index": 0,
         "evidence_set_id": "ES_00180"
-      },
-      {
-        "value": "Buffett wrote that GAAP earnings are '100 percent misleading when viewed quarterly or even annually.'",
-        "activity_id": "A:ACT_O_S5_E1_P1_1",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00181"
-      },
-      {
-        "value": "Buffett wrote that capital gains have been hugely important to Berkshire and are expected to be meaningfully positive in future decades, but their quarter-by-quarter gyrations misinform investors.",
-        "activity_id": "A:ACT_O_S5_E1_P1_1",
-        "detail_index": 2,
-        "evidence_set_id": "ES_00182"
-      },
-      {
-        "value": "Buffett said in the letter that 2022 was a good year for business despite GAAP earnings being $112 billion lower than the previous year.",
-        "activity_id": "A:ACT_O_S5_E1_P1_1",
-        "detail_index": 3,
-        "evidence_set_id": "ES_00183"
       },
       {
         "value": "Berkshire reported a 2022 net loss of $22.8 billion, driven by a nearly $54 billion decline in the value of its stock portfolio.",
@@ -4191,24 +2931,6 @@
         "activity_id": "A:ACT_O_S5_E2_P2_1",
         "detail_index": 0,
         "evidence_set_id": "ES_00202"
-      },
-      {
-        "value": "The Q&A with Buffett and Munger was scheduled from 10:15 a.m. ET to 4:30 p.m. ET with a one-hour lunch break.",
-        "activity_id": "A:ACT_O_S5_E2_P2_1",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00203"
-      },
-      {
-        "value": "This was the first time the meeting was broadcast, with CNBC holding exclusive broadcast and streaming rights.",
-        "activity_id": "A:ACT_O_S5_E2_P2_1",
-        "detail_index": 2,
-        "evidence_set_id": "ES_00204"
-      },
-      {
-        "value": "Shareholders were to vote on proposals addressing climate change, diversity and political advocacy.",
-        "activity_id": "A:ACT_O_S5_E2_P2_1",
-        "detail_index": 3,
-        "evidence_set_id": "ES_00205"
       },
       {
         "value": "Just over a quarter of votes in 2021 and 2022 supported the idea.",
@@ -4235,106 +2957,10 @@
         "evidence_set_id": "ES_00231"
       },
       {
-        "value": "Shareholders were to vote on proposals addressing climate change, diversity and political advocacy.",
-        "activity_id": "A:ACT_O_S5_E3_P3_1",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00232"
-      },
-      {
-        "value": "Just over a quarter of votes in 2021 and 2022 supported the idea.",
-        "activity_id": "A:ACT_O_S5_E3_P5_1",
-        "detail_index": 0,
-        "evidence_set_id": "ES_00236"
-      },
-      {
-        "value": "The proposal sought disclosure of how Berkshire's board governs climate risks.",
-        "activity_id": "A:ACT_O_S5_E3_P6_1",
-        "detail_index": 0,
-        "evidence_set_id": "ES_00238"
-      },
-      {
-        "value": "Donated Berkshire stock worth about $4.63 billion to five institutions, most of it to the Bill & Melinda Gates Foundation.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 0,
-        "evidence_set_id": "ES_00257"
-      },
-      {
-        "value": "Donated $3.54 billion (76%) to the Gates Foundation and nearly $1 billion in total to four charities run by his three children.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00258"
-      },
-      {
-        "value": "Converted 9,129 Class A shares into 13,693,500 Class B shares in order to donate 13,693,400 shares to the five foundations.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 2,
-        "evidence_set_id": "ES_00259"
-      },
-      {
-        "value": "More than 10.45 million shares went to the Bill & Melinda Gates Foundation Trust, worth nearly $3.54 billion at Wednesday's closing price of $338.61 per Class B share.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 3,
-        "evidence_set_id": "ES_00260"
-      },
-      {
-        "value": "1,045,300 shares went to the Susan Thompson Buffett Foundation, and 731,700 shares went to the Sherwood Foundation, Howard G. Buffett Foundation and NoVo Foundation.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 4,
-        "evidence_set_id": "ES_00261"
-      },
-      {
-        "value": "Stated that the annual donation schedule was set on June 26, 2006, and that he has since made substantial donations to four of the five recipients.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 5,
-        "evidence_set_id": "ES_00262"
-      },
-      {
-        "value": "Stated that when he made the original pledge he owned 474,998 Berkshire Class A shares worth about $43 billion, more than 98% of his net worth.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 6,
-        "evidence_set_id": "ES_00263"
-      },
-      {
-        "value": "Stated that the five foundations have received Berkshire Class B shares worth about $50 billion at the time of receipt, far exceeding his entire 2006 net worth.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 7,
-        "evidence_set_id": "ES_00264"
-      },
-      {
-        "value": "Stated he has no debt and his remaining Class A shares are worth about $112 billion, more than 99% of his net worth.",
-        "activity_id": "A:ACT_O_S6_E1_P1_1",
-        "detail_index": 8,
-        "evidence_set_id": "ES_00265"
-      },
-      {
         "value": "Converted 1,600 Class A shares into 2,400,000 Class B shares.",
         "activity_id": "A:ACT_O_S6_E2_P1_1",
         "detail_index": 0,
         "evidence_set_id": "ES_00292"
-      },
-      {
-        "value": "Gifted 1,500,000 Class B shares to the Susan Thompson Buffett Foundation.",
-        "activity_id": "A:ACT_O_S6_E2_P1_2",
-        "detail_index": 0,
-        "evidence_set_id": "ES_00294"
-      },
-      {
-        "value": "Gave 300,000 Class B shares each to the Sherwood Foundation, the Howard G. Buffett Foundation, and the NoVo Foundation.",
-        "activity_id": "A:ACT_O_S6_E2_P1_2",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00295"
-      },
-      {
-        "value": "Total donation value calculated by Reuters at about $866 million.",
-        "activity_id": "A:ACT_O_S6_E2_P1_2",
-        "detail_index": 2,
-        "evidence_set_id": "ES_00296"
-      },
-      {
-        "value": "The proposal received little support and was defeated at the shareholder meeting.",
-        "activity_id": "A:ACT_O_S12_E1_P1_1",
-        "detail_index": 0,
-        "evidence_set_id": "ES_00355"
       },
       {
         "value": "The proposal drew few supporters and was voted down at the shareholder meeting.",
@@ -4353,24 +2979,6 @@
         "activity_id": "A:ACT_O_S16_E1_P1_1",
         "detail_index": 0,
         "evidence_set_id": "ES_00388"
-      },
-      {
-        "value": "Buffett wrote that GAAP earnings are '100 percent misleading when viewed quarterly or even annually.'",
-        "activity_id": "A:ACT_O_S16_E1_P1_1",
-        "detail_index": 1,
-        "evidence_set_id": "ES_00389"
-      },
-      {
-        "value": "Buffett said he and Charlie Munger prefer operating earnings as the measure of financial performance and urge Berkshire shareholders to do the same.",
-        "activity_id": "A:ACT_O_S16_E1_P1_1",
-        "detail_index": 2,
-        "evidence_set_id": "ES_00390"
-      },
-      {
-        "value": "Buffett said that despite the GAAP result, he thought 2022 was a good year for business.",
-        "activity_id": "A:ACT_O_S16_E1_P1_1",
-        "detail_index": 3,
-        "evidence_set_id": "ES_00391"
       },
       {
         "value": "Berkshire reported a 2022 net loss of $22.8 billion, driven by a nearly $54 billion decline in the value of its stock portfolio.",

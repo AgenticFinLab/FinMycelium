@@ -1,5 +1,5 @@
 # Search configuration; independent of Builder settings.
-# Opt-in search only; the existing simple runner defaults are unchanged.
+# Standalone agent search uses this flat file; pipeline options live under search_config.enhancement.
 providers: [bocha]  # Select baidu, bocha, exa, or a list of them.
 max_results: 5
 early_stop_multiplier: 1  # Pipeline overrides this to 4.

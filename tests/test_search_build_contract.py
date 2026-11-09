@@ -96,8 +96,6 @@ def test_full_entry_passes_budgeted_body_unchanged_and_keeps_model_configs_separ
     recorded_build = Mock(return_value='stub-build-result')
     factory = Mock(return_value=SimpleNamespace(lm_build_pipeline_with_contents=recorded_build))
     monkeypatch.setattr(search_pipeline_runner, '_create_pipeline', factory)
-    monkeypatch.setattr(search_pipeline_runner, '_limit_content_length',
-                        lambda *a, **k: pytest.fail('Budgeted input must not be trimmed again'))
     config = dict(search_config=dict(mode='agent', enhancement=dict(lm_name='ark/search-model')),
                   builder_config=dict(builder_type='SparseRagBuilder', lm_name='ark/build-model'),
                   all_content_config=dict(max_content_length=1))
@@ -105,7 +103,8 @@ def test_full_entry_passes_budgeted_body_unchanged_and_keeps_model_configs_separ
     result = search_pipeline_runner.run_search_pipeline(config, 'original', [], tmp_path/'full')
     recorded_build.assert_called_once_with(contents=[s['content'] for s in payload['samples']],
         query_text=payload['user_query']['query_text'], key_words=payload['user_query']['key_words'])
-    factory.assert_called_once_with(config)
+    factory.assert_called_once()
+    assert factory.call_args.args[0]["source_registry"]["saved_0"]["source_id"] == payload["samples"][0]["raw_data_id"]
     assert fake_search.call_args.kwargs['config']['lm_name'] == 'ark/search-model'
     assert config == before
     assert sum(map(len, result['all_text_content'])) == selection['material_chars']

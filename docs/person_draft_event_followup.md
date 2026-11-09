@@ -1,21 +1,20 @@
 # 保留初版 EPG，按已有事件增补
 
 这版将初次生成与补搜分为独立预算，取消补搜后的整图重建。
-人物、公司、事件名称或阶段数量均未写死。参考 HTML 用于说明过程细节，
+人物、事件名称或阶段数量均未写死。参考 HTML 用于说明过程细节，
 不作为固定的活动数或阶段模板。
 
 ## 搜索与人物构图入口
 
 本流程已与 main 的共享搜索实现合并，无需另行应用历史 patch。
-`configs/search_pipeline.yml` 使用 `search_config.mode: agent`，
+`configs/search_pipeline.yml` 统一使用 Agent 搜索，
 模型、provider 和搜索限制在 `search_config.enhancement` 中独立配置；
-示例明确选择 DeepSeek 和 Bocha/Baidu 双源，并允许联网，运行前需要配置对应密钥。
-设置 `mode: simple` 可继续使用旧采集器。
+示例明确选择 DeepSeek 和 Bocha，并允许联网，运行前需要配置对应密钥。
+旧 `mode: simple` 会迁移到 Agent，不再保留另一套采集器。
 
 CLI 的 `run_search_pipeline` 和现有重建页面均读取
 `builder_config.reconstruction`：person 使用人物组织、Person EPG schema、
-规范 JSON 与专用 HTML；company 保持 AgentEventBuilder 的原生公司路径。
-选择公司时须同时配置 `builder_type: AgentEventBuilder`。
+规范 JSON 与专用 HTML；单事件保留现有 Event Builder。
 搜索的 `target_type` 不替代 builder 的主体、覆盖期和范围配置。
 
 人物初次搜索默认先发现 domain/storyline，再逐 event 调用共享搜索，
@@ -28,9 +27,8 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 共享搜索保存选中来源的完整正文与版本；初版和补充阶段分别进行一次最终证据分配。
 来源标题、URL、发表时间和版本随筛选、预算重排进入 builder，
 不会按输入序号错配。发表日期不是事件日期；不完整日期不会补成虚构时间戳。
-单个搜索任务暂停、失败或未完成交付时，其内容不进入构图；人物初搜中其他完成的 event
-仍可进入初版，未完成项另行报告。完全无可用原文时不启动构图。
-补搜部分完成时只接收已完成 event 的原文，并报告未完成的 event。
+搜索任务未完成时，已保存且可验证的非空原文仍可交接，未完成项另行报告。
+人物初搜与补搜均保留其他 event 的成功资料；完全无可用原文时不启动构图。
 
 ## 流程与预算
 
@@ -38,7 +36,7 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 2. 仅在 `event_followup.enabled: true` 时，读取初版已有 event，以名称、实体、具体活动和年份线索进行补搜。
    只有名称的薄事件也可检索，无需用户预先填写 event 列表。
 3. 补搜使用独立的检索计数，只处理新增来源；相关性由搜索 Agent 判断。
-4. 新资料进入单独约 60,000 字符证据池，不重新截断或替换第一轮证据。
+4. 新资料进入单独约 120,000 字符证据池，不重新截断或替换第一轮证据。
 5. 对有新来源且有剩余额度的 event，先各提交一轮增补提议和模型审核，再用剩余额度定向修订失败项。
    提议为空或结构/引文预检失败时不再调用审核。所有尝试均计入额度。
 6. 只合并通过审核的有据活动、细节、关系和可选阶段；最终使用现有 Person EPG 页面渲染。
@@ -47,12 +45,12 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 
 ```yaml
 all_content_config:
-  max_content_length: 60000  # 初版证据上限
+  max_content_length: 120000  # 初版证据上限
   max_document_chars: 12000
 
 event_followup:
   enabled: false  # 显式设为 true 才执行下述构图后补搜
-  max_content_length: 60000  # 额外新增证据池，所有 event 共用
+  max_content_length: 120000  # 额外新增证据池，所有 event 共用
   max_document_chars: 12000
   max_search_calls: 12
   max_parse_calls: 40
@@ -61,16 +59,15 @@ event_followup:
   max_model_calls: 24      # 所有 event 的提议、审核、修订、重审和重试总次数
   max_repair_rounds_per_event: 1  # 初次尝试之后的修订轮数，0 禁用，允许 0..3
   max_output_tokens: 8192  # 单次输出还受原 generation_config 较小上限约束
-  queries_per_event: 2
 ```
 
-`queries_per_event` 仅用于 simple 采集器；agent 模式由共享搜索模型安排查询。
+查询由共享搜索模型安排；旧 `queries_per_event` 不再影响执行。
 搜索、阅读、搜索模型调用上限由所有 event 共用，不会按 event 数倍增。
 每次查询消耗所选 provider 数量的请求额度；额度不足的 event 会明确跳过。
 补搜任务的配额与累计消耗落盘，暂停后重新进入同一目录不会重置预算。
 
 字符按 Python Unicode 字符计算，包含分配后的来源包装，不是 token。
-60,000 是本阶段去重后的证据池容量，不是所有模型调用累计输入量：
+120,000 是本阶段去重后的证据池容量，不是所有模型调用累计输入量：
 同一来源可服务多个相关 event，提议与审核也会重用证据。
 旧事件相关的原文摘录可复用，每个 event 最多带入 12,000 字符的旧证据摘录；
 同时提供既有活动，用于检查重复和矛盾。模型调用仍另有上述有限上限。
@@ -161,7 +158,7 @@ python -m finmy.runner.resume_event_enrichment \
 未知日期不会被填为发表时间，背景活动单独列示，窗口的模糊性和原始表达继续保留。
 
 时间处理不需要额外模型调用或整图重建。下述有界修订共用原增补调用额度，
-独立的 60,000 + 60,000 字符证据预算与增补调用总上限保持不变。
+独立的 120,000 + 120,000 字符证据预算与增补调用总上限保持不变。
 
 ## 失败项修订与合格部分保留
 
@@ -213,6 +210,6 @@ python -m finmy.runner.resume_event_enrichment \
 回归验证覆盖：完整 builder 仅执行一次、旧行原样保留、独立预算与耗尽行为、
 来源/局部引用/日期、重复交易数值量级、审核失败、跨事件事实复用，以及 UI/CLI 同一路径。
 测试使用离线模型适配器与现有有效 EPG fixture，不调用真实搜索或付费模型。
-搜索衔接回归还覆盖新旧入口路由、暂停/空交付、跨事件共享配额、来源版本传递，
+搜索衔接回归还覆盖统一入口路由与旧配置迁移、暂停/空交付、跨事件共享配额、来源版本传递，
 以及实际 Person EPG 校验与 JSON/HTML 输出。
 这些测试证明实现约束，不等同于真实重建结果已达到参考 HTML 的细节质量。

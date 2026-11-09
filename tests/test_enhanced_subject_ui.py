@@ -65,15 +65,8 @@ class EnhancedSubjectUI(unittest.TestCase):
         return copy.deepcopy(self.search_result)
 
     def forbid_legacy(self):
-        patches = [
-            patch("finmy.runner.scoped_search.plan_search", side_effect=AssertionError("legacy scoped plan")),
-            patch("finmy.runner.decision_followup.collect_decision_followup", side_effect=AssertionError("legacy decision search")),
-            patch.object(self.collector.DataCollectorService, "collect_bocha_search_results", side_effect=AssertionError("legacy Bocha")),
-            patch.object(self.collector.DataCollectorService, "collect_baidu_search_results", side_effect=AssertionError("legacy Baidu")),
-        ]
-        for item in patches:
-            item.start()
-            self.addCleanup(item.stop)
+        for name in ("collect_subject_search_results", "collect_bocha_search_results", "collect_baidu_search_results"):
+            self.assertFalse(hasattr(self.collector.DataCollectorService, name))
 
     def test_shared_search_preserves_provider_order_metadata_and_structured_inputs(self):
         self.forbid_legacy()
@@ -205,12 +198,10 @@ class EnhancedSubjectUI(unittest.TestCase):
             service.run_reconstruction("Another subject", [], None)
         self.assertTrue(self.service.st.session_state.search_coverage["search_complete"])
         service.config["builder_config"]["reconstruction"] = {"mode": "event"}
-        with patch.object(self.collector.DataCollectorService, "collect_bocha_search_results", return_value=[]), \
-             patch.object(self.collector.DataCollectorService, "collect_baidu_search_results", return_value=[]), \
-             patch.object(self.collector.DataCollectorService, "collect_structured_data", return_value=([], [])):
-            with self.assertRaisesRegex(ValueError, "Context budget admitted no documents"):
-                service.run_reconstruction("An event", [], None)
-        self.assertIsNone(self.service.st.session_state.search_coverage)
+        self.search_result.update(status="insufficient", documents=[])
+        with patch.object(self.collector.DataCollectorService, "collect_structured_data", return_value=([], [])):
+            self.assertIsNone(service.run_reconstruction("An event", [], None))
+        self.assertEqual(self.service.st.session_state.search_coverage["builder_status"], "not_started")
 
     def test_malformed_partial_material_never_reaches_builder(self):
         self.search_result.update(status="partial", documents=[{"raw_text": None}])
@@ -220,20 +211,73 @@ class EnhancedSubjectUI(unittest.TestCase):
                 service.run_reconstruction("A subject", [], None)
         build.assert_not_called()
 
-    def test_explicit_agent_mode_selects_shared_search_for_each_subject_type(self):
+    def test_agent_search_serves_person_and_single_event(self):
         self.forbid_legacy()
-        for mode in ("person", "company"):
+        for mode in ("person", "event"):
             with self.subTest(mode=mode):
                 config = self.config()
                 config["subject_search"] = {"enabled": False}
                 config["builder_config"]["reconstruction"]["mode"] = mode
-                if mode == "company":
-                    config["builder_config"]["builder_type"] = "AgentEventBuilder"
+                if mode == "event":
+                    config["builder_config"]["reconstruction"].pop("subject")
                 service = self.service.ReconstructionService(config)
                 service._run_pipeline = lambda contents, *args: contents
                 contents = service.run_reconstruction("Trace documented experiences", [], None)
                 self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [doc["raw_text"] for doc in self.search_result["documents"]])
         self.assertEqual(len(self.search_calls), 2)
+
+    def test_search_flags_never_restore_removed_executors(self):
+        for search_config in ({}, {"mode": "simple"}, {"mode": "agent", "enhancement": {"enabled": False}}):
+            with self.subTest(search_config=search_config):
+                config = self.config()
+                config["search_config"] = search_config
+                service = self.service.ReconstructionService(config)
+                service._run_pipeline = lambda contents, *args: contents
+                self.assertTrue(service.run_reconstruction("Research subject", [], None))
+        self.assertEqual(len(self.search_calls), 3)
+
+    def test_empty_agent_search_keeps_explicit_source_inputs_buildable(self):
+        self.search_result.update(status="paused", documents=[])
+        service = self.service.ReconstructionService(self.config())
+        service._run_pipeline = lambda contents, *args: contents
+        def local(collector, *args):
+            collector.documents["url"].append({"raw_text": "User supplied acquisition filing.", "source": "url"})
+            return ["User supplied acquisition filing."], []
+        with patch.object(self.collector.DataCollectorService, "collect_structured_data", local):
+            contents = service.run_reconstruction("Research subject", [], object())
+        self.assertEqual(len(contents), 1)
+        self.assertIn("User supplied acquisition filing.", contents[0])
+        self.assertEqual(service.search_coverage["search_status"], "paused")
+
+    def test_explicit_urls_use_parser_config_and_do_not_depend_on_search_budget(self):
+        config = self.config()
+        config["url_collector_config"] = {"delay": 0.2, "use_selenium_fallback": False}
+        config["subject_search"] = {"max_parse_calls": 0, "max_elapsed_seconds": 0}
+        config["event_followup"]["enabled"] = True
+        with patch.object(self.collector, "URLParser") as parser:
+            collector = self.collector.DataCollectorService(config, str(self.path))
+        self.assertEqual(parser.call_args.kwargs["delay"], 0.2)
+        collector.parser = parser.return_value
+        collector.parser.run.return_value = types.SimpleNamespace(results=[{"content": "Original filing body."}])
+        class Row(dict):
+            def to_dict(self):
+                return dict(self)
+        rows = types.SimpleNamespace(
+            iterrows=lambda: iter(enumerate([Row(url="www.example.org/filing", title="Filing"),
+                                            Row(url="https://www.example.org/filing#section", title="Duplicate") ])),
+        )
+        # The UI accepts a DataFrame interface; this fixture has no pandas dependency.
+        class Frame:
+            def __len__(self):
+                return 2
+            iterrows = staticmethod(rows.iterrows)
+        contents, files = collector.collect_structured_data(Frame(), [])
+        self.assertEqual(len(contents), 1)
+        self.assertEqual(files, [])
+        collector.parser.run.assert_called_once()
+        self.assertEqual(collector.documents["url"][0]["url"], "https://www.example.org/filing")
+        collector.parser.run.return_value = types.SimpleNamespace(results=[])
+        self.assertEqual(collector.collect_structured_data(Frame(), []), ([], []))
 
     def test_null_legacy_subject_options_keep_agent_mode_runnable(self):
         self.forbid_legacy()

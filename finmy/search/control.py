@@ -79,7 +79,8 @@ class SearchController:
         task_id=uuid.uuid4().hex
         with task_lock(self.root,task_id):
             state=SearchState(self.root,task_id,task=task,config=config)
-            state.data['mode']=mode
+            # Older clients may still send simple; new tasks always use the agent.
+            state.data['mode']='agent'
             state.save()
         return task_id
 
@@ -150,7 +151,7 @@ class SearchController:
             if not self.dependencies and not state['config']['allow_network']:
                 raise ValueError('Enable external calls in task configuration before starting')
             if not self.dependencies:
-                if state.get('mode','agent') == 'agent' and not state['config']['lm_name']:
+                if not state['config']['lm_name']:
                     raise ValueError('请先配置独立的搜索侧模型')
                 if self.env_file and self.env_file.is_file():
                     from dotenv import load_dotenv
@@ -172,10 +173,10 @@ class SearchController:
                             reason='legacy_provider_interruption'))
                         state.data.update(status='paused', stop_reason='legacy_provider_interruption')
                         state.save()
-                    if state.data.get('mode','agent')=='simple':
-                        self._simple(state)
-                    else:
-                        _run_search(root=self.root,task_id=task_id,max_steps=steps,**self.dependencies)
+                    if state.data.get('mode') != 'agent':
+                        state.data['mode'] = 'agent'
+                        state.save()
+                    _run_search(root=self.root,task_id=task_id,max_steps=steps,**self.dependencies)
                 except Exception as exc:
                     state=SearchState(self.root,task_id)
                     state.data.update(status='failed',stop_reason=type(exc).__name__)
@@ -183,42 +184,3 @@ class SearchController:
         except ValueError:
             # Another process owns this task; do not overwrite its state.
             return
-
-    def _simple(self, state):
-        """Fixed supplied queries and original material; no search-side model."""
-        from .tools import SearchTools
-        from .handoff import assemble
-        from .state import LimitReached
-        tools=SearchTools(state,transport=self.dependencies.get('transport'),fetcher=self.dependencies.get('fetcher'))
-        task=state.data['task']
-        if not state.data.get('seeds_imported'):
-            for url in task.get('seed_urls',[]): tools.sources.register(url)
-            for path in task.get('local_files',[]): tools.sources.import_file(path)
-            state.data['seeds_imported']=True
-            state.save()
-        queries=task.get('search_queries') or [task['target_name']+' '+' '.join(task.get('key_words',[]))]
-        if not isinstance(queries,list) or any(not isinstance(q,str) or not q.strip() for q in queries):
-            raise ValueError('Simple search requires nonempty queries')
-        state.data['status']='running';state.save()
-        for query in queries:
-            if (state.root/'pause_requested').exists():
-                state.data.update(status='paused',stop_reason='user_pause');state.save();return
-            tools.search(query)
-        selected=[]
-        for sid in list(state.data['sources']):
-            if (state.root/'pause_requested').exists():
-                state.data.update(status='paused',stop_reason='user_pause');state.save();return
-            try:
-                result=tools.read_source(sid)
-            except LimitReached:
-                break
-            while result.get('spans'):
-                selected.extend(dict(source_id=sid,version=result['version'],block=s['block'],start=s['start'],end=s['end'])
-                                for s in result['spans'] if s['end']>s['start'])
-                if result['next_location'] is None:break
-                if (state.root/'pause_requested').exists():
-                    state.data.update(status='paused',stop_reason='user_pause');state.save();return
-                result=tools.read_source(sid,result['next_location'])
-        payload=assemble(state,selected,gaps=['Simple search has no semantic coverage assessment'],reason='fixed_queries_completed')
-        state.data.update(status='finished' if payload['samples'] else 'insufficient',stop_reason='fixed_queries_completed')
-        state.save()

@@ -52,9 +52,7 @@ class EnhancedEventFollowupTests(unittest.TestCase):
         return run_search(task, **kwargs)
 
     def collect(self, **kwargs):
-        with patch("finmy.search.pipeline.run_search", self.search_runner), \
-             patch("finmy.runner.draft_event_search.search_window", side_effect=AssertionError("date gate")), \
-             patch("finmy.runner.draft_event_search.collect_subject_sources", side_effect=AssertionError("legacy collector")):
+        with patch("finmy.search.pipeline.run_search", self.search_runner):
             return collect_draft_event_sources(self.package, "Reconstruct this person's investments", [],
                 self.subject, self.config, self.root, usage=self.usage, **kwargs)
 
@@ -78,6 +76,12 @@ class EnhancedEventFollowupTests(unittest.TestCase):
         self.assertEqual(report["events"][0]["accepted_documents"], 1)
         self.assertEqual(report["events"][0]["search_calls"], 2)
         self.assertEqual(self.config, before)
+
+    def test_omitted_mode_still_uses_the_agent(self):
+        self.config["search_config"].pop("mode")
+        self.assertEqual(len(self.collect()), 1)
+        self.assertEqual(self.report()["backend"], "agent")
+        self.assertEqual(len(self.requests), 2)
 
     def test_multiple_events_share_actual_provider_budget_and_deduplicate(self):
         self.package["event"] += [{"event_id": "E2", "label": "Apple investment"},

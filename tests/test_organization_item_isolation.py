@@ -1,68 +1,64 @@
-"""Actual mixed-phase response and item-local recovery regressions."""
+"""Placement isolation, cache validity, and independent native export regressions."""
 import copy
 import json
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
-from types import SimpleNamespace
 
 from sparse_test_dependencies import install_missing_lmbase_containers
 install_missing_lmbase_containers()
-from finmy.builder.sparse_build.organization_partial import partition_relevance, PENDING_RELEVANCE
-from finmy.builder.sparse_build.organization_batches import _validate_relevance, _memberships
+from finmy.builder.sparse_build.organization_partial import PENDING_RELEVANCE
+from finmy.builder.sparse_build.organization_batches import partition_placements, _memberships
 from finmy.builder.sparse_build.organization_errors import OrganizationValidationError
 from finmy.builder.sparse_build.organization_resume import OrganizationResume
 from finmy.builder.sparse_build.main_build import SparseRagBuilder
 from finmy.builder.sparse_build.person_organization import apply_organization
 from test_sparse_organization_batches import many_facts
 from test_person_canonical_organization import CanonicalResponses, bind_test_evidence
-from test_sparse_person_organization import plan, facts
+from test_sparse_person_organization import plan, facts, vf
 import test_sparse_person_full_flow as lifecycle
 
-FIXTURE = Path(__file__).parent / 'fixtures/person_relevance_failure_20261109.json'
 
-
-class RelevanceIsolationTest(unittest.TestCase):
+class PlacementIsolationTest(unittest.TestCase):
     def setUp(self):
-        self.f = json.loads(FIXTURE.read_text())
+        self.package = bind_test_evidence(many_facts(3, 2))
+        self.layout = {'events': [{'event_id': 'E'}]}
+        self.ids = ['A1', 'A2', 'A3']
+        self.relevance_ids = ['O1', 'O2']
+        self.candidate = {
+            'memberships': [{'event_id': 'E', 'activity_id': aid} for aid in self.ids],
+            'unassigned_reasons': [],
+            'occurrence_relevance': [{'occurrence_id': oid, 'subject_relevance': vf('The person spoke.')}
+                                     for oid in self.relevance_ids],
+            'occurrence_issues': [],
+        }
 
-    def clean(self, candidate=None):
-        f = self.f
-        return partition_relevance(candidate or f['candidate'], f['ids'], f['layout'],
-                                   f['package'], f['prior_memberships'])
-
-    def test_actual_fifteen_cross_phase_rows_are_isolated_together(self):
-        before = copy.deepcopy(self.f)
-        result, audit = self.clean()
-        _validate_relevance(result, self.f['ids'], self.f['layout'], self.f['package'])
-        deferred = [r for r in audit['items'] if r['status'] == 'cross_phase_deferred']
-        self.assertEqual(len(deferred), 15)
-        self.assertTrue(all(r['existing_memberships'] for r in deferred))
-        self.assertEqual(len(result['occurrence_relevance']), 5)
-        self.assertEqual([m['activity_id'] for m in result['memberships']], ['C:O_S4_E1'])
-        self.assertFalse(result.get('pending_occurrence_ids'))
-        self.assertEqual(self.f, before)
+    def partition(self, candidate):
+        before = copy.deepcopy((candidate, self.package))
+        result = partition_placements(candidate, self.ids, self.relevance_ids, self.layout, self.package)
+        self.assertEqual((candidate, self.package), before)
+        return result
 
     def test_unknown_ids_and_invalid_details_do_not_poison_good_rows(self):
-        value = copy.deepcopy(self.f['candidate'])
-        value['memberships'].extend([
-            {'activity_id':'NONEXISTENT', 'event_id':'NO_EVENT', 'detail_indices':[999]},
-            {'activity_id':'C:O_S4_E1', 'event_id':'NO_EVENT', 'detail_indices':[999]}])
-        result, audit = self.clean(value)
-        _validate_relevance(result, self.f['ids'], self.f['layout'], self.f['package'])
-        self.assertEqual(len(result['memberships']), 1)
-        self.assertEqual(len(result['occurrence_relevance']), 5)
-        self.assertTrue(any(r['status']=='invalid_background_membership' for r in audit['items']))
+        value = copy.deepcopy(self.candidate)
+        value['memberships'][1]['detail_indices'] = [999]
+        value['memberships'].append({'event_id': 'NO_EVENT', 'activity_id': 'NONEXISTENT'})
+        result, audit = self.partition(value)
+        self.assertEqual([r['activity_id'] for r in result['memberships']], ['A1', 'A3'])
+        self.assertEqual(result['pending_activity_ids'], ['A2'])
+        self.assertEqual(result['occurrence_relevance'], value['occurrence_relevance'])
+        self.assertEqual([r['kind'] for r in audit], ['invalid_membership', 'invalid_membership'])
 
     def test_conflicting_relevance_is_pending_without_losing_other_occurrences(self):
-        value = copy.deepcopy(self.f['candidate'])
+        value = copy.deepcopy(self.candidate)
         row = copy.deepcopy(value['occurrence_relevance'][0])
         row['subject_relevance']['value'] = 'Contradictory alternative'
         value['occurrence_relevance'].append(row)
-        result, _ = self.clean(value)
-        self.assertEqual(result['pending_occurrence_ids'], [self.f['ids'][0]])
-        self.assertEqual(result['occurrence_relevance'][0]['subject_relevance'], PENDING_RELEVANCE)
-        self.assertEqual(result['occurrence_relevance'][1:], value['occurrence_relevance'][1:5])
+        result, audit = self.partition(value)
+        self.assertEqual(result['pending_occurrence_ids'], ['O1'])
+        self.assertEqual(result['occurrence_relevance'], [value['occurrence_relevance'][1]])
+        self.assertEqual(result['memberships'], value['memberships'])
+        self.assertEqual(audit[0]['kind'], 'conflicting_relevance')
 
     def test_pending_metadata_cannot_be_used_to_accept_uncited_claims(self):
         package, proposal = facts(), plan()
@@ -78,7 +74,7 @@ class RelevanceIsolationTest(unittest.TestCase):
     def test_membership_errors_report_all_bad_items_at_once(self):
         with self.assertRaises(OrganizationValidationError) as caught:
             _memberships([{'event_id':'missing','activity_id':'X'},
-                          {'event_id':'missing','activity_id':'Y'}], {'A'}, self.f['layout'], self.f['package'])
+                          {'event_id':'missing','activity_id':'Y'}], {'A'}, self.layout, self.package)
         self.assertEqual(len(caught.exception.report['violations']), 4)
 
     def test_local_repair_only_requests_pending_occurrence_and_keeps_later_batches(self):

@@ -1,10 +1,8 @@
-# 原生主体图：人物与公司
+# 旧 SubjectGraph 格式与兼容接口
 
-人物模式新增并行导出 `FinalPersonEPG.json`（`person-epg-3.0`）。新的关系模型、字段字典及旧格式转换见 [人物 EPG Schema](person_epg_schema.md)。下文仍描述供现有构建与 HTML 使用的 `subject-graph-1.0`。
+本文记录 `subject-graph-1.0` 的旧结构、显式旧 builder 和历史结果兼容行为。当前人物默认走 `SparseRagBuilder` 的规范事实构建，输出 `FinalPersonEPG.json` / HTML；参见 [人物模式](person_mode.md) 和 [当前构图流程](workflows/canonical-person-build.md)。
 
-`person` / `company` 模式直接生成 `SubjectGraph`。图的根是稳定主体，一个时期内的多段经历独立组织，共享实体注册表。原事件模式仍生成原来的 EventCascade。
-
-这版适配覆盖 schema、构图、校验、前端和历史读取。它不增加补搜；已有资料可以直接重新构图。它也不证明现有资料足以覆盖人物完整生平。
+维护的用户入口是 Person 与单事件 Event。旧格式中的 organization 主体仍可读取；不据此新增公司模式入口。下列旧配置与构图步骤仅用于兼容说明。
 
 ## 结构
 
@@ -79,7 +77,7 @@ builder_config:
       scope: ""
 ```
 
-`subject_id` 和 `name` 必填；scope 留空表示该人物在所选时期内有资料支持的各项活动。原始请求也应写人物与时期；如果继续输入 OXY 限定请求，构图仍会尊重这个范围。公司模式改为 `mode: company` 并填写实际公司身份。日期可为 null，或带引号的年、年月、日期。
+`subject_id` 和 `name` 必填；scope 留空表示该人物在所选时期内有资料支持的各项活动。原始请求也应写人物与时期；如果继续输入 OXY 限定请求，构图仍会尊重这个范围。旧归档中的 company 标识继续可读。日期可为 null，或带引号的年、年月、日期。
 
 Pipeline 页只提供 Event / Person。Person 沿用原描述、关键词和资料上传，只增加一个 Person name；ID 自动生成，同一配置中的同一人物复用原 ID。时间和专题要求直接写在描述里，界面不再使用旧配置中的隐藏时间、别名或专题限制，也没有高级表单。结果页提供 HTML 下载，下载后查看 EventCascadeGanttVisualizer 原有 Gantt，包括参与者标记、关系连线和时间窗口控件；只调整人物标题、图例和说明。卡片时间线已删除。未能表达为事件内连线的背景关系保留在原生 JSON。历史读取优先选择同目录的 `FinalSubjectGraph.json`。
 
@@ -172,43 +170,12 @@ python -m finmy.subject_graph.recover /path/to/build_output_20261103215915661838
 离线测试验证的是修正和合并机制。
 
 
-### 按完整时间范围检索
+### 当前检索入口
 
-Person 流程默认从描述提取时间范围，使用整个范围、原始描述与关键词查询，每个搜索源首次查询一次。Bocha 使用
-`freshness`，Baidu 使用 `search_filter.range.page_time` 传递发布时间边界；
-返回结果在抓取前再次核对日期，日期缺失或超范围不会进入自动搜索的构建输入。
-事件发生时间仍由正文提取，不能用发布时间替代。手动上传的材料保持原有流程。
-
-正文读取仅处理 HTML，有限超时、最多 4 MiB、无 Selenium 回退。
-索引页尝试进入带“全文／实录／transcript”链接的正文；子页面必须提供自己的
-发布时间。读不到正文的 PDF、视频或受限页面保留失败记录，不把搜索摘要当正文。
-大会、访谈、股东信及接班发言的资料过短、只有索引或缺少发言线索时，
-最多进行一轮定向补搜。判断使用长度与发言标记启发式，不代表内容已经语义完备；
-没有搜索命中的年份不会自动触发补搜。
-
-首次分别查询两个搜索源，Bocha 取 10 条、Baidu 取 20 条；旧配置中的 topics / max_queries 不再拆分或限定查询。
-正文补搜和决策补搜每次分别至多取 2／5 条（首搜数量的四分之一，向下取整），请求次数上限不变。
-补搜与已有正文去重；上下文依次分配给首搜、正文补搜、决策补搜，后者只使用剩余字符，
-不会缩减前者已分配的片段。预算已满时新增资料可能全部省略，原文仍在来源清单中保存；
-`context_budget_report.json` 中的 search_phase 和 included 字段可核对实际纳入情况。
-全程最多 40 次正文抓取，补搜最多 3 次搜索调用，并向后续搜索源分配抓取额度。
-默认经过 300 秒后不再启动新请求，正在执行的请求仍受自身超时限制。
-这些参数可在现有配置顶层按需调整，无需增加输入字段：
-
-```yaml
-subject_search:
-  enabled: true
-  max_parse_calls: 40
-  max_followup_queries: 3
-  max_links_per_index: 2
-  max_elapsed_seconds: 300
-```
-
-需要扩大“资料发布时间”但不扩大事件时期时，可另配 `publication_start` /
-`publication_end`。查询范围缺失或含糊时直接报错，不静默扩大搜索。
-`subject_search_report.json` 保存查询范围、逐条取舍及未解决的缺失；
-`subject_search_sources.json` 保存正文和来源清单。
-Event 模式沿用原有检索；`subject_search.enabled: false` 可显式恢复旧检索。
+单事件、人物与已有 EPG 补搜统一使用 Agent 搜索。旧 scoped/simple 执行器、固定轮次 decision-followup 与独立 relevance filtering 已删除。
+旧归档的来源、证据和结果仍可复用；搜索模式开关不会恢复旧算法。
+发布时间过滤与事件发生时间分别配置，后续回顾资料可以支持较早的事件。
+当前参数和运行方式见 [搜索与证据交接](workflows/search-enhancement.md)。
 
 ### 模糊时间的定位与原文显示
 

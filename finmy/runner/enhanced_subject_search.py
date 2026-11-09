@@ -10,6 +10,7 @@ import copy
 from dataclasses import asdict, replace
 import json
 import math
+import logging
 from pathlib import Path
 import time
 
@@ -18,13 +19,52 @@ from finmy.runner.search_failures import TERMINAL, phase_status, read_task_usage
 
 
 def enhanced_search_enabled(config):
+    """Compatibility probe: search always uses the agent, including old YAML."""
     options = config.get("search_config", {}) or {}
     if not isinstance(options, dict):
         raise ValueError("search_config must be a mapping")
-    mode = options.get("mode", "simple")
+    mode = options.get("mode", "agent")
     if mode not in {"simple", "agent"}:
-        raise ValueError("search_config.mode must be simple or agent")
-    return mode == "agent"
+        raise ValueError("search_config.mode must be agent (simple is a deprecated alias)")
+    if mode == "simple":
+        logging.getLogger(__name__).warning(
+            "search_config.mode=simple is retired; using the shared search agent")
+    return True
+
+
+def agent_search_config(config):
+    """Migrate old acquisition settings once; explicit agent settings take priority."""
+    enhanced_search_enabled(config)
+    options = config.get("search_config") or {}
+    settings = options.get("enhancement") or {}
+    if not isinstance(settings, dict):
+        raise ValueError("search_config.enhancement must be a mapping")
+    result = copy.deepcopy(settings)
+    legacy = config.get("subject_search") or {}
+    if not isinstance(legacy, dict):
+        raise ValueError("subject_search must be a mapping")
+    for old, new in (("providers", "providers"), ("max_search_calls", "max_search_requests"),
+                     ("max_parse_calls", "max_read_sources")):
+        if old in legacy:
+            result.setdefault(new, copy.deepcopy(legacy[old]))
+    # Publication filters are independent of the person's event coverage.
+    # Old YAML allowed year/month precision; the provider contract uses days.
+    from finmy.reconstruction_scope import date_bounds
+    for key, bound in (("publication_start", 0), ("publication_end", 1)):
+        if key not in result and legacy.get(key) is not None:
+            result[key] = date_bounds(legacy[key])[bound].isoformat()
+    # Only old YAML lacking the agent section inherits the online pipeline
+    # model. Existing agent configurations retain independent search defaults.
+    if "enhancement" not in options:
+        result.setdefault("allow_network", True)
+        builder = config.get("builder_config", config)
+        model = config.get("lm_name") or builder.get("lm_name")
+        if model:
+            result.setdefault("lm_name", model)
+    content_limit = (config.get("all_content_config") or {}).get("max_content_length")
+    if content_limit is not None:
+        result.setdefault("max_builder_material_chars", content_limit)
+    return result
 
 
 def _integer(value, name, minimum=0):
@@ -38,15 +78,19 @@ def _task(query, keywords, subject, config, event=None, supplied=None):
         raise ValueError("Search requires the original nonempty request")
     if not isinstance(keywords, list) or any(not isinstance(k, str) for k in keywords):
         raise ValueError("Search keywords must be a list of strings")
-    if not isinstance(subject, dict) or not isinstance(subject.get("name"), str) or not subject["name"].strip():
-        raise ValueError("Subject search requires a nonempty subject name")
     builder = config.get("builder_config", config)
-    mode = (builder.get("reconstruction") or {}).get("mode", "person")
-    if mode not in {"person", "company"}:
-        raise ValueError("Enhanced subject search requires person/company reconstruction")
-    result = {"target_type": mode, "target_name": subject["name"],
-              "query_text": query, "key_words": list(keywords),
-              "subject_scope": copy.deepcopy(subject)}
+    mode = (builder.get("reconstruction") or {}).get("mode", "event")
+    if mode not in {"event", "person", "company"}:
+        raise ValueError("Search requires event or subject reconstruction")
+    if mode == "event":
+        result = {"target_type": "event", "target_name": query,
+                  "query_text": query, "key_words": list(keywords)}
+    else:
+        if not isinstance(subject, dict) or not isinstance(subject.get("name"), str) or not subject["name"].strip():
+            raise ValueError("Subject search requires a nonempty subject name")
+        result = {"target_type": mode, "target_name": subject["name"],
+                  "query_text": query, "key_words": list(keywords),
+                  "subject_scope": copy.deepcopy(subject)}
     if event is not None:
         eid, label = event.get("event_id"), event.get("event_label") or event.get("label")
         if not isinstance(eid, str) or not eid.strip() or not isinstance(label, str) or not label.strip():
@@ -67,7 +111,7 @@ def _task(query, keywords, subject, config, event=None, supplied=None):
         if set(supplied) - allowed:
             raise ValueError("Unsupported subject search task fields")
         for key in ("target_type", "target_name", "query_text", "key_words", "subject_scope"):
-            if key in supplied and supplied[key] != result[key]:
+            if key in supplied and supplied[key] != result.get(key):
                 raise ValueError("Search task cannot override configured subject scope: " + key)
         for key in ("seed_urls", "local_files"):
             if key in supplied:
@@ -234,12 +278,7 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
     from finmy.search.sources import fetch_public
     from finmy.search.tools import http_transport
 
-    if not enhanced_search_enabled(config):
-        raise ValueError("Shared search requires search_config.mode: agent")
-    enhancement = (config.get("search_config") or {}).get("enhancement", {})
-    if not isinstance(enhancement, dict):
-        raise ValueError("search_config.enhancement must be a mapping")
-    shared = SearchConfig(**copy.deepcopy(enhancement))
+    shared = SearchConfig(**agent_search_config(config))
     dependencies = dict(dependencies or {})
     if set(dependencies) - {"model", "transport", "fetcher", "max_steps", "run_search"}:
         raise ValueError("Unsupported shared search dependencies")
@@ -456,7 +495,7 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
 
 
 def storyline_discovery_enabled(config):
-    """Default discovery for person-mode agent search; explicit false replays old flow."""
+    """Optional planning before person agent search; false searches the subject directly."""
     settings = (config.get("search_config") or {}).get("storyline_discovery", {})
     if settings is None:
         settings = {}
@@ -500,7 +539,7 @@ def _collect_storyline_sources(query, keywords, subject, config, save_dir, *,
                               progress, usage, dependencies, task, discovery_completion):
     from finmy.runner.storyline_discovery import discover_storylines, StorylineDiscoveryError
     from finmy.runner.initial_event_search import event_search_options
-    shared = SearchConfig(**copy.deepcopy((config.get("search_config") or {}).get("enhancement", {})))
+    shared = SearchConfig(**agent_search_config(config))
     event_options = event_search_options(config)
     # Reject invalid scheduler settings before discovery costs anything.
     if event_options["max_search_requests"] < len(shared.providers):
@@ -534,7 +573,13 @@ def _collect_storyline_sources(query, keywords, subject, config, save_dir, *,
     discovery_config = copy.deepcopy(config)
     discovery_settings = dict(settings)
     discovery_settings["max_model_calls"] = discovery_limit - base_discovery_calls
-    discovery_config.setdefault("search_config", {})["storyline_discovery"] = discovery_settings
+    discovery_search = discovery_config.setdefault("search_config", {})
+    discovery_search["storyline_discovery"] = discovery_settings
+    # Legacy pipeline YAML has no independent agent section. Discovery must
+    # receive the same migrated model/network settings as acquisition. Existing
+    # agent sections stay byte-for-byte equivalent for saved discovery identity.
+    if "enhancement" not in discovery_search:
+        discovery_search["enhancement"] = agent_search_config(config)
     report_path = Path(save_dir) / "storyline_search_report.json"
 
     def accounted(search_usage, discovery_calls):

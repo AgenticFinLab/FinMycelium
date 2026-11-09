@@ -85,14 +85,13 @@ class EventRefinementTests(unittest.TestCase):
             "reason": "Source directly concerns the event.", "evidence": c["text"][:90]}
             for c in payload["chunks"]]})
 
-    def search(self, provider, query, count, start, end):
+    def collect(self, package, query, keywords, subject, config, save_dir, **kwargs):
         self.order.append("search")
-        self.assertEqual((start, end), ("2022-01-01", "2023-12-31"))
-        return [{"url": "https://example.com/new", "title": "New execution account",
-                 "published_at": "2023-05-07"}]
-
-    def parse(self, url):
-        return {"text": self.new_text, "links": []}
+        kwargs["usage"].update(search_calls=2, parse_calls=1, search_model_calls=3)
+        doc = make_document(self.new_text, {"url": "https://example.com/new",
+            "title": "New execution account", "published_at": "2023-05-07"}, "agent")
+        doc["event_ids"] = [package["event"][0]["event_id"]]
+        return [doc]
 
     def build(self, contents, query, keywords, config):
         self.assertFalse(self.build_calls, "The complete builder must never be called a second time")
@@ -110,12 +109,13 @@ class EventRefinementTests(unittest.TestCase):
         return append_grounded_detail(package), {"model_calls": 2, "status": "enriched", "added_details": 1}
 
     def run_flow(self, **kwargs):
-        return build_with_draft_event_followup(self.contents, "Buffett 2022–2023", [],
-            self.config, self.root, documents=self.documents,
-            usage=self.usage, build=kwargs.pop("build", self.build),
-            completion=kwargs.pop("completion", self.completion),
-            enrich=kwargs.pop("enrich", self.enrich),
-            search=kwargs.pop("search", self.search), parse=kwargs.pop("parse", self.parse), **kwargs)
+        collector = kwargs.pop("collector", self.collect)
+        with patch("finmy.runner.draft_event_search.collect_draft_event_sources", collector):
+            return build_with_draft_event_followup(self.contents, "Buffett 2022–2023", [],
+                self.config, self.root, documents=self.documents,
+                usage=self.usage, build=kwargs.pop("build", self.build),
+                completion=kwargs.pop("completion", self.completion),
+                enrich=kwargs.pop("enrich", self.enrich), **kwargs)
 
     def report(self):
         return json.loads((self.root / "event_refinement_report.json").read_text())
@@ -181,7 +181,7 @@ class EventRefinementTests(unittest.TestCase):
         self.assertEqual(self.report()["budgets"]["supplementary_content_limit"], 8000)
 
     def test_no_new_sources_keeps_draft_and_initial_replay_input(self):
-        result, _ = self.run_flow(search=lambda *args: [])
+        result, _ = self.run_flow(collector=lambda *args, **kwargs: [])
         self.assertIs(result, self.draft)
         self.assertEqual(self.report()["status"], "no_new_sources")
         self.assertFalse(self.enrich_calls)
@@ -227,14 +227,14 @@ class EventRefinementTests(unittest.TestCase):
 
     def test_empty_initial_events_need_no_new_scope_gate(self):
         self.draft.extras["person_epg"]["event"] = []
-        result, _ = self.run_flow(search=lambda *a: self.fail("No events must not trigger discovery"))
+        result, _ = self.run_flow(collector=lambda *a, **k: self.fail("No events must not trigger discovery"))
         self.assertIs(result, self.draft)
         self.assertEqual(self.report()["status"], "no_existing_events")
         self.assertEqual(len(self.build_calls), 1)
 
     def test_omitted_followup_builds_once_without_post_build_work(self):
         self.config.pop("event_followup")
-        result, _ = self.run_flow(search=lambda *a: self.fail("Post-build search must be opt-in"),
+        result, _ = self.run_flow(collector=lambda *a, **k: self.fail("Post-build search must be opt-in"),
                                   enrich=lambda *a, **k: self.fail("Post-build enrichment must be opt-in"))
         self.assertIs(result, self.draft)
         self.assertEqual(len(self.build_calls), 1)
@@ -246,7 +246,7 @@ class EventRefinementTests(unittest.TestCase):
                 self.build_calls.clear()
                 self.config["event_followup"]["enabled"] = not disabled
                 self.config["builder_config"]["builder_type"] = "SparseRagBuilder" if disabled else "AgentEventBuilder"
-                result, _ = self.run_flow(search=lambda *a: self.fail("Should use original builder path"))
+                result, _ = self.run_flow(collector=lambda *a, **k: self.fail("Should use original builder path"))
                 self.assertIs(result, self.draft)
                 self.assertEqual(len(self.build_calls), 1)
 
@@ -277,7 +277,7 @@ class EventRefinementTests(unittest.TestCase):
             return [source]
         with patch("finmy.runner.event_refinement.time.monotonic", side_effect=lambda: clock[0]), \
              patch("finmy.runner.draft_event_search.collect_draft_event_sources", side_effect=collect):
-            result, _ = self.run_flow()
+            result, _ = self.run_flow(collector=collect)
         self.assert_original_rows_preserved(result)
         self.assertEqual(self.report()["status"], "enriched")
         self.assertEqual(self.report()["acquisition_elapsed_seconds"], 301)
@@ -300,8 +300,7 @@ class EventRefinementTests(unittest.TestCase):
         source["event_ids"] = [self.package["event"][0]["event_id"]]
         before = copy.deepcopy(source)
         result, _ = self.run_flow(supplementary_sources=[source],
-            search=lambda *args: self.fail("Archived sources must not trigger search"),
-            parse=lambda *args: self.fail("Archived sources must not trigger parsing"))
+            collector=lambda *args, **kwargs: self.fail("Archived sources must not trigger search"))
         self.assert_original_rows_preserved(result)
         self.assertEqual(source, before)
         self.assertTrue(self.report()["acquisition_reused"])

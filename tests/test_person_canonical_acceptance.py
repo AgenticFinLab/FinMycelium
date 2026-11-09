@@ -77,6 +77,47 @@ class CanonicalRealOutputAcceptanceTest(unittest.TestCase):
             if row.get("document_id"):
                 self.assertEqual(docs[row["document_id"]][row["char_start"]:row["char_end"]], row["quote"])
 
+    def test_fixture_contains_only_retained_fact_evidence(self):
+        # Keep the full Buffett package in its separate rendering fixture. This
+        # one needs only the facts distinguishing the seven failure cases.
+        self.assertEqual(len(self.package['activity']), 18)
+        self.assertEqual(len(self.package['activity_detail']), 17)
+        used_sets = set()
+        for table, rows in self.package.items():
+            if table.startswith('evidence_'):
+                continue
+            for row in rows if isinstance(rows, list) else [rows]:
+                if isinstance(row, dict) and row.get('evidence_set_id'):
+                    used_sets.add(row['evidence_set_id'])
+        self.assertEqual({r['evidence_set_id'] for r in self.package['evidence_set']}, used_sets)
+        self.assertEqual({r['span_id'] for r in self.package['evidence_span']},
+                         {r['span_id'] for r in self.package['evidence_link']})
+        self.assertEqual({r['document_id'] for r in self.package['source_document']},
+                         {r['document_id'] for r in self.package['evidence_span'] if r.get('document_id')})
+
+    def test_captured_response_relation_uses_vote_as_response_not_proposal(self):
+        from finmy.builder.sparse_build.relation_candidates import (
+            normalize_response_direction, validate_relation_candidates,
+        )
+        case = self.cases['responds_to_direction']
+        captured = case['incorrect_relation']
+        quote = next(r['quote'] for r in self.package['evidence_span']
+                     if 'CalPERS' in r['quote'] and '被否决' in r['quote'])
+        relation = {key: captured[key] for key in
+                    ('from_activity_id', 'to_activity_id', 'relation_type', 'basis')}
+        relation['description'] = {'value': captured['description'],
+                                   'evidence_source_contents': [quote], 'reasons': []}
+        before = copy.deepcopy(relation)
+        result = normalize_response_direction(relation, {
+            'response_activity_id': case['expected_from'],
+            'trigger_activity_id': case['expected_to'],
+        })
+        ids = [r['activity_id'] for r in self.package['activity']]
+        validate_relation_candidates({'activity_relations': [result]}, ids, ids, self.package)
+        self.assertEqual(result['from_activity_id'], case['expected_from'])
+        self.assertEqual(result['to_activity_id'], case['expected_to'])
+        self.assertEqual(relation, before)
+
     def test_import_retains_existing_context_activity_and_all_fact_evidence(self):
         result, _ = self.apply([])
         self.assertIn("C:O_S4_E1", {r["activity_id"] for r in result["activity"]})

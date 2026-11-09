@@ -122,7 +122,7 @@ def _publish(initial, package, target, initial_dir, report):
 
 def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
                                     *, documents, filtered=None, usage=None, build=None,
-                                    completion=None, search=None, parse=None, progress=None,
+                                    completion=None, progress=None,
                                     enrichment_completion=None, enrich=None,
                                     supplementary_sources=None):
     """Run the original builder once, then append verified event-local additions.
@@ -138,7 +138,7 @@ def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
     from finmy.runner.draft_event_search import draft_event_options, collect_draft_event_sources
     from finmy.runner.event_followup_config import followup_enabled
     enabled = followup_enabled(config)
-    options, _ = draft_event_options(config) if enabled else ({}, {})
+    options = draft_event_options(config) if enabled else {}
     if supplementary_sources is not None and (
             not isinstance(supplementary_sources, list)
             or any(not isinstance(row, dict) or not isinstance(row.get("raw_text"), str)
@@ -191,13 +191,12 @@ def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
             report["status"] = "supplementary_model_budget_exhausted"
             return selected
         reconstruction = read_reconstruction(config)
-        supplemental_usage = {"started_at": time.monotonic(), "search_calls": 0, "parse_calls": 0,
-                              "followup_queries": 0}
+        supplemental_usage = {"started_at": time.monotonic(), "search_calls": 0, "parse_calls": 0}
         if supplementary_sources is None:
             log(f"Event enrichment: Searching around {len(events)} existing events with a separate evidence budget.")
             added_sources = collect_draft_event_sources(package, query, keywords,
                 reconstruction["subject"], config, target, progress=progress,
-                usage=supplemental_usage, search=search, parse=parse, known_documents=documents)
+                usage=supplemental_usage, known_documents=documents)
         else:
             log("Event enrichment: Reusing archived supplementary sources without new acquisition.")
             added_sources = copy.deepcopy(supplementary_sources)

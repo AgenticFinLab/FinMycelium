@@ -84,6 +84,17 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         self.assertLessEqual(sum(len(s["content"]) for s in handoff["samples"]), 840)
         self.assertNotIn("freshness", self.requests[0][1])
 
+    def test_single_event_exports_full_originals_without_subject_scope(self):
+        self.config["builder_config"]["reconstruction"] = {"mode": "event"}
+        result = collect_enhanced_sources("Reconstruct acquisition 2023", [], {},
+            self.config, self.root, dependencies={"model": self.model,
+                "transport": self.transport, "fetcher": self.fetcher})
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["documents"][0]["raw_text"], self.body)
+        self.assertEqual(self.contexts[0]["task"]["target_type"], "event")
+        self.assertEqual(self.contexts[0]["task"]["query_text"], "Reconstruct acquisition 2023")
+        self.assertNotIn("subject_scope", self.contexts[0]["task"])
+
     def test_explicit_publication_window_stays_separate_from_event_coverage(self):
         self.config["search_config"]["enhancement"].update(publication_start="2024-01-01", publication_end="2025-12-31")
         result = self.collect()
@@ -297,7 +308,7 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         before = copy.deepcopy(self.config)
         self.collect(events=self.events())
         self.assertEqual(self.config, before)
-        self.assertFalse(enhanced_search_enabled({}))
+        self.assertTrue(enhanced_search_enabled({}))
         with self.assertRaises(ValueError):
             enhanced_search_enabled({"search_config": {"mode": "unexpected"}})
 

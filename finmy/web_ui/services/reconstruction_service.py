@@ -17,7 +17,7 @@ from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
 from finmy.runner.source_documents import prepare_documents
 from finmy.runner.context_budget import allocate_context
-from finmy.reconstruction_scope import read_reconstruction, search_query
+from finmy.reconstruction_scope import read_reconstruction
 
 
 class ReconstructionService:
@@ -54,28 +54,6 @@ class ReconstructionService:
         st.session_state.search_coverage = None
         self.search_coverage = None
         reconstruction = read_reconstruction(self.config)
-        scoped = reconstruction["mode"] != "event" and (self.config.get("subject_search") or {}).get("enabled", True)
-        from finmy.runner.enhanced_subject_search import enhanced_search_enabled
-        enhanced = reconstruction["mode"] != "event" and enhanced_search_enabled(self.config)
-        if scoped and not enhanced:
-            from finmy.runner.scoped_search import plan_search, search_window
-            # Validate the plan before any network call. Prompt dates become
-            # structured event coverage; publication overrides stay search-only.
-            plan_search(main_input, keywords, reconstruction["subject"], self.config.get("subject_search", {}))
-            subject = self.config["builder_config"]["reconstruction"]["subject"]
-            if not subject.get("coverage_start") or not subject.get("coverage_end"):
-                try:
-                    start, end = search_window(main_input, reconstruction["subject"])
-                except ValueError:
-                    # An explicit publication-only window need not assert event dates.
-                    # plan_search above already validated that the search is bounded.
-                    pass
-                else:
-                    subject["coverage_start"] = subject.get("coverage_start") or start.isoformat()
-                    subject["coverage_end"] = subject.get("coverage_end") or end.isoformat()
-            reconstruction = read_reconstruction(self.config)
-        # Prepare search query
-        search_query_content = search_query(main_input, keywords, self.config)
         st.write(f"**{format_timestamp()}** - Input has been processed.")
         
         # Create output directory
@@ -86,27 +64,13 @@ class ReconstructionService:
         # Initialize data collector
         collector = DataCollectorService(self.config, save_dir)
         
-        # Collect data from all sources
-        if enhanced:
-            search_content = collector.collect_enhanced_search_results(
-                main_input, keywords, reconstruction["subject"]
-            )
-            self._search_acquisition = collector.enhanced_search_result
-            self.search_coverage = collector.search_coverage
-            st.session_state.search_coverage = self.search_coverage
-            if not search_content:
-                # A provider pause or empty search is a saved acquisition result,
-                # not a failed graph build. The UI presents its exact status.
-                return None
-        elif scoped:
-            bocha_content, baidu_content = collector.collect_subject_search_results(
-                main_input, keywords, reconstruction["subject"]
-            )
-            search_content = bocha_content + baidu_content
-        else:
-            bocha_content = collector.collect_bocha_search_results(search_query_content, keywords)
-            baidu_content = collector.collect_baidu_search_results(search_query_content, keywords)
-            search_content = bocha_content + baidu_content
+        # Person and single-event requests share the agent acquisition path.
+        search_content = collector.collect_enhanced_search_results(
+            main_input, keywords, reconstruction.get("subject", {})
+        )
+        self._search_acquisition = collector.enhanced_search_result
+        self.search_coverage = collector.search_coverage
+        st.session_state.search_coverage = self.search_coverage
         url_content, filepath_content = collector.collect_structured_data(
             structured_data, keywords
         )
@@ -130,32 +94,15 @@ class ReconstructionService:
         # Assign stable document IDs before allocating the source-text budget.
         # Keep the original All_Text_Content and formatted search archives unchanged.
         documents = [doc for source in ("url", "file") for doc in collector.documents[source]]
-        if enhanced:
-            documents += collector.enhanced_documents
-        else:
-            documents += [doc for source in ("bocha", "baidu")
-                          for doc in collector.documents[source]]
+        documents += collector.enhanced_documents
         if [d["raw_text"] for d in documents] != all_text_content:
             raise ValueError("Collected source metadata/content are out of sync")
-        from finmy.runner.event_followup_config import initial_search_options
+        if not documents:
+            return None
         usage = getattr(collector, "evidence_usage", {})
         documents = prepare_documents(documents, main_input, keywords, self.config, save_dir)
-        if scoped and not enhanced and reconstruction["mode"] == "person":
-            from finmy.runner.decision_followup import collect_decision_followup
-            initial_config = copy.deepcopy(self.config)
-            initial_config["subject_search"] = initial_search_options(self.config)
-            extra = collect_decision_followup(
-                {"documents": documents}, main_input, keywords, reconstruction["subject"], initial_config, save_dir,
-                progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"),
-                known_urls=[d.get("url") for d in documents],
-                usage=usage,
-            )
-            if extra:
-                documents = prepare_documents(documents + extra, main_input, keywords,
-                                              self.config, save_dir)
-
         budget_config = copy.deepcopy(self.config)
-        storyline_plan = getattr(collector, "enhanced_search_result", {}).get("storyline_plan") if enhanced else None
+        storyline_plan = collector.enhanced_search_result.get("storyline_plan")
         if storyline_plan:
             budget_config.setdefault("all_content_config", {})["allocation_strategy"] = "event"
         budgeted = allocate_context(documents, [], budget_config, include_metadata=True)
@@ -179,43 +126,18 @@ class ReconstructionService:
         # Run pipeline
         self._draft_evidence = {"documents": documents, "usage": usage}
         pipeline_config = self.config
-        if enhanced:
-            from finmy.subject_graph.runner import with_source_registry
-            self.config = with_source_registry(self.config, documents, budgeted)
-            if storyline_plan:
-                self.config["storyline_plan"] = copy.deepcopy(storyline_plan)
+        from finmy.subject_graph.runner import with_source_registry
+        self.config = with_source_registry(self.config, documents, budgeted)
+        if storyline_plan:
+            self.config["storyline_plan"] = copy.deepcopy(storyline_plan)
         try:
             return self._run_pipeline(
                 all_text_content_limit, main_input, keywords, save_dir
             )
         finally:
-            # A reused Streamlit service must not attach this run's sources to
-            # a subsequent reconstruction, including a switch to simple mode.
-            if enhanced:
-                self.config = pipeline_config
-    
-    def _limit_content_length(self, content_list: List[str]) -> List[str]:
-        """Limit content to maximum allowed length."""
-        max_length = self.config.get("all_content_config", {}).get(
-            "max_content_length", float("inf")
-        )
-        
-        limited_content = []
-        total_length = 0
-        
-        for item in content_list:
-            item_length = len(item)
-            if total_length + item_length <= max_length:
-                limited_content.append(item)
-                total_length += item_length
-            else:
-                continue
-        
-        logging.info("Length of All_Text_Content String: %d", sum(len(c) for c in content_list))
-        logging.info("Length of All_Text_Content_Limit String: %d", total_length)
-        
-        return limited_content
-    
+            # Run-specific source metadata never leaks into the next request.
+            self.config = pipeline_config
+
     def _run_pipeline(
         self, contents: List[str], query_text: str, keywords: List[str], save_dir: str
     ) -> Dict[str, Any]:

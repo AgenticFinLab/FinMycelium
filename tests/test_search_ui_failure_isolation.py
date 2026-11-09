@@ -6,6 +6,7 @@ from streamlit.testing.v1 import AppTest
 
 from finmy.search.control import SearchController
 from finmy.workbench import search_page
+from test_search_workbench import evidence_model
 
 
 APP = Path(__file__).resolve().parents[1] / 'finmy/workbench/app.py'
@@ -21,7 +22,7 @@ def _page(tmp_path, monkeypatch, controller):
 
 def _finished(controller):
     task_id = controller.create(dict(target_type='event', target_name='Deal',
-                                    query_text='Trace the documented closing'), {}, 'simple')
+                                    query_text='Trace the documented closing'), {})
     controller.start(task_id)
     controller.threads[task_id].join(5)
     assert controller.inspect(task_id)['status'] == 'finished'
@@ -29,7 +30,7 @@ def _finished(controller):
 
 
 def _controller(tmp_path):
-    return SearchController(tmp_path / 'search',
+    return SearchController(tmp_path / 'search', model=evidence_model,
         transport=lambda *args: {'data': {'webPages': {'value': [
             {'url': 'https://example.org/closing', 'name': 'Closing announcement'}]}}},
         fetcher=lambda url: (b'The transaction closed after approval.', 'txt', 'utf-8'))
@@ -39,7 +40,7 @@ def test_corrupt_task_does_not_break_task_selector(tmp_path, monkeypatch):
     controller = _controller(tmp_path)
     healthy = _finished(controller)
     broken = controller.create(dict(target_type='event', target_name='Broken',
-                                    query_text='Trace another event'), {}, 'simple')
+                                    query_text='Trace another event'), {})
     (controller.root / broken / 'runs/initial/run.json').write_text('{unfinished')
     app = _page(tmp_path, monkeypatch, controller)
     assert not app.exception
