@@ -127,9 +127,10 @@ class SharedEventSourcesTests(unittest.TestCase):
         raw = next(self.pool.root.glob("*/raw"))
         raw.write_bytes(b"tampered")
         recipient = self.state("tsmc")
-        with self.assertRaisesRegex(ValueError, "integrity mismatch"):
-            self.pool.refresh(recipient)
+        self.assertEqual(self.pool.refresh(recipient), [])
         self.assertEqual(recipient.data["sources"], {})
+        self.assertEqual(self.pool.errors[0]["stage"], "shared_snapshot")
+        self.assertTrue((self.pool.root / "errors.json").is_file())
 
     def test_reparsed_original_does_not_reintroduce_a_stale_snapshot(self):
         donor, sid = self.donor()
@@ -149,6 +150,24 @@ class SharedEventSourcesTests(unittest.TestCase):
         copied = SourceStore(recipient).document(sid)
         self.assertEqual(copied, corrected)
         self.assertNotIn("read_ranges", recipient.data["sources"][sid])
+
+    def test_one_malformed_snapshot_does_not_hide_another_valid_original(self):
+        self.donor(name="broken", url="https://example.test/broken")
+        bad = next(self.pool.root.glob("*/record.json"))
+        bad.write_text("[]")
+        _, good_sid = self.donor(name="valid", url="https://example.test/valid")
+        recipient = self.state("recipient")
+        self.assertEqual(self.pool.refresh(recipient), [good_sid])
+        self.assertTrue(self.pool.has_sources())
+        self.assertEqual(len(self.pool.errors), 1)
+
+    def test_bad_hydration_child_does_not_block_valid_child(self):
+        good, sid = self.donor()
+        broken = self.state("broken")
+        (broken.run_dir / "run.json").write_text("{")
+        self.pool.hydrate(["broken", good.root.name])
+        self.assertEqual(self.pool.refresh(self.state("recipient")), [sid])
+        self.assertEqual(self.pool.errors[0]["stage"], "hydrate_task")
 
     def test_existing_version_is_pinned_and_read_history_is_not_replaced(self):
         recipient = self.state("tsmc")

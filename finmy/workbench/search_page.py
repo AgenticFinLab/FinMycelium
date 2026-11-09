@@ -20,21 +20,37 @@ def get_controller(root):
 
 STATUS={'ready':'待启动','running':'运行中','paused':'已暂停','finished':'待检查材料',
         'insufficient':'资料不足','limit':'达到运行上限','failed':'运行失败'}
+LOCAL_RECORD_ERRORS = (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError)
+
+
+def task_label(controller, task_id):
+    try:
+        return controller.inspect(task_id)['task']['target_name'] + ' · ' + task_id[:8]
+    except LOCAL_RECORD_ERRORS:
+        return '记录无法读取 · ' + task_id[:8]
 
 
 @st.fragment(run_every='1s')
 def task_panel(controller, task_id, store, read_only=False):
-    data=controller.inspect(task_id)
+    try:
+        data=controller.inspect(task_id)
+    except LOCAL_RECORD_ERRORS as exc:
+        st.error(f'此任务的运行记录暂时无法读取（{type(exc).__name__}）；其他任务仍可查看。')
+        return
     active=controller.active(task_id)
     st.subheader(data['task']['target_name'])
     st.caption(STATUS.get(data['status'],data['status'])+' · '+task_id)
+    if data.get('inspection_errors'):
+        st.warning('部分交接记录无法读取，已单独列出；已保存来源和运行进度仍保留。')
+        with st.expander('交接记录读取问题'):
+            st.json(data['inspection_errors'])
     a,b,c=st.columns(3)
     a.metric('搜索请求',f"{data['usage']['search']} / {data['config']['max_search_requests']}")
     b.metric('阅读来源',f"{len(data['read_sources'])} / {data['config']['max_read_sources']}")
     c.metric('模型请求',f"{data['usage']['model']} / {data['config']['max_model_calls']}")
     if not read_only:
         a,b,c=st.columns(3)
-        ended=data['status'] in {'finished','insufficient'}
+        ended=not data.get('can_resume', data['status'] not in {'finished','insufficient'})
         if a.button('开始／继续',disabled=active or ended,key='start-'+task_id,type='secondary' if ended else 'primary'):
             try:
                 controller.start(task_id)
@@ -50,8 +66,16 @@ def task_panel(controller, task_id, store, read_only=False):
             st.info('已请求暂停；当前请求结束后保存状态。')
         st.caption('执行一步 = 一次模型决策及其工具执行；联合搜索可调用多家服务。暂停会等待当前请求结束。')
     if data.get('stop_reason'):
-        reasons={'fixed_queries_completed':'固定查询已完成','user_pause':'手动暂停','checkpoint':'到达检查点','model_context_limit':'上下文达到长度上限','model_limit':'达到模型调用上限','repeated_invalid_action':'连续执行错误，任务已停止','supported':'已准备可供检查的材料','low_gain':'继续补搜收益较低','insufficient':'证据不足'}
+        reasons={'fixed_queries_completed':'固定查询已完成','user_pause':'手动暂停','checkpoint':'到达检查点','model_context_limit':'上下文达到长度上限','model_limit':'达到模型调用上限','repeated_invalid_action':'连续执行错误，任务已停止','supported':'已准备可供检查的材料','low_gain':'继续补搜收益较低','insufficient':'证据不足',
+                 'provider_cooldown':'搜索服务暂时限流，等待后可继续',
+                 'provider_blocked':'搜索服务拒绝访问，检查账户或凭据后可继续',
+                 'provider_retry_exhausted':'本轮搜索服务重试已用完，稍后可继续',
+                 'provider_unavailable':'搜索服务暂不可用，进度已保留',
+                 'model_unavailable':'搜索模型暂不可用，进度已保留'}
         st.caption('停止原因：'+reasons.get(data['stop_reason'],data['stop_reason']))
+    resume = data.get('resume')
+    if data['status'] == 'paused' and isinstance(resume, dict) and resume.get('resumable'):
+        st.info('任务已暂停，未判定为搜索完成。恢复后沿用已保存材料和累计额度。')
     if not read_only:
         with st.expander('调整运行上限'):
             with st.form('limits-'+task_id):
@@ -69,7 +93,10 @@ def task_panel(controller, task_id, store, read_only=False):
     with st.expander('研究要求'):
         st.text(data['task']['query_text'])
         st.caption('运行模型：' + str(data['config'].get('lm_name') or '简单搜索无需模型'))
-    render_process(controller, task_id, data, read_only=read_only)
+    try:
+        render_process(controller, task_id, data, read_only=read_only)
+    except LOCAL_RECORD_ERRORS as exc:
+        st.warning(f'部分过程记录无法展示（{type(exc).__name__}），下方材料仍可检查。')
     sources=data['sources']
     st.subheader('资料与交接')
     if not sources:st.info('尚未取得来源。')
@@ -85,18 +112,18 @@ def task_panel(controller, task_id, store, read_only=False):
                     doc=SourceStore(SearchState(controller.root,task_id)).document(sid)
                     st.caption('来源版本：'+doc['version'])
                     st.text_area('已保存原文','\n\n'.join(b['text'] for b in doc['blocks']),height=220,disabled=True,key='text-'+task_id+sid)
-                except ValueError as exc:st.error(str(exc))
+                except LOCAL_RECORD_ERRORS as exc:st.error(f'此来源无法校验（{type(exc).__name__}），请检查其他来源。')
             else:st.caption('该来源尚无可用正文。')
     source_assembly_preview(controller, task_id, data, active)
     complete=data.get('complete_material')
     if complete:
         from finmy.search.handoff import materialize_complete
-        st.caption(f"完整交接材料：{len(complete['selected'])} 份来源 · {complete['material_chars']} 字符；本次输入的遗漏仍保留在完整材料中。")
         try:
+            st.caption(f"完整交接材料：{len(complete['selected'])} 份来源 · {complete['material_chars']} 字符；本次输入的遗漏仍保留在完整材料中。")
             full=materialize_complete(SearchState(controller.root,task_id),complete)
             st.download_button('下载完整交接正文',json.dumps(full,ensure_ascii=False,indent=2),file_name=task_id+'-complete-material.json',mime='application/json',key='complete-download-'+str(controller.root/task_id))
-        except ValueError as exc:
-            st.error(str(exc))
+        except LOCAL_RECORD_ERRORS as exc:
+            st.error(f'完整交接材料无法校验（{type(exc).__name__}），已保存来源仍可逐项检查。')
     selection=data['selection']
     if selection:
         st.caption('本次交接策略：' + budget_policy_label(selection))
@@ -118,15 +145,21 @@ def task_panel(controller, task_id, store, read_only=False):
             with st.expander('调整本次输入长度并重新组装'):
                 length=st.number_input('本次 Builder 输入字符上限',min_value=1,value=selection['max_material_chars'],key='length-'+task_id)
                 if st.button('重新组装',disabled=active,key='assemble-'+task_id):
-                    controller.reassemble(task_id,length)
-                    st.rerun()
+                    try:
+                        controller.reassemble(task_id,length)
+                        st.rerun()
+                    except LOCAL_RECORD_ERRORS as exc:
+                        st.error(f'本次组装未完成（{type(exc).__name__}），原始材料仍保留。')
         with st.expander('筛选与遗漏记录'):st.json(selection)
 
 
 def source_assembly_preview(controller, task_id, data, active):
     from finmy.search.handoff import prepare_complete_sources, derive_input
-    candidates = [sid for sid, entry in data['sources'].items() if any(
-        r['version'] == entry.get('version') and r['end'] > r['start'] for r in entry.get('read_ranges', []))]
+    candidates = [sid for sid, entry in data['sources'].items()
+        if isinstance(entry, dict) and not entry.get('quarantine') and any(
+            isinstance(r, dict) and r.get('version') == entry.get('version')
+            and type(r.get('end')) is int and type(r.get('start')) is int
+            and r['end'] > r['start'] for r in entry.get('read_ranges', []))]
     if not candidates:
         return
     key = str(controller.root / task_id)
@@ -143,8 +176,8 @@ def source_assembly_preview(controller, task_id, data, active):
                         gaps=['人工选择来源的离线组装预览；尚未进行语义完整性验收'])
                     payload, record = derive_input(state, complete, max_chars=limit)
                     st.session_state['complete-package-result-'+key] = (payload, record, full, complete)
-                except ValueError as exc:
-                    st.error(str(exc))
+                except LOCAL_RECORD_ERRORS as exc:
+                    st.error(f'所选材料无法组装（{type(exc).__name__}）；请排除有问题的来源后重试。')
         result = st.session_state.get('complete-package-result-'+key)
         if result:
             payload, record, full, complete = result
@@ -246,6 +279,6 @@ def search_page(store):
                 except (ValueError,TypeError) as exc:st.error(str(exc))
     tasks=controller.tasks()
     if tasks:
-        selected=st.selectbox('选择检索任务',tasks,format_func=lambda k:controller.inspect(k)['task']['target_name']+' · '+k[:8],index=tasks.index(st.session_state.get('search-selected')) if st.session_state.get('search-selected') in tasks else 0)
+        selected=st.selectbox('选择检索任务',tasks,format_func=lambda k:task_label(controller,k),index=tasks.index(st.session_state.get('search-selected')) if st.session_state.get('search-selected') in tasks else 0)
         task_panel(controller,selected,store)
     else:st.info('尚无检索任务。')

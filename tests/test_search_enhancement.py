@@ -36,23 +36,32 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(state.data['usage']['search'],3)
         sid=result['source_ids'][0]
         self.assertEqual(len(state.data['sources'][sid]['discoveries']),2)
-        tools.search('deal closing')
-        self.assertEqual(state.data['usage']['search'],4) # only failed provider retried
+        again = tools.search('deal closing')
+        self.assertEqual(state.data['usage']['search'],3) # cached successes; failed provider cools down
+        self.assertEqual(again['providers'][1]['status'], 'cooldown')
         read=tools.read_source(sid)
         self.assertEqual(read['status'],'partial')
         self.assertIn('Not yet completed.',read['spans'][0]['text'])
 
-    def test_invalid_query_rejected_before_any_selected_provider(self):
+    def test_invalid_query_does_not_block_other_selected_providers(self):
         state=self.state(providers=['exa','baidu'])
-        tools=SearchTools(state, transport=lambda *a:self.fail('must not call'))
-        with self.assertRaises(ValueError): tools.search('长'*40)
-        self.assertEqual(state.data['usage']['search'],0)
+        called=[]
+        def transport(provider,payload,config):
+            called.append(provider)
+            return {'results':[]}
+        result=SearchTools(state, transport=transport).search('长'*40)
+        self.assertEqual(called,['exa'])
+        self.assertEqual(state.data['usage']['search'],1)
+        self.assertEqual(result['providers'][1]['status'],'invalid_query')
+        self.assertTrue(result['needs_query_repair'])
         payload=request_payload('exa','长'*40,SearchConfig(providers=['exa']))
         self.assertEqual(payload['query'],'长'*40)
 
     def test_unsupported_filter_not_silently_dropped(self):
         state=self.state(include_domains=['example.org'])
-        with self.assertRaises(ValueError): SearchTools(state).search('deal')
+        result=SearchTools(state,transport=lambda *a:self.fail('must not call')).search('deal')
+        self.assertEqual(result['providers'][0]['status'],'invalid_request')
+        self.assertIn('not yet verified',result['providers'][0]['hint'])
         self.assertEqual(state.data['usage']['search'],0)
 
     def test_resume_and_new_run_do_not_reset_usage(self):

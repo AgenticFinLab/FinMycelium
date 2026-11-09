@@ -142,10 +142,12 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         invalid = copy.deepcopy(responses[2])
         invalid["participants"][0]["actions"][0]["timestamp"]["value"] = "2026-01-01"
         responses.insert(2, invalid)
+        responses.insert(3, {"decision": "keep_scope", "episode": None,
+                             "reason": "The later action belongs to another scene."})
         builder, sequence = self.lifecycle.builder(extraction=responses)
         output = builder.run(self.lifecycle.inputs)
-        self.assertEqual(len(sequence.calls), 9)
-        self.assertEqual(output.extras["usage"]["calls"], 9)
+        self.assertEqual(len(sequence.calls), 10)
+        self.assertEqual(output.extras["usage"]["calls"], 10)
         self.assertEqual(output.extras["usage"]["retries"], 1)
         self.assertEqual(output.extras["person_acceptance"]["episode_scope_conflicts"], 1)
         self.assertFalse(output.extras["person_acceptance"]["semantic_approval"])
@@ -166,11 +168,13 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         responses = flow.extraction_responses()
         invalid = copy.deepcopy(responses[2])
         invalid["participants"][0]["actions"][0]["timestamp"]["value"] = "2026-01-01"
-        builder, sequence = self.lifecycle.builder(organization=[], extraction=responses[:2] + [invalid] * 3)
+        review = {"decision": "keep_scope", "episode": None,
+                  "reason": "The later action belongs to another scene."}
+        builder, sequence = self.lifecycle.builder(organization=[], extraction=responses[:2] + [invalid, review, invalid, invalid])
         with self.assertRaisesRegex(ValueError, "ParticipantReconstructor returned invalid output after 3"):
             builder.run(self.lifecycle.inputs)
-        self.assertEqual(len(sequence.calls), 5)
-        self.lifecycle.assert_failed(builder, 5)
+        self.assertEqual(len(sequence.calls), 6)
+        self.lifecycle.assert_failed(builder, 6)
         self.assertEqual(len(self.report(builder)["conflicts"]), 3)
         self.assertFalse(Path(builder.save_dir, "FinalPersonEPG.html").exists())
 

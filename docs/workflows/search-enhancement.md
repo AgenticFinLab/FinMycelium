@@ -189,8 +189,9 @@ model credentials; the build-only entry supports explicit `--env-file .env` load
 For the existing full runner, set `search_config.mode: agent` and supply search options
 under `search_config.enhancement`. Once search finishes, it passes the budgeted contents
 and original query to `FinmyPipeline.lm_build_pipeline_with_contents`; the old search
-trimming policy is not applied again. Paused, failed, insufficient or limit-stopped search
-does not create the Pipeline. This full route still performs existing query summarization,
+trimming policy is not applied again. Subject reconstruction can use validated partial
+material while separately reporting unfinished events. Empty evidence never starts a
+Builder; temporary service failures remain resumable. This full route still performs existing query summarization,
 optional Matcher processing and database storage before the Builder. With Matcher enabled,
 material may be selected again. The build-only route is the direct route for a reviewed
 search package: it retains the search sample IDs and text without those extra stages.
@@ -224,6 +225,31 @@ one separate 120,000-character evidence pool. The persisted task ledger prevents
 resume from multiplying those budgets. Only validated original material enters
 construction; incomplete supplementary coverage is reported separately.
 See [event enrichment](../person_draft_event_followup.md) for limits and outputs.
+
+## Failure isolation and recovery
+
+Errors are handled at the smallest affected unit. A request failure does not establish
+that another provider, event or saved document is unusable.
+
+| Failure | Result |
+| --- | --- |
+| Provider 429, timeout or server error | Task-local cooldown and a saved resume deadline; no empty `finish` call merely to close the task. |
+| Provider 401/403 or exhausted account balance | The affected task/provider pauses for access correction and explicit resume. Other providers and events continue. |
+| One malformed search-result row | Valid rows remain candidates; rejected row indices/reasons are recorded. |
+| One corrupt saved source or shared snapshot | That source is quarantined with diagnostics; valid sources remain available. Original integrity checks are retained. |
+| One event fails or pauses | Other events continue. Valid selected partial material can reach the subject Builder, with unresolved events reported. |
+| Required Builder review is unavailable | Preserve the pending candidate, validated outputs and interruption diagnostics. Do not repeat extraction as a JSON repair or publish an unreviewed graph as complete. |
+
+Provider health is stored under each task's run directory. The old phase-wide
+`provider_health.json` is ignored, so an earlier event's outage cannot disable siblings.
+Explicit resume retains attempted-call counters, source versions and the discovery plan;
+it does not refresh budgets. Cooldown is not evidence insufficiency. When no material is
+available, the phase reports `waiting`, `blocked` or `paused` as appropriate.
+
+Reassembling or inspecting saved material does not convert a paused task into a completed
+search. Invalid optional sidecars are reported independently. Invalid task identity,
+changed scope, inconsistent global reservations and an unavailable required final graph
+remain explicit stopping conditions; they are never converted into successful evidence.
 
 ## Storage and verification
 

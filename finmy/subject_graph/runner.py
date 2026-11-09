@@ -124,7 +124,14 @@ def build_from_contents(contents, query, keywords, config):
     samples = [DataSample(sample_id=f"saved_{i}", raw_data_id=f"saved_{i}", content=text)
                for i, text in enumerate(contents)]
     builder = builder_class(build_config=build_config)
-    return builder.run(BuildInput(user_query=user_query, samples=samples)), builder.save_dir
+    try:
+        output = builder.run(BuildInput(user_query=user_query, samples=samples))
+    except Exception as error:
+        # Preserve the original exception type and traceback while giving the
+        # caller the directory that was created before reconstruction failed.
+        error.builder_directory = str(builder.save_dir)
+        raise
+    return output, builder.save_dir
 
 
 def main(argv=None):

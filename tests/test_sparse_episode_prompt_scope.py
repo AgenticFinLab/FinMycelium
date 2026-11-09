@@ -89,15 +89,14 @@ class SparseEpisodePromptScopeTest(unittest.TestCase):
                 self.assertIn("Return one complete JSON object with the exact fields and types",
                               " ".join(system.split()))
 
-    def test_shared_policy_and_other_five_roles_remain_unchanged(self):
+    def test_shared_policy_and_unaffected_role_templates_remain_unchanged(self):
         # Snapshot the existing shared blocks and unaffected user templates:
-        # this fix must not alter global extraction or other role semantics.
+        # The checker and Episode role now also receive securities-role guidance;
+        # their behavior is covered by test_security_counterparty_grounding.
         snapshots = {
             "COMMON_SYSTEM_PROMPT": "c5ee21d88e73a9a1e6690bdea28bf8eb62418237d578e663f40d2cd0d5c5a73b",
             "COMMON_USER_INPUT_BLOCK": "07cea4cc64fb5cb7b33ed49a17c1969c702c9dae0160dd6bd2274bd3c7ef6f87",
             "EventLayoutReconstructorUser": "b366988860374db491cc1d6a531a880b8d1a143fb82a73a68a6221fb9728909a",
-            "SkeletonCheckerUser": "77f4876e1b815992420c4ec6cabf16bfdc41498287ff2142db1f6f3efdbf4f7b",
-            "EpisodeReconstructorUser": "d8513121d2993c2598b144a1ae9ca9f73e4b6618ad8e318cbb47d9ea254bc994",
             "StageDescriptionReconstructorUser": "c1d23c02d0010c5019ec7cb4c5475d47c85085bd3db4cd7160c80c62272d9a29",
             "EventDescriptionReconstructorUser": "9ce1459c00cdd22eaa5201a3be8c8459993b9ce4422168af7f2a957630e52890",
         }

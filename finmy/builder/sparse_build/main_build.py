@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -43,6 +44,11 @@ from .renderers import render_context_asset_summary
 from .runtime import PERSON_SCOPE_GUIDANCE, digest, run_identity, sparse_options, summarize_calls, validate_config, validate_input
 from .temporal_recovery import build_temporal_retry_user_msg
 from .organization_errors import OrganizationValidationError, build_organization_retry_user_msg
+from .organization_call_guard import guard_organization_call
+from .relation_grounding import (
+    CounterpartyEvidenceGuard, RelationGroundingError, ReviewUnavailableError,
+    build_relation_retry_user_msg,
+)
 from .validation import (
     validate_cascade, validate_endpoints, validate_episode, validate_role,
 )
@@ -394,7 +400,11 @@ class SparseRagBuilder(BaseBuilder):
         prompt_kwargs: dict[str, str],
         savename: str,
         validator=None,
+        temporal_reviewer=None,
     ) -> Any:
+        if agent_name == "PersonOrganization":
+            sys_msg, user_msg, validator = guard_organization_call(
+                sys_msg, user_msg, validator, phase=savename)
         max_attempts = self._event_config_value("max_json_attempts", 3)
         max_calls = self._event_config_value("max_calls", 300)
         if type(max_attempts) is not int or not 1 <= max_attempts <= 3:
@@ -430,7 +440,10 @@ class SparseRagBuilder(BaseBuilder):
                 raise
             finally:
                 record["elapsed_seconds"] = time.perf_counter() - started
-                self._save_call_ledger()
+                if record["status"] == "transport_error":
+                    self._save_failure_ledger()
+                else:
+                    self._save_call_ledger()
             cost = getattr(output, "cost", None)
             details = getattr(output, "extras", None) or {}
             record.update(
@@ -482,10 +495,17 @@ class SparseRagBuilder(BaseBuilder):
                 record["status"] = "accepted"
                 self._save_call_ledger()
                 return parsed
+            except ReviewUnavailableError as exc:
+                record.update(status="review_pending", validation_kind="review_unavailable",
+                              error_type=exc.review_error_type, review_role=exc.review_role,
+                              candidate_checkpoint_saved=exc.audit_saved,
+                              pending_candidate_artifact=exc.audit_artifact if exc.audit_saved else None)
+                self._save_failure_ledger()
+                raise
             except (TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
                 if (agent_name in self._JSON_SYNTACTIC_RECOVERY_AGENTS
-                        and not isinstance(last_error, TemporalScopeError)):
+                        and not isinstance(last_error, (TemporalScopeError, RelationGroundingError))):
                     try:
                         recovered = self._recover_syntactic_json_response(response_text)
                         parsed = recovered
@@ -501,9 +521,29 @@ class SparseRagBuilder(BaseBuilder):
                 if isinstance(last_error, TemporalScopeError):
                     record["validation_kind"] = "episode_temporal_scope"
                     self._record_temporal_conflict(agent_name, savename, attempt, last_error, parsed)
+                    if temporal_reviewer is not None:
+                        reviewer, temporal_reviewer = temporal_reviewer, None
+                        try:
+                            revised = reviewer(last_error, parsed)
+                        except ReviewUnavailableError as review_error:
+                            record.update(status="review_pending", error_type=review_error.review_error_type,
+                                          review_role=review_error.review_role,
+                                          candidate_checkpoint_saved=review_error.audit_saved,
+                                          pending_candidate_artifact=review_error.audit_artifact
+                                              if review_error.audit_saved else None)
+                            self._save_failure_ledger()
+                            raise
+                        if revised:
+                            validator(parsed)
+                            self._save_agent_result(parsed, savename)
+                            record.update(status="accepted", scope_revision=True)
+                            self._save_call_ledger()
+                            return parsed
                 elif isinstance(last_error, OrganizationValidationError):
                     record["validation_kind"] = "organization_semantic"
                     self._record_organization_error(agent_name, savename, attempt, last_error, parsed)
+                elif isinstance(last_error, RelationGroundingError):
+                    record["validation_kind"] = "relation_evidence"
                 self._save_call_ledger()
                 if attempt >= max_attempts:
                     raise ValueError(
@@ -515,10 +555,20 @@ class SparseRagBuilder(BaseBuilder):
                 elif isinstance(last_error, OrganizationValidationError):
                     current_user_msg = build_organization_retry_user_msg(
                         user_msg, agent_name, last_error, parsed)
+                elif isinstance(last_error, RelationGroundingError):
+                    current_user_msg = build_relation_retry_user_msg(user_msg, last_error, parsed)
                 else:
                     current_user_msg = self._build_json_retry_user_msg(user_msg, agent_name) + f"\nValidation issue: {last_error}\n"
 
         raise ValueError(f"{agent_name} returned invalid JSON: {last_error}")
+
+    def _save_failure_ledger(self):
+        """A diagnostic write failure must not replace the active request error."""
+        try:
+            self._save_call_ledger()
+        except OSError as exc:
+            logging.getLogger(__name__).warning('Could not save failure CallLedger (%s)',
+                                               type(exc).__name__)
 
     def _save_agent_trace(
         self,
@@ -942,6 +992,77 @@ class SparseRagBuilder(BaseBuilder):
             assembled["transactions"] = self._latest_agent_result(state, "TransactionReconstructor")["transactions"]
         validate_episode(assembled)
 
+    def _review_episode_scope(self, state, agent_name, user_msg, savename, error, candidate):
+        """Review a draft boundary once, retaining facts and an auditable old skeleton."""
+        from .temporal_scope_review import SYSTEM, apply_revision, review_message, validate_proposal
+
+        skeleton = self._get_event_skeleton(state)
+        si, ei, _, target, locator = self._get_episode_by_sequence_index(
+            skeleton, self._current_episode_sequence_index(state))
+        participants = candidate.get("participants", []) if agent_name == "ParticipantReconstructor" else (
+            self._latest_agent_result(state, "ParticipantReconstructor") or {}).get("participants", [])
+        transactions = candidate.get("transactions", []) if agent_name == "TransactionReconstructor" else []
+        review_name = "TemporalScopeReview-" + savename
+        audit = {"agent": agent_name, "save_name": savename, "episode_locator": locator,
+                 "before": copy.deepcopy(skeleton), "candidate": copy.deepcopy(candidate),
+                 "conflict": copy.deepcopy(error.report), "status": "not_revised"}
+        try:
+            proposal = self._infer_and_parse_json("EpisodeScopeReviewer", SYSTEM,
+                review_message(user_msg, skeleton, target, candidate, error), {}, review_name,
+                validator=lambda value: validate_proposal(value, target,
+                    state["build_input"].samples, participants, transactions))
+        except Exception as exc:
+            audit_name = "TemporalScopeAudit-" + savename
+            review_calls = [row for row in getattr(self, "_call_records", [])
+                            if row.get("save_name") == review_name]
+            review_status = review_calls[-1]["status"] if review_calls else "not_called"
+            audit.update(status="review_unavailable", review_error_type=type(exc).__name__,
+                         review_status=review_status, semantic_approval=False)
+            audit_saved = True
+            try:
+                self._save_agent_result(audit, audit_name)
+            except OSError as save_error:
+                audit_saved = False
+                logging.getLogger(__name__).warning('Could not save %s (%s)',
+                    audit_name, type(save_error).__name__)
+            # Invalid review proposals never relax the original check. A local
+            # response failure can use the ordinary bounded role correction;
+            # transport/budget failures must not be misclassified as bad facts.
+            if audit_saved and isinstance(exc, ValueError) and review_status in {
+                    "invalid_output", "empty_response", "incomplete_response"}:
+                return False
+            raise ReviewUnavailableError("EpisodeScopeReviewer", audit_name, exc,
+                                         audit_saved=audit_saved) from exc
+        audit["review"] = copy.deepcopy(proposal)
+        if proposal["decision"] != "revise_scope":
+            self._save_agent_result(audit, "TemporalScopeAudit-" + savename)
+            return False
+        revised = apply_revision(skeleton, si, ei, proposal["episode"])
+        original = copy.deepcopy(skeleton)
+        skeleton.clear()
+        skeleton.update(revised)
+        try:
+            self._validate_agent_output(state, agent_name, candidate)
+        except (TypeError, ValueError):
+            skeleton.clear()
+            skeleton.update(original)
+            audit["status"] = "revision_failed_validation"
+            self._save_agent_result(audit, "TemporalScopeAudit-" + savename)
+            return False
+        audit.update(status="revised", after=copy.deepcopy(skeleton))
+        self._save_agent_result(audit, "TemporalScopeAudit-" + savename)
+        role = "SkeletonChecker" if self._latest_agent_result(state, "SkeletonChecker") is not None else "SkeletonReconstructor"
+        count = sum(role in row for row in state["agent_results"])
+        self._save_agent_result(skeleton, f"{role}-{count}")
+        # Persist the revision in the same source artifact consumed by strict
+        # replay; the audit above retains the exact previous checked skeleton.
+        if getattr(self, "_temporal_conflicts", None):
+            self._temporal_conflicts[-1].update(status="scope_revised", review_artifact=review_name)
+            if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
+                self.save_traces({"contract_version": 1, "semantic_support_checked": False,
+                    "conflicts": self._temporal_conflicts}, "EpisodeScopeConflicts", "json")
+        return True
+
     def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
         """Execute one event reconstruction agent stage."""
 
@@ -961,13 +1082,30 @@ class SparseRagBuilder(BaseBuilder):
         )
         system_msg, user_msg = self._format_agent_messages(agent_name, prompt_kwargs)
         savename = self._agent_save_name(state, agent_name)
+        relation_guard = None
+        if agent_name == "EpisodeReconstructor":
+            relation_guard = CounterpartyEvidenceGuard(
+                prompt_kwargs["Content"],
+                self._latest_agent_result(state, "ParticipantReconstructor")["participants"],
+                infer=lambda system, user, name, validator: self._infer_and_parse_json(
+                    "CounterpartyEvidenceReview", system, user, {}, name, validator=validator),
+                save=lambda data, name: self._save_agent_result(data, name), name=savename)
+
+        def validate_output(payload):
+            self._validate_agent_output(state, agent_name, payload)
+            if relation_guard is not None:
+                relation_guard(payload)
+
         parsed_result = self._infer_and_parse_json(
             agent_name,
             system_msg,
             user_msg,
             prompt_kwargs,
             savename,
-            validator=lambda payload: self._validate_agent_output(state, agent_name, payload),
+            validator=validate_output,
+            temporal_reviewer=(lambda error, candidate: self._review_episode_scope(
+                state, agent_name, user_msg, savename, error, candidate))
+                if agent_name in {"ParticipantReconstructor", "TransactionReconstructor"} else None,
         )
 
         meta: dict[str, Any] | None = None
@@ -1453,13 +1591,44 @@ class SparseRagBuilder(BaseBuilder):
             return output
         except BaseException as exc:
             manifest.update(status="failed", error_type=type(exc).__name__)
+            # Accepted roles are durable artifacts, not a completed graph. Give
+            # callers an explicit checkpoint boundary without claiming that
+            # arbitrary partial extraction has an automatic resume path.
+            interruption = {
+                "status": "checkpointed_incomplete", "error_type": type(exc).__name__,
+                "accepted_result_artifacts": sorted({row["save_name"] + "-Result.json"
+                    for row in self._call_records if row.get("status") in {"accepted", "recovered"}}),
+                "pending_candidate_artifacts": sorted({row["pending_candidate_artifact"]
+                    for row in self._call_records if row.get("pending_candidate_artifact")}),
+                "recovery_scope": "person_organization_only" if output is not None
+                    and reconstruction["mode"] == "person" else "manual_extraction_recovery",
+                "final_artifact_allowed": False,
+            }
+            if self._call_records:
+                last_call = self._call_records[-1]
+                interruption["last_call"] = {key: last_call[key] for key in
+                    ("agent", "save_name", "status", "error_type") if key in last_call}
+            manifest["interruption"] = interruption
+            if persist:
+                try:
+                    self.save_traces(interruption, "BuildInterruption", "json")
+                except OSError as save_error:
+                    interruption["checkpoint_write_error_type"] = type(save_error).__name__
+                    logging.getLogger(__name__).warning('Could not save BuildInterruption (%s)',
+                        type(save_error).__name__)
             raise
         finally:
             manifest.update(elapsed_seconds=time.perf_counter() - started,
                             usage=summarize_calls(self._call_records))
             if persist:
-                manifest["artifact_sha256"] = self._artifact_hashes()
-                self.save_traces(manifest, "RunManifest", "json")
+                try:
+                    manifest["artifact_sha256"] = self._artifact_hashes()
+                    self.save_traces(manifest, "RunManifest", "json")
+                except OSError as save_error:
+                    if manifest["status"] != "failed":
+                        raise
+                    logging.getLogger(__name__).warning('Could not finalize failed RunManifest (%s)',
+                        type(save_error).__name__)
 
             if manifest["status"] == "completed" and output is not None:
                 output.extras.update(builder_type=self.builder_type,

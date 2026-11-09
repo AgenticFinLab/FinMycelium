@@ -16,7 +16,7 @@ import shutil
 import tempfile
 
 from finmy.search.control import SearchController, task_lock
-from finmy.search.sources import SourceStore
+from finmy.search.sources import SourceStore, SourceIntegrityError
 from finmy.search.state import SearchConfig, SearchState, digest, now, write_json
 
 
@@ -64,7 +64,7 @@ def _native_state(root, task_id, expected_task, record):
     if data.get("task") != expected_task or data.get("input_sha256") != digest(expected_task):
         raise ValueError("Saved event search differs from the requested person, period or storyline")
     old_config = SearchConfig(**data["config"])
-    if record.get("config") != asdict(old_config):
+    if SearchConfig(**record.get("config", {})) != old_config:
         raise ValueError("Saved task configuration differs from its phase reservation")
     read_ids = data.get("read_sources", [])
     if not isinstance(read_ids, list) or len(set(read_ids)) != len(read_ids):
@@ -83,7 +83,12 @@ def _native_state(root, task_id, expected_task, record):
         for version in entry.get("versions", []):
             if not isinstance(version, str) or not re.fullmatch(r"[0-9a-f]{64}", version):
                 raise ValueError("Invalid source version")
-            store.document(sid, version)  # Verifies every saved raw/parsed version.
+            try:
+                store.document(sid, version)  # Never promote unverifiable originals.
+            except SourceIntegrityError as error:
+                data.setdefault("_resume_source_errors", []).append({
+                    "stage": "source_integrity", "source_id": sid, "version": version,
+                    "error_type": type(error).__name__})
     return data, counts
 
 
@@ -204,13 +209,21 @@ def _prepare_locked(source, target, query, keywords, subject, config, task):
             usage[key] += spent[key]
         if data is None:
             continue  # Unstarted events are admitted by the ordinary scheduler.
-        finished = data.get("status") == "finished"
+        source_errors = data.get("_resume_source_errors", [])
+        if source_errors:
+            record["errors"] = source_errors
+        finished = data.get("status") == "finished" and not source_errors
         if finished:
-            found = _documents(source_root, task_id, {"status": "finished"}, event)
-            if not found:
-                raise ValueError("Finished saved event has no usable handoff")
-            record.update(status="finished", config=data["config"], document_count=len(found))
-        else:
+            try:
+                found = _documents(source_root, task_id, {"status": "finished"}, event)
+                if not found:
+                    raise ValueError("Finished saved event has no usable handoff")
+                record.update(status="finished", config=data["config"], document_count=len(found))
+            except (ValueError, OSError, KeyError, TypeError) as error:
+                from finmy.runner.search_failures import record_failure
+                record_failure(record, "saved_handoff", error)
+                finished = False
+        if not finished:
             if any(spent[key] > getattr(child, option) for key, option in COUNTERS.items()):
                 raise ValueError("Per-event ceiling is below saved usage for " + task_id)
             record["config"] = asdict(child)
@@ -230,7 +243,9 @@ def _prepare_locked(source, target, query, keywords, subject, config, task):
                  "discovery_model_calls": base_discovery + discovery_calls,
                  "reused_event_ids": [event["event_id"] for event in events],
                  "reopened_task_ids": [key for key, record in records.items()
-                                       if native[key] and record["status"] != "finished"]}
+                                       if native[key] and record["status"] != "finished"],
+                 "isolated_source_errors": {key: row["errors"] for key, row in records.items()
+                                            if row.get("errors")}}
     target.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".storyline-resume-", dir=target.parent))
     try:

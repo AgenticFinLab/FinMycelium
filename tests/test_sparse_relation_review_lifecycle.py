@@ -53,7 +53,10 @@ class RelationLifecycleInference:
             value = self.extraction.pop(0)
         else:
             prefix, raw_task = infer_input.user_msg.split(TASK_SEPARATOR, 1)
-            request, task = json.loads(prefix), json.loads(raw_task)
+            # Organization inference appends a factual detail-reference catalog
+            # after the task JSON; parse the task without treating that metadata
+            # as part of the JSON document.
+            request, task = json.loads(prefix), json.JSONDecoder().raw_decode(raw_task)[0]
             self.tasks.append(copy.deepcopy(task))
             self.requests.append(request)
             value = self.organization_response(task, request)

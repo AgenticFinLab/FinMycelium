@@ -126,8 +126,12 @@ class SearchFinishRepairTests(unittest.TestCase):
             prepare_complete_sources(self.state, [good])
         entry['read_ranges'][0]['end'] -= 100
         (self.state.root / 'sources' / good / entry['version'] / 'raw').write_bytes(b'Changed')
+        context = context_for(self.state, finalize=True)
+        self.assertEqual(context['eligible_source_ids'], [])
+        self.assertEqual(context['sources'], [])
+        self.assertEqual(context['quarantined_sources'][0]['source_id'], good)
         with self.assertRaisesRegex(ValueError, 'integrity'):
-            context_for(self.state, finalize=True)
+            prepare_complete_sources(self.state, [good])
 
     def test_query_limit_feedback_reports_actual_units_without_truncation(self):
         good = self.source('filing')
@@ -138,10 +142,19 @@ class SearchFinishRepairTests(unittest.TestCase):
             if len(contexts) == 1:
                 return {'action': 'search', 'query': query}
             return {'action': 'finish', 'source_ids': [good], 'reason': 'low_gain', 'gaps': []}
+        # Baidu rejection must not suppress the other configured provider.
+        requests = []
+        def transport(provider, payload, config):
+            requests.append((provider, payload))
+            return {'data': {'webPages': {'value': []}}}
+        self.tools.transport = transport
         self.finalize(model, already_spent=0)
-        self.assertEqual(contexts[1]['feedback']['query_units'], 73)
-        self.assertEqual(contexts[1]['feedback']['query_max_units'], 72)
-        self.assertEqual(self.state.data['usage']['search'], 0)
+        rejected = next(row for row in contexts[1]['feedback']['providers']
+                        if row['provider'] == 'baidu')
+        self.assertEqual(rejected['query_units'], 73)
+        self.assertEqual(rejected['query_max_units'], 72)
+        self.assertEqual([row[0] for row in requests], ['bocha'])
+        self.assertEqual(self.state.data['usage']['search'], 1)
         trace = (self.state.run_dir / 'trace.jsonl').read_text()
         self.assertIn(query, trace)
 

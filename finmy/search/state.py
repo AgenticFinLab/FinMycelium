@@ -31,6 +31,8 @@ class SearchConfig:
     max_search_requests: int = 12
     max_read_sources: int = 12
     max_model_calls: int = 30
+    early_stop_multiplier: int = 1
+    source_languages: list = field(default_factory=list)
     max_read_chars: int = 12000
     max_builder_material_chars: int = 120000
     include_domains: list = field(default_factory=list)
@@ -46,13 +48,22 @@ class SearchConfig:
     generation_config: dict = field(default_factory=lambda: {'max_tokens':4096})
 
     def __post_init__(self):
+        if (not isinstance(self.source_languages, list)
+                or any(lang not in {'en', 'zh'} for lang in self.source_languages)
+                or len(set(self.source_languages)) != len(self.source_languages)):
+            raise ValueError('source_languages must be an ordered subset of en, zh')
+        if self.source_languages:
+            try:
+                import langid
+            except ImportError as error:
+                raise ValueError('Source language policy requires pip install langid==1.1.6') from error
         if not self.providers or len(set(self.providers)) != len(self.providers):
             raise ValueError('Select unique providers')
         if set(self.providers) - {'baidu', 'bocha', 'exa'}:
             raise ValueError('Unknown search provider')
         if type(self.max_search_requests) is not int or self.max_search_requests < 0:
             raise ValueError('max_search_requests must be a nonnegative integer')
-        for name in ('max_results', 'max_read_sources',
+        for name in ('max_results', 'max_read_sources', 'early_stop_multiplier',
                      'max_model_calls', 'max_read_chars', 'max_builder_material_chars',
                      'timeout', 'max_download_bytes', 'max_model_context_chars'):
             value = getattr(self, name)

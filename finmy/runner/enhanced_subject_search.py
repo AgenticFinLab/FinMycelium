@@ -14,6 +14,7 @@ from pathlib import Path
 import time
 
 from finmy.search.state import SearchConfig, SearchState, digest, write_json
+from finmy.runner.search_failures import TERMINAL, phase_status, read_task_usage, record_failure
 
 
 def enhanced_search_enabled(config):
@@ -78,16 +79,30 @@ def _task(query, keywords, subject, config, event=None, supplied=None):
 
 def _documents(root, task_id, result, event):
     """Validate the handoff, then export full inspected bodies with provenance."""
-    if result.get("status") not in {"finished", "insufficient"}:
+    def exclude_source(sid, version, error):
+        failure = {"stage": "source_integrity", "source_id": sid, "version": version,
+                   "error_type": type(error).__name__}
+        if failure not in result.setdefault("errors", []):
+            result["errors"].append(failure)
+        gap = "Some selected originals failed integrity validation and were excluded."
+        if gap not in result.setdefault("gaps", []):
+            result["gaps"].append(gap)
+        if result.get("status") == "finished":
+            result["status"] = "insufficient"
+
+    if result.get("status") not in {"finished", "insufficient", "paused", "failed", "limit"}:
+        return []
+    run_dir = Path(root) / task_id / "runs" / "initial"
+    if result.get("status") != "finished" and not (run_dir / "builder_input.json").exists():
         return []
     state = SearchState(root, task_id)
     handoff = state.run_dir / "builder_input.json"
     if not handoff.exists():
-        if result.get("status") == "insufficient":
+        if result.get("status") != "finished":
             return []
         raise ValueError("Finished search has no saved Builder handoff")
     payload = json.loads(handoff.read_text(encoding="utf-8"))
-    if isinstance(payload, dict) and payload.get("samples") == [] and result.get("status") == "insufficient":
+    if isinstance(payload, dict) and payload.get("samples") == [] and result.get("status") != "finished":
         return []
     if (not isinstance(payload, dict) or not isinstance(payload.get("samples"), list)
             or not payload["samples"] or any(not isinstance(s, dict)
@@ -136,10 +151,14 @@ def _documents(root, task_id, result, event):
             chosen.setdefault((sid, version), []).append(body[start:end])
         records = [(sid, version, "\n\n".join(parts), "partial") for (sid, version), parts in chosen.items()]
     else:
-        from finmy.search.handoff import materialize_complete
-        from finmy.search.sources import SourceStore
+        from finmy.search.handoff import materialize_complete, source_selection_status
+        from finmy.search.sources import SourceStore, SourceIntegrityError
         complete = json.loads(path.read_text(encoding="utf-8"))
-        full = materialize_complete(state, complete)  # Verifies manifest/raw/parsed hashes.
+        source_errors = []
+        full = materialize_complete(state, complete, source_errors=source_errors)
+        for error in source_errors:
+            exclude_source(error["source_id"], error["version"],
+                           SourceIntegrityError(error["source_id"], "Unverifiable saved source"))
         if payload.get("user_query") != full["user_query"]:
             raise ValueError("Search handoff scope differs from retained material")
         store = SourceStore(state)
@@ -147,18 +166,27 @@ def _documents(root, task_id, result, event):
         if any(s["raw_data_id"] not in selected_ids for s in payload["samples"]):
             raise ValueError("Search handoff references unselected sources")
         records = []
+        usable_ids = {sample["raw_data_id"] for sample in full["samples"]}
         for entry in complete["selected"]:
             sid, version = entry["source_id"], entry["version"]
-            doc = store.document(sid, version)
-            if doc.get("status") not in {"success", "partial"}:
+            if sid not in usable_ids:
                 continue
-            if not any(r["version"] == version and r["end"] > r["start"]
-                       for r in state.data["sources"][sid].get("read_ranges", [])):
-                raise ValueError("Selected source was not inspected")
+            try:
+                problem = source_selection_status(state, sid, version)
+                if problem is not None:
+                    raise SourceIntegrityError(sid, "Selected source is not eligible: " + problem)
+                doc = store.document(sid, version)
+            except (SourceIntegrityError, KeyError, TypeError, AttributeError) as error:
+                exclude_source(sid, version, error)
+                continue
             body = "\n\n".join(doc["blocks"][i]["text"] for i in entry["blocks"])
             records.append((sid, version, body, entry["source_status"]))
     output = []
     for sid, version, body, status in records:
+        from finmy.search.language_policy import assess
+        if not assess(store.document(sid, version), state.config.source_languages)['allowed']:
+            exclude_source(sid, version, ValueError('Source language excluded'))
+            continue
         if not body.strip():
             continue
         source = state.data["sources"][sid]
@@ -167,7 +195,8 @@ def _documents(root, task_id, result, event):
         if (not isinstance(metadata, dict) or metadata.get("source_id", sid) != sid or
                 ("version" in metadata and metadata["version"] != version) or
                 ("versions" in metadata and version not in metadata["versions"])):
-            raise ValueError("Search source metadata differs from selected version")
+            exclude_source(sid, version, ValueError("Search source metadata differs from selected version"))
+            continue
         published = (metadata.get("published_at") if metadata else
                      next((d.get("published_at") for d in discoveries if d.get("published_at")), None))
         row = {"raw_text": body, "title": metadata.get("title", source.get("title", "")),
@@ -292,11 +321,7 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
         result = dict(report["base_usage"])
         for record in report["tasks"].values():
             path = root / record["task_id"] / "runs" / "initial" / "run.json"
-            if path.exists():
-                state = json.loads(path.read_text(encoding="utf-8"))
-                record["usage"] = {"search_calls": state["usage"]["search"],
-                                   "parse_calls": len(state["read_sources"]),
-                                   "search_model_calls": state["usage"]["model"]}
+            read_task_usage(record, path)
             for key in caps:
                 result[key] += record.get("usage", {}).get(key, 0)
         return result
@@ -321,7 +346,7 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                 names = {"search_calls": "max_search_requests", "parse_calls": "max_read_sources",
                          "search_model_calls": "max_model_calls"}
                 for prior in report["tasks"].values():
-                    if "config" in prior and prior["status"] not in {"finished", "insufficient", "invalid_handoff"}:
+                    if "config" in prior and prior["status"] not in TERMINAL:
                         for key, option in names.items():
                             reserved[key] += max(0, prior["config"][option] - prior.get("usage", {}).get(key, 0))
                 remaining = len(tasks) - index
@@ -341,7 +366,7 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
             if "config" not in record:
                 continue
             child_config = SearchConfig(**record["config"])
-            if record["status"] not in {"finished", "insufficient"}:
+            if record["status"] not in TERMINAL:
                 if seconds is not None and elapsed() >= seconds:
                     record["status"] = "time_budget_exhausted"
                     persist()
@@ -384,19 +409,24 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                                     model=bounded_model, transport=bounded_transport,
                                     fetcher=bounded_fetcher, **dependencies)
                     record.update(status=result["status"], run_directory=result.get("run_dir"))
+                    for key in ("stop_reason", "resume"):
+                        if key in result:
+                            record[key] = copy.deepcopy(result[key])
                 except Exception as exc:
                     record.update(status="failed", error_type=type(exc).__name__)
+                    record_failure(record, "event_search", exc)
                 finally:
                     persist()
-            if record["status"] in {"finished", "insufficient"}:
+            if record["status"] != "invalid_state":
                 try:
-                    found = _documents(root, task_id, {"status": record["status"]}, event)
+                    found = _documents(root, task_id, record, event)
                     if not found and record["status"] == "finished":
                         record["status"] = "insufficient"
                     documents.extend(found)
                     record["document_count"] = len(found)
                 except Exception as exc:
                     record.update(status="invalid_handoff", error_type=type(exc).__name__)
+                    record_failure(record, "document_export", exc)
                 persist()
         # One identical original can support several events without duplicate text.
         unique = {}
@@ -412,9 +442,9 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                             prior[name].append(value)
         documents = list(unique.values())
         outcomes = list(report["tasks"].values())
-        status = (outcomes[0]["status"] if not event_tasks else
-                  "finished" if outcomes and all(r["status"] == "finished" for r in outcomes) else
-                  "partial" if documents else "insufficient")
+        status = (outcomes[0]["status"] if not event_tasks and
+                  outcomes[0]["status"] not in {"paused", "failed"}
+                  else phase_status(outcomes, documents))
         report.update(status=status, complete=bool(outcomes) and all(r["status"] == "finished" for r in outcomes),
                       document_count=len(documents),
                       archived_content_chars=sum(len(d["raw_text"]) for d in documents))

@@ -40,6 +40,63 @@ class DiscoveryTests(unittest.TestCase):
     def checkpoint(self):
         return json.loads((self.root / "storyline_discovery/checkpoint.json").read_text())
 
+    def overflow_candidates(self):
+        value = candidate()
+        value['domains'] = [dict(domain_id='d'+str(i), label='Domain '+str(i), summary='Scope')
+                            for i in range(3)]
+        value['events'] = [dict(candidate()['events'][0], event_id='e'+str(i),
+                               label='Event '+str(i), domain_id='d'+str(0 if i < 8 else i-7))
+                           for i in range(10)]
+        return value
+
+    def test_overflow_selects_eight_and_preserves_late_domains_without_extra_call(self):
+        value = self.overflow_candidates()
+        calls = Mock(return_value=value)
+        calls.last_usage = None
+        plan = self.run_discovery(completion=calls)
+        self.assertEqual(calls.call_count, 1)
+        self.assertEqual([e['label'] for e in plan['events']],
+                         ['Event '+str(i) for i in [0, 1, 2, 3, 4, 5, 8, 9]])
+        self.assertEqual(len({e['domain_id'] for e in plan['events']}), 3)
+        audit = json.loads((self.root / 'storyline_discovery/candidate_selection.json').read_text())
+        self.assertEqual([e['label'] for e in audit['deferred_events']], ['Event 6', 'Event 7'])
+        self.assertEqual(normalize_plan(plan, self.subject, 8),
+                         {k:v for k,v in plan.items() if k != 'usage'})
+
+    def test_more_domains_than_slots_preserves_domain_coverage(self):
+        value = self.overflow_candidates()
+        plan = normalize_plan(value, self.subject, 2)
+        self.assertEqual(len(plan['events']), 3)
+        self.assertEqual(len(plan['domains']), 3)
+
+    def test_missing_search_terms_uses_existing_event_label(self):
+        value = candidate()
+        del value['events'][0]['event_terms']
+        plan = normalize_plan(value, self.subject, 8)
+        self.assertEqual(plan['events'][0]['event_terms'], ['Alpha project'])
+
+    def test_saved_overflow_recovers_without_new_calls_or_reset(self):
+        value = self.overflow_candidates()
+        with patch('finmy.runner.storyline_discovery.normalize_plan',
+                   side_effect=ValueError('events exceed the configured resource cap')):
+            with self.assertRaises(StorylineDiscoveryError):
+                self.run_discovery(completion=lambda *args: value)
+        self.assertEqual(self.checkpoint()['usage']['model_calls'], 2)
+        plan = self.run_discovery(completion=lambda *args: self.fail('No new API call'))
+        self.assertEqual(len(plan['events']), 8)
+        self.assertEqual(plan['usage'], dict(model_calls=2, new_model_calls=0))
+        self.assertTrue(self.checkpoint()['attempts'][-1]['recovered_from_saved_response'])
+
+    def test_repair_feedback_includes_specific_field(self):
+        broken = candidate()
+        del broken['events'][0]['questions']
+        calls = []
+        def complete(system, payload):
+            calls.append(payload)
+            return broken if len(calls) == 1 else candidate()
+        self.run_discovery(completion=complete)
+        self.assertIn('questions', calls[1]['repair']['error'])
+
     def test_candidate_plan_ids_scope_and_cache(self):
         before = copy.deepcopy(self.subject)
         calls = []

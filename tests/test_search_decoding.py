@@ -173,8 +173,11 @@ class SearchDecodingTests(unittest.TestCase):
     def test_repair_refuses_tampered_source_bytes(self):
         sid, folder, raw, old = self.legacy_garbled()
         (folder / 'raw').write_bytes(raw + b'tampered')
+        self.assertEqual(repair_saved_sources(self.state), [])
+        self.assertTrue(self.state.data['sources'][sid]['quarantine']['excluded_from_handoff'])
+        self.assertEqual((folder / 'raw').read_bytes(), raw + b'tampered')
         with self.assertRaisesRegex(ValueError, 'integrity mismatch'):
-            repair_saved_sources(self.state)
+            self.store.document(sid)
 
 
 if __name__ == '__main__':

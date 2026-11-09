@@ -181,8 +181,17 @@ class PipelinePage:
                     st.session_state.is_processing_blocked = False
                     st.session_state.should_redirect = True
                 else:
-                    st.error("❌ Reconstruction failed. No results returned.")
-                    st.session_state.processing_status = "error"
+                    coverage = getattr(reconstruction_service, "search_coverage", None)
+                    if coverage and coverage.get("builder_status") == "not_started":
+                        st.warning(coverage.get("message") or
+                                   "No usable source text was retained. Search diagnostics were saved; Builder has not started.")
+                        st.write("Saved run: " + coverage["resume_directory"])
+                        if coverage.get("next_action"):
+                            st.write(coverage["next_action"])
+                        st.session_state.processing_status = coverage["search_status"]
+                    else:
+                        st.error("❌ Reconstruction failed. No results returned.")
+                        st.session_state.processing_status = "error"
         
         except Exception as e:
             error_type = type(e).__name__

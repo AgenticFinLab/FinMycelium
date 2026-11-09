@@ -17,6 +17,38 @@ def task_path(root, task_id):
     return Path(root)/task_id
 
 
+def _legacy_outage(data, run_dir):
+    """Recognize empty pre-fix outage handoffs only on explicit resume."""
+    if data.get('status') != 'insufficient' or data.get('sources'):
+        return False
+    trace = run_dir / 'trace.jsonl'
+    if trace.exists():
+        try:
+            with trace.open(encoding='utf-8') as stream:
+                for line in stream:
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if (isinstance(row, dict) and row.get('action') == 'provider_result'
+                            and row.get('status') in {'failed', 'cooldown', 'unavailable', 'blocked', 'retry_exhausted'}
+                            and row.get('error_details')):
+                        return True
+        except OSError:
+            pass
+    # Old shared health prevented siblings with zero requests from searching.
+    # Consult it only as historical migration evidence, never as current health.
+    if data.get('usage', {}).get('search', 0) != 0:
+        return False
+    try:
+        health = json.loads((run_dir.parents[2] / 'provider_health.json').read_text())
+        return health.get('version') == 1 and any(
+            row.get('disabled') and row.get('last_error')
+            for scope in health.get('scopes', {}).values() for row in scope.values())
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
 @contextmanager
 def task_lock(root, task_id):
     path=task_path(root,task_id)
@@ -56,7 +88,15 @@ class SearchController:
         data=json.loads((path/'run.json').read_text())
         for name in ('selection','builder_input','complete_material'):
             file=path/(name+'.json')
-            data[name]=json.loads(file.read_text()) if file.exists() else None
+            try:
+                data[name]=json.loads(file.read_text()) if file.exists() else None
+                if file.exists() and not isinstance(data[name], dict):
+                    raise TypeError('Optional handoff sidecar must be an object')
+            except (OSError, ValueError, TypeError) as exc:
+                data[name]=None
+                data.setdefault('inspection_errors', []).append(dict(
+                    file=name+'.json', error_type=type(exc).__name__, stage='optional_sidecar'))
+        data['can_resume'] = data['status'] not in {'finished', 'insufficient'} or _legacy_outage(data, path)
         return data
 
     def tasks(self):
@@ -95,7 +135,8 @@ class SearchController:
             else:
                 payload = assemble(state,old['selected']+[{k:v for k,v in s.items() if k!='omission_reason'} for s in old['omitted']],
                                 gaps=old['gaps'],reason=old['reason'],max_chars=max_chars)
-            state.data['status'] = 'finished' if payload['samples'] and old['reason'] != 'insufficient' else 'insufficient'
+            if state.data['status'] in {'finished', 'insufficient'}:
+                state.data['status'] = 'finished' if payload['samples'] and old['reason'] != 'insufficient' else 'insufficient'
             state.save()
             return payload
 
@@ -103,7 +144,7 @@ class SearchController:
         with self.guard:
             if self.active(task_id): raise ValueError('This task is already running')
             state=self.inspect(task_id)
-            if state['status'] in {'finished','insufficient'}:
+            if not state['can_resume']:
                 raise ValueError('Task ended; review or create a new task')
             # Starting/resuming is explicit; no API is triggered by page rendering.
             if not self.dependencies and not state['config']['allow_network']:
@@ -125,6 +166,12 @@ class SearchController:
             with task_lock(self.root,task_id):
                 state=SearchState(self.root,task_id)
                 try:
+                    if _legacy_outage(state.data, state.run_dir):
+                        state.data.setdefault('resume_history', []).append(dict(
+                            previous_status=state.data['status'], previous_stop_reason=state.data.get('stop_reason'),
+                            reason='legacy_provider_interruption'))
+                        state.data.update(status='paused', stop_reason='legacy_provider_interruption')
+                        state.save()
                     if state.data.get('mode','agent')=='simple':
                         self._simple(state)
                     else:

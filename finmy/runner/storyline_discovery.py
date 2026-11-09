@@ -91,16 +91,39 @@ def _parse(value):
     return value
 
 
+def select_events(events, max_events):
+    """Reserve one candidate per domain, then fill in model-returned order.
+
+    Order is a deterministic priority proxy, not a new semantic quality score.
+    Domain coverage takes precedence when there are more domains than slots;
+    downstream search allowances remain unchanged.
+    """
+    if type(max_events) is not int or max_events < 1:
+        raise ValueError("Event resource cap must be a positive integer")
+    representatives = {}
+    for index, event in enumerate(events):
+        representatives.setdefault(event["domain_id"], index)
+    limit = max(max_events, len(representatives))
+    chosen = set(representatives.values())
+    for index in range(len(events)):
+        if len(chosen) >= limit:
+            break
+        chosen.add(index)
+    return [event for i, event in enumerate(events) if i in chosen], {
+        "policy": "one_per_domain_then_model_order", "requested_max_events": max_events,
+        "effective_max_events": limit, "candidate_count": len(events),
+        "selected_count": len(chosen), "domain_count": len(representatives),
+        "domain_coverage_overflow": len(representatives) > max_events,
+        "deferred_events": [copy.deepcopy(event) for i, event in enumerate(events) if i not in chosen],
+    }
+
+
 def normalize_plan(value, subject, max_events):
     """Normalize model-local IDs while checking structural ambiguity only."""
     value = _parse(value)
     domains, events = value.get("domains"), value.get("events")
     if not isinstance(domains, list) or not isinstance(events, list):
         raise ValueError("domains and events must be lists")
-    if len(events) > max_events:
-        raise ValueError("events exceed the configured resource cap")
-    if len(domains) > max_events:
-        raise ValueError("domains exceed the configured resource cap")
     unresolved = _strings(value.get("unresolved", []), "unresolved")
     domain_map, domain_labels, normalized_domains = {}, set(), []
     for row in domains:
@@ -136,9 +159,10 @@ def normalize_plan(value, subject, max_events):
             "summary": _string(row.get("summary"), "event.summary"),
             "person_connection": _string(row.get("person_connection"), "event.person_connection"),
             "scope": scope,
-            "event_terms": _strings(row.get("event_terms"), "event_terms", nonempty=True),
+            "event_terms": _strings(row.get("event_terms") or [label], "event_terms", nonempty=True),
             "questions": _strings(row.get("questions"), "questions", nonempty=True),
         })
+    normalized_events, _ = select_events(normalized_events, max_events)
     used_domains = {row["domain_id"] for row in normalized_events}
     return {"version": "person-storylines-v1", "status": "candidates",
             "candidate_only": True, "subject": copy.deepcopy(subject),
@@ -252,6 +276,31 @@ def discover_storylines(query, keywords, subject, config, save_dir, *, completio
         plan = copy.deepcopy(checkpoint["plan"])
         plan["usage"] = usage()
         return plan
+
+    def accept(plan, response, attempt):
+        # Selection is advisory metadata, separate from the stable plan/schema.
+        _, selection = select_events(_parse(response)["events"], options["max_events"])
+        write_json(target / "candidate_selection.json", selection)
+        plan["usage"] = usage()
+        checkpoint.update(status="completed", plan=plan)
+        attempt["status"] = "completed"
+        write_json(target / "plan.json", plan)
+        write_json(checkpoint_path, checkpoint)
+        return copy.deepcopy(plan)
+
+    # Recover an already paid-for response rejected by the former count gate.
+    # Scope identity above and cumulative usage remain unchanged.
+    for attempt in reversed(checkpoint["attempts"]):
+        if attempt.get("status") != "invalid_response" or not attempt.get("response_file"):
+            continue
+        try:
+            response = json.loads((target / attempt["response_file"]).read_text(encoding="utf-8"))
+            plan = normalize_plan(response, subject, options["max_events"])
+        except (OSError, ValueError, TypeError):
+            continue
+        if plan["events"]:
+            attempt["recovered_from_saved_response"] = True
+            return accept(plan, response, attempt)
     complete = completion
     while checkpoint["usage"]["model_calls"] < options["max_model_calls"]:
         number = checkpoint["usage"]["model_calls"] + 1
@@ -282,17 +331,13 @@ def discover_storylines(query, keywords, subject, config, save_dir, *, completio
                 plan = normalize_plan(response, subject, options["max_events"])
             except (json.JSONDecodeError, ValueError, TypeError) as exc:
                 attempt.update(status="invalid_response", error_type=type(exc).__name__,
-                               validation_error="Response failed JSON/schema validation")
+                               validation_error=str(exc)[:1000])
                 continue
             if not plan["events"]:
                 attempt.update(status="insufficient", validation_error="No candidate storylines were returned")
                 checkpoint["status"] = "insufficient"
                 break
-            plan["usage"] = usage()
-            checkpoint.update(status="completed", plan=plan)
-            attempt["status"] = "completed"
-            write_json(target / "plan.json", plan)
-            return copy.deepcopy(plan)
+            return accept(plan, response, attempt)
         except Exception as exc:
             # Never record provider error text: it may contain credential URLs.
             attempt.update(status="failed", error_type=type(exc).__name__)

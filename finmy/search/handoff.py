@@ -4,7 +4,8 @@ import copy
 from finmy.subject_graph.runner import _publication_timestamp
 
 from .state import write_json
-from .sources import SourceStore, document_is_usable
+from .sources import SourceStore, SourceIntegrityError, document_is_usable, quarantine_source
+from .language_policy import assess
 
 
 class SourceSelectionError(ValueError):
@@ -29,17 +30,24 @@ def source_selection_status(state, sid, version=None):
     if entry is None:
         return 'unknown_source'
     version = version or entry.get('version')
-    ranges = [r for r in entry.get('read_ranges', []) if r.get('version') == version]
-    if not version or not ranges:
+    if not version:
         return 'not_inspected'
     document = SourceStore(state).document(sid, version)
+    if not assess(document, state.config.source_languages)['allowed']:
+        return 'language_excluded'
+    raw_ranges = entry.get('read_ranges', [])
+    if not isinstance(raw_ranges, list) or any(not isinstance(r, dict) for r in raw_ranges):
+        raise SourceIntegrityError(sid, 'Invalid inspected source range: ' + sid)
+    ranges = [r for r in raw_ranges if r.get('version') == version]
+    if not ranges:
+        return 'not_inspected'
     inspected = False
     for row in ranges:
         block, start, end = (row.get(key) for key in ('block', 'start', 'end'))
         if (any(type(value) is not int for value in (block, start, end))
                 or not 0 <= block < len(document['blocks'])
                 or not 0 <= start <= end <= len(document['blocks'][block]['text'])):
-            raise ValueError('Invalid inspected source range: ' + sid)
+            raise SourceIntegrityError(sid, 'Invalid inspected source range: ' + sid)
         inspected = inspected or end > start
     if not inspected:
         return 'not_inspected'
@@ -47,7 +55,25 @@ def source_selection_status(state, sid, version=None):
 
 
 def eligible_source_ids(state):
-    return [sid for sid in state.data['sources'] if source_selection_status(state, sid) is None]
+    """Audit every source independently, excluding corrupt versions explicitly.
+
+    Selecting a corrupt source directly still raises; a catalog query must not
+    discard other valid sources merely because one saved file was damaged.
+    """
+    eligible = []
+    for sid, entry in state.data['sources'].items():
+        try:
+            status = source_selection_status(state, sid)
+        except SourceIntegrityError as exc:
+            quarantine_source(state, sid, exc)
+            continue
+        if entry.pop('quarantine', None) is not None:
+            state.trace(dict(action='source_quarantine_cleared', source_id=sid,
+                             version=entry.get('version')))
+            state.save()
+        if status is None:
+            eligible.append(sid)
+    return eligible
 
 
 def _source_metadata(source, document, version):
@@ -83,6 +109,8 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
         sid, version = selection['source_id'], selection['version']
         entry = state.data['sources'][sid]
         doc = store.document(sid, version)
+        if not assess(doc, state.config.source_languages)['allowed']:
+            raise SourceSelectionError({sid: 'language_excluded'}, eligible_source_ids(state))
         if not document_is_usable(doc):
             raise ValueError('Selected source has no usable original body: ' + sid)
         block, start, end = selection['block'], selection['start'], selection['end']
@@ -226,17 +254,43 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     return materialize_complete(state, record), record
 
 
-def materialize_complete(state, record):
+def materialize_complete(state, record, *, source_errors=None):
     """Reconstruct a fixed complete view from original versions, without recleaning."""
     from .state import digest
     if digest({k:v for k,v in record.items() if k!='complete_id'}) != record['complete_id']:
         raise ValueError('Complete material manifest integrity mismatch')
+    selected = record.get('selected')
+    if not isinstance(selected, list) or any(
+            not isinstance(entry, dict)
+            or not isinstance(entry.get('source_id'), str)
+            or not isinstance(entry.get('version'), str)
+            or not isinstance(entry.get('header'), str)
+            or type(entry.get('material_chars')) is not int
+            or not isinstance(entry.get('blocks'), list)
+            or any(type(index) is not int or index < 0 for index in entry['blocks'])
+            for entry in selected):
+        raise ValueError('Invalid complete material manifest')
     store, samples = SourceStore(state), []
-    for entry in record['selected']:
-        doc = store.document(entry['source_id'], entry['version'])
-        content = entry['header'] + '\n\n'.join(doc['blocks'][i]['text'] for i in entry['blocks'])
-        if len(content) != entry['material_chars']:
-            raise ValueError('Complete material length mismatch')
+    for entry in selected:
+        try:
+            doc = store.document(entry['source_id'], entry['version'])
+            if not assess(doc, state.config.source_languages)['allowed']:
+                if source_errors is None:
+                    raise SourceSelectionError({entry['source_id']: 'language_excluded'}, [])
+                source_errors.append(dict(source_id=entry['source_id'], version=entry['version'],
+                    error_type='language_excluded', stage='language_policy'))
+                continue
+            if any(i >= len(doc['blocks']) for i in entry['blocks']):
+                raise SourceIntegrityError(entry['source_id'], 'Invalid complete material block')
+            content = entry['header'] + '\n\n'.join(doc['blocks'][i]['text'] for i in entry['blocks'])
+            if len(content) != entry['material_chars']:
+                raise SourceIntegrityError(entry['source_id'], 'Complete material length mismatch')
+        except SourceIntegrityError as exc:
+            if source_errors is None:
+                raise
+            source_errors.append(dict(source_id=entry['source_id'], version=entry['version'],
+                error_type=type(exc).__name__, stage='source_integrity'))
+            continue
         samples.append(dict(sample_id=entry['source_id']+'-document',raw_data_id=entry['source_id'],content=content))
     return dict(user_query=copy.deepcopy(record['user_query']), samples=samples)
 

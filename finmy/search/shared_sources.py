@@ -20,6 +20,7 @@ class SharedSourcePool:
         self.root = self.phase_root / 'shared_sources'
         self.scope = copy.deepcopy(subject_scope)
         self.lock = RLock()
+        self.errors = []
         self.root.mkdir(parents=True, exist_ok=True)
         identity = {'version': 'shared-originals-v1', 'subject_scope': self.scope}
         path = self.root / 'scope.json'
@@ -57,75 +58,119 @@ class SharedSourcePool:
         with self._guard():
             from .handoff import source_selection_status
             for sid, entry in state.data['sources'].items():
-                version = entry.get('version')
-                if not version or not any(r['version'] == version and r['end'] > r['start']
-                                          for r in entry.get('read_ranges', [])):
-                    continue
-                if source_selection_status(state, sid, version) is not None:
-                    continue
-                parsed_hash = entry['parsed_hashes'][version]
-                key = digest([state.root.name, sid, version, parsed_hash])
-                target = self.root / key
-                if target.exists():
-                    continue
-                source = state.root / 'sources' / sid / version
-                temporary = Path(tempfile.mkdtemp(prefix='.publish-', dir=self.root))
                 try:
-                    shutil.copyfile(source / 'raw', temporary / 'raw')
-                    shutil.copyfile(source / 'parsed.json', temporary / 'parsed.json')
-                    metadata = {key: copy.deepcopy(entry[key]) for key in
-                                ('source_id', 'url', 'title', 'discoveries', 'published_at') if key in entry}
-                    record = {
-                        'source': metadata, 'source_id': sid, 'version': version,
-                        'parsed_hash': parsed_hash, 'origin_task': state.root.name,
-                        'origin_event_id': state.data['task'].get('event_id'),
-                        'subject_scope': self.scope,
-                    }
-                    write_json(temporary / 'record.json', {**record, 'record_sha256': digest(record)})
-                    temporary.rename(target)
-                finally:
-                    if temporary.exists():
-                        shutil.rmtree(temporary)
+                    self._publish_entry(state, sid, entry, source_selection_status)
+                except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
+                    self._failure('publish_source', sid, error)
+
+    def _publish_entry(self, state, sid, entry, source_selection_status):
+        if not isinstance(entry, dict):
+            raise ValueError('Invalid shared source entry')
+        version = entry.get('version')
+        if not version or not any(r['version'] == version and r['end'] > r['start']
+                                  for r in entry.get('read_ranges', [])):
+            return
+        if source_selection_status(state, sid, version) is not None:
+            return
+        parsed_hash = entry['parsed_hashes'][version]
+        key = digest([state.root.name, sid, version, parsed_hash])
+        target = self.root / key
+        if target.exists():
+            return
+        source = state.root / 'sources' / sid / version
+        temporary = Path(tempfile.mkdtemp(prefix='.publish-', dir=self.root))
+        try:
+            shutil.copyfile(source / 'raw', temporary / 'raw')
+            shutil.copyfile(source / 'parsed.json', temporary / 'parsed.json')
+            metadata = {key: copy.deepcopy(entry[key]) for key in
+                        ('source_id', 'url', 'title', 'discoveries', 'published_at') if key in entry}
+            record = {
+                'source': metadata, 'source_id': sid, 'version': version,
+                'parsed_hash': parsed_hash, 'origin_task': state.root.name,
+                'origin_event_id': state.data['task'].get('event_id'),
+                'subject_scope': self.scope,
+            }
+            write_json(temporary / 'record.json', {**record, 'record_sha256': digest(record)})
+            temporary.rename(target)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self._failure('publish_source', sid, error)
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+
+    def _failure(self, stage, identifier, error):
+        # A bad immutable snapshot is excluded, never repaired or silently trusted.
+        with self.lock:
+            row = {'stage': stage, 'identifier': identifier, 'error_type': type(error).__name__}
+            if row not in self.errors:
+                self.errors.append(row)
+                write_json(self.root / 'errors.json', self.errors)
 
     def hydrate(self, task_ids):
         """Publish inspected originals from prior attempts, including insufficient ones."""
         for task_id in task_ids:
             if (self.phase_root / task_id / 'runs/initial/run.json').exists():
-                self.publish(SearchState(self.phase_root, task_id))
+                try:
+                    state = SearchState(self.phase_root, task_id)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    self._failure('hydrate_task', task_id, error)
+                    continue
+                self._check_scope(state)
+                self.publish(state)
 
     def _records(self):
         for path in sorted(self.root.glob('*/record.json')):
             if path.parent.name.startswith('.'):
                 continue
-            row = json.loads(path.read_text(encoding='utf-8'))
-            if digest({key: value for key, value in row.items() if key != 'record_sha256'}) != row.get('record_sha256'):
-                raise ValueError('Shared original metadata integrity mismatch')
-            sid, version, parsed_hash = row['source_id'], row['version'], row['parsed_hash']
-            if (not re.fullmatch(r'[0-9a-f]{24}', sid)
-                    or not re.fullmatch(r'[0-9a-f]{64}', version)
-                    or not re.fullmatch(r'[0-9a-f]{64}', parsed_hash)
-                    or not re.fullmatch(r'[A-Za-z0-9_-]+', row['origin_task'])
-                    or row.get('subject_scope') != self.scope):
-                raise ValueError('Invalid shared original identity')
-            # A parser repair invalidates older snapshots; never reintroduce its
-            # old mojibake or stale paragraph locations.
-            origin_path = self.phase_root / row['origin_task'] / 'runs/initial/run.json'
-            origin = json.loads(origin_path.read_text(encoding='utf-8'))
-            original_entry = origin['sources'].get(sid, {})
-            if (origin['task'].get('subject_scope') != self.scope
-                    or original_entry.get('url') != row['source'].get('url')
-                    or row['source'].get('source_id') != sid):
-                raise ValueError('Shared original provenance differs from its source task')
-            if original_entry.get('parsed_hashes', {}).get(version) != parsed_hash:
+            try:
+                row = self._record(path)
+            except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
+                self._failure('shared_snapshot', path.parent.name, error)
                 continue
-            raw = (path.parent / 'raw').read_bytes()
-            parsed = (path.parent / 'parsed.json').read_bytes()
-            if digest(raw) != version or digest(parsed) != parsed_hash:
-                raise ValueError('Shared original integrity mismatch')
-            document = json.loads(parsed)
-            if not self._usable(document):
-                continue
-            yield row, raw, parsed, document
+            if row is not None:
+                yield row
+
+    def _record(self, path):
+        row = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(row, dict) or not isinstance(row.get('source'), dict):
+            raise ValueError('Invalid shared original record')
+        if digest({key: value for key, value in row.items() if key != 'record_sha256'}) != row.get('record_sha256'):
+            raise ValueError('Shared original metadata integrity mismatch')
+        sid, version, parsed_hash = row['source_id'], row['version'], row['parsed_hash']
+        if (not re.fullmatch(r'[0-9a-f]{24}', sid)
+                or not re.fullmatch(r'[0-9a-f]{64}', version)
+                or not re.fullmatch(r'[0-9a-f]{64}', parsed_hash)
+                or not re.fullmatch(r'[A-Za-z0-9_-]+', row['origin_task'])
+                or row.get('subject_scope') != self.scope):
+            raise ValueError('Invalid shared original identity')
+        # A parser repair invalidates older snapshots; never reintroduce its
+        # old mojibake or stale paragraph locations.
+        origin_path = self.phase_root / row['origin_task'] / 'runs/initial/run.json'
+        origin = json.loads(origin_path.read_text(encoding='utf-8'))
+        if (not isinstance(origin, dict) or not isinstance(origin.get('sources'), dict)
+                or not isinstance(origin.get('task'), dict)):
+            raise ValueError('Invalid shared original source task')
+        original_entry = origin['sources'].get(sid, {})
+        if not isinstance(original_entry, dict):
+            raise ValueError('Invalid shared original source metadata')
+        if (origin['task'].get('subject_scope') != self.scope
+                or original_entry.get('url') != row['source'].get('url')
+                or row['source'].get('source_id') != sid):
+            raise ValueError('Shared original provenance differs from its source task')
+        if original_entry.get('parsed_hashes', {}).get(version) != parsed_hash:
+            return None
+        raw = (path.parent / 'raw').read_bytes()
+        parsed = (path.parent / 'parsed.json').read_bytes()
+        if digest(raw) != version or digest(parsed) != parsed_hash:
+            raise ValueError('Shared original integrity mismatch')
+        document = json.loads(parsed)
+        if (not isinstance(document, dict) or not isinstance(document.get('blocks'), list)
+                or any(not isinstance(block, dict) or not isinstance(block.get('text'), str)
+                       for block in document['blocks'])):
+            raise ValueError('Invalid shared original document')
+        if not self._usable(document):
+            return None
+        return row, raw, parsed, document
 
     def has_sources(self):
         with self._guard():

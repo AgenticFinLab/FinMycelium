@@ -1,0 +1,578 @@
+{
+  "provenance": {
+    "request_file": "PersonOrganization-Assignments-001.json",
+    "run_directory": "build_output_20261109145923639759",
+    "response_sha256": "78959e6d9767d91e3c877450303dec421f2be3233b6fac3c2b69c12ab897e08f",
+    "note": "Captured response and referenced factual rows; unrelated source/evidence tables omitted from this offline reference-contract replay."
+  },
+  "request": {
+    "facts": {
+      "activity": [
+        {
+          "activity_id": "A:ACT_O_S1_E1_P1_1",
+          "action_id": "ACT_O_S1_E1_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S1_E1_P3_1",
+          "action_id": "ACT_O_S1_E1_P3_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S1_E1_P4_1",
+          "action_id": "ACT_O_S1_E1_P4_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S1_E1_P5_1",
+          "action_id": "ACT_O_S1_E1_P5_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S1_E2_P1_1",
+          "action_id": "ACT_O_S1_E2_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S1_E2_P4_1",
+          "action_id": "ACT_O_S1_E2_P4_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S2_E1_P1_1",
+          "action_id": "ACT_O_S2_E1_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "T:TX_O_S2_E1_1",
+          "action_id": null,
+          "transaction_id": "TX_O_S2_E1_1",
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S2_E2_P1_1",
+          "action_id": "ACT_O_S2_E2_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "T:TX_O_S2_E2_1",
+          "action_id": null,
+          "transaction_id": "TX_O_S2_E2_1",
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S2_E3_P1_1",
+          "action_id": "ACT_O_S2_E3_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S2_E3_P4_1",
+          "action_id": "ACT_O_S2_E3_P4_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S2_E4_P1_1",
+          "action_id": "ACT_O_S2_E4_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S2_E5_P1_1",
+          "action_id": "ACT_O_S2_E5_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "T:TX_O_S2_E5_1",
+          "action_id": null,
+          "transaction_id": "TX_O_S2_E5_1",
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S3_E1_P1_1",
+          "action_id": "ACT_O_S3_E1_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S3_E1_P2_1",
+          "action_id": "ACT_O_S3_E1_P2_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S3_E1_P8_1",
+          "action_id": "ACT_O_S3_E1_P8_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S3_E2_P1_1",
+          "action_id": "ACT_O_S3_E2_P1_1",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        },
+        {
+          "activity_id": "A:ACT_O_S3_E2_P1_2",
+          "action_id": "ACT_O_S3_E2_P1_2",
+          "transaction_id": null,
+          "context_occurrence_id": null
+        }
+      ],
+      "activity_detail": [
+        {
+          "value": "Shareholders voted on several proposals at the formal business meeting, including one to strip Buffett of the chairman role.",
+          "activity_id": "A:ACT_O_S1_E1_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00029"
+        },
+        {
+          "value": "The proposal was the most closely watched of those voted on at the meeting.",
+          "activity_id": "A:ACT_O_S1_E1_P3_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00031"
+        },
+        {
+          "value": "The rejected proposal was supported by CALPERS, the largest U.S. public pension fund.",
+          "activity_id": "A:ACT_O_S1_E1_P4_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00033"
+        },
+        {
+          "value": "Shareholders voted on several proposals at the meeting, including climate-risk and diversity reporting proposals, all of which failed.",
+          "activity_id": "A:ACT_O_S1_E2_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00042"
+        },
+        {
+          "value": "Shareholders defeated the proposal requiring Berkshire to publish an annual assessment of how it manages climate-related physical and transition risks.",
+          "activity_id": "A:ACT_O_S1_E2_P4_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00044"
+        },
+        {
+          "value": "Shareholders also defeated a proposal requiring Berkshire to report whether and how it measures, discloses and reduces greenhouse gas emissions consistent with the Paris Agreement 1.5°C goal and net-zero emissions.",
+          "activity_id": "A:ACT_O_S1_E2_P4_1",
+          "detail_index": 1,
+          "evidence_set_id": "ES_00045"
+        },
+        {
+          "value": "Shareholders defeated a proposal requiring Berkshire to report quantitative data on employee composition, hiring, retention and promotion rates by gender, race and ethnicity, and on its diversity, equity and inclusion efforts.",
+          "activity_id": "A:ACT_O_S1_E2_P4_1",
+          "detail_index": 2,
+          "evidence_set_id": "ES_00046"
+        },
+        {
+          "value": "Acquired 9.5 million Occidental Petroleum shares for a total of $528.79 million at an average price of $55.36 per share.",
+          "activity_id": "A:ACT_O_S2_E1_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00052"
+        },
+        {
+          "value": "Acquired 794,000 Occidental Petroleum shares, raising Berkshire's stake to 16.4%.",
+          "activity_id": "A:ACT_O_S2_E2_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00060"
+        },
+        {
+          "value": "Berkshire held 153.5 million Occidental shares worth $9 billion after the purchase.",
+          "activity_id": "A:ACT_O_S2_E2_P1_1",
+          "detail_index": 1,
+          "evidence_set_id": "ES_00061"
+        },
+        {
+          "value": "Berkshire sought approval to buy as much as half of Occidental Petroleum.",
+          "activity_id": "A:ACT_O_S2_E3_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00070"
+        },
+        {
+          "value": "FERC said the proposed stock purchases would be consistent with the public interest.",
+          "activity_id": "A:ACT_O_S2_E3_P4_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00072"
+        },
+        {
+          "value": "Stake rose to 26.8% from 20.2% as of Aug. 8.",
+          "activity_id": "A:ACT_O_S2_E4_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00079"
+        },
+        {
+          "value": "The new ownership level was reported in a federal filing.",
+          "activity_id": "A:ACT_O_S2_E4_P1_1",
+          "detail_index": 1,
+          "evidence_set_id": "ES_00080"
+        },
+        {
+          "value": "Bought about 3.5 million Occidental Petroleum shares at $58 each.",
+          "activity_id": "A:ACT_O_S2_E5_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00086"
+        },
+        {
+          "value": "Resulting stake in Occidental reached 24.4% (217.3 million shares).",
+          "activity_id": "A:ACT_O_S2_E5_P1_1",
+          "detail_index": 1,
+          "evidence_set_id": "ES_00087"
+        },
+        {
+          "value": "Berkshire now owns approximately 7.4% in Mitsubishi Corp., Mitsui & Co., Sumitomo Corp., Itochu Corp. and Marubeni Corp.",
+          "activity_id": "A:ACT_O_S3_E1_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00100"
+        },
+        {
+          "value": "In 2020 Berkshire acquired approximately 5% in each of these firms.",
+          "activity_id": "A:ACT_O_S3_E1_P1_1",
+          "detail_index": 1,
+          "evidence_set_id": "ES_00101"
+        },
+        {
+          "value": "Berkshire is considering possible investments in other Japanese firms.",
+          "activity_id": "A:ACT_O_S3_E1_P1_1",
+          "detail_index": 2,
+          "evidence_set_id": "ES_00102"
+        },
+        {
+          "value": "Buffett is in Japan meeting with leaders of local companies.",
+          "activity_id": "A:ACT_O_S3_E1_P2_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00104"
+        },
+        {
+          "value": "Buffett was in Japan at age 92.",
+          "activity_id": "A:ACT_O_S3_E2_P1_1",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00116"
+        },
+        {
+          "value": "Meetings were with leaders of local Japanese companies.",
+          "activity_id": "A:ACT_O_S3_E2_P1_2",
+          "detail_index": 0,
+          "evidence_set_id": "ES_00118"
+        }
+      ],
+      "financial_transaction": [
+        {
+          "transaction_id": "TX_O_S2_E1_1",
+          "name": "Occidental Petroleum share purchase",
+          "from_entity_id": "entity:P_1",
+          "to_entity_id": "entity:P_6",
+          "timestamp_time_id": "TIME_00040",
+          "details": [
+            "9.5 million Occidental Petroleum shares acquired",
+            "Total consideration $528.79 million",
+            "Average purchase price $55.36 per share"
+          ],
+          "occurrence_id": "O_S2_E1",
+          "sort_order": 0,
+          "evidence_set_id": "ES_00053"
+        },
+        {
+          "transaction_id": "TX_O_S2_E2_1",
+          "name": "Purchase of 794,000 Occidental Petroleum shares",
+          "from_entity_id": "entity:P_1",
+          "to_entity_id": "entity:P_6",
+          "timestamp_time_id": "TIME_00050",
+          "details": [
+            "Berkshire acquired an additional 794,000 Occidental Petroleum shares, raising its stake to 16.4%.",
+            "After the purchase, Berkshire held 153.5 million Occidental shares worth $9 billion."
+          ],
+          "occurrence_id": "O_S2_E2",
+          "sort_order": 0,
+          "evidence_set_id": "ES_00062"
+        },
+        {
+          "transaction_id": "TX_O_S2_E5_1",
+          "name": "purchase of Occidental Petroleum shares",
+          "from_entity_id": "entity:P_1",
+          "to_entity_id": "entity:P_6",
+          "timestamp_time_id": "TIME_00083",
+          "details": [
+            "About 3.5 million Occidental Petroleum shares were bought at $58 each.",
+            "The purchase raised Berkshire's stake in Occidental to 24.4% (217.3 million shares)."
+          ],
+          "occurrence_id": "O_S2_E5",
+          "sort_order": 0,
+          "evidence_set_id": "ES_00088"
+        }
+      ]
+    }
+  },
+  "task": {
+    "phase": "Assignments",
+    "assigned_ids": [
+      "A:ACT_O_S1_E1_P1_1",
+      "A:ACT_O_S1_E1_P3_1",
+      "A:ACT_O_S1_E1_P4_1",
+      "A:ACT_O_S1_E1_P5_1",
+      "A:ACT_O_S1_E2_P1_1",
+      "A:ACT_O_S1_E2_P4_1",
+      "A:ACT_O_S2_E1_P1_1",
+      "T:TX_O_S2_E1_1",
+      "A:ACT_O_S2_E2_P1_1",
+      "T:TX_O_S2_E2_1",
+      "A:ACT_O_S2_E3_P1_1",
+      "A:ACT_O_S2_E3_P4_1",
+      "A:ACT_O_S2_E4_P1_1",
+      "A:ACT_O_S2_E5_P1_1",
+      "T:TX_O_S2_E5_1",
+      "A:ACT_O_S3_E1_P1_1",
+      "A:ACT_O_S3_E1_P2_1",
+      "A:ACT_O_S3_E1_P8_1",
+      "A:ACT_O_S3_E2_P1_1",
+      "A:ACT_O_S3_E2_P1_2"
+    ],
+    "layout": {
+      "events": [
+        {
+          "event_id": "storyline:6b4c639621698fd4"
+        },
+        {
+          "event_id": "storyline:e02a69f002b38969"
+        },
+        {
+          "event_id": "storyline:96d71e63453b874a"
+        },
+        {
+          "event_id": "storyline:60266cd296509797"
+        },
+        {
+          "event_id": "storyline:8fac68060a7528df"
+        },
+        {
+          "event_id": "storyline:eb058022810078a7"
+        }
+      ],
+      "stages": [
+        {
+          "event_id": "storyline:6b4c639621698fd4",
+          "stage_id": "S2"
+        },
+        {
+          "event_id": "storyline:6b4c639621698fd4",
+          "stage_id": "S2b"
+        },
+        {
+          "event_id": "storyline:6b4c639621698fd4",
+          "stage_id": "S2c"
+        },
+        {
+          "event_id": "storyline:e02a69f002b38969",
+          "stage_id": "S3"
+        },
+        {
+          "event_id": "storyline:e02a69f002b38969",
+          "stage_id": "S3b"
+        },
+        {
+          "event_id": "storyline:96d71e63453b874a",
+          "stage_id": "S4"
+        },
+        {
+          "event_id": "storyline:96d71e63453b874a",
+          "stage_id": "S4b"
+        },
+        {
+          "event_id": "storyline:60266cd296509797",
+          "stage_id": "S6"
+        },
+        {
+          "event_id": "storyline:8fac68060a7528df",
+          "stage_id": "S1"
+        },
+        {
+          "event_id": "storyline:8fac68060a7528df",
+          "stage_id": "S5"
+        },
+        {
+          "event_id": "storyline:eb058022810078a7",
+          "stage_id": "S7"
+        }
+      ]
+    }
+  },
+  "response": {
+    "memberships": [
+      {
+        "event_id": "storyline:8fac68060a7528df",
+        "activity_id": "A:ACT_O_S1_E1_P1_1",
+        "stage_id": "S1",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:8fac68060a7528df",
+        "activity_id": "A:ACT_O_S1_E1_P3_1",
+        "stage_id": "S1",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:8fac68060a7528df",
+        "activity_id": "A:ACT_O_S1_E1_P4_1",
+        "stage_id": "S1",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:8fac68060a7528df",
+        "activity_id": "A:ACT_O_S1_E1_P5_1",
+        "stage_id": "S1",
+        "detail_indices": []
+      },
+      {
+        "event_id": "storyline:8fac68060a7528df",
+        "activity_id": "A:ACT_O_S1_E2_P1_1",
+        "stage_id": "S1",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:8fac68060a7528df",
+        "activity_id": "A:ACT_O_S1_E2_P4_1",
+        "stage_id": "S1",
+        "detail_indices": [
+          0,
+          1,
+          2
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "A:ACT_O_S2_E1_P1_1",
+        "stage_id": "S2",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "T:TX_O_S2_E1_1",
+        "stage_id": "S2",
+        "detail_indices": [
+          0,
+          1,
+          2
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "A:ACT_O_S2_E2_P1_1",
+        "stage_id": "S2",
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "T:TX_O_S2_E2_1",
+        "stage_id": "S2",
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "A:ACT_O_S2_E3_P1_1",
+        "stage_id": "S2b",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "A:ACT_O_S2_E3_P4_1",
+        "stage_id": "S2b",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "A:ACT_O_S2_E4_P1_1",
+        "stage_id": "S2b",
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "A:ACT_O_S2_E5_P1_1",
+        "stage_id": "S2c",
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:6b4c639621698fd4",
+        "activity_id": "T:TX_O_S2_E5_1",
+        "stage_id": "S2c",
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:e02a69f002b38969",
+        "activity_id": "A:ACT_O_S3_E1_P1_1",
+        "stage_id": "S3",
+        "detail_indices": [
+          0,
+          1,
+          2
+        ]
+      },
+      {
+        "event_id": "storyline:e02a69f002b38969",
+        "activity_id": "A:ACT_O_S3_E1_P2_1",
+        "stage_id": "S3",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:e02a69f002b38969",
+        "activity_id": "A:ACT_O_S3_E1_P8_1",
+        "stage_id": "S3",
+        "detail_indices": []
+      },
+      {
+        "event_id": "storyline:e02a69f002b38969",
+        "activity_id": "A:ACT_O_S3_E2_P1_1",
+        "stage_id": "S3",
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:e02a69f002b38969",
+        "activity_id": "A:ACT_O_S3_E2_P1_2",
+        "stage_id": "S3",
+        "detail_indices": [
+          0
+        ]
+      }
+    ],
+    "unassigned_reasons": []
+  }
+}

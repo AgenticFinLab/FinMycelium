@@ -12,6 +12,29 @@ from .state import digest, now, write_json
 from .decoding import decode_source, shell_reason
 
 
+class SourceIntegrityError(ValueError):
+    """One saved source cannot be trusted; unrelated sources remain usable."""
+
+    def __init__(self, source_id, message, *, version=None):
+        self.source_id = source_id
+        self.version = version
+        super().__init__(message)
+
+
+def quarantine_source(state, sid, exc):
+    """Record the excluded version without deleting or reinterpreting evidence."""
+    entry = state.data['sources'].get(sid)
+    if entry is None:
+        return
+    record = dict(source_id=sid, version=getattr(exc, 'version', None) or entry.get('version'),
+                  error_type=type(exc).__name__, reason=str(exc),
+                  excluded_from_handoff=True)
+    if entry.get('quarantine') != record:
+        entry['quarantine'] = record
+        state.trace(dict(action='source_quarantined', **record))
+        state.save()
+
+
 def canonical_url(url):
     p = urlsplit(url)
     if p.scheme not in {'http', 'https'} or not p.hostname or p.username or p.password:
@@ -187,17 +210,32 @@ class SourceStore:
         return document
 
     def document(self, sid, version=None):
-        entry = self.state.data['sources'][sid]
-        version = version or entry.get('version')
-        if version not in entry['versions']:
-            raise ValueError('Unknown source version')
-        folder = self.state.root / 'sources' / sid / version
-        if digest((folder / 'raw').read_bytes()) != version:
-            raise ValueError('Original source integrity mismatch')
-        parsed = (folder / 'parsed.json').read_bytes()
-        if digest(parsed) != entry['parsed_hashes'][version]:
-            raise ValueError('Parsed source integrity mismatch')
-        return json.loads(parsed)
+        try:
+            entry = self.state.data['sources'][sid]
+            version = version or entry.get('version')
+            if version not in entry['versions']:
+                raise ValueError('Unknown source version')
+            folder = self.state.root / 'sources' / sid / version
+            if digest((folder / 'raw').read_bytes()) != version:
+                raise ValueError('Original source integrity mismatch')
+            parsed = (folder / 'parsed.json').read_bytes()
+            if digest(parsed) != entry['parsed_hashes'][version]:
+                raise ValueError('Parsed source integrity mismatch')
+            document = json.loads(parsed)
+            if (not isinstance(document, dict) or document.get('version') != version
+                    or not isinstance(document.get('blocks'), list)
+                    or not isinstance(document.get('status'), str)
+                    or not isinstance(document.get('kind'), str)
+                    or any(not isinstance(block, dict) or not isinstance(block.get('text'), str)
+                           for block in document['blocks'])):
+                raise ValueError('Invalid saved source document')
+            return document
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            # Keep direct access strict. The agent may quarantine this source and
+            # continue; callers must never turn damaged bytes into valid text.
+            message = (str(exc) if isinstance(exc, ValueError)
+                       else 'Saved source could not be verified (' + type(exc).__name__ + ')')
+            raise SourceIntegrityError(sid, message, version=version) from exc
 
     def read(self, sid, block=0, offset=0):
         if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
@@ -213,6 +251,14 @@ class SourceStore:
                 self.state.save()
                 return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__)
         doc = self.document(sid)
+        from .language_policy import assess
+        language = assess(doc, self.state.config.source_languages)
+        entry['language_assessment'] = language
+        if not language['allowed']:
+            entry['status'] = 'language_excluded'
+            self.state.save()
+            return dict(source_id=sid, status='language_excluded', language_assessment=language,
+                        spans=[], next_location=None)
         blocks = doc['blocks']
         if block > len(blocks) or (block == len(blocks) and offset):
             raise ValueError('Unknown block')
@@ -265,7 +311,11 @@ def repair_saved_sources(state):
     changes = []
     for sid, entry in state.data['sources'].items():
         for version in entry.get('versions', []):
-            old = store.document(sid, version)  # Verify raw and parsed hashes first.
+            try:
+                old = store.document(sid, version)  # Verify raw and parsed hashes first.
+            except SourceIntegrityError as exc:
+                quarantine_source(state, sid, exc)
+                continue
             if old.get('kind') not in {'html', 'txt'}:
                 continue
             folder = state.root / 'sources' / sid / version
@@ -323,6 +373,8 @@ def repair_saved_sources(state):
     for name in handoff_files:
         (state.run_dir / name).unlink(missing_ok=True)
     state.data.pop('pending_finish_repair', None)
+    state.data.pop('partial_finalization', None)
+    state.data.pop('repeated_query_repair', None)
     state.data['invalid_actions'] = 0
     state.data.setdefault('parse_repairs', []).append({
         'time': now(), 'source_ids': changed_ids,

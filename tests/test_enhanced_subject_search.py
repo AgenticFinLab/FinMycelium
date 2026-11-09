@@ -198,6 +198,46 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         self.assertEqual(result["status"], "invalid_handoff")
         self.assertEqual(result["documents"], [])
 
+    def test_one_damaged_selected_original_keeps_other_verified_documents(self):
+        def transport(provider, payload, config):
+            return {"data": {"webPages": {"value": [
+                {"url": "https://example.org/first", "name": "First original"},
+                {"url": "https://example.org/second", "name": "Second original"}]}}}
+
+        def corrupt_after_finish(*args, **kwargs):
+            result = run_search(*args, **kwargs)
+            task_root = Path(result["run_dir"]).parent.parent
+            next(task_root.glob("sources/*/*/raw")).write_bytes(b"damaged")
+            return result
+
+        result = self.collect(dependencies={"run_search": corrupt_after_finish,
+            "transport": transport,
+            "fetcher": lambda url: ((self.body + " Original: " + url).encode(), "txt", "utf-8")})
+        self.assertEqual(len(result["documents"]), 1)
+        self.assertFalse(result.get("complete", False))
+        self.assertEqual(result["reports"][0]["status"], "insufficient")
+        self.assertEqual(result["reports"][0]["errors"][0]["stage"], "source_integrity")
+        self.assertTrue(result["reports"][0]["gaps"])
+
+    def test_one_uninspected_selected_source_does_not_discard_other_read_sources(self):
+        def transport(provider, payload, config):
+            return {"data": {"webPages": {"value": [
+                {"url": "https://example.org/first", "name": "First original"},
+                {"url": "https://example.org/second", "name": "Second original"}]}}}
+        def corrupt_read_ledger(*args, **kwargs):
+            result = run_search(*args, **kwargs)
+            path = Path(result["run_dir"]) / "run.json"
+            data = json.loads(path.read_text())
+            next(iter(data["sources"].values()))["read_ranges"] = []
+            path.write_text(json.dumps(data))
+            return result
+        result = self.collect(dependencies={"run_search": corrupt_read_ledger,
+            "transport": transport,
+            "fetcher": lambda url: ((self.body + " Original: " + url).encode(), "txt", "utf-8")})
+        self.assertEqual(len(result["documents"]), 1)
+        self.assertEqual(result["reports"][0]["errors"][0]["stage"], "source_integrity")
+        self.assertEqual(result["reports"][0]["status"], "insufficient")
+
     def test_task_seeds_allowed_but_subject_override_rejected(self):
         result = self.collect(task={"seed_urls": ["https://example.org/seed"]})
         self.assertEqual(result["status"], "finished")

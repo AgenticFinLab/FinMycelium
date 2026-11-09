@@ -63,7 +63,7 @@ class StorylineSearchResumeTests(unittest.TestCase):
 
     def test_legacy_paused_search_reuses_plan_raw_cache_and_counts(self):
         first = self.fixture.collect(dependencies={"max_steps": 2})
-        self.assertEqual(first["status"], "partial")
+        self.assertEqual(first["status"], "paused")
         self.legacy_ledger()
         before = self.snapshot()
         metadata = self.prepare()
@@ -104,6 +104,24 @@ class StorylineSearchResumeTests(unittest.TestCase):
             old = json.loads(old_path.read_text())
             self.assertEqual(new["config"], old["config"])
             self.assertNotIn("config_history", new)
+
+    def test_explicit_resume_reopens_legacy_empty_insufficient_without_rediscovery(self):
+        first = self.fixture.collect(dependencies={"max_steps": 1})
+        for path in self.source.glob("initial_event_search/event_*/runs/initial/run.json"):
+            saved = json.loads(path.read_text())
+            saved.update(status="insufficient", stop_reason="insufficient")
+            write_json(path, saved)
+        metadata = self.prepare()
+        self.assertEqual(len(metadata["reopened_task_ids"]), 2)
+        def no_search(*args, **kwargs):
+            self.fail("Saved event plan and query results must be reused")
+        result = collect_enhanced_sources("Buffett 2022-2023", [], self.fixture.subject,
+            self.config, self.target, dependencies={"discovery_completion": no_search,
+                "model": self.fixture.model, "transport": no_search, "fetcher": self.fixture.fetcher})
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["usage"]["search_calls"], first["usage"]["search_calls"])
+        self.assertEqual(result["usage"]["search_model_calls"], 6)
+        self.assertEqual(result["usage"]["discovery_model_calls"], 1)
 
     def test_v2_scheduler_checkpoint_migrates_without_restarting_discovery_or_search(self):
         first = self.fixture.collect(dependencies={"max_steps": 2})
@@ -217,6 +235,44 @@ class StorylineSearchResumeTests(unittest.TestCase):
         self.assertEqual(result["usage"]["search_model_calls"], first["usage"]["search_model_calls"] + 2)
         self.assertEqual(result["usage"]["search_calls"], first["usage"]["search_calls"])
 
+    def test_explicit_revision_reopens_recovered_partial_research(self):
+        self.fixture.config = copy.deepcopy(self.config)
+        def interrupted(context):
+            if context['phase'] == 'finalize':
+                return {"action": "finish", "source_ids": context['eligible_source_ids'],
+                        "reason": "insufficient", "gaps": ["Rationale remains unresolved."]}
+            if context['eligible_source_ids']:
+                return 'invalid json'
+            return self.fixture.model(context)
+        first = self.fixture.collect(dependencies={"model": interrupted})
+        self.assertEqual(first['status'], 'partial')
+        old_states = list(self.source.glob('initial_event_search/event_*/runs/initial/run.json'))
+        self.assertTrue(old_states)
+        for path in old_states:
+            old = json.loads(path.read_text())
+            self.assertEqual(old['status'], 'insufficient')
+            self.assertEqual(old['partial_finalization']['attempts'], 1)
+        self.prepare()
+        contexts = []
+        def revised(context):
+            contexts.append(context)
+            self.assertEqual(context['phase'], 'research')
+            self.assertNotIn('interrupted_research', context)
+            return self.fixture.model(context)
+        result = collect_enhanced_sources('Buffett 2022-2023', [], self.fixture.subject,
+            self.config, self.target, dependencies={'model': revised,
+                'transport': lambda *args: self.fail('No provider request expected'),
+                'fetcher': lambda *args: self.fail('No fetch expected')})
+        self.assertEqual(result['status'], 'finished')
+        self.assertEqual(result['usage']['search_calls'], first['usage']['search_calls'])
+        self.assertEqual(result['usage']['search_model_calls'],
+                         first['usage']['search_model_calls'] + len(contexts))
+        for path in self.target.glob('initial_event_search/event_*/runs/initial/run.json'):
+            new = json.loads(path.read_text())
+            self.assertNotIn('partial_finalization', new)
+            self.assertEqual(new['finalization_history'][-1]['reason'],
+                             'explicit_storyline_search_revision')
+
     def test_rejects_unaffordable_reservations_before_output_creation(self):
         self.fixture.collect(dependencies={"max_steps": 2})
         config = copy.deepcopy(self.config)
@@ -227,7 +283,7 @@ class StorylineSearchResumeTests(unittest.TestCase):
         self.assertFalse(self.target.exists())
         self.assertEqual(before, self.snapshot())
 
-    def test_rejects_changed_scope_or_tampered_original(self):
+    def test_rejects_changed_scope_but_quarantines_one_tampered_original(self):
         self.fixture.collect(dependencies={"max_steps": 2})
         subject = {**self.fixture.subject, "coverage_end": "2024"}
         with self.assertRaisesRegex(ValueError, "scope must match"):
@@ -235,9 +291,16 @@ class StorylineSearchResumeTests(unittest.TestCase):
                 "Buffett 2022-2023", [], subject, self.config)
         raw = next(self.source.glob("initial_event_search/event_*/sources/*/*/raw"))
         raw.write_bytes(b"tampered")
-        with self.assertRaisesRegex(ValueError, "integrity mismatch"):
-            self.prepare()
-        self.assertFalse(self.target.exists())
+        before = self.snapshot()
+        result = self.prepare()
+        self.assertTrue(result["isolated_source_errors"])
+        self.assertEqual(before, self.snapshot())
+        states = [json.loads(path.read_text()) for path in self.target.glob(
+            "initial_event_search/event_*/runs/initial/run.json")]
+        quarantined = [entry for state in states for entry in state["sources"].values()
+                       if entry.get("quarantine")]
+        self.assertEqual(len(quarantined), 1)
+        self.assertTrue(quarantined[0]["quarantine"]["excluded_from_handoff"])
 
     def test_rejects_nonempty_target_and_symlinked_artifacts(self):
         self.fixture.collect()

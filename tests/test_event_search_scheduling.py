@@ -106,25 +106,25 @@ class EventSearchSchedulingTests(unittest.TestCase):
             if step == 4:
                 source = next(s for s in sources if s["url"].endswith("later-filing"))
                 return {"action": "read_source", "source": source["source_id"]}
-            if step <= 10:
-                # Exercise the last reserved calls after the research allowance
-                # has been used; cached rereads do not add provider/fetch costs.
+            if context["phase"] != "finalize":
+                # Cached rereads cannot consume the full model allowance: three
+                # unchanged reads trigger early bounded finalization.
                 return {"action": "read_source", "source": sources[0]["source_id"]}
             selected = [s["source_id"] for s in sources if s["reviewed"]]
             # Final context excludes unread leads, but the model can remember an
             # ID from research; its invalid selection must still be repairable.
-            if step == 11:
+            if len([c for c in calls if c["phase"] == "finalize"]) == 1:
                 selected += remembered_unread
             return {"action": "finish", "source_ids": selected,
                     "gaps": [], "reason": "supported"}
 
         result = self.collect(dependencies={"model": model, "transport": transport,
             "fetcher": lambda url: ((self.body + " Original source: " + url).encode(), "txt", "utf-8")})
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(len(calls), 12)
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(len(calls), 9)
         self.assertEqual(result["usage"]["search_calls"], 4)
         self.assertEqual(result["usage"]["parse_calls"], 2)
-        self.assertEqual(result["usage"]["search_model_calls"], 12)
+        self.assertEqual(result["usage"]["search_model_calls"], 9)
         self.assertEqual(len(result["documents"]), 2)
         self.assertEqual([c["phase"] for c in calls[-2:]], ["finalize", "finalize"])
         self.assertEqual(calls[-1]["feedback"]["error"], "SourceSelectionError")
@@ -160,7 +160,7 @@ class EventSearchSchedulingTests(unittest.TestCase):
 
     def test_paused_resume_preserves_originals_and_does_not_repeat_search_or_reads(self):
         first = self.collect(dependencies={"max_steps": 2})
-        self.assertEqual(first["status"], "partial")
+        self.assertEqual(first["status"], "paused")
         self.assertEqual(first["documents"], [])
         self.assertTrue(all(r["status"] == "paused" for r in first["reports"]))
         before = {p: p.read_bytes() for p in (self.root / "initial_event_search").rglob("raw") if p.is_file()}
@@ -410,7 +410,7 @@ class EventSearchSchedulingTests(unittest.TestCase):
         self.assertEqual(state["stop_reason"], "user_pause")
         self.assertEqual(state["usage"]["model"], 1)
         self.assertTrue(flag.exists())
-        self.assertEqual(second["status"], "partial")
+        self.assertEqual(second["status"], "paused")
         resumed = self.collect()
         self.assertEqual(resumed["status"], "finished")
         self.assertFalse(flag.exists())
@@ -431,7 +431,7 @@ class EventSearchSchedulingTests(unittest.TestCase):
             return run_search(task, **kwargs)
 
         first = self.collect(dependencies={"run_search": runner})
-        self.assertEqual(first["status"], "partial")
+        self.assertEqual(first["status"], "paused")
         self.assertEqual(first["reports"][0]["status"], "paused")
         self.assertEqual(first["usage"]["search_model_calls"], 0)
         self.assertTrue(paused[0].exists())

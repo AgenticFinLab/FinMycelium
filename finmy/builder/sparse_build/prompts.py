@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from finmy.builder.utils import load_python_text
+from .relation_grounding import SECURITY_ROLE_POLICY
 
 
 @lru_cache(maxsize=7)
@@ -243,6 +244,7 @@ SkeletonCheckerUser = (
     "a boundary is not given. Do not drop a process merely to make a neat timeline. "
     "Retain uncertainty such as may/as early as/estimated in reasons and descriptions "
     "where allowed. Return the corrected skeleton only.\n\n"
+    + SECURITY_ROLE_POLICY + "\n\n"
     + COMMON_USER_INPUT_BLOCK
     + "\n\n=== PROPOSED SKELETON BEGIN ===\n{ProposedSkeleton}\n=== PROPOSED SKELETON END ==="
 )
@@ -266,6 +268,7 @@ ParticipantReconstructorUser = (
     "each source for distinct in-scope facts before returning; verbosity tiers do not "
     "permit omission of relevant actors or intermediate steps.\n\n"
     + EPISODE_FACT_SCOPE_POLICY + "\n\n"
+    + SECURITY_ROLE_POLICY + "\n\n"
     + COMMON_USER_INPUT_BLOCK
     + "\n\n=== CANONICAL PARTICIPANT IDENTITIES (NO PREVIOUS ACTIONS) ===\n{ReconstructedParticipants}"
     + "\n\n=== PARTICIPANT DETAIL TIER ===\n{ParticipantDetailTier}"
@@ -288,6 +291,7 @@ TransactionReconstructorUser = (
     "missed payment is not a completed cash transfer. Do not infer execution from a "
     "participant action if the original source only establishes approval.\n\n"
     + EPISODE_FACT_SCOPE_POLICY + "\n\n"
+    + SECURITY_ROLE_POLICY + "\n\n"
     + COMMON_USER_INPUT_BLOCK
 )
 
@@ -307,6 +311,7 @@ EpisodeReconstructorUser = (
     "reuse a convenient creditor/regulator ID for a different group. Retain internal "
     "information-flow failures when supported. Do not promote proposed/approved "
     "activity into executed facts in the summary.\n\n"
+    + SECURITY_ROLE_POLICY + "\n\n"
     + COMMON_USER_INPUT_BLOCK
     + "\n\n=== STAGE SKELETON ===\n{StageSkeleton}"
     + "\n\n=== COMPLETED STAGE EPISODES ===\n{StageSparseCache}"

@@ -1,4 +1,6 @@
 """Independent search orchestration. This module never starts a Builder."""
+import copy
+
 from .state import SearchConfig, SearchState
 from .tools import SearchTools
 from .agent import run_agent
@@ -10,17 +12,33 @@ def _run_search(task=None, *, root='output/search', task_id, run_id='initial', c
         config=SearchConfig(**config)
     state=SearchState(root,task_id,run_id,task=task,config=config)
     tools=SearchTools(state,transport=transport,fetcher=fetcher,source_pool=source_pool)
-    if not state.data.get('seeds_imported'):
-        for url in state.data['task'].get('seed_urls',[]):
-            tools.sources.register(url)
-        for path in state.data['task'].get('local_files',[]):
-            tools.sources.import_file(path)
+    imported = state.data.get('seeds_imported')
+    failed_seeds = {(row['kind'], row['index']) for row in state.data.get('seed_errors', [])}
+    if not imported or (failed_seeds and state.data['status'] not in {'finished', 'insufficient'}):
+        errors = []
+        for kind, load in (('seed_urls', tools.sources.register), ('local_files', tools.sources.import_file)):
+            for index, value in enumerate(state.data['task'].get(kind, [])):
+                if imported and (kind, index) not in failed_seeds:
+                    continue
+                try:
+                    load(value)
+                except (OSError, ValueError, TypeError) as error:
+                    row = dict(kind=kind, index=index, error_type=type(error).__name__)
+                    errors.append(row)
+                    state.trace(dict(action='seed_import_failed', **row))
+        state.data['seed_errors'] = errors
         state.data['seeds_imported']=True
         state.save()
     run_agent(state,tools,model,max_steps=max_steps)
-    return dict(task_id=task_id,status=state.data['status'],usage=state.data['usage'],
+    result = dict(task_id=task_id,status=state.data['status'],usage=state.data['usage'],
                 read_sources=len(state.data['read_sources']),run_dir=str(state.run_dir),
+                seed_errors=copy.deepcopy(state.data.get('seed_errors', [])),
+                quarantined_sources=[copy.deepcopy(entry['quarantine'])
+                    for entry in state.data['sources'].values() if entry.get('quarantine')],
                 builder_input_path=str(state.run_dir/'builder_input.json') if (state.run_dir/'builder_input.json').exists() else None)
+    result.update({key: copy.deepcopy(state.data[key]) for key in ('stop_reason', 'resume')
+                   if state.data.get(key) is not None})
+    return result
 
 
 def run_batch(tasks, *, root='output/search', config=None, **dependencies):

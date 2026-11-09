@@ -72,9 +72,11 @@ class DataCollectorService:
         )
         self.enhanced_search_result = result
         documents = result.get("documents", [])
-        from finmy.runner.search_status import has_search_material, incomplete_search_result, IncompleteSearchError, record_search_coverage
+        from finmy.runner.search_status import has_search_material, incomplete_search_result, record_search_coverage
         if not has_search_material(result):
-            raise IncompleteSearchError(incomplete_search_result(result, self.save_dir))
+            self.search_coverage = incomplete_search_result(result, self.save_dir)
+            self.enhanced_documents = []
+            return []
         self.search_coverage = record_search_coverage(result, self.save_dir)
         if not self.search_coverage["search_complete"]:
             st.warning(

@@ -133,7 +133,11 @@ def test_tampered_evidence_cannot_enter_finalization_context(tmp_path):
     store=SourceStore(state);sid=store.register('https://example.org/a')
     doc=store.save_raw(sid,b'Original.','txt');store.read(sid)
     (state.root/'sources'/sid/doc['version']/'raw').write_bytes(b'Changed.')
-    with pytest.raises(ValueError,match='integrity'): context_for(state)
+    context = context_for(state)
+    assert context['eligible_source_ids'] == []
+    assert context['sources'] == []
+    assert context['quarantined_sources'][0]['source_id'] == sid
+    assert 'integrity' in context['quarantined_sources'][0]['reason']
 
 
 def test_search_model_does_not_overwrite_builder_model(tmp_path,monkeypatch):

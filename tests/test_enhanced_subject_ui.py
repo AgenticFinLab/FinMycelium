@@ -164,8 +164,9 @@ class EnhancedSubjectUI(unittest.TestCase):
                 service = self.service.ReconstructionService(self.config())
                 with patch.object(service, "_run_pipeline") as build, \
                      patch.object(self.service, "prepare_documents") as relevance:
-                    with self.assertRaisesRegex(ValueError, "Enhanced search did not finish"):
-                        service.run_reconstruction("Trace documented experiences", [], None)
+                    self.assertIsNone(service.run_reconstruction("Trace documented experiences", [], None))
+                    self.assertEqual(service.search_coverage["builder_status"], "not_started")
+                    self.assertIsNotNone(self.service.st.session_state.search_coverage)
                     build.assert_not_called()
                     relevance.assert_not_called()
 

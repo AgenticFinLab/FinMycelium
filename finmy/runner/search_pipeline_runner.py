@@ -779,17 +779,29 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser,
     if enhanced:
         from finmy.subject_graph.runner import with_source_registry
         config = with_source_registry(config, documents, packed)
-    if followup_enabled(config):
-        result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
-            config, target, documents=documents, usage=usage,
-            search=None if enhanced else search, parse=None if enhanced else parse,
-            progress=logger.info)
-    else:
-        from finmy.subject_graph.runner import build_from_contents
-        result, directory = build_from_contents(packed["contents"], main_input, keywords, config)
-    final_input = json.loads((target / "builder_input_contents.json").read_text(encoding="utf-8"))
+    if enhanced:
+        record_search_coverage(acquired, target, builder_status="running")
+    try:
+        if followup_enabled(config):
+            result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
+                config, target, documents=documents, usage=usage,
+                search=None if enhanced else search, parse=None if enhanced else parse,
+                progress=logger.info)
+        else:
+            from finmy.subject_graph.runner import build_from_contents
+            result, directory = build_from_contents(packed["contents"], main_input, keywords, config)
+    except Exception as error:
+        if enhanced:
+            try:
+                record_search_coverage(acquired, target,
+                    builder_directory=getattr(error, "builder_directory", None),
+                    builder_status="failed", builder_error=error)
+            except OSError:
+                logger.exception("Could not update Builder failure status")
+        raise
     coverage = record_search_coverage(acquired, target, builder_directory=directory,
-                                      build_completed=result is not None) if enhanced else {}
+        builder_status="completed" if result is not None else "failed") if enhanced else {}
+    final_input = json.loads((target / "builder_input_contents.json").read_text(encoding="utf-8"))
     return {**coverage, "all_text_content": contents, "search_query": build_search_query(main_input, keywords),
             "limited_content_count": len(final_input), "pipeline_result": result,
             "save_dir": str(target), "builder_save_dir": directory}

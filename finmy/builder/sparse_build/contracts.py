@@ -96,6 +96,16 @@ def date_interval(value):
     if not isinstance(value, str):
         return None
     value = value.strip()
+    quarter = re.fullmatch(r"(?:(\d{4})-Q([1-4])|Q([1-4])\s+(\d{4}))", value, re.I)
+    if quarter:
+        year = int(quarter.group(1) or quarter.group(4))
+        number = int(quarter.group(2) or quarter.group(3))
+        first, last = (number - 1) * 3 + 1, number * 3
+        try:
+            return (datetime(year, first, 1), datetime(year, last,
+                calendar.monthrange(year, last)[1], 23, 59, 59, 999999))
+        except ValueError:
+            return None
     match = re.fullmatch(r"(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?", value)
     if match:
         year, month, day = (int(part) if part else None for part in match.groups())

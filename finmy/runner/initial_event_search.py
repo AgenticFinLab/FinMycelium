@@ -16,12 +16,12 @@ import time
 
 from finmy.search.control import task_lock
 from finmy.search.state import SearchConfig, digest, write_json
+from finmy.runner.search_failures import TERMINAL, phase_status, read_task_usage, record_failure
 
 
 VERSION = "initial-event-search-v3"
 COUNTERS = {"search_calls": "max_search_requests", "parse_calls": "max_read_sources",
             "search_model_calls": "max_model_calls"}
-TERMINAL = {"finished", "insufficient", "limit", "invalid_handoff"}
 
 
 def event_search_options(config):
@@ -111,20 +111,7 @@ def collect_initial_events(*, tasks, events, shared, config, save_dir, usage,
             for task_id in order:
                 record = report["tasks"][task_id]
                 path = root / task_id / "runs" / "initial" / "run.json"
-                if path.exists():
-                    state = json.loads(path.read_text(encoding="utf-8"))
-                    if state["config"] != record.get("config"):
-                        raise ValueError("Saved task configuration differs from its phase reservation")
-                    record["usage"] = {"search_calls": state["usage"]["search"],
-                                       "parse_calls": len(state["read_sources"]),
-                                       "search_model_calls": state["usage"]["model"]}
-                    record["run_directory"] = str(path.parent)
-                    if state.get("stop_reason"):
-                        record["stop_reason"] = state["stop_reason"]
-                    # Recover a result saved immediately before interruption of
-                    # the coordinator, without repeating the completed task.
-                    if record["status"] not in TERMINAL and state["status"] in TERMINAL:
-                        record["status"] = state["status"]
+                read_task_usage(record, path)
                 for key, option in COUNTERS.items():
                     spent = _nonnegative(record.get("usage", {}).get(key, 0), key)
                     if "config" in record and spent > record["config"][option]:
@@ -136,6 +123,8 @@ def collect_initial_events(*, tasks, events, shared, config, save_dir, usage,
 
         def persist():
             report["usage"] = counters()
+            if source_pool is not None:
+                report["shared_source_errors"] = copy.deepcopy(source_pool.errors)
             report["elapsed_seconds"] = previous_elapsed + time.monotonic() - started
             usage.update({key: max(usage.get(key, 0), value)
                           for key, value in report["usage"].items()})
@@ -243,8 +232,14 @@ def collect_initial_events(*, tasks, events, shared, config, save_dir, usage,
                         record = report["tasks"][task_id]
                         result = future.result()
                         record.update(status=result["status"], run_directory=result.get("run_dir"))
+                        for key in ("stop_reason", "resume"):
+                            if key in result:
+                                record[key] = copy.deepcopy(result[key])
                         if result.get("error_type"):
                             record["error_type"] = result["error_type"]
+                            failure = {"stage": "event_search", "error_type": result["error_type"]}
+                            if failure not in record.setdefault("errors", []):
+                                record["errors"].append(failure)
                         else:
                             record.pop("error_type", None)
                     persist()
@@ -253,20 +248,24 @@ def collect_initial_events(*, tasks, events, shared, config, save_dir, usage,
                 record = report["tasks"][task_id]
                 selection_path = root / task_id / "runs" / "initial" / "selection.json"
                 if selection_path.exists():
-                    selection = json.loads(selection_path.read_text(encoding="utf-8"))
-                    record["gaps"] = selection.get("gaps", [])
-                    record["selection_reason"] = selection.get("reason")
-                if record["status"] not in {"finished", "insufficient"}:
+                    try:
+                        selection = json.loads(selection_path.read_text(encoding="utf-8"))
+                        record["gaps"] = selection.get("gaps", [])
+                        record["selection_reason"] = selection.get("reason")
+                    except (OSError, ValueError, AttributeError) as error:
+                        record_failure(record, "selection_diagnostics", error)
+                if record["status"] == "invalid_state":
                     continue
                 try:
                     with task_lock(root, task_id):
-                        found = documents_for(root, task_id, {"status": record["status"]}, event)
+                        found = documents_for(root, task_id, record, event)
                     record["document_count"] = len(found)
-                    if not found:
+                    if not found and record["status"] == "finished":
                         record["status"] = "insufficient"
                     documents.extend(found)
                 except Exception as exc:
                     record.update(status="invalid_handoff", error_type=type(exc).__name__)
+                    record_failure(record, "document_export", exc)
             unique = {}
             for row in documents:
                 key = (row["url"], row["source_version"], digest(row["raw_text"]))
@@ -281,10 +280,7 @@ def collect_initial_events(*, tasks, events, shared, config, save_dir, usage,
             documents = list(unique.values())
             outcomes = [report["tasks"][task_id] for task_id in order]
             complete = bool(outcomes) and all(row["status"] == "finished" for row in outcomes)
-            status = ("finished" if complete else "partial" if documents else "budget_exhausted"
-                      if outcomes and all("config" not in row for row in outcomes)
-                      else "insufficient" if not outcomes or all(row["status"] == "insufficient" for row in outcomes)
-                      else "partial")
+            status = phase_status(outcomes, documents)
             unresolved = [row["event_id"] for row in outcomes if row["status"] != "finished"]
             report.update(status=status, complete=complete, unresolved_events=unresolved,
                           document_count=len(documents),

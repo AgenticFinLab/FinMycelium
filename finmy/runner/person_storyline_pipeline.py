@@ -87,11 +87,12 @@ def main(argv=None):
                "postbuild_followup_enabled": config["event_followup"]["enabled"]}
     for key in ("complete", "search_report_path", "status_path", "unresolved_events",
                 "search_status", "search_complete", "search_coverage_report_path",
-                "retained_document_count", "resume_directory", "usage"):
+                "retained_document_count", "resume_directory", "usage", "resume", "message", "next_action"):
         if key in result:
             summary[key] = result[key]
     print(json.dumps(summary, ensure_ascii=False))
-    return 0 if result.get("pipeline_result") is not None else 1
+    return (0 if result.get("pipeline_result") is not None else
+            2 if result.get("search_status") in {"waiting", "blocked", "paused"} else 1)
 
 
 if __name__ == "__main__":

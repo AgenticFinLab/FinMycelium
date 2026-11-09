@@ -93,6 +93,11 @@ class ReconstructionService:
             )
             self._search_acquisition = collector.enhanced_search_result
             self.search_coverage = collector.search_coverage
+            st.session_state.search_coverage = self.search_coverage
+            if not search_content:
+                # A provider pause or empty search is a saved acquisition result,
+                # not a failed graph build. The UI presents its exact status.
+                return None
         elif scoped:
             bocha_content, baidu_content = collector.collect_subject_search_results(
                 main_input, keywords, reconstruction["subject"]
@@ -240,6 +245,11 @@ class ReconstructionService:
             )
             logging.info("config: %s", self.config)
             
+            if getattr(self, "search_coverage", None) is not None:
+                from finmy.runner.search_status import record_search_coverage
+                self.search_coverage = record_search_coverage(
+                    self._search_acquisition, save_dir, builder_status="running")
+                st.session_state.search_coverage = self.search_coverage
             if read_reconstruction(self.config)["mode"] != "event":
                 # Filtered evidence goes directly to the native subject builder.
                 # Legacy financial matching/summarization can drop person/company history.
@@ -265,8 +275,8 @@ class ReconstructionService:
                 from finmy.runner.search_status import record_search_coverage
                 self.search_coverage = record_search_coverage(
                     self._search_acquisition, save_dir, builder_directory=builder_save_path,
-                    build_completed=pipeline_result is not None)
-                st.session_state.search_coverage = self.search_coverage if pipeline_result is not None else None
+                    builder_status="completed" if pipeline_result is not None else "failed")
+                st.session_state.search_coverage = self.search_coverage
             logging.info("builder save directory: %s", builder_save_path)
 
             logging.info("type of pipeline_result: %s", type(pipeline_result))
@@ -297,6 +307,20 @@ class ReconstructionService:
             
             return None
         except Exception as e:
+            # Only a still-running Builder has failed. Errors in later result
+            # presentation must not rewrite a completed reconstruction as failed.
+            if (getattr(self, "search_coverage", None) or {}).get("builder_status") == "running":
+                from finmy.runner.search_status import record_search_coverage
+                builder_directory = getattr(e, "builder_directory", None)
+                try:
+                    self.search_coverage = record_search_coverage(
+                        self._search_acquisition, save_dir, builder_directory=builder_directory,
+                        builder_status="failed", builder_error=e)
+                    st.session_state.search_coverage = self.search_coverage
+                    if builder_directory is not None:
+                        st.session_state.save_builder_dir_path = builder_directory
+                except OSError:
+                    logging.exception("Could not update Builder failure status")
             error_type = type(e).__name__
             error_msg = str(e)
             error_traceback = traceback.format_exc()

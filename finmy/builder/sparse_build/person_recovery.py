@@ -140,7 +140,8 @@ def load_person_checkpoint(source_root) -> PersonCheckpoint:
     if not isinstance(ledger, list) or summarize_calls(ledger) != manifest.get("usage"):
         raise ValueError("Recovery call ledger and usage do not match")
     roles = set(get_agent_prompts()[0])
-    if any(row.get("agent") not in roles | {"PersonOrganization"} for row in ledger):
+    auxiliary_roles = {"EpisodeScopeReviewer", "CounterpartyEvidenceReview"}
+    if any(row.get("agent") not in roles | auxiliary_roles | {"PersonOrganization"} for row in ledger):
         raise ValueError("Recovery ledger contains an unsupported role")
     inherited = []
     if "recovery" in manifest:
@@ -162,7 +163,7 @@ def load_person_checkpoint(source_root) -> PersonCheckpoint:
     elif "OriginalCallLedger.json" in artifacts:
         raise ValueError("Recovery history is missing its provenance")
     checkpoint = PersonCheckpoint(root, manifest, manifest_bytes, artifacts, inputs, cascade, ledger, inherited)
-    if any(row.get("agent") not in roles | {"PersonOrganization"} for row in inherited):
+    if any(row.get("agent") not in roles | auxiliary_roles | {"PersonOrganization"} for row in inherited):
         raise ValueError("Recovery history contains an unsupported role")
     accepted_extraction = Counter(row.get("save_name", "") + "-Result.json"
                                   for row in checkpoint.historical_calls
@@ -251,7 +252,8 @@ def recover_person(config, source_root) -> BuildOutput:
     builder._save_call_ledger()
     builder.save_traces(manifest, "RunManifest", "json")
     extraction_roles = [row["agent"] for row in historical
-                        if row["agent"] != "PersonOrganization" and row.get("status") in {"accepted", "recovered"}]
+                        if row["agent"] in set(get_agent_prompts()[0])
+                        and row.get("status") in {"accepted", "recovered"}]
     output = BuildOutput(event_cascades=copy.deepcopy(checkpoint.cascade), result={"cost": []},
                          logs=extraction_roles.copy(), extras={
                              "agent_executed": extraction_roles.copy(),
