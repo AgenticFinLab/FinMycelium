@@ -7,7 +7,7 @@ import unicodedata
 from pathlib import Path
 
 from finmy.runner.context_budget import allocate_context
-from finmy.runner.relevance_filter import _json_object, _live_completion
+from finmy.runner.model_completion import _json_object, _live_completion
 from finmy.runner.subject_search import collect_subject_sources
 
 
@@ -106,7 +106,7 @@ def collect_decision_followup(filtered, query, keywords, subject, config, save_d
         # Bound this single review even when the builder uses unlimited context.
         budget = review_config.setdefault("all_content_config", {})
         budget["max_content_length"] = min(budget.get("max_content_length") or 60000, 60000)
-        packed = allocate_context(filtered["documents"], filtered["decisions"], review_config)
+        packed = allocate_context(filtered["documents"], [], review_config)
         sources = [{"source_id": f"SOURCE_{i+1}", "content": text}
                    for i, text in enumerate(packed["contents"])]
         if not sources:
@@ -117,7 +117,7 @@ def collect_decision_followup(filtered, query, keywords, subject, config, save_d
         (target / "review_input.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         log("Decision follow-up: Reviewing documented investment actions for material gaps.")
         complete = completion or _live_completion(
-            config.get("relevance_filter", {}).get("lm_name") or config.get("lm_name")
+            config.get("lm_name")
             or config.get("builder_config", {}).get("lm_name") or "deepseek/deepseek-chat", {})
         if usage is not None:
             usage["decision_review_calls"] = usage.get("decision_review_calls", 0) + 1

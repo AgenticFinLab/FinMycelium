@@ -8,7 +8,7 @@ from pathlib import Path
 
 from finmy.reconstruction_scope import read_reconstruction
 from finmy.runner.context_budget import allocate_context
-from finmy.runner.relevance_filter import filter_documents
+from finmy.runner.source_documents import prepare_documents
 
 
 def _save(path, value):
@@ -121,14 +121,15 @@ def _publish(initial, package, target, initial_dir, report):
 
 
 def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
-                                    *, filtered, documents, usage=None, build=None,
+                                    *, documents, filtered=None, usage=None, build=None,
                                     completion=None, search=None, parse=None, progress=None,
                                     enrichment_completion=None, enrich=None,
                                     supplementary_sources=None):
     """Run the original builder once, then append verified event-local additions.
 
+    The obsolete filtered/completion keyword arguments are accepted but unused.
     First-phase inputs and artifacts never compete with supplementary evidence.
-    Supplemental retrieval, P0, evidence characters and model calls have their
+    Supplemental retrieval, evidence characters and model calls have their
     own finite limits. A failed event leaves its initial rows untouched.
     """
     if build is None:
@@ -155,8 +156,7 @@ def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
               "budgets": {"initial_content_limit": (config.get("all_content_config") or {}).get("max_content_length", 60000),
                           "supplementary_content_limit": options.get("max_content_length", 60000),
                           "supplementary_search_model_call_limit": options.get("max_search_model_calls", 30),
-                          "supplementary_model_call_limit": options.get("max_model_calls", 24),
-                          "supplementary_relevance_time_limit": options.get("max_relevance_elapsed_seconds", 300)}}
+                          "supplementary_model_call_limit": options.get("max_model_calls", 24)}}
     _save(target / "initial_builder_input_contents.json", contents)
     _save(target / "builder_input_contents.json", contents)
 
@@ -192,7 +192,7 @@ def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
             return selected
         reconstruction = read_reconstruction(config)
         supplemental_usage = {"started_at": time.monotonic(), "search_calls": 0, "parse_calls": 0,
-                              "followup_queries": 0, "relevance_model_calls": 0}
+                              "followup_queries": 0}
         if supplementary_sources is None:
             log(f"Event enrichment: Searching around {len(events)} existing events with a separate evidence budget.")
             added_sources = collect_draft_event_sources(package, query, keywords,
@@ -209,48 +209,15 @@ def build_with_draft_event_followup(contents, query, keywords, config, save_dir,
             return selected
         candidate_dir = target / "event_enrichment"
         candidate_config = copy.deepcopy(config)
-        relevance_options = candidate_config.setdefault("relevance_filter", {})
-        relevance_options["max_model_calls"] = options["max_relevance_model_calls"]
-        relevance_options["max_elapsed_seconds"] = options["max_relevance_elapsed_seconds"]
-        # Acquisition may use its entire deadline. P0 starts once here with its
-        # own finite clock; never reset it between batches or bypass its limits.
-        relevance_usage = {"started_at": time.monotonic(), "relevance_model_calls": 0}
-        try:
-            added = filter_documents(added_sources, query, keywords, candidate_config,
-                candidate_dir / "relevance", completion=completion, progress=progress,
-                document_id_offset=len(documents), usage=relevance_usage)
-        finally:
-            supplemental_usage["relevance_model_calls"] = relevance_usage["relevance_model_calls"]
-            report["relevance"] = {"usage": copy.deepcopy(relevance_usage),
-                "elapsed_seconds": max(0.0, time.monotonic() - relevance_usage["started_at"]),
-                "max_elapsed_seconds": options["max_relevance_elapsed_seconds"]}
-        report["relevance"]["summary"] = copy.deepcopy(added["summary"])
-        retained = added["documents"]
-        # Exhausted/failed P0 does not promote unreviewed material above evidence.
-        if added["summary"]["enabled"]:
-            retained = [row for row in retained if row.get("relevance") in {"CORE", "CONTEXT"}]
+        retained = prepare_documents(added_sources, query, keywords, candidate_config,
+            candidate_dir / "sources", document_id_offset=len(documents))
         report["new_retained_source_count"] = len(retained)
-        if not retained:
-            summary = added["summary"]
-            blocked = summary.get("blocked_reasons", {})
-            if blocked.get("time_budget_exhausted"):
-                report["status"] = "relevance_time_budget_exhausted"
-            elif blocked.get("call_budget_exhausted"):
-                report["status"] = "relevance_call_budget_exhausted"
-            elif any(f.get("code") == "processing_failed" for f in summary.get("failures", [])):
-                report["status"] = "relevance_processing_failed"
-            elif summary.get("review_chunks") or summary.get("labels", {}).get("REVIEW"):
-                report["status"] = "unreviewed_sources"
-            else:
-                report["status"] = "no_new_relevant_sources"
-            return selected
         candidate_config["all_content_config"] = {
             "max_content_length": options["max_content_length"],
             "max_document_chars": options["max_document_chars"],
             "allocation_strategy": "event",
         }
-        packed = allocate_context(retained, added["decisions"], candidate_config,
-                                  include_metadata=bool(added["summary"]["enabled"]))
+        packed = allocate_context(retained, [], candidate_config, include_metadata=True)
         sources = _packed_sources(package, retained, packed)
         _save(candidate_dir / "context_budget_report.json", packed["report"])
         _save(candidate_dir / "supplementary_input_contents.json", packed["contents"])

@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 """Offline UI/CLI regression: one initial build, then additive event enrichment."""
 import copy
 import json
@@ -6,8 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import test_event_relevance_integration as legacy
-from test_event_relevance_integration import module, load
+import test_source_integration as legacy
+from test_source_integration import module, load
 from test_event_refinement import package_fixture, append_grounded_detail
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +38,7 @@ def configuration(output):
 
 class DraftFollowupEntryPoints(unittest.TestCase):
     def setUp(self):
-        legacy.WebRelevanceIntegrationTest.setUp(self)
+        legacy.WebSourceIntegrationTest.setUp(self)
         self.errors = []
         self.service.st.error = self.errors.append
         self.timeline, self.searches, self.parses, self.classifications, self.builds, self.enrichments = [], [], [], [], [], []
@@ -101,15 +102,14 @@ class DraftFollowupEntryPoints(unittest.TestCase):
 
     def run_ui(self, cfg=None):
         service = self.service.ReconstructionService(cfg or configuration(self.path))
-        with patch.dict("sys.modules", self.adapters()), \
-             patch("finmy.runner.relevance_filter._live_completion", return_value=self.completion):
+        with patch.dict("sys.modules", self.adapters()):
             result = service.run_reconstruction("Warren Buffett activities 2022–2023", [], None)
         return result, next(self.path.glob("pipeline_output_*"))
 
     def assert_enriched_flow(self, output):
         self.assertEqual(len(self.builds), 1)
         self.assertEqual(len(self.enrichments), 1)
-        self.assertEqual(self.timeline[0:3], ["initial_search", "classify_initial", "draft_build"])
+        self.assertEqual(self.timeline[0:2], ["initial_search", "draft_build"])
         self.assertEqual(self.timeline[-1], "event_enrichment")
         first = self.timeline.index("draft_build")
         self.assertTrue(all(i > first for i, value in enumerate(self.timeline) if value == "event_search"))
@@ -125,9 +125,7 @@ class DraftFollowupEntryPoints(unittest.TestCase):
         self.assertTrue(any(DETAIL in text for text in supplemental))
         self.assertFalse(any(INITIAL in text for text in supplemental))
         self.assertLessEqual(sum(map(len, supplemental)), 60000)
-        self.assertEqual(len(self.classifications), 2)
-        self.assertEqual(len(self.classifications[0]["chunks"]), 1)
-        self.assertFalse(any(INITIAL in c["text"] for c in self.classifications[1]["chunks"]))
+        self.assertEqual(self.classifications, [])
         plan = json.loads((output / "draft_event_search_plan.json").read_text())
         self.assertEqual(plan["event_discovery_model_calls"], 0)
         self.assertEqual([e["event_id"] for e in plan["events"]], [e["event_id"] for e in self.package["event"]])
@@ -158,7 +156,7 @@ class DraftFollowupEntryPoints(unittest.TestCase):
         runner = load("draft_cli_entrypoint_test", ROOT / "finmy/runner/search_pipeline_runner.py")
         cfg = configuration(self.path)
         with patch.dict("sys.modules", self.adapters()), \
-             patch("finmy.runner.relevance_filter._live_completion", return_value=self.completion), \
+             nullcontext(), \
              patch.object(runner, "collect_search_contents", side_effect=AssertionError("Unexpected legacy entry")):
             result = runner.run_search_pipeline(cfg, "Warren Buffett activities 2022–2023", [], self.path)
         self.assertEqual(result["pipeline_result"].extras["person_epg"], self.enriched_package)

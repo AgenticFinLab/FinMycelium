@@ -85,7 +85,7 @@ def resume_event_enrichment(input_dir, config, output_dir, *, completion=None,
         return result, str(saved_initial)
 
     output, directory = build_with_draft_event_followup(
-        contents, query, keywords, effective, target, filtered={}, documents=documents,
+        contents, query, keywords, effective, target, documents=documents,
         usage=previous_report.get("initial_usage", {}), build=restore_initial,
         supplementary_sources=supplementary, completion=completion,
         enrichment_completion=enrichment_completion, enrich=enrich, progress=progress)

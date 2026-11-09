@@ -43,12 +43,6 @@ def normalize_followup_config(config):
         value = content.setdefault(key, default)
         if type(value) is not int or value < minimum:
             raise ValueError("all_content_config." + key + " must be finite and positive")
-    relevance = result.setdefault("relevance_filter", {})
-    if not isinstance(relevance, dict):
-        raise ValueError("relevance_filter must be a mapping")
-    value = relevance.setdefault("max_model_calls", 12)
-    if type(value) is not int or value < 0:
-        raise ValueError("relevance_filter.max_model_calls must be finite and nonnegative")
     return result
 
 

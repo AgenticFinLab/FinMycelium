@@ -42,8 +42,7 @@ class DraftEventSearchTests(unittest.TestCase):
         return json.loads((self.root / "draft_event_search_plan.json").read_text())
 
     def test_label_only_existing_event_searches_without_model_or_quote_gate(self):
-        with patch("finmy.runner.relevance_filter._live_completion", side_effect=AssertionError("No planner")):
-            docs = self.collect([{"event_id": "oxy", "label": "西方石油投资", "summary": ""}])
+        docs = self.collect([{"event_id": "oxy", "label": "西方石油投资", "summary": ""}])
         self.assertEqual(len(docs), 1)
         self.assertIn("西方石油投资", self.calls[0][1])
         self.assertEqual(docs[0]["event_ids"], ["oxy"])
@@ -216,7 +215,7 @@ class DraftEventSearchTests(unittest.TestCase):
         self.assertEqual(self.report()["events"][0]["activity_count"], 1)
 
     def test_independent_content_and_model_budgets_reject_unbounded_values(self):
-        for key in ("max_content_length", "max_document_chars", "max_relevance_model_calls", "max_model_calls"):
+        for key in ("max_content_length", "max_document_chars", "max_model_calls"):
             for invalid in (None, True, -1, float("inf")):
                 with self.subTest(key=key, value=invalid):
                     with self.assertRaises(ValueError):

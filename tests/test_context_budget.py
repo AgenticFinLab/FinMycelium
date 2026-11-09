@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 from finmy.runner.context_budget import allocate_context
-from finmy.runner.relevance_filter import render_document
+from finmy.runner.source_documents import render_document
 
 
 def document(identifier, text, label="CORE", **kwargs):
@@ -98,29 +98,28 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertEqual(result["report"]["summary"]["included_documents"], 2)
         self.assert_valid(result, docs, 4500)
 
-    def test_core_precedes_review_regardless_of_input_order(self):
+    def test_search_order_is_preserved_regardless_of_old_labels(self):
         docs = [document("noise", "uncertain. " * 3000, "REVIEW"),
                 document("trade", "dated trade evidence. " * 300)]
         result = allocate_context(docs, [], config(2500))
-        self.assertEqual(result["report"]["documents"][0]["document_id"], "trade")
+        self.assertEqual(result["report"]["documents"][0]["document_id"], "noise")
         self.assertTrue(result["report"]["documents"][0]["included"])
-        self.assertFalse(result["report"]["documents"][1]["included"])
         self.assert_valid(result, docs, 2500)
 
     def test_context_gets_seed_before_core_expansion(self):
         docs = [document("core", "stock purchases. " * 4000),
                 document("letter", "financing background. " * 4000, "CONTEXT")]
         result = allocate_context(docs, [], config(5000))
-        self.assertEqual(result["report"]["summary"]["included_by_label"], {"CORE": 1, "CONTEXT": 1})
+        self.assertEqual(result["report"]["summary"]["included_documents"], 2)
         self.assert_valid(result, docs, 5000)
 
-    def test_review_only_uses_budget_after_core_context(self):
+    def test_old_labels_cannot_reorder_search_results(self):
         docs = [document("review", "other. " * 5000, "REVIEW"),
                 document("background", "direct background. " * 300, "CONTEXT"),
                 document("core", "trade. " * 300)]
         result = allocate_context(docs, [], config(7000))
         rows = result["report"]["documents"]
-        self.assertEqual([r["relevance"] for r in rows], ["CORE", "CONTEXT", "REVIEW"])
+        self.assertEqual([r["document_id"] for r in rows], ["review", "background", "core"])
         self.assertTrue(all(r["included"] for r in rows[:2]))
         self.assert_valid(result, docs, 7000)
 
@@ -128,19 +127,18 @@ class ContextBudgetTest(unittest.TestCase):
         quote = "Occidental warrants explain this investment."
         text = "UNRELATED PREFACE. " * 1400 + quote + " Relevant background. " * 200
         start = text.index(quote)
-        docs = [document("letter", text, "CONTEXT")]
+        docs = [document("letter", text, "CONTEXT", retrieval_queries=["Occidental warrants"])]
         decisions = [{"document_id": "letter", "chunks": [
             {"start_char": 0, "end_char": start, "relevance": "IRRELEVANT", "evidence": "UNRELATED PREFACE."},
             {"start_char": start, "end_char": len(text), "relevance": "CONTEXT", "evidence": quote}]}]
         result = allocate_context(docs, decisions, config(2200))
         self.assertIn(quote, result["contents"][0])
-        self.assertNotIn("UNRELATED PREFACE", result["contents"][0])
         self.assert_valid(result, docs, 2200)
 
     def test_whitespace_normalised_quote_maps_back_to_raw_text(self):
         quote = "Purchase\n  completed\t2023-10-23."
         text = "x" * 10000 + quote + " End of filing. " * 80
-        doc = document("filing", text)
+        doc = document("filing", text, retrieval_queries=["completed 2023-10-23"])
         decisions = [{"document_id": "filing", "chunks": [{"start_char": 10000,
                       "end_char": len(text), "relevance": "CORE",
                       "evidence": "Purchase completed 2023-10-23."}]}]
@@ -205,9 +203,9 @@ class ContextBudgetTest(unittest.TestCase):
     def test_empty_and_irrelevant_documents(self):
         docs = [document("empty", ""), document("bad", "off-topic " * 200, "IRRELEVANT")]
         result = allocate_context(docs, [], config())
-        self.assertEqual(result["contents"], [])
+        self.assertEqual(len(result["contents"]), 1)
         self.assertEqual(result["report"]["documents"][0]["omission_reason"], "empty_source")
-        self.assertEqual(result["report"]["documents"][1]["omission_reason"], "filtered_irrelevant")
+        self.assertIsNone(result["report"]["documents"][1]["omission_reason"])
         self.assertEqual(allocate_context([], [], config())["contents"], [])
 
     def test_deterministic_and_inputs_not_mutated(self):

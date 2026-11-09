@@ -15,7 +15,7 @@ from finmy.pipeline import FinmyPipeline
 from finmy.builder.utils import estimate_complete_time
 from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
-from finmy.runner.relevance_filter import filter_documents
+from finmy.runner.source_documents import prepare_documents
 from finmy.runner.context_budget import allocate_context
 from finmy.reconstruction_scope import read_reconstruction, search_query
 
@@ -117,7 +117,7 @@ class ReconstructionService:
         logging.info("All_Text_Content: %s", all_text_content)
         logging.info("Length of All_Text_Content List: %d", len(all_text_content))
         
-        # P0: classify sources BEFORE the existing context-length budget is applied.
+        # Assign stable document IDs before allocating the source-text budget.
         # Keep the original All_Text_Content and formatted search archives unchanged.
         documents = [doc for source in ("url", "file") for doc in collector.documents[source]]
         if enhanced:
@@ -127,50 +127,24 @@ class ReconstructionService:
                           for doc in collector.documents[source]]
         if [d["raw_text"] for d in documents] != all_text_content:
             raise ValueError("Collected source metadata/content are out of sync")
-        from finmy.runner.event_followup_config import followup_enabled, initial_search_options
-        follow_events = followup_enabled(self.config)
+        from finmy.runner.event_followup_config import initial_search_options
         usage = getattr(collector, "evidence_usage", {})
-        filter_kwargs = {"usage": usage} if follow_events else {}
-        filtered = filter_documents(documents, main_input, keywords, self.config, save_dir,
-                                    progress=st.write, **filter_kwargs)
-        summary = filtered["summary"]
-        st.write(f"Relevance filter: kept {summary['kept']}/{summary['retrieved']} "
-                 f"documents; removed {summary['removed']}.")
-        for warning in filtered["warnings"]:
-            st.warning(warning)
-        if not filtered["contents"]:
-            raise ValueError("No relevant sources remain. Inspect relevance_decisions.json or refine the search.")
-
+        documents = prepare_documents(documents, main_input, keywords, self.config, save_dir)
         if scoped and not enhanced and reconstruction["mode"] == "person":
             from finmy.runner.decision_followup import collect_decision_followup
             initial_config = copy.deepcopy(self.config)
             initial_config["subject_search"] = initial_search_options(self.config)
             extra = collect_decision_followup(
-                filtered, main_input, keywords, reconstruction["subject"], initial_config, save_dir,
+                {"documents": documents}, main_input, keywords, reconstruction["subject"], initial_config, save_dir,
                 progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"),
                 known_urls=[d.get("url") for d in documents],
-                **filter_kwargs,
+                usage=usage,
             )
             if extra:
-                # Reuse the relevance cache for old documents and assign unique
-                # IDs across the combined source list before the context budget.
-                filtered = filter_documents(
-                    documents + extra, main_input, keywords, self.config, save_dir, progress=st.write,
-                    **filter_kwargs,
-                )
-                documents = documents + extra
-                summary = filtered["summary"]
-                st.write(f"Relevance filter after decision follow-up: kept {summary['kept']}/"
-                         f"{summary['retrieved']} documents.")
-                for warning in filtered["warnings"]:
-                    st.warning(warning)
+                documents = prepare_documents(documents + extra, main_input, keywords,
+                                              self.config, save_dir)
 
-        # Budget retained evidence before building: CORE/CONTEXT first, long
-        # sources as verbatim excerpts. No extra model call is needed here.
-        budgeted = allocate_context(
-            filtered["documents"], filtered["decisions"], self.config,
-            include_metadata=summary["enabled"],
-        )
+        budgeted = allocate_context(documents, [], self.config, include_metadata=True)
         all_text_content_limit = budgeted["contents"]
         budget_report = budgeted["report"]
         with open(os.path.join(save_dir, "context_budget_report.json"), "w", encoding="utf-8") as f:
@@ -186,14 +160,14 @@ class ReconstructionService:
         with open(os.path.join(save_dir, "builder_input_contents.json"), "w", encoding="utf-8") as f:
             json.dump(all_text_content_limit, f, ensure_ascii=False, indent=2)
         if not all_text_content_limit:
-            raise ValueError("Context budget admitted no documents. Inspect filtered_contents.json.")
+            raise ValueError("Context budget admitted no documents. Inspect context_budget_report.json.")
         
         # Run pipeline
-        self._draft_evidence = {"filtered": filtered, "documents": documents, "usage": usage}
+        self._draft_evidence = {"documents": documents, "usage": usage}
         pipeline_config = self.config
         if enhanced:
             from finmy.subject_graph.runner import with_source_registry
-            self.config = with_source_registry(self.config, filtered["documents"], budgeted)
+            self.config = with_source_registry(self.config, documents, budgeted)
         try:
             return self._run_pipeline(
                 all_text_content_limit, main_input, keywords, save_dir

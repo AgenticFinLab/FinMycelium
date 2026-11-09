@@ -19,7 +19,7 @@ from finmy.url_collector.url_parser_clean import extract_content_from_parsed_con
 from finmy.pdf_collector.pdf_collector import PDFCollector
 from finmy.pdf_collector.base import PDFCollectorInput
 from finmy.web_ui.utils.formatters import format_timestamp
-from finmy.runner.relevance_filter import make_document
+from finmy.runner.source_documents import make_document
 from finmy.runner.event_followup_config import followup_enabled
 
 

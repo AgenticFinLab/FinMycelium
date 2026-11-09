@@ -1,18 +1,16 @@
-"""Deterministic source-text budgeting after P0; no model calls or new dependencies."""
+"""Deterministic budgeting of search-selected source text; no model calls."""
 from __future__ import annotations
 
 import argparse
 import json
 import math
 import re
-from collections import Counter
 from itertools import groupby
 from pathlib import Path
 from typing import Any
 
-from finmy.runner.relevance_filter import render_document
+from finmy.runner.source_documents import render_document
 
-PRIORITY = {"CORE": 0, "CONTEXT": 1, "REVIEW": 2, "UNCLASSIFIED": 2}
 SEARCH_PHASE = {"initial": 0, "followup": 1, "decision_followup": 2}
 EXCERPT_NOTE = (
     "Verbatim source excerpts follow; gaps are omitted. Offsets refer to raw_text "
@@ -27,7 +25,7 @@ def _integer(value: Any, name: str, minimum: int = 1) -> int:
 
 
 def _uncovered(start: int, end: int, selected: list[tuple[int, int]]):
-    """Subtract already selected text; overlapping P0 chunks must not duplicate it."""
+    """Subtract already selected text; overlapping source windows must not duplicate it."""
     cursor = start
     for left, right in sorted(selected):
         if right <= cursor:
@@ -41,42 +39,26 @@ def _uncovered(start: int, end: int, selected: list[tuple[int, int]]):
         yield cursor, end
 
 
-def _ranges(text: str, chunks: list[dict[str, Any]]):
-    """Verbatim quotes first, nearby context second, relevant chunks third.
+def _ranges(text):
+    return [(0, len(text), False)] if text else []
 
-    P0 decisions are selection hints, never appended to source evidence. For long
-    mixed documents, known IRRELEVANT chunks are not used as budget padding.
-    """
-    usable = []
-    for chunk in chunks:
-        if not isinstance(chunk, dict):
-            continue
-        start, end = chunk.get("start_char"), chunk.get("end_char")
-        label = chunk.get("relevance", "REVIEW")
-        if (type(start) is int and type(end) is int and 0 <= start < end <= len(text)
-                and label in PRIORITY):
-            usable.append((PRIORITY[label], start, end, chunk))
-    usable.sort(key=lambda item: (item[0], item[1], item[2]))
-    quotes, surroundings = [], []
-    for rank, start, end, chunk in usable:
-        evidence = chunk.get("evidence", "")
-        if rank > 1 or not isinstance(evidence, str) or not evidence.strip() or len(evidence) > 1200:
-            continue
-        segment = text[start:end]
-        offset = segment.find(evidence)
-        if offset >= 0:
-            left, right = start + offset, start + offset + len(evidence)
-        else:
-            # P0 accepts whitespace-normalised excerpts. Recover ORIGINAL offsets.
-            match = re.search(r"\s+".join(re.escape(t) for t in evidence.split()), segment)
-            if match is None:
-                continue
-            left, right = start + match.start(), start + match.end()
-        quotes.append((left, right, True))
-        surroundings.append((max(start, left - 400), min(end, right + 400), False))
-    candidates = quotes + surroundings + [(start, end, False) for _, start, end, _ in usable]
-    # Missing/unusable decisions must not drop a retained document.
-    return candidates or [(0, len(text), False)]
+
+def _ranked_ranges(document):
+    """Reuse shared-search BM25 ranking on exact source windows, without an LLM."""
+    from finmy.search.budget import rank_blocks
+    text = document["raw_text"]
+    # Overlap keeps a sentence crossing a window boundary available intact.
+    spans = [(a, min(a + 1000, len(text))) for a in range(0, len(text), 800)]
+    blocks = [{"text": text[a:b]} for a, b in spans]
+    rankings = rank_blocks({"blocks": list(range(len(blocks)))}, {"blocks": blocks},
+                          document.get("retrieval_queries", []))
+    selected = []
+    for index in range(max((len(r["ranking"]) for r in rankings), default=0)):
+        for row in rankings:
+            if index < len(row["ranking"]):
+                a, b = spans[row["ranking"][index][0]]
+                selected.append((a, b, False))
+    return list(dict.fromkeys(selected)) + _ranges(text)
 
 
 def _block(text: str, start: int, end: int) -> str:
@@ -96,7 +78,7 @@ def _fit(document: dict[str, Any], candidates, allowance: int, metadata: bool, *
     for start, end, atomic in candidates:
         fragments = list(_uncovered(start, end, selected))
         if atomic and sum(len(_block(text, a, b)) for a, b in fragments) > remaining:
-            # Never output a chopped quote as the evidence selected by P0.
+            # Never output a chopped quote as a selected evidence passage.
             continue
         for left, right in fragments:
             cost = len(_block(text, left, right))
@@ -143,27 +125,10 @@ def _strings(value):
                              if isinstance(item, str) and item.strip())) if isinstance(value, list) else []
 
 
-def _event_ranges(document, chunks):
-    """Select original passages; event terms are retrieval hints, never evidence.
-
-    A document retrieved for an event is not necessarily about that event. Exact
-    lexical hits prioritize passages, while P0 determines which chunks may enter.
-    No claim of semantic coverage is made from term matching.
-    """
+def _event_ranges(document):
+    """Prioritize event terms in retained originals, without judging relevance."""
     text = document["raw_text"]
-    valid = [chunk for chunk in chunks if isinstance(chunk, dict)
-             and type(chunk.get("start_char")) is int and type(chunk.get("end_char")) is int
-             and 0 <= chunk["start_char"] < chunk["end_char"] <= len(text)]
-    allowed = sorted((chunk["start_char"], chunk["end_char"]) for chunk in valid
-                     if chunk.get("relevance", "REVIEW") in PRIORITY)
-    if not valid:
-        allowed = [(0, len(text))] if text else []
-    merged = []
-    for left, right in allowed:
-        if merged and left <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(right, merged[-1][1]))
-        else:
-            merged.append((left, right))
+    merged = [(0, len(text))] if text else []
     marker = re.search(r"\n\ncontent:\n", text, re.I)
     body_start = marker.end() if marker else 0
     matches, nearby, term_hits = [], [], {}
@@ -189,16 +154,8 @@ def _event_ranges(document, chunks):
             for queue in queues:
                 if index < len(queue):
                     yield queue[index]
-    # Prioritize one passage per term before repeated mentions of the same term.
-    # P0 quotes keep their original locations and remain protected from clipping.
-    p0 = _ranges(text, valid) if merged else []
-    permitted_p0 = [(max(a, left), min(b, right), atomic)
-                    for a, b, atomic in p0 for left, right in merged
-                    if max(a, left) < min(b, right)]
-    candidates = list(interleave(matches))
-    candidates += [row for row in permitted_p0 if row[2]]
-    candidates += list(interleave(nearby))
-    candidates += [row for row in permitted_p0 if not row[2]]
+    # Cover distinct event terms before repeated mentions, then the saved body.
+    candidates = list(interleave(matches)) + list(interleave(nearby)) + _ranked_ranges(document)
     return list(dict.fromkeys(candidates)), term_hits, merged
 
 
@@ -208,7 +165,7 @@ def _event_schedule(items):
     queues = []
     for event_id in event_ids:
         phases = {}
-        for item in sorted(items, key=lambda row: (PRIORITY[row["label"]], row["index"])):
+        for item in sorted(items, key=lambda row: row["index"]):
             if event_id in item["event_ids"]:
                 phases.setdefault(item["document"].get("search_phase", "initial"), []).append(item)
         queue = []
@@ -234,7 +191,6 @@ def _allocate_events(documents, decisions, options, include_metadata):
     limit = _integer(options.get("max_content_length", 60000), "max_content_length", 0)
     cap = _integer(options.get("max_document_chars", 12000), "max_document_chars")
     seed = min(cap, _integer(options.get("min_document_chars", 2000), "min_document_chars"))
-    decision_by_id = {item["document_id"]: item for item in decisions}
     prepared, ids = [], set()
     for index, source in enumerate(documents):
         if not isinstance(source, dict) or not isinstance(source.get("raw_text"), str):
@@ -244,12 +200,6 @@ def _allocate_events(documents, decisions, options, include_metadata):
         if not isinstance(doc_id, str) or not doc_id or doc_id in ids:
             raise ValueError("Budget document IDs must be non-empty and unique")
         ids.add(doc_id)
-        decision = decision_by_id.get(doc_id, {})
-        label = doc.get("relevance", decision.get("relevance", "UNCLASSIFIED"))
-        if decision.get("relevance") == "IRRELEVANT":
-            label = "IRRELEVANT"
-        if label not in PRIORITY and label != "IRRELEVANT":
-            label = "REVIEW"
         routes = doc.get("event_routes", [])
         routes = routes if isinstance(routes, list) else []
         doc["event_routes"] = routes
@@ -264,16 +214,16 @@ def _allocate_events(documents, decisions, options, include_metadata):
         event_ids = list(dict.fromkeys(_strings(doc.get("event_ids")) + list(route_terms)))
         if len(event_ids) == 1 and event_ids[0] not in route_terms:
             route_terms[event_ids[0]] = _strings(doc.get("event_terms"))
-        candidates, hits, permitted = _event_ranges(doc, decision.get("chunks") or [])
-        prepared.append({"document": doc, "index": index, "label": label,
+        candidates, hits, permitted = _event_ranges(doc)
+        prepared.append({"document": doc, "index": index,
                          "event_ids": event_ids, "candidates": candidates,
                          "route_terms": route_terms, "hits": hits, "permitted": permitted})
-    useful = [item for item in prepared if item["label"] in PRIORITY]
+    useful = prepared
     event_items, _ = _event_schedule([item for item in useful if item["event_ids"] and item["hits"]])
     unmatched, _ = _event_schedule([item for item in useful if item["event_ids"] and not item["hits"]])
     events = list(dict.fromkeys(event for item in prepared for event in item["event_ids"]))
     background = sorted([item for item in useful if not item["event_ids"]],
-                        key=lambda item: (PRIORITY[item["label"]], item["index"]))
+                        key=lambda item: item["index"])
     selected, remaining = {}, limit
     step = max(seed, 512)
     targets = [seed] + list(range(seed + step, cap, step)) + ([cap] if cap > seed else [])
@@ -300,7 +250,7 @@ def _allocate_events(documents, decisions, options, include_metadata):
     event_rank = {event: index for index, event in enumerate(events)}
     ordered = sorted(prepared, key=lambda item: (
         min((event_rank.get(event, len(events)) for event in item["event_ids"]), default=len(events)),
-        PRIORITY.get(item["label"], 3), item["index"]))
+        item["index"]))
     contents, records = [], []
     for item in ordered:
         doc = item["document"]
@@ -311,7 +261,7 @@ def _allocate_events(documents, decisions, options, include_metadata):
         included_terms = [term for term, hits in item["hits"].items()
                           if any(left <= a and b <= right for a, b in hits for left, right in ranges)]
         records.append({"document_id": doc["document_id"], "title": doc.get("title", ""),
-            "url": doc.get("url", ""), "relevance": item["label"],
+            "url": doc.get("url", ""),
             "search_phase": doc.get("search_phase", "initial"), "event_ids": item["event_ids"],
             "event_terms_matched": list(item["hits"]), "event_terms_included": included_terms,
             "event_routes": [{"event_id": event, "matched_terms": [term for term in terms if term in item["hits"]],
@@ -322,23 +272,18 @@ def _allocate_events(documents, decisions, options, include_metadata):
             "builder_chars": len(value), "included": bool(value),
             "truncated": bool(value) and chars < len(doc["raw_text"]),
             "source_ranges": [{"start_char": a, "end_char": b} for a, b in ranges],
-            "omission_reason": (None if value else "filtered_irrelevant" if item["label"] == "IRRELEVANT"
-                else "empty_source" if not doc["raw_text"] else "no_permitted_source_range"
+            "omission_reason": (None if value else "empty_source" if not doc["raw_text"] else "no_permitted_source_range"
                 if not item["permitted"] else "insufficient_budget_or_document_cap")})
     used = sum(map(len, contents))
     if used > limit or remaining != limit - used:
         raise AssertionError("Internal total context budget overflow")
     summary = {"candidate_documents": len(documents), "included_documents": len(contents),
-        "included_by_label": dict(Counter(row["relevance"] for row in records if row["included"])),
         "omitted_documents": sum(not row["included"] for row in records),
         "truncated_documents": sum(row["truncated"] for row in records),
         "max_content_length": limit, "used_chars": used, "unused_chars": remaining,
         "max_document_chars": cap, "min_document_chars": seed}
-    warnings = []
-    missed = [row["document_id"] for row in records
-              if row["relevance"] in {"CORE", "CONTEXT"} and not row["included"]]
-    if missed:
-        warnings.append("Budget could not admit CORE/CONTEXT sources: " + ", ".join(missed))
+    missed = [row["document_id"] for row in records if row["original_chars"] and not row["included"]]
+    warnings = ["Budget could not admit selected sources: " + ", ".join(missed)] if missed else []
     coverage = [{"event_id": event,
         "routed_document_ids": [row["document_id"] for row in records if event in row["event_ids"]],
         "included_document_ids": [row["document_id"] for row in records
@@ -358,12 +303,11 @@ def allocate_context(
     documents: list[dict[str, Any]], decisions: list[dict[str, Any]],
     config: dict[str, Any], *, include_metadata: bool = True,
 ) -> dict[str, Any]:
-    """Reserve a small share for CORE/CONTEXT before expanding any long source.
+    """Budget source order and event coverage without relevance labels.
 
-    Allocate each search phase before the next, so follow-ups use only remaining
-    space and never shrink earlier excerpts. Within each phase, fill CORE/CONTEXT
-    before REVIEW. P0 labels are reused as-is; source quality is not rescored.
-    The limit is a CHARACTER budget for source content, not a model token limit.
+    The decisions positional argument is accepted only for older callers; its
+    contents are ignored. Neither archived labels nor chunk decisions can drop
+    or reorder search-selected sources. Limits count characters, not tokens.
     """
     options = config.get("all_content_config", {}) or {}
     if not isinstance(options, dict):
@@ -376,7 +320,6 @@ def allocate_context(
     unlimited = limit is None or (type(limit) is float and math.isinf(limit) and limit > 0)
     if not unlimited:
         limit = _integer(limit, "max_content_length", 0)
-    decision_by_id = {item["document_id"]: item for item in decisions}
     prepared, ids = [], set()
     for index, source in enumerate(documents):
         if not isinstance(source, dict) or not isinstance(source.get("raw_text"), str):
@@ -386,27 +329,18 @@ def allocate_context(
         if not isinstance(doc_id, str) or not doc_id or doc_id in ids:
             raise ValueError("Budget document IDs must be non-empty and unique")
         ids.add(doc_id)
-        label = doc.get("relevance", "UNCLASSIFIED")
-        if label not in PRIORITY and label != "IRRELEVANT":
-            label = "REVIEW"
-        chunks = decision_by_id.get(doc_id, {}).get("chunks", [])
-        prepared.append({"document": doc, "label": label, "index": index,
+        prepared.append({"document": doc, "index": index,
                          "phase": SEARCH_PHASE.get(doc.get("search_phase"), 0),
-                         "candidates": _ranges(doc["raw_text"], chunks or [])})
+                         "candidates": _ranked_ranges(doc)})
     if unlimited:
         limit = sum(len(render_document(p["document"]) if include_metadata else
                         p["document"]["raw_text"]) for p in prepared)
-    ordered = sorted(prepared, key=lambda p: (p["phase"], PRIORITY.get(p["label"], 3), p["index"]))
-    groups = []
-    for _, phase in groupby(ordered, key=lambda p: p["phase"]):
-        phase = list(phase)
-        groups.extend([p for p in phase if p["label"] in labels]
-                      for labels in ({"CORE", "CONTEXT"}, {"REVIEW", "UNCLASSIFIED"}))
+    ordered = sorted(prepared, key=lambda p: (p["phase"], p["index"]))
+    groups = [list(phase) for _, phase in groupby(ordered, key=lambda p: p["phase"])]
     selected: dict[str, tuple[str, list[tuple[int, int]]]] = {}
     remaining = limit
     for group in groups:
-        # First secure breadth within the group, then expand. CONTEXT gets a seed
-        # before long CORE documents can consume the entire remaining budget.
+        # Secure breadth within each phase before expanding long documents.
         for target in (seed, cap):
             for item in group:
                 doc = item["document"]
@@ -429,19 +363,17 @@ def allocate_context(
         chars = sum(end - start for start, end in ranges)
         records.append({
             "document_id": doc["document_id"], "title": doc.get("title", ""),
-            "url": doc.get("url", ""), "relevance": item["label"],
+            "url": doc.get("url", ""),
             "search_phase": doc.get("search_phase", "initial"),
             "original_chars": len(doc["raw_text"]), "included_source_chars": chars,
             "builder_chars": len(value), "included": bool(value),
             "truncated": bool(value) and chars < len(doc["raw_text"]),
             "source_ranges": [{"start_char": a, "end_char": b} for a, b in ranges],
-            "omission_reason": (None if value else "filtered_irrelevant" if
-                                item["label"] == "IRRELEVANT" else "empty_source" if
+            "omission_reason": (None if value else "empty_source" if
                                 not doc["raw_text"] else "insufficient_budget_or_document_cap"),
         })
     summary = {
         "candidate_documents": len(documents), "included_documents": len(contents),
-        "included_by_label": dict(Counter(r["relevance"] for r in records if r["included"])),
         "omitted_documents": sum(not r["included"] for r in records),
         "truncated_documents": sum(r["truncated"] for r in records),
         "max_content_length": limit, "used_chars": sum(map(len, contents)),
@@ -449,17 +381,14 @@ def allocate_context(
     }
     if summary["used_chars"] > limit:
         raise AssertionError("Internal total context budget overflow")
-    warnings = []
-    missed = [r["document_id"] for r in records if r["relevance"] in {"CORE", "CONTEXT"}
-              and not r["included"]]
-    if missed:
-        warnings.append("Budget could not admit CORE/CONTEXT sources: " + ", ".join(missed))
+    missed = [row["document_id"] for row in records if row["original_chars"] and not row["included"]]
+    warnings = ["Budget could not admit selected sources: " + ", ".join(missed)] if missed else []
     return {"contents": contents, "report": {"version": "context-budget-v1",
             "unit": "characters", "summary": summary, "warnings": warnings, "documents": records}}
 
 
 def main() -> None:
-    """Repack an existing P0 run without searching, classifying, or building."""
+    """Repack saved sources without searching or building."""
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("--input-dir", required=True)
     parser.add_argument("--output-dir", help="Default: INPUT_DIR/budget_review")
@@ -471,10 +400,12 @@ def main() -> None:
     target = Path(args.output_dir) if args.output_dir else source / "budget_review"
     if source.resolve() == target.resolve():
         parser.error("Use a separate output directory to preserve the original run")
-    docs = json.loads((source / "filtered_documents.json").read_text(encoding="utf-8"))
-    path = source / "relevance_decisions.json"
-    decisions = json.loads(path.read_text(encoding="utf-8"))["documents"] if path.exists() else []
-    result = allocate_context(docs, decisions, {"all_content_config": {
+    # Prefer the complete source archive; old filtered archives remain readable.
+    path = source / "retrieved_documents.json"
+    if not path.exists():
+        path = source / "filtered_documents.json"
+    docs = json.loads(path.read_text(encoding="utf-8"))
+    result = allocate_context(docs, [], {"all_content_config": {
         "max_content_length": args.max_chars, "max_document_chars": args.max_document_chars,
         "allocation_strategy": args.allocation_strategy}})
     target.mkdir(parents=True, exist_ok=True)

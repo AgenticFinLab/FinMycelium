@@ -9,9 +9,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from finmy.reconstruction_scope import read_reconstruction, search_query
-from finmy.runner.relevance_filter import filter_documents, make_document, COMPANY_CLASSIFY_PROMPT
+from finmy.runner.source_documents import make_document
+from source_test_support import source_batch
 from finmy.subject_graph.runner import build_from_contents
-import test_event_relevance_integration as web
+import test_source_integration as web
 
 
 def config(mode="person"):
@@ -30,23 +31,6 @@ class SubjectScopeTest(unittest.TestCase):
             c["builder_config"]["reconstruction"]["subject"]["scope"] = "Selected project only"
             self.assertEqual(read_reconstruction(c)["subject"]["scope"], "Selected project only")
 
-    def test_company_filter_uses_company_prompt_and_scope_in_cache(self):
-        calls = []
-        def complete(system, payload):
-            calls.append((system, payload))
-            return json.dumps({"decisions": [{"chunk_id": chunk["chunk_id"], "relevance": "CORE",
-                "confidence": .99, "event_time": None, "matched_entities": [],
-                "reason": "Fixture", "evidence": chunk["text"]} for chunk in payload["chunks"]]})
-        c = config("company")
-        docs = [make_document("Example launched a product in 2023.", {}, "file")]
-        with tempfile.TemporaryDirectory() as tmp:
-            result = filter_documents(docs, "history", [], c, tmp, completion=complete)
-            self.assertEqual(len(calls), 1)
-            self.assertEqual(calls[0][0], COMPANY_CLASSIFY_PROMPT)
-            self.assertEqual(calls[0][1]["reconstruction"]["mode"], "company")
-            self.assertEqual(result["summary"]["kept"], 1)
-            report = json.loads((Path(tmp) / "relevance_decisions.json").read_text())
-            self.assertEqual(report["version"], "company-relevance-v1")
 
     def test_saved_runner_rejects_empty_input_before_loading_runtime(self):
         for contents in ([], "text", [None], [" "]):
@@ -73,7 +57,7 @@ class SubjectScopeTest(unittest.TestCase):
 
 
 class NativeServiceTest(unittest.TestCase):
-    setUp = web.WebRelevanceIntegrationTest.setUp
+    setUp = web.WebSourceIntegrationTest.setUp
 
     def test_service_prefers_native_subject_and_bypasses_legacy_pipeline(self):
         c = config()

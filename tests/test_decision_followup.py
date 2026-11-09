@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from finmy.runner.decision_followup import collect_decision_followup, _supported_names
-from finmy.runner.relevance_filter import make_document
+from finmy.runner.source_documents import make_document
 
 
 QUOTE = "Berkshire bought shares in Example Energy in 2023."

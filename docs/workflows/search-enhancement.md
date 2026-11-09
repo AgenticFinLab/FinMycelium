@@ -204,7 +204,7 @@ rendering. Person defaults to SparseRagBuilder; company requires AgentEventBuild
 model/provider; `mode: simple` retains historical acquisition.
 
 The subject bridge reads the version-pinned complete material, preserves provenance
-through P0, and performs one final 60,000-character initial allocation. Selected
+without a second relevance classifier, and performs one final 60,000-character initial allocation. Selected
 source metadata is joined by document ID into `user_query.extras.source_registry`.
 The first person EPG then supplies its existing events directly to the same search
 algorithm. All supplementary events share finite search/read/model ceilings and

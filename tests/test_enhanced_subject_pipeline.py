@@ -79,7 +79,7 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                 build.assert_called_once()
                 followup.assert_not_called()
                 contents, query, keywords, build_config = build.call_args.args
-                self.assertEqual(contents, [self.documents[0]["raw_text"]])
+                self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [self.documents[0]["raw_text"]])
                 self.assertEqual((query, keywords), (self.query, self.keywords))
                 self.assertEqual(build_config["builder_config"]["reconstruction"]["mode"], mode)
                 registry = build_config["source_registry"]["saved_0"]
@@ -104,7 +104,7 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
             with self.subTest(status=status), \
                  patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources",
                        return_value={"status": status, "reports": [], "documents": documents}), \
-                 patch("finmy.runner.relevance_filter.filter_documents") as relevance, \
+                 patch("finmy.runner.source_documents.prepare_documents") as relevance, \
                  patch("finmy.subject_graph.runner.build_from_contents") as build, \
                  patch("finmy.runner.event_refinement.build_with_draft_event_followup") as followup:
                 result = run_search_pipeline(self.config(followup=True), self.query,
@@ -168,7 +168,7 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
 
         def enrich(graph, sources, *args, **kwargs):
             order.append("event_enrichment")
-            self.assertEqual(sources[0]["content"], DETAIL)
+            self.assertEqual(sources[0]["content"].split("\n\n", 1)[1], DETAIL)
             self.assertEqual(sources[0]["event_ids"], [package["event"][0]["event_id"]])
             return append_grounded_detail(graph), {"model_calls": 2, "status": "enriched"}
 

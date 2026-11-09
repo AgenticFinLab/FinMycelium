@@ -703,7 +703,7 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser,
     from finmy.runner.scoped_search_api import search
     from finmy.runner.scoped_page import parse
     from finmy.runner.subject_search import collect_subject_sources
-    from finmy.runner.relevance_filter import filter_documents
+    from finmy.runner.source_documents import prepare_documents
     from finmy.runner.context_budget import allocate_context
     from finmy.runner.decision_followup import collect_decision_followup
     from finmy.runner.event_followup_config import initial_search_options, followup_enabled
@@ -756,32 +756,28 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir, parser,
             search, parse, target, progress=logger.info, usage=usage)
     contents = [doc["raw_text"] for doc in documents]
     _write_json(target / f"All_Text_Content_{_timestamp()}.json", contents)
-    filtered = filter_documents(documents, main_input, keywords, config, target,
-                                progress=logger.info, usage=usage)
+    documents = prepare_documents(documents, main_input, keywords, config, target)
     initial_config = copy.deepcopy(config)
     initial_config["subject_search"] = options
     # The shared agent already owns gap-driven search and its cumulative ledger.
     # Starting the old follow-up collector here would open an unaccounted budget.
     extra = [] if enhanced or reconstruction["mode"] != "person" else collect_decision_followup(
-        filtered, main_input, keywords, reconstruction["subject"],
+        {"documents": documents}, main_input, keywords, reconstruction["subject"],
         initial_config, target, logger.info, search=search, parse=parse, usage=usage,
         known_urls=[d.get("url") for d in documents])
     if extra:
-        documents += extra
-        filtered = filter_documents(documents, main_input, keywords, config, target,
-                                    progress=logger.info, usage=usage)
-    packed = allocate_context(filtered["documents"], filtered["decisions"], config,
-                              include_metadata=filtered["summary"]["enabled"])
+        documents = prepare_documents(documents + extra, main_input, keywords, config, target)
+    packed = allocate_context(documents, [], config, include_metadata=True)
     _write_json(target / "context_budget_report.json", packed["report"])
     _write_json(target / "builder_input_contents.json", packed["contents"])
     if not packed["contents"]:
         raise ValueError("No relevant source text fits the initial context budget.")
     if enhanced:
         from finmy.subject_graph.runner import with_source_registry
-        config = with_source_registry(config, filtered["documents"], packed)
+        config = with_source_registry(config, documents, packed)
     if followup_enabled(config):
         result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
-            config, target, filtered=filtered, documents=documents, usage=usage,
+            config, target, documents=documents, usage=usage,
             search=None if enhanced else search, parse=None if enhanced else parse,
             progress=logger.info)
     else:

@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 """Shared search reaches the existing subject UI build contract without live APIs."""
 import copy
 import json
@@ -6,14 +7,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import test_event_relevance_integration as legacy
-from finmy.runner.relevance_filter import filter_documents
+import test_source_integration as legacy
+from source_test_support import source_batch
 from finmy.subject_graph.runner import with_source_registry
 
 
 class EnhancedSubjectUI(unittest.TestCase):
     def setUp(self):
-        legacy.WebRelevanceIntegrationTest.setUp(self)
+        legacy.WebSourceIntegrationTest.setUp(self)
         self.errors = []
         self.service.st.error = self.errors.append
         self.search_calls = []
@@ -103,14 +104,14 @@ class EnhancedSubjectUI(unittest.TestCase):
         self.assertEqual(len(captures), 1)
         contents, query, keywords, directory = captures[0]
         expected = ["Local URL original.", "Local file original."] + [d["raw_text"] for d in self.search_result["documents"]]
-        self.assertEqual(contents, expected)
+        self.assertEqual([text.split("\n\n", 1)[1] for text in contents], expected)
         self.assertEqual(query, "Trace documented experiences")
         self.assertEqual(keywords, ["subject"])
         documents = service._draft_evidence["documents"]
         self.assertEqual([d.get("source") for d in documents], ["url", "file", "exa", "bocha", "exa"])
-        self.assertEqual(documents[2:], self.search_result["documents"])
+        self.assertEqual([d["raw_text"] for d in documents[2:]], [d["raw_text"] for d in self.search_result["documents"]])
         self.assertEqual(service._draft_evidence["usage"]["search_model_calls"], 4)
-        self.assertEqual(json.loads((Path(directory) / "builder_input_contents.json").read_text()), expected)
+        self.assertEqual(json.loads((Path(directory) / "builder_input_contents.json").read_text()), contents)
         args = self.search_calls[0][0]
         self.assertEqual(args[3]["search_config"]["enhancement"], original["search_config"]["enhancement"])
         self.assertEqual(args[3]["builder_config"]["lm_name"], "deepseek/build-only-model")
@@ -133,7 +134,7 @@ class EnhancedSubjectUI(unittest.TestCase):
                 self.search_result = {"status": status, "documents": documents, "reports": []}
                 service = self.service.ReconstructionService(self.config())
                 with patch.object(service, "_run_pipeline") as build, \
-                     patch.object(self.service, "filter_documents") as relevance:
+                     patch.object(self.service, "prepare_documents") as relevance:
                     with self.assertRaisesRegex(ValueError, "Enhanced search did not finish"):
                         service.run_reconstruction("Trace documented experiences", [], None)
                     build.assert_not_called()
@@ -151,7 +152,7 @@ class EnhancedSubjectUI(unittest.TestCase):
                 service = self.service.ReconstructionService(config)
                 service._run_pipeline = lambda contents, *args: contents
                 contents = service.run_reconstruction("Trace documented experiences", [], None)
-                self.assertEqual(contents, [doc["raw_text"] for doc in self.search_result["documents"]])
+                self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [doc["raw_text"] for doc in self.search_result["documents"]])
         self.assertEqual(len(self.search_calls), 2)
 
     def test_null_legacy_subject_options_keep_agent_mode_runnable(self):
@@ -161,36 +162,23 @@ class EnhancedSubjectUI(unittest.TestCase):
         service = self.service.ReconstructionService(config)
         service._run_pipeline = lambda contents, *args: contents
         contents = service.run_reconstruction("Trace documented experiences", [], None)
-        self.assertEqual(contents, [doc["raw_text"] for doc in self.search_result["documents"]])
+        self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [doc["raw_text"] for doc in self.search_result["documents"]])
         self.assertEqual(len(self.search_calls), 1)
 
-    def test_agent_sources_still_pass_existing_relevance_and_character_budget(self):
+    def test_agent_selection_is_not_reclassified_and_budget_still_applies(self):
         self.forbid_legacy()
         self.search_result["documents"][0]["raw_text"] = "Original execution detail. " * 200
+        self.search_result["documents"][1]["relevance"] = "IRRELEVANT"
         config = self.config()
-        config["relevance_filter"] = {"enabled": True, "cache": False}
-        config["all_content_config"] = {"max_content_length": 1800, "max_document_chars": 1300}
+        config["relevance_filter"] = {"enabled": True, "max_model_calls": 0}
+        config["all_content_config"] = {"max_content_length": 2500, "max_document_chars": 1300}
         service = self.service.ReconstructionService(config)
-        seen = []
-
-        def complete(system, payload):
-            return json.dumps({"decisions": [{"chunk_id": c["chunk_id"],
-                "relevance": "IRRELEVANT" if c["title"] == "Second" else "CORE",
-                "confidence": .99, "event_time": None, "matched_entities": [],
-                "reason": "Offline source screening", "evidence": c["text"][:30]}
-                for c in payload["chunks"]]})
-
-        def relevance(*args, **kwargs):
-            seen.extend(copy.deepcopy(args[0]))
-            return filter_documents(*args, **kwargs, completion=complete)
-
         service._run_pipeline = lambda contents, *args: contents
-        with patch.object(self.service, "filter_documents", relevance):
-            contents = service.run_reconstruction("Trace documented experiences", [], None)
-        self.assertEqual(seen[0]["raw_text"], self.search_result["documents"][0]["raw_text"])
-        self.assertLessEqual(sum(map(len, contents)), 1800)
-        self.assertFalse(any("Second original" in text for text in contents))
+        contents = service.run_reconstruction("Trace documented experiences", [], None)
+        self.assertLessEqual(sum(map(len, contents)), 2500)
+        self.assertTrue(any("Second original" in text for text in contents))
         self.assertTrue(any("Original execution" in text for text in contents))
+        self.assertFalse(list(self.path.rglob("relevance_decisions.json")))
 
     def test_shared_search_reaches_native_person_json_return_path(self):
         self.forbid_legacy()

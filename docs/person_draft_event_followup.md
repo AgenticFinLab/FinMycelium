@@ -18,7 +18,7 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 选择公司时须同时配置 `builder_type: AgentEventBuilder`。
 搜索的 `target_type` 不替代 builder 的主体、覆盖期和范围配置。
 
-初次搜索使用原始请求和配置主体，完成后将选中的原文送入 P0 与初版预算分配。
+初次搜索使用原始请求和配置主体，完成后将选中的原文直接送入初版预算分配。
 随后直接读取初版已经存在的 event，为每个 event 调用同一套共享搜索算法；
 薄事件只有名称也可以检索。新算法自行决定搜索、阅读、补缺与停止，
 不再叠加旧的 decision-followup 搜索。
@@ -32,10 +32,10 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
 
 ## 流程与预算
 
-1. 原始搜索、P0 与 builder 正常生成初版 Person EPG；原初始检索额度保持完整。
+1. 原始搜索与 builder 正常生成初版 Person EPG；原初始检索额度保持完整。
 2. 读取初版已有 event，以名称、实体、具体活动和年份线索进行补搜。
    只有名称的薄事件也可检索，无需用户预先填写 event 列表。
-3. 补搜使用独立的检索和 P0 计数，只处理新增来源。
+3. 补搜使用独立的检索计数，只处理新增来源；相关性由搜索 Agent 判断。
 4. 新资料进入单独约 60,000 字符证据池，不重新截断或替换第一轮证据。
 5. 对有新来源且有剩余额度的 event，先各提交一轮增补提议和模型审核，再用剩余额度定向修订失败项。
    提议为空或结构/引文预检失败时不再调用审核。所有尝试均计入额度。
@@ -56,8 +56,6 @@ event_followup:
   max_parse_calls: 40
   max_search_model_calls: 30  # agent 搜索决策总次数，与增补提议/审核独立
   max_elapsed_seconds: 300  # 补搜采集阶段，不含后续模型处理
-  max_relevance_elapsed_seconds: 300  # 补充 P0 单独从筛选开始计时
-  max_relevance_model_calls: 12
   max_model_calls: 24      # 所有 event 的提议、审核、修订、重审和重试总次数
   max_repair_rounds_per_event: 1  # 初次尝试之后的修订轮数，0 禁用，允许 0..3
   max_output_tokens: 8192  # 单次输出还受原 generation_config 较小上限约束
@@ -78,12 +76,11 @@ event_followup:
 初始 builder 的 `max_calls` 与补充 `max_model_calls` 分别计数。
 初次构图已用完自身额度，不会自动禁止独立的补充阶段。
 预算耗尽时报告具体未执行的 event；不会宣称所有事件均已深挖。
-补搜和补充 P0 分别使用有限计时器，P0 批次之间不会重新开始计时。
-筛选失败/待审、筛选额度耗尽与已判无关的来源分别报告。
+补搜使用有限计时器；不再设置独立的相关性筛选调用或时间额度。
 
 ## 从现有资料续跑
 
-补搜采集与补充 P0 分别计时，采集耗尽时间不会导致 P0 在开始前就被阻塞。
+补充来源直接进入字符预算分配与事件增补，不再经过第二次相关性分类。
 
 可复用本次已完成的初版和补搜资料，不再执行搜索、网页解析或初始构图：
 
@@ -96,16 +93,11 @@ python -m finmy.runner.resume_event_enrichment \
 
 把路径替换为本机实际路径，先解压运行包。`--config` 使用带有模型配置的原 pipeline YAML；
 人物与时间范围直接恢复自归档，不重新解释用户请求。输出目录必须为空或尚不存在。
-该命令只重新执行补充 P0 与事件增补/审核，仍受各自调用和时间上限约束；
+该命令只重新执行补充来源预算分配与事件增补/审核，仍受字符和增补调用上限约束；
 原运行文件不变。命令会打印最终 HTML 和报告路径。
 
-新增状态 `relevance_time_budget_exhausted`、`relevance_call_budget_exhausted`、
-`relevance_processing_failed`、`unreviewed_sources` 区分筛选阻塞原因。
-`no_new_relevant_sources` 保留给已审查且无相关来源的情况。
-`resume_provenance.json` 记录复用路径及本次新增搜索/解析/初始构图调用数（均为零）。
-
-真实归档资料的离线回放已验证：同样 9 篇、12 块可执行 3 批 P0 并进入增补函数。
-回放使用模拟分类结果，只证明计时与执行链路，不证明 9 篇都相关或最终内容质量。
+旧的 relevance 配置与标签不再参与执行，也不再生成相关性分类报告。
+`resume_provenance.json` 继续记录复用路径及本次新增搜索/解析/初始构图调用数（均为零）。
 
 ## 保留与增补约束
 
@@ -200,7 +192,7 @@ python -m finmy.runner.resume_event_enrichment \
 
 - `initial_person_epg.json`：初版图快照。
 - `draft_event_search_plan.json`：实际查询、逐事件搜索状态和遗漏原因。
-- `event_enrichment/relevance/`：只针对补充资料的 P0 记录。
+- `event_enrichment/sources/`：补充原文、文档 ID、声明的范围与检索来源档案。
 - `event_enrichment/context_budget_report.json`：额外证据池分配。
 - `event_enrichment/supplementary_input_contents.json`、`supplementary_sources.json`：补充输入。
 - `event_enrichment/event_XXXX_propose_request.json` / `review_request.json` 与响应：事件提议与审核。

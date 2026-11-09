@@ -7,7 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from finmy.runner.relevance_filter import filter_documents, make_document
+from finmy.runner.source_documents import make_document
+from source_test_support import source_batch
 from finmy.runner.context_budget import allocate_context
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,10 +75,7 @@ class ContextBudgetIntegrationTest(unittest.TestCase):
             self.builder_calls.append(contents)
             return {"contents": contents}
         instance._run_pipeline = build
-        def classify(*args, **kwargs):
-            return filter_documents(*args, **kwargs, completion=self.completion)
-        with patch.object(self.service, "filter_documents", classify):
-            value = instance.run_reconstruction("fixture", None, None)
+        value = instance.run_reconstruction("fixture", None, None)
         return value, next(self.path.glob("pipeline_output_*"))
 
     def test_report_matches_exact_builder_input(self):
@@ -91,7 +89,7 @@ class ContextBudgetIntegrationTest(unittest.TestCase):
         self.assertIn("https://example.test/letter", saved[1])
         raw = json.loads(next(directory.glob("All_Text_Content_*.json")).read_text())
         self.assertGreater(sum(map(len, raw)), 6000)
-        self.assertTrue((directory / "filtered_documents.json").exists())
+        self.assertTrue((directory / "retrieved_documents.json").exists())
 
     def test_disabled_filter_needs_no_saved_decision_file(self):
         value, directory = self.run_pipeline(enabled=False)
@@ -119,9 +117,9 @@ class ContextBudgetIntegrationTest(unittest.TestCase):
             with self.subTest(filter_enabled=enabled):
                 config = {"relevance_filter": {"enabled": enabled},
                           "all_content_config": {"max_content_length": 4000}}
-                first = filter_documents(docs[:1], "fixture", [], config, self.path,
+                first = source_batch(docs[:1], "fixture", [], config, self.path,
                                          completion=self.completion)
-                combined = filter_documents(docs, "fixture", [], config, self.path,
+                combined = source_batch(docs, "fixture", [], config, self.path,
                                             completion=self.completion)
                 self.assertEqual([d["search_phase"] for d in combined["documents"]],
                                  [d["search_phase"] for d in docs])

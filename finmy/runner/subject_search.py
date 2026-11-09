@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from finmy.runner.relevance_filter import make_document
+from finmy.runner.source_documents import make_document
 from finmy.runner.scoped_search import plan_search, publication_allowed
 
 

@@ -11,7 +11,8 @@ from unittest.mock import patch
 from finmy.person_epg.validation import validate_person_epg
 from finmy.runner.context_budget import allocate_context
 from finmy.runner.event_refinement import build_with_draft_event_followup
-from finmy.runner.relevance_filter import filter_documents, make_document
+from finmy.runner.source_documents import make_document
+from source_test_support import source_batch
 
 FIXTURE = Path(__file__).parent / "fixtures/buffett_person_epg_preview.json"
 DETAIL = "The additional source documents a later management conversation."
@@ -65,7 +66,7 @@ class EventRefinementTests(unittest.TestCase):
         self.new_text = "OXY investment NEW evidence describes execution and management communication. " * 18
         self.documents = [make_document(self.original_text,
             {"title": "Original", "url": "https://example.com/original", "datepublished": "2023-05-06"}, "bocha")]
-        self.filtered = filter_documents(self.documents, "Buffett 2022–2023", [], self.config,
+        self.filtered = source_batch(self.documents, "Buffett 2022–2023", [], self.config,
             self.root / "initial_filter", completion=self.classify)
         self.contents = allocate_context(self.filtered["documents"], self.filtered["decisions"],
             self.config)["contents"]
@@ -110,7 +111,7 @@ class EventRefinementTests(unittest.TestCase):
 
     def run_flow(self, **kwargs):
         return build_with_draft_event_followup(self.contents, "Buffett 2022–2023", [],
-            self.config, self.root, filtered=self.filtered, documents=self.documents,
+            self.config, self.root, documents=self.documents,
             usage=self.usage, build=kwargs.pop("build", self.build),
             completion=kwargs.pop("completion", self.completion),
             enrich=kwargs.pop("enrich", self.enrich),
@@ -146,7 +147,7 @@ class EventRefinementTests(unittest.TestCase):
         self.assertEqual(self.report()["selected_builder_directory"], directory)
         self.assertTrue((Path(directory) / "FinalPersonEPG.json").exists())
         self.assertTrue((Path(directory) / "FinalPersonEPG.html").exists())
-        self.assertTrue(self.classified)
+        self.assertFalse(self.classified)
         self.assertFalse(any("ORIGINAL evidence" in text for text in self.classified))
         self.assertEqual(self.report()["supplementary_model_calls"], 2)
 
@@ -162,7 +163,7 @@ class EventRefinementTests(unittest.TestCase):
         self.assertGreater(supplemental["started_at"], 0)
         self.assertLessEqual(supplemental["search_calls"], 2)
         self.assertLessEqual(supplemental["parse_calls"], 4)
-        self.assertGreater(supplemental["relevance_model_calls"], 0)
+        self.assertNotIn("relevance_model_calls", supplemental)
 
     def test_supplementary_characters_have_their_own_limit(self):
         self.config["all_content_config"]["max_content_length"] = 1000
@@ -186,16 +187,6 @@ class EventRefinementTests(unittest.TestCase):
         self.assertFalse(self.enrich_calls)
         self.assertEqual(json.loads((self.root / "builder_input_contents.json").read_text()), self.contents)
 
-    def test_irrelevant_added_sources_do_not_enrich(self):
-        def reject(system, payload):
-            value = json.loads(self.classify(system, payload))
-            for row in value["decisions"]:
-                row["relevance"] = "IRRELEVANT"
-            return json.dumps(value)
-        result, _ = self.run_flow(completion=reject)
-        self.assertIs(result, self.draft)
-        self.assertEqual(self.report()["status"], "no_new_relevant_sources")
-        self.assertFalse(self.enrich_calls)
 
     def test_tiny_supplementary_budget_keeps_initial(self):
         self.config["event_followup"]["max_content_length"] = 1
@@ -267,7 +258,7 @@ class EventRefinementTests(unittest.TestCase):
         for name, value in snapshots.items():
             self.assertEqual(json.loads((self.root / name).read_text()), value)
 
-    def test_expired_acquisition_clock_does_not_prevent_fresh_bounded_p0(self):
+    def test_expired_acquisition_clock_does_not_block_source_packing(self):
         clock = [100.0]
         source = make_document(self.new_text, {"title": "New execution account",
             "url": "https://example.com/new", "datepublished": "2023-05-07"}, "bocha")
@@ -282,52 +273,20 @@ class EventRefinementTests(unittest.TestCase):
         self.assert_original_rows_preserved(result)
         self.assertEqual(self.report()["status"], "enriched")
         self.assertEqual(self.report()["acquisition_elapsed_seconds"], 301)
-        self.assertEqual(self.report()["relevance"]["usage"]["started_at"], 401)
-        self.assertGreater(self.report()["relevance"]["summary"]["model_calls"], 0)
-        self.assertEqual(self.report()["relevance"]["max_elapsed_seconds"], 300)
+        self.assertNotIn("relevance", self.report())
         self.assertEqual(self.config["subject_search"]["max_elapsed_seconds"], 300)
 
-    def test_p0_failure_does_not_claim_sources_were_reviewed_as_irrelevant(self):
-        def fail(*args):
-            raise RuntimeError("https://private.test/?api_key=SECRET")
-        result, _ = self.run_flow(completion=fail)
-        self.assertIs(result, self.draft)
-        report = self.report()
-        self.assertEqual(report["status"], "relevance_processing_failed")
-        self.assertGreater(report["relevance"]["summary"]["processing_failed_batches"], 0)
-        self.assertGreater(report["relevance"]["summary"]["labels"]["REVIEW"], 0)
-        self.assertNotIn("SECRET", json.dumps(report))
-        decisions = (self.root / "event_enrichment/relevance/relevance_decisions.json").read_text()
-        self.assertNotIn("SECRET", decisions)
-
-    def test_supplementary_p0_own_time_limit_still_blocks_before_submission(self):
-        clock = [100.0]
-        self.config["event_followup"]["max_relevance_elapsed_seconds"] = 10
-        def progress(message):
-            if message.startswith("Relevance filtering:"):
-                clock[0] += 11
-        with patch("finmy.runner.event_refinement.time.monotonic", side_effect=lambda: clock[0]):
-            result, _ = self.run_flow(progress=progress)
-        self.assertIs(result, self.draft)
-        report = self.report()
-        self.assertEqual(report["status"], "relevance_time_budget_exhausted")
-        self.assertEqual(report["relevance"]["summary"]["model_calls"], 0)
-        self.assertGreater(report["relevance"]["summary"]["blocked_reasons"]["time_budget_exhausted"], 0)
-        self.assertEqual(report["relevance"]["max_elapsed_seconds"], 10)
-
-    def test_supplementary_p0_call_limit_is_distinct_from_irrelevance(self):
+    def test_obsolete_relevance_options_and_completion_cannot_block_enrichment(self):
+        self.config["relevance_filter"] = {"enabled": True, "max_model_calls": 0}
         self.config["event_followup"]["max_relevance_model_calls"] = 0
-        result, _ = self.run_flow()
-        self.assertIs(result, self.draft)
-        self.assertEqual(self.report()["status"], "relevance_call_budget_exhausted")
-        self.assertEqual(self.report()["relevance"]["summary"]["model_calls"], 0)
+        self.config["event_followup"]["max_relevance_elapsed_seconds"] = 0
+        result, _ = self.run_flow(completion=lambda *args: self.fail("Removed classifier called"))
+        self.assert_original_rows_preserved(result)
+        self.assertEqual(self.report()["status"], "enriched")
+        self.assertNotIn("relevance", self.report())
+        self.assertFalse((self.root / "event_enrichment/relevance").exists())
 
-    def test_unreviewed_model_decisions_are_not_negative_classification(self):
-        result, _ = self.run_flow(completion=lambda *args: json.dumps({"decisions": []}))
-        self.assertIs(result, self.draft)
-        self.assertEqual(self.report()["status"], "unreviewed_sources")
-
-    def test_archived_supplementary_sources_skip_acquisition_and_use_same_p0(self):
+    def test_archived_supplementary_sources_skip_acquisition_and_preserve_sources(self):
         source = make_document(self.new_text, {"title": "Previously fetched",
             "url": "https://example.com/archived", "datepublished": "2023-05-07"}, "bocha")
         source["event_ids"] = [self.package["event"][0]["event_id"]]
@@ -340,7 +299,7 @@ class EventRefinementTests(unittest.TestCase):
         self.assertTrue(self.report()["acquisition_reused"])
         self.assertEqual(self.report()["supplemental_usage"]["search_calls"], 0)
         self.assertEqual(self.report()["supplemental_usage"]["parse_calls"], 0)
-        self.assertGreater(self.report()["relevance"]["summary"]["model_calls"], 0)
+        self.assertNotIn("relevance", self.report())
 
 
 if __name__ == "__main__":

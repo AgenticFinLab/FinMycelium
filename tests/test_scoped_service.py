@@ -1,24 +1,25 @@
+from contextlib import nullcontext
 """The UI service forwards inferred periods through retrieval and building."""
 import copy
 import json
 import unittest
 from unittest.mock import patch
 
-import test_event_relevance_integration as legacy
-from test_event_relevance_integration import module
+import test_source_integration as legacy
+from test_source_integration import module
 from test_subject_search_integration import BODY, result
-from finmy.runner.relevance_filter import filter_documents
+from source_test_support import source_batch
 
 
 class ScopedServiceTests(unittest.TestCase):
     def setUp(self):
-        legacy.WebRelevanceIntegrationTest.setUp(self)
+        legacy.WebSourceIntegrationTest.setUp(self)
         # All service tests remain offline even with model dependencies installed.
         reviewer = patch("finmy.runner.decision_followup._live_completion",
                          return_value=lambda *args: {"gaps": []})
         reviewer.start()
         self.addCleanup(reviewer.stop)
-    completion = staticmethod(legacy.WebRelevanceIntegrationTest.completion)
+    completion = staticmethod(legacy.WebSourceIntegrationTest.completion)
 
     def test_request_years_reach_native_search_filter_and_builder(self):
         config = {
@@ -40,8 +41,6 @@ class ScopedServiceTests(unittest.TestCase):
         def parse(url):
             return {"text": BODY + url, "links": []}
 
-        def run_filter(*args, **kwargs):
-            return filter_documents(*args, **kwargs, completion=self.completion)
 
         service._run_pipeline = lambda *args: built.append(copy.deepcopy(service.config)) or {}
         adapters = {
@@ -49,7 +48,7 @@ class ScopedServiceTests(unittest.TestCase):
             "finmy.runner.scoped_page": module("scoped_page", parse=parse),
         }
         with patch.dict("sys.modules", adapters), \
-             patch.object(self.service, "filter_documents", run_filter), \
+             nullcontext(), \
              patch.object(self.collector.DataCollectorService, "collect_bocha_search_results") as legacy_bocha, \
              patch.object(self.collector.DataCollectorService, "collect_baidu_search_results") as legacy_baidu:
             service.run_reconstruction("Warren Buffett annual meetings from January 2022 through December 2023", [], None)
@@ -83,8 +82,6 @@ class ScopedServiceTests(unittest.TestCase):
             return [result("https://example.com/" + suffix, title="Example Energy investment")]
         def parse(url):
             return {"text": (QUOTE if url.endswith("original") else reason) * 20, "links": []}
-        def run_filter(*args, **kwargs):
-            return filter_documents(*args, **kwargs, completion=self.completion)
         service = self.service.ReconstructionService(config)
         service._run_pipeline = lambda contents, *args: contents
         adapters = {
@@ -92,7 +89,7 @@ class ScopedServiceTests(unittest.TestCase):
             "finmy.runner.scoped_page": module("scoped_page", parse=parse),
         }
         with patch.dict("sys.modules", adapters), \
-             patch.object(self.service, "filter_documents", run_filter), \
+             nullcontext(), \
              patch("finmy.runner.decision_followup._live_completion",
                    return_value=lambda *args: {"gaps": [gap()]}):
             contents = service.run_reconstruction("Buffett investments 2022–2023", [], None)
@@ -124,7 +121,7 @@ class ScopedServiceTests(unittest.TestCase):
 
     def test_event_mode_still_uses_existing_search_methods(self):
         with patch.object(self.collector.DataCollectorService, "collect_subject_search_results") as scoped:
-            result_data, _ = legacy.WebRelevanceIntegrationTest.run_service(self)
+            result_data, _ = legacy.WebSourceIntegrationTest.run_service(self)
         scoped.assert_not_called()
         self.assertIn("https://example.test/oxy", result_data["builder_contents"][0])
 
@@ -146,15 +143,13 @@ class ScopedServiceTests(unittest.TestCase):
             calls.append((start, end))
             return [result(f"https://www.example.com/meeting/{start[:4]}", start)]
 
-        def run_filter(*args, **kwargs):
-            return filter_documents(*args, **kwargs, completion=self.completion)
 
         service._run_pipeline = lambda *args: built.append(copy.deepcopy(service.config)) or {}
         adapters = {
             "finmy.runner.scoped_search_api": module("scoped_api", search=search),
             "finmy.runner.scoped_page": module("scoped_page", parse=lambda url: {"text": BODY + url, "links": []}),
         }
-        with patch.dict("sys.modules", adapters), patch.object(self.service, "filter_documents", run_filter):
+        with patch.dict("sys.modules", adapters), nullcontext():
             service.run_reconstruction("Warren Buffett annual meeting discussions", [], None)
         self.assertEqual(calls, [("2022-01-01", "2023-12-31")])
         scope = built[0]["builder_config"]["reconstruction"]["subject"]

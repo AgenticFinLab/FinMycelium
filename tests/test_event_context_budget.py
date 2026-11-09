@@ -98,7 +98,7 @@ class EventContextBudgetTest(unittest.TestCase):
         self.assertTrue(rows["broad"]["routing_without_body_term_match"])
         self.assert_valid(result, [broad, matched], 2500)
 
-    def test_known_irrelevant_chunk_cannot_reenter_when_whole_document_fits(self):
+    def test_obsolete_chunk_labels_do_not_reject_selected_body(self):
         noise = "IGNORE THIS EXCLUDED MATERIAL. " * 15
         useful = "Occidental decision and execution context. " * 15
         doc = document("mixed", noise + useful, event_ids=["oxy"], event_terms=["Occidental"])
@@ -107,23 +107,23 @@ class EventContextBudgetTest(unittest.TestCase):
             {"start_char": len(noise), "end_char": len(noise + useful), "relevance": "CORE"}]}]
         result = allocate_context([doc], decisions, settings())
         self.assertIn("Occidental decision", result["contents"][0])
-        self.assertNotIn("EXCLUDED MATERIAL", result["contents"][0])
+        self.assertIn("EXCLUDED MATERIAL", result["contents"][0])
         self.assert_valid(result, [doc], 60000)
 
-    def test_rejected_source_is_not_revived_by_event_metadata(self):
+    def test_obsolete_document_rejection_does_not_override_search_selection(self):
         doc = event_doc("bad", "oxy", "Occidental")
         decisions = [{"document_id": "bad", "relevance": "IRRELEVANT", "chunks": []}]
         result = allocate_context([doc], decisions, settings())
-        self.assertEqual(result["contents"], [])
-        self.assertEqual(result["report"]["documents"][0]["omission_reason"], "filtered_irrelevant")
+        self.assertTrue(result["contents"])
+        self.assertIsNone(result["report"]["documents"][0]["omission_reason"])
 
-    def test_all_negative_chunks_cannot_fallback_to_full_document(self):
+    def test_obsolete_negative_chunks_do_not_block_event_sources(self):
         doc = event_doc("negative", "oxy", "Occidental")
         decisions = [{"document_id": "negative", "chunks": [{"start_char": 0,
             "end_char": len(doc["raw_text"]), "relevance": "IRRELEVANT"}]}]
         result = allocate_context([doc], decisions, settings())
-        self.assertEqual(result["contents"], [])
-        self.assertEqual(result["report"]["documents"][0]["omission_reason"], "no_permitted_source_range")
+        self.assertTrue(result["contents"])
+        self.assertIsNone(result["report"]["documents"][0]["omission_reason"])
 
     def test_title_or_routing_terms_are_not_reported_as_body_evidence(self):
         doc = document("source", "Title:\nOccidental\n\nContent:\n" + "Unrelated body text. " * 100,
