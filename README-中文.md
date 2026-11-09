@@ -112,7 +112,7 @@ streamlit run examples/uTEST/test_web_interface.py
 python -m finmy.workbench --port 8537
 ```
 
-打开 `http://localhost:8537`，进行数据管理、检索和审核。构建使用独立入口。
+打开 `http://localhost:8537`，进行数据管理、检索和审核。构建任务使用已确认的输入，并由独立构建进程执行。
 
 ---
 

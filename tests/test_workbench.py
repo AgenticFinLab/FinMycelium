@@ -150,6 +150,7 @@ def test_graph_revisions_and_review(store, event, graph):
     store.add_source(event, "Source", "The port reopened.")
     first = store.add_graph(event, graph)
     target = store.target(event, "graph")
+    store.review(event, "evidence", "approved", "Reviewer", "", store.target(event, "evidence"))
     store.review(event, "graph", "approved", "Reviewer", "Checked", target)
     assert store.status(event) == "已收录"
     revised = copy.deepcopy(graph)
@@ -203,6 +204,7 @@ def test_stage_local_episode_ids_survive_import_and_export(store, event, graph):
 
     store.add_source(event, "Source", "The port reopened.")
     store.add_graph(event, graph_from_bytes(json.dumps(graph).encode()))
+    store.review(event, "evidence", "approved", "Reviewer", "", store.target(event, "evidence"))
     store.review(event, "graph", "approved", "Reviewer", "Checked", store.target(event, "graph"))
     assert store.graphs(event)[0]["body"] == original
     with zipfile.ZipFile(io.BytesIO(store.export_zip([event]))) as archive:
@@ -254,6 +256,7 @@ def test_config_reject(store, config):
 def test_export_isolation_and_manifest(store, event, graph):
     store.add_source(event, "Source", "The port reopened.", raw=b"binary-original")
     store.add_graph(event, graph)
+    store.review(event, "evidence", "approved", "Reviewer", "", store.target(event, "evidence"))
     store.review(event, "graph", "approved", "Reviewer", "", store.target(event, "graph"))
     other = store.create_events([{"event_name_en": "PRIVATE OTHER", "description": "Other", "scope_include": "Other"}])[0]
     store.review(other, "scope", "approved", "Reviewer", "", store.target(other, "scope"))
