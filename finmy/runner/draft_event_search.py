@@ -53,6 +53,10 @@ def draft_event_options(config):
         if type(value) is not int or value < minimum:
             raise ValueError(f"event_followup.{key} must be a finite integer >= {minimum}")
         options[key] = value
+    repair_rounds = options.get("max_repair_rounds_per_event", 1)
+    if type(repair_rounds) is not int or not 0 <= repair_rounds <= 3:
+        raise ValueError("event_followup.max_repair_rounds_per_event must be an integer in 0..3")
+    options["max_repair_rounds_per_event"] = repair_rounds
     for key in ("max_elapsed_seconds", "max_relevance_elapsed_seconds"):
         seconds = options.get(key, 300)
         if (isinstance(seconds, bool) or not isinstance(seconds, (int, float))

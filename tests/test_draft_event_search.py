@@ -226,6 +226,27 @@ class DraftEventSearchTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     draft_event_options({"event_followup": {"max_elapsed_seconds": invalid}})
 
+    def test_repair_round_defaults_and_overrides_survive_normalization(self):
+        base = {"reconstruction": {"mode": "person", "subject": {**SUBJECT, "subject_id": "buffett"}}}
+        for configured in (None, 0, 1, 3):
+            with self.subTest(configured=configured):
+                config = {**base, "event_followup": {} if configured is None else
+                          {"max_repair_rounds_per_event": configured}}
+                normalized = normalize_followup_config(config)
+                options, _ = draft_event_options(normalized)
+                self.assertEqual(options["max_repair_rounds_per_event"], 1 if configured is None else configured)
+                self.assertEqual(options["max_model_calls"], 24)
+                self.assertEqual(options["max_content_length"], 60000)
+                self.assertEqual(normalized["all_content_config"]["max_content_length"], 60000)
+                self.assertEqual(config["event_followup"], {} if configured is None else
+                                 {"max_repair_rounds_per_event": configured})
+
+    def test_repair_round_cap_rejects_unbounded_or_mistyped_values(self):
+        for value in (None, True, False, -1, 4, 1.0, "1", float("inf"), float("nan")):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "max_repair_rounds_per_event"):
+                    draft_event_options({"event_followup": {"max_repair_rounds_per_event": value}})
+
 
 if __name__ == "__main__":
     unittest.main()

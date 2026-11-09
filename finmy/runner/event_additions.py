@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from jsonschema import Draft202012Validator
 from finmy.person_epg.validation import validate_person_epg
+from finmy.subject_graph.validation import date_interval
 
 
 def _object(properties):
@@ -34,6 +35,17 @@ _NULLABLE_TEXT = {"anyOf": [_TEXT, {"type": "null"}]}
 _CITATIONS = {**_array(_object({"document_id": _KEY, "quote": _TEXT}), 12), "minItems": 1}
 _DETAIL = _object({"value": _TEXT, "citations": _CITATIONS})
 _RELATIONS = ["precedes", "overlaps", "executed_by", "explains", "responds_to", "context_for"]
+_TIME_FIELD = _object({
+    "value": _KEY,
+    "evidence_source_contents": _array(_TEXT, 12),
+    "reasons": _array(_TEXT, 12),
+})
+_TIME_FIELD["properties"].update(
+    time_window=_object({"start": _KEY, "end": _KEY, "original": _TEXT,
+                         "approximate": {"type": "boolean"}}),
+    window_semantics={"enum": ["uncertainty", "duration"]},
+)
+_TIME = {"anyOf": [_KEY, {"type": "null"}, _TIME_FIELD]}
 ADDITIONS_SCHEMA = _object({
     "entities": _array(_object({"key": _KEY, "name": _TEXT,
         "entity_type": {"type": "string", "minLength": 1, "maxLength": 64}, "citations": _CITATIONS}), 40),
@@ -41,13 +53,15 @@ ADDITIONS_SCHEMA = _object({
         "summary": _NULLABLE_TEXT, "boundary_reason": _NULLABLE_TEXT, "citations": _CITATIONS}), 20),
     "activities": _array(_object({"key": _KEY, "kind": {"enum": ["action", "transaction", "context"]},
         "title": _TEXT, "actor_id": _NULLABLE_KEY, "from_entity_id": _NULLABLE_KEY,
-        "to_entity_id": _NULLABLE_KEY, "time": _NULLABLE_KEY, "stage_id": _NULLABLE_KEY,
+        "to_entity_id": _NULLABLE_KEY, "time": _TIME, "stage_id": _NULLABLE_KEY,
         "details": _array(_DETAIL, 30), "citations": _CITATIONS}), 80),
     "details": _array(_object({"activity_id": _KEY, "value": _TEXT, "citations": _CITATIONS}), 100),
     "relations": _array(_object({"from_activity_id": _KEY, "to_activity_id": _KEY,
         "relation_type": {"enum": _RELATIONS}, "description": _NULLABLE_TEXT,
         "citations": _CITATIONS}), 100),
 })
+# Older saved proposals remain valid; new proposals explain their event membership.
+ADDITIONS_SCHEMA["properties"]["activities"]["items"]["properties"]["event_reason"] = _TEXT
 
 
 def empty_additions():
@@ -78,19 +92,15 @@ def _numbers(value):
     return tuple(sorted(set(values)))
 
 
-def _source_time(value, rows):
-    """Normalize only an explicit, quoted absolute date, retaining precision."""
-    if value is None:
-        return None
-    if not any(value in row["quote"] for row in rows):
-        raise ValueError("Activity time must occur verbatim in its cited passage")
+def _normalize_absolute(value):
+    """Normalize ordinary absolute date spelling without changing precision."""
     raw = value.strip()
     normalized = re.sub(r"年|月", "-", raw).removesuffix("日").rstrip("-")
     if re.fullmatch(r"\d{4}(?:-\d{1,2}){0,2}", normalized):
         parts = [int(part) for part in normalized.split("-")]
         date(parts[0], parts[1] if len(parts) > 1 else 1, parts[2] if len(parts) > 2 else 1)
         return f"{parts[0]:04d}" + (f"-{parts[1]:02d}" if len(parts) > 1 else "") + (f"-{parts[2]:02d}" if len(parts) > 2 else "")
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?", raw):
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?", raw):
         datetime.fromisoformat(raw.replace("Z", "+00:00"))
         return raw
     months = {name: index for index, name in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
@@ -107,6 +117,84 @@ def _source_time(value, rows):
         date(int(partial[2]), months[partial[1]], 1)
         return f"{int(partial[2]):04d}-{months[partial[1]]:02d}"
     raise ValueError("Unsupported or relative date; leave the activity time null")
+
+
+def _source_time(value, rows):
+    """Legacy strings allow equivalent spellings; interpreted dates use a VF.
+
+    A structured time claim preserves its anchors and reasoning for semantic
+    review. The legacy string has no such reasoning, so only directly quoted
+    dates and deterministic spelling equivalence are admitted here.
+    """
+    if value is None:
+        return None
+    normalized = _normalize_absolute(value)
+    expression = (r"(?<!\d)" if value[0].isdigit() else "") + re.escape(value)
+    expression += r"(?!\d)" if value[-1].isdigit() else ""
+    if any(re.search(expression, row["quote"]) for row in rows):
+        return normalized
+    candidates = r"\d{4}年(?:\d{1,2}月(?:\d{1,2}日)?)?|\d{4}(?:-\d{1,2}){0,2}|[A-Za-z]+\.?\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+\d{4}|\d{1,2}\s+[A-Za-z]+\.?\s+\d{4}|[A-Za-z]+\.?\s+\d{4}"
+    for row in rows:
+        for match in re.finditer(r"(?<!\d)(?:" + candidates + r")(?!\d)", row["quote"]):
+            try:
+                if _normalize_absolute(match.group()) == normalized:
+                    return normalized
+            except ValueError:
+                continue
+    raise ValueError("Time is not a quoted or equivalent absolute date; supply a supported time field with anchors and reasons")
+
+
+def _time_claim(value, rows):
+    """Validate representation and provenance, leaving date entailment to review."""
+    if not isinstance(value, dict):
+        normalized = _source_time(value, rows)
+        return ({"value": normalized} if normalized is not None else None), {}
+    quotes = [row["quote"] for row in rows]
+    if any(not text.strip() or not any(text in quote for quote in quotes)
+           for text in value["evidence_source_contents"]):
+        raise ValueError("Time evidence must occur verbatim in the activity citations")
+    if any(not reason.strip() for reason in value["reasons"]):
+        raise ValueError("Time interpretation needs a nonempty anchor/rule explanation")
+    raw = value["value"].strip()
+    unknown = raw.casefold() in {"unknown", "unspecified", "none", "null", "n/a"}
+    normalized = "unknown" if unknown else _normalize_absolute(raw)
+    if not unknown and date_interval(normalized) is None:
+        raise ValueError("Invalid normalized time value")
+    result = {"value": normalized}
+    window = value.get("time_window")
+    semantics = value.get("window_semantics", "uncertainty")
+    if window is None and "window_semantics" in value:
+        raise ValueError("Window semantics requires a time window")
+    if window is not None:
+        for boundary in ("start", "end"):
+            text = window[boundary]
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+                raise ValueError("Time window bounds must be calendar dates")
+            date.fromisoformat(text)
+        if window["start"] > window["end"]:
+            raise ValueError("Time window end precedes start")
+        if not window["original"].strip() or not any(window["original"] in q for q in quotes):
+            raise ValueError("Time window original must occur in its supporting source excerpts")
+        if not window["approximate"] and semantics == "uncertainty" and window["start"] != window["end"]:
+            raise ValueError("An exact occurrence window must name one day; use duration for a supported period")
+        if not unknown:
+            point, interval = date_interval(normalized), date_interval(value)
+            if not point or not interval or point[1] < interval[0] or point[0] > interval[1]:
+                raise ValueError("Time value lies outside its own window")
+        result.update(window_start=window["start"], window_end=window["end"],
+                      original_text=window["original"], is_approximate=window["approximate"],
+                      window_semantics=semantics)
+    return result, {"reasons": copy.deepcopy(value["reasons"])}
+
+
+def _time_signature(value):
+    """Do not collapse distinct uncertain windows sharing one coarse value."""
+    if not value:
+        return ""
+    if value.get("window_start") is not None:
+        return json.dumps([value.get("value"), value["window_start"], value["window_end"],
+                           value.get("window_semantics") or "uncertainty"], ensure_ascii=False)
+    return _normal(value.get("value"))
 
 
 def merge_event_additions(package, event_id, proposal, sources):
@@ -199,10 +287,11 @@ def merge_event_additions(package, event_id, proposal, sources):
                 for detail in row.get("details", []):
                     citations(detail["citations"])
 
-        def evidence(rows, paths):
+        def evidence(rows, paths, field_metadata=None):
             located = citations(rows)
             set_id = new_id("ES", [located, paths, len(result["evidence_set"])])
-            result["evidence_set"].append({"evidence_set_id": set_id})
+            result["evidence_set"].append({"evidence_set_id": set_id,
+                **({"field_metadata": copy.deepcopy(field_metadata)} if field_metadata else {})})
             for i, (sid, start, end, quote) in enumerate(located):
                 used_source_ids.add(sid)
                 location = sid, start, end
@@ -265,7 +354,7 @@ def merge_event_additions(package, event_id, proposal, sources):
         actions = {row["action_id"]: row for row in result["action"]}
         transactions = {row["transaction_id"]: row for row in result["financial_transaction"]}
         occurrences = {row["occurrence_id"]: row for row in result["occurrence"]}
-        times = {row["time_id"]: row["value"] for row in result["time_value"]}
+        times = {row["time_id"]: row for row in result["time_value"]}
         span_map = {row["span_id"]: row for row in result["evidence_span"]}
         existing_citations = {}
         for link in result["evidence_link"]:
@@ -279,11 +368,11 @@ def merge_event_additions(package, event_id, proposal, sources):
             if activity.get("action_id"):
                 fact = actions[activity["action_id"]]
                 signature = ("action", _normal(fact["action_type"]), fact["actor_id"], None,
-                             _normal(times.get(fact.get("timestamp_time_id"))))
+                             _time_signature(times.get(fact.get("timestamp_time_id"))))
             elif activity.get("transaction_id"):
                 fact = transactions[activity["transaction_id"]]
                 signature = ("transaction", _normal(fact["name"]), fact.get("from_entity_id"), fact.get("to_entity_id"),
-                             _normal(times.get(fact.get("timestamp_time_id"))))
+                             _time_signature(times.get(fact.get("timestamp_time_id"))))
                 quote_key = (tuple(sorted(existing_citations.get(fact.get("evidence_set_id"), set()))),
                              signature[1], signature[2], signature[3], signature[4])
                 if quote_key[0]:
@@ -291,7 +380,7 @@ def merge_event_additions(package, event_id, proposal, sources):
             else:
                 fact = occurrences[activity["context_occurrence_id"]]
                 signature = ("context", _normal(fact["title"]), None, None,
-                             _normal(times.get(fact.get("start_time_id"))))
+                             _time_signature(times.get(fact.get("start_time_id"))))
             fingerprints[signature] = activity["activity_id"]
 
         def add_detail(activity_id, value, rows):
@@ -308,7 +397,8 @@ def merge_event_additions(package, event_id, proposal, sources):
 
         for row in proposal["activities"]:
             kind = row["kind"]
-            normalized_time = _source_time(row["time"], row["citations"])
+            time_record, temporal_metadata = _time_claim(row["time"], row["citations"])
+            time_signature = _time_signature(time_record)
             actor = entity_id(row["actor_id"], required=kind == "action")
             sender = entity_id(row["from_entity_id"])
             recipient = entity_id(row["to_entity_id"])
@@ -316,10 +406,10 @@ def merge_event_additions(package, event_id, proposal, sources):
                 raise ValueError("Activity fields mix incompatible fact kinds")
             sid = stage_id(row["stage_id"])
             signature = (kind, _normal(row["title"]), actor if kind == "action" else sender if kind == "transaction" else None,
-                         recipient if kind == "transaction" else None, _normal(normalized_time))
+                         recipient if kind == "transaction" else None, time_signature)
             same = fingerprints.get(signature)
             quote_key = (tuple(sorted((c["document_id"], c["quote"]) for c in row["citations"])),
-                         _normal(row["title"]), sender, recipient, _normal(normalized_time))
+                         _normal(row["title"]), sender, recipient, time_signature)
             numeric = _numbers(json.dumps([d["value"] for d in row["details"]], ensure_ascii=False))
             if kind == "transaction" and quote_key in transaction_quotes:
                 previous_id, previous_numeric = transaction_quotes[quote_key]
@@ -341,11 +431,15 @@ def merge_event_additions(package, event_id, proposal, sources):
             aid = new_id("ACTIVITY", row["key"])
             oid = new_id("OCC", row["key"])
             tid = None
-            if normalized_time is not None:
-                tid = new_id("TIME", [row["key"], normalized_time])
-                result["time_value"].append({"time_id": tid, "value": normalized_time})
+            if time_record is not None:
+                tid = new_id("TIME", [row["key"], time_record])
+                result["time_value"].append({"time_id": tid, **time_record})
+            field_metadata = {path: temporal_metadata for path in ("/start_time", "/end_time", "/timestamp")
+                              if temporal_metadata}
+            if row.get("event_reason"):
+                field_metadata["/subject_relevance"] = {"reasons": [row["event_reason"]]}
             evidence_id = evidence(row["citations"], ["/title", "/subject_relevance", "/start_time", "/end_time",
-                "/action_type" if kind == "action" else "/name", "/timestamp"])
+                "/action_type" if kind == "action" else "/name", "/timestamp"], field_metadata)
             occurrence = {"occurrence_id": oid, "title": row["title"], "subject_relevance": "event_context" if kind == "context" else "documented_activity",
                 "start_time_id": tid, "end_time_id": tid, "descriptions": [],
                 "evidence_set_id": evidence_id, "sort_order": order("occurrence")}
@@ -362,7 +456,8 @@ def merge_event_additions(package, event_id, proposal, sources):
             elif kind == "transaction":
                 fid = new_id("TX", row["key"])
                 paths = ["/name", "/timestamp"]
-                tx_evidence_id = evidence(row["citations"], paths)
+                tx_evidence_id = evidence(row["citations"], paths,
+                    {"/timestamp": temporal_metadata} if temporal_metadata else None)
                 # Separate detail evidence links retain field-level provenance.
                 for i, detail in enumerate(row["details"]):
                     location_rows = citations(detail["citations"])

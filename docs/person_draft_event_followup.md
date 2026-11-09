@@ -37,7 +37,7 @@ CLI 的 `run_search_pipeline` 和现有重建页面均读取
    只有名称的薄事件也可检索，无需用户预先填写 event 列表。
 3. 补搜使用独立的检索和 P0 计数，只处理新增来源。
 4. 新资料进入单独约 60,000 字符证据池，不重新截断或替换第一轮证据。
-5. 对有新来源且有剩余额度的 event，分别提交一次增补提议、一次模型审核。
+5. 对有新来源且有剩余额度的 event，先各提交一轮增补提议和模型审核，再用剩余额度定向修订失败项。
    提议为空或结构/引文预检失败时不再调用审核。所有尝试均计入额度。
 6. 只合并通过审核的有据活动、细节、关系和可选阶段；最终使用现有 Person EPG 页面渲染。
 
@@ -58,7 +58,8 @@ event_followup:
   max_elapsed_seconds: 300  # 补搜采集阶段，不含后续模型处理
   max_relevance_elapsed_seconds: 300  # 补充 P0 单独从筛选开始计时
   max_relevance_model_calls: 12
-  max_model_calls: 24      # 所有 event 的增补提议＋审核总次数
+  max_model_calls: 24      # 所有 event 的提议、审核、修订、重审和重试总次数
+  max_repair_rounds_per_event: 1  # 初次尝试之后的修订轮数，0 禁用，允许 0..3
   max_output_tokens: 8192  # 单次输出还受原 generation_config 较小上限约束
   queries_per_event: 2
 ```
@@ -121,13 +122,76 @@ python -m finmy.runner.resume_event_enrichment \
   再定位到准确来源字符区间。模型产生的查询或事件名称不算原始证据。
 - 复用可确定重复的已有活动，新增事件关联；不为复述建立重复事实。
   同一交易的部分数值/单位矛盾会被确定性拒绝，其余语义重复和冲突由审核检查。
-- 明确的中英文日期规范化后保留年月日精度；不从发表日期推算行动日期，
-  不为缺失日期自动补年、月或日。
+- 时间处理复用已有主体时间策略：支持模糊窗口、相对日期和有依据的历法转换，
+  规范值不必逐字出现在引文里。引文本身仍须真实存在；转换、锚点、精度与事件归属由审核检查。
+  不把发表日期默认作为行动日期，也不为未知日期补造年月日。
 - 单个 event 提议无效、审核拒绝或调用失败时保留原内容，其他已成功补充的事件不回滚。
   补充阶段不能把成功的初版变为构图失败。
 
 原有全部行保留是机械保障；来源是否可信、引文是否充分支持结论，
 仍然需要内容评估。第二次模型审核不是独立人工核验，也不能证明输出质量已达到参考 HTML。
+
+## 增补中的时间与事件归属
+
+先根据原文中的交易、持续事项和发展过程判断是否属于同一 event，再处理时间。
+初版成员活动覆盖的日期范围只是当前观察结果，不是新增活动的准入条件。
+提议用 `event_reason` 说明新增活动与当前事件的联系；同一人物、公司或相似主题本身不够。
+请求明确区分当前可引用的 `allowed_activity_ids` 与跨事件查重用的 `known_activities`。
+用户显式设定的研究范围仍保持原样，模型不能把自动推导的事件范围当作该约束。
+
+增补提议的 `activities[].time` 兼容旧字符串和 null，推荐采用已有的可验证时间字段形状：
+
+```json
+{
+  "value": "2022-07",
+  "evidence_source_contents": ["2022年7月下旬，公司完成了这笔投资。"],
+  "reasons": ["原文明确给出年月；下旬为21日至该月最后一天，确切执行日未知。"],
+  "time_window": {
+    "start": "2022-07-21", "end": "2022-07-31",
+    "original": "2022年7月下旬", "approximate": true
+  },
+  "window_semantics": "uncertainty"
+}
+```
+
+时间引文必须包含在对应活动的可见引用中；转换结果不需要字面相同。
+锚点、历法和规则应在 `reasons` 中解释，并交由现有审核调用检查。
+程序只检查可表示的日期/区间、字段一致性和引文定位，不用有限的节日或季节白名单替代模型判断。
+无法可靠确定日期时可以使用 unknown/null，保留其他有据活动内容。
+该扩展只涉及增补输入协议，最终 Person EPG schema 不变；原文、窗口和理由进入已有时间与证据字段。
+
+规范 event/stage 表没有独立的起止日期列。JSON 保留其成员活动时间，HTML 重新渲染时
+按成员活动计算分组范围，因此已接纳的更早或更晚活动会相应改变范围，无需改写旧事实。
+`event_enrichment_report.json` 的逐事件 `time_coverage` 记录接纳前后的 observed、primary、context
+范围及变化；这是已知活动的证据覆盖范围，不宣称事件真实起止或持续时间。
+未知日期不会被填为发表时间，背景活动单独列示，窗口的模糊性和原始表达继续保留。
+
+时间处理不需要额外模型调用或整图重建。下述有界修订共用原增补调用额度，
+独立的 60,000 + 60,000 字符证据预算与增补调用总上限保持不变。
+
+## 失败项修订与合格部分保留
+
+所有 event 先获得原有的首轮机会，再按事件顺序处理待修订项，默认最多一轮。
+每轮在同一个 `CallLedger.json` 中计费；不重置预算，不重新搜索，也不调用初版 builder。
+准备发起修订前须同时留出修订和后续审核的两次额度；已有候选只需重审时保留一次额度。
+
+- 引用、schema 或合并检查失败：把上一份提议、具体错误和原有可见证据交给模型。
+  模型应修正有原文依据的问题，删除无法支持的项，保留独立有效内容。
+  修订后的完整提议重新执行引用、日期、结构检查，再进行语义审核。
+- 审核定位了局部问题：可返回 `rejected_paths`，例如 `/details/2` 或 `/activities/0/details/1`。
+  路径只能来自请求中的 `proposal_items`。程序剔除指定项、依赖它的活动/细节/关系，
+  以及不再被引用的新实体和阶段，再把剩余候选完整送审。删除问题项本身不代表审核通过。
+- 审核只给出整体否决或文字意见：兼容旧的 `{approved, issues}` 响应，改走定向修订。
+- 审核超时、连接失败、限流或服务端临时错误：在额度允许时复用候选重审。
+  不盲目重复 400/401/403 请求；保存有界错误诊断。无效审核 JSON 也只能重审，不能当作批准。
+
+每次重试使用相同来源片段，更新已接纳图的上下文，避免覆盖其他 event 的成功补充。
+只有所有检查通过且收到明确的完整批准，候选才写入最终图；失败、额度不足或轮数耗尽时，
+保留之前已接纳的内容。设置 `max_repair_rounds_per_event: 0` 可恢复单次提议/审核行为。
+
+逐事件 `attempts` 记录每轮动作、问题反馈、审核和调用次数；`repair_stop_reason` 区分
+额度不足、修订轮数耗尽和禁用修订。`accepted_subset` 记录通过重审的保留部分，
+路径沿用删除前那份提议的索引；每次实际审核均以该次请求的 `proposal_items` 为准。
 
 ## 输出与复核
 
@@ -140,6 +204,8 @@ python -m finmy.runner.resume_event_enrichment \
 - `event_enrichment/context_budget_report.json`：额外证据池分配。
 - `event_enrichment/supplementary_input_contents.json`、`supplementary_sources.json`：补充输入。
 - `event_enrichment/event_XXXX_propose_request.json` / `review_request.json` 与响应：事件提议与审核。
+- `event_enrichment/event_XXXX_rNN_repair_request.json` / `review_request.json` 与响应：逐轮修订和重审。
+  `event_XXXX_rNN_subset.json` 保存待重审的保留候选；原始请求/响应不会被覆盖。
 - `event_enrichment/CallLedger.json`、`event_enrichment_report.json`：真实调用尝试和逐事件结果。
 - `event_enrichment/final/FinalPersonEPG.json`、`FinalPersonEPG.html`：合并后的规范图和页面。
 - 根目录 `event_refinement_report.json`、`evidence_supply_usage.json`：选中结果及分阶段预算统计。

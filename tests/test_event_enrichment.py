@@ -26,7 +26,7 @@ class EventEnrichmentTests(unittest.TestCase):
                 "reconstruction": {"mode": "person", "subject": {
                     "subject_id": "buffett", "name": "Warren Buffett",
                     "coverage_start": "2022", "coverage_end": "2023"}}},
-            "event_followup": {"max_model_calls": 4},
+            "event_followup": {"max_model_calls": 4, "max_repair_rounds_per_event": 0},
         }
         self.event_ids = [row["event_id"] for row in self.package["event"][:2]]
         self.sources = [{"document_id": "EF_DOC_demo", "event_ids": self.event_ids,

@@ -115,6 +115,9 @@ event_followup:
   max_relevance_elapsed_seconds: 300
   max_relevance_model_calls: 12
   max_model_calls: 24
+  # Repair/re-review after each event's initial turn; all calls share the limit above.
+  # Set to 0 to disable repair, or 1..3 for a bounded number of rounds per event.
+  max_repair_rounds_per_event: 1
 
 
 # ----------------------------------------------------------------------------

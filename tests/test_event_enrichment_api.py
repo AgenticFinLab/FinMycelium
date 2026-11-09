@@ -76,7 +76,7 @@ def test_live_adapter_preserves_json_messages_and_bounded_options(api_style, tok
         modules["lmbase.inference.api_call"].LangChainAPIInference = Inference
 
         from finmy.runner.event_enrichment import (
-            _live_completion, _completion_value, PROPOSAL_PROMPT, REVIEW_PROMPT)
+            _live_completion, _completion_value, PROPOSAL_PROMPT, REVIEW_PROMPT, REPAIR_PROMPT)
         config = {"builder_config": {"lm_name": "deepseek/deepseek-chat",
                   "generation_config": {token_key: 16384, "temperature": 0.2}},
                   "event_followup": {"max_output_tokens": 8192,
@@ -84,7 +84,7 @@ def test_live_adapter_preserves_json_messages_and_bounded_options(api_style, tok
         complete = _live_completion(config)
         payload = {"event": {"event_id": "E1"},
                    "content": 'Literal {Query}, unmatched {, 中文 {"amount":123}'}
-        for prompt in (PROPOSAL_PROMPT, REVIEW_PROMPT):
+        for prompt in (PROPOSAL_PROMPT, REVIEW_PROMPT, REPAIR_PROMPT):
             record = {}
             result = complete(prompt, payload)
             assert json.loads(_completion_value(result, record))["approved"] is True
@@ -92,7 +92,7 @@ def test_live_adapter_preserves_json_messages_and_bounded_options(api_style, tok
             assert calls[-1]["messages"] == [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
-        assert len(calls) == 2
+        assert len(calls) == 3
         assert client_options == [{"max_retries": 0, "timeout": 31}]
         effective = "max_completion_tokens" if token_key == "max_completion_tokens" else "max_tokens"
         assert all(c[effective] == 8192 for c in calls)
