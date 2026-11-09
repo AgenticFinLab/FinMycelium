@@ -8,7 +8,7 @@ from finmy.builder.sparse_build.organization_context import (
     ORGANIZATION_CONTEXT_POLICY_IDENTITY, build_organization_context,
 )
 from finmy.builder.sparse_build.person_organization import validate_organization
-from finmy.builder.sparse_build.relation_candidates import collect_reviewed_relations
+from finmy.builder.sparse_build.relation_candidates import collect_canonical_relations
 from test_sparse_person_organization import facts, plan, vf
 
 
@@ -122,39 +122,34 @@ class SparseOrganizationContextTest(unittest.TestCase):
         self.assertFalse(any("disconnected" in hint["code"] for hint in context["quality_hints"]))
         self.assertEqual((package, proposal), before)
 
-    def test_whole_context_reaches_generation_and_review_as_independent_copies(self):
+    def test_relation_tasks_use_confirmed_memberships_and_targeted_review(self):
         package, proposal = facts(), plan()
-        package["action"].append({**package["action"][0], "action_id": "ACT2"})
-        package["activity"].append({"activity_id": "A2", "action_id": "ACT2"})
-        proposal["events"].append({**copy.deepcopy(proposal["events"][0]), "event_id": "E2"})
-        proposal["memberships"].append({"event_id": "E2", "activity_id": "A2"})
-        validate_organization(proposal, package)
-        context = build_organization_context(package, proposal)
-        original = copy.deepcopy(context)
+        package['action'].append({**package['action'][0], 'action_id': 'ACT2', 'action_type': 'Explain an earlier statement'})
+        package['activity'].append({'activity_id': 'A2', 'action_id': 'ACT2'})
+        proposal['events'].append({**copy.deepcopy(proposal['events'][0]), 'event_id': 'E2'})
+        proposal['memberships'].append({'event_id': 'E2', 'activity_id': 'A2'})
+        before = copy.deepcopy(proposal)
         calls = []
-        edge = {"from_activity_id": "A", "to_activity_id": "A2", "relation_type": "context_for",
-                "basis": "source", "description": vf("Supported cross-theme relation")}
-
-        def call(phase, task, name, validator):
-            calls.append((phase, copy.deepcopy(task)))
-            self.assertEqual(task["organization_context"], original)
-            task["organization_context"]["themes"].clear()
-            if phase == "Relations":
-                payload = {"activity_relations": [edge] if "A" in task["assigned_ids"] else []}
+        edge = {'from_activity_id': 'A', 'to_activity_id': 'A2', 'relation_type': 'context_for',
+                'basis': 'source', 'description': vf('Supported cross-theme relation')}
+        def call(phase, task, ids, validator, name, **kwargs):
+            calls.append((phase, copy.deepcopy(task), list(ids)))
+            self.assertIn('memberships', task)
+            if phase == 'Relations':
+                payload = {'candidates': [{'relation': edge, 'assessment': {
+                    'supported': True, 'evidence_scope': 'relation', 'from_role': 'context', 'to_role': 'statement',
+                    'reason': 'The source describes their contextual connection.', 'needs_review': True,
+                    'duplicate_fact': False}}] if 'A' in task['assigned_ids'] else []}
             else:
-                payload = {"decisions": [{"candidate_id": item["candidate_id"], "decision": "accept", "reason": "Supported"}
-                                          for item in task["candidates"]]}
+                payload = {'decisions': [{'candidate_id': c['candidate_id'], 'decision': 'accept',
+                                         'reason': 'Relation-level support.'} for c in task['candidates']]}
             validator(payload)
             return payload
-
-        result = collect_reviewed_relations(package, ["A", "A2"], {}, [], call,
-            lambda data, name: None, lambda error: False, batch_size=1,
-            organization_context=context)
+        result = collect_canonical_relations(package, proposal, call, lambda *args: None, batch_size=1)
         self.assertEqual(result, [edge])
-        self.assertEqual([phase for phase, _ in calls], ["Relations", "Relations", "RelationsReview"])
-        self.assertEqual(context, original)
-        self.assertTrue(all(len(task["organization_context"]["themes"]) == 2 for _, task in calls))
-        self.assertTrue(all(task["allowed_activity_ids"] == ["A", "A2"] for _, task in calls))
+        self.assertEqual([r[0] for r in calls], ['Relations', 'Relations', 'RelationsReview'])
+        self.assertEqual(set(calls[-1][2]), {'A', 'A2'})
+        self.assertEqual(proposal, before)
 
 
 if __name__ == "__main__":

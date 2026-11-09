@@ -1,0 +1,561 @@
+{
+  "skeleton": {
+    "event_id": "buffett_berkshire_2022_2023",
+    "title": {
+      "value": "Warren Buffett's Berkshire Hathaway Activities 2022-2023",
+      "evidence_source_contents": [],
+      "reasons": [
+        "Title is derived from the query scope metadata ('Warrent Buffett 2022 – 2023') and the storyline plan, not from a single verbatim source headline; no source span is quoted to avoid inventing evidence."
+      ],
+      "confidence": 0.4
+    },
+    "event_type": {
+      "value": "unknown",
+      "evidence_source_contents": [],
+      "reasons": [
+        "Sources describe portfolio purchases, sales, shareholder communication and charitable gifts but supply no categorical event label; type left unknown per evidence policy."
+      ],
+      "confidence": 0.3
+    },
+    "start_time": {
+      "value": "2022",
+      "evidence_source_contents": [
+        "Berkshire has spent this year expanding its ownership in Occidental after first making a bet on the Houston-based oil company three years ago."
+      ],
+      "reasons": [
+        "Earliest in-scope activity is Berkshire's 2022 Occidental accumulation; the source gives the year only, so the boundary is a year-level estimate, not a precise date."
+      ],
+      "confidence": 0.6
+    },
+    "end_time": {
+      "value": "2023-11-22",
+      "evidence_source_contents": [
+        "Updated / Wednesday, 22 Nov 2023"
+      ],
+      "reasons": [
+        "Latest in-scope documented activity is the November 2023 donation and letter; the update timestamp is used only as the publication boundary of that reported event, not as an execution date."
+      ],
+      "confidence": 0.5
+    },
+    "stages": [
+      {
+        "stage_id": "S1",
+        "name": {
+          "value": "Occidental Petroleum stake buildup",
+          "evidence_source_contents": [
+            "Warren Buffett’s Berkshire Hathaway boosted its stake in Occidental Petroleum to 26.8%"
+          ],
+          "reasons": [
+            "Direct headline and body statement of the Occidental stake increase."
+          ],
+          "confidence": 0.9
+        },
+        "index_in_event": 0,
+        "start_time": {
+          "value": "2022-08-19",
+          "evidence_source_contents": [
+            "In approving Berkshire’s request on Aug. 19, the Federal Energy Regulatory Commission said the proposed stock purchases would be consistent with the public interest."
+          ],
+          "reasons": [
+            "Earliest dated Occidental-related step in the sources is the FERC approval on Aug. 19; this is an approval date, not a purchase date."
+          ],
+          "confidence": 0.8
+        },
+        "end_time": {
+          "value": "2023-05",
+          "evidence_source_contents": [
+            "巴菲特在5月份的伯克希尔年会上说道"
+          ],
+          "reasons": [
+            "Latest Occidental-related item is Buffett's May 2023 annual-meeting remarks; month-level only, so boundary is approximate."
+          ],
+          "confidence": 0.6
+        },
+        "episodes": [
+          {
+            "episode_id": "E1",
+            "name": {
+              "value": "FERC approves Berkshire request to buy up to 50% of Occidental",
+              "evidence_source_contents": [
+                "In approving Berkshire’s request on Aug. 19, the Federal Energy Regulatory Commission said the proposed stock purchases would be consistent with the public interest."
+              ],
+              "reasons": [
+                "Explicit regulatory approval action with date; approval enables purchases but does not itself prove purchases."
+              ],
+              "confidence": 0.9
+            },
+            "index_in_stage": 0,
+            "start_time": {
+              "value": "2022-08-19",
+              "evidence_source_contents": [
+                "In approving Berkshire’s request on Aug. 19"
+              ],
+              "reasons": [
+                "Explicit date of the FERC approval."
+              ],
+              "confidence": 0.9
+            },
+            "end_time": {
+              "value": "2022-08-19",
+              "evidence_source_contents": [
+                "In approving Berkshire’s request on Aug. 19"
+              ],
+              "reasons": [
+                "Single-day approval event."
+              ],
+              "confidence": 0.9
+            }
+          },
+          {
+            "episode_id": "E2",
+            "name": {
+              "value": "Occidental stake reported at 26.8%",
+              "evidence_source_contents": [
+                "boosted its stake in Occidental Petroleum to 26.8% after getting the go-ahead last month from US regulators"
+              ],
+              "reasons": [
+                "Explicit reported ownership level tied to a federal filing; the filing report date is the disclosure date, not necessarily the trade date."
+              ],
+              "confidence": 0.9
+            },
+            "index_in_stage": 1,
+            "start_time": {
+              "value": "2022-09-09",
+              "evidence_source_contents": [
+                "September 9, 2022, 7:39 PM ET"
+              ],
+              "reasons": [
+                "Article dateline for the report of the 26.8% level; used as disclosure date, not purchase date."
+              ],
+              "confidence": 0.7
+            },
+            "end_time": {
+              "value": "2022-09-09",
+              "evidence_source_contents": [
+                "September 9, 2022, 7:39 PM ET"
+              ],
+              "reasons": [
+                "Single report date."
+              ],
+              "confidence": 0.7
+            }
+          },
+          {
+            "episode_id": "E3",
+            "name": {
+              "value": "Occidental stake raised to 25.1% after further purchases",
+              "evidence_source_contents": [
+                "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%"
+              ],
+              "reasons": [
+                "Explicit purchase of 2.1 million shares raising stake to 25.1%; source gives weekdays only, so exact dates unknown."
+              ],
+              "confidence": 0.85
+            },
+            "index_in_stage": 2,
+            "start_time": {
+              "value": "unknown",
+              "evidence_source_contents": [
+                "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental"
+              ],
+              "reasons": [
+                "Source specifies Monday/Tuesday/Wednesday without calendar dates; boundary left unknown rather than inferred."
+              ],
+              "confidence": 0.5
+            },
+            "end_time": {
+              "value": "unknown",
+              "evidence_source_contents": [
+                "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental"
+              ],
+              "reasons": [
+                "No calendar date given for the purchases."
+              ],
+              "confidence": 0.5
+            }
+          },
+          {
+            "episode_id": "E4",
+            "name": {
+              "value": "Buffett public remarks on Occidental rationale and warrants",
+              "evidence_source_contents": [
+                "巴菲特在5月份的伯克希尔年会上说道：“Vicki Hollub，她是Occidental一位杰出的经理。"
+              ],
+              "reasons": [
+                "Buffett's own annual-meeting remarks on Occidental management and his warrant position; month-level date only."
+              ],
+              "confidence": 0.8
+            },
+            "index_in_stage": 3,
+            "start_time": {
+              "value": "2023-05",
+              "evidence_source_contents": [
+                "巴菲特在5月份的伯克希尔年会上说道"
+              ],
+              "reasons": [
+                "Month-level reference to the May annual meeting."
+              ],
+              "confidence": 0.7
+            },
+            "end_time": {
+              "value": "2023-05",
+              "evidence_source_contents": [
+                "巴菲特在5月份的伯克希尔年会上说道"
+              ],
+              "reasons": [
+                "Month-level reference only."
+              ],
+              "confidence": 0.7
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "failed_target": {
+    "episode_id": "E5",
+    "name": {
+      "value": "Berkshire purchases 2.1 million more Occidental shares over Monday–Wednesday, raising stake to 25.1%",
+      "evidence_source_contents": [
+        "一份新的监管文件显示，伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。",
+        "伯克希尔哈撒韦目前持有2.241亿股OXY，按周三57.46美元的收盘价计算，价值129亿美元。"
+      ],
+      "reasons": [
+        "Distinct purchase occurrence reported via a new regulatory filing; matches existing E3 (25.1% stake) but supplies the missing specifics of the purchase and holding size.",
+        "Article published 2023-06-30/07-01; the purchases occurred in the days before publication, so exact dates are not stated — left unknown rather than invented."
+      ],
+      "confidence": 0.85
+    },
+    "index_in_stage": 4
+  },
+  "responses": [
+    {
+      "episode_id": "E5",
+      "index_in_stage": 4,
+      "name": {
+        "value": "Berkshire purchases 2.1 million more Occidental shares over Monday–Wednesday, raising stake to 25.1%",
+        "evidence_source_contents": [
+          "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。"
+        ],
+        "reasons": [
+          "Directly states the 2.1 million share purchase over Monday–Wednesday and the resulting 25.1% stake."
+        ],
+        "confidence": 0.95
+      },
+      "descriptions": [
+        {
+          "value": "A new regulatory filing showed Berkshire bought 2.1 million additional Occidental shares on Monday, Tuesday and Wednesday, lifting its stake to 25.1%.",
+          "evidence_source_contents": [
+            "一份新的监管文件显示，伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。"
+          ],
+          "reasons": [
+            "Explicit filing-based statement of the purchase and stake level."
+          ],
+          "confidence": 0.95
+        },
+        {
+          "value": "Berkshire held 224.1 million Occidental shares worth $12.9 billion at the $57.46 Wednesday close.",
+          "evidence_source_contents": [
+            "伯克希尔哈撒韦目前持有2.241亿股OXY，按周三57.46美元的收盘价计算，价值129亿美元。"
+          ],
+          "reasons": [
+            "Quantifies the position and valuation at the Wednesday close."
+          ],
+          "confidence": 0.9
+        },
+        {
+          "value": "Occidental was Berkshire's sixth-largest holding at the time.",
+          "evidence_source_contents": [
+            "现在是伯克希尔哈撒韦的第六大持仓股。"
+          ],
+          "reasons": [
+            "States the portfolio ranking of the position."
+          ],
+          "confidence": 0.85
+        }
+      ],
+      "start_time": {
+        "value": "unknown",
+        "evidence_source_contents": [
+          "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental"
+        ],
+        "reasons": [
+          "Source gives weekdays only, not calendar dates; exact start date is not stated."
+        ],
+        "confidence": 0.6
+      },
+      "end_time": {
+        "value": "unknown",
+        "evidence_source_contents": [
+          "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental"
+        ],
+        "reasons": [
+          "Source gives weekdays only, not calendar dates; exact end date is not stated."
+        ],
+        "confidence": 0.6
+      },
+      "participants": "Results of ParticipantReconstructor",
+      "participant_relations": [
+        {
+          "from_participant_id": "P_2",
+          "to_participant_id": "P_4",
+          "relation_name": {
+            "value": "shareholder of",
+            "evidence_source_contents": [
+              "将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%"
+            ],
+            "reasons": [
+              "Berkshire's stake in Occidental is explicitly stated as raised to 25.1%."
+            ],
+            "confidence": 0.9
+          },
+          "descriptions": [
+            {
+              "value": "Berkshire held 224.1 million Occidental shares, a 25.1% stake, after the additional purchases.",
+              "evidence_source_contents": [
+                "伯克希尔哈撒韦目前持有2.241亿股OXY",
+                "持股比例提高至了25.1%"
+              ],
+              "reasons": [
+                "Combines the stated share count and stake percentage for the same holding."
+              ],
+              "confidence": 0.9
+            }
+          ],
+          "relation_type": {
+            "value": "investment ownership",
+            "evidence_source_contents": [
+              "持股比例提高至了25.1%"
+            ],
+            "reasons": [
+              "The relation is an equity ownership stake, not a documented purchase counterparty role."
+            ],
+            "confidence": 0.85
+          },
+          "start_time": null,
+          "end_time": null
+        }
+      ],
+      "transactions": "Results of TransactionReconstructor"
+    },
+    {
+      "episode_id": "E5",
+      "index_in_stage": 4,
+      "name": {
+        "value": "Berkshire purchases 2.1 million more Occidental shares over Monday–Wednesday, raising stake to 25.1%",
+        "evidence_source_contents": [
+          "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。"
+        ],
+        "reasons": [
+          "Direct source statement of the additional 2.1 million shares purchased over Monday–Wednesday and the resulting 25.1% stake; the episode name is derived from this span."
+        ],
+        "confidence": 0.95
+      },
+      "descriptions": [
+        {
+          "value": "Berkshire bought 2.1 million additional Occidental shares over Monday, Tuesday and Wednesday, lifting its stake to 25.1%.",
+          "evidence_source_contents": [
+            "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。"
+          ],
+          "reasons": [
+            "Explicit purchase quantity, days and resulting ownership percentage."
+          ],
+          "confidence": 0.95
+        },
+        {
+          "value": "The new ownership level was disclosed in a new regulatory filing.",
+          "evidence_source_contents": [
+            "一份新的监管文件显示，伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental"
+          ],
+          "reasons": [
+            "Identifies the disclosure vehicle for the purchase."
+          ],
+          "confidence": 0.9
+        },
+        {
+          "value": "Berkshire held 224.1 million Occidental shares worth $12.9 billion at the $57.46 Wednesday close.",
+          "evidence_source_contents": [
+            "伯克希尔哈撒韦目前持有2.241亿股OXY，按周三57.46美元的收盘价计算，价值129亿美元。"
+          ],
+          "reasons": [
+            "Share count and valuation at the stated closing price."
+          ],
+          "confidence": 0.9
+        },
+        {
+          "value": "Occidental was Berkshire's sixth-largest holding at the time.",
+          "evidence_source_contents": [
+            "现在是伯克希尔哈撒韦的第六大持仓股。"
+          ],
+          "reasons": [
+            "Portfolio ranking reported by the source."
+          ],
+          "confidence": 0.8
+        },
+        {
+          "value": "Buffett had ruled out taking full control of the energy company.",
+          "evidence_source_contents": [
+            "巴菲特已经排除了完全控股这家能源公司的可能性。"
+          ],
+          "reasons": [
+            "Direct statement of Buffett's position, relevant to the limits of the stake buildup."
+          ],
+          "confidence": 0.85
+        }
+      ],
+      "start_time": {
+        "value": "unknown",
+        "evidence_source_contents": [],
+        "reasons": [
+          "The source gives only the relative days '周一、周二和周三' without calendar dates; no absolute start date is stated, so the skeleton's unknown value is retained."
+        ],
+        "confidence": 0.5
+      },
+      "end_time": {
+        "value": "unknown",
+        "evidence_source_contents": [],
+        "reasons": [
+          "No absolute end date is given in the source; the skeleton's unknown value is retained."
+        ],
+        "confidence": 0.5
+      },
+      "participants": "Results of ParticipantReconstructor",
+      "participant_relations": [
+        {
+          "from_participant_id": "P_2",
+          "to_participant_id": "P_4",
+          "relation_name": {
+            "value": "shareholder of",
+            "evidence_source_contents": [
+              "将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%"
+            ],
+            "reasons": [
+              "Berkshire's ownership percentage in Occidental establishes the investor-to-issuer holding relation; direction is Berkshire (holder) to Occidental (issuer)."
+            ],
+            "confidence": 0.9
+          },
+          "descriptions": [
+            {
+              "value": "Berkshire held 224.1 million Occidental shares, a 25.1% stake, after the additional purchases.",
+              "evidence_source_contents": [
+                "伯克希尔哈撒韦目前持有2.241亿股OXY",
+                "持股比例提高至了25.1%"
+              ],
+              "reasons": [
+                "Share count and percentage support the holding relation."
+              ],
+              "confidence": 0.9
+            }
+          ],
+          "relation_type": {
+            "value": "shareholding",
+            "evidence_source_contents": [
+              "持股比例提高至了25.1%"
+            ],
+            "reasons": [
+              "The source describes an ownership percentage, i.e., a shareholding relation."
+            ],
+            "confidence": 0.9
+          },
+          "start_time": null,
+          "end_time": null
+        }
+      ],
+      "transactions": "Results of TransactionReconstructor"
+    },
+    {
+      "episode_id": "E5",
+      "name": {
+        "value": "Berkshire purchases 2.1 million more Occidental shares over Monday–Wednesday, raising stake to 25.1%",
+        "evidence_source_contents": [
+          "伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。"
+        ],
+        "reasons": [
+          "Directly states the 2.1 million share purchase over Monday–Wednesday and the resulting 25.1% stake."
+        ],
+        "confidence": 0.95
+      },
+      "index_in_stage": 4,
+      "descriptions": [
+        {
+          "value": "A new regulatory filing showed Berkshire bought 2.1 million additional Occidental shares, lifting its stake to 25.1%.",
+          "evidence_source_contents": [
+            "一份新的监管文件显示，伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。"
+          ],
+          "reasons": [
+            "Explicitly attributes the purchase and stake increase to a new regulatory filing."
+          ],
+          "confidence": 0.95
+        },
+        {
+          "value": "Berkshire held 224.1 million Occidental shares worth $12.9 billion at the $57.46 Wednesday close.",
+          "evidence_source_contents": [
+            "伯克希尔哈撒韦目前持有2.241亿股OXY，按周三57.46美元的收盘价计算，价值129亿美元。"
+          ],
+          "reasons": [
+            "Gives the share count and valuation at the Wednesday closing price."
+          ],
+          "confidence": 0.9
+        },
+        {
+          "value": "Occidental was Berkshire's sixth-largest holding at the time.",
+          "evidence_source_contents": [
+            "现在是伯克希尔哈撒韦的第六大持仓股。"
+          ],
+          "reasons": [
+            "States the portfolio ranking of the Occidental position."
+          ],
+          "confidence": 0.85
+        }
+      ],
+      "start_time": {
+        "value": "unknown",
+        "evidence_source_contents": [],
+        "reasons": [
+          "The skeleton leaves start_time unknown; the source describes purchases over Monday–Wednesday but does not give calendar dates for those days."
+        ],
+        "confidence": 0.5
+      },
+      "end_time": {
+        "value": "unknown",
+        "evidence_source_contents": [],
+        "reasons": [
+          "The skeleton leaves end_time unknown; the source does not provide a precise calendar date for the filing or the Wednesday close."
+        ],
+        "confidence": 0.5
+      },
+      "participants": "Results of ParticipantReconstructor",
+      "participant_relations": [],
+      "transactions": "Results of TransactionReconstructor"
+    }
+  ],
+  "proposal": {
+    "stage_id": "S1",
+    "stage_name": {
+      "value": "Occidental Petroleum stake buildup",
+      "evidence_source_contents": [
+        "沃伦巴菲特的伯克希尔哈撒韦公司不断在买入西方石油（OXY）的股票，目前已持有这家石油巨头四分之一的股份。"
+      ],
+      "reasons": [
+        "Source frames the Occidental purchases as an ongoing Berkshire action; used only to anchor the stage, not as a new episode."
+      ],
+      "confidence": 0.7
+    },
+    "episode": {
+      "episode_id": "E3",
+      "name": {
+        "value": "Berkshire purchases 2.1 million more Occidental shares over Monday–Wednesday, raising stake to 25.1%",
+        "evidence_source_contents": [
+          "一份新的监管文件显示，伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。",
+          "伯克希尔哈撒韦目前持有2.241亿股OXY，按周三57.46美元的收盘价计算，价值129亿美元。"
+        ],
+        "reasons": [
+          "Distinct purchase occurrence reported via a new regulatory filing; matches existing E3 (25.1% stake) but supplies the missing specifics of the purchase and holding size.",
+          "Article published 2023-06-30/07-01; the purchases occurred in the days before publication, so exact dates are not stated — left unknown rather than invented."
+        ],
+        "confidence": 0.85
+      }
+    }
+  },
+  "source": "一份新的监管文件显示，伯克希尔哈撒韦在周一、周二和周三又购买了210万股的Occidental，将这家总部位于休斯顿的能源生产商的持股比例提高至了25.1%。\n伯克希尔哈撒韦目前持有2.241亿股OXY，按周三57.46美元的收盘价计算，价值129亿美元。"
+}

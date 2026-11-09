@@ -1,0 +1,2518 @@
+{
+  "candidate": {
+    "occurrence_relevance": [
+      {
+        "occurrence_id": "O_S3_E4",
+        "subject_relevance": {
+          "value": "Berkshire's stated intention to cap its Japanese trading-house holdings at 9.9% and hold them long term is part of the Japanese investment course Buffett publicly explained; the cap is a company commitment, not a personal purchase.",
+          "evidence_source_contents": [
+            "该公司将只收购这五家公司中任何一家至多9.9%的股份",
+            "伯克希尔哈撒韦公司表示，它打算长期持有在日本的投资"
+          ],
+          "reasons": [
+            "The source attributes the cap and holding intention to Berkshire, not to Buffett personally.",
+            "Buffett is identified as Berkshire's CEO in the same article, supporting indirect relevance."
+          ],
+          "confidence": 0.8
+        }
+      },
+      {
+        "occurrence_id": "O_S4_E1",
+        "subject_relevance": {
+          "value": "Berkshire's initial ~$1 billion Activision Blizzard purchase preceded Microsoft's announced acquisition and is the background to the later merger-arbitrage position Buffett described; the source does not disclose whether Buffett or his lieutenants made the purchase.",
+          "evidence_source_contents": [
+            "于2021年第四季度花了近10亿美元购买了近1470万股动视暴雪的股票",
+            "也不清楚购买动视暴雪股票的是巴菲特还是他的两名投资副手的手笔"
+          ],
+          "reasons": [
+            "The purchase is attributed to Berkshire, with personal attribution explicitly unresolved.",
+            "It is the documented origin of the position Buffett later discussed as arbitrage."
+          ],
+          "confidence": 0.75
+        }
+      },
+      {
+        "occurrence_id": "O_S4_E2",
+        "subject_relevance": {
+          "value": "Buffett personally stated at Activision's annual meeting that Berkshire held about 9.5% of Activision and had been increasing the stake as a merger-arbitrage play, describing it as an occasional arbitrage trade he does himself.",
+          "evidence_source_contents": [
+            "巴菲特说，伯克希尔目前持有动视约9.5％的股份。",
+            "“偶尔我会看到套利交易，就去做，”伯克希尔的董事长兼首席执行官说。"
+          ],
+          "reasons": [
+            "Direct quotation attributes the arbitrage framing and decision to Buffett personally.",
+            "The stake increase is described as ongoing since the deal announcement."
+          ],
+          "confidence": 0.95
+        }
+      },
+      {
+        "occurrence_id": "O_S4_E3",
+        "subject_relevance": {
+          "value": "Berkshire disclosed a reduced 1.9% Activision stake, and the source links Buffett to the earlier merger-arbitrage buildup and to his long history of arbitrage trades with Munger.",
+          "evidence_source_contents": [
+            "其持有动视1.9%的股份，共计14658121股。相比之下，3月底的持股比例为6.3%，2022年底的持股比例为6.7%。",
+            "此后，这位92岁的投资传奇人物在一场并购套利游戏中增持了该公司的股份"
+          ],
+          "reasons": [
+            "The reduction is disclosed as Berkshire's holding, while Buffett is linked to the arbitrage buildup.",
+            "The source preserves the distinction between company disclosure and Buffett's stated arbitrage activity."
+          ],
+          "confidence": 0.85
+        }
+      },
+      {
+        "occurrence_id": "O_S5_E1",
+        "subject_relevance": {
+          "value": "Buffett's February 2023 shareholder letter advocated operating earnings over GAAP measures and called GAAP earnings '100 percent misleading when viewed quarterly or even annually,' while Berkshire reported its 2022 results.",
+          "evidence_source_contents": [
+            "In his annual  letter to shareholders published on Feb. 25, Buffett said he and Charlie Munger, his longtime business partner, prefer using operating earnings as a measure of financial performance.",
+            "“The GAAP earnings are 100 percent misleading when viewed quarterly or even annually,” Buffett wrote in the shareholder letter."
+          ],
+          "reasons": [
+            "Direct quotation attributes the performance-measure advocacy to Buffett's letter.",
+            "Berkshire's reported results provide the company context for the letter."
+          ],
+          "confidence": 0.95
+        }
+      }
+    ],
+    "background_occurrence_ids": [
+      "O_S4_E1"
+    ],
+    "memberships": [
+      {
+        "event_id": "storyline:376e4808f9c0f9b9",
+        "activity_id": "A:ACT_O_S3_E4_P1_1",
+        "stage_id": "S3b",
+        "display_title": null,
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "C:O_S4_E1",
+        "stage_id": "S4",
+        "display_title": "Initial Activision stake disclosed in Q4 2021 13F",
+        "detail_indices": null
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E1_P1_1",
+        "stage_id": "S4",
+        "display_title": null,
+        "detail_indices": [
+          0,
+          1
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E1_P4_1",
+        "stage_id": "S4",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "T:TX_O_S4_E1_1",
+        "stage_id": "S4",
+        "display_title": null,
+        "detail_indices": []
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "stage_id": "S4b",
+        "display_title": null,
+        "detail_indices": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E2_P2_1",
+        "stage_id": "S4b",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E2_P3_1",
+        "stage_id": "S4b",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E3_P1_1",
+        "stage_id": "S4c",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E3_P1_2",
+        "stage_id": "S4c",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E3_P2_1",
+        "stage_id": "S4c",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E3_P2_2",
+        "stage_id": "S4c",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E3_P3_1",
+        "stage_id": "S4c",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "activity_id": "A:ACT_O_S4_E3_P4_1",
+        "stage_id": "S4c",
+        "display_title": null,
+        "detail_indices": [
+          0
+        ]
+      },
+      {
+        "event_id": "storyline:e62e14478d0f8c98",
+        "activity_id": "A:ACT_O_S5_E1_P1_1",
+        "stage_id": "S5",
+        "display_title": null,
+        "detail_indices": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "event_id": "storyline:e62e14478d0f8c98",
+        "activity_id": "A:ACT_O_S5_E1_P2_1",
+        "stage_id": "S5",
+        "display_title": null,
+        "detail_indices": [
+          0,
+          1
+        ]
+      }
+    ],
+    "occurrence_issues": []
+  },
+  "ids": [
+    "O_S3_E4",
+    "O_S4_E1",
+    "O_S4_E2",
+    "O_S4_E3",
+    "O_S5_E1"
+  ],
+  "layout": {
+    "events": [
+      {
+        "event_id": "storyline:8499e12655a99021"
+      },
+      {
+        "event_id": "storyline:57279a24ca3018ae"
+      },
+      {
+        "event_id": "storyline:376e4808f9c0f9b9"
+      },
+      {
+        "event_id": "storyline:9de06a434f25d0ef"
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40"
+      },
+      {
+        "event_id": "storyline:e62e14478d0f8c98"
+      },
+      {
+        "event_id": "storyline:c6a1a2ae595b8ba7"
+      },
+      {
+        "event_id": "storyline:new_berkshire_portfolio_rebalancing"
+      },
+      {
+        "event_id": "storyline:new_buffett_public_commentary"
+      }
+    ],
+    "stages": [
+      {
+        "event_id": "storyline:8499e12655a99021",
+        "stage_id": "S1"
+      },
+      {
+        "event_id": "storyline:8499e12655a99021",
+        "stage_id": "S1b"
+      },
+      {
+        "event_id": "storyline:57279a24ca3018ae",
+        "stage_id": "S2"
+      },
+      {
+        "event_id": "storyline:57279a24ca3018ae",
+        "stage_id": "S2b"
+      },
+      {
+        "event_id": "storyline:376e4808f9c0f9b9",
+        "stage_id": "S3"
+      },
+      {
+        "event_id": "storyline:376e4808f9c0f9b9",
+        "stage_id": "S3b"
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "stage_id": "S4"
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "stage_id": "S4b"
+      },
+      {
+        "event_id": "storyline:cec4e4a421ecca40",
+        "stage_id": "S4c"
+      },
+      {
+        "event_id": "storyline:e62e14478d0f8c98",
+        "stage_id": "S5"
+      },
+      {
+        "event_id": "storyline:e62e14478d0f8c98",
+        "stage_id": "S5b"
+      },
+      {
+        "event_id": "storyline:c6a1a2ae595b8ba7",
+        "stage_id": "S6"
+      },
+      {
+        "event_id": "storyline:c6a1a2ae595b8ba7",
+        "stage_id": "S6b"
+      },
+      {
+        "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+        "stage_id": "S7"
+      },
+      {
+        "event_id": "storyline:new_buffett_public_commentary",
+        "stage_id": "S8"
+      }
+    ]
+  },
+  "package": {
+    "activity": [
+      {
+        "activity_id": "A:ACT_O_S1_E1_P2_1",
+        "action_id": "ACT_O_S1_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E1_P4_1",
+        "action_id": "ACT_O_S1_E1_P4_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E2_P2_1",
+        "action_id": "ACT_O_S1_E2_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E3_P2_1",
+        "action_id": "ACT_O_S1_E3_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "T:TX_O_S1_E3_1",
+        "action_id": null,
+        "transaction_id": "TX_O_S1_E3_1",
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E4_P1_1",
+        "action_id": "ACT_O_S1_E4_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E4_P1_2",
+        "action_id": "ACT_O_S1_E4_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E4_P1_3",
+        "action_id": "ACT_O_S1_E4_P1_3",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S1_E4_P2_1",
+        "action_id": "ACT_O_S1_E4_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S2_E1_P2_1",
+        "action_id": "ACT_O_S2_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S2_E2_P2_1",
+        "action_id": "ACT_O_S2_E2_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S2_E3_P1_1",
+        "action_id": "ACT_O_S2_E3_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E1_P1_1",
+        "action_id": "ACT_O_S3_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E1_P1_2",
+        "action_id": "ACT_O_S3_E1_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E1_P2_1",
+        "action_id": "ACT_O_S3_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E2_P1_1",
+        "action_id": "ACT_O_S3_E2_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E2_P1_2",
+        "action_id": "ACT_O_S3_E2_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "action_id": "ACT_O_S3_E3_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E3_P2_1",
+        "action_id": "ACT_O_S3_E3_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S3_E4_P1_1",
+        "action_id": "ACT_O_S3_E4_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E1_P1_1",
+        "action_id": "ACT_O_S4_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E1_P4_1",
+        "action_id": "ACT_O_S4_E1_P4_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "T:TX_O_S4_E1_1",
+        "action_id": null,
+        "transaction_id": "TX_O_S4_E1_1",
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "action_id": "ACT_O_S4_E2_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E2_P2_1",
+        "action_id": "ACT_O_S4_E2_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E2_P3_1",
+        "action_id": "ACT_O_S4_E2_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E3_P1_1",
+        "action_id": "ACT_O_S4_E3_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E3_P1_2",
+        "action_id": "ACT_O_S4_E3_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E3_P2_1",
+        "action_id": "ACT_O_S4_E3_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E3_P2_2",
+        "action_id": "ACT_O_S4_E3_P2_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E3_P3_1",
+        "action_id": "ACT_O_S4_E3_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S4_E3_P4_1",
+        "action_id": "ACT_O_S4_E3_P4_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E1_P1_1",
+        "action_id": "ACT_O_S5_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E1_P2_1",
+        "action_id": "ACT_O_S5_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P1_1",
+        "action_id": "ACT_O_S5_E2_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P1_2",
+        "action_id": "ACT_O_S5_E2_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P2_1",
+        "action_id": "ACT_O_S5_E2_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P3_1",
+        "action_id": "ACT_O_S5_E2_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P5_1",
+        "action_id": "ACT_O_S5_E2_P5_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P6_1",
+        "action_id": "ACT_O_S5_E2_P6_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E2_P7_1",
+        "action_id": "ACT_O_S5_E2_P7_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P1_1",
+        "action_id": "ACT_O_S5_E3_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P1_2",
+        "action_id": "ACT_O_S5_E3_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P1_3",
+        "action_id": "ACT_O_S5_E3_P1_3",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P1_4",
+        "action_id": "ACT_O_S5_E3_P1_4",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P2_1",
+        "action_id": "ACT_O_S5_E3_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P3_1",
+        "action_id": "ACT_O_S5_E3_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P4_1",
+        "action_id": "ACT_O_S5_E3_P4_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P5_1",
+        "action_id": "ACT_O_S5_E3_P5_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E3_P6_1",
+        "action_id": "ACT_O_S5_E3_P6_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E4_P1_1",
+        "action_id": "ACT_O_S5_E4_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S5_E4_P2_1",
+        "action_id": "ACT_O_S5_E4_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "action_id": "ACT_O_S6_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P2_1",
+        "action_id": "ACT_O_S6_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P3_1",
+        "action_id": "ACT_O_S6_E1_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P4_1",
+        "action_id": "ACT_O_S6_E1_P4_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P5_1",
+        "action_id": "ACT_O_S6_E1_P5_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P6_1",
+        "action_id": "ACT_O_S6_E1_P6_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P7_1",
+        "action_id": "ACT_O_S6_E1_P7_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E1_P8_1",
+        "action_id": "ACT_O_S6_E1_P8_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "T:TX_O_S6_E1_1",
+        "action_id": null,
+        "transaction_id": "TX_O_S6_E1_1",
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E2_P1_1",
+        "action_id": "ACT_O_S6_E2_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E2_P1_2",
+        "action_id": "ACT_O_S6_E2_P1_2",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "T:TX_O_S6_E2_1",
+        "action_id": null,
+        "transaction_id": "TX_O_S6_E2_1",
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "action_id": "ACT_O_S6_E3_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S7_E1_P1_1",
+        "action_id": "ACT_O_S7_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S8_E1_P1_1",
+        "action_id": "ACT_O_S8_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S8_E1_P2_1",
+        "action_id": "ACT_O_S8_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "T:TX_O_S8_E1_1",
+        "action_id": null,
+        "transaction_id": "TX_O_S8_E1_1",
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S9_E1_P1_1",
+        "action_id": "ACT_O_S9_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S9_E1_P2_1",
+        "action_id": "ACT_O_S9_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S10_E1_P1_1",
+        "action_id": "ACT_O_S10_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S11_E1_P1_1",
+        "action_id": "ACT_O_S11_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S11_E1_P2_1",
+        "action_id": "ACT_O_S11_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S11_E1_P3_1",
+        "action_id": "ACT_O_S11_E1_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S12_E1_P1_1",
+        "action_id": "ACT_O_S12_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S12_E1_P2_1",
+        "action_id": "ACT_O_S12_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S12_E1_P3_1",
+        "action_id": "ACT_O_S12_E1_P3_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "action_id": "ACT_O_S14_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S15_E1_P1_1",
+        "action_id": "ACT_O_S15_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S16_E1_P1_1",
+        "action_id": "ACT_O_S16_E1_P1_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      },
+      {
+        "activity_id": "A:ACT_O_S16_E1_P2_1",
+        "action_id": "ACT_O_S16_E1_P2_1",
+        "transaction_id": null,
+        "context_occurrence_id": null
+      }
+    ],
+    "activity_detail": [
+      {
+        "value": "Berkshire requested approval to buy as much as half of Occidental Petroleum.",
+        "activity_id": "A:ACT_O_S1_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00029"
+      },
+      {
+        "value": "The approval allowed Berkshire to buy as much as half of Occidental, and the agency said the proposed purchases would be consistent with the public interest.",
+        "activity_id": "A:ACT_O_S1_E1_P4_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00031"
+      },
+      {
+        "value": "The new ownership level was up from 20.2% as of Aug. 8, according to Bloomberg-compiled data.",
+        "activity_id": "A:ACT_O_S1_E2_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00038"
+      },
+      {
+        "value": "Berkshire expanded its Occidental ownership during the year after first betting on the Houston-based oil company three years earlier.",
+        "activity_id": "A:ACT_O_S1_E2_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00039"
+      },
+      {
+        "value": "The stake increase followed regulatory go-ahead to buy as much as half of the oil giant.",
+        "activity_id": "A:ACT_O_S1_E2_P2_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00040"
+      },
+      {
+        "value": "Berkshire bought 2.1 million additional Occidental shares, raising its stake to 25.1%.",
+        "activity_id": "A:ACT_O_S1_E3_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00046"
+      },
+      {
+        "value": "After the purchases Berkshire held 224.1 million Occidental shares, worth $12.9 billion at Wednesday's closing price of $57.46.",
+        "activity_id": "A:ACT_O_S1_E3_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00047"
+      },
+      {
+        "value": "Occidental was Berkshire's sixth-largest holding at the time.",
+        "activity_id": "A:ACT_O_S1_E3_P2_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00048"
+      },
+      {
+        "value": "Praised Occidental CEO Vicki Hollub as an outstanding manager, noting her first job was at Cities Service, the company of the first stock Buffett bought in 1942.",
+        "activity_id": "A:ACT_O_S1_E4_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00057"
+      },
+      {
+        "value": "Said he understood the math of the business but would not know what to do in the oil-field domain.",
+        "activity_id": "A:ACT_O_S1_E4_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00058"
+      },
+      {
+        "value": "Told shareholders he was satisfied with the warrants Berkshire holds from the 2019 transaction that helped fund Occidental's acquisition of Anadarko.",
+        "activity_id": "A:ACT_O_S1_E4_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00059"
+      },
+      {
+        "value": "Said Berkshire may or may not hold more shares in the future but definitely holds warrants on a large number of shares from the original deal at about $59 per share, with long duration.",
+        "activity_id": "A:ACT_O_S1_E4_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00060"
+      },
+      {
+        "value": "The source reports Buffett has excluded the possibility of fully controlling Occidental.",
+        "activity_id": "A:ACT_O_S1_E4_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00062"
+      },
+      {
+        "value": "Buffett began buying Occidental shares after reading its annual report and gaining confidence in the company's growth and leadership.",
+        "activity_id": "A:ACT_O_S1_E4_P1_3",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00064"
+      },
+      {
+        "value": "Berkshire holds $10 billion of Occidental preferred stock and warrants to buy 83.9 million common shares at $59.62 per share for $5 billion.",
+        "activity_id": "A:ACT_O_S1_E4_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00066"
+      },
+      {
+        "value": "Chevron (CVX) represented 7.13% of the reported portfolio.",
+        "activity_id": "A:ACT_O_S2_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00071"
+      },
+      {
+        "value": "The reported portfolio was approximately $363.5 billion in capital.",
+        "activity_id": "A:ACT_O_S2_E1_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00072"
+      },
+      {
+        "value": "Reported stock positions totaling approximately $300,130,772,000.",
+        "activity_id": "A:ACT_O_S2_E2_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00078"
+      },
+      {
+        "value": "Reported Chevron (CVX) at 7.79% of the portfolio.",
+        "activity_id": "A:ACT_O_S2_E2_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00079"
+      },
+      {
+        "value": "Reported cash position of $105.4 billion as of June 30, 2022.",
+        "activity_id": "A:ACT_O_S2_E2_P2_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00080"
+      },
+      {
+        "value": "Chevron was reduced for four consecutive quarters, with peak holdings of 165 million shares and 50 million shares sold by the latest disclosure period, leaving 110 million shares.",
+        "activity_id": "A:ACT_O_S2_E3_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00086"
+      },
+      {
+        "value": "Chevron was among the top five reductions in the Q3 2023 13F, with the top five reductions totaling about $3.328 billion.",
+        "activity_id": "A:ACT_O_S2_E3_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00087"
+      },
+      {
+        "value": "Chevron remained a top-ten holding at Q3 2023 end, within a top-ten group worth about $287.976 billion or 91.93% of the portfolio.",
+        "activity_id": "A:ACT_O_S2_E3_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00088"
+      },
+      {
+        "value": "Buffett was visiting Japan when he disclosed the stake increases.",
+        "activity_id": "A:ACT_O_S3_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00093"
+      },
+      {
+        "value": "Berkshire raised its holdings in each of five major Japanese trading companies to 7.4%.",
+        "activity_id": "A:ACT_O_S3_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00094"
+      },
+      {
+        "value": "The five trading companies are Mitsubishi Corp, Mitsui & Co, Sumitomo Corp, Itochu and Marubeni.",
+        "activity_id": "A:ACT_O_S3_E1_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00095"
+      },
+      {
+        "value": "The 7.4% level was higher than the above-6% level in November.",
+        "activity_id": "A:ACT_O_S3_E1_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00096"
+      },
+      {
+        "value": "Buffett said he would consider making more investments in Japanese stocks.",
+        "activity_id": "A:ACT_O_S3_E1_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00098"
+      },
+      {
+        "value": "The Japanese trading-house position became Berkshire's largest investment outside the United States.",
+        "activity_id": "A:ACT_O_S3_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00100"
+      },
+      {
+        "value": "Berkshire first bought shares in the Japanese trading companies in August 2020 at slightly above 5%.",
+        "activity_id": "A:ACT_O_S3_E1_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00101"
+      },
+      {
+        "value": "Buffett said Berkshire might occasionally cooperate with Japanese trading houses and that he looked forward to it.",
+        "activity_id": "A:ACT_O_S3_E2_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00106"
+      },
+      {
+        "value": "Buffett said investments in Japan would continue to increase Berkshire Hathaway's value.",
+        "activity_id": "A:ACT_O_S3_E2_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00107"
+      },
+      {
+        "value": "Buffett said the five trading houses as a group could bring Berkshire 14% returns on its purchases, pay substantial dividends and sometimes buy back stock.",
+        "activity_id": "A:ACT_O_S3_E2_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00109"
+      },
+      {
+        "value": "Buffett said Berkshire could eliminate currency risk through yen financing at a cost of only 0.5%.",
+        "activity_id": "A:ACT_O_S3_E2_P1_2",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00110"
+      },
+      {
+        "value": "The increase was carried out through wholly owned subsidiary National Indemnity Company.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00116"
+      },
+      {
+        "value": "The average stake across the five trading houses was raised above 8.5%.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00117"
+      },
+      {
+        "value": "Itochu stake raised from 6.21% to 7.47%.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00118"
+      },
+      {
+        "value": "Sumitomo stake raised from 6.57% to 8.31%.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00119"
+      },
+      {
+        "value": "Mitsui stake raised from 6.62% to 8.09%.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 4,
+        "evidence_set_id": "ES_00120"
+      },
+      {
+        "value": "Marubeni stake raised from 6.75% to 8.3%.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 5,
+        "evidence_set_id": "ES_00121"
+      },
+      {
+        "value": "The five companies involved are Itochu, Marubeni, Mitsubishi, Mitsui and Sumitomo.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 6,
+        "evidence_set_id": "ES_00122"
+      },
+      {
+        "value": "Berkshire said the total value of these Japanese interests exceeds its holdings in any country outside the United States.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 7,
+        "evidence_set_id": "ES_00123"
+      },
+      {
+        "value": "Berkshire said it intends to hold the Japanese investments long term.",
+        "activity_id": "A:ACT_O_S3_E3_P1_1",
+        "detail_index": 8,
+        "evidence_set_id": "ES_00124"
+      },
+      {
+        "value": "The average stake across the five trading houses was raised above 8.5%.",
+        "activity_id": "A:ACT_O_S3_E3_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00126"
+      },
+      {
+        "value": "Berkshire said it will acquire at most 9.9% of any one of the five companies.",
+        "activity_id": "A:ACT_O_S3_E4_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00130"
+      },
+      {
+        "value": "Berkshire said it intends to hold the Japanese investments long term.",
+        "activity_id": "A:ACT_O_S3_E4_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00131"
+      },
+      {
+        "value": "Berkshire spent nearly $1 billion to buy nearly 14.7 million Activision Blizzard shares.",
+        "activity_id": "A:ACT_O_S4_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00138"
+      },
+      {
+        "value": "The purchase preceded Microsoft's announced $68.7 billion acquisition of Activision by a few weeks.",
+        "activity_id": "A:ACT_O_S4_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00139"
+      },
+      {
+        "value": "The announced acquisition price was $68.7 billion.",
+        "activity_id": "A:ACT_O_S4_E1_P4_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00141"
+      },
+      {
+        "value": "Buffett said Berkshire had been increasing its Activision stake since the Microsoft deal was announced because the shares traded well below Microsoft's offer.",
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00150"
+      },
+      {
+        "value": "Buffett described the position as an occasional arbitrage trade he does himself and acknowledged Berkshire could lose a fairly large amount if the deal fails.",
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00151"
+      },
+      {
+        "value": "Buffett said Berkshire did not know in advance about Microsoft's plan to acquire Activision when it made the initial ~$1 billion purchase in Q4 2021.",
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00152"
+      },
+      {
+        "value": "Buffett cited uncertainty over how the DOJ, the EU and roughly 30 other jurisdictions would act, while noting Microsoft had the money.",
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00153"
+      },
+      {
+        "value": "At the time of the remarks, Activision closed at $75.60 per share versus Microsoft's $95 offer price.",
+        "activity_id": "A:ACT_O_S4_E2_P1_1",
+        "detail_index": 4,
+        "evidence_set_id": "ES_00154"
+      },
+      {
+        "value": "Berkshire held about 9.5% of Activision as stated by Buffett at Activision's annual shareholder meeting.",
+        "activity_id": "A:ACT_O_S4_E2_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00156"
+      },
+      {
+        "value": "Activision shares closed at $75.60 on the Friday before the remarks.",
+        "activity_id": "A:ACT_O_S4_E2_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00158"
+      },
+      {
+        "value": "Buffett increased Berkshire's Activision shares as a merger-arbitrage bet that Microsoft's proposed acquisition would complete.",
+        "activity_id": "A:ACT_O_S4_E3_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00165"
+      },
+      {
+        "value": "Buffett said he and Charlie Munger began doing merger-arbitrage trades 50 years earlier, when such trades were called 'reorganizations'.",
+        "activity_id": "A:ACT_O_S4_E3_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00167"
+      },
+      {
+        "value": "Berkshire's disclosed Activision stake was 1.9%, or 14,658,121 shares, down from 6.3% at end-March and 6.7% at end-2022.",
+        "activity_id": "A:ACT_O_S4_E3_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00169"
+      },
+      {
+        "value": "The reduction left Berkshire with a 1.9% Activision stake, below 6.3% at end-March and 6.7% at end-2022.",
+        "activity_id": "A:ACT_O_S4_E3_P2_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00171"
+      },
+      {
+        "value": "Activision Blizzard shares rose more than 9% in the week after the FTC failed to block Microsoft's $68.7 billion acquisition.",
+        "activity_id": "A:ACT_O_S4_E3_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00173"
+      },
+      {
+        "value": "Microsoft appealed the UK regulator's ban and obtained a two-month suspension.",
+        "activity_id": "A:ACT_O_S4_E3_P4_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00175"
+      },
+      {
+        "value": "Buffett wrote that he and Charlie Munger prefer operating earnings as a measure of financial performance and urged Berkshire shareholders to do the same.",
+        "activity_id": "A:ACT_O_S5_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00180"
+      },
+      {
+        "value": "Buffett wrote that GAAP earnings are '100 percent misleading when viewed quarterly or even annually.'",
+        "activity_id": "A:ACT_O_S5_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00181"
+      },
+      {
+        "value": "Buffett wrote that capital gains have been hugely important to Berkshire and are expected to be meaningfully positive in future decades, but their quarter-by-quarter gyrations misinform investors.",
+        "activity_id": "A:ACT_O_S5_E1_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00182"
+      },
+      {
+        "value": "Buffett said in the letter that 2022 was a good year for business despite GAAP earnings being $112 billion lower than the previous year.",
+        "activity_id": "A:ACT_O_S5_E1_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00183"
+      },
+      {
+        "value": "Berkshire reported a 2022 net loss of $22.8 billion, driven by a nearly $54 billion decline in the value of its stock portfolio.",
+        "activity_id": "A:ACT_O_S5_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00185"
+      },
+      {
+        "value": "Excluding unrealized stock investment losses, Berkshire recorded $30.8 billion in 2022 operating earnings, a record high and 12 percent more than the previous year's $27.5 billion.",
+        "activity_id": "A:ACT_O_S5_E1_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00186"
+      },
+      {
+        "value": "Buffett and Munger were scheduled to take shareholder questions for about five hours.",
+        "activity_id": "A:ACT_O_S5_E2_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00196"
+      },
+      {
+        "value": "Buffett was expected to answer questions on recent U.S. bank failures, the Federal Reserve's inflation efforts, recession risk and the debt ceiling debate.",
+        "activity_id": "A:ACT_O_S5_E2_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00197"
+      },
+      {
+        "value": "Buffett, with his 32% voting power, opposed shareholder proposals on climate change, diversity and political advocacy.",
+        "activity_id": "A:ACT_O_S5_E2_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00198"
+      },
+      {
+        "value": "Questions were to alternate between in-person shareholders and online submissions, moderated by CNBC's Becky Quick.",
+        "activity_id": "A:ACT_O_S5_E2_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00200"
+      },
+      {
+        "value": "The meeting was a three-day event drawing as many as 40,000 people annually.",
+        "activity_id": "A:ACT_O_S5_E2_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00202"
+      },
+      {
+        "value": "The Q&A with Buffett and Munger was scheduled from 10:15 a.m. ET to 4:30 p.m. ET with a one-hour lunch break.",
+        "activity_id": "A:ACT_O_S5_E2_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00203"
+      },
+      {
+        "value": "This was the first time the meeting was broadcast, with CNBC holding exclusive broadcast and streaming rights.",
+        "activity_id": "A:ACT_O_S5_E2_P2_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00204"
+      },
+      {
+        "value": "Shareholders were to vote on proposals addressing climate change, diversity and political advocacy.",
+        "activity_id": "A:ACT_O_S5_E2_P2_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00205"
+      },
+      {
+        "value": "Munger recently raised concerns that American banks are \"full of bad loans\" and in \"trouble\" in the commercial property market.",
+        "activity_id": "A:ACT_O_S5_E2_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00207"
+      },
+      {
+        "value": "Just over a quarter of votes in 2021 and 2022 supported the idea.",
+        "activity_id": "A:ACT_O_S5_E2_P5_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00209"
+      },
+      {
+        "value": "CNBC's Becky Quick was to moderate the Q&A.",
+        "activity_id": "A:ACT_O_S5_E2_P7_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00212"
+      },
+      {
+        "value": "Buffett said Abel would certainly inherit some of the work he currently does.",
+        "activity_id": "A:ACT_O_S5_E3_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00221"
+      },
+      {
+        "value": "Buffett said Abel will be more successful than him, joking his nose would grow if he were wrong.",
+        "activity_id": "A:ACT_O_S5_E3_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00223"
+      },
+      {
+        "value": "Buffett said he thinks Abel will make decisions within the same framework Buffett has used for 30 years.",
+        "activity_id": "A:ACT_O_S5_E3_P1_3",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00225"
+      },
+      {
+        "value": "Buffett opposed proposals addressing climate change, diversity and political advocacy, including activist efforts to oust him as chairman.",
+        "activity_id": "A:ACT_O_S5_E3_P1_4",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00227"
+      },
+      {
+        "value": "Abel bought nearly $70 million worth of Berkshire Hathaway stock.",
+        "activity_id": "A:ACT_O_S5_E3_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00229"
+      },
+      {
+        "value": "Tens of thousands of investors gathered in Omaha, Nebraska for the meeting.",
+        "activity_id": "A:ACT_O_S5_E3_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00231"
+      },
+      {
+        "value": "Shareholders were to vote on proposals addressing climate change, diversity and political advocacy.",
+        "activity_id": "A:ACT_O_S5_E3_P3_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00232"
+      },
+      {
+        "value": "Munger said American banks are 'full of bad loans' and in 'trouble' in the commercial property market.",
+        "activity_id": "A:ACT_O_S5_E3_P4_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00234"
+      },
+      {
+        "value": "Just over a quarter of votes in 2021 and 2022 supported the idea.",
+        "activity_id": "A:ACT_O_S5_E3_P5_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00236"
+      },
+      {
+        "value": "The proposal sought disclosure of how Berkshire's board governs climate risks.",
+        "activity_id": "A:ACT_O_S5_E3_P6_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00238"
+      },
+      {
+        "value": "The letter states Greg Abel is ready to become Berkshire Hathaway CEO starting the next day.",
+        "activity_id": "A:ACT_O_S5_E4_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00244"
+      },
+      {
+        "value": "The FY2023 annual report was released together with Buffett's 46th shareholder letter.",
+        "activity_id": "A:ACT_O_S5_E4_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00246"
+      },
+      {
+        "value": "Donated Berkshire stock worth about $4.63 billion to five institutions, most of it to the Bill & Melinda Gates Foundation.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00257"
+      },
+      {
+        "value": "Donated $3.54 billion (76%) to the Gates Foundation and nearly $1 billion in total to four charities run by his three children.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00258"
+      },
+      {
+        "value": "Converted 9,129 Class A shares into 13,693,500 Class B shares in order to donate 13,693,400 shares to the five foundations.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00259"
+      },
+      {
+        "value": "More than 10.45 million shares went to the Bill & Melinda Gates Foundation Trust, worth nearly $3.54 billion at Wednesday's closing price of $338.61 per Class B share.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00260"
+      },
+      {
+        "value": "1,045,300 shares went to the Susan Thompson Buffett Foundation, and 731,700 shares went to the Sherwood Foundation, Howard G. Buffett Foundation and NoVo Foundation.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 4,
+        "evidence_set_id": "ES_00261"
+      },
+      {
+        "value": "Stated that the annual donation schedule was set on June 26, 2006, and that he has since made substantial donations to four of the five recipients.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 5,
+        "evidence_set_id": "ES_00262"
+      },
+      {
+        "value": "Stated that when he made the original pledge he owned 474,998 Berkshire Class A shares worth about $43 billion, more than 98% of his net worth.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 6,
+        "evidence_set_id": "ES_00263"
+      },
+      {
+        "value": "Stated that the five foundations have received Berkshire Class B shares worth about $50 billion at the time of receipt, far exceeding his entire 2006 net worth.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 7,
+        "evidence_set_id": "ES_00264"
+      },
+      {
+        "value": "Stated he has no debt and his remaining Class A shares are worth about $112 billion, more than 99% of his net worth.",
+        "activity_id": "A:ACT_O_S6_E1_P1_1",
+        "detail_index": 8,
+        "evidence_set_id": "ES_00265"
+      },
+      {
+        "value": "Said Buffett converted 9,129 Class A shares into 13,693,500 Class B shares to donate 13,693,400 shares to five foundations.",
+        "activity_id": "A:ACT_O_S6_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00267"
+      },
+      {
+        "value": "Said 1,045,300 shares went to the Susan Thompson Buffett Foundation and 731,700 shares to the Sherwood Foundation, Howard G. Buffett Foundation and NoVo Foundation.",
+        "activity_id": "A:ACT_O_S6_E1_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00268"
+      },
+      {
+        "value": "Received more than 10.45 million Class B shares worth nearly $3.54 billion at the $338.61 closing price.",
+        "activity_id": "A:ACT_O_S6_E1_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00270"
+      },
+      {
+        "value": "Received 1,045,300 Class B shares.",
+        "activity_id": "A:ACT_O_S6_E1_P4_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00272"
+      },
+      {
+        "value": "Received 731,700 Class B shares.",
+        "activity_id": "A:ACT_O_S6_E1_P5_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00274"
+      },
+      {
+        "value": "Received 731,700 Class B shares.",
+        "activity_id": "A:ACT_O_S6_E1_P6_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00276"
+      },
+      {
+        "value": "Received 731,700 Class B shares.",
+        "activity_id": "A:ACT_O_S6_E1_P7_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00278"
+      },
+      {
+        "value": "Said Buffett's generosity played a huge role in achieving the foundation's ambitious goals and affected millions of lives.",
+        "activity_id": "A:ACT_O_S6_E1_P8_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00280"
+      },
+      {
+        "value": "Said it is always hard to fully express how much their lifelong friendship and Buffett's support mean to him.",
+        "activity_id": "A:ACT_O_S6_E1_P8_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00281"
+      },
+      {
+        "value": "Converted 1,600 Class A shares into 2,400,000 Class B shares.",
+        "activity_id": "A:ACT_O_S6_E2_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00292"
+      },
+      {
+        "value": "Gifted 1,500,000 Class B shares to the Susan Thompson Buffett Foundation.",
+        "activity_id": "A:ACT_O_S6_E2_P1_2",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00294"
+      },
+      {
+        "value": "Gave 300,000 Class B shares each to the Sherwood Foundation, the Howard G. Buffett Foundation, and the NoVo Foundation.",
+        "activity_id": "A:ACT_O_S6_E2_P1_2",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00295"
+      },
+      {
+        "value": "Total donation value calculated by Reuters at about $866 million.",
+        "activity_id": "A:ACT_O_S6_E2_P1_2",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00296"
+      },
+      {
+        "value": "Pledged that more than 99% of his wealth would go to charity.",
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00304"
+      },
+      {
+        "value": "Named his three children as executors of his current will.",
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00305"
+      },
+      {
+        "value": "Wrote that his children 'were not fully prepared for this awesome responsibility in 2006, but they are now.'",
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00306"
+      },
+      {
+        "value": "Stated his will would be an 'open book' with no 'imaginative' trusts or foreign entities, available at the Douglas County Courthouse.",
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00307"
+      },
+      {
+        "value": "Wrote that Berkshire has 'the right CEO to succeed me and the right board of directors as well.'",
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "detail_index": 4,
+        "evidence_set_id": "ES_00308"
+      },
+      {
+        "value": "Said 'At 93, I feel good but fully realise I am playing in extra innings.'",
+        "activity_id": "A:ACT_O_S6_E3_P1_1",
+        "detail_index": 5,
+        "evidence_set_id": "ES_00309"
+      },
+      {
+        "value": "The source characterizes the TSMC trade as resembling a political task rather than a pure investment decision.",
+        "activity_id": "A:ACT_O_S7_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00314"
+      },
+      {
+        "value": "Berkshire sold 2.48 million BYD H shares, lowering its stake from 11.13% to 10.9%.",
+        "activity_id": "A:ACT_O_S8_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00319"
+      },
+      {
+        "value": "The March 31 sale was part of a series of ten consecutive BYD H share reductions since the first reduction on Aug. 24, 2022.",
+        "activity_id": "A:ACT_O_S8_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00320"
+      },
+      {
+        "value": "The source headline attributes the continued BYD reduction to Buffett, while the body attributes the March 31 sale to Berkshire Hathaway.",
+        "activity_id": "A:ACT_O_S8_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00322"
+      },
+      {
+        "value": "Buffett said he likes banks but dislikes their proportion in the portfolio, and that Berkshire holds over 10% of Bank of America.",
+        "activity_id": "A:ACT_O_S9_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00329"
+      },
+      {
+        "value": "Buffett described banking risks as banks periodically doing foolish things such as asset-liability mismatches or accounting manipulation.",
+        "activity_id": "A:ACT_O_S9_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00330"
+      },
+      {
+        "value": "By end-2022, financial stocks' share of Berkshire's portfolio had fallen substantially; only Bank of America remained in the top ten holdings among bank stocks.",
+        "activity_id": "A:ACT_O_S9_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00332"
+      },
+      {
+        "value": "Q1 2023 revenue was $85.393 billion versus $70.81 billion a year earlier.",
+        "activity_id": "A:ACT_O_S10_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00336"
+      },
+      {
+        "value": "Q1 2023 net income was $35.5 billion versus $5.46 billion a year earlier.",
+        "activity_id": "A:ACT_O_S10_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00337"
+      },
+      {
+        "value": "Buffett said he does not understand AI and first saw ChatGPT after a recommendation from his old friend Bill Gates, calling it an 'incredible technological advance.'",
+        "activity_id": "A:ACT_O_S11_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00343"
+      },
+      {
+        "value": "Buffett compared the invention's impact to the atomic bomb built in 1945, saying he does not know the principle behind the bomb but Einstein told the world it would change the world, and it did.",
+        "activity_id": "A:ACT_O_S11_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00344"
+      },
+      {
+        "value": "Buffett said he does not expect the world to be changed too many times without knowing the outcome, calling AI an excellent and extraordinary invention while saying he does not know whether it is beneficial.",
+        "activity_id": "A:ACT_O_S11_E1_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00345"
+      },
+      {
+        "value": "Munger said the AI field has much 'crazy hype and nonsense' and that he is both hopeful and worried.",
+        "activity_id": "A:ACT_O_S11_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00347"
+      },
+      {
+        "value": "Gates recommended ChatGPT to Buffett, who described it as an 'incredible technological advance.'",
+        "activity_id": "A:ACT_O_S11_E1_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00349"
+      },
+      {
+        "value": "The proposal received little support and was defeated at the shareholder meeting.",
+        "activity_id": "A:ACT_O_S12_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00355"
+      },
+      {
+        "value": "The proposal drew few supporters and was voted down at the shareholder meeting.",
+        "activity_id": "A:ACT_O_S12_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00357"
+      },
+      {
+        "value": "The proposal to replace the chairman received little support and was rejected.",
+        "activity_id": "A:ACT_O_S12_E1_P3_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00359"
+      },
+      {
+        "value": "Reported Q3 2023 portfolio market value of $313.257 billion, down $34.937 billion (-10.03%) from Q2.",
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00371"
+      },
+      {
+        "value": "Reported 45 holdings: 0 increased, 6 reduced, 6 newly established, 9 fully exited.",
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00372"
+      },
+      {
+        "value": "Top ten holdings were Apple, Bank of America, American Express, Coca-Cola, Chevron, Occidental Petroleum, Kraft Heinz, Moody's, DaVita and HP, together about $287.976 billion or 91.93% of the portfolio.",
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00373"
+      },
+      {
+        "value": "New positions included Liberty Media (multiple lines due to spin-off), Sirius XM and Atlanta Braves.",
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00374"
+      },
+      {
+        "value": "Top five reductions were Chevron, HP, Markel, Globe Life and AON, totaling about $3.328 billion.",
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "detail_index": 4,
+        "evidence_set_id": "ES_00375"
+      },
+      {
+        "value": "Top five full exits were Activision Blizzard, General Motors, Celanese, Johnson & Johnson and Procter & Gamble, totaling about $2.807 billion.",
+        "activity_id": "A:ACT_O_S14_E1_P2_1",
+        "detail_index": 5,
+        "evidence_set_id": "ES_00376"
+      },
+      {
+        "value": "The 2022 annual report is a 144-page English-language PDF.",
+        "activity_id": "A:ACT_O_S15_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00380"
+      },
+      {
+        "value": "The report's main content covers Berkshire's stock performance and annualized returns from 1965 through 2022.",
+        "activity_id": "A:ACT_O_S15_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00381"
+      },
+      {
+        "value": "From 1965 to 2022, Berkshire's stock had a compound annual growth rate of 19.8% and overall growth of 3,787,464%.",
+        "activity_id": "A:ACT_O_S15_E1_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00382"
+      },
+      {
+        "value": "Berkshire's stock annualized return was reported as 29.6% in 2021 and 4.0% in 2022.",
+        "activity_id": "A:ACT_O_S15_E1_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00383"
+      },
+      {
+        "value": "Buffett said the reported 2022 net loss figure is highly misleading and does not reflect the true state of Berkshire's financial performance.",
+        "activity_id": "A:ACT_O_S16_E1_P1_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00388"
+      },
+      {
+        "value": "Buffett wrote that GAAP earnings are '100 percent misleading when viewed quarterly or even annually.'",
+        "activity_id": "A:ACT_O_S16_E1_P1_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00389"
+      },
+      {
+        "value": "Buffett said he and Charlie Munger prefer operating earnings as the measure of financial performance and urge Berkshire shareholders to do the same.",
+        "activity_id": "A:ACT_O_S16_E1_P1_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00390"
+      },
+      {
+        "value": "Buffett said that despite the GAAP result, he thought 2022 was a good year for business.",
+        "activity_id": "A:ACT_O_S16_E1_P1_1",
+        "detail_index": 3,
+        "evidence_set_id": "ES_00391"
+      },
+      {
+        "value": "Berkshire reported a 2022 net loss of $22.8 billion, driven by a nearly $54 billion decline in the value of its stock portfolio.",
+        "activity_id": "A:ACT_O_S16_E1_P2_1",
+        "detail_index": 0,
+        "evidence_set_id": "ES_00393"
+      },
+      {
+        "value": "Excluding unrealized stock-investment losses, Berkshire recorded $30.8 billion in 2022 operating earnings, a record high and 12 percent more than the prior year's $27.5 billion.",
+        "activity_id": "A:ACT_O_S16_E1_P2_1",
+        "detail_index": 1,
+        "evidence_set_id": "ES_00394"
+      },
+      {
+        "value": "Under GAAP accounting, Berkshire earned $112 billion less in 2022 than the previous year.",
+        "activity_id": "A:ACT_O_S16_E1_P2_1",
+        "detail_index": 2,
+        "evidence_set_id": "ES_00395"
+      }
+    ]
+  },
+  "prior_memberships": [
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E1_P2_1",
+      "stage_id": "S1",
+      "display_title": "Berkshire requests approval to buy up to half of Occidental",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E1_P4_1",
+      "stage_id": "S1",
+      "display_title": "FERC approves Berkshire's Occidental purchase request",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E2_P2_1",
+      "stage_id": "S1",
+      "display_title": "Occidental stake raised to 26.8%",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E3_P2_1",
+      "stage_id": "S1",
+      "display_title": "Additional Occidental purchases raise stake to 25.1%",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "T:TX_O_S1_E3_1",
+      "stage_id": "S1",
+      "display_title": "Occidental share purchase",
+      "detail_indices": []
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E4_P1_1",
+      "stage_id": "S1b",
+      "display_title": "Buffett explains Occidental rationale and warrant satisfaction",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E4_P1_2",
+      "stage_id": "S1b",
+      "display_title": "Buffett rules out full control of Occidental",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E4_P1_3",
+      "stage_id": "S1b",
+      "display_title": "Buffett discloses basis for beginning Occidental purchases",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:8499e12655a99021",
+      "activity_id": "A:ACT_O_S1_E4_P2_1",
+      "stage_id": "S1b",
+      "display_title": "Berkshire holds Occidental preferred stock and warrants",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:57279a24ca3018ae",
+      "activity_id": "A:ACT_O_S2_E1_P2_1",
+      "stage_id": "S2",
+      "display_title": "Q1 2022 13F reports Chevron at 7.13%",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:57279a24ca3018ae",
+      "activity_id": "A:ACT_O_S2_E2_P2_1",
+      "stage_id": "S2",
+      "display_title": "Q2 2022 13F reports Chevron at 7.79%",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:57279a24ca3018ae",
+      "activity_id": "A:ACT_O_S2_E3_P1_1",
+      "stage_id": "S2b",
+      "display_title": "Chevron reduced for four consecutive quarters",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E1_P1_1",
+      "stage_id": "S3",
+      "display_title": "Buffett discloses 7.4% stakes during Japan visit",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E1_P1_2",
+      "stage_id": "S3",
+      "display_title": "Buffett considers more Japanese stock investments",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E1_P2_1",
+      "stage_id": "S3",
+      "display_title": "Berkshire raises Japanese trading-house holdings to 7.4%",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E2_P1_1",
+      "stage_id": "S3",
+      "display_title": "Buffett remarks on possible cooperation with Japanese trading houses",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E2_P1_2",
+      "stage_id": "S3",
+      "display_title": "Buffett states rationale for Japanese trading-house investments",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E3_P1_1",
+      "stage_id": "S3b",
+      "display_title": "Berkshire announces average Japanese stake above 8.5%",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E3_P2_1",
+      "stage_id": "S3b",
+      "display_title": "National Indemnity increases Japanese trading-house shareholdings",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:376e4808f9c0f9b9",
+      "activity_id": "A:ACT_O_S3_E4_P1_1",
+      "stage_id": "S3b",
+      "display_title": "Berkshire states 9.9% cap and long-term holding intention",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E1_P1_1",
+      "stage_id": "S4",
+      "display_title": "Berkshire buys Activision Blizzard shares",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E1_P4_1",
+      "stage_id": "S4",
+      "display_title": "Microsoft announces Activision acquisition",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "T:TX_O_S4_E1_1",
+      "stage_id": "S4",
+      "display_title": "Activision Blizzard share purchase",
+      "detail_indices": []
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E2_P1_1",
+      "stage_id": "S4b",
+      "display_title": "Buffett explains 9.5% Activision arbitrage stake",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E2_P2_1",
+      "stage_id": "S4b",
+      "display_title": "Activision stake increased as merger arbitrage",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E2_P3_1",
+      "stage_id": "S4b",
+      "display_title": "Activision annual shareholder meeting",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E3_P1_1",
+      "stage_id": "S4c",
+      "display_title": "Buffett's arbitrage-driven Activision accumulation",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E3_P1_2",
+      "stage_id": "S4c",
+      "display_title": "Buffett recalls 50-year merger-arbitrage history",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E3_P2_1",
+      "stage_id": "S4c",
+      "display_title": "Berkshire discloses 1.9% Activision stake",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E3_P2_2",
+      "stage_id": "S4c",
+      "display_title": "Berkshire reduces Activision stake",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E3_P3_1",
+      "stage_id": "S4c",
+      "display_title": "Activision shares jump after FTC setback for Microsoft",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:cec4e4a421ecca40",
+      "activity_id": "A:ACT_O_S4_E3_P4_1",
+      "stage_id": "S4c",
+      "display_title": "Microsoft appeals UK regulator's prohibition",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E1_P1_1",
+      "stage_id": "S5",
+      "display_title": "Buffett's letter advocates operating earnings",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E1_P2_1",
+      "stage_id": "S5",
+      "display_title": "Berkshire reports 2022 results",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P1_1",
+      "stage_id": "S5b",
+      "display_title": "Buffett answers shareholder questions",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P1_2",
+      "stage_id": "S5b",
+      "display_title": "Buffett plans about 60 questions",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P2_1",
+      "stage_id": "S5b",
+      "display_title": "Berkshire holds 59th annual meeting",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P3_1",
+      "stage_id": "S5b",
+      "display_title": "Munger answers shareholder questions",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P5_1",
+      "stage_id": "S5b",
+      "display_title": "CalPERS proposes annual climate reporting",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P6_1",
+      "stage_id": "S5b",
+      "display_title": "Frerichs proposes climate-risk governance disclosure",
+      "detail_indices": []
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E2_P7_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P1_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P1_2",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P1_3",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P1_4",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P2_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P3_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P4_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P5_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E3_P6_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E4_P1_1",
+      "stage_id": null,
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S5_E4_P2_1",
+      "stage_id": null,
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P1_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P2_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P3_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P4_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P5_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P6_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P7_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E1_P8_1",
+      "stage_id": "S6",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "T:TX_O_S6_E1_1",
+      "stage_id": "S6",
+      "detail_indices": []
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E2_P1_1",
+      "stage_id": "S6b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E2_P1_2",
+      "stage_id": "S6b",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "T:TX_O_S6_E2_1",
+      "stage_id": "S6b",
+      "detail_indices": []
+    },
+    {
+      "event_id": "storyline:c6a1a2ae595b8ba7",
+      "activity_id": "A:ACT_O_S6_E3_P1_1",
+      "stage_id": "S6b",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "event_id": "storyline:9de06a434f25d0ef",
+      "activity_id": "A:ACT_O_S7_E1_P1_1",
+      "stage_id": null,
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S8_E1_P1_1",
+      "stage_id": "S7",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S8_E1_P2_1",
+      "stage_id": "S7",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "T:TX_O_S8_E1_1",
+      "stage_id": "S7",
+      "detail_indices": []
+    },
+    {
+      "event_id": "storyline:new_buffett_public_commentary",
+      "activity_id": "A:ACT_O_S9_E1_P1_1",
+      "stage_id": "S8",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S9_E1_P2_1",
+      "stage_id": "S7",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S10_E1_P1_1",
+      "stage_id": "S7",
+      "detail_indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "event_id": "storyline:new_buffett_public_commentary",
+      "activity_id": "A:ACT_O_S11_E1_P1_1",
+      "stage_id": "S8",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "event_id": "storyline:new_buffett_public_commentary",
+      "activity_id": "A:ACT_O_S11_E1_P2_1",
+      "stage_id": "S8",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:new_buffett_public_commentary",
+      "activity_id": "A:ACT_O_S11_E1_P3_1",
+      "stage_id": "S8",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S12_E1_P1_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S12_E1_P2_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S12_E1_P3_1",
+      "stage_id": "S5b",
+      "detail_indices": [
+        0
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S14_E1_P2_1",
+      "stage_id": "S7",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S15_E1_P1_1",
+      "stage_id": "S7",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "event_id": "storyline:e62e14478d0f8c98",
+      "activity_id": "A:ACT_O_S16_E1_P1_1",
+      "stage_id": "S5",
+      "display_title": "Buffett defends operating earnings over GAAP",
+      "detail_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "event_id": "storyline:new_berkshire_portfolio_rebalancing",
+      "activity_id": "A:ACT_O_S16_E1_P2_1",
+      "stage_id": "S7",
+      "display_title": "Berkshire reports 2022 net loss and record operating earnings",
+      "detail_indices": [
+        0,
+        1,
+        2
+      ]
+    }
+  ]
+}

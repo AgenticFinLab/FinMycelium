@@ -45,8 +45,8 @@ class TemporalScopeRevisionTests(unittest.TestCase):
         original = copy.deepcopy(responses[1])
         builder, sequence = self.fixture.builder(extraction=responses)
         output = builder.run(self.fixture.inputs)
-        self.assertEqual(len(sequence.calls), 9)
-        self.assertEqual(output.extras['usage']['calls'], 9)
+        self.assertEqual(len(sequence.calls), 8)
+        self.assertEqual(output.extras['usage']['calls'], 8)
         saved = self.fixture.artifact(builder, 'SkeletonChecker-1-Result')
         for item in (saved, saved['stages'][0], saved['stages'][0]['episodes'][0]):
             self.assertEqual(item['end_time']['value'], '2025-01-02')
@@ -55,20 +55,10 @@ class TemporalScopeRevisionTests(unittest.TestCase):
         self.assertEqual(audit['before'], original)
         self.assertEqual(audit['status'], 'revised')
         self.assertEqual(builder.integrate_from_files(strict=True), output.event_cascades)
-        self.assertEqual(builder.integrate_person_from_files(strict=True), output.extras['person_epg'])
         ledger = self.fixture.artifact(builder, 'CallLedger')
         accepted = [row for row in ledger if row.get('scope_revision')]
         self.assertEqual(len(accepted), 1)
         self.assertEqual(accepted[0]['status'], 'accepted')
-
-    def test_organization_failure_after_revision_remains_recoverable(self):
-        builder, _ = self.fixture.builder(extraction=self.scenario(), organization=[RuntimeError('offline failure')])
-        with self.assertRaisesRegex(RuntimeError, 'offline failure'):
-            builder.run(self.fixture.inputs)
-        checkpoint = load_person_checkpoint(builder.save_dir)
-        self.assertEqual(len(checkpoint.historical_calls), 9)
-        self.assertIn('EpisodeScopeReviewer', [r['agent'] for r in checkpoint.historical_calls])
-        self.assertEqual(checkpoint.cascade['stages'][0]['episodes'][0]['end_time']['value'], '2025-01-02')
 
     def test_actual_quarter_vs_august_conflict_can_revise_without_rewriting_fact(self):
         quote = 'Ownership was 20.2% as of Aug. 8, 2022.'

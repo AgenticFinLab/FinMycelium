@@ -13,11 +13,122 @@ from collections import Counter, defaultdict
 
 
 ORGANIZATION_CONTEXT_POLICY_IDENTITY = {
-    "version": 1,
+    "version": 2,
     "facts": "immutable_ids_and_exact_detail_projection",
     "themes": "hypotheses_not_evidence",
     "diagnostics": "advisory_no_quotas_no_forced_connectivity",
 }
+
+
+def activity_catalog(package):
+    """Global identities and factual titles, without repeated source documents."""
+    actions = {r['action_id']: r for r in package['action']}
+    transactions = {r['transaction_id']: r for r in package['financial_transaction']}
+    occurrences = {r['occurrence_id']: r for r in package['occurrence']}
+    times = {r['time_id']: r for r in package['time_value']}
+    entities = {r['entity_id']: r.get('name') for r in package['entity']}
+    details = defaultdict(list)
+    for row in package['activity_detail']:
+        details[row['activity_id']].append({'detail_index': row['detail_index'], 'value': row['value']})
+    result = []
+    for activity in package['activity']:
+        if activity.get('action_id'):
+            row = actions[activity['action_id']]
+            kind, title, actors = 'action', row['action_type'], [row['actor_id']]
+        elif activity.get('transaction_id'):
+            row = transactions[activity['transaction_id']]
+            kind, title = 'transaction', row['name']
+            actors = [row.get('from_entity_id'), row.get('to_entity_id')]
+        else:
+            row = occurrences[activity['context_occurrence_id']]
+            kind, title, actors = 'context', row['title'], []
+        oid = row['occurrence_id']
+        result.append({'activity_id': activity['activity_id'], 'kind': kind, 'title': title,
+                       'occurrence_id': oid, 'occurrence_title': occurrences[oid]['title'],
+                       'actors': [{'entity_id': eid, 'name': entities.get(eid)} for eid in actors if eid],
+                       'times': [times[value] for key, value in row.items()
+                                 if key.endswith('_time_id') and value in times],
+                       'details': details[activity['activity_id']]})
+    return result
+
+
+def field_evidence(package, row, field):
+    """Reconstruct an existing verifiable field; never invent a quotation."""
+    esid = row.get('evidence_set_id')
+    evidence = next((r for r in package['evidence_set'] if r['evidence_set_id'] == esid), {})
+    metadata = (evidence.get('field_metadata') or {}).get('/' + field, {})
+    spans = {r['span_id']: r for r in package['evidence_span']}
+    links = sorted((r for r in package['evidence_link']
+                    if r['evidence_set_id'] == esid and r['field_path'] == '/' + field),
+                   key=lambda r: r.get('quote_order', 0))
+    return {'value': row.get(field),
+            'evidence_source_contents': list(dict.fromkeys(spans[r['span_id']]['quote'] for r in links)),
+            'reasons': copy.deepcopy(metadata.get('reasons') or [])}
+
+
+def scoped_organization_request(package, subject, activity_ids, *, occurrence_ids=(), catalog=None):
+    """Send the complete evidence closure of this task, plus a global ID index.
+
+    Documents in the closure remain verbatim. Unbound quotes are resolved against
+    all stored documents, so older saved graphs retain their original evidence.
+    No character cap or arbitrary first-N document selection is applied here.
+    """
+    from .organization_details import detail_index_catalog, detail_reference_catalog
+    selected = set(activity_ids)
+    activities = [r for r in package['activity'] if r['activity_id'] in selected]
+    action_ids = {r.get('action_id') for r in activities}
+    transaction_ids = {r.get('transaction_id') for r in activities}
+    actions = [r for r in package['action'] if r['action_id'] in action_ids]
+    transactions = [r for r in package['financial_transaction'] if r['transaction_id'] in transaction_ids]
+    oids = set(occurrence_ids) | {r['occurrence_id'] for r in actions + transactions}
+    oids.update(r['context_occurrence_id'] for r in activities if r.get('context_occurrence_id'))
+    facts = {
+        'entity': package['entity'], 'entity_alias': package['entity_alias'],
+        'occurrence': [r for r in package['occurrence'] if r['occurrence_id'] in oids],
+        'occurrence_participant': [r for r in package['occurrence_participant'] if r['occurrence_id'] in oids],
+        'participation': [r for r in package['participation'] if r.get('occurrence_id') in oids],
+        'action': actions, 'financial_transaction': transactions,
+        'transaction_instrument': [r for r in package['transaction_instrument'] if r['transaction_id'] in transaction_ids],
+        'activity': activities,
+        'activity_detail': [r for r in package['activity_detail'] if r['activity_id'] in selected],
+        'time_value': package['time_value'],
+        'relation_occurrence': [r for r in package['relation_occurrence'] if r['occurrence_id'] in oids],
+    }
+    relids = {r['relation_id'] for r in facts['relation_occurrence']}
+    facts['entity_relation'] = [r for r in package['entity_relation'] if r['relation_id'] in relids]
+    tids = {value for key, rows in facts.items() if key != 'time_value' for r in rows
+            for field, value in r.items() if field.endswith('_time_id') and value}
+    facts['time_value'] = [r for r in package['time_value'] if r['time_id'] in tids]
+    eids = {package['graph']['subject_entity_id']}
+    for key, rows in facts.items():
+        if key in {'entity', 'entity_alias'}:
+            continue
+        for row in rows:
+            eids.update(value for field, value in row.items()
+                        if field in {'entity_id', 'actor_id', 'from_entity_id', 'to_entity_id',
+                                     'source_entity_id', 'target_entity_id'} and value)
+    facts['entity'] = [r for r in package['entity'] if r['entity_id'] in eids]
+    facts['entity_alias'] = [r for r in package['entity_alias'] if r['entity_id'] in eids]
+    # Entity/time catalogs are small metadata; their unrelated sources should not
+    # pull the whole input corpus into every placement batch.
+    esids = {r.get('evidence_set_id') for key, rows in facts.items()
+             if key not in {'entity', 'entity_alias', 'time_value'} for r in rows}
+    facts['evidence_set'] = [r for r in package['evidence_set'] if r['evidence_set_id'] in esids]
+    facts['evidence_link'] = [r for r in package['evidence_link'] if r['evidence_set_id'] in esids]
+    span_ids = {r['span_id'] for r in facts['evidence_link']}
+    facts['evidence_span'] = [r for r in package['evidence_span'] if r['span_id'] in span_ids]
+    docids = {r.get('document_id') for r in facts['evidence_span']}
+    unbound = [r['quote'] for r in facts['evidence_span'] if not r.get('document_id') and r.get('quote')]
+    facts['source_document'] = [r for r in package['source_document'] if r['document_id'] in docids
+                               or any(q in r.get('content', '') for q in unbound)]
+    return copy.deepcopy({'subject': subject, 'graph': package['graph'], 'facts': facts,
+                          'global_activity_index': catalog if catalog is not None else activity_catalog(package),
+                          'source_catalog': [{k: r[k] for k in ('document_id', 'title', 'url') if k in r}
+                                             for r in package['source_document']],
+                          'available_detail_indices': detail_index_catalog(facts),
+                          'available_detail_refs': {aid: [{'detail_ref': row['detail_ref'], 'value': row['value']}
+                                                          for row in rows]
+                                                    for aid, rows in detail_reference_catalog(facts).items()}})
 
 
 def _unique(values):
@@ -165,7 +276,7 @@ the caller must run the existing organization validator first.
     for row in plan.get("unassigned_reasons", []):
         hint("unassigned_activity", "The Activity is retained but has no theme membership.", activity_id=row["activity_id"])
     context = {
-        "organization_context_version": 1,
+        "organization_context_version": ORGANIZATION_CONTEXT_POLICY_IDENTITY['version'],
         "semantic_support_checked": False,
         "interpretation": "Derived organization is not source evidence. Hints and connectivity are advisory, not quotas or semantic approval.",
         "subject_entity_id": package["graph"]["subject_entity_id"],

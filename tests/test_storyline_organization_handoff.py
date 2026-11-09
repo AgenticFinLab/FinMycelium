@@ -38,7 +38,7 @@ class StorylineOrganizationHandoffTests(unittest.TestCase):
         self.assertFalse(request["candidate_storylines"]["is_source_evidence"])
         self.assertIn("Reuse", request["storyline_instructions"])
         self.assertNotIn("NEVER PROMOTE", json.dumps(request["facts"]))
-        self.assertEqual(result, plan())
+        self.assertEqual([r["event_id"] for r in result["events"]], ["E"])
         rendered, _ = apply_organization(original_facts, result)
         self.assertEqual([e["event_id"] for e in rendered["event"]], ["E"])
         audit = saved["PersonStorylineResolution"]

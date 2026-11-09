@@ -58,6 +58,12 @@ def main(argv=None):
         builder = SparseRagBuilder.__new__(SparseRagBuilder)
         builder.save_dir = str(Path(args.replay).resolve())
         builder.build_config = {}
+        manifest = json.loads((Path(args.replay) / "RunManifest.json").read_text(encoding="utf-8"))
+        if manifest.get("person_pipeline_version") == "canonical-person-v1":
+            person = builder.integrate_person_from_files(strict=True)
+            print(json.dumps({"status": "replay_pass", "event_id": person["graph"]["graph_id"],
+                              "person_sha256": digest(person)}))
+            return 0
         cascade = builder.integrate_from_files(strict=True)
         saved = json.loads((Path(args.replay) / "FinalEventCascade.json").read_text(encoding="utf-8"))
         if cascade != saved:

@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from jsonschema import Draft202012Validator
 
 from finmy.person_epg.validation import validate_person_epg
+from .organization_details import detail_index_catalog, validate_detail_selections
 
 
 ORGANIZATION_CONTRACT_VERSION = 1
@@ -72,6 +73,9 @@ PLAN_SCHEMA = _object({
         "description": _VF,
     })),
     "occurrence_issues": _array(_TEXT),
+    "pending_occurrence_ids": _array(_ID, uniqueItems=True),
+    "pending_activity_ids": _array(_ID, uniqueItems=True),
+    "pending_event_ids": _array(_ID, uniqueItems=True),
     "unassigned_reasons": _array(_object({"activity_id": _ID, "reason": _TEXT})),
 }, ["domains", "events", "stages", "memberships", "occurrence_relevance"])
 
@@ -100,6 +104,10 @@ summary is available. Never invent a transition to fill a stage or link quota.
 The earlier event skeleton is only a candidate organization. Use stage_id=null
 when a supported stage boundary cannot be established. Summaries, stage boundary
 reasons and every occurrence's subject_relevance need short exact source quotes.
+Do not summarize conflicting numbers as a monotonic increase/decrease unless
+their denominators, units and intervening changes support that interpretation.
+Corrected action/transaction records take precedence over old occurrence
+descriptions; original source evidence remains authoritative.
 Keep company activities attributed to the company. Company transactions do not
 automatically imply personal decisions. Explain supported indirect relevance.
 
@@ -107,6 +115,15 @@ Preserve every action, transaction, time, source and detail. You may select whic
 existing details to display, but cannot rewrite details or invent facts. A null
 detail_indices means all details; [] means explicitly display none. Every existing
 Activity must either appear in memberships or have an unassigned_reasons entry.
+available_detail_indices maps each Activity to its exact allowed detail_index keys.
+Copy only keys from facts.activity_detail rows with the SAME activity_id. These
+are local keys, normally starting at 0, not global array positions or one-based
+counts. Do not renumber sparse keys or borrow another Activity's keys. Details
+inside financial_transaction and transaction_instrument.ordinal use different
+contracts and cannot be selected through membership.detail_indices. A newly
+created background Activity has no activity_detail keys. An empty allowed list
+means there are no selectable keys, even when the underlying fact has other
+detail fields. Preserve those facts; do not invent a selection index for them.
 One Activity may belong to several Events, but at most once in each Event.
 Evaluate detail selection separately for every membership: display the details
 relevant to that Event, especially when the same Activity serves different
@@ -124,6 +141,7 @@ Activity links are not entity relations. A non-temporal link needs its own sourc
 quote supporting the link, not merely the two endpoints separately. executed_by
 points from decision/instruction to execution; explains from a later explanation
 to the explained activity. context_for does not assert contemporaneous knowledge.
+responds_to points FROM the response TO the request/question (approval to application).
 Use basis=temporal only for precedes/overlaps provable from the supplied times;
 uncertain overlapping occurrence windows do not prove simultaneous activities.
 Do not infer causality from order. You may leave activity_relations empty.
@@ -204,6 +222,7 @@ def organization_request(package, cascade, subject, *, include_context_activitie
         "subject": copy.deepcopy(subject),
         "graph": graph,
         "facts": facts,
+        "available_detail_indices": detail_index_catalog(facts),
         "candidate_stages": skeleton,
         "organization_contract_version": ORGANIZATION_CONTRACT_VERSION,
     }
@@ -306,8 +325,8 @@ def apply_organization(package, plan):
     if errors:
         error = errors[0]
         raise ValueError(f"Organization {'/'.join(map(str, error.absolute_path))}: {error.message}")
-    if plan.get("occurrence_issues"):
-        raise ValueError("Occurrence reconstruction required: " + "; ".join(plan["occurrence_issues"]))
+    # Factual repairs belong to the canonical fact phase. Organization retains
+    # item-level diagnostics and a draft instead of discarding unrelated facts.
     out = copy.deepcopy(package)
     for table in _ORGANIZATION_TABLES:
         out[table] = []
@@ -315,9 +334,20 @@ def apply_organization(package, plan):
     relevance_ids = _unique(plan["occurrence_relevance"], lambda row: row["occurrence_id"], "occurrence relevance")
     if relevance_ids != set(occurrences):
         raise ValueError("occurrence_relevance must cover every existing occurrence exactly once")
+    from .organization_partial import pending_relevance
+    pending = set(plan.get("pending_occurrence_ids", []))
+    pending_activities = set(plan.get("pending_activity_ids", []))
+    if not pending_activities <= {row['activity_id'] for row in package['activity']}:
+        raise ValueError('Pending placement references an unknown activity')
+    if not pending <= relevance_ids:
+        raise ValueError("Pending relevance references an unknown occurrence")
     for row in plan["occurrence_relevance"]:
         value = row["subject_relevance"]
-        _require_quotes(value, "subject_relevance")
+        if row["occurrence_id"] in pending:
+            if not pending_relevance(value):
+                raise ValueError("Pending relevance must be explicit execution metadata, not a factual claim")
+        else:
+            _require_quotes(value, "subject_relevance")
         occurrence = occurrences[row["occurrence_id"]]
         occurrence["subject_relevance"] = value["value"]
         occurrence["evidence_set_id"] = add_evidence(
@@ -344,6 +374,9 @@ def apply_organization(package, plan):
 
     domain_ids = _unique(plan["domains"], lambda row: row["domain_id"], "domain")
     event_ids = _unique(plan["events"], lambda row: row["event_id"], "event")
+    pending_events = set(plan.get('pending_event_ids', []))
+    if not pending_events <= event_ids:
+        raise ValueError('Pending summary references an unknown Event')
     stage_ids = _unique(plan["stages"], lambda row: (row["event_id"], row["stage_id"]), "stage")
     for order, row in enumerate(plan["domains"]):
         out["domain"].append({**copy.deepcopy(row), "summary": None, "sort_order": order})
@@ -370,18 +403,18 @@ def apply_organization(package, plan):
                              "evidence_set_id": add_evidence(out, fields), "sort_order": order})
 
     _unique(plan["memberships"], lambda row: (row["event_id"], row["activity_id"]), "membership")
-    known_details = {(row["activity_id"], row["detail_index"]) for row in out["activity_detail"]}
     assigned = set()
-    for order, row in enumerate(plan["memberships"]):
+    for row in plan["memberships"]:
         eid, aid, sid = row["event_id"], row["activity_id"], row.get("stage_id")
         if eid not in event_ids or aid not in activities:
             raise ValueError(f"Membership references unknown Event or Activity: {eid}, {aid}")
         if sid is not None and (eid, sid) not in stage_ids:
             raise ValueError(f"Stage does not belong to membership Event: {eid}, {sid}")
+    validate_detail_selections(plan["memberships"], detail_index_catalog(out), phase="Organization")
+    for order, row in enumerate(plan["memberships"]):
+        eid, aid, sid = row["event_id"], row["activity_id"], row.get("stage_id")
         selections = row.get("detail_indices")
         for index in selections or []:
-            if (aid, index) not in known_details:
-                raise ValueError(f"Unknown activity detail: {aid}, {index}")
             out["event_activity_detail"].append({"event_id": eid, "activity_id": aid, "detail_index": index})
         out["event_activity"].append({"event_id": eid, "activity_id": aid, "stage_id": sid,
                                       "display_title": row.get("display_title"),
@@ -418,7 +451,11 @@ def apply_organization(package, plan):
         })
     _require_valid(out)
     return out, {"contract_version": ORGANIZATION_CONTRACT_VERSION,
-                 "status": "draft_requires_content_review", "semantic_support_checked": False,
+                 "status": "partial_organization_requires_review" if pending or pending_activities or pending_events or plan.get('occurrence_issues') else "draft_requires_content_review",
+                 **({"pending_occurrence_ids": sorted(pending)} if pending else {}),
+                 **({"pending_activity_ids": sorted(pending_activities)} if pending_activities else {}),
+                 **({"pending_event_ids": sorted(pending_events)} if pending_events else {}),
+                 "semantic_support_checked": False,
                  "unassigned_activities": copy.deepcopy(reasons),
                  "background_activity_ids": created_backgrounds,
                  "counts": {name: len(out[name]) for name in _ORGANIZATION_TABLES}}

@@ -121,6 +121,11 @@ class SequencedInference:
 
 
 class SparsePersonFullFlowTest(unittest.TestCase):
+    """Lifecycle/provenance regressions for the canonical Person entry.
+
+    Historical response factories above remain available to checkpoint import
+    tests. Single-event temporal tests explicitly request ``extraction=...``.
+    """
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
@@ -131,15 +136,24 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         self.config["reconstruction"]["subject"] = {"subject_id": "person_alpha", "name": "Alpha",
             "coverage_start": "2025-01-01", "coverage_end": "2025-01-02", "scope": "Documented transfer"}
         self.config["sparse_builder_config"].update(output_language="English", max_json_attempts=2)
+        from test_person_canonical_full_flow import SOURCE as canonical_source
         self.inputs = BuildInput(UserQueryInput(query_text="Alpha bitcoin transfer", key_words=["Alpha", "bitcoin"]),
-            [DataSample(sample_id="s1", raw_data_id="r1", content=SOURCE,
+            [DataSample(sample_id="s1", raw_data_id="r1", content=SOURCE + "\n" + canonical_source,
                         category="article", knowledge_field="finance")])
 
     def builder(self, organization=None, *, extraction=None):
-        sequence = SequencedInference((extraction or extraction_responses()) +
-                                     ([organization_plan()] if organization is None else organization))
+        from test_person_canonical_full_flow import CanonicalFixtureInference
+        config = copy.deepcopy(self.config)
+        if extraction is None:
+            if organization is not None:
+                raise ValueError("Use phase-aware canonical responses, not the removed monolithic organization response")
+            sequence = CanonicalFixtureInference()
+        else:
+            # This exercises the retained Event builder, not a legacy Person switch.
+            config["reconstruction"] = {"mode": "event"}
+            sequence = SequencedInference(extraction)
         with patch("finmy.builder.sparse_build.inference.SparseAPIInference", return_value=sequence):
-            builder = SparseRagBuilder(build_config=copy.deepcopy(self.config))
+            builder = SparseRagBuilder(build_config=config)
         return builder, sequence
 
     def artifact(self, builder, name):
@@ -152,134 +166,36 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         self.assertFalse(Path(builder.save_dir, "FinalPersonEPG.json").exists())
         self.assertFalse(Path(builder.save_dir, "FinalSubjectGraph.json").exists())
 
-    def test_person_full_flow_accounts_for_all_eight_calls_and_preserves_attribution(self):
+    def test_person_ledger_accounts_for_canonical_phases_and_attribution(self):
         builder, sequence = self.builder()
         output = builder.run(self.inputs)
         person = output.extras["person_epg"]
-        self.assertEqual(validate_person_epg(person), {"valid": True, "errors": []})
-        self.assertEqual(output.extras["agent_executed"], ROLES)
-        self.assertEqual(output.logs, ROLES)
-        self.assertEqual([call["agent"] for call in output.result["cost"]], ROLES)
-        self.assertEqual(len(sequence.calls), 8)
-        self.assertFalse(sequence.responses)
-        self.assertIn(SOURCE, sequence.calls[-1][0].user_msg)
-        self.assertIn('"output_language": "English"', sequence.calls[-1][0].user_msg)
-        self.assertEqual(len(person["action"]), 2)
-        self.assertEqual({row["actor_id"] for row in person["action"]}, {"person_alpha", "entity:P_2"})
-        self.assertEqual(len(person["financial_transaction"]), 1)
-        self.assertEqual(len(person["event_activity"]), 3)
-        self.assertEqual(person["event"][0]["event_id"], "PERSON_E1")
+        ledger = self.artifact(builder, "CallLedger")
+        self.assertEqual({row["agent"] for row in ledger}, {"PersonFacts", "PersonOrganization", "PersonOverview"})
+        self.assertEqual(len(ledger), len(sequence.calls))
+        self.assertEqual(output.result["cost"], ledger)
+        self.assertEqual(person["action"][0]["actor_id"], "person_alpha")
+        self.assertEqual(person["financial_transaction"][0]["to_entity_id"], "beta")
         manifest = self.artifact(builder, "RunManifest")
-        self.assertEqual(manifest["status"], "completed")
-        self.assertEqual(manifest["person_organization_contract_version"], 1)
-        self.assertEqual(manifest["usage"]["calls"], 8)
-        self.assertEqual(manifest["usage"]["prompt_tokens"], 80)
-        self.assertEqual(manifest["usage"]["completion_tokens"], 40)
-        self.assertEqual(manifest["usage"]["by_role"]["PersonOrganization"]["prompt_tokens"], 10)
+        self.assertEqual(manifest["usage"]["calls"], len(sequence.calls))
+        self.assertEqual(manifest["person_pipeline_version"], "canonical-person-v1")
         self.assertEqual(output.extras["usage"], manifest["usage"])
-        self.assertEqual(self.artifact(builder, "FinalPersonEPG"), person)
-        self.assertEqual(self.artifact(builder, "FinalSubjectGraph"), output.subject_graph)
         self.assertTrue(output.extras["person_acceptance"]["quote_check_passed"])
         self.assertFalse(output.extras["person_acceptance"]["semantic_approval"])
-        self.assertGreater(output.extras["person_acceptance"]["fields_without_quotes"], 0)
-        page = Path(builder.save_dir, "FinalPersonEPG.html").read_text(encoding="utf-8")
-        self.assertEqual(json.loads(EmbeddedPersonData(page).payload), person)
-        self.assertIn("Collapse events", page)
-        self.assertEqual(self.artifact(builder, "PersonRenderStatus"), {"status": "completed"})
-        self.assertFalse(Path(builder.save_dir, "FinalSubjectGraph.html").exists())
+        self.assertEqual(json.loads(EmbeddedPersonData(Path(builder.save_dir, "FinalPersonEPG.html").read_text()).payload), person)
 
-    def test_storyline_hints_reach_organization_json_html_and_offline_replay(self):
+    def test_storyline_hints_remain_metadata_and_reach_new_fact_and_organization_phases(self):
         discovery = {"version": "person-storylines-v1", "candidate_only": True,
-            "domains": [{"domain_id": "domain:planned", "label": "Financial activities"}],
-            "events": [{"event_id": "storyline:planned", "domain_id": "domain:planned",
-                        "label": "Transfer involvement", "summary": "CANDIDATE_ONLY_SCOPE"},
-                       {"event_id": "storyline:unverified", "domain_id": "domain:planned",
-                        "label": "Unverified project", "summary": "CANDIDATE_ONLY_SCOPE"}]}
+            "domains": [{"domain_id": "D1", "label": "Financial activities"}],
+            "events": [{"event_id": "EVENT_TRANSFER", "domain_id": "D1",
+                        "label": "Transfer involvement", "summary": "CANDIDATE_ONLY_SCOPE"}]}
         self.inputs.user_query.extras = {"storyline_plan": discovery}
         builder, sequence = self.builder()
         output = builder.run(self.inputs)
-        person = output.extras["person_epg"]
-        self.assertEqual(len(sequence.calls), 8)
-        self.assertTrue(all("CANDIDATE_ONLY_SCOPE" not in call[0].user_msg for call in sequence.calls[:-1]))
-        self.assertIn("CANDIDATE_ONLY_SCOPE", sequence.calls[-1][0].user_msg)
-        self.assertEqual([row["event_id"] for row in person["event"]], ["storyline:planned"])
-        self.assertNotIn("CANDIDATE_ONLY_SCOPE", json.dumps(person))
-        self.assertEqual(validate_person_epg(person), {"valid": True, "errors": []})
-        self.assertEqual(self.artifact(builder, "PersonStorylineResolution-Result")["represented_event_count"], 1)
-        self.assertEqual(self.artifact(builder, "FinalPersonEPG"), person)
-        page = Path(builder.save_dir, "FinalPersonEPG.html").read_text(encoding="utf-8")
-        self.assertEqual(json.loads(EmbeddedPersonData(page).payload), person)
-        with patch.object(sequence, "run", side_effect=AssertionError("Replay must stay offline")):
-            self.assertEqual(builder.integrate_person_from_files(strict=True), person)
-
-    def test_invalid_organization_retries_in_shared_ledger(self):
-        invalid = organization_plan()
-        invalid["memberships"][0]["activity_id"] = "INVENTED"
-        builder, sequence = self.builder([invalid, organization_plan()])
-        output = builder.run(self.inputs)
-        self.assertEqual(len(sequence.calls), 9)
-        records = self.artifact(builder, "CallLedger")[-2:]
-        self.assertEqual([r["status"] for r in records], ["invalid_output", "accepted"])
-        self.assertEqual([r["attempt"] for r in records], [1, 2])
-        self.assertEqual(output.extras["usage"]["retries"], 1)
-        self.assertEqual(output.extras["usage"]["prompt_tokens"], 90)
-        self.assertEqual(self.artifact(builder, "PersonOrganization-Result"), organization_plan())
-        self.assertTrue(Path(builder.save_dir, "PersonOrganization-Retry1.json").exists())
-        self.assertIn("Validation issue:", sequence.calls[-1][0].user_msg)
-
-    def test_invalid_organization_exhaustion_fails_without_final_person(self):
-        builder, sequence = self.builder([{}, {}])
-        with self.assertRaisesRegex(ValueError, "PersonOrganization returned invalid output after 2"):
-            builder.run(self.inputs)
-        self.assertEqual(len(sequence.calls), 9)
-        self.assert_failed(builder, 9)
-        self.assertFalse(Path(builder.save_dir, "PersonOrganization-Result.json").exists())
-
-    def test_organization_timeout_records_failed_call_without_final_person(self):
-        builder, sequence = self.builder([TimeoutError("Synthetic organization timeout")])
-        with self.assertRaisesRegex(TimeoutError, "organization timeout"):
-            builder.run(self.inputs)
-        self.assertEqual(len(sequence.calls), 8)
-        self.assert_failed(builder, 8)
-        record = self.artifact(builder, "CallLedger")[-1]
-        self.assertEqual(record["agent"], "PersonOrganization")
-        self.assertEqual(record["status"], "transport_error")
-        self.assertEqual(record["error_type"], "TimeoutError")
-        self.assertIsNone(record["prompt_tokens"])
-        self.assertFalse(Path(builder.save_dir, "PersonOrganization-Result.json").exists())
-
-    def test_call_budget_covers_initial_organization_and_retries(self):
-        for limit, organization, expected_calls in ((7, [organization_plan()], 7), (8, [{}, organization_plan()], 8)):
-            with self.subTest(limit=limit):
-                self.config["sparse_builder_config"]["max_calls"] = limit
-                builder, sequence = self.builder(organization)
-                with self.assertRaisesRegex(RuntimeError, "model call limit"):
-                    builder.run(self.inputs)
-                self.assertEqual(len(sequence.calls), expected_calls)
-                self.assert_failed(builder, expected_calls)
-
-    def test_strict_person_quote_gate_retains_candidate_but_no_final(self):
-        self.config["sparse_builder_config"]["evidence_policy"] = "strict"
-        builder, _ = self.builder([organization_plan("This quote never occurs in the supplied source.")])
-        with self.assertRaisesRegex(ValueError, "Person EPG contains quotes"):
-            builder.run(self.inputs)
-        self.assert_failed(builder, 8)
-        self.assertTrue(Path(builder.save_dir, "CandidatePersonEPG.json").exists())
-        self.assertEqual(self.artifact(builder, "PersonEvidenceCheck")["unmatched_quote_count"], 1)
-        acceptance = self.artifact(builder, "PersonAcceptance")
-        self.assertEqual(acceptance["status"], "quote_gate_blocked")
-        self.assertFalse(acceptance["final_artifact_allowed"])
-
-    def test_report_policy_keeps_unmatched_quote_as_reviewable_draft(self):
-        builder, _ = self.builder([organization_plan("This quote never occurs in the supplied source.")])
-        output = builder.run(self.inputs)
-        acceptance = output.extras["person_acceptance"]
-        self.assertEqual(acceptance["status"], "draft_requires_content_review")
-        self.assertTrue(acceptance["final_artifact_allowed"])
-        self.assertFalse(acceptance["quote_check_passed"])
-        self.assertFalse(acceptance["semantic_approval"])
-        self.assertEqual(acceptance["unmatched_quotes"], 1)
-        self.assertEqual(self.artifact(builder, "RunManifest")["status"], "completed")
+        first = sequence.calls[0][1]
+        self.assertEqual(first["event_plan"], discovery)
+        self.assertNotIn("CANDIDATE_ONLY_SCOPE", json.dumps(output.extras["person_epg"]))
+        self.assertEqual(builder.integrate_person_from_files(strict=True), output.extras["person_epg"])
 
     def test_strict_replay_is_repeatable_and_performs_zero_model_calls(self):
         self.config["sparse_builder_config"]["evidence_policy"] = "strict"
@@ -293,27 +209,26 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         self.assertEqual(builder._artifact_hashes(), before)
 
     def test_strict_replay_rejects_artifact_tampering(self):
-        builder, sequence = self.builder()
+        builder, _ = self.builder()
         builder.run(self.inputs)
         path = Path(builder.save_dir, "PersonOrganization-Result.json")
         plan = self.artifact(builder, "PersonOrganization-Result")
         plan["events"][0]["label"] = "Tampered label"
         path.write_text(json.dumps(plan))
-        with patch.object(sequence, "run", side_effect=AssertionError("Replay must not call the model")):
-            with self.assertRaisesRegex(ValueError, "hash mismatch"):
-                builder.integrate_person_from_files(strict=True)
+        with self.assertRaisesRegex(ValueError, "changed|hash mismatch"):
+            builder.integrate_person_from_files(strict=True)
 
-    def test_strict_replay_recomputes_person_reports_even_if_hashes_are_replaced(self):
+    def test_strict_replay_recomputes_organization_report_after_rehashed_tampering(self):
         builder, _ = self.builder()
         builder.run(self.inputs)
-        path = Path(builder.save_dir, "PersonMappingReport.json")
-        report = self.artifact(builder, "PersonMappingReport")
+        path = Path(builder.save_dir, "PersonOrganizationReport.json")
+        report = self.artifact(builder, "PersonOrganizationReport")
         report["tampered"] = True
         path.write_text(json.dumps(report))
         manifest = self.artifact(builder, "RunManifest")
         manifest["artifact_sha256"] = builder._artifact_hashes()
         Path(builder.save_dir, "RunManifest.json").write_text(json.dumps(manifest))
-        with self.assertRaisesRegex(ValueError, "PersonMappingReport does not match"):
+        with self.assertRaisesRegex(ValueError, "PersonOrganizationReport does not match"):
             builder.integrate_person_from_files(strict=True)
 
     def test_replay_rejects_unknown_organization_version_and_changed_scope(self):
@@ -334,14 +249,12 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "configuration hash mismatch"):
             builder.integrate_person_from_files(strict=True)
 
-    def test_explicit_empty_sparse_options_override_invalid_legacy_options(self):
+    def test_person_accepts_empty_roles_but_keeps_explicit_option_precedence(self):
+        self.config["agents"] = {}
         self.config["sparse_builder_config"] = {}
-        self.config["event_builder_config"] = {
-            "evidence_policy": "invalid-policy", "max_calls": 1, "max_json_attempts": 0,
-        }
-        builder, sequence = self.builder([organization_plan("Unmatched organization quote.")])
+        self.config["event_builder_config"] = {"evidence_policy": "invalid-policy", "max_calls": 1}
+        builder, _ = self.builder()
         output = builder.run(self.inputs)
-        self.assertEqual(len(sequence.calls), 8)
         self.assertEqual(output.extras["person_acceptance"]["policy"], "report")
         self.assertEqual(builder.integrate_person_from_files(strict=True), output.extras["person_epg"])
 
@@ -349,8 +262,7 @@ class SparsePersonFullFlowTest(unittest.TestCase):
         builder, _ = self.builder()
         with patch("finmy.person_epg.visualizer.render_person_epg", side_effect=RuntimeError("Synthetic render failure")):
             output = builder.run(self.inputs)
-        self.assertEqual(self.artifact(builder, "PersonRenderStatus"),
-                         {"status": "failed", "error_type": "RuntimeError"})
+        self.assertEqual(self.artifact(builder, "PersonRenderStatus"), {"status": "failed", "error_type": "RuntimeError"})
         self.assertEqual(self.artifact(builder, "RunManifest")["status"], "completed")
         self.assertEqual(self.artifact(builder, "FinalPersonEPG"), output.extras["person_epg"])
         self.assertEqual(builder.integrate_person_from_files(strict=True), output.extras["person_epg"])

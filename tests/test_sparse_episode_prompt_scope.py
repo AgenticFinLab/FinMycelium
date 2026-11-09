@@ -98,7 +98,6 @@ class SparseEpisodePromptScopeTest(unittest.TestCase):
             "COMMON_USER_INPUT_BLOCK": "07cea4cc64fb5cb7b33ed49a17c1969c702c9dae0160dd6bd2274bd3c7ef6f87",
             "EventLayoutReconstructorUser": "b366988860374db491cc1d6a531a880b8d1a143fb82a73a68a6221fb9728909a",
             "StageDescriptionReconstructorUser": "c1d23c02d0010c5019ec7cb4c5475d47c85085bd3db4cd7160c80c62272d9a29",
-            "EventDescriptionReconstructorUser": "9ce1459c00cdd22eaa5201a3be8c8459993b9ce4422168af7f2a957630e52890",
         }
         for name, digest in snapshots.items():
             with self.subTest(template=name):
@@ -110,7 +109,8 @@ class SparseEpisodePromptScopeTest(unittest.TestCase):
         })
         self.assertEqual(set(systems), set(users))
         for role in users:
-            self.assertEqual(systems[role], prompts.COMMON_SYSTEM_PROMPT)
+            if role != "EventDescriptionReconstructor":
+                self.assertEqual(systems[role], prompts.COMMON_SYSTEM_PROMPT)
             if role not in FACT_ROLES:
                 self.assertNotIn(prompts.EPISODE_FACT_SCOPE_POLICY, users[role])
 

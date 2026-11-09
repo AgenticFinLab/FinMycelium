@@ -38,6 +38,10 @@ def replay(directory):
         builder = SparseRagBuilder.__new__(SparseRagBuilder)
         builder.save_dir = str(directory)
         builder.build_config = {}
+        if manifest.get("person_pipeline_version") == "canonical-person-v1":
+            person = builder.integrate_person_from_files(strict=True)
+            return {"status": "replay_pass", "builder_type": kind,
+                    "event_id": person["graph"]["graph_id"], "person_sha256": digest(person)}
         cascade = builder.integrate_from_files(strict=True)
         if manifest.get("effective_config", {}).get("reconstruction", {}).get("mode") == "person":
             builder.integrate_person_from_files(strict=True)

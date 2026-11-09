@@ -30,7 +30,7 @@ from .context_assets import (
 from .completion_errors import IncompleteCompletionError
 from .contracts import (
     CONSTRUCTION_CONTRACT_VERSION, TemporalScopeError, check_temporal_scope, compact_values,
-    construction_report, episode_scope, participant_registry, stage_scope,
+    construction_report, episode_scope, participant_registry, stage_scope, bind_episode_scope,
     validate_episode_reuse, validate_participant_identity,
 )
 from .execution_budget import (
@@ -81,6 +81,8 @@ class SparseRagBuilder(BaseBuilder):
     event_config_key = "sparse_builder_config"
     legacy_event_config_key = "event_builder_config"
     _JSON_PARSE_RETRY_AGENTS = {
+        "PersonFacts",
+        "PersonOverview",
         "PersonOrganization",
         "SkeletonReconstructor",
         "SkeletonChecker",
@@ -234,6 +236,16 @@ class SparseRagBuilder(BaseBuilder):
     ) -> dict[str, str]:
         """Build explicit prompt variables for one event agent call."""
 
+        if agent_name == "EventDescriptionReconstructor":
+            # The overview cannot add facts: no full sources, occurrence tables,
+            # retrieval memory or coverage checklist need to be re-emitted here.
+            return {
+                "Query": build_input.user_query.query_text or "",
+                "OutputLanguage": str(self._event_config_value("output_language", "English")),
+                "STRUCTURE_SPEC": structure_spec(agent_name),
+                "EventCascade": "{}", "Content": "[]",
+                **{key: self._format_prompt_value(value) for key, value in extra_kwargs.items()},
+            }
         bundle = context_assets or self._build_private_context_assets(build_input)
         local_context = self._build_local_context_package(
             build_input=build_input,
@@ -874,7 +886,9 @@ class SparseRagBuilder(BaseBuilder):
             return "", "", None, {"ProposedSkeleton": compact_values(proposed)}
 
         if agent_name == "EventDescriptionReconstructor":
-            return "", "", None, {"EventCascade": compact_values(self.integrate_results(state))}
+            from .event_summary import overview_context
+            overview, quotes = overview_context(self.integrate_results(state), build_input.samples)
+            return "", "", None, {"EventCascade": overview, "Content": quotes}
 
         if agent_name == "StageDescriptionReconstructor":
             stage_index = state["agent_executed"].count("StageDescriptionReconstructor")
@@ -1001,7 +1015,13 @@ class SparseRagBuilder(BaseBuilder):
             skeleton, self._current_episode_sequence_index(state))
         participants = candidate.get("participants", []) if agent_name == "ParticipantReconstructor" else (
             self._latest_agent_result(state, "ParticipantReconstructor") or {}).get("participants", [])
-        transactions = candidate.get("transactions", []) if agent_name == "TransactionReconstructor" else []
+        transactions = candidate.get("transactions", []) if agent_name == "TransactionReconstructor" else (
+            (self._latest_agent_result(state, "TransactionReconstructor") or {}).get("transactions", [])
+            if agent_name == "EpisodeReconstructor" else [])
+        if agent_name == "EpisodeReconstructor":
+            entry = self._get_episode_execution_plan_entry(state.get("episode_execution_plan"), si, ei)
+            if self._transaction_step_skipped(entry):
+                transactions = []
         review_name = "TemporalScopeReview-" + savename
         audit = {"agent": agent_name, "save_name": savename, "episode_locator": locator,
                  "before": copy.deepcopy(skeleton), "candidate": copy.deepcopy(candidate),
@@ -1035,6 +1055,15 @@ class SparseRagBuilder(BaseBuilder):
                                          audit_saved=audit_saved) from exc
         audit["review"] = copy.deepcopy(proposal)
         if proposal["decision"] != "revise_scope":
+            if agent_name == "EpisodeReconstructor" and proposal["decision"] == "keep_scope":
+                # A reviewed rejection of newly proposed boundaries retains the
+                # canonical scene; extracted descriptions/actions remain intact.
+                for key in ("start_time", "end_time"):
+                    candidate[key] = copy.deepcopy(target.get(key))
+                audit["status"] = "kept_scope"
+                self._validate_agent_output(state, agent_name, candidate)
+                self._save_agent_result(audit, "TemporalScopeAudit-" + savename)
+                return True
             self._save_agent_result(audit, "TemporalScopeAudit-" + savename)
             return False
         revised = apply_revision(skeleton, si, ei, proposal["episode"])
@@ -1042,10 +1071,17 @@ class SparseRagBuilder(BaseBuilder):
         skeleton.clear()
         skeleton.update(revised)
         try:
+            if agent_name == "EpisodeReconstructor":
+                bound = bind_episode_scope(candidate, revised["stages"][si]["episodes"][ei])
+                candidate.clear()
+                candidate.update(bound)
             self._validate_agent_output(state, agent_name, candidate)
         except (TypeError, ValueError):
             skeleton.clear()
             skeleton.update(original)
+            if agent_name == "EpisodeReconstructor":
+                candidate.clear()
+                candidate.update(copy.deepcopy(audit["candidate"]))
             audit["status"] = "revision_failed_validation"
             self._save_agent_result(audit, "TemporalScopeAudit-" + savename)
             return False
@@ -1062,6 +1098,49 @@ class SparseRagBuilder(BaseBuilder):
                 self.save_traces({"contract_version": 1, "semantic_support_checked": False,
                     "conflicts": self._temporal_conflicts}, "EpisodeScopeConflicts", "json")
         return True
+
+    def _infer_person_phase(self, agent, system, user, name, validator):
+        """Expose recorded provider failures to item/phase recovery uniformly."""
+        start = len(getattr(self, "_call_records", []))
+        try:
+            return self._infer_and_parse_json(agent, system, user, {}, name, validator=validator)
+        except Exception as error:
+            calls = getattr(self, "_call_records", [])[start:]
+            if calls and calls[-1].get("status") == "transport_error" and not isinstance(error, AssertionError):
+                raise RuntimeError(f"{agent} provider request failed ({type(error).__name__}): {error}") from error
+            raise
+
+    def _infer_event_overview(self, state, system, user, kwargs, name, validator):
+        from .event_summary import stage_summary_fallback
+        start = len(getattr(self, "_call_records", []))
+        try:
+            result = self._infer_and_parse_json("EventDescriptionReconstructor",
+                system, user, kwargs, name, validator=validator)
+        except Exception as error:
+            calls = getattr(self, "_call_records", [])[start:]
+            local_failure = calls and calls[-1].get("status") in {
+                "incomplete_response", "invalid_output", "empty_response", "transport_error"}
+            budget_exhausted = (type(error) is RuntimeError
+                and str(error) == "Configured model call limit reached")
+            # Do not conceal programming errors, failed checkpoint writes or interrupts.
+            if isinstance(error, AssertionError) or (isinstance(error, OSError) and not (
+                    calls and calls[-1].get("status") == "transport_error")):
+                raise
+            if not local_failure and not budget_exhausted:
+                raise
+            result, origins = stage_summary_fallback(self.integrate_results(state))
+            validator(result)
+            self._summary_status = {"status": "degraded", "strategy": "existing_stage_descriptions",
+                "error_type": type(error).__name__, "source_fields": origins,
+                "result_sha256": digest(result), "partial_response_used": False,
+                "detailed_facts_preserved": True, "semantic_approval": False}
+            self._save_agent_result(result, name)
+        else:
+            self._summary_status = {"status": "completed", "strategy": "model_overview",
+                "detailed_facts_preserved": True}
+        if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
+            self.save_traces(self._summary_status, "EventSummaryStatus", "json")
+        return result
 
     def execute_agent(self, state: AgentState, agent_name: str) -> AgentState:
         """Execute one event reconstruction agent stage."""
@@ -1092,22 +1171,34 @@ class SparseRagBuilder(BaseBuilder):
                 save=lambda data, name: self._save_agent_result(data, name), name=savename)
 
         def validate_output(payload):
+            if agent_name == "EpisodeReconstructor" and isinstance(payload, dict):
+                _, _, _, target, _ = self._get_episode_by_sequence_index(
+                    self._get_event_skeleton(state), self._current_episode_sequence_index(state))
+                bound = bind_episode_scope(payload, target)
+                if bound != payload:
+                    self._save_agent_result({"original": copy.deepcopy(payload),
+                        "target_scope": episode_scope(target)}, "EpisodeScopeBinding-" + savename)
+                    payload.clear()
+                    payload.update(bound)
             self._validate_agent_output(state, agent_name, payload)
             if relation_guard is not None:
                 relation_guard(payload)
 
-        parsed_result = self._infer_and_parse_json(
-            agent_name,
-            system_msg,
-            user_msg,
-            prompt_kwargs,
-            savename,
-            validator=validate_output,
-            temporal_reviewer=(lambda error, candidate: self._review_episode_scope(
-                state, agent_name, user_msg, savename, error, candidate))
-                if agent_name in {"ParticipantReconstructor", "TransactionReconstructor"} else None,
-        )
-
+        if agent_name == "EventDescriptionReconstructor":
+            parsed_result = self._infer_event_overview(state, system_msg, user_msg,
+                prompt_kwargs, savename, validate_output)
+        else:
+            parsed_result = self._infer_and_parse_json(
+                agent_name,
+                system_msg,
+                user_msg,
+                prompt_kwargs,
+                savename,
+                validator=validate_output,
+                temporal_reviewer=(lambda error, candidate: self._review_episode_scope(
+                    state, agent_name, user_msg, savename, error, candidate))
+                    if agent_name in {"ParticipantReconstructor", "TransactionReconstructor", "EpisodeReconstructor"} else None,
+            )
         meta: dict[str, Any] | None = None
         if agent_name in {
             "ParticipantReconstructor",
@@ -1427,6 +1518,10 @@ class SparseRagBuilder(BaseBuilder):
 
         manifest_path = Path(self.save_dir) / "RunManifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+        if manifest.get("person_pipeline_version") == "canonical-person-v1":
+            from finmy.person_epg.compat_projection import project_person_epg
+            from finmy.subject_graph.compat import to_event_cascade
+            return to_event_cascade(project_person_epg(self.integrate_person_from_files(strict=strict)))
         contract_version = manifest.get("construction_contract_version", 1)
         if type(contract_version) is not int or contract_version not in {1, CONSTRUCTION_CONTRACT_VERSION}:
             raise ValueError("Unsupported construction contract version")
@@ -1440,12 +1535,29 @@ class SparseRagBuilder(BaseBuilder):
             if actual != recorded:
                 raise ValueError("Replay artifacts are incomplete or changed (hash mismatch)")
 
+        dummy_state = self._load_saved_state(contract_version)
+        plan_path = os.path.join(self.save_dir, "EpisodeExecutionPlan-Result.json")
+        if strict or os.path.isfile(plan_path):
+            self._validate_replay_completeness(dummy_state)
+        cascade = self.integrate_results(dummy_state)
+        if strict or os.path.isfile(plan_path):
+            validate_cascade(cascade)
+        if contract_version == CONSTRUCTION_CONTRACT_VERSION:
+            report = construction_report(cascade)
+            if strict:
+                recorded = json.loads((Path(self.save_dir) / "ConstructionCheck.json").read_text())
+                if report != recorded:
+                    raise ValueError("Replay construction checks differ from saved report")
+        return cascade
+
+    def _load_saved_state(self, contract_version=CONSTRUCTION_CONTRACT_VERSION):
+        """Read only accepted role artifacts; raw failed responses are never replayed."""
         indexed_files: list[tuple[int, str, str]] = []
         for filename in os.listdir(self.save_dir):
             if not filename.endswith("-Result.json"):
                 continue
             parts = filename.removesuffix("-Result.json").split("-")
-            if len(parts) < 2:
+            if len(parts) < 2 or parts[0] not in get_agent_prompts()[0]:
                 continue
             try:
                 index = int(parts[1])
@@ -1500,25 +1612,14 @@ class SparseRagBuilder(BaseBuilder):
             "episode_execution_plan": plan,
             "construction_contract_version": contract_version,
         }
-        if strict or os.path.isfile(plan_path):
-            self._validate_replay_completeness(dummy_state)
-        cascade = self.integrate_results(dummy_state)
-        if strict or os.path.isfile(plan_path):
-            validate_cascade(cascade)
-        if contract_version == CONSTRUCTION_CONTRACT_VERSION:
-            report = construction_report(cascade)
-            if strict:
-                recorded = json.loads((Path(self.save_dir) / "ConstructionCheck.json").read_text())
-                if report != recorded:
-                    raise ValueError("Replay construction checks differ from saved report")
-        return cascade
+        return dummy_state
 
     def _artifact_hashes(self):
         return {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
                 for path in sorted(Path(self.save_dir).glob("*.json"))
                 if path.name not in {"RunManifest.json", "GanttStatus.json"}}
 
-    def _validate_replay_completeness(self, state):
+    def _validate_replay_completeness(self, state, *, include_event_description=True):
         skeleton = self._get_event_skeleton(state)
         validate_role("SkeletonChecker", skeleton)
         expected = ["SkeletonReconstructor", "SkeletonChecker"]
@@ -1532,7 +1633,8 @@ class SparseRagBuilder(BaseBuilder):
                     expected.append("TransactionReconstructor")
                 expected.append("EpisodeReconstructor")
             expected.append("StageDescriptionReconstructor")
-        expected.append("EventDescriptionReconstructor")
+        if include_event_description:
+            expected.append("EventDescriptionReconstructor")
         if sorted(state["agent_executed"]) != sorted(expected):
             raise ValueError("Replay role sequence is incomplete or duplicated")
         queues = {role: [item for item in state["agent_results"] if role in item] for role in set(expected)}
@@ -1575,6 +1677,7 @@ class SparseRagBuilder(BaseBuilder):
             from .organization_batches import ORGANIZATION_EXECUTION_VERSION
             manifest["person_organization_contract_version"] = ORGANIZATION_CONTRACT_VERSION
             manifest["organization_execution_version"] = ORGANIZATION_EXECUTION_VERSION
+            manifest["person_pipeline_version"] = "canonical-person-v1"
         persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
         if persist:
             if os.path.exists(os.path.join(self.save_dir, "RunManifest.json")):
@@ -1584,13 +1687,19 @@ class SparseRagBuilder(BaseBuilder):
         started = time.perf_counter()
         output = None
         try:
-            output = self._run_validated(build_input)
             if reconstruction["mode"] == "person":
+                # Person facts have their own lifecycle; a legacy event skeleton
+                # is neither the factual source nor an extraction prerequisite.
+                output = BuildOutput(result={"cost": []}, logs=[], extras={})
                 output = self._complete_person(build_input, output, reconstruction["subject"])
-            manifest.update(status="completed", event_id=output.event_cascades["event_id"])
+            else:
+                output = self._run_validated(build_input)
+            manifest.update(status="completed", event_id=(
+                output.extras["person_epg"]["graph"]["graph_id"]
+                if reconstruction["mode"] == "person" else output.event_cascades["event_id"]))
             return output
         except BaseException as exc:
-            manifest.update(status="failed", error_type=type(exc).__name__)
+            manifest.update(status="failed", error_type=type(exc).__name__, error_message=str(exc))
             # Accepted roles are durable artifacts, not a completed graph. Give
             # callers an explicit checkpoint boundary without claiming that
             # arbitrary partial extraction has an automatic resume path.
@@ -1600,8 +1709,8 @@ class SparseRagBuilder(BaseBuilder):
                     for row in self._call_records if row.get("status") in {"accepted", "recovered"}}),
                 "pending_candidate_artifacts": sorted({row["pending_candidate_artifact"]
                     for row in self._call_records if row.get("pending_candidate_artifact")}),
-                "recovery_scope": "person_organization_only" if output is not None
-                    and reconstruction["mode"] == "person" else "manual_extraction_recovery",
+                "recovery_scope": "canonical_person_reorganization"
+                    if reconstruction["mode"] == "person" else "manual_extraction_recovery",
                 "final_artifact_allowed": False,
             }
             if self._call_records:
@@ -1618,6 +1727,8 @@ class SparseRagBuilder(BaseBuilder):
                         type(save_error).__name__)
             raise
         finally:
+            if hasattr(self, "_summary_status"):
+                manifest["event_summary"] = copy.deepcopy(self._summary_status)
             manifest.update(elapsed_seconds=time.perf_counter() - started,
                             usage=summarize_calls(self._call_records))
             if persist:
@@ -1636,26 +1747,78 @@ class SparseRagBuilder(BaseBuilder):
                                      elapsed_seconds=manifest["elapsed_seconds"],
                                      usage=copy.deepcopy(manifest["usage"]))
 
-    def _complete_person(self, build_input, output, subject):
-        """Finish the person target before the enclosing run can be completed."""
+    def _complete_person(self, build_input, output, subject, *, package=None, canonical_checkpoint=None):
+        """Canonical facts first, then organization and independent exports.
+
+        ``package`` imports paid-for legacy facts. It is never trusted as a
+        completed canonical checkpoint merely because its JSON is valid.
+        """
         from finmy.person_epg.sparse_adapter import build_person_facts, ground_person_evidence
         from finmy.person_epg.compat_projection import project_person_epg
         from finmy.person_epg.validation import validate_person_epg
         from .person_organization import apply_organization
         from .organization_batches import organize_person_plan
-        package, mapping = build_person_facts(output.event_cascades, build_input, subject)
         storyline_plan = (getattr(build_input.user_query, "extras", None) or {}).get("storyline_plan")
+        from .person_fact_pipeline import build_canonical_facts, canonical_input_hash
+        mapping = {"mode": "canonical_person", "legacy_import": False}
+        imported_mapping = None
+        if package is None and output.event_cascades:
+            package, imported_mapping = build_person_facts(output.event_cascades, build_input, subject)
+            mapping["legacy_import"] = True
+        elif package is not None:
+            mapping["legacy_import"] = canonical_checkpoint is None
+        def save_canonical(data, name):
+            if getattr(self, "save_dir", None) and os.path.isdir(self.save_dir):
+                self.save_traces(data, name, "json")
+        checkpoint = canonical_checkpoint or {}
+        audit = checkpoint.get("audit", {})
+        cached = checkpoint.get("package")
+        reusable = (audit.get("version") == "canonical-person-v1"
+                    and audit.get("status") == "completed"
+                    and audit.get("phase") == "completed"
+                    and audit.get("input_sha256") == canonical_input_hash(build_input, subject, storyline_plan)
+                    and cached is not None and audit.get("package_sha256") == digest(cached)
+                    and validate_person_epg(cached)["valid"])
+        if reusable:
+            package, audit = copy.deepcopy(cached), copy.deepcopy(audit)
+        else:
+            package, audit = build_canonical_facts(build_input, subject,
+                infer=lambda system, user, name, validator: self._infer_person_phase(
+                    "PersonFacts", system, user, name, validator),
+                save=save_canonical, seed=package, checkpoint=canonical_checkpoint,
+                storyline_plan=storyline_plan,
+                output_language=self._event_config_value("output_language", "English"))
+        save_canonical(package, "PersonCanonicalFacts")
+        save_canonical(audit, "PersonCanonicalAudit")
+        if imported_mapping is not None:
+            save_canonical(imported_mapping, "PersonLegacyImportMap")
+        mapping.update(canonical_input_sha256=audit.get("input_sha256"),
+                       canonical_package_sha256=audit.get("package_sha256"),
+                       activity_ids=[r["activity_id"] for r in package["activity"]],
+                       source_document_ids=[r["document_id"] for r in package["source_document"]],
+                       operations_artifact="PersonCanonicalAudit.json")
+        save_canonical(mapping, "PersonMappingReport")
+        if not package.get("activity"):
+            raise ValueError("No usable person facts were extracted. Source text and the factual checkpoint "
+                             "were preserved; inspect PersonCanonicalAudit.json and resume this run.")
         organization_options = {"storyline_plan": storyline_plan} if storyline_plan is not None else {}
+        from .organization_resume import OrganizationResume
+        organization_resume = OrganizationResume(self)
         plan = organize_person_plan(
-            package, output.event_cascades, subject,
+            package, {}, subject,
             self._event_config_value("output_language", "English"),
-            infer=lambda system, user, name, validator: self._infer_and_parse_json(
-                "PersonOrganization", system, user, {}, name, validator=validator),
+            infer=organization_resume.infer,
             save=self._save_agent_result,
             **organization_options,
         )
         self._save_agent_result(plan, "PersonOrganization")
         person, organization = apply_organization(package, plan)
+        from .person_overview import complete_overview
+        person, self._summary_status = complete_overview(person, plan,
+            infer=lambda system, user, name, validator: self._infer_person_phase(
+                "PersonOverview", system, user, name, validator),
+            save=save_canonical,
+            output_language=self._event_config_value("output_language", "English"))
         evidence = ground_person_evidence(person)
         validation = validate_person_epg(person)
         policy = self._event_config_value("evidence_policy", "report")
@@ -1671,20 +1834,50 @@ class SparseRagBuilder(BaseBuilder):
             "final_artifact_allowed": validation["valid"] and not blocked,
             "status": "quote_gate_blocked" if blocked else "draft_requires_content_review",
         }
+        acceptance["fact_status"] = audit.get("status", "partial")
+        if audit.get("status") != "completed" and not blocked:
+            acceptance["status"] = "partial_facts_requires_review"
         persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
         if persist:
             for name, data in (("CandidatePersonEPG", person), ("PersonMappingReport", mapping),
                                ("PersonOrganizationReport", organization),
                                ("PersonEvidenceCheck", evidence), ("PersonAcceptance", acceptance)):
                 self.save_traces(data, name, "json")
+        pending_keys = ("pending_occurrence_ids", "pending_activity_ids", "pending_event_ids")
+        if any(plan.get(key) for key in pending_keys):
+            for key in pending_keys:
+                if plan.get(key):
+                    acceptance[key] = list(plan[key])
+            if not blocked:
+                acceptance["status"] = "partial_organization_requires_review"
+            if persist:
+                self.save_traces(acceptance, "PersonAcceptance", "json")
         if not validation["valid"]:
             raise ValueError("Person EPG validation failed: " + json.dumps(validation["errors"][:5]))
         if blocked:
             raise ValueError("Person EPG contains quotes absent or ambiguous in the supplied sources")
-        projection = project_person_epg(person)
+        projection = None
+        legacy_cascade = None
+        projection_status = {"status": "completed"}
+        try:
+            projection = project_person_epg(person)
+            from finmy.subject_graph.compat import to_event_cascade
+            legacy_cascade = to_event_cascade(projection)
+        except (ValueError, TypeError) as error:
+            # The legacy projection has stricter temporal containers than the
+            # native person schema. Its failure is an export outcome, not grounds
+            # for deleting a validated native graph or suppressing its HTML.
+            projection_status = {"status": "failed", "error_type": type(error).__name__,
+                                 "message": str(error), "native_person_preserved": True}
+            projection = None
+            legacy_cascade = None
         if persist:
             self.save_traces(person, "FinalPersonEPG", "json")
-            self.save_traces(projection, "FinalSubjectGraph", "json")
+            self.save_traces(projection_status, "SubjectProjectionStatus", "json")
+            if projection is not None:
+                self.save_traces(projection, "FinalSubjectGraph", "json")
+            if legacy_cascade is not None:
+                self.save_traces(legacy_cascade, "FinalEventCascade", "json")
             # Rendering is an independent presentation outcome, not a fact mutation.
             render_status = {"status": "completed"}
             try:
@@ -1694,9 +1887,13 @@ class SparseRagBuilder(BaseBuilder):
                 render_status = {"status": "failed", "error_type": type(exc).__name__}
             self.save_traces(render_status, "PersonRenderStatus", "json")
         output.subject_graph = projection
+        output.event_cascades = legacy_cascade
         output.logs.append("PersonOrganization")
         output.extras["agent_executed"] = [*output.extras.get("agent_executed", []), "PersonOrganization"]
         output.extras.update(person_epg=person, subject_graph=projection,
+                             person_pipeline_version="canonical-person-v1",
+                             canonical_facts=audit, event_summary=copy.deepcopy(self._summary_status),
+                             compat_projection=projection_status,
                              person_acceptance=acceptance, person_organization=organization,
                              calls=copy.deepcopy(self._call_records))
         if isinstance(output.result, dict):
@@ -1720,16 +1917,43 @@ class SparseRagBuilder(BaseBuilder):
         reconstruction = read_reconstruction(config)
         if reconstruction["mode"] != "person":
             raise ValueError("This run does not record a Sparse person reconstruction")
-        cascade = self.integrate_from_files(strict=strict)
         inputs = json.loads((root / "BuildInput.json").read_text(encoding="utf-8"))
         if strict and (digest(inputs) != manifest.get("input_sha256")
                        or digest(manifest["effective_config"]) != manifest.get("config_sha256")):
             raise ValueError("Replay input or effective configuration hash mismatch")
         build_input = BuildInput(UserQueryInput(**inputs["user_query"]),
                                  [DataSample(**item) for item in inputs["samples"]])
-        package, mapping = build_person_facts(cascade, build_input, reconstruction["subject"])
+        canonical = manifest.get("person_pipeline_version") == "canonical-person-v1"
+        if canonical:
+            if strict and self._artifact_hashes() != manifest.get("artifact_sha256"):
+                raise ValueError("Canonical person artifacts are incomplete or changed")
+            package = json.loads((root / "PersonCanonicalFacts.json").read_text(encoding="utf-8"))
+            audit = json.loads((root / "PersonCanonicalAudit.json").read_text(encoding="utf-8"))
+            from .person_fact_pipeline import canonical_input_hash
+            storyline = (getattr(build_input.user_query, "extras", None) or {}).get("storyline_plan")
+            if (audit.get("version") != "canonical-person-v1"
+                    or audit.get("input_sha256") != canonical_input_hash(build_input, reconstruction["subject"], storyline)
+                    or audit.get("package_sha256") != digest(package)):
+                raise ValueError("Canonical fact checkpoint does not match the recorded inputs")
+            mapping = json.loads((root / "PersonMappingReport.json").read_text(encoding="utf-8"))
+        else:
+            # Read-only replay of pre-canonical artifacts remains supported.
+            cascade = self.integrate_from_files(strict=strict)
+            package, mapping = build_person_facts(cascade, build_input, reconstruction["subject"])
+            repair_path = root / "PersonFactRepair-Result.json"
+            if repair_path.exists():
+                from .person_fact_repair import replay_facts
+                package = replay_facts(package, json.loads(repair_path.read_text(encoding="utf-8")))
         plan = json.loads((root / "PersonOrganization-Result.json").read_text(encoding="utf-8"))
         person, organization = apply_organization(package, plan)
+        if canonical:
+            from .person_overview import apply_overview
+            overview = json.loads((root / "PersonOverviewResult.json").read_text(encoding="utf-8"))
+            final_events = [{"event_id": r["event_id"], "label": r["label"], "summary": r["summary"]}
+                            for r in plan["events"]]
+            if overview.get("input_sha256") != digest(final_events):
+                raise ValueError("Overview was generated for different event memberships")
+            person = apply_overview(person, overview["fields"])
         evidence = ground_person_evidence(person)
         if not validate_person_epg(person)["valid"]:
             raise ValueError("Replayed Person EPG is invalid")
@@ -1742,10 +1966,16 @@ class SparseRagBuilder(BaseBuilder):
         if policy.get("evidence_policy", "report") == "strict" and evidence["unmatched_quote_count"]:
             raise ValueError("Replayed Person EPG fails the strict evidence policy")
         if strict:
-            for name, actual in (("FinalPersonEPG", person), ("PersonEvidenceCheck", evidence),
-                                 ("PersonMappingReport", mapping),
-                                 ("PersonOrganizationReport", organization),
-                                 ("FinalSubjectGraph", project_person_epg(person))):
+            comparisons = [("FinalPersonEPG", person), ("PersonEvidenceCheck", evidence),
+                           ("PersonMappingReport", mapping), ("PersonOrganizationReport", organization)]
+            status_path = root / "SubjectProjectionStatus.json"
+            projection_status = json.loads(status_path.read_text()) if status_path.exists() else {}
+            if projection_status.get("status") == "failed":
+                if (root / "FinalSubjectGraph.json").exists():
+                    raise ValueError("Failed projection must not have a final legacy graph")
+            else:
+                comparisons.append(("FinalSubjectGraph", project_person_epg(person)))
+            for name, actual in comparisons:
                 recorded = json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
                 if recorded != actual:
                     raise ValueError(f"Replayed {name} does not match the saved artifact")
@@ -1767,6 +1997,9 @@ class SparseRagBuilder(BaseBuilder):
             "construction_contract_version": CONSTRUCTION_CONTRACT_VERSION,
         }
         final_state = self._run_state_machine(state)
+        return self._finalize_extraction(build_input, final_state, context_assets)
+
+    def _finalize_extraction(self, build_input, final_state, context_assets=None):
         final_state["cost"] = copy.deepcopy(self._call_records)
         cascade_dict = self.integrate_results(final_state)
         persist = bool(getattr(self, "save_dir", None) and os.path.isdir(self.save_dir))
@@ -1803,7 +2036,8 @@ class SparseRagBuilder(BaseBuilder):
             extras={
                 "builder_type": self.builder_type,
                 "agent_executed": list(final_state["agent_executed"]),
-                "context_asset_summary": summarize_context_assets(context_assets),
+                "context_asset_summary": summarize_context_assets(context_assets) if context_assets else {},
+                "event_summary": copy.deepcopy(getattr(self, "_summary_status", {})),
                 "episode_execution_plan": final_state.get("episode_execution_plan"),
                 "calls": copy.deepcopy(self._call_records),
                 "episode_scope_conflicts": copy.deepcopy(getattr(self, "_temporal_conflicts", [])),

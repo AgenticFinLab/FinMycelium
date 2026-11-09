@@ -83,7 +83,6 @@ class SparsePersonOrganizationTest(unittest.TestCase):
             lambda p: p["memberships"][0].update(detail_indices=[5]),
             lambda p: p["memberships"].append(copy.deepcopy(p["memberships"][0])),
             lambda p: p["occurrence_relevance"].clear(),
-            lambda p: p.update(occurrence_issues=["The episode mixes two meetings."]),
             lambda p: p["stages"][0]["boundary_reason"].update(evidence_source_contents=[]),
         ]
         for mutate in mutations:
@@ -94,6 +93,13 @@ class SparsePersonOrganizationTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_organization(proposal, package)
                 self.assertEqual(package, before)
+
+    def test_occurrence_issue_keeps_valid_facts_and_marks_partial(self):
+        proposal = plan()
+        proposal['occurrence_issues'] = ['O: The episode needs local scene review.']
+        result, report = apply_organization(facts(), proposal)
+        self.assertEqual(result['action'], facts()['action'])
+        self.assertEqual(report['status'], 'partial_organization_requires_review')
 
     def test_every_unassigned_fact_requires_an_explicit_reason(self):
         package = facts()

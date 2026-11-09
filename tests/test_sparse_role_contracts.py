@@ -86,12 +86,17 @@ class RoleContractTest(unittest.TestCase):
         self.assertNotIn("action-detail-marker", user)
         self.assertIn("Recovery", user)
 
-    def test_stage_and_event_descriptions_see_completed_graph_content(self):
-        for role in ("StageDescriptionReconstructor", "EventDescriptionReconstructor"):
-            with self.subTest(role=role):
-                _, user = self.render(self.state(), role)
-                self.assertIn("episode-detail-marker", user)
-                self.assertIn("action-detail-marker", user)
+    def test_stage_description_sees_episode_facts_but_event_uses_stage_overviews(self):
+        state = self.state()
+        _, user = self.render(state, "StageDescriptionReconstructor")
+        self.assertIn("episode-detail-marker", user)
+        self.assertIn("action-detail-marker", user)
+        state["agent_results"].append({"StageDescriptionReconstructor": {
+            "descriptions": [vf("stage-overview-marker")]}})
+        _, user = self.render(state, "EventDescriptionReconstructor")
+        self.assertIn("stage-overview-marker", user)
+        self.assertNotIn("episode-detail-marker", user)
+        self.assertNotIn("action-detail-marker", user)
 
     def test_disabled_sparse_routing_is_full_for_every_episode(self):
         plan = self.builder._build_episode_execution_plan(self.inputs, cascade())

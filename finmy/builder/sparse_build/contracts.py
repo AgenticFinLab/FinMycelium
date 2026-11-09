@@ -81,12 +81,56 @@ def validate_participant_identity(participants, previous_results):
     return participant_registry([*previous_results, {"ParticipantReconstructor": {"participants": participants}}])
 
 
+def unknown_time(value):
+    value = scalar(value)
+    return value is None or isinstance(value, str) and value.strip().casefold() in UNKNOWN
+
+
+def equivalent_scope_time(left, right):
+    if unknown_time(left) and unknown_time(right):
+        return True
+    if scalar(left) == scalar(right):
+        return True
+    a, b = date_interval(left), date_interval(right)
+    return a is not None and a == b
+
+
+def bind_episode_scope(payload, target):
+    """Identity belongs to the requested scene; unknown times have one meaning.
+
+    Only equivalent temporal representations are normalized. A genuinely different
+    time remains visible to validation instead of being silently overwritten.
+    The caller saves the raw model response separately.
+    """
+    result = copy.deepcopy(payload)
+    for key in ("episode_id", "name", "index_in_stage"):
+        result[key] = copy.deepcopy(target[key])
+    for key in ("start_time", "end_time"):
+        if equivalent_scope_time(result.get(key), target.get(key)):
+            result[key] = copy.deepcopy(target.get(key))
+    return result
+
+
+class EpisodeBoundaryDifference(TemporalScopeError):
+    """A different proposed boundary needs semantic review, not JSON repair."""
+    def __init__(self, payload, target, key):
+        self.report = {"episode": episode_scope(target), "violations": [{
+            "path": key, "timestamp": scalar(payload.get(key)),
+            "target_boundary": scalar(target.get(key)), "kind": "episode_boundary_difference"}]}
+        ValueError.__init__(self, f"Episode scope drift: {key} differs from the checked skeleton")
+
+
 def validate_episode_reuse(payload, target):
     for key, placeholder in ROLE_RESULTS.items():
         if payload.get(key) != placeholder:
             raise ValueError(f"episode.{key}: must equal {placeholder!r}; arrays belong to the preceding role")
     for key in EPISODE_SCOPE_FIELDS:
-        if scalar(payload.get(key)) != scalar(target.get(key)):
+        same = (equivalent_scope_time(payload.get(key), target.get(key))
+                if key in {"start_time", "end_time"}
+                else scalar(payload.get(key)) == scalar(target.get(key)))
+        if not same:
+            if key in {"start_time", "end_time"}:
+                raise EpisodeBoundaryDifference(payload, target, key)
             raise ValueError(f"Episode scope drift: {key} must match the checked skeleton")
 
 

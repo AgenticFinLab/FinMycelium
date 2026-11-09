@@ -51,9 +51,9 @@ def validate_proposal(value, target, samples, participants, transactions):
     index = SourceIndex(samples)
     changes = 0
     for key, field in patch.items():
-        validate_shape(field, VerifiableField, 'scope_revision.' + key)
         if field == target.get(key):
             continue
+        validate_shape(field, VerifiableField, 'scope_revision.' + key)
         changes += 1
         quotes = field.get('evidence_source_contents', [])
         if not quotes or any(not index.locate(quote) for quote in quotes):

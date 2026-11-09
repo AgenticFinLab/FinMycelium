@@ -137,7 +137,7 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         self.assertEqual(self.report(builder)["conflicts"][0]["rejected_candidate"], self.bad)
         self.assertIn("EPISODE MEMBERSHIP CORRECTION", sequence.calls[1].user_msg)
 
-    def test_person_lifecycle_counts_retry_and_exports_review_diagnostic(self):
+    def test_event_lifecycle_counts_retry_and_exports_review_diagnostic(self):
         responses = flow.extraction_responses()
         invalid = copy.deepcopy(responses[2])
         invalid["participants"][0]["actions"][0]["timestamp"]["value"] = "2026-01-01"
@@ -146,14 +146,14 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
                              "reason": "The later action belongs to another scene."})
         builder, sequence = self.lifecycle.builder(extraction=responses)
         output = builder.run(self.lifecycle.inputs)
-        self.assertEqual(len(sequence.calls), 10)
-        self.assertEqual(output.extras["usage"]["calls"], 10)
+        self.assertEqual(len(sequence.calls), 9)
+        self.assertEqual(output.extras["usage"]["calls"], 9)
         self.assertEqual(output.extras["usage"]["retries"], 1)
-        self.assertEqual(output.extras["person_acceptance"]["episode_scope_conflicts"], 1)
-        self.assertFalse(output.extras["person_acceptance"]["semantic_approval"])
+        self.assertEqual(len(output.extras["episode_scope_conflicts"]), 1)
+        self.assertFalse(output.extras["acceptance"]["semantic_approval"])
         self.assertEqual(output.extras["episode_scope_conflicts"], self.report(builder)["conflicts"])
         self.assertEqual(self.lifecycle.artifact(builder, "RunManifest")["status"], "completed")
-        self.assertTrue(Path(builder.save_dir, "FinalPersonEPG.html").exists())
+        self.assertTrue(Path(builder.save_dir, "FinalEventCascade.json").exists())
 
     def test_recovered_fragment_exhaustion_preserves_temporal_error_cause(self):
         text = json.dumps(self.bad) + '\nextra {"marker":"trailing"}'
@@ -163,7 +163,7 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         self.assertIsInstance(caught.exception.__cause__, TemporalScopeError)
         self.assertEqual(caught.exception.__cause__.report["scope"]["episode_id"], "E10")
 
-    def test_person_lifecycle_exhaustion_remains_failed_without_final_artifacts(self):
+    def test_event_lifecycle_exhaustion_remains_failed_without_final_artifacts(self):
         self.lifecycle.config["sparse_builder_config"]["max_json_attempts"] = 3
         responses = flow.extraction_responses()
         invalid = copy.deepcopy(responses[2])

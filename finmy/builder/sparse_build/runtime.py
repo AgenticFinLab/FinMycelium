@@ -44,7 +44,7 @@ def sparse_options(config):
 
 
 def validate_config(config):
-    read_reconstruction(config)
+    reconstruction = read_reconstruction(config)
     roles = set(get_agent_prompts()[0])
     required = {"agents", "lm_type", "lm_name", "generation_config", "save_folder"}
     if not required <= config.keys():
@@ -53,7 +53,14 @@ def validate_config(config):
         raise ValueError("Use lm_type: api and lm_name: provider/model")
     if not isinstance(config["save_folder"], str) or not config["save_folder"].strip():
         raise ValueError("save_folder must be nonempty")
-    if not isinstance(config["agents"], dict) or set(config["agents"]) != roles:
+    if not isinstance(config["agents"], dict):
+        raise ValueError("agents must be an object")
+    if reconstruction["mode"] == "person":
+        # Historical YAML with seven role entries remains loadable. Person
+        # construction uses the common backend and no longer needs those roles.
+        if not set(config["agents"]) <= roles | {"PersonFacts", "PersonOrganization", "PersonOverview"}:
+            raise ValueError("Unknown person builder role")
+    elif set(config["agents"]) != roles:
         raise ValueError("agents must contain exactly the seven sparse roles")
     generation = config["generation_config"]
     if not isinstance(generation, dict):
@@ -83,10 +90,11 @@ def validate_config(config):
     options = sparse_options(config)
     allowed = {"enable_sparse_routing", "enable_context_assets", "max_calls", "context_top_k",
                "max_context_chars", "excerpt_char_limit", "max_card_tokens", "max_json_attempts",
-               "request_timeout_seconds", "evidence_policy", "output_language"}
+               "request_timeout_seconds", "evidence_policy", "output_language",
+               "person_coverage_repair", "person_fact_repair"}
     if set(options) - allowed:
         raise ValueError("Unknown sparse_builder_config option")
-    for key in ("enable_sparse_routing", "enable_context_assets"):
+    for key in ("enable_sparse_routing", "enable_context_assets", "person_coverage_repair", "person_fact_repair"):
         if key in options and type(options[key]) is not bool:
             raise ValueError(f"{key} must be boolean")
     for key, default in (("max_calls", 300), ("context_top_k", 8), ("max_context_chars", 6000),
@@ -137,12 +145,13 @@ def run_identity(build_input, config):
     safe_config["reconstruction"] = reconstruction
     prompts = get_agent_prompts()
     if reconstruction["mode"] == "person":
-        from .person_organization import ORGANIZATION_SYSTEM_PROMPT
         from .organization_batches import ORGANIZATION_BATCH_PROMPT_IDENTITY
-        prompts = {"event_roles": prompts, "scope": render_scope(config),
-                   "person_guidance": PERSON_SCOPE_GUIDANCE,
-                   "organization": ORGANIZATION_SYSTEM_PROMPT,
-                   "organization_batches": ORGANIZATION_BATCH_PROMPT_IDENTITY}
+        from .person_fact_pipeline import EXTRACTION_SYSTEM, RECONCILE_SYSTEM, VERSION
+        from .person_overview import SYSTEM as OVERVIEW_SYSTEM
+        prompts = {"person_pipeline_version": VERSION, "scope": render_scope(config),
+                   "fact_extraction": EXTRACTION_SYSTEM, "fact_reconciliation": RECONCILE_SYSTEM,
+                   "organization_batches": ORGANIZATION_BATCH_PROMPT_IDENTITY,
+                   "overview": OVERVIEW_SYSTEM}
     return inputs, {"status": "running", "input_sha256": digest(inputs),
                     "effective_config": safe_config, "config_sha256": digest(safe_config),
                     "code": code_identity(), "prompt_sha256": digest(prompts)}

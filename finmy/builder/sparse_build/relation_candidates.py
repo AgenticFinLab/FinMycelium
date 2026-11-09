@@ -25,7 +25,7 @@ RELATION_REVIEW_SCHEMA = {
         "required": ["candidate_id", "decision", "reason"],
         "properties": {
             "candidate_id": {"type": "string", "minLength": 1},
-            "decision": {"enum": ["accept", "reject"]},
+            "decision": {"enum": ["accept", "reject", "reverse"]},
             "reason": {"type": "string", "minLength": 1, "pattern": r"\S"},
         },
     }}},
@@ -34,9 +34,15 @@ RELATION_REVIEW_INSTRUCTIONS = """Review every supplied relation candidate exact
 once against the complete original facts and sources. All supplied variants of
 one (from_activity_id,to_activity_id,relation_type) key must be considered
 together; accept at most one variant for that key. Return only candidate_id,
-accept/reject and a concise nonempty reason. You cannot edit endpoints, dates,
+accept/reject/reverse and a concise nonempty reason. reverse swaps ONLY the two
+endpoints of an otherwise supported non-temporal relation. You cannot edit dates,
 relation types, descriptions, quotes or any underlying fact. Reject an unsupported
 proposal rather than inventing a repair. A generating batch is not evidence.
+Read the proposed edge as an explicit sentence: FROM [relation] TO. For
+responds_to, FROM is the response and TO the earlier request/question/proposal.
+Approval responds_to application, never application responds_to approval. If
+your reason describes the opposite direction, choose reverse, not accept.
+Reject temporal reversal; it needs a separately validated temporal proposal.
 Cross-batch proposals require the same factual support as all other proposals.
 executed_by must connect a decision or instruction to its execution; a meeting
 containing a statement, or a person speaking during a meeting, is not executed_by.
@@ -166,8 +172,13 @@ def validate_relation_review(payload, candidates, assigned_ids, allowed_activity
         if cid in seen:
             issues.append(_violation(path, "duplicate_decision", "Candidate has more than one decision", decision))
         seen.add(cid)
-        if decision["decision"] == "accept":
-            key = _key(expected[cid]["relation"])
+        if decision["decision"] in {"accept", "reverse"}:
+            relation = copy.deepcopy(expected[cid]["relation"])
+            if decision["decision"] == "reverse":
+                if relation["relation_type"] in {"precedes", "overlaps"}:
+                    issues.append(_violation(path, "temporal_reversal", "Temporal relations require a new checked proposal"))
+                relation["from_activity_id"], relation["to_activity_id"] = relation["to_activity_id"], relation["from_activity_id"]
+            key = _key(relation)
             if key in accepted:
                 issues.append(_violation(path, "conflicting_variants", "At most one variant of a relation key may be accepted", decision))
             accepted[key] = cid
@@ -244,94 +255,272 @@ class RelationCandidatePool:
     def accepted(self):
         if any(candidate["decision"] is None for candidate in self._candidates.values()):
             raise ValueError("Every relation candidate requires an explicit review decision")
-        return [copy.deepcopy(candidate["relation"]) for candidate in self._candidates.values()
-                if candidate["decision"]["decision"] == "accept"]
+        accepted = {}
+        for candidate in self._candidates.values():
+            decision = candidate["decision"]["decision"]
+            if decision not in {"accept", "reverse"}:
+                continue
+            relation = copy.deepcopy(candidate["relation"])
+            if decision == "reverse":
+                relation["from_activity_id"], relation["to_activity_id"] = relation["to_activity_id"], relation["from_activity_id"]
+            accepted.setdefault(_key(relation), relation)
+        return list(accepted.values())
 
 
-def collect_reviewed_relations(package, activity_ids, layout, backgrounds,
-                               call, save, is_splittable, *, batch_size=20,
-                               organization_context=None):
-    """Collect every generating batch, then review whole variant groups by owner."""
+
+CANONICAL_RELATION_SCHEMA = {
+    'type': 'object', 'additionalProperties': False, 'required': ['candidates'],
+    'properties': {'candidates': {'type': 'array', 'items': {
+        'type': 'object', 'additionalProperties': False, 'required': ['relation', 'assessment'],
+        'properties': {
+            'relation': PLAN_SCHEMA['properties']['activity_relations']['items'],
+            'assessment': {
+                'type': 'object', 'additionalProperties': False,
+                'required': ['supported', 'evidence_scope', 'from_role', 'to_role', 'reason', 'needs_review', 'duplicate_fact'],
+                'properties': {
+                    'supported': {'type': 'boolean'},
+                    'evidence_scope': {'enum': ['relation', 'endpoints_only']},
+                    'from_role': {'type': 'string', 'minLength': 1},
+                    'to_role': {'type': 'string', 'minLength': 1},
+                    'reason': {'type': 'string', 'minLength': 1},
+                    'needs_review': {'type': 'boolean'}, 'duplicate_fact': {'type': 'boolean'},
+                    'response_activity_id': {'type': 'string'}, 'trigger_activity_id': {'type': 'string'},
+                },
+            },
+        },
+    }}},
+}
+CANONICAL_RELATION_INSTRUCTIONS = '''Propose only supported relations involving the assigned_ids source Activities.
+A target may be any known global canonical Activity; inspect its factual context.
+Do not connect duplicate reports of one fact using overlaps/explains: flag a
+suspected duplicate instead. Identity repair is upstream, not a new edge.
+For each candidate, assess the relation itself against the original source:
+supported, evidence_scope (relation vs endpoints_only), the two semantic roles,
+and a concrete reason. A quotation mentioning both endpoints does not establish
+causality, execution or response. Mark needs_review for genuine ambiguity.
+For responds_to explicitly identify response_activity_id and trigger_activity_id:
+a vote or approval responds to the earlier request/proposal, never the reverse.
+For executed_by, FROM is a decision/instruction and TO is its implementation;
+for explains, FROM is an explanation and TO is what it explains. A meeting
+containing a speech does not establish execution. Use temporal basis only when
+activity times establish the relation, preserving uncertain windows. Empty
+candidates is legitimate; do not create connectivity or relationship quotas.'''
+CANONICAL_REVIEW_SCHEMA = copy.deepcopy(RELATION_REVIEW_SCHEMA)
+CANONICAL_REVIEW_SCHEMA['properties']['decisions']['items']['properties'].update({
+    'response_activity_id': {'type': 'string'}, 'trigger_activity_id': {'type': 'string'},
+})
+CANONICAL_REVIEW_INSTRUCTIONS = RELATION_REVIEW_INSTRUCTIONS + '''
+Only disputed candidates and directional semantic claims require this review.
+For responds_to, also return response_activity_id and trigger_activity_id from
+the candidate endpoints; these semantic roles determine the final direction.
+Do not accept a relation supported only by separately quoted endpoint facts.
+A duplicate-fact suspicion is not resolved by accepting an overlap edge.'''
+
+
+def _same_fact_candidate(package, left, right):
+    """Conservative duplicate suspicion, never an automatic fact merge."""
+    activities = {r['activity_id']: r for r in package['activity']}
+    left_id, right_id = left, right
+    left, right = activities[left], activities[right]
+    for table, key in (('action', 'action_id'), ('financial_transaction', 'transaction_id')):
+        if not left.get(key) or not right.get(key):
+            continue
+        rows = {r[key]: r for r in package[table]}
+        a, b = rows[left[key]], rows[right[key]]
+        fields = ('actor_id', 'action_type') if key == 'action_id' else ('from_entity_id', 'to_entity_id', 'name')
+        times = {r['time_id']: r for r in package['time_value']}
+        ta, tb = times.get(a.get('timestamp_time_id')), times.get(b.get('timestamp_time_id'))
+        def normalized(row):
+            return {k: v for k, v in (row or {}).items() if k not in {'time_id', 'evidence_set_id'}}
+        details = lambda aid: sorted(r['value'] for r in package['activity_detail'] if r['activity_id'] == aid)
+        if details(left_id) != details(right_id):
+            return False
+        if key == 'transaction_id':
+            def instruments(tid):
+                return sorted(_canonical({k: v for k, v in r.items()
+                                           if k not in {'transaction_id', 'ordinal', 'evidence_set_id'}})
+                              for r in package['transaction_instrument'] if r['transaction_id'] == tid)
+            if instruments(a[key]) != instruments(b[key]):
+                return False
+        return (all(a.get(k) == b.get(k) for k in fields) and bool(ta) and bool(tb)
+                and normalized(ta) == normalized(tb))
+    return False
+
+
+def _original_quotes(package, relation):
+    quotes = relation['description']['evidence_source_contents']
+    return all(any(quote in r.get('content', '') for r in package['source_document']) for quote in quotes)
+
+
+def normalize_response_direction(relation, assessment):
+    """Assemble response direction from declared semantic roles, not prose regex."""
+    row = copy.deepcopy(relation)
+    if row['relation_type'] == 'responds_to':
+        response, trigger = assessment.get('response_activity_id'), assessment.get('trigger_activity_id')
+        if response == trigger or {response, trigger} != {row['from_activity_id'], row['to_activity_id']}:
+            raise ValueError('responds_to needs distinct response and trigger endpoint roles')
+        row['from_activity_id'], row['to_activity_id'] = response, trigger
+    return row
+
+
+def collect_canonical_relations(package, plan, call, save, *, batch_size=20):
+    """One semantic proposal pass; review conflicts and directional claims only.
+
+    Citation presence is only a grounding check. Each proposal contains an
+    explicit semantic assessment; direction-sensitive claims get an independent
+    review with both endpoint evidence closures before acceptance.
+    """
+    from .organization_batches import _splittable
+    activity_ids = [r['activity_id'] for r in package['activity']]
     pool = RelationCandidatePool(activity_ids, batch_size)
-
+    pool.audit.update(execution_version=6, review_policy='semantic_disputes_and_directional_relations')
+    assessments = {}
+    membership_events = {}
+    for row in plan['memberships']:
+        membership_events.setdefault(row['activity_id'], set()).add(row['event_id'])
     def persist():
-        save(pool.snapshot(), "PersonOrganization-RelationCandidates")
-
-    def checked(phase, name, ids, payload, validator):
+        save(pool.snapshot(), 'PersonOrganization-RelationCandidates')
+    def generation(ids, name):
+        event_ids = set().union(*(membership_events.get(aid, set()) for aid in ids))
+        scope_ids = [aid for aid in activity_ids if aid in ids or membership_events.get(aid, set()) & event_ids]
+        task = {'assigned_ids': ids, 'allowed_activity_ids': activity_ids,
+                'events': [r for r in plan['events'] if r['event_id'] in event_ids],
+                'memberships': [r for r in plan['memberships'] if r['event_id'] in event_ids]}
+        def check(value):
+            if not isinstance(value, dict) or not isinstance(value.get('candidates'), list):
+                raise ValueError('Relation response needs a candidates array')
+            accepted = []
+            schema = CANONICAL_RELATION_SCHEMA['properties']['candidates']['items']
+            for candidate in value['candidates']:
+                try:
+                    if not Draft202012Validator(schema).is_valid(candidate):
+                        raise ValueError('Invalid candidate/semantic assessment shape')
+                    row, assessment = candidate['relation'], candidate['assessment']
+                    validate_relation_candidates({'activity_relations': [row]}, ids, activity_ids, package)
+                    if not {row['from_activity_id'], row['to_activity_id']} & set(ids):
+                        raise ValueError('Both relation endpoints are outside this generation task')
+                    if not _original_quotes(package, row):
+                        raise ValueError('Relation quote is not present in the original sources')
+                    if not assessment['supported'] or assessment['evidence_scope'] != 'relation':
+                        raise ValueError('Assessment does not establish the relation itself')
+                    if assessment['duplicate_fact'] or _same_fact_candidate(package, row['from_activity_id'], row['to_activity_id']):
+                        raise ValueError('Possible duplicate fact requires upstream identity review, not an edge')
+                    row = normalize_response_direction(row, assessment)
+                    accepted.append({'relation': row, 'assessment': assessment})
+                except (ValueError, TypeError, KeyError) as error:
+                    entry = {'batch': name, 'candidate': copy.deepcopy(candidate), 'reason': str(error)}
+                    if entry not in pool.audit['rejected_attempts']:
+                        pool.audit['rejected_attempts'].append(entry)
+            value['candidates'] = accepted
         try:
-            validator(payload)
-        except OrganizationValidationError as error:
-            pool.rejected(phase, name, ids, payload, error)
-            persist()
-            raise
-
-    def generate(ids, name):
-        task = {"assigned_ids": ids, "layout": layout,
-                "allowed_activity_ids": list(activity_ids), "background_activities": backgrounds}
-        if organization_context is not None:
-            task["organization_context"] = copy.deepcopy(organization_context)
-        try:
-            result = call("Relations", task, name,
-                lambda value: checked("Relations", name, ids, value,
-                    lambda proposal: validate_relation_candidates(proposal, ids, activity_ids, package)))
-        except Exception as error:
-            if not is_splittable(error) or len(ids) <= 1:
-                raise
-            midpoint = len(ids) // 2
-            generate(ids[:midpoint], name + "-L")
-            generate(ids[midpoint:], name + "-R")
-            return
-        pool.add(result, name, ids)
+            result = call('Relations', task, scope_ids, check, name,
+                          schema=CANONICAL_RELATION_SCHEMA, instructions=CANONICAL_RELATION_INSTRUCTIONS)
+        except (ValueError, RuntimeError, TimeoutError) as error:
+            if _splittable(error) and len(ids) > 1:
+                midpoint = len(ids)//2
+                generation(ids[:midpoint], name+'-L'); generation(ids[midpoint:], name+'-R')
+                return
+            pool.audit.setdefault('unreviewed_batches', []).append({'phase': 'Relations', 'batch': name, 'error_type': type(error).__name__})
+            persist(); return
+        for candidate in result['candidates']:
+            row = candidate['relation']
+            pool.add({'activity_relations': [row]}, name, ids)
+            cid = 'RC_' + hashlib.sha256(_canonical(row).encode('utf-8')).hexdigest()
+            assessments[cid] = candidate['assessment']
         persist()
-
-    def review(owner, assigned_ids, groups, name):
-        candidates = [candidate for group in groups for candidate in group]
-        task = {"assigned_ids": assigned_ids, "layout": layout,
-                "allowed_activity_ids": list(activity_ids), "owner_batch": owner,
-                "background_activities": backgrounds, "candidates": candidates}
-        if organization_context is not None:
-            task["organization_context"] = copy.deepcopy(organization_context)
+    for index, start in enumerate(range(0, len(activity_ids), batch_size), 1):
+        generation(activity_ids[start:start+batch_size], f'PersonOrganization-Relations-{index:03d}')
+    # Keep every variant, including reversed proposals, in the same review task.
+    # Scheduling ownership must not separate claims about the same pair.
+    pair_groups = {}
+    position = {aid: index for index, aid in enumerate(activity_ids)}
+    for candidate in pool.snapshot()['candidates']:
+        row = candidate['relation']
+        key = (*sorted((row['from_activity_id'], row['to_activity_id'])), row['relation_type'])
+        pair_groups.setdefault(key, []).append(candidate)
+    scheduled = {}
+    for key, group in pair_groups.items():
+        owner = min(position[key[0]], position[key[1]]) // batch_size
+        scheduled.setdefault(owner, []).append(group)
+    for index, (owner, groups) in enumerate(sorted(scheduled.items()), 1):
+        assigned_ids = activity_ids[owner*batch_size:(owner+1)*batch_size]
+        disputed = []
+        for group in groups:
+            for candidate in group:
+                row = candidate['relation']; assessment = assessments[candidate['candidate_id']]
+                opposite = any(other['relation']['from_activity_id'] == row['to_activity_id']
+                               and other['relation']['to_activity_id'] == row['from_activity_id']
+                               and other['relation']['relation_type'] == row['relation_type']
+                               for other in pool.snapshot()['candidates'])
+                requires_review = (len(group) > 1 or opposite or assessment['needs_review'] or row['basis'] == 'inferred'
+                                   or row['relation_type'] in {'responds_to', 'explains', 'executed_by'})
+                if requires_review:
+                    candidate['assessment'] = assessment
+                    disputed.append(candidate)
+                else:
+                    pool.decide({'decisions': [{'candidate_id': candidate['candidate_id'], 'decision': 'accept',
+                        'reason': 'Generation assessed relation-level support; references and original quotations validated.'}]}, 'semantic_proposal')
+        if not disputed:
+            continue
+        name = f'PersonOrganization-RelationsReview-{index:03d}'
+        scope_ids = list(dict.fromkeys(aid for c in disputed for aid in
+                                      (c['relation']['from_activity_id'], c['relation']['to_activity_id'])))
+        task = {'assigned_ids': assigned_ids, 'allowed_activity_ids': activity_ids, 'candidates': disputed,
+                'memberships': [r for r in plan['memberships'] if r['activity_id'] in scope_ids]}
+        by_id = {c['candidate_id']: c for c in disputed}
+        def checked(value):
+            if not isinstance(value, dict) or not isinstance(value.get('decisions'), list):
+                raise ValueError('Relation review needs a decisions array')
+            accepted = {}
+            pending = set(value.get('pending_candidate_ids', []))
+            for decision in value['decisions']:
+                cid = decision.get('candidate_id') if isinstance(decision, dict) else None
+                if cid not in by_id or not Draft202012Validator(CANONICAL_REVIEW_SCHEMA['properties']['decisions']['items']).is_valid(decision):
+                    continue
+                if cid in accepted and accepted[cid] != decision:
+                    accepted[cid] = {'candidate_id': cid, 'decision': 'reject', 'reason': 'Conflicting review decisions.'}
+                    continue
+                relation = by_id[cid]['relation']
+                if decision['decision'] != 'reject' and relation['relation_type'] == 'responds_to':
+                    try:
+                        oriented = normalize_response_direction(relation, decision)
+                    except ValueError:
+                        continue
+                    decision = copy.deepcopy(decision)
+                    decision['decision'] = ('accept' if oriented['from_activity_id'] == relation['from_activity_id'] else 'reverse')
+                else:
+                    decision = {k: decision[k] for k in ('candidate_id', 'decision', 'reason')}
+                if decision['decision'] == 'reverse' and relation['basis'] == 'temporal':
+                    decision = {'candidate_id': cid, 'decision': 'reject', 'reason': 'Cannot reverse a validated temporal relation.'}
+                accepted[cid] = decision
+            final_keys = {}
+            for cid, decision in accepted.items():
+                if decision['decision'] == 'reject':
+                    continue
+                row = copy.deepcopy(by_id[cid]['relation'])
+                if decision['decision'] == 'reverse':
+                    row['from_activity_id'], row['to_activity_id'] = row['to_activity_id'], row['from_activity_id']
+                final_keys.setdefault(_key(row), []).append(cid)
+            for variants in final_keys.values():
+                if len(variants) > 1:
+                    pending.update(variants)
+                    for cid in variants:
+                        accepted[cid] = {'candidate_id': cid, 'decision': 'reject',
+                                         'reason': 'Multiple accepted variants for one relation; all withheld pending a consistent decision.'}
+            pending.update(cid for cid in by_id if cid not in accepted)
+            value['pending_candidate_ids'] = sorted(pending)
+            value['decisions'] = [accepted.get(cid, {'candidate_id': cid, 'decision': 'reject',
+                                         'reason': 'Review unavailable for this candidate; withheld, not semantically rejected.'}) for cid in by_id]
         try:
-            result = call("RelationsReview", task, name,
-                lambda value: checked("RelationsReview", name, assigned_ids, value,
-                    lambda proposal: validate_relation_review(proposal, candidates, assigned_ids, activity_ids)))
-        except Exception as error:
-            if not is_splittable(error) or len(groups) <= 1:
-                raise
-            midpoint = len(groups) // 2
-            review(owner, assigned_ids, groups[:midpoint], name + "-L")
-            review(owner, assigned_ids, groups[midpoint:], name + "-R")
-            return
-        pool.decide(result, name)
-        persist()
-
+            result = call('RelationsReview', task, scope_ids, checked, name,
+                          schema=CANONICAL_REVIEW_SCHEMA, instructions=CANONICAL_REVIEW_INSTRUCTIONS)
+        except (ValueError, RuntimeError, TimeoutError) as error:
+            pool.audit.setdefault('unreviewed_batches', []).append({'phase': 'RelationsReview', 'batch': name, 'error_type': type(error).__name__})
+            result = {'decisions': [{'candidate_id': cid, 'decision': 'reject', 'reason': 'Semantic review unavailable; candidate withheld.'} for cid in by_id]}
+        if result.get('pending_candidate_ids'):
+            pool.audit.setdefault('pending_candidate_ids', []).extend(result['pending_candidate_ids'])
+        pool.decide(result, name); persist()
+    pool.audit['status'] = ('partial_requires_content_review' if pool.audit.get('unreviewed_batches') or pool.audit.get('pending_candidate_ids')
+                            else 'reviewed_requires_content_review')
     persist()
-    try:
-        for index, start in enumerate(range(0, len(activity_ids), batch_size), 1):
-            generate(activity_ids[start:start + batch_size], f"PersonOrganization-Relations-{index:03d}")
-        pool.audit["status"] = "reviewing"
-        persist()
-        for index, (owner, ids, groups) in enumerate(pool.groups_by_owner(), 1):
-            review(owner, ids, groups, f"PersonOrganization-RelationsReview-{index:03d}")
-        accepted = pool.accepted()
-        pool.audit["status"] = "reviewed_requires_content_review"
-        persist()
-        return accepted
-    except Exception as error:
-        pool.audit["status"] = "failed"
-        failure = {"error_type": type(error).__name__}
-        business_error = (error if isinstance(error, OrganizationValidationError)
-                          else error.__cause__ if isinstance(error.__cause__, OrganizationValidationError)
-                          else None)
-        if business_error is not None:
-            failure.update(message=str(business_error), report=business_error.report)
-        elif isinstance(error, IncompleteCompletionError):
-            failure.update(finish_reason=error.finish_reason,
-                           completion_tokens=error.completion_tokens,
-                           output_limit=error.output_limit,
-                           refusal=error.refusal, tool_calls=error.tool_calls)
-        # Transport exception messages may contain endpoints or headers. The
-        # type is sufficient here; never copy arbitrary provider text to audit.
-        pool.audit["failure"] = failure
-        persist()
-        raise
+    return pool.accepted()

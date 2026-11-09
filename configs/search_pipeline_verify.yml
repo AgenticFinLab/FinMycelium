@@ -1,0 +1,146 @@
+lm_type: api
+lm_name: deepseek/deepseek-chat
+inference_config: &id001
+  device: cuda
+generation_config: &id002
+  max_new_tokens: 8192
+  temperature: 0.2
+  top_p: 0.95
+db_config:
+  url: sqlite:///data/finmy.sqlite3
+output_dir: EXPERIMENT/uTEST/Pipline/output
+url_collector_config:
+  delay: 1.0
+  use_selenium_fallback: false
+  selenium_wait_time: 5
+search_config:
+  storyline_discovery:
+    enabled: true
+    max_model_calls: 2
+    max_events: 8
+  event_search:
+    max_search_requests: 12
+    max_read_sources: 12
+    max_model_calls: 24
+    max_concurrent_events: 2
+    reuse_sources: true
+  mode: agent
+  enhancement:
+    early_stop_multiplier: 4
+    source_languages:
+    - en
+    - zh
+    allow_network: true
+    providers:
+    - bocha
+    lm_name: deepseek/deepseek-chat
+    generation_config:
+      max_tokens: 4096
+      temperature: 0
+    max_results: 5
+    max_search_requests: 96
+    max_read_sources: 96
+    max_model_calls: 192
+    max_read_chars: 12000
+    max_builder_material_chars: 120000
+    max_model_context_chars: 100000
+    timeout: 120
+  bocha_count: 15
+  baidu_count: 15
+  merge_strategy: interleave
+  quality_filter:
+    enabled: true
+    min_text_chars: 300
+    dedupe_url: true
+    reject_search_pages: true
+    reject_auth_pages: true
+pdf_collector_config:
+  output_dir: EXPERIMENT/uTEST/Pipline/input/pdf
+  batch_size: 10
+  language: zh
+  check_pdf_limits: true
+  retry_failed: true
+  env_file: .env
+all_content_config:
+  max_content_length: 120000
+  max_document_chars: 12000
+event_followup:
+  enabled: false
+  max_content_length: 120000
+  max_document_chars: 12000
+  max_search_calls: 12
+  max_parse_calls: 40
+  max_search_model_calls: 30
+  max_elapsed_seconds: 300
+  max_model_calls: 24
+  max_repair_rounds_per_event: 1
+summarizer_config:
+  summarizer_type: KWLMSummarizer
+  llm_name: deepseek/deepseek-chat
+matcher_config:
+  use_matcher: false
+  matcher_type: LXMatcher
+  lm_name: deepseek/deepseek-chat
+builder_config:
+  builder_type: SparseRagBuilder
+  lm_type: api
+  lm_name: deepseek/deepseek-chat
+  inference_config: *id001
+  generation_config: *id002
+  graph_config:
+    recursion_limit: 150
+  save_folder: EXPERIMENT/uTEST/Pipline
+  sparse_builder_config:
+    enable_sparse_routing: true
+    enable_context_assets: true
+    max_calls: 300
+    max_json_attempts: 3
+    request_timeout_seconds: 900
+    evidence_policy: report
+    output_language: English
+  agents:
+    SkeletonReconstructor:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+    SkeletonChecker:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+    ParticipantReconstructor:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+    TransactionReconstructor:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+    EpisodeReconstructor:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+    StageDescriptionReconstructor:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+    EventDescriptionReconstructor:
+      lm_type: api
+      lm_name: deepseek/deepseek-chat
+      inference_config: *id001
+      generation_config: *id002
+  reconstruction:
+    mode: person
+    subject:
+      subject_id: person_56a060e220f58911
+      name: Warrent Buffett
+      scope: Documented activities and experiences across events and organizations
+        within the requested period. Discover relevant events from the sources.
+      aliases: []
+      coverage_start: '2022'
+      coverage_end: '2023'

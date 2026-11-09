@@ -131,6 +131,12 @@ def guard_organization_call(system_msg, user_msg, validator, *, phase):
         metadata, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
     def checked(value):
+        # Relevance first separates unrelated Activity assignments. They must not
+        # fail the detail guard before the phase's item isolation gets a chance.
+        if task.get("phase") == "Relevance" and validator is not None:
+            result = validator(value)
+            _check_details(value, catalog, facts, task, phase)
+            return result
         _check_details(value, catalog, facts, task, phase)
         if validator is not None:
             return validator(value)
