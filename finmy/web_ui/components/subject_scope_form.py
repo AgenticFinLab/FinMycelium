@@ -95,8 +95,6 @@ def render_subject_scope(config):
             search["mode"] = "agent"
             search["storyline_discovery"] = dict(search.get("storyline_discovery") or {})
             search["storyline_discovery"]["enabled"] = True
-            effective["event_followup"] = dict(effective.get("event_followup") or {})
-            effective["event_followup"].setdefault("enabled", False)
             effective.setdefault("all_content_config", {}).setdefault("max_content_length", 120000)
         return effective
     except ValueError as exc:

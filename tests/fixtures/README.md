@@ -6,7 +6,7 @@ review; reducing whitespace is not a substitute for reducing irrelevant data.
 
 | Fixture | Purpose |
 | --- | --- |
-| `buffett_person_epg_preview.json` | Full fixed package for schema, projection, enrichment, and rendering compatibility. Its checksum is tested. |
+| `buffett_person_epg_preview.json` | Full fixed package for schema, projection, recovery, and rendering compatibility. Its checksum is tested. |
 | `person_canonical_cases.json` | Real faulty output for duplicate annual results and meetings, Activision/Abel historic scene placement, June/November recipient splitting, and reversed proposal/response direction. |
 | `organization_transaction_detail_replay.json` | Captured transaction details incorrectly selected as activity details; validates complete diagnostics and explicit model retry. |
 | `relation_batch_overflow.json` | Captured cross-batch relation candidates and coarse/unknown-time failures. |

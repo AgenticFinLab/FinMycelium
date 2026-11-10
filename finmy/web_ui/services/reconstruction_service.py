@@ -17,7 +17,7 @@ from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
 from finmy.runner.source_documents import prepare_documents
 from finmy.runner.context_budget import allocate_context
-from finmy.reconstruction_scope import read_reconstruction
+from finmy.reconstruction_scope import read_reconstruction, strip_retired_event_followup
 
 
 class ReconstructionService:
@@ -30,10 +30,9 @@ class ReconstructionService:
         Args:
             config: Configuration dictionary
         """
-        from finmy.runner.event_followup_config import normalize_followup_config
-        self.config = normalize_followup_config(config)
+        self.config = strip_retired_event_followup(config)
         # Reject malformed person scope before starting any search or model call.
-        read_reconstruction(config)
+        read_reconstruction(self.config)
     
     def run_reconstruction(
         self, main_input: str, keywords: List[str], structured_data: Any
@@ -99,7 +98,6 @@ class ReconstructionService:
             raise ValueError("Collected source metadata/content are out of sync")
         if not documents:
             return None
-        usage = getattr(collector, "evidence_usage", {})
         documents = prepare_documents(documents, main_input, keywords, self.config, save_dir)
         budget_config = copy.deepcopy(self.config)
         storyline_plan = collector.enhanced_search_result.get("storyline_plan")
@@ -124,7 +122,6 @@ class ReconstructionService:
             raise ValueError("Context budget admitted no documents. Inspect context_budget_report.json.")
         
         # Run pipeline
-        self._draft_evidence = {"documents": documents, "usage": usage}
         pipeline_config = self.config
         from finmy.subject_graph.runner import with_source_registry
         self.config = with_source_registry(self.config, documents, budgeted)
@@ -176,16 +173,8 @@ class ReconstructionService:
                 # Filtered evidence goes directly to the native subject builder.
                 # Legacy financial matching/summarization can drop person/company history.
                 from finmy.subject_graph.runner import build_from_contents
-                from finmy.runner.event_followup_config import followup_enabled
-                if followup_enabled(self.config) and hasattr(self, "_draft_evidence"):
-                    from finmy.runner.event_refinement import build_with_draft_event_followup
-                    pipeline_result, builder_save_path = build_with_draft_event_followup(
-                        contents, query_text, keywords, self.config, save_dir,
-                        **self._draft_evidence, build=build_from_contents,
-                        progress=lambda message: st.write(f"**{format_timestamp()}** - {message}"))
-                else:
-                    pipeline_result, builder_save_path = build_from_contents(
-                        contents, query_text, keywords, self.config)
+                pipeline_result, builder_save_path = build_from_contents(
+                    contents, query_text, keywords, self.config)
             else:
                 pipeline = FinmyPipeline(self.config)
                 pipeline_result = pipeline.lm_build_pipeline_with_contents(

@@ -37,14 +37,14 @@ def run_search_pipeline(
     search_task=None,
     search_dependencies=None,
 ) -> Dict[str, Any]:
-    from finmy.reconstruction_scope import read_reconstruction
-    from finmy.runner.event_followup_config import normalize_followup_config
+    from finmy.reconstruction_scope import read_reconstruction, strip_retired_event_followup
     from finmy.runner.enhanced_subject_search import agent_search_config
+    config = strip_retired_event_followup(config)
     scope = read_reconstruction(config)
     search_config = agent_search_config(config)
     if scope["mode"] != "event":
-        return _run_person_draft_followup(
-            normalize_followup_config(config), main_input, keywords, save_dir,
+        return _run_person_pipeline(
+            config, main_input, keywords, save_dir,
             search_task=search_task, search_dependencies=search_dependencies,
         )
     from finmy.search.pipeline import run_search
@@ -84,14 +84,12 @@ def run_search_pipeline(
             "save_dir": str(save_dir)}
 
 
-def _run_person_draft_followup(config, main_input, keywords, save_dir,
-                               *, search_task=None, search_dependencies=None):
-    """Acquire through the agent, then build and optionally enrich its events."""
+def _run_person_pipeline(config, main_input, keywords, save_dir,
+                         *, search_task=None, search_dependencies=None):
+    """Acquire through the agent, then construct the native person result once."""
     from finmy.reconstruction_scope import read_reconstruction
     from finmy.runner.source_documents import prepare_documents
     from finmy.runner.context_budget import allocate_context
-    from finmy.runner.event_followup_config import followup_enabled
-    from finmy.runner.event_refinement import build_with_draft_event_followup
     from finmy.runner.enhanced_subject_search import collect_enhanced_sources
 
     keywords = keywords or []
@@ -125,13 +123,8 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir,
     config = with_source_registry(config, documents, packed)
     record_search_coverage(acquired, target, builder_status="running")
     try:
-        if followup_enabled(config):
-            result, directory = build_with_draft_event_followup(packed["contents"], main_input, keywords,
-                config, target, documents=documents, usage=usage,
-                progress=logger.info)
-        else:
-            from finmy.subject_graph.runner import build_from_contents
-            result, directory = build_from_contents(packed["contents"], main_input, keywords, config)
+        from finmy.subject_graph.runner import build_from_contents
+        result, directory = build_from_contents(packed["contents"], main_input, keywords, config)
     except Exception as error:
         try:
             record_search_coverage(acquired, target,
@@ -142,7 +135,6 @@ def _run_person_draft_followup(config, main_input, keywords, save_dir,
         raise
     coverage = record_search_coverage(acquired, target, builder_directory=directory,
         builder_status="completed" if result is not None else "failed")
-    final_input = json.loads((target / "builder_input_contents.json").read_text(encoding="utf-8"))
     return {**coverage, "all_text_content": contents, "search_query": build_search_query(main_input, keywords),
-            "limited_content_count": len(final_input), "pipeline_result": result,
+            "limited_content_count": len(packed["contents"]), "pipeline_result": result,
             "save_dir": str(target), "builder_save_dir": directory}

@@ -27,7 +27,7 @@ python -m finmy.runner.person_storyline_pipeline \
    部分完成或证据不足的事件也能交付已经选中的有效材料；未完成事件和缺口单独记录。
 4. 将候选目录单独传入人物组织阶段。最终 domain/event 可依据原文合并、拆分、增加或省略，
    使用原有 schema、JSON 和 HTML 流程。候选描述不能充当活动、日期或引文证据。
-5. 默认到此结束。构图后按已有 EPG 再补搜、增补及审核默认关闭。
+5. 保存本次构建的 JSON/HTML 并返回，不再发起构图后的补搜、增补或审核。
 
 ## 预算和开关
 
@@ -53,9 +53,6 @@ search_config:
     max_builder_material_chars: 120000
 all_content_config:
   max_content_length: 120000
-event_followup:
-  enabled: false
-  max_content_length: 120000
 ```
 
 每个事件启动前，按全局剩余额度预留不超过 `event_search` 的配额，
@@ -79,12 +76,11 @@ event_followup:
 收尾阶段只提供已阅读且可用的来源 ID。混入未阅读来源时，反馈要求修正 `finish`；
 若调用耗尽，最多保留模型最后一次选择中可校验的子集，并记录剔除项和缺口，状态仍为证据不足。
 
-新命令默认强制关闭构图后补搜，即使传入旧 YAML 的 `event_followup.enabled: true`。
-只有显式添加 `--event-followup` 才启用。直接调用已有 runner/UI 时，省略开关也默认关闭，
-显式 `true` 仍有效。共享搜索 Agent 在初搜内部的继续查询与阅读不受该开关影响。
+构图后的补搜入口与 `--event-followup` 参数已移除。旧 YAML 的 `event_followup`
+配置会提示并忽略，不会启动额外搜索。共享搜索 Agent 在初搜内部仍可按缺口继续查询与阅读。
 
 人物 `agent` 模式默认启用主线发现；显式设置 `storyline_discovery.enabled: false`
-可使用原有主体搜索。公司和已有 EPG 的显式事件补搜不经过此发现阶段。
+可直接围绕人物请求进行 Agent 搜索。单事件直接进入 Agent 搜索，不经过人物主线发现。
 
 ## 结果与续跑
 

@@ -4,9 +4,21 @@ The configuration is task metadata, never source evidence. Keeping it inside
 builder_config ensures the regular FinmyPipeline passes it to the builder.
 """
 import calendar
+import copy
 import datetime as dt
 import json
+import logging
 import re
+
+
+def strip_retired_event_followup(config):
+    """Accept old pipeline YAML without enabling or validating removed enrichment."""
+    result = copy.deepcopy(config)
+    if isinstance(result, dict) and "event_followup" in result:
+        result.pop("event_followup")
+        logging.getLogger(__name__).warning(
+            "Ignoring retired event_followup configuration: post-build enrichment was removed.")
+    return result
 
 
 def date_bounds(value):

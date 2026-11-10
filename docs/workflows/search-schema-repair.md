@@ -35,8 +35,8 @@ git apply FinMycelium_PR18_search_schema_repair.patch
   separately from search coverage. A failed Builder retains its output directory
   and the already prepared search materials instead of remaining `not_started`.
 
-Existing 120,000-character limits and disabled-by-default post-build enrichment
-are unchanged. Public schema, EPG serialization, and HTML rendering are unchanged.
+The search input limit is 120,000 characters. Post-build enrichment has since been
+removed; public schema, EPG serialization, and HTML rendering remain unchanged.
 
 ## Recovering existing work
 

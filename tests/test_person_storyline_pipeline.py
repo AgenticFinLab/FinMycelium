@@ -19,7 +19,7 @@ class PersonStorylinePipelineTests(unittest.TestCase):
             "providers": ["exa"], "lm_name": "deepseek/deepseek-chat", "allow_network": False}},
             "event_followup": {"enabled": True}, "builder_config": {"lm_name": "deepseek/deepseek-chat"}}
 
-    def test_compact_request_sets_person_years_and_disables_old_followup_setting(self):
+    def test_compact_request_sets_person_years_and_removes_retired_followup_setting(self):
         original = self.config()
         before = copy.deepcopy(original)
         for request in ("Buffett 2022-2023", "Buffett 2022–2023", "巴菲特2022至2023"):
@@ -27,7 +27,7 @@ class PersonStorylinePipelineTests(unittest.TestCase):
             subject = c["builder_config"]["reconstruction"]["subject"]
             self.assertEqual((subject["coverage_start"], subject["coverage_end"]), ("2022", "2023"))
             self.assertIn(subject["name"], ("Buffett", "巴菲特"))
-            self.assertFalse(c["event_followup"]["enabled"])
+            self.assertNotIn("event_followup", c)
             self.assertTrue(c["search_config"]["storyline_discovery"]["enabled"])
         self.assertEqual(original, before)
 
@@ -51,30 +51,33 @@ class PersonStorylinePipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
              patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", return_value={
                  "status": "finished", "documents": sources, "storyline_plan": plan}) as acquire, \
-             patch("finmy.subject_graph.runner.build_from_contents", return_value=(types.SimpleNamespace(), tmp)) as build, \
-             patch("finmy.runner.event_refinement.build_with_draft_event_followup", side_effect=AssertionError("Default followup used")):
+             patch("finmy.subject_graph.runner.build_from_contents", return_value=(types.SimpleNamespace(), tmp)) as build:
             result = run_search_pipeline(config, "Buffett 2022-2023", [], tmp)
             self.assertIsNotNone(result["pipeline_result"])
             self.assertEqual(acquire.call_count, 1)
             self.assertEqual(build.call_count, 1)
             contents, _, _, received = build.call_args.args
             self.assertEqual(received["storyline_plan"], plan)
+            self.assertNotIn("event_followup", received)
             self.assertEqual(received["all_content_config"]["allocation_strategy"], "event")
             self.assertLessEqual(sum(map(len, contents)), 60000)
             self.assertNotIn('"domains"', ''.join(contents))
             self.assertEqual(received["source_registry"]["saved_0"]["source_id"], "S1")
             self.assertEqual(json.loads((Path(tmp)/"context_budget_report.json").read_text())["allocation_strategy"], "event")
 
-    def test_command_followup_requires_flag_even_with_old_enabled_yaml(self):
+    def test_command_ignores_old_enabled_yaml_and_rejects_removed_flag(self):
         import yaml
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp)/"config.yml"; file.write_text(yaml.safe_dump(self.config()))
-            for enable in (False, True):
-                with patch("finmy.runner.search_pipeline_runner.run_search_pipeline", return_value={"pipeline_result": object()}) as run:
-                    args = ["--request", "Buffett 2022-2023", "--config", str(file), "--output-dir", tmp]
-                    if enable: args.append("--event-followup")
-                    self.assertEqual(main(args), 0)
-                    self.assertEqual(run.call_args.args[0]["event_followup"]["enabled"], enable)
+            args = ["--request", "Buffett 2022-2023", "--config", str(file), "--output-dir", tmp]
+            with patch("finmy.runner.search_pipeline_runner.run_search_pipeline", return_value={"pipeline_result": object()}) as run, \
+                 redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(main(args), 0)
+                self.assertNotIn("event_followup", run.call_args.args[0])
+                with self.assertRaises(SystemExit) as raised:
+                    main(args + ["--event-followup"])
+                self.assertEqual(raised.exception.code, 2)
+                run.assert_called_once()
 
     def test_command_builds_partial_sources_and_reports_unresolved_events(self):
         import yaml
@@ -108,7 +111,7 @@ class PersonStorylinePipelineTests(unittest.TestCase):
             self.assertEqual(summary["search_status"], "partial")
             self.assertFalse(summary["search_complete"])
             self.assertTrue(Path(summary["search_coverage_report_path"]).exists())
-            self.assertFalse(summary["postbuild_followup_enabled"])
+            self.assertNotIn("postbuild_followup_enabled", summary)
             self.assertTrue(Path(summary["status_path"]).exists())
             build.assert_called_once()
 
@@ -140,7 +143,7 @@ class PersonStorylinePipelineTests(unittest.TestCase):
         self.assertEqual(prepared[4]["coverage_end"], "2023")
         self.assertTrue(prepared[4]["scope"])
         self.assertIs(prepared[5], calls[1][1][0])
-        self.assertFalse(prepared[5]["event_followup"]["enabled"])
+        self.assertNotIn("event_followup", prepared[5])
 
     def test_search_resume_validation_error_stops_before_pipeline(self):
         import yaml

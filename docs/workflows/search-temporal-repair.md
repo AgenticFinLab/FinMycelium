@@ -57,7 +57,7 @@ person recovery. These are model-assisted semantic checks, not guarantees that
 every factual interpretation is correct.
 
 Public schema, final JSON layout and HTML rendering are unchanged. Existing
-character limits and the default disabled post-build enrichment are unchanged.
+character limits are unchanged. Post-build enrichment has since been removed.
 Tests use local sources and simulated model/provider responses; no live paid
 requests are required for the regression suite.
 

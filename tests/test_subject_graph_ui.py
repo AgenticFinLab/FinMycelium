@@ -116,7 +116,7 @@ class SubjectUITest(unittest.TestCase):
         self.assertEqual(effective["builder_config"]["lm_name"], "test-model")
         self.assertEqual(effective["search_config"]["mode"], "agent")
         self.assertTrue(effective["search_config"]["storyline_discovery"]["enabled"])
-        self.assertFalse(effective["event_followup"]["enabled"])
+        self.assertNotIn("event_followup", effective)
         self.assertEqual(effective["all_content_config"]["max_content_length"], 120000)
         self.assertEqual(original, snapshot)
         self.assertIsNot(effective, original)

@@ -172,7 +172,7 @@ python -m finmy.subject_graph.recover /path/to/build_output_20261103215915661838
 
 ### 当前检索入口
 
-单事件、人物与已有 EPG 补搜统一使用 Agent 搜索。旧 scoped/simple 执行器、固定轮次 decision-followup 与独立 relevance filtering 已删除。
+单事件与人物统一使用 Agent 搜索，构图后的补搜与增补链路已删除。旧 scoped/simple 执行器、固定轮次 decision-followup 与独立 relevance filtering 已删除。
 旧归档的来源、证据和结果仍可复用；搜索模式开关不会恢复旧算法。
 发布时间过滤与事件发生时间分别配置，后续回顾资料可以支持较早的事件。
 当前参数和运行方式见 [搜索与证据交接](workflows/search-enhancement.md)。

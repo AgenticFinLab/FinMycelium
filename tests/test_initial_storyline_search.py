@@ -9,7 +9,6 @@ from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
 from finmy.runner.enhanced_subject_search import collect_enhanced_sources
-from finmy.runner.event_followup_config import followup_enabled
 
 
 class InitialStorylineSearchTests(unittest.TestCase):
@@ -83,8 +82,7 @@ class InitialStorylineSearchTests(unittest.TestCase):
         return collect_enhanced_sources("Buffett 2022-2023", [], self.subject,
             config or self.config, self.root, dependencies=deps, **kwargs)
 
-    def test_default_discovers_then_researches_distinct_events_without_postbuild_optin(self):
-        self.assertFalse(followup_enabled(self.config))
+    def test_default_discovers_then_researches_distinct_events(self):
         before = copy.deepcopy(self.config)
         result = self.collect()
         self.assertEqual(result["status"], "finished")

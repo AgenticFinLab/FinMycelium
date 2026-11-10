@@ -9,7 +9,6 @@ from __future__ import annotations
 import copy
 from dataclasses import asdict, replace
 import json
-import math
 import logging
 from pathlib import Path
 import time
@@ -265,14 +264,8 @@ def _documents(root, task_id, result, event):
 
 
 def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
-                             progress=None, usage=None, events=None, dependencies=None,
-                             task=None, initial_events=False):
-    """Acquire original sources under one persisted phase budget.
-
-    Supplementary tasks share search/read/model ceilings; creating one task per
-    event cannot multiply those ceilings. Full selected bodies are archived;
-    the caller applies its one initial/supplementary content budget afterwards.
-    """
+                             progress=None, usage=None, dependencies=None, task=None):
+    """Acquire an initial subject or single-event task and resume its saved budget."""
     from finmy.search.pipeline import run_search
     from finmy.search.agent import LmbaseModel
     from finmy.search.sources import fetch_public
@@ -287,55 +280,19 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
     supplied_transport = dependencies.pop("transport", None)
     supplied_fetcher = dependencies.pop("fetcher", None)
     usage = usage if usage is not None else {}
-    event_tasks = events is not None
-    supplemental = event_tasks and not initial_events
-    if event_tasks and (not isinstance(events, list) or any(not isinstance(e, dict) for e in events)):
-        raise ValueError("Existing events must be a list of event descriptors")
-    entries = events if event_tasks else [None]
-    if initial_events and task is not None:
-        supplied = _task(query, keywords, subject, config, supplied=task)
-        tasks = [_task(query, keywords, subject, config, e) for e in entries]
-        for child in tasks:
-            for key in ("seed_urls", "local_files"):
-                if key in supplied:
-                    child[key] = supplied[key]
-    else:
-        tasks = [_task(query, keywords, subject, config, e, task) for e in entries]
-    if len({t.get("event_id") for t in tasks}) != len(tasks):
-        raise ValueError("Existing event IDs must be unique")
-    options = config.get("event_followup", {}) or {}
-    if not isinstance(options, dict):
-        raise ValueError("event_followup must be a mapping")
+    search_task = _task(query, keywords, subject, config, supplied=task)
     caps = {"search_calls": shared.max_search_requests, "parse_calls": shared.max_read_sources,
             "search_model_calls": shared.max_model_calls}
     content_limit = (config.get("all_content_config") or {}).get("max_content_length", 120000)
-    seconds = None
-    if supplemental:
-        caps = {"search_calls": options.get("max_search_calls", 12),
-                "parse_calls": options.get("max_parse_calls", 40),
-                "search_model_calls": options.get("max_search_model_calls", 30)}
-        content_limit = options.get("max_content_length", 120000)
-        seconds = options.get("max_elapsed_seconds", 300)
-        if type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds <= 0:
-            raise ValueError("event_followup.max_elapsed_seconds must be positive and finite")
     for key, value in caps.items():
         _integer(value, key)
     _integer(content_limit, "max_content_length", 1)
     shared = replace(shared, max_builder_material_chars=min(shared.max_builder_material_chars, content_limit))
-    if initial_events:
-        from finmy.runner.initial_event_search import collect_initial_events
-        return collect_initial_events(tasks=tasks, events=entries, shared=shared,
-            config=config, save_dir=save_dir, usage=usage, content_limit=content_limit,
-            runner=runner, dependencies={**dependencies, "model": supplied_model,
-                "transport": supplied_transport, "fetcher": supplied_fetcher},
-            documents_for=_documents, progress=progress)
-    root = Path(save_dir) / ("enhanced_event_search" if supplemental else "initial_event_search" if initial_events else "enhanced_subject_search")
+    root = Path(save_dir) / "enhanced_subject_search"
     report_path = root / "phase_report.json"
-    identity_fields = {"tasks": tasks, "config": asdict(shared), "caps": caps,
-                       "seconds": seconds, "content_limit": content_limit}
-    if initial_events:
-        identity_fields["initial_events"] = True
-    fingerprint = digest(identity_fields)
+    # Keep the original initial-search identity so saved runs remain resumable.
+    fingerprint = digest({"tasks": [search_task], "config": asdict(shared), "caps": caps,
+                          "seconds": None, "content_limit": content_limit})
     if report_path.exists():
         report = json.loads(report_path.read_text(encoding="utf-8"))
         if report.get("identity") != fingerprint:
@@ -349,13 +306,6 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
     started = time.monotonic()
     previous_elapsed = report["elapsed_seconds"]
 
-    def elapsed():
-        return previous_elapsed + time.monotonic() - started
-
-    def guard():
-        if seconds is not None and elapsed() >= seconds:
-            raise TimeoutError("Shared supplementary search time limit reached")
-
     def counters():
         result = dict(report["base_usage"])
         for record in report["tasks"].values():
@@ -367,86 +317,40 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
 
     def persist():
         report["usage"] = counters()
-        report["elapsed_seconds"] = elapsed()
+        report["elapsed_seconds"] = previous_elapsed + time.monotonic() - started
         usage.update({k: max(usage.get(k, 0), v) for k, v in report["usage"].items()})
         write_json(report_path, report)
 
     documents = []
+    task_id = "subject"
     try:
-        for index, (event, search_task) in enumerate(zip(entries, tasks)):
-            task_id = "subject" if event is None else "event_" + digest(event["event_id"])[:16]
-            record = report["tasks"].get(task_id)
-            if record is None:
-                spent = counters()
-                reserved = {key: 0 for key in caps}
-                # Paused/failed tasks keep their assigned allowance on resume.
-                # Reallocating that unspent allowance would multiply the phase
-                # budget when the earlier task subsequently resumes.
-                names = {"search_calls": "max_search_requests", "parse_calls": "max_read_sources",
-                         "search_model_calls": "max_model_calls"}
-                for prior in report["tasks"].values():
-                    if "config" in prior and prior["status"] not in TERMINAL:
-                        for key, option in names.items():
-                            reserved[key] += max(0, prior["config"][option] - prior.get("usage", {}).get(key, 0))
-                remaining = len(tasks) - index
-                quotas = {key: max(0, caps[key] - spent[key] - reserved[key]) // remaining for key in caps}
-                record = {"task_id": task_id, "event_id": search_task.get("event_id"),
-                          "status": "pending", "usage": {key: 0 for key in caps}}
-                report["tasks"][task_id] = record
-                minimums = (("search_calls", len(shared.providers)), ("parse_calls", 1),
-                            ("search_model_calls", 3)) if event_tasks else ((k, 1) for k in caps)
-                if any(quotas[k] < minimum for k, minimum in minimums):
-                    record["status"] = "budget_exhausted"
-                    persist()
-                    continue
+        record = report["tasks"].get(task_id)
+        if record is None:
+            spent = counters()
+            quotas = {key: max(0, caps[key] - spent[key]) for key in caps}
+            record = {"task_id": task_id, "event_id": None,
+                      "status": "pending", "usage": {key: 0 for key in caps}}
+            report["tasks"][task_id] = record
+            if any(value < 1 for value in quotas.values()):
+                record["status"] = "budget_exhausted"
+            else:
                 record["config"] = asdict(replace(shared, max_search_requests=quotas["search_calls"],
                     max_read_sources=quotas["parse_calls"], max_model_calls=quotas["search_model_calls"]))
-                persist()  # Persist assigned ceilings before the first attempted call.
-            if "config" not in record:
-                continue
+            persist()  # Persist assigned ceilings before the first attempted call.
+        if "config" in record:
             child_config = SearchConfig(**record["config"])
             if record["status"] not in TERMINAL:
-                if seconds is not None and elapsed() >= seconds:
-                    record["status"] = "time_budget_exhausted"
-                    persist()
-                    continue
                 if progress:
                     progress("Shared search: " + search_task["target_name"])
                 if child_config.allow_network:
                     from dotenv import load_dotenv
                     load_dotenv(Path.cwd() / ".env", override=False)
-                model = supplied_model or LmbaseModel(child_config)
-
-                def bounded_model(context):
-                    guard()
-                    if supplied_model is None and seconds is not None:
-                        model.config = replace(child_config,
-                            timeout=max(1, min(child_config.timeout, math.ceil(seconds - elapsed()))))
-                        if model.adapter is not None:
-                            model.adapter.client = model.adapter.client.with_options(timeout=model.config.timeout)
-                    try:
-                        return model(context)
-                    finally:
-                        # Keep the shared search trace's provider usage when
-                        # wrapping the real model with a phase deadline.
-                        bounded_model.last_usage = getattr(model, "last_usage", None)
-
-                def bounded_transport(provider, payload, settings):
-                    guard()
-                    bounded = settings if seconds is None else replace(settings,
-                        timeout=max(1, min(settings.timeout, math.ceil(seconds - elapsed()))))
-                    return (supplied_transport or http_transport)(provider, payload, bounded)
-
-                def bounded_fetcher(url):
-                    guard()
-                    bounded = child_config if seconds is None else replace(child_config,
-                        timeout=max(1, min(child_config.timeout, math.ceil(seconds - elapsed()))))
-                    return supplied_fetcher(url) if supplied_fetcher else fetch_public(url, bounded)
-
                 try:
                     result = runner(search_task, root=root, task_id=task_id, config=child_config,
-                                    model=bounded_model, transport=bounded_transport,
-                                    fetcher=bounded_fetcher, **dependencies)
+                                    model=supplied_model or LmbaseModel(child_config),
+                                    transport=supplied_transport or http_transport,
+                                    fetcher=supplied_fetcher or (lambda url: fetch_public(url, child_config)),
+                                    **dependencies)
                     record.update(status=result["status"], run_directory=result.get("run_dir"))
                     for key in ("stop_reason", "resume"):
                         if key in result:
@@ -458,33 +362,18 @@ def _collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
                     persist()
             if record["status"] != "invalid_state":
                 try:
-                    found = _documents(root, task_id, record, event)
-                    if not found and record["status"] == "finished":
+                    documents = _documents(root, task_id, record, None)
+                    if not documents and record["status"] == "finished":
                         record["status"] = "insufficient"
-                    documents.extend(found)
-                    record["document_count"] = len(found)
+                    record["document_count"] = len(documents)
                 except Exception as exc:
                     record.update(status="invalid_handoff", error_type=type(exc).__name__)
                     record_failure(record, "document_export", exc)
                 persist()
-        # One identical original can support several events without duplicate text.
-        unique = {}
-        for row in documents:
-            key = (row["url"], row["source_version"], digest(row["raw_text"]))
-            if key not in unique:
-                unique[key] = row
-            else:
-                prior = unique[key]
-                for name in ("event_ids", "event_labels", "event_terms", "event_routes"):
-                    for value in row.get(name, []):
-                        if value not in prior.setdefault(name, []):
-                            prior[name].append(value)
-        documents = list(unique.values())
-        outcomes = list(report["tasks"].values())
-        status = (outcomes[0]["status"] if not event_tasks and
-                  outcomes[0]["status"] not in {"paused", "failed"}
+        outcomes = [record]
+        status = (record["status"] if record["status"] not in {"paused", "failed"}
                   else phase_status(outcomes, documents))
-        report.update(status=status, complete=bool(outcomes) and all(r["status"] == "finished" for r in outcomes),
+        report.update(status=status, complete=record["status"] == "finished",
                       document_count=len(documents),
                       archived_content_chars=sum(len(d["raw_text"]) for d in documents))
         write_json(root / "sources.json", documents)
@@ -515,17 +404,16 @@ def storyline_search_identity(query, keywords, subject, config, task=None):
 
 
 def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
-                             progress=None, usage=None, events=None, dependencies=None, task=None):
+                             progress=None, usage=None, dependencies=None, task=None):
     """Discover candidates independently, then research them under one phase budget.
 
-    Existing-EPG supplementary calls retain their separate explicitly enabled budget.
     Discovery output is planning metadata only, never appended as source evidence.
     """
     dependencies = dict(dependencies or {})
     discovery_completion = dependencies.pop("discovery_completion", None)
-    if events is not None or not storyline_discovery_enabled(config):
+    if not storyline_discovery_enabled(config):
         return _collect_enhanced_sources(query, keywords, subject, config, save_dir,
-            progress=progress, usage=usage, events=events, dependencies=dependencies, task=task)
+            progress=progress, usage=usage, dependencies=dependencies, task=task)
     from finmy.search.control import task_lock
     # Protect discovery as well as reservations: two same-output invocations
     # must not duplicate a model call before the event scheduler starts.
@@ -538,7 +426,8 @@ def collect_enhanced_sources(query, keywords, subject, config, save_dir, *,
 def _collect_storyline_sources(query, keywords, subject, config, save_dir, *,
                               progress, usage, dependencies, task, discovery_completion):
     from finmy.runner.storyline_discovery import discover_storylines, StorylineDiscoveryError
-    from finmy.runner.initial_event_search import event_search_options
+    from finmy.runner.initial_event_search import collect_initial_events, event_search_options
+    from finmy.search.pipeline import run_search
     shared = SearchConfig(**agent_search_config(config))
     event_options = event_search_options(config)
     # Reject invalid scheduler settings before discovery costs anything.
@@ -606,9 +495,26 @@ def _collect_storyline_sources(query, keywords, subject, config, save_dir, *,
     # allowance. Unfunded candidates remain explicitly queued in the phase report.
     phase_usage = dict(base_usage)
     candidates = [{**event, "discovery_candidate": True} for event in plan["events"]]
-    result = _collect_enhanced_sources(query, keywords, subject, config, save_dir,
-        progress=progress, usage=phase_usage, events=candidates, dependencies=dependencies,
-        task=task, initial_events=True)
+    tasks = [_task(query, keywords, subject, config, event) for event in candidates]
+    if task is not None:
+        supplied = _task(query, keywords, subject, config, supplied=task)
+        for child in tasks:
+            for key in ("seed_urls", "local_files"):
+                if key in supplied:
+                    child[key] = supplied[key]
+    if len({item["event_id"] for item in tasks}) != len(tasks):
+        raise ValueError("Candidate event IDs must be unique")
+    dependencies = dict(dependencies or {})
+    if set(dependencies) - {"model", "transport", "fetcher", "max_steps", "run_search"}:
+        raise ValueError("Unsupported shared search dependencies")
+    runner = dependencies.pop("run_search", run_search)
+    content_limit = _integer((config.get("all_content_config") or {}).get(
+        "max_content_length", 120000), "max_content_length", 1)
+    search_config = replace(shared, max_builder_material_chars=min(
+        shared.max_builder_material_chars, content_limit))
+    result = collect_initial_events(tasks=tasks, events=candidates, shared=search_config,
+        config=config, save_dir=save_dir, usage=phase_usage, content_limit=content_limit,
+        runner=runner, dependencies=dependencies, documents_for=_documents, progress=progress)
     result["usage"] = accounted(result["usage"], plan["usage"]["model_calls"])
     result["storyline_plan"] = plan
     report = {"version": "person-storyline-search-v2", "status": result["status"],

@@ -6,7 +6,7 @@ It prepares material for draft EPG construction and review. It does not change B
 algorithms, EPG schemas or visualization formats.
 
 Agent search is the only acquisition algorithm for the full runner, Pipeline UI,
-workbench, single-event tasks and person event enrichment. Configure it under
+workbench, single-event tasks and initial person research. Configure it under
 `search_config.enhancement` in `configs/search_pipeline.yml`. Older `mode: simple`
 settings migrate to agent; they no longer select a fixed-query collector. Historical
 search states and saved source/output formats remain readable.
@@ -221,13 +221,12 @@ Search coverage and unresolved events remain explicit in `search_coverage_report
 and the UI, independently of successful graph construction. Empty evidence still stops construction.
 The candidate plan reaches organization separately from source evidence. See the
 [short-request entry point](../person_storyline_discovery.md) for `Buffett 2022-2023`.
-Post-build enrichment now defaults to disabled (`event_followup.enabled: false`).
-When explicitly enabled, the first person EPG supplies its existing events to the
-search algorithm. All supplementary events share finite search/read/model ceilings and
-one separate 120,000-character evidence pool. The persisted task ledger prevents
-resume from multiplying those budgets. Only validated original material enters
-construction; incomplete supplementary coverage is reported separately.
-See [event enrichment](../person_draft_event_followup.md) for limits and outputs.
+The pipeline builds once from the retained search material and returns the native
+JSON/HTML. Post-build event search, enrichment review, and the enrichment-only resume
+command have been removed. Legacy `event_followup` settings are ignored with a warning.
+This does not change the agent's gap-driven queries within initial search, source reuse,
+search checkpoint continuation, or rebuilding/recovering from already saved material.
+Previously enriched Person EPG files remain readable as ordinary saved results.
 
 ## Failure isolation and recovery
 

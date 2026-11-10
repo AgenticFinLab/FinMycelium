@@ -1,8 +1,8 @@
 # Focused regression suite
 
-Tests prioritize observable results, saved evidence, and recovery. Production code
-and JSON fixtures are unchanged by this test-only cleanup. Test Python shrinks
-from 24,539 to 17,033 lines; 23 redundant modules are retired.
+Tests prioritize observable results, saved-evidence integrity, and recovery.
+Post-build enrichment tests retire with that execution path; initial agent-search
+gap handling and recovery remain covered.
 
 ## Coverage owners
 
@@ -10,11 +10,11 @@ from 24,539 to 17,033 lines; 23 redundant modules are retired.
 | --- | --- |
 | Person facts, organization and export | `test_person_fact_pipeline`, `test_person_canonical_acceptance`, `test_person_canonical_organization`, `test_person_canonical_full_flow` |
 | Single-event build and replay | `test_sparse_rag_builder_full_flow`, `test_sparse_rag_builder_replay_regression`, `test_sparse_runtime_entry`, `test_epg_validation` |
-| Resume without searching or repeating accepted work | `test_person_canonical_recovery`, `test_sparse_person_recovery`, `test_storyline_search_resume`, `test_resume_event_enrichment` |
+| Resume without searching or repeating accepted work | `test_person_canonical_recovery`, `test_sparse_person_recovery`, `test_storyline_search_resume` |
 | Agent scheduling, budgets and source reuse | `test_event_search_scheduling`, `test_initial_storyline_search`, `test_shared_event_sources`, `test_failure_isolation_flow` |
 | Search failures and partial evidence | `test_search_failure_isolation`, `test_search_phase_isolation`, `test_search_interrupted_finalization`, `test_search_seed_failure_isolation` |
 | Source identity, quotes and handoff | `test_source_documents`, `test_search_source_provenance`, `test_pipeline_source_handoff`, `test_search_build_contract`, `test_security_counterparty_grounding` |
-| Optional enrichment, item repair and fuzzy dates | `test_event_refinement`, `test_event_enrichment_repair`, `test_event_enrichment_temporal`, `test_event_additions_temporal` |
+| Item isolation, factual reconciliation and fuzzy dates | `test_organization_item_isolation`, `test_person_canonical_acceptance`, `test_sparse_temporal_scope_revision` |
 | Schema, HTML and old result compatibility | `test_person_epg_contract`, `test_person_epg_validation`, `test_person_epg_visualizer`, `test_person_cli_rendering`, `test_subject_graph_recovery` |
 | User entry points | `test_person_pipeline_app`, `test_enhanced_subject_ui`, `test_search_workbench`, `test_workbench_ui` |
 
@@ -43,8 +43,5 @@ network calls are mocked. `sparse_test_dependencies` supplies containers only; i
 cannot validate a missing provider implementation. Rendering and SQL tests use
 the committed `fixtures/buffett_person_epg_preview.json`, not optional examples.
 
-Cleanup validation ran each of the 121 remaining modules in an isolated process
-with outbound socket connections blocked: 700 tests passed. Six modules need
-the unavailable full `lmbase` dependency in that environment; the same failures
-were reproduced before pruning. They remain in the suite, without new skips or
-relaxed assertions. Live model quality was not evaluated.
+Tests require no live paid model or search calls. A passing offline suite checks
+implementation behavior; it does not establish the quality of a new model-generated EPG.

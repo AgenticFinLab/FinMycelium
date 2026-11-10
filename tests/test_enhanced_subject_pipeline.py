@@ -1,8 +1,7 @@
 """Offline CLI integration from shared acquisition through native subject outputs.
 
-Only acquisition and model-produced graph changes are substituted. Source
-normalization, character allocation, event routing, validation, publishing and
-the final person HTML renderer run normally.
+Acquisition and model building are substituted. Source normalization, character
+allocation, event routing, validation and the person HTML renderer run normally.
 """
 import copy
 import json
@@ -14,7 +13,7 @@ from unittest.mock import patch
 
 from finmy.person_epg.validation import validate_person_epg
 from finmy.runner.search_pipeline_runner import run_search_pipeline
-from test_event_refinement import append_grounded_detail, package_fixture, DETAIL
+from finmy.person_epg.visualizer import render_person_epg
 
 
 class EnhancedSubjectPipelineTests(unittest.TestCase):
@@ -30,13 +29,12 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
             "source_version": "v1", "published_at": "2023-05-06T12:00:00Z"}]
         self.calls = []
 
-    def config(self, mode="person", followup=False):
+    def config(self, mode="person"):
         return {"search_config": {"mode": "agent", "enhancement": {
                     "providers": ["exa"], "allow_network": False,
                     "lm_name": "ark/explicit-search-model"}},
                 "all_content_config": {"max_content_length": 60000,
                                        "max_document_chars": 12000},
-                "event_followup": {"enabled": followup, "max_content_length": 60000},
                 "builder_config": {"builder_type": "SparseRagBuilder" if mode == "person" else "AgentEventBuilder",
                     "lm_name": "deepseek/explicit-builder-model",
                     "reconstruction": {"mode": mode, "subject": {
@@ -68,12 +66,10 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                 output = SimpleNamespace(extras={"native": True})
                 destination = self.root / mode
                 with patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", self.acquired), \
-                     patch("finmy.subject_graph.runner.build_from_contents", return_value=(output, "native-output")) as build, \
-                     patch("finmy.runner.event_refinement.build_with_draft_event_followup") as followup:
+                     patch("finmy.subject_graph.runner.build_from_contents", return_value=(output, "native-output")) as build:
                     result = run_search_pipeline(config, self.query, self.keywords, destination,
                         search_task=task, search_dependencies=dependencies)
                 build.assert_called_once()
-                followup.assert_not_called()
                 contents, query, keywords, build_config = build.call_args.args
                 self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [self.documents[0]["raw_text"]])
                 self.assertEqual((query, keywords), (self.query, self.keywords))
@@ -94,61 +90,27 @@ class EnhancedSubjectPipelineTests(unittest.TestCase):
                 self.assertEqual(json.loads((destination / "builder_input_contents.json").read_text()), contents)
 
 
-    def test_existing_events_reach_supplement_and_native_valid_json_html(self):
+    def test_old_followup_enabled_is_ignored_and_native_result_still_renders(self):
         self.forbid_legacy()
-        config = self.config(followup=True)
-        original_config = copy.deepcopy(config)
-        package = package_fixture()
-        initial = SimpleNamespace(extras={"person_epg": package, "usage": {"calls": 5}},
-                                  subject_graph=None, event_cascades={}, logs=[])
-        order = []
-
-        def acquire(*args, **kwargs):
-            if kwargs.get("events") is None:
-                order.append("initial_search")
-                return self.acquired(*args, **kwargs)
-            order.append("event_search")
-            events = kwargs["events"]
-            self.assertEqual([e["event_id"] for e in events], [e["event_id"] for e in package["event"]])
-            self.assertEqual(args[0], self.query)
-            self.assertEqual(kwargs["usage"]["search_calls"], 0)
-            kwargs["usage"].update(search_calls=3, parse_calls=1, search_model_calls=6)
-            return {"status": "finished", "reports": [], "documents": [{
-                "raw_text": DETAIL, "title": "Later documented conversation",
-                "url": "https://example.test/later", "source": "enhanced",
-                "event_ids": [events[0]["event_id"]]}]}
-
-        def build(*args):
-            order.append("initial_build")
-            self.assertEqual(args[3]["source_registry"]["saved_0"]["source_url"], self.documents[0]["url"])
-            return initial, str(self.root / "initial")
-
-        def enrich(graph, sources, *args, **kwargs):
-            order.append("event_enrichment")
-            self.assertEqual(sources[0]["content"].split("\n\n", 1)[1], DETAIL)
-            self.assertEqual(sources[0]["event_ids"], [package["event"][0]["event_id"]])
-            return append_grounded_detail(graph), {"model_calls": 2, "status": "enriched"}
-
-        with patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", acquire), \
-             patch("finmy.subject_graph.runner.build_from_contents", build), \
-             patch("finmy.runner.event_enrichment.enrich_events", enrich):
+        config = self.config()
+        config["event_followup"] = {"enabled": True, "max_content_length": "invalid"}
+        original = copy.deepcopy(config)
+        package = json.loads((Path(__file__).parent / "fixtures" / "buffett_person_epg_preview.json").read_text())
+        output = SimpleNamespace(extras={"person_epg": package})
+        with self.assertLogs("finmy.reconstruction_scope", level="WARNING") as warnings, \
+             patch("finmy.runner.enhanced_subject_search.collect_enhanced_sources", self.acquired), \
+             patch("finmy.subject_graph.runner.build_from_contents", return_value=(output, str(self.root))) as build:
             result = run_search_pipeline(config, self.query, self.keywords, self.root)
-        self.assertEqual(order, ["initial_search", "initial_build", "event_search", "event_enrichment"])
-        report = json.loads((self.root / "event_refinement_report.json").read_text())
-        self.assertEqual(report["status"], "enriched")
-        self.assertEqual(report["budgets"]["initial_content_limit"], 60000)
-        self.assertEqual(report["budgets"]["supplementary_content_limit"], 60000)
-        self.assertEqual(report["initial_usage"]["search_calls"], 2)
-        self.assertEqual(report["supplemental_usage"]["search_calls"], 3)
-        final_dir = Path(result["builder_save_dir"])
-        final = json.loads((final_dir / "FinalPersonEPG.json").read_text())
-        self.assertTrue(validate_person_epg(final)["valid"])
-        for table, rows in package.items():
-            self.assertEqual(final[table][:len(rows)] if isinstance(rows, list) else final[table], rows)
-        self.assertTrue((final_dir / "FinalPersonEPG.html").exists())
-        self.assertEqual(json.loads((final_dir / "PersonRenderStatus.json").read_text())["status"], "completed")
-        self.assertIn(DETAIL, (final_dir / "FinalPersonEPG.html").read_text())
-        self.assertEqual(config, original_config)
+        self.assertEqual(len(warnings.output), 1)
+        self.assertEqual(len(self.calls), 1)
+        build.assert_called_once()
+        self.assertNotIn("event_followup", build.call_args.args[3])
+        self.assertIs(result["pipeline_result"], output)
+        self.assertTrue(validate_person_epg(package)["valid"])
+        target = self.root / "FinalPersonEPG.html"
+        render_person_epg(result["pipeline_result"].extras["person_epg"], target)
+        self.assertIn("Warren Buffett", target.read_text())
+        self.assertEqual(config, original)
 
     def test_old_simple_and_disabled_flags_use_agent_and_native_builder(self):
         config = self.config()

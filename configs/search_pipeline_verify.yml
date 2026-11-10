@@ -64,16 +64,6 @@ pdf_collector_config:
 all_content_config:
   max_content_length: 120000
   max_document_chars: 12000
-event_followup:
-  enabled: false
-  max_content_length: 120000
-  max_document_chars: 12000
-  max_search_calls: 12
-  max_parse_calls: 40
-  max_search_model_calls: 30
-  max_elapsed_seconds: 300
-  max_model_calls: 24
-  max_repair_rounds_per_event: 1
 summarizer_config:
   summarizer_type: KWLMSummarizer
   llm_name: deepseek/deepseek-chat

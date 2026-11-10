@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from finmy.runner.enhanced_subject_search import collect_enhanced_sources, enhanced_search_enabled
+from finmy.runner.enhanced_subject_search import collect_enhanced_sources
 from finmy.search.pipeline import run_search
 
 
@@ -22,9 +22,7 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
             "max_model_calls": 12, "max_builder_material_chars": 60000}},
             "all_content_config": {"max_content_length": 60000},
             "builder_config": {"lm_name": "builder/never-inherit", "reconstruction": {
-                "mode": "person", "subject": self.subject}},
-            "event_followup": {"max_search_calls": 6, "max_parse_calls": 6,
-                               "max_search_model_calls": 12, "max_content_length": 60000}}
+                "mode": "person", "subject": self.subject}}}
         self.requests, self.contexts, self.fetches = [], [], []
         self.body = "\n\n".join("Original acquisition evidence paragraph " + str(i) + "." for i in range(35))
 
@@ -60,10 +58,6 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
             self.subject, kwargs.pop("config", self.config), self.root,
             dependencies=deps, **kwargs)
 
-    def events(self, count=2):
-        return [{"event_id": "E:" + str(i), "event_label": "Investment " + str(i),
-                 "event_terms": ["investment"], "summary": "Existing thin event"} for i in range(count)]
-
     def test_full_source_export_preserves_subject_and_independent_model(self):
         self.config["all_content_config"]["max_content_length"] = 840
         result = self.collect()
@@ -97,24 +91,34 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
 
 
     def test_completed_rerun_uses_saved_handoff_without_spending_again(self):
-        result = self.collect(events=self.events())
+        result = self.collect()
         counts = len(self.requests), len(self.contexts), len(self.fetches)
         usage = {}
-        repeated = self.collect(events=self.events(), usage=usage)
+        repeated = self.collect(usage=usage)
         self.assertEqual(counts, (len(self.requests), len(self.contexts), len(self.fetches)))
         self.assertEqual(result["documents"], repeated["documents"])
         self.assertEqual(usage, repeated["usage"])
 
-    def test_paused_tasks_reserve_capacity_when_resuming(self):
-        self.config["event_followup"]["max_search_model_calls"] = 6
-        self.config["event_followup"]["max_search_calls"] = 2
+    def test_paused_initial_search_resumes_within_its_saved_budget(self):
+        self.config["search_config"]["enhancement"].update(max_model_calls=3, max_search_requests=1)
         for _ in range(3):
-            result = self.collect(events=self.events(), dependencies={"max_steps": 1})
-            self.assertLessEqual(result["usage"]["search_calls"], 2)
-            self.assertLessEqual(result["usage"]["search_model_calls"], 6)
+            result = self.collect(dependencies={"max_steps": 1})
+            self.assertLessEqual(result["usage"]["search_calls"], 1)
+            self.assertLessEqual(result["usage"]["search_model_calls"], 3)
         self.assertEqual(result["status"], "finished")
-        self.assertEqual(len(self.contexts), 6)
-        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(len(self.contexts), 3)
+        self.assertEqual(len(self.requests), 1)
+
+    def test_retired_followup_settings_do_not_affect_initial_search_or_resume(self):
+        self.config["event_followup"] = "malformed retired settings"
+        result = self.collect()
+        counts = len(self.requests), len(self.contexts), len(self.fetches)
+        self.config["event_followup"] = {"enabled": True, "max_search_calls": 0,
+                                        "max_content_length": 0}
+        repeated = self.collect()
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["documents"], repeated["documents"])
+        self.assertEqual(counts, (len(self.requests), len(self.contexts), len(self.fetches)))
 
     def test_changed_scope_or_budget_cannot_reset_saved_usage(self):
         self.collect()

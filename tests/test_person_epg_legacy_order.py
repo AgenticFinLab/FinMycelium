@@ -1,4 +1,4 @@
-"""Render additions in time without rewriting or reordering the original graph."""
+"""Saved legacy enrichment graphs remain renderable without the retired runner."""
 import copy
 import json
 from pathlib import Path
@@ -7,14 +7,13 @@ import subprocess
 import unittest
 
 from finmy.person_epg.visualizer import render_person_epg
-from test_person_epg_visualizer import PageData
-from test_event_refinement import package_fixture
+from test_person_epg_visualizer import PageData, package as package_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 @unittest.skipUnless(shutil.which("node"), "Node.js is used for the actual renderer")
-class EnrichmentDisplayOrderTests(unittest.TestCase):
+class LegacyPersonDisplayOrderTests(unittest.TestCase):
     def setUp(self):
         self.package = package_fixture()
         event = copy.deepcopy(self.package["event"][0])

@@ -52,7 +52,6 @@ class EnhancedSubjectUI(unittest.TestCase):
                 "lm_name": "ark/search-only-model"}},
             "all_content_config": {"max_content_length": 60000},
             "relevance_filter": {"enabled": False},
-            "event_followup": {"enabled": False},
             "builder_config": {"builder_type": "SparseRagBuilder",
                 "lm_name": "deepseek/build-only-model",
                 "reconstruction": {"mode": "person", "subject": {
@@ -100,10 +99,10 @@ class EnhancedSubjectUI(unittest.TestCase):
         self.assertEqual([text.split("\n\n", 1)[1] for text in contents], expected)
         self.assertEqual(query, "Trace documented experiences")
         self.assertEqual(keywords, ["subject"])
-        documents = service._draft_evidence["documents"]
+        documents = json.loads((Path(directory) / "retrieved_documents.json").read_text())
         self.assertEqual([d.get("source") for d in documents], ["url", "file", "exa", "bocha", "exa"])
         self.assertEqual([d["raw_text"] for d in documents[2:]], [d["raw_text"] for d in self.search_result["documents"]])
-        self.assertEqual(service._draft_evidence["usage"]["search_model_calls"], 4)
+        self.assertFalse(hasattr(service, "_draft_evidence"))
         self.assertEqual(json.loads((Path(directory) / "builder_input_contents.json").read_text()), contents)
         args = self.search_calls[0][0]
         self.assertEqual(args[3]["search_config"]["enhancement"], original["search_config"]["enhancement"])
@@ -156,7 +155,12 @@ class EnhancedSubjectUI(unittest.TestCase):
             reports=[{"event_id": "E1", "status": "finished"},
                      {"event_id": "E2", "status": "limit", "gaps": ["closing date"]}],
             report_path=str(self.path / "initial_event_search" / "phase_report.json"))
-        service = self.service.ReconstructionService(self.config())
+        config = self.config()
+        config["event_followup"] = "obsolete malformed setting"
+        with self.assertLogs("finmy.reconstruction_scope", level="WARNING") as warnings:
+            service = self.service.ReconstructionService(config)
+        self.assertEqual(len(warnings.output), 1)
+        self.assertNotIn("event_followup", service.config)
         native = {"schema_version": "person-epg-3.0", "event": [{"event_id": "E1"}]}
         builder_dir = self.path / "native"
         builder_dir.mkdir()
@@ -223,7 +227,6 @@ class EnhancedSubjectUI(unittest.TestCase):
         config = self.config()
         config["url_collector_config"] = {"delay": 0.2, "use_selenium_fallback": False}
         config["subject_search"] = {"max_parse_calls": 0, "max_elapsed_seconds": 0}
-        config["event_followup"]["enabled"] = True
         with patch.object(self.collector, "URLParser") as parser:
             collector = self.collector.DataCollectorService(config, str(self.path))
         self.assertEqual(parser.call_args.kwargs["delay"], 0.2)
