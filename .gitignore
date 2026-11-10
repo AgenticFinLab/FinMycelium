@@ -219,6 +219,7 @@ EXPERIMENT/
 
 /output
 *.patch
+*.bundle
 person_epg_backup.*/*
 person_epg_backup.*
 

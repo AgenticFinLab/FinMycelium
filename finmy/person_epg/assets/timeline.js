@@ -9,9 +9,7 @@ const actions = index('action', 'action_id'),
   transactions = index('financial_transaction', 'transaction_id');
 const occurrences = index('occurrence', 'occurrence_id'),
   times = index('time_value', 'time_id');
-const spans = index('evidence_span', 'span_id'),
-  documents = index('source_document', 'document_id'),
-  evidenceSets = index('evidence_set', 'evidence_set_id');
+const evidenceSets = index('evidence_set', 'evidence_set_id');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -252,29 +250,6 @@ function displayBlocks(members, stages) {
     rangeFor);
 }
 
-function evidence(setIds) {
-  const ids = new Set(setIds.filter(Boolean)), seen = new Set(), quotes = [];
-  for (const link of epg.evidence_link) {
-    if (!ids.has(link.evidence_set_id)) continue;
-    const span = spans.get(link.span_id);
-    if (!span) continue;
-    const key = JSON.stringify([span.document_id, span.quote]);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const doc = documents.get(span.document_id);
-    let text = esc(span.quote);
-    if (doc) {
-      text += `<br>${esc(doc.title || 'Source')}`;
-      if (/^https?:\/\//i.test(doc.source_url || '')) {
-        const url = esc(doc.source_url);
-        text += `<br><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-      }
-    }
-    quotes.push(`<blockquote>${text}</blockquote>`);
-  }
-  return quotes.length ? `<details><summary>Evidence (${quotes.length})</summary>${quotes.join('')}</details>` : '';
-}
-
 function activityTitle(id) {
   const m = epg.event_activity.find(m => m.activity_id === id && m.display_title);
   if (m) return m.display_title;
@@ -284,7 +259,7 @@ function activityTitle(id) {
 }
 
 function linkHover(r) {
-  return `<h3>${esc(r.description||r.relation_type)}</h3><p>${esc(activityTitle(r.from_activity_id))} → ${esc(activityTitle(r.to_activity_id))}</p>${evidence([r.evidence_set_id])}`;
+  return `<h3>${esc(r.description||r.relation_type)}</h3><p>${esc(activityTitle(r.from_activity_id))} → ${esc(activityTitle(r.to_activity_id))}</p>`;
 }
 
 function relationTime(r) {
@@ -352,13 +327,6 @@ function factHover(f, event, stage) {
     }
     parts.push('</details>');
   }
-  parts.push(evidence([f.row.evidence_set_id, oc.evidence_set_id,
-    ...f.details.map(d => d.evidence_set_id), ...relations.map(r => r.evidence_set_id),
-    ...links.map(r => r.evidence_set_id)]));
-  if (isPDF) {
-    parts.push('<p>PDF 引用编号：' + (m.refs || []).map(n => '[' + n + ']').join('') +
-      '。附件未附原始来源清单。</p>');
-  }
   return parts.join('');
 }
 
@@ -370,18 +338,41 @@ let annotationMap = {},
   cards = [],
   queue = Promise.resolve();
 
+// Plotly SVG hover labels need explicit line breaks. Preserve all non-evidence
+// content and inline formatting; wrapping must never truncate the text.
 function nativeHover(html) {
-  return html.replace(/<h[34]>(.*?)<\/h[34]>/g, '<b>$1</b><br>')
+  const text = html.replace(/<h[34]>(.*?)<\/h[34]>/g, '<b>$1</b><br>')
     .replace(/<summary>(.*?)<\/summary>/g, '<br><b>$1</b><br>')
     .replace(/<\/(?:p|blockquote|div)>/g, '<br>')
     .replace(/<(?:p|blockquote|div|span|details)[^>]*>|<\/(?:span|details)>/g, '')
     .replace(/(?:<br>){3,}/g, '<br><br>');
+  const lines = [], width = 68;
+  const columnsFor = token => token.startsWith('<') ? 0 : token.codePointAt(0) > 0xff ? 2 : 1;
+  for (const paragraph of text.split(/<br\s*\/?>/)) {
+    // Treat escaped entities as one character; also wrap CJK and long URLs.
+    const tokens = paragraph.replace(/\s+/g, ' ').match(/<[^>]*>|&(?:#\d+|#x[\da-f]+|[a-z]+);|[\s\S]/giu) || [];
+    let line = [], columns = 0;
+    for (const token of tokens) {
+      const size = columnsFor(token);
+      if (columns + size > width) {
+        const space = line.lastIndexOf(' ');
+        const cut = space >= line.length / 2 ? space + 1 : line.length;
+        lines.push(line.slice(0, cut).join(''));
+        line = line.slice(cut);
+        columns = line.reduce((n, c) => n + columnsFor(c), 0);
+      }
+      line.push(token);
+      columns += size;
+    }
+    lines.push(line.join(''));
+  }
+  return lines.join('<br>');
 }
 const actor = f => f.actor || f.row.from_entity_id || epg.occurrence_participant.find(p => p
   .occurrence_id === f.oid)?.entity_id;
 const date = f => f.plotTime ? new Date((f.plotTime.lo + f.plotTime.hi) / 2).toISOString() : 0;
 const info = (html, control) => ({
-  html: nativeHover(html),
+  html,
   control
 });
 
@@ -389,7 +380,7 @@ function push(data, trace, detail) {
   cards[data.length] = detail;
   data.push({
     ...trace,
-    hovertext: trace.y.map(() => detail.html),
+    hovertext: trace.y.map(() => nativeHover(detail.html)),
     hovertemplate: '%{hovertext}<extra></extra>',
     showlegend: false
   });
@@ -577,7 +568,7 @@ function activityRow(data, shapes, f, event, stage, y) {
       xaxis: axis,
       line: rs
     }, info(
-      `<h3>${esc(r.relation_type)}</h3><p>${esc(label(r.from_entity_id))} → ${esc(label(r.to_entity_id))}</p><p>有效时间：${esc(relationTime(r))}</p>${evidence([r.evidence_set_id])}`
+      `<h3>${esc(r.relation_type)}</h3><p>${esc(label(r.from_entity_id))} → ${esc(label(r.to_entity_id))}</p><p>有效时间：${esc(relationTime(r))}</p>`
       ));
     push(data, {
       type: 'scatter',
@@ -595,7 +586,7 @@ function activityRow(data, shapes, f, event, stage, y) {
         }
       }
     }, info(
-      `<h3>${esc(label(other))}</h3><p>${esc(r.relation_type)}</p>${evidence([r.evidence_set_id])}`
+      `<h3>${esc(label(other))}</h3><p>${esc(r.relation_type)}</p>`
       ));
   }
 }
@@ -639,7 +630,7 @@ function build() {
         opened = openEvents.has(event.event_id);
       labelAt(annotations, `<b>${opened?'▾':'▸'} ${wrap(event.label,31)}</b>`, y, 1, ctl);
       summary(data, shapes, members, y,
-        `<h3>${esc(event.label)}</h3><p>${esc(event.summary)}</p><p>${members.length} activities</p>${evidence([event.evidence_set_id])}`,
+        `<h3>${esc(event.label)}</h3><p>${esc(event.summary)}</p><p>${members.length} activities</p>`,
         ctl);
       y += 66;
       if (!opened) continue;
@@ -649,7 +640,7 @@ function build() {
         if (b.stage) {
           const ms = displayMembers(members.filter(m => m.stage_id === b.stage.stage_id));
           summary(data, shapes, ms, y,
-            `<h3>${esc(b.stage.label)}</h3><p>${esc(b.stage.summary)}</p><p>${esc(b.stage.boundary_reason)}</p>${evidence([b.stage.evidence_set_id])}`,
+            `<h3>${esc(b.stage.label)}</h3><p>${esc(b.stage.summary)}</p><p>${esc(b.stage.boundary_reason)}</p>`,
             null, true);
           y += 54;
           for (const m of ms) {

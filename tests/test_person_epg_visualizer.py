@@ -141,11 +141,46 @@ class PersonEPGScriptTest(unittest.TestCase):
                     member['detail_mode'] == 'all' or detail['detail_index'] in selected
                 ):
                     from html import escape
-                    self.assertIn(escape(detail['value'], quote=True).replace('&#x27;', '&#39;'), trace['hovertext'][0])
+                    self.assertIn(escape(detail['value'], quote=True).replace('&#x27;', '&#39;'), result['hoverCards'][result['data'].index(trace)]['html'])
         uncertain = [s for s in result['shapes'] if s.get('type') == 'rect' and s.get('line', {}).get('dash') == 'dash']
         self.assertTrue(uncertain)
         self.assertTrue(all(s['fillcolor'] == 'rgba(0,0,0,0)' for s in uncertain))
         self.assertTrue(any(t.get('marker', {}).get('pattern', {}).get('shape') == '/' for t in result['data']))
+
+    def test_hover_omits_evidence_wraps_and_preserves_full_formatted_text(self):
+        from html import unescape
+        import re
+        data = package()
+        for span in data['evidence_span']:
+            if span['document_id'] is None:
+                span['quote'] = 'HIDDEN_EVIDENCE_SENTINEL'
+        for event, text in zip(data['event'], [
+            'Long overview & context ' * 80, '中文没有空格' * 300, 'x' * 2000
+        ]):
+            event['summary'] = text
+        result = self.run_script(data)
+        previews = [h for t in result['data'] for h in t.get('hovertext', [])]
+        self.assertTrue(any(len(h.split('<br>')) > 20 for h in previews))
+        self.assertTrue(any('<b>' in h for h in previews))
+        for trace, card in zip(result['data'], result['hoverCards']):
+            if not card:
+                continue
+            # Ignore layout whitespace, but require every character of every
+            # non-evidence field, including the final relationship, to survive.
+            plain = lambda h: re.sub(r'\s+', '', unescape(re.sub(r'<[^>]*>', '', h)))
+            for hover in trace.get('hovertext', []):
+                self.assertEqual(plain(hover), plain(card['html']))
+                for bold in re.findall(r'<b>(.*?)</b>', card['html']):
+                    self.assertIn(plain(bold), [plain(x) for x in
+                        re.findall(r'<b>(.*?)</b>', hover)])
+        for preview in previews:
+            self.assertNotIn('HIDDEN_EVIDENCE_SENTINEL', preview)
+            self.assertNotIn('Evidence (', preview)
+            lines = preview.split('<br>')
+            self.assertNotIn('preview shortened', preview)
+            for line in lines:
+                self.assertLessEqual(sum(2 if ord(c) > 255 else 1
+                                         for c in unescape(re.sub(r'<[^>]*>', '', line))), 68)
 
     def test_subject_years_and_unknown_time_are_not_hardcoded(self):
         data = package()

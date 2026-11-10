@@ -41,7 +41,7 @@ const activityTraces = () => gd.data.filter(t => t.meta?.kind === 'activity');
   const json = value => JSON.parse(JSON.stringify(value));
   const result = json({
     title: gd.layout.title.text, annotations: gd.layout.annotations,
-    data: gd.data, shapes: gd.layout.shapes, xaxis: gd.layout.xaxis,
+    data: gd.data, hoverCards: vm.runInContext('cards', context), shapes: gd.layout.shapes, xaxis: gd.layout.xaxis,
     scale: {min: element('compactness').min, max: element('compactness').max,
       disabled: element('compactness').disabled}
   });
