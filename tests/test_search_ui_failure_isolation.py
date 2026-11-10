@@ -1,5 +1,7 @@
 """A damaged task or original must not hide other local search results."""
+import io
 import json
+import zipfile
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -12,11 +14,13 @@ from test_search_workbench import evidence_model
 APP = Path(__file__).resolve().parents[1] / 'finmy/workbench/app.py'
 
 
-def _page(tmp_path, monkeypatch, controller):
+def _page(tmp_path, monkeypatch, controller, task_id=None):
     monkeypatch.setenv('FINMY_WORKBENCH_HOME', str(tmp_path))
     monkeypatch.setattr(search_page, 'get_controller', lambda root: controller)
     app = AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.radio[0].set_value('检索').run()
+    if task_id is not None:
+        app.session_state['task-selected'] = task_id
+    app.button(key='nav-任务').click().run()
     return app
 
 
@@ -42,14 +46,15 @@ def test_corrupt_task_does_not_break_task_selector(tmp_path, monkeypatch):
     broken = controller.create(dict(target_type='event', target_name='Broken',
                                     query_text='Trace another event'), {})
     (controller.root / broken / 'runs/initial/run.json').write_text('{unfinished')
-    app = _page(tmp_path, monkeypatch, controller)
+    app = _page(tmp_path, monkeypatch, controller, healthy)
     assert not app.exception
-    selector = next(widget for widget in app.selectbox if widget.label == '选择检索任务')
-    selector.set_value(healthy).run()
+    assert any('事件归属' in warning.value for warning in app.warning)
+    rows = next(frame.value for frame in app.dataframe if '任务 ID' in frame.value)
+    assert len(rows) == 2
     assert not app.exception
-    assert any(header.value == '资料与交接' for header in app.subheader)
-    selector = next(widget for widget in app.selectbox if widget.label == '选择检索任务')
-    selector.set_value(broken).run()
+    assert any(tab.label == '资料与交接' for tab in app.tabs)
+    app.session_state['task-selected'] = broken
+    app.run()
     assert not app.exception
     assert any('运行记录暂时无法读取' in error.value for error in app.error)
 
@@ -76,7 +81,7 @@ def test_malformed_complete_manifest_is_display_error_not_page_failure(tmp_path,
     app = _page(tmp_path, monkeypatch, controller)
     assert not app.exception
     assert app.error or app.warning
-    assert any(header.value == '资料与交接' for header in app.subheader)
+    assert any(tab.label == '资料与交接' for tab in app.tabs)
 
 
 def test_invalid_optional_sidecar_keeps_task_and_resume_control_visible(tmp_path, monkeypatch):
@@ -110,3 +115,28 @@ def test_legacy_empty_outage_has_resume_button_without_running_calls(tmp_path, m
     assert not next(button for button in app.button if button.label == '开始／继续').disabled
     assert not controller.threads
     assert controller.inspect(task_id)['usage'] == state['usage']
+
+
+def test_corrupt_search_keeps_event_progress_and_export(tmp_path):
+    from finmy.workbench.store import Store
+    from finmy.workbench.workflow import progress
+    store = Store(tmp_path)
+    eid = store.create_events([{'event_name_en': 'Deal', 'description': 'A transaction',
+                                'scope_include': 'The closing'}])[0]
+    store.review(eid, 'scope', 'approved', 'Reviewer', '', store.target(eid, 'scope'))
+    controller = _controller(tmp_path)
+    healthy = controller.create(dict(target_type='event', target_name='Deal',
+        query_text='Trace the closing', event_id=eid), {})
+    broken = controller.create(dict(target_type='event', target_name='Broken',
+        query_text='Another event'), {})
+    (controller.root / broken / 'runs/initial/run.json').write_text('{unfinished')
+    errors = []
+    assert progress(store, eid, controller, errors=errors)[0] == 1
+    assert [row['task_id'] for row in errors] == [broken]
+    with zipfile.ZipFile(io.BytesIO(store.export_zip([eid]))) as archive:
+        saved = json.loads(archive.read(eid + '/search_runs.json'))
+        assert [row['task_id'] for row in saved] == [healthy]
+        diagnosis = json.loads(archive.read('search_record_errors.json'))
+        assert diagnosis == {'scope': 'unattributed', 'errors': errors}
+        assert eid + '/input.json' in archive.namelist()
+    assert not controller.threads

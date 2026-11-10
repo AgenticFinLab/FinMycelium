@@ -12,11 +12,12 @@ def main():
     if not 1 <= args.port <= 65535:
         parser.error("port must be in 1..65535")
     from streamlit.web import cli
+    from finmy.workbench.ui import theme_args
     sys.argv = ["streamlit", "run", str(Path(__file__).with_name("app.py")),
                 "--server.address", "127.0.0.1", "--server.port", str(args.port),
                 "--server.headless", "true", "--browser.gatherUsageStats", "false",
                 "--server.maxUploadSize", "20",
-                "--theme.base", "light", "--theme.primaryColor", "#187968"]
+                *theme_args()]
     cli.main()
 
 

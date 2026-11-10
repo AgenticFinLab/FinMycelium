@@ -15,12 +15,16 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from finmy.workbench.domain import (
-    FIELDS, MODELS, DEFAULT_COLUMNS, DERIVED_FIELDS, LANGUAGES, LIST_FIELDS, RELATIONS, TABLE_LABELS,
+    FIELDS, MODELS, LANGUAGES, RELATIONS, TABLE_LABELS,
     date_bounds, digest, display_name, editable_fields, encoded, export_table,
     extract_text, graph_from_bytes, read_matrix, read_table, unwrap,
 )
+from finmy.workbench.ui import heading, apply_style, status as show_status, table_status, stats, step_strip, empty, keep_ui_state, local_timestamp
 from finmy.workbench.store import Store
-from finmy.workbench.search_page import search_page
+from finmy.workbench.search_page import search_page, get_controller, task_panel, STATUS
+from finmy.workbench.workflow import STEPS, progress, navigate, event_searches, search_records
+from finmy.workbench.build_tasks import BuildController
+from finmy.workbench.build_page import create_build, build_panel, LABELS as BUILD_LABELS
 
 
 def notice(text):
@@ -28,10 +32,11 @@ def notice(text):
     st.rerun()
 
 
-def heading(title, subtitle=None):
-    st.title(title)
-    if subtitle:
-        st.caption(subtitle)
+def search_record_warnings(errors):
+    if errors:
+        st.warning("部分检索运行记录无法读取，无法确认其事件归属；其他任务和已保存材料仍可使用。")
+        with st.expander("检索记录读取问题"):
+            st.json(list({row["task_id"]: row for row in errors}.values()))
 
 
 def event_form(store, event=None):
@@ -87,6 +92,7 @@ def event_form(store, event=None):
                     store.update_event(suffix, values, event["revision"])
                 else:
                     st.session_state["detail_id"] = store.create_events([values])[0]
+                    st.session_state.pop("data-action", None)
                 notice("事件已保存")
             except ValueError as exc:
                 st.error(str(exc))
@@ -133,150 +139,179 @@ def model_picker(default, key):
     return MODELS[label]
 
 
-def job_form(store, ids):
-    defaults = store.settings()
-    model = model_picker(defaults["model"], "job-model")
-    with st.form("new-job"):
-        stage = st.selectbox("任务阶段", ["完整流程", "检索与处理", "构建图"])
-        a, b = st.columns(2)
-        with a:
-            methods = ["SparseRagBuilder", "AgentEventBuilder"]
-            builder = st.selectbox("构建方法", methods, index=methods.index(defaults["builder"]))
-        with b:
-            concurrency = st.number_input("事件并发数", min_value=1, max_value=32, value=defaults["concurrency"], step=1)
-            evidence_review = st.checkbox("人工检查资料", value=True)
-            graph_review = st.checkbox("人工审核图", value=True)
-        if st.form_submit_button("保存任务", icon=":material/add_task:", type="primary", disabled=not ids):
-            try:
-                mapping = {"完整流程": "full", "检索与处理": "search", "构建图": "build"}
-                store.create_job(ids, mapping[stage], {"builder": builder, "model": model, "concurrency": concurrency}, evidence_review, graph_review)
-                notice("任务已保存，执行器待接入")
-            except ValueError as exc:
-                st.error(str(exc))
-
-
 def data_page(store):
     events = store.events()
-    heading("事件数据", f"{len(events)} 个事件")
-    a, b = st.columns(2)
-    with a:
-        with st.expander("新增事件", icon=":material/add:"):
+    ids_all = {e["event_id"] for e in events}
+    selected = st.session_state.get("detail_id")
+    view = st.session_state.get("data-action")
+    if selected in ids_all or view in {"new", "import"}:
+        if st.button("返回事件列表", icon=":material/arrow_back:", type="tertiary"):
+            st.session_state.pop("detail_id", None)
+            st.session_state.pop("data-action", None)
+            st.session_state["master-epoch"] = st.session_state.get("master-epoch", 0) + 1
+            st.rerun()
+        if view == "new":
+            heading("新增事件", "先明确对象与范围，再准备检索资料。")
             event_form(store)
-    with b:
-        with st.expander("导入主表", icon=":material/upload:"):
+        elif view == "import":
+            heading("导入事件主表", "预览字段映射后确认导入，保留已有事件。")
             import_events(store)
-    st.subheader("事件主表")
-    search, state = st.columns([3, 2])
+        else:
+            heading(display_name(store.event(selected)))
+            details(store, selected)
+        return
+    title, actions = st.columns([3, 2], vertical_alignment="center")
+    with title:
+        heading("事件数据", f"{len(events)} 个事件 · 从研究范围到最终 EPG")
+    with actions:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button("导入主表", icon=":material/upload:"):
+                st.session_state["data-action"] = "import"
+                st.rerun()
+            if st.button("新增事件", icon=":material/add:", type="primary"):
+                st.session_state["data-action"] = "new"
+                st.rerun()
+    search, state, filters, display_options = st.columns([4, 2, 1, 1], vertical_alignment="bottom")
     with search:
-        query = st.text_input("搜索", placeholder="名称、别名、ID、主体", label_visibility="collapsed", disabled=not events)
+        query = st.text_input("搜索事件", placeholder="搜索名称、别名、ID 或主体", label_visibility="collapsed", key="ui-master-query")
     with state:
-        filter_state = st.selectbox("状态", ["全部状态", "待整理", "待审核资料", "待构建", "待审核图", "待修订", "已收录"], label_visibility="collapsed", disabled=not events)
+        filter_state = st.selectbox("流程状态", ["全部状态", "待确认范围", "待检索／补充资料", "检索中", "待检查检索材料", "待检查材料", "待构建", "构建中", "输入已更新，待重新构建", "待审核图", "需修订", "已收录"], label_visibility="collapsed", key="ui-master-status")
+    with filters:
+        with st.popover("筛选", icon=":material/filter_list:", width="stretch"):
+            domain_filter = st.selectbox("领域", ["全部领域"] + sorted({e["domain"] for e in events if e["domain"]}), key="ui-master-domain")
+            owner_filter = st.selectbox("负责人", ["全部负责人"] + sorted({e["owner"] for e in events if e["owner"]}), key="ui-master-owner")
+            scope_filter = st.selectbox("范围确认", ["全部", "待确认", "需修订", "已确认"], key="ui-master-scope")
+    labels = {"name": "事件名称", **TABLE_LABELS}
+    with display_options:
+        with st.popover("显示", icon=":material/view_column:", width="stretch"):
+            columns = st.multiselect("显示列", list(labels), default=["name", "status", "coverage", "owner", "classification"], format_func=labels.get, key="ui-master-columns")
+            batch = st.toggle("批量选择", key="ui-master-batch", help="开启后可多选事件，准备检索或导出。")
+    columns = columns or ["name", "status", "coverage", "owner"]
+    controller = get_controller(str(store.root / "search"))
     rows = store.table_rows()
-    domain, owner, scope = st.columns(3)
-    with domain:
-        domain_filter = st.selectbox("领域筛选", ["全部领域"] + sorted({e["domain"] for e in events if e["domain"]}), disabled=not events)
-    with owner:
-        owner_filter = st.selectbox("负责人筛选", ["全部负责人"] + sorted({e["owner"] for e in events if e["owner"]}), disabled=not events)
-    with scope:
-        scope_filter = st.selectbox("范围确认筛选", ["全部", "待确认", "需修订", "已确认"], disabled=not events)
+    search_errors = []
+    for row in rows:
+        row["status"] = progress(store, row["event_id"], controller, errors=search_errors)[1]
+    search_record_warnings(search_errors)
     rows = [r for r in rows if (not query or query.casefold() in encoded(r).casefold())
             and (domain_filter == "全部领域" or r["domain"] == domain_filter)
             and (owner_filter == "全部负责人" or r["owner"] == owner_filter)
             and (scope_filter == "全部" or r["scope_review"] == scope_filter)
             and (filter_state == "全部状态" or r["status"] == filter_state)]
-    with st.expander("显示列", icon=":material/view_column:"):
-        columns = st.multiselect("列", list(TABLE_LABELS), default=DEFAULT_COLUMNS, format_func=TABLE_LABELS.get)
-    columns = columns or DEFAULT_COLUMNS
-    table_rows = [{**r, "classification": " / ".join(v for v in (r["domain"], r["category"]) if v),
-                   "coverage": f"{r['coverage_start'] or '未知'} → {r['coverage_end'] or '未知'}"} for r in rows]
-    display = pd.DataFrame([{k: encoded(v) if isinstance(v, (list, dict)) else v for k,v in r.items()} for r in table_rows], columns=columns)
-    selection = st.dataframe(display.rename(columns=TABLE_LABELS), hide_index=True, width="stretch", height=176 if not rows else "auto",
-                             on_select="rerun", selection_mode="single-row", key="master-" + digest([[r["event_id"] for r in rows], columns])[:12])
-    if selection.selection.rows:
-        st.session_state["detail_id"] = rows[selection.selection.rows[0]]["event_id"]
-    if not events:
-        st.caption("暂无事件")
-        return
+    active_filters = [v for v in (domain_filter, owner_filter, scope_filter) if v not in {"全部领域", "全部负责人", "全部"}]
+    st.caption(f"显示 {len(rows)} / {len(events)} 个事件" + (" · " + " / ".join(active_filters) if active_filters else "") + (" · 勾选多个事件进行批量操作" if batch else " · 选择一行打开事件"))
     if not rows:
-        st.info("无匹配事件")
-    else:
-        ids = st.multiselect("批量选择", [r["event_id"] for r in rows], format_func=lambda eid: display_name(next(r for r in rows if r["event_id"] == eid)), key="event-selection")
-        with st.expander("批量任务", icon=":material/play_arrow:"):
-            job_form(store, ids)
-        with st.expander("导出", icon=":material/download:"):
-            selected = [e for e in rows if e["event_id"] in ids]
-            if not selected:
-                st.caption("未选择事件")
-            else:
-                a, b, c = st.columns(3)
-                a.download_button("CSV", export_table(selected), "events.csv", icon=":material/download:")
-                b.download_button("Excel", export_table(selected, "xlsx"), "events.xlsx", icon=":material/download:")
-                c.download_button("事件包", store.export_zip(ids), "events.zip", icon=":material/folder_zip:")
-    st.divider()
-    options = [e["event_id"] for e in events]
-    selected = st.session_state.get("detail_id")
-    eid = selected if selected in options else options[0]
-    st.session_state["detail_id"] = eid
-    st.subheader(display_name(store.event(eid)))
-    details(store, eid)
+        empty("暂无匹配事件" if events else "从第一个事件开始", "调整筛选条件，或新增事件。" if events else "导入 CSV / Excel 主表，或新增事件来明确研究范围。")
+        return
+    table_rows = [{**r, "name": display_name(r), "status": table_status(r["status"]),
+                   "classification": " / ".join(v for v in (r["domain"], r["category"]) if v),
+                   "coverage": f"{r['coverage_start'] or '未知'} → {r['coverage_end'] or '未知'}"} for r in rows]
+    frame = pd.DataFrame([{k: encoded(v) if isinstance(v, (list, dict)) else v for k,v in r.items()} for r in table_rows], columns=columns).rename(columns=labels)
+    table_key = "master-" + digest([[r["event_id"] for r in rows], columns, batch, st.session_state.get("master-epoch", 0)])[:12]
+    selection = st.dataframe(frame, hide_index=True, width="stretch", height=min(590, 38*len(rows)+40), row_height=38,
+                             on_select="rerun", selection_mode="multi-row" if batch else "single-row", key=table_key,
+                             column_config={"事件名称":st.column_config.TextColumn(width="large"), "流程状态":st.column_config.TextColumn(width="medium")})
+    chosen = [rows[i]["event_id"] for i in selection.selection.rows]
+    if chosen and not batch:
+        st.session_state["detail_id"] = chosen[0]
+        st.rerun()
+    if chosen:
+        with st.container(horizontal=True, vertical_alignment="center"):
+            st.write(f"已选择 **{len(chosen)}** 个事件")
+            if st.button("准备批量检索", icon=":material/search:", type="primary"):
+                navigate("检索", search_event_ids=chosen)
+            with st.popover("导出所选", icon=":material/download:"):
+                records = [r for r in rows if r["event_id"] in chosen]
+                st.download_button("事件主表 CSV", export_table(records), "events.csv")
+                st.download_button("事件主表 Excel", export_table(records, "xlsx"), "events.xlsx")
+                st.download_button("完整事件包", store.export_zip(chosen), "events.zip")
 
 
 def source_panel(store, eid):
-    upload_tab, url_tab = st.tabs(["上传资料", "添加来源"])
-    with upload_tab:
-        files = st.file_uploader("TXT / 文本 PDF", type=["txt", "pdf"], accept_multiple_files=True, key=f"sources-{eid}")
-        if st.button("保存资料", icon=":material/upload:", disabled=not files, key=f"save-sources-{eid}"):
-            try:
-                parsed = [(f.name, extract_text(f.getvalue(), f.name), f.getvalue()) for f in files]
-                for name, text, raw in parsed:
-                    store.add_source(eid, name, text, raw=raw)
-                notice(f"已保存 {len(parsed)} 份资料")
-            except Exception as exc:
-                st.error(f"资料未通过检查：{exc}")
-    with url_tab:
-        with st.form(f"source-url-{eid}"):
-            title = st.text_input("来源标题")
-            url = st.text_input("URL")
-            published = st.text_input("发布日期")
-            text = st.text_area("正文", height=150)
-            if st.form_submit_button("保存来源", icon=":material/add:"):
-                try:
-                    store.add_source(eid, title, text, url, published)
-                    notice("来源已保存" if text.strip() else "URL 已登记，抓取待接入")
-                except ValueError as exc:
-                    st.error(str(exc))
     sources = store.sources(eid)
-    if not sources:
-        st.caption("暂无资料")
-        return
-    st.subheader("来源清单")
-    for source in sources:
-        with st.expander(source["title"] + (" · 已纳入" if source["included"] else " · 未纳入")):
-            st.caption(f"{source['id']} · {source['published'] or '日期未知'}")
-            if source["url"]:
-                st.link_button("原始来源", source["url"], icon=":material/open_in_new:")
-            st.text(source["text"] or "尚无正文")
-            included = st.checkbox("纳入构建输入", bool(source["included"]), disabled=not source["text"].strip(), key=f"inc-{source['id']}")
-            if included != bool(source["included"]):
-                store.include_source(eid, source["id"], included)
+    bundle = store.input_bundle(eid)
+    included = [s for s in sources if s['included'] and s['text'].strip()]
+    stats([("已登记资料", len(sources), "文档、片段或尚无正文的 URL"), ("当前输入条目", len(included), "同一来源可以包含多个片段"),
+           ("输入正文字符", f"{sum(len(s['content']) for s in bundle['samples']):,}", "以实际输入为准")])
+    material, review = st.columns([7, 3])
+    with material:
+        with st.expander("添加资料", expanded=not sources, icon=":material/add:"):
+            upload_tab, url_tab = st.tabs(["上传资料", "添加来源"])
+            with upload_tab:
+                files = st.file_uploader("TXT / 文本 PDF", type=["txt", "pdf"], accept_multiple_files=True, key=f"sources-{eid}")
+                if st.button("保存资料", icon=":material/upload:", disabled=not files, key=f"save-sources-{eid}"):
+                    try:
+                        parsed = [(f.name, extract_text(f.getvalue(), f.name), f.getvalue()) for f in files]
+                        for name, text, raw in parsed:
+                            store.add_source(eid, name, text, raw=raw)
+                        notice(f"已保存 {len(parsed)} 份资料")
+                    except Exception as exc:
+                        st.error(f"资料未通过检查：{exc}")
+            with url_tab:
+                with st.form(f"source-url-{eid}"):
+                    title = st.text_input("来源标题")
+                    url = st.text_input("URL")
+                    published = st.text_input("发布日期")
+                    text = st.text_area("正文", height=150)
+                    if st.form_submit_button("保存来源", icon=":material/add:"):
+                        try:
+                            store.add_source(eid, title, text, url, published)
+                            notice("来源已保存" if text.strip() else "URL 已登记，抓取待接入")
+                        except ValueError as exc:
+                            st.error(str(exc))
+        if sources:
+            source_key = "ui-source-" + eid
+            table_key = "source-list-" + eid
+            def select_source():
+                rows = st.session_state[table_key]['selection']['rows']
+                if rows:
+                    st.session_state[source_key] = sources[rows[0]]['id']
+            st.dataframe([{"来源":s['title'], "输入":'已纳入' if s['included'] else '未纳入', "字符":len(s['text'])} for s in sources],
+                         hide_index=True, width="stretch", height=min(250,38*len(sources)+40), row_height=38,
+                         on_select=select_source, selection_mode="single-row", key=table_key,
+                         column_config={"来源":st.column_config.TextColumn(width="large")})
+            source = next((s for s in sources if s['id'] == st.session_state.get(source_key)), sources[0])
+            st.markdown('**' + source['title'].replace('*','') + '**')
+            st.caption('发布日期：' + (source['published'] or '未记录'))
+            if source['url']:
+                st.link_button('打开原始来源', source['url'], icon=':material/open_in_new:')
+            use = st.checkbox('纳入构建输入', value=bool(source['included']), disabled=not source['text'].strip(), key='inc-'+source['id'])
+            if use != bool(source['included']):
+                store.include_source(eid, source['id'], use)
                 st.rerun()
-    with st.expander("构建输入", icon=":material/data_object:"):
-        bundle = store.input_bundle(eid)
-        st.json(bundle, expanded=False)
-        st.download_button("下载输入", encoded(bundle), f"{eid}-input.json", icon=":material/download:")
-    review_form(store, eid, "evidence")
+            with st.container(height=320, border=True):
+                st.text(source['text'] or '尚无正文')
+        else:
+            empty('还没有资料', '可从检索任务纳入材料，也可直接上传已有证据。')
+    with review:
+        if sources:
+            review_form(store, eid, 'evidence')
+        st.download_button('下载当前实际输入', encoded(bundle), eid+'-input.json', icon=':material/download:')
+        with st.expander('查看输入结构'):
+            st.json(bundle, expanded=False)
+        versions = store.handoffs(eid)
+        if versions:
+            with st.expander(f'已确认输入 · {len(versions)} 个版本'):
+                for version in versions:
+                    st.caption(version['created'][:19])
+                    st.download_button('下载确认版输入', encoded(version['body']), version['id']+'.json', key=version['id'])
 
 
 def review_form(store, eid, kind):
     target = store.target(eid, kind)
     label = {"scope": "范围", "evidence": "资料", "graph": "图"}[kind]
     decision = store.decision(eid, kind)
+    prerequisite = (kind == "evidence" and store.decision(eid, "scope") != "approved") or (
+        kind == "graph" and (store.decision(eid, "scope") != "approved" or store.decision(eid, "evidence") != "approved"))
+    if prerequisite:
+        st.warning("请先确认范围与当前资料，再审核后续产物。")
+        return
     st.subheader(f"审核{label}")
     if decision:
-        st.caption({"approved": "已通过", "returned": "已退回", "issue": "已记录问题"}[decision])
+        show_status({"approved": "已通过", "returned": "已退回", "issue": "已记录问题"}[decision])
     with st.form(f"review-{eid}-{kind}-{target[:12]}"):
         name = st.text_input("审核人", key=f"reviewer-{eid}-{kind}-{target[:12]}")
-        verdict = st.radio("结论", ["通过", "退回", "记录问题"], horizontal=True)
+        verdict = st.selectbox("审核结论", ["通过", "退回", "记录问题"])
         note = st.text_area("审核备注", height=90)
         if st.form_submit_button("保存范围确认" if kind == "scope" else "保存审核", icon=":material/fact_check:", type="primary"):
             try:
@@ -344,174 +379,318 @@ def graph_panel(store, eid):
     version = st.selectbox("图版本", range(len(graphs)), format_func=lambda i: f"v{len(graphs)-i} · {graphs[i]['note']} · {graphs[i]['created'][:19]}", key=f"version-{eid}")
     current = graphs[version]
     graph = current["body"]
-    gantt, fields, evidence = st.tabs(["Gantt", "结构与修订", "证据片段"])
-    with gantt:
-        timeline(graph)
-    with fields:
-        st.json(graph, expanded=False)
-        options = list(editable_fields(graph))
-        if options:
-            path = st.selectbox("修改字段", range(len(options)), format_func=lambda i: " / ".join(map(str, options[i][0])), key=f"edit-path-{current['id']}")
-            with st.form(f"graph-edit-{current['id']}"):
-                value = st.text_area("新内容", value=options[path][1], height=100, key=f"edit-value-{current['id']}-{path}")
-                reason = st.text_input("修订说明")
-                if st.form_submit_button("保存修订版", icon=":material/save:", disabled=version != 0):
-                    try:
-                        if not reason.strip():
-                            raise ValueError("请填写修订说明")
-                        revised = copy.deepcopy(graph)
-                        cursor = revised
-                        field_path = options[path][0]
-                        for key in field_path[:-1]:
-                            cursor = cursor[key]
-                        cursor[field_path[-1]] = value
-                        store.add_graph(eid, revised, reason, current["id"])
-                        notice("修订版已保存，需重新审核")
-                    except ValueError as exc:
-                        st.error(str(exc))
-    with evidence:
-        quotes = [(path, value) for path, value in editable_fields(graph) if "evidence_source_contents" in path]
-        if not quotes:
-            st.caption("图中暂无证据片段")
-        for path, value in quotes:
-            st.caption(" / ".join(map(str, path)))
-            st.text(value)
-        st.caption("来源正文见“资料与输入”")
-    st.download_button("下载此版本 JSON", encoded(graph), f"{eid}-{current['id']}.json", icon=":material/download:")
-    if version == 0:
-        review_form(store, eid, "graph")
-    else:
-        st.caption("历史版本 · 只读")
+    content, review = st.columns([7, 3])
+    with content:
+        gantt, fields, evidence = st.tabs(["Gantt", "结构与修订", "证据片段"])
+        with gantt:
+            timeline(graph)
+        with fields:
+            st.json(graph, expanded=False)
+            options = list(editable_fields(graph))
+            if options:
+                path = st.selectbox("修改字段", range(len(options)), format_func=lambda i: " / ".join(map(str, options[i][0])), key=f"edit-path-{current['id']}")
+                with st.form(f"graph-edit-{current['id']}"):
+                    value = st.text_area("新内容", value=options[path][1], height=100, key=f"edit-value-{current['id']}-{path}")
+                    reason = st.text_input("修订说明")
+                    if st.form_submit_button("保存修订版", icon=":material/save:", disabled=version != 0):
+                        try:
+                            if not reason.strip():
+                                raise ValueError("请填写修订说明")
+                            revised = copy.deepcopy(graph)
+                            cursor = revised
+                            field_path = options[path][0]
+                            for key in field_path[:-1]:
+                                cursor = cursor[key]
+                            cursor[field_path[-1]] = value
+                            store.add_graph(eid, revised, reason, current["id"])
+                            notice("修订版已保存，需重新审核")
+                        except ValueError as exc:
+                            st.error(str(exc))
+        with evidence:
+            quotes = [(path, value) for path, value in editable_fields(graph) if "evidence_source_contents" in path]
+            if not quotes:
+                st.caption("图中暂无证据片段")
+            for path, value in quotes:
+                st.caption(" / ".join(map(str, path)))
+                st.text(value)
+            st.caption("来源正文见“资料与输入”")
+        st.download_button("下载此版本 JSON", encoded(graph), f"{eid}-{current['id']}.json", icon=":material/download:")
+    with review:
+        if version == 0:
+            review_form(store, eid, "graph")
+        else:
+            st.caption("历史版本 · 只读")
 
 
 def details(store, eid):
+    controller = get_controller(str(store.root / "search"))
+    search_errors = []
+    step, state, action = progress(store, eid, controller, errors=search_errors)
+    search_record_warnings(search_errors)
     event = store.event(eid)
-    st.caption(f"{eid} · {store.status(eid)} · 主表 v{event['revision']}")
-    meta, sources, graphs, history = st.tabs(["基本信息", "资料与输入", "图与修订", "运行记录"])
-    with meta:
-        event_form(store, event)
-        if event["related_events"]:
-            known_ids = {r["event_id"] for r in store.events()}
-            st.dataframe(pd.DataFrame([{**r, "relation_type": RELATIONS[r["relation_type"]], "位置": "本工作区" if r["event_id"] in known_ids else "外部／未导入"} for r in event["related_events"]]).rename(columns={"event_id": "关联事件 ID", "relation_type": "关系", "note": "说明"}), hide_index=True, width="stretch")
-        review_form(store, eid, "scope")
-    with sources:
-        source_panel(store, eid)
-    with graphs:
-        graph_panel(store, eid)
-    with history:
-        jobs = [j for j in store.jobs() if any(e["event"]["event_id"] == eid for e in j["body"]["events"])]
-        if not jobs:
-            st.caption("暂无运行记录")
-        for job in jobs:
-            st.write(f"{job['id']} · {'已取消' if job['status']=='cancelled' else '执行器待接入'}")
-        reviews = store.reviews(eid)
-        if reviews:
-            st.subheader("审核记录")
-            st.dataframe(pd.DataFrame(reviews)[["kind", "decision", "reviewer", "note", "created"]].rename(columns={"kind": "对象", "decision": "结论", "reviewer": "审核人", "note": "备注", "created": "时间"}), hide_index=True, width="stretch")
+    info, primary = st.columns([3, 2], vertical_alignment="center")
+    with info:
+        show_status(state, f"主表 v{event['revision']} · {event['owner'] or '未指定负责人'}")
+    section_key = "ui-event-section-" + eid
+    if section_key not in st.session_state:
+        st.session_state[section_key] = "基本信息" if step < 2 else "资料与输入" if step == 2 else "图与修订"
+    with primary:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if step >= 2 and st.button("补充检索", icon=":material/search:", key="supplement-"+eid):
+                navigate("检索", search_event_ids=[eid])
+            if action in {"开始检索", "查看任务", "查看构建任务"}:
+                if st.button(action, key="next-"+eid, type="primary"):
+                    navigate("检索" if action == "开始检索" else "任务", search_event_ids=[eid], task_event_filter=eid)
+            elif action == "收录导出":
+                st.download_button("导出已审核事件包", store.export_zip([eid]), eid+".zip", key="final-export-"+eid, type="primary")
+            else:
+                label = "配置构建任务" if action == "创建构建任务" else action
+                if st.button(label, type="primary", key="next-"+eid):
+                    st.session_state[section_key] = "基本信息" if step == 0 else "资料与输入" if step == 2 else "图与修订"
+                    st.rerun()
+    step_strip(STEPS, step)
+    st.caption(eid + " · 流程位置随当前范围、材料和审核状态更新")
+    last_section = st.session_state.get(section_key) or "基本信息"
+    def retain_section():
+        if st.session_state.get(section_key) is None:
+            st.session_state[section_key] = last_section
+    section = st.segmented_control("事件详情", ["基本信息", "资料与输入", "图与修订", "运行记录"], key=section_key, label_visibility="collapsed", on_change=retain_section) or last_section
+    with st.container(key="event-body"):
+        if section == "基本信息":
+            summary, review = st.columns([7, 3])
+            with summary:
+                st.subheader("研究范围")
+                st.write(event['description'] or '尚未填写事件简介')
+                st.markdown('**纳入范围**')
+                st.write(event['scope_include'] or '尚未填写')
+                if event['scope_exclude']:
+                    st.markdown('**排除范围**')
+                    st.write(event['scope_exclude'])
+                st.caption(f"事件覆盖时间：{event['coverage_start'] or '未限定'} → {event['coverage_end'] or '未限定'}")
+                if event['keywords']:
+                    st.caption('关键词：' + ' / '.join(event['keywords']))
+                with st.expander("编辑事件与范围", expanded=not event['scope_include']):
+                    event_form(store, event)
+                if event["related_events"]:
+                    known_ids = {r["event_id"] for r in store.events()}
+                    st.dataframe(pd.DataFrame([{**r, "relation_type": RELATIONS[r["relation_type"]], "位置": "本工作区" if r["event_id"] in known_ids else "外部／未导入"} for r in event["related_events"]]).rename(columns={"event_id": "关联事件 ID", "relation_type": "关系", "note": "说明"}), hide_index=True, width="stretch")
+            with review:
+                review_form(store, eid, "scope")
+        elif section == "资料与输入":
+            source_panel(store, eid)
+        elif section == "图与修订":
+            if store.decision(eid, "evidence") == "approved" and store.decision(eid, "scope") == "approved":
+                with st.expander("构建 draft EPG", expanded=action == "创建构建任务"):
+                    create_build(store, eid)
+            graph_panel(store, eid)
+        elif section == "运行记录":
+            history_errors = []
+            runs = event_searches(store, controller, eid, errors=history_errors)
+            if not search_errors:
+                search_record_warnings(history_errors)
+            for tid, data in runs:
+                with st.container(horizontal=True, vertical_alignment="center"):
+                    st.write("检索 · " + STATUS.get(data['status'], data['status']))
+                    if st.button("打开任务", key="open-"+tid):
+                        navigate("任务", **{"task-selected": tid, "task_event_filter": eid})
+            for build in BuildController(store).tasks(eid):
+                with st.container(horizontal=True, vertical_alignment="center"):
+                    st.write("构建 · " + BUILD_LABELS[build["status"]])
+                    if st.button("查看构建记录", key="history-build-"+build["id"]):
+                        navigate("任务", **{"task-selected": build["id"], "task_event_filter": eid})
+            reviews = store.reviews(eid)
+            if reviews:
+                st.subheader("审核记录")
+                st.dataframe(pd.DataFrame(reviews)[["kind", "decision", "reviewer", "note", "created"]].rename(columns={"kind": "对象", "decision": "结论", "reviewer": "审核人", "note": "备注", "created": "时间"}), hide_index=True, width="stretch")
+            if not runs and not reviews and not BuildController(store).tasks(eid):
+                empty("暂无运行与审核记录", "检索、构建与确认材料后，记录会保存在这里。")
 
 
 def tasks_page(store):
+    title, action = st.columns([4, 1], vertical_alignment="center")
+    with title:
+        heading("任务中心", "查看检索与构建的实际运行、产物和下一步。")
+    with action:
+        if st.button("新建检索", icon=":material/add:", width="stretch"):
+            navigate("检索")
+    task_workspace(store)
+
+
+@st.fragment(run_every="2s")
+def task_workspace(store):
+    controller = get_controller(str(store.root / "search"))
+    builds = BuildController(store)
+    events = {e["event_id"]:e for e in store.events()}
+    if "task_event_filter" in st.session_state:
+        st.session_state["ui-task-event"] = st.session_state.pop("task_event_filter")
+        st.session_state["ui-task-kind"] = "全部类型"
+        st.session_state["ui-task-state"] = "全部状态"
+    if st.session_state.get("ui-task-event", "") not in [""] + list(events):
+        st.session_state["ui-task-event"] = ""
+    scope, kind, state = st.columns([3, 1, 1])
+    with scope:
+        eid = st.selectbox("按事件筛选", [""]+list(events), format_func=lambda k:display_name(events[k]) if k else "全部事件与独立研究", key="ui-task-event", label_visibility="collapsed")
+    with kind:
+        kind_filter = st.selectbox("任务类型", ["全部类型", "检索", "构建"], key="ui-task-kind", label_visibility="collapsed")
+    with state:
+        state_filter = st.selectbox("运行状态", ["全部状态", "待启动", "运行中", "待检查", "需处理", "已取消"], key="ui-task-state", label_visibility="collapsed")
+    records = []
+    search_errors = []
+    for tid, data in search_records(controller, search_errors):
+        if not eid or data["task"].get("event_id") == eid:
+            records.append({"id":tid, "kind":"检索", "name":data["task"]["target_name"], "code":data["status"],
+                            "status":STATUS.get(data["status"],data["status"]), "created":data.get("created_at", ""), "data":data})
+    search_record_warnings(search_errors)
+    for error in search_errors:
+        records.append({"id": error["task_id"], "kind": "检索", "name": "记录无法读取 · 事件归属未知",
+                        "code": "unreadable", "status": "记录无法读取", "created": "", "data": None})
+    for build in builds.tasks(eid or None):
+        row = builds.reconcile(build["id"])
+        records.append({"id":row["id"], "kind":"构建", "name":display_name(row["body"]["event"]),
+                        "code":row["status"], "status":BUILD_LABELS[row["status"]], "created":row["created"], "data":row})
+    buckets = {"待启动":{"ready"}, "运行中":{"running","queued"}, "待检查":{"finished","completed"},
+               "需处理":{"failed","limit","insufficient","paused","interrupted","unreadable"}, "已取消":{"cancelled"}}
+    records = [r for r in records if (kind_filter == "全部类型" or r["kind"] == kind_filter)
+               and (state_filter == "全部状态" or r["code"] in buckets[state_filter])]
+    records.sort(key=lambda r:r["created"], reverse=True)
+    if records:
+        keys = [r["id"] for r in records]
+        table_key = "tasks-" + digest(keys)[:12]
+        def select_task():
+            selected_rows = st.session_state[table_key]["selection"]["rows"]
+            if selected_rows:
+                st.session_state["task-selected"] = keys[selected_rows[0]]
+        st.dataframe([{"研究对象":r["name"], "类型":r["kind"], "状态":table_status(r["status"]),
+                       "创建时间（北京时间）":local_timestamp(r["created"]), "任务 ID":r["id"][:12]} for r in records],
+                     hide_index=True, width="stretch", height=min(240, 38*len(records)+40), row_height=38,
+                     on_select=select_task, selection_mode="single-row", key=table_key,
+                     column_config={"研究对象":st.column_config.TextColumn(width="large"), "状态":st.column_config.TextColumn(width="medium")})
+        selected = st.session_state.get("task-selected")
+        current = next((r for r in records if r["id"] == selected), records[0])
+        st.session_state["task-selected"] = current["id"]
+        st.caption(f"{len(records)} 个任务 · 选择一行查看详情 · 每 2 秒更新运行状态")
+        with st.container(key="task-detail"):
+            if current["kind"] == "构建":
+                build_panel(store, current["id"], row=current["data"])
+            else:
+                task_panel(controller, current["id"], store, data=current["data"])
+    else:
+        empty("暂无匹配任务", "从主表准备检索，或确认资料后创建构建任务；也可调整筛选条件。")
     jobs = store.jobs()
-    heading("任务", f"{len(jobs)} 个任务")
-    st.caption("检索与构建执行器待接入")
-    events = store.events()
-    with st.expander("新建任务", icon=":material/add_task:"):
-        ids = st.multiselect("事件", [e["event_id"] for e in events], format_func=lambda eid: f"{eid} · {display_name(next(e for e in events if e['event_id']==eid))}")
-        job_form(store, ids)
-    if not jobs:
-        st.info("暂无任务")
-    for job in jobs:
-        body = job["body"]
-        label = "已取消" if job["status"] == "cancelled" else "待接入"
-        with st.expander(f"{job['id']} · {len(body['events'])} 个事件 · {label}", expanded=len(jobs) == 1):
-            a, b, c = st.columns(3)
-            a.write(body["config"]["builder"])
-            b.write(body["config"]["model"])
-            c.write(f"并发 {body['config']['concurrency']}")
-            st.caption(job["created"][:19])
-            st.dataframe(pd.DataFrame([{"事件 ID": e["event"]["event_id"], "事件名称": display_name(e["event"]), "状态": label} for e in body["events"]]), hide_index=True, width="stretch")
-            a, b, c, d = st.columns(4)
-            a.button("开始", icon=":material/play_arrow:", disabled=True, key="run-"+job["id"])
-            b.button("暂停", icon=":material/pause:", disabled=True, key="pause-"+job["id"])
-            c.button("重试失败项", icon=":material/replay:", disabled=True, key="retry-"+job["id"])
-            if d.button("取消", icon=":material/close:", disabled=job["status"] == "cancelled", key="cancel-"+job["id"]):
-                store.cancel_job(job["id"])
-                notice("任务已取消")
-            with st.expander("任务配置"):
-                st.json({k: v for k, v in body.items() if k != "events"})
-            st.caption("尚未运行 · 耗时、tokens 与费用暂无")
+    if jobs:
+        with st.expander(f"历史任务计划 · {len(jobs)} 条"):
+            st.caption("旧版计划供查阅，不代表实际执行。")
+            for job in jobs:
+                st.write(job["id"] + " · " + ("已取消" if job["status"] == "cancelled" else "未执行"))
+                st.json(job["body"], expanded=False)
+                if st.button("取消计划", disabled=job["status"] == "cancelled", key="cancel-"+job["id"]):
+                    store.cancel_job(job["id"])
+                    st.rerun()
 
 
 def review_page(store):
-    heading("待审")
+    heading("待审", "核对当前版本的范围、材料与图，保存可追溯的审核结论。")
     events = store.events()
     pending = [e for e in events if store.decision(e["event_id"], "scope") != "approved" or store.status(e["event_id"]) in {"待审核资料", "待审核图", "待修订"}]
+    def review_kind(e):
+        if store.decision(e['event_id'], 'scope') != 'approved':
+            return '范围'
+        return '材料' if store.decision(e['event_id'], 'evidence') != 'approved' else '图'
+    filtered = st.segmented_control("审核对象", ['全部','范围','材料','图'], default='全部', key='ui-review-kind') or '全部'
+    pending = sorted([e for e in pending if filtered == '全部' or review_kind(e) == filtered], key=lambda e:(['范围','材料','图'].index(review_kind(e)), display_name(e)))
     if not pending:
-        st.info("暂无待审事件")
+        empty("暂无待审事件", "新材料和 draft 图完成后，可在这里检查并保存审核意见。")
         return
-    st.dataframe(pd.DataFrame([{"事件 ID": e["event_id"], "事件名称": display_name(e), "状态": store.status(e["event_id"]), "负责人": e["owner"]} for e in pending]), hide_index=True, width="stretch")
-    eid = st.selectbox("选择事件", [e["event_id"] for e in pending], format_func=lambda x: f"{x} · {display_name(next(e for e in pending if e['event_id']==x))}")
+    keys = [e['event_id'] for e in pending]
+    key = 'review-list-' + digest(keys)[:12]
+    def select_review():
+        rows = st.session_state[key]['selection']['rows']
+        if rows:
+            st.session_state['ui-review-event'] = keys[rows[0]]
+    st.dataframe([{'事件名称':display_name(e),'待审对象':review_kind(e),'状态':table_status(store.status(e['event_id'])),'负责人':e['owner']} for e in pending],
+                 hide_index=True, width='stretch', height=min(230,38*len(pending)+40), row_height=38,
+                 on_select=select_review, selection_mode='single-row', key=key,
+                 column_config={'事件名称':st.column_config.TextColumn(width='large')})
+    eid = st.session_state.get('ui-review-event')
+    if eid not in keys:
+        eid = keys[0]
+    st.session_state['ui-review-event'] = eid
+    index = keys.index(eid)
+    title, actions = st.columns([3,2], vertical_alignment='center')
+    with title:
+        st.subheader(display_name(store.event(eid)))
+        st.caption(f'当前 {index+1} / {len(keys)} · 待审对象：{review_kind(pending[index])}')
+    with actions:
+        with st.container(horizontal=True, horizontal_alignment='right'):
+            if st.button('上一项', disabled=index==0, icon=':material/chevron_left:'):
+                st.session_state['ui-review-event']=keys[index-1]
+                st.rerun()
+            if st.button('下一项', disabled=index==len(keys)-1, icon=':material/chevron_right:'):
+                st.session_state['ui-review-event']=keys[index+1]
+                st.rerun()
     details(store, eid)
 
 
 def settings_page(store):
-    heading("设置")
-    settings = store.settings()
-    st.subheader("默认构建配置")
-    model = model_picker(settings["model"], "default-model")
-    with st.form("settings"):
-        methods = ["SparseRagBuilder", "AgentEventBuilder"]
-        builder = st.selectbox("构建方法", methods, index=methods.index(settings["builder"]))
-        concurrency = st.number_input("事件并发数", min_value=1, max_value=32, value=settings["concurrency"], step=1)
-        if st.form_submit_button("保存设置", icon=":material/save:", type="primary"):
-            try:
-                store.save_settings({"builder": builder, "model": model, "concurrency": concurrency})
-                notice("默认配置已保存")
-            except ValueError as exc:
-                st.error(str(exc))
-    st.divider()
-    st.subheader("接口状态")
-    from dotenv import dotenv_values
-    envfile = ROOT / ".env"
-    env = dotenv_values(envfile) if envfile.is_file() else {}
-    rows = []
-    for name, key in [("Ark", "ARK_API_KEY"), ("Bocha", "BOCHA_API_KEY"), ("Baidu", "BAIDUSEARCH_API_KEY"), ("Exa", "EXA_API_KEY")]:
-        configured = bool(os.environ.get(key, env.get(key)))
-        rows.append({"服务": name, "配置": "已配置" if configured else "未配置", "连接": "未检查"})
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-    st.button("检查连接", icon=":material/wifi:", disabled=True)
-    st.caption("连接检查待接入 · 密钥通过 .env 维护")
-    st.subheader("工作目录")
-    st.code(str(store.root), language=None)
-    st.caption("本地单用户 · 模型可用性尚未验证")
+    heading("设置", "配置新任务的默认值。已经创建的任务保留各自的配置。")
+    search, build, workspace = st.tabs(['搜索默认配置', '构建默认配置', '接口与工作区'])
+    with search:
+        from finmy.workbench.search_settings import search_settings
+        search_settings(store)
+    with build:
+        settings = store.settings()
+        model = model_picker(settings['model'], 'default-model')
+        with st.form('settings'):
+            methods = ['SparseRagBuilder','AgentEventBuilder']
+            builder = st.selectbox('构建方法', methods, index=methods.index(settings['builder']))
+            st.caption('构建模型与搜索模型独立；每个事件单独创建构建任务。')
+            if st.form_submit_button('保存构建默认配置', icon=':material/save:', type='primary'):
+                try:
+                    store.save_settings({'builder':builder,'model':model,'concurrency':settings['concurrency']})
+                    notice('构建默认配置已保存')
+                except ValueError as exc:
+                    st.error(str(exc))
+    with workspace:
+        from dotenv import dotenv_values
+        envfile = ROOT / '.env'
+        env = dotenv_values(envfile) if envfile.is_file() else {}
+        rows = []
+        for name,key in [('Ark','ARK_API_KEY'),('Bocha','BOCHA_API_KEY'),('Baidu','BAIDUSEARCH_API_KEY'),('Exa','EXA_API_KEY')]:
+            configured = bool(os.environ.get(key,env.get(key)))
+            rows.append({'服务':name,'密钥配置':'已配置' if configured else '未配置','连接':'未检查'})
+        st.subheader('接口状态')
+        st.dataframe(rows,hide_index=True,width='stretch')
+        st.caption('密钥通过 .env 维护。这里仅显示配置是否存在，不会发起连接或模型请求。')
+        st.subheader('本地工作目录')
+        st.code(str(store.root),language=None)
+        st.caption('运行记录与数据库保存在本地工作区；自动批量构建调度尚未接入。')
 
 
 def main():
     st.set_page_config(page_title="FinMycelium | 事件工作台", page_icon=":material/account_tree:", layout="wide")
-    st.markdown("""<style>
-        :root {font-family:system-ui,sans-serif;letter-spacing:0;}
-        .stApp {background:#fff;color:#22302d;}
-        h1 {font-size:1.65rem!important;font-weight:650!important;letter-spacing:0!important;}
-        h2,h3 {font-size:1.12rem!important;letter-spacing:0!important;}
-        .block-container {padding-top:2rem;max-width:1440px;padding-bottom:3rem;}
-        [data-testid=stSidebar] {background:#f4f6f5;border-right:1px solid #e1e7e4;}
-        [data-testid=stSidebar] h2 {font-size:1.22rem!important;}
-        .stButton button,.stDownloadButton button {border-radius:5px;}
-        .stButton button[kind=primary],.stFormSubmitButton button[kind=primary] {background:#187968;border-color:#187968;color:white;}
-        [data-testid=stMetricValue] {font-size:1.5rem;}
-        p,label,button,span {letter-spacing:0;overflow-wrap:anywhere;}
-        @media(max-width:640px){.block-container{padding:4rem 1rem 2rem;}h1{font-size:1.4rem!important;}}
-        </style>""", unsafe_allow_html=True)
+    apply_style()
+    keep_ui_state()
     store = Store(os.environ.get("FINMY_WORKBENCH_HOME", str(ROOT / "output/workbench")))
+    if "navigate_to" in st.session_state:
+        st.session_state["navigation"] = st.session_state.pop("navigate_to")
+        if st.session_state["navigation"] == "数据" and st.session_state.get("detail_id"):
+            st.session_state.pop("data-action", None)
+    page = st.session_state.get("navigation", "数据")
     with st.sidebar:
-        st.header("FinMycelium")
-        st.caption("事件工作台")
-        page = st.radio("导航", ["数据", "检索", "任务", "待审", "设置"], label_visibility="collapsed")
+        st.markdown('<div class="fm-brand"><strong>FinMycelium</strong><small>事件工作台 · EPG</small></div>', unsafe_allow_html=True)
+        for value, label, icon in [("数据","事件数据","table_view"), ("检索","新建检索","search"),
+                                   ("任务","任务中心","play_circle"), ("待审","待审","fact_check"), ("设置","设置","tune")]:
+            if st.button(label, icon=":material/"+icon+":", type="primary" if page == value else "secondary", width="stretch", key="nav-"+value):
+                if value == "数据":
+                    st.session_state.pop("detail_id", None)
+                    st.session_state.pop("data-action", None)
+                    st.session_state["master-epoch"] = st.session_state.get("master-epoch", 0)+1
+                navigate(value)
         st.divider()
-        st.caption("本地工作区")
-    message = st.empty()
+        st.caption("本地工作区 · 单用户")
+        st.caption("范围 → 资料 → 草稿 → 审核")
     if "notice" in st.session_state:
-        message.success(st.session_state["notice"])
+        st.toast(st.session_state.pop("notice"), icon=":material/check_circle:")
     {"数据": data_page, "检索": search_page, "任务": tasks_page, "待审": review_page, "设置": settings_page}[page](store)
 
 

@@ -128,17 +128,20 @@ model requests are reserved for `finish`. Context pressure first switches to com
 finalization; if that still exceeds the limit, execution pauses before a request.
 These controls bound work; they do not force a successful handoff after a failure.
 
-In the workbench, select **检索** to configure a task, start/continue, inspect progress,
-read sources and review omissions. New-task advanced settings expose the request timeout
-and context limit; stopped tasks can revise them under **调整运行上限**. Saved profiles
+In the workbench, select **新建检索** to create searches; use **任务中心** to start/continue,
+inspect progress, read sources and review omissions. Reusable defaults live in **设置**.
+From **事件数据**, confirm scope and choose one or several events to prepare searches.
+New-task advanced settings expose the request timeout and context limit; stopped tasks can revise them under **调整运行上限**. Saved profiles
 retain their configured values until explicitly changed.
 The handoff panel describes the recorded material allocation, and **设置 →
-接口状态** includes Ark, Baidu, Bocha and Exa configuration presence without displaying
+接口与工作区** includes Ark, Baidu, Bocha and Exa configuration presence without displaying
 keys. Workbench execution uses the same agent and source-level handoff. Paused historical
 simple tasks continue through the agent with their saved material and usage intact;
 finished historical tasks can still be inspected and reassembled without model calls.
 Material adoption into an event's review list is explicit
-and does not automatically approve evidence or launch a Builder.
+and does not automatically approve evidence or launch a Builder. After confirming
+the actual input, create a separate Builder task. See [event workbench](event-workbench.md)
+for versioned inputs, draft review and execution boundaries.
 
 ## Complete material and input budgeting
 
