@@ -60,3 +60,94 @@ Temporal reasoning for subject histories:
   cannot become a definite personal decision. Retain the company's supported act
   and the qualified observation; preserve a personal decision only with evidence.
 """
+
+
+def normalize_time_field(field):
+    """Execute unambiguous Gregorian cases of the policy without an LLM or I/O.
+
+    Other calendars require context-backed conversion by the policy-guided model
+    or a verified calculation. Never guess an epoch, holiday rule or fiscal year.
+    Retain unresolved wording in metadata/reasons instead of a false timestamp.
+    """
+    import calendar
+    import copy
+    import re
+    from datetime import date
+    from .validation import date_interval
+
+    out = copy.deepcopy(field)
+    raw = str(out.get("value", "unknown"))
+    text = raw.strip()
+    window = out.get("time_window")
+
+    def record(status, rule):
+        out["time_normalization"] = {"status": status, "original": raw, "rule": rule}
+        reason = f"Time normalization ({status}): {raw!r}. {rule}"
+        reasons = out.setdefault("reasons", [])
+        if reason not in reasons:
+            reasons.append(reason)
+        return out
+
+    if window is not None:
+        try:
+            lo, hi = date.fromisoformat(window["start"]), date.fromisoformat(window["end"])
+            valid = (lo <= hi and lo.isoformat() == window["start"]
+                     and hi.isoformat() == window["end"]
+                     and isinstance(window.get("original"), str)
+                     and type(window.get("approximate")) is bool)
+        except (KeyError, TypeError, ValueError):
+            valid = False
+        if valid:
+            if date_interval(text) is not None:
+                return out
+            out["value"] = window["start"]
+            return record("normalized", "Use the supplied supported window; value is a positioning boundary, not an asserted occurrence day.")
+        # An invalid window must not override an otherwise usable scalar date.
+        out.pop("time_window", None)
+        record("unresolved", "Invalid supplied time_window retained in audit metadata.")
+        out["time_normalization"]["original_window"] = copy.deepcopy(window)
+
+    if text.lower() in {"", "unknown", "unspecified", "none", "null", "n/a", "na"}:
+        out["value"] = "unknown"
+        return out
+    if date_interval(text) is not None:
+        # ISO separator also makes policy-supported HH:MM timestamps readable
+        # by the HTML renderer. No date precision or timezone is invented.
+        out["value"] = text.replace(" ", "T", 1)
+        return out
+
+    context = " ".join(str(v) for v in out.get("evidence_source_contents", []) + out.get("reasons", []))
+    fiscal = re.search(r"\bfiscal\b|\bFY\s*\d|财年|財年", context, re.I)
+    period = re.fullmatch(r"(\d{4})-(Q[1-4]|H[12])", text, re.I)
+    bounds = None
+    rule = ""
+    if period and not fiscal:
+        year, part = int(period[1]), period[2].upper()
+        length = 3 if part[0] == "Q" else 6
+        month = (int(part[1]) - 1) * length + 1
+        try:
+            lo = date(year, month, 1)
+            end_month = month + length - 1
+            hi = date(year, end_month, calendar.monthrange(year, end_month)[1])
+            bounds = lo.isoformat(), hi.isoformat()
+            rule = "Gregorian calendar period; bounds locate the activity without asserting a day or continuous duration."
+        except ValueError:
+            pass
+    interval = re.fullmatch(r"(\d{4}(?:-\d{2}){0,2})\s+to\s+(\d{4}(?:-\d{2}){0,2})", text, re.I)
+    if interval:
+        lo, hi = date_interval(interval[1]), date_interval(interval[2])
+        if lo and hi and lo[0] <= hi[1]:
+            bounds = lo[0].date().isoformat(), hi[1].date().isoformat()
+            rule = "Explicit Gregorian interval; coarse endpoints retain their full supported range, not a midpoint or an asserted purchase date."
+    if bounds:
+        out["value"] = bounds[0]
+        out["time_window"] = {"start": bounds[0], "end": bounds[1],
+                              "original": raw, "approximate": bounds[0] != bounds[1]}
+        return record("normalized", rule)
+
+    season = re.fullmatch(r"(\d{4})-(?:spring|summer|fall|autumn|winter)", text, re.I)
+    if season and date_interval(season[1]) is not None:
+        out["value"] = season[1]
+        return record("unresolved", "Retain the supported Gregorian year; seasonal boundaries require an established locale and seasonal convention.")
+    out["value"] = "unknown"
+    return record("unresolved", "Requires a supported calendar, anchor or conversion rule under temporal_policy.py; original expression retained, no date guessed.")

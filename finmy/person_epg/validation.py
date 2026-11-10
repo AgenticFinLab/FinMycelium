@@ -165,7 +165,7 @@ def _check_semantics(package, add_error):
             )
 
 
-def validate_person_epg(package):
+def validate_person_epg(package, *, require_normalized_times=False):
     """Return ``{valid, errors}``; paths use JSON Pointer and input is unchanged.
 
     Shape errors are returned before relational checks, so malformed JSON values
@@ -187,4 +187,10 @@ def validate_person_epg(package):
     _check_relations(rows, add_error)
     _check_evidence(package, add_error)
     _check_semantics(package, add_error)
+    if require_normalized_times:
+        from finmy.subject_graph.validation import date_interval
+        for index, time in enumerate(package["time_value"]):
+            if time["value"] != "unknown" and date_interval(time["value"]) is None:
+                add_error(f"/time_value/{index}/value",
+                          "Normalize this expression under subject_graph/temporal_policy.py before writing canonical facts.")
     return {"valid": not errors, "errors": errors}

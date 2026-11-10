@@ -196,7 +196,10 @@ class CanonicalRealOutputAcceptanceTest(unittest.TestCase):
         action = next(r for r in result["action"] if r["action_id"] == case["historical_fact_id"])
         times = {r["time_id"]: r["value"] for r in result["time_value"]}
         self.assertEqual(action["occurrence_id"], case["new_occurrence_id"])
-        self.assertEqual(times[action["timestamp_time_id"]], "2022-fall")
+        self.assertEqual(times[action["timestamp_time_id"]], "2022")
+        metadata = next(s["field_metadata"] for s in result["evidence_set"]
+                        if s["evidence_set_id"] == action["evidence_set_id"])
+        self.assertEqual(metadata["/timestamp"]["time_normalization"]["original"], "2022-fall")
         self.assertEqual(next(r for r in result["action"] if r["action_id"] == "ACT_O_S5_E3_P1_1")["occurrence_id"], "O_S5_E3")
 
     def november_split(self):

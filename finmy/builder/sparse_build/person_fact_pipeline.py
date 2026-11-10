@@ -16,6 +16,9 @@ from finmy.person_epg.schema import SCHEMA_VERSION
 from finmy.person_epg.validation import validate_person_epg
 from finmy.person_epg.sparse_adapter import ground_person_evidence
 from finmy.subject_graph.validation import date_interval
+from finmy.subject_graph.temporal_policy import (
+    TEMPORAL_NORMALIZATION_POLICY, SUBJECT_TEMPORAL_POLICY, normalize_time_field,
+)
 from .runtime import digest
 from .completion_errors import IncompleteCompletionError
 
@@ -92,6 +95,11 @@ Do not delete supported facts merely because the person link is indirect.
 """
 
 
+# The shared policy is the sole temporal specification for both model phases.
+EXTRACTION_SYSTEM = TEMPORAL_NORMALIZATION_POLICY + SUBJECT_TEMPORAL_POLICY + EXTRACTION_SYSTEM
+RECONCILE_SYSTEM = TEMPORAL_NORMALIZATION_POLICY + SUBJECT_TEMPORAL_POLICY + RECONCILE_SYSTEM
+
+
 def _json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -154,7 +162,7 @@ def _field(value, documents, *, allow_unknown=False):
         if date_interval(value) is None:
             raise ValueError("Invalid normalized time window")
         out["time_window"] = copy.deepcopy(value["time_window"])
-    return out
+    return normalize_time_field(out) if allow_unknown else out
 
 
 def _merge_fields(left, right):
@@ -271,6 +279,9 @@ def _restore_graph(package):
                         out[key] = _metadata(out[key])
                     out[key]["time_window"] = {"start": time["window_start"], "end": time["window_end"],
                         "original": time["original_text"], "approximate": time["is_approximate"]}
+                if not isinstance(out[key], dict):
+                    out[key] = _metadata(out[key])
+                out[key] = normalize_time_field(out[key])
             else:
                 raw = row.get((renames or {}).get(key, key))
                 if raw is None and key in {"descriptions", "details", "instruments"}:
@@ -330,6 +341,13 @@ def _restore_graph(package):
 
 def _package(graph, documents):
     class Converter(_Converter):
+        def record(self, table, native, fields, *, extra=None, renames=None):
+            native = copy.deepcopy(native)
+            for field in fields:
+                if field in TIME_FIELDS:
+                    native[field] = normalize_time_field(native[field])
+            return super().record(table, native, fields, extra=extra, renames=renames)
+
         def participant(self, occurrence_id, entity_id):
             # Old attribution repairs may have attached field evidence to the
             # actor ID. Keep that evidence while indexing its scalar identity.
@@ -372,7 +390,7 @@ def _package(graph, documents):
         for meta in (row.get("field_metadata") or {}).values():
             meta.pop("_citations", None)
     ground_person_evidence(package)
-    check = validate_person_epg(package)
+    check = validate_person_epg(package, require_normalized_times=True)
     if not check["valid"]:
         raise ValueError("Invalid canonical facts: " + str(check["errors"][:2]))
     return package
