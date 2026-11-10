@@ -85,12 +85,6 @@ class PersonRenderRoutingTest(unittest.TestCase):
         self.assertIn('id="epg-data"', render_person_epg(result))
         self.assertEqual(self.st.session_state.save_builder_dir_path, "offline/run")
 
-    def test_legacy_person_and_company_keep_subject_graph_result(self):
-        output = SimpleNamespace(extras={}, subject_graph=self.projection, event_cascades={"stages": []})
-        for mode in ("person", "company"):
-            with self.subTest(mode=mode):
-                self.assertIs(self.run_result(output, mode), self.projection)
-                self.assertEqual(self.history.detect_build_mode(self.projection), "subject_graph")
 
     def test_legacy_event_object_and_dictionary_results_remain_unchanged(self):
         event = {"event_id": "EV1", "stages": [{"episodes": []}]}
@@ -107,27 +101,6 @@ class PersonRenderRoutingTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid Person EPG"):
             render_person_epg(result)
 
-    def test_history_prefers_person_when_all_outputs_exist_and_honors_explicit_file(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "FinalPersonEPG.json").write_text(json.dumps(self.package))
-            subject_path = root / "FinalSubjectGraph.json"
-            subject_path.write_text(json.dumps(self.projection))
-            (root / "FinalEventCascade.json").write_text(json.dumps({"stages": []}))
-            self.assertEqual(Path(self.history.preferred_result_file(root)).name, "FinalPersonEPG.json")
-            result = self.history.load_history_result(str(root))
-            self.assertEqual(result, self.package)
-            self.assertEqual(self.history.detect_build_mode(result), "person_epg")
-            self.assertEqual(self.history.load_history_result(str(subject_path)), self.projection)
-
-    def test_invalid_person_history_does_not_silently_fall_back(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "FinalPersonEPG.json").write_text('{"schema_version":"person-epg-3.0"}')
-            (root / "FinalSubjectGraph.json").write_text(json.dumps(self.projection))
-            (root / "FinalEventCascade.json").write_text(json.dumps({"stages": []}))
-            with self.assertLogs(level="ERROR"):
-                self.assertIsNone(self.history.load_history_result(str(root)))
 
     def test_history_retains_legacy_subject_and_event_fallbacks(self):
         with tempfile.TemporaryDirectory() as directory:

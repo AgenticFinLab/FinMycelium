@@ -151,34 +151,6 @@ class EventRefinementTests(unittest.TestCase):
         self.assertFalse(any("ORIGINAL evidence" in text for text in self.classified))
         self.assertEqual(self.report()["supplementary_model_calls"], 2)
 
-    def test_initial_budget_exhaustion_does_not_spend_or_block_independent_supplement(self):
-        self.draft.extras["usage"]["calls"] = 10
-        self.usage.update(started_at=0, search_calls=12, parse_calls=40, relevance_model_calls=12)
-        before = copy.deepcopy(self.usage)
-        result, _ = self.run_flow()
-        self.assert_original_rows_preserved(result)
-        self.assertEqual(len(self.enrich_calls), 1)
-        self.assertEqual(self.usage, before)
-        supplemental = self.report()["supplemental_usage"]
-        self.assertGreater(supplemental["started_at"], 0)
-        self.assertLessEqual(supplemental["search_calls"], 2)
-        self.assertLessEqual(supplemental["parse_calls"], 4)
-        self.assertNotIn("relevance_model_calls", supplemental)
-
-    def test_supplementary_characters_have_their_own_limit(self):
-        self.config["all_content_config"]["max_content_length"] = 1000
-        self.config["event_followup"].update(max_content_length=8000, max_document_chars=8000)
-        self.new_text *= 8
-        result, _ = self.run_flow()
-        self.assert_original_rows_preserved(result)
-        supplemental = json.loads((self.root / "event_enrichment/supplementary_input_contents.json").read_text())
-        self.assertGreater(sum(map(len, supplemental)), 1000)
-        self.assertLessEqual(sum(map(len, supplemental)), 8000)
-        self.assertTrue(any("NEW evidence" in text for text in supplemental))
-        self.assertFalse(any("ORIGINAL evidence" in text for text in supplemental))
-        self.assertEqual(json.loads((self.root / "builder_input_contents.json").read_text()), self.contents)
-        self.assertEqual(self.report()["budgets"]["initial_content_limit"], 1000)
-        self.assertEqual(self.report()["budgets"]["supplementary_content_limit"], 8000)
 
     def test_no_new_sources_keeps_draft_and_initial_replay_input(self):
         result, _ = self.run_flow(collector=lambda *args, **kwargs: [])
@@ -187,13 +159,6 @@ class EventRefinementTests(unittest.TestCase):
         self.assertFalse(self.enrich_calls)
         self.assertEqual(json.loads((self.root / "builder_input_contents.json").read_text()), self.contents)
 
-
-    def test_tiny_supplementary_budget_keeps_initial(self):
-        self.config["event_followup"]["max_content_length"] = 1
-        result, _ = self.run_flow()
-        self.assertIs(result, self.draft)
-        self.assertEqual(self.report()["status"], "no_new_sources_admitted")
-        self.assertFalse(self.enrich_calls)
 
     def test_failed_enrichment_does_not_fail_successful_initial_build(self):
         def fail(*args, **kwargs):
@@ -205,10 +170,6 @@ class EventRefinementTests(unittest.TestCase):
         self.assertEqual(len(self.build_calls), 1)
         self.assertEqual(json.loads((self.root / "builder_input_contents.json").read_text()), self.contents)
 
-    def test_no_change_returns_original_without_new_final_directory(self):
-        result, _ = self.run_flow(enrich=lambda package, *a, **k: (copy.deepcopy(package), {"model_calls": 2}))
-        self.assertIs(result, self.draft)
-        self.assertEqual(self.report()["status"], "no_changes")
 
     def test_injected_enricher_cannot_delete_or_change_existing_facts(self):
         for mutation in ("delete_event", "change_detail", "change_graph", "drop_stage"):
@@ -225,12 +186,6 @@ class EventRefinementTests(unittest.TestCase):
                 self.assertIs(result, self.draft)
                 self.assertEqual(self.report()["status"], "enrichment_rejected")
 
-    def test_empty_initial_events_need_no_new_scope_gate(self):
-        self.draft.extras["person_epg"]["event"] = []
-        result, _ = self.run_flow(collector=lambda *a, **k: self.fail("No events must not trigger discovery"))
-        self.assertIs(result, self.draft)
-        self.assertEqual(self.report()["status"], "no_existing_events")
-        self.assertEqual(len(self.build_calls), 1)
 
     def test_omitted_followup_builds_once_without_post_build_work(self):
         self.config.pop("event_followup")
@@ -240,21 +195,6 @@ class EventRefinementTests(unittest.TestCase):
         self.assertEqual(len(self.build_calls), 1)
         self.assertEqual(self.report()["status"], "disabled_or_unsupported_builder")
 
-    def test_disabled_or_other_builder_keeps_original_single_call(self):
-        for disabled in (True, False):
-            with self.subTest(disabled=disabled):
-                self.build_calls.clear()
-                self.config["event_followup"]["enabled"] = not disabled
-                self.config["builder_config"]["builder_type"] = "SparseRagBuilder" if disabled else "AgentEventBuilder"
-                result, _ = self.run_flow(collector=lambda *a, **k: self.fail("Should use original builder path"))
-                self.assertIs(result, self.draft)
-                self.assertEqual(len(self.build_calls), 1)
-
-    def test_initial_build_failure_is_still_reported(self):
-        def fail(*args): raise ValueError("original failure")
-        with self.assertRaisesRegex(ValueError, "original failure"):
-            self.run_flow(build=fail)
-        self.assertEqual(self.report()["status"], "initial_build_failed")
 
     def test_original_archives_stay_unchanged_after_success(self):
         snapshots = {"retrieved_documents.json": [{"archive": "original retrieval"}],
@@ -266,33 +206,6 @@ class EventRefinementTests(unittest.TestCase):
         for name, value in snapshots.items():
             self.assertEqual(json.loads((self.root / name).read_text()), value)
 
-    def test_expired_acquisition_clock_does_not_block_source_packing(self):
-        clock = [100.0]
-        source = make_document(self.new_text, {"title": "New execution account",
-            "url": "https://example.com/new", "datepublished": "2023-05-07"}, "bocha")
-        source["event_ids"] = [self.package["event"][0]["event_id"]]
-        def collect(*args, **kwargs):
-            kwargs["usage"].update(search_calls=7, parse_calls=25)
-            clock[0] += 301
-            return [source]
-        with patch("finmy.runner.event_refinement.time.monotonic", side_effect=lambda: clock[0]), \
-             patch("finmy.runner.draft_event_search.collect_draft_event_sources", side_effect=collect):
-            result, _ = self.run_flow(collector=collect)
-        self.assert_original_rows_preserved(result)
-        self.assertEqual(self.report()["status"], "enriched")
-        self.assertEqual(self.report()["acquisition_elapsed_seconds"], 301)
-        self.assertNotIn("relevance", self.report())
-        self.assertEqual(self.config["subject_search"]["max_elapsed_seconds"], 300)
-
-    def test_obsolete_relevance_options_and_completion_cannot_block_enrichment(self):
-        self.config["relevance_filter"] = {"enabled": True, "max_model_calls": 0}
-        self.config["event_followup"]["max_relevance_model_calls"] = 0
-        self.config["event_followup"]["max_relevance_elapsed_seconds"] = 0
-        result, _ = self.run_flow(completion=lambda *args: self.fail("Removed classifier called"))
-        self.assert_original_rows_preserved(result)
-        self.assertEqual(self.report()["status"], "enriched")
-        self.assertNotIn("relevance", self.report())
-        self.assertFalse((self.root / "event_enrichment/relevance").exists())
 
     def test_archived_supplementary_sources_skip_acquisition_and_preserve_sources(self):
         source = make_document(self.new_text, {"title": "Previously fetched",

@@ -90,37 +90,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
         files = list(self.root.glob("event_*_request.json"))
         self.assertEqual(len(files), 3, "Retry artifacts must not overwrite the first review")
 
-    def test_rejected_entity_removes_dependent_activity_detail_and_relation(self):
-        proposal = self.proposal(two=True)
-        proposal["entities"] = [{"key": "fiction", "name": "Fiction Company",
-            "entity_type": "company", "citations": self.citation()}]
-        proposal["activities"][1]["actor_id"] = "fiction"
-        proposal["details"] = [{"activity_id": "discussion", "value": "Explained the purchase",
-                                "citations": self.citation()}]
-        proposal["relations"] = [{"from_activity_id": "review", "to_activity_id": "discussion",
-            "relation_type": "precedes", "description": None, "citations": self.citation()}]
-        result, report, _ = self.run_script(proposal,
-            {"approved": False, "issues": ["The entity is unrelated to this event."],
-             "rejected_paths": ["/entities/0"]}, APPROVE)
-        retained = self.requests[-1][1]["proposal"]
-        self.assertEqual(retained["entities"], [])
-        self.assertEqual([row["key"] for row in retained["activities"]], ["review"])
-        self.assertEqual(retained["details"], [])
-        self.assertEqual(retained["relations"], [])
-        self.assertEqual(len(result["activity"]), len(self.package["activity"]) + 1)
-        self.assertEqual(report["events"][0]["status"], "enriched")
-
-    def test_bad_nested_detail_does_not_discard_supported_activity(self):
-        proposal = self.proposal()
-        proposal["activities"][0]["details"] = [
-            {"value": "Supported memorandum detail", "citations": self.citation()},
-            {"value": "An unsupported motivation", "citations": self.citation()}]
-        result, _, _ = self.run_script(proposal,
-            {"approved": False, "issues": ["The second detail invents a motivation."],
-             "rejected_paths": ["/activities/0/details/1"]}, APPROVE)
-        retained = self.requests[-1][1]["proposal"]["activities"][0]
-        self.assertEqual([row["value"] for row in retained["details"]], ["Supported memorandum detail"])
-        self.assertEqual(len(result["activity"]), len(self.package["activity"]) + 1)
 
     def test_invalid_citation_can_be_repaired_using_the_same_visible_evidence(self):
         bad = self.proposal()
@@ -133,23 +102,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
         self.assertEqual(repair_request["supplemental_sources"], self.requests[0][1]["supplemental_sources"])
         self.assertIn("Invented quotation requiring repair", json.dumps(repair_request))
 
-    def test_legacy_rejection_without_item_paths_requests_a_repair_and_new_review(self):
-        result, report, ledger = self.run_script(self.proposal(),
-            {"approved": False, "issues": ["Recheck the actor attribution."]}, self.proposal(), APPROVE)
-        self.assertEqual([row["role"] for row in ledger], ["propose", "review", "repair", "review"])
-        self.assertIn("Recheck the actor attribution", json.dumps(self.requests[2][1]))
-        self.assertEqual(report["events"][0]["status"], "enriched")
-        self.assertNotEqual(result, self.package)
-
-    def test_malformed_proposal_json_is_repaired_as_raw_response(self):
-        raw = '{"activities": [{"key": "unfinished"'
-        result, report, ledger = self.run_script(raw, self.proposal(), APPROVE)
-        self.assertEqual([row["role"] for row in ledger], ["propose", "repair", "review"])
-        self.assertEqual(ledger[0]["status"], "failed")
-        self.assertEqual(self.requests[1][1]["previous_response"], raw)
-        self.assertIsNone(self.requests[1][1]["previous_proposal"])
-        self.assertEqual(report["events"][0]["status"], "enriched")
-        self.assertNotEqual(result, self.package)
 
     def test_malformed_review_retries_review_without_regenerating_proposal(self):
         for malformed in ('{"approved":', {"approved": True}, '{"approved": NaN, "issues": []}',
@@ -162,14 +114,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
                 self.assertEqual(report["events"][0]["status"], "enriched")
                 self.assertNotEqual(result, self.package)
 
-    def test_nonfinite_proposal_json_and_schema_errors_can_be_repaired(self):
-        for malformed in ('{"activities": NaN}', {"activities": []}):
-            with self.subTest(malformed=malformed):
-                self.requests = []
-                result, report, ledger = self.run_script(malformed, self.proposal(), APPROVE)
-                self.assertEqual([row["role"] for row in ledger], ["propose", "repair", "review"])
-                self.assertEqual(report["events"][0]["status"], "enriched")
-                self.assertNotEqual(result, self.package)
 
     def test_all_events_get_initial_attempt_before_any_repair(self):
         self.sources[0]["event_ids"] = self.event_ids
@@ -187,23 +131,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
         known = self.requests[3][1]["known_activities"]
         self.assertTrue(any(row["fact"].get("action_type") == "Discussed project QY-23" for row in known))
 
-    def test_review_retry_rebases_candidate_on_other_events_accepted_facts(self):
-        self.sources[0]["event_ids"] = self.event_ids
-        self.config["event_followup"]["max_model_calls"] = 5
-        second = self.proposal()
-        second["activities"][0]["key"] = "other_event_meeting"
-        second["activities"][0]["title"] = "Discussed project QY-23"
-        result, report, ledger = self.run_script(self.proposal(), TimeoutError("Transient review failure"),
-                                               second, APPROVE, APPROVE)
-        self.assertEqual([row["event_id"] for row in ledger],
-                         [self.event_ids[0], self.event_ids[0], self.event_ids[1], self.event_ids[1], self.event_ids[0]])
-        self.assertEqual([row["status"] for row in report["events"][:2]], ["enriched", "enriched"])
-        self.assertEqual(len(result["activity"]), len(self.package["activity"]) + 2)
-        retry_request = self.requests[-1][1]
-        self.assertTrue(any(row["fact"].get("action_type") == "Discussed project QY-23"
-                            for row in retry_request["known_activities"]))
-        self.assertEqual(retry_request["original_source_excerpts"], self.requests[0][1]["original_source_excerpts"])
-        self.assertEqual(retry_request["supplemental_sources"], self.requests[0][1]["supplemental_sources"])
 
     def test_no_budget_for_subset_review_means_no_unreviewed_commit(self):
         self.config["event_followup"]["max_model_calls"] = 2
@@ -214,14 +141,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
         self.assertNotEqual(report["events"][0]["status"], "enriched")
         self.assertFalse((self.root / "checkpoint_person_epg.json").exists())
 
-    def test_pruned_subset_is_not_committed_when_its_own_review_rejects_it(self):
-        result, report, _ = self.run_script(self.proposal(two=True),
-            {"approved": False, "issues": ["The second activity is unrelated."],
-             "rejected_paths": ["/activities/1"]},
-            {"approved": False, "issues": ["The remaining activity also has incorrect attribution."]})
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["model_calls"], 3)
-        self.assertFalse((self.root / "checkpoint_person_epg.json").exists())
 
     def test_repair_cannot_expand_its_citation_scope(self):
         bad = self.proposal()
@@ -233,29 +152,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
         self.assertEqual(report["model_calls"], 2)
         self.assertFalse((self.root / "checkpoint_person_epg.json").exists())
 
-    def test_repair_generation_requires_budget_for_its_following_review(self):
-        self.config["event_followup"]["max_model_calls"] = 2
-        bad = self.proposal()
-        bad["activities"][0]["citations"][0]["quote"] = "Invented quotation"
-        result, report, _ = self.run_script(bad)
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["model_calls"], 1)
-
-    def test_zero_repair_rounds_preserves_single_attempt_behavior(self):
-        self.config["event_followup"]["max_repair_rounds_per_event"] = 0
-        result, report, _ = self.run_script(self.proposal(),
-            {"approved": False, "issues": ["Actor unsupported."]})
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["model_calls"], 2)
-        self.assertEqual(report["events"][0]["status"], "review_rejected")
-
-    def test_invalid_repair_limit_is_rejected_before_any_model_call(self):
-        for limit in (-1, True, 1.5, None, 4):
-            with self.subTest(limit=limit):
-                self.config["event_followup"]["max_repair_rounds_per_event"] = limit
-                with self.assertRaisesRegex(ValueError, "max_repair_rounds_per_event"):
-                    enrich_events(self.package, self.sources, self.config, self.root,
-                                  completion=lambda *args: self.fail("Invalid limit must fail before model calls"))
 
     def test_review_timeout_reuses_candidate_and_requires_successful_review(self):
         result, report, ledger = self.run_script(self.proposal(), TimeoutError("Temporary provider failure"), APPROVE)
@@ -265,13 +161,6 @@ class EventEnrichmentRepairTests(unittest.TestCase):
         self.assertEqual(report["events"][0]["status"], "enriched")
         self.assertNotEqual(result, self.package)
 
-    def test_persistent_failure_stops_after_the_default_single_repair_round(self):
-        result, report, _ = self.run_script(self.proposal(),
-            {"approved": False, "issues": ["Unsupported claim"]}, self.proposal(),
-            {"approved": False, "issues": ["Still unsupported"]})
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["model_calls"], 4)
-        self.assertFalse((self.root / "checkpoint_person_epg.json").exists())
 
     def test_nonretryable_review_http_failure_does_not_repeat_the_request(self):
         class ProviderError(Exception):

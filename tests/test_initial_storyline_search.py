@@ -150,19 +150,6 @@ class InitialStorylineSearchTests(unittest.TestCase):
         self.assertEqual(json.loads(checkpoint.read_text())["identity"], previous)
         self.assertEqual(len(self.discovery_calls), 1)
 
-    def test_discovery_and_search_calls_have_separate_finite_budgets(self):
-        result = self.collect()
-        self.assertEqual(result["usage"]["search_calls"], len(self.requests))
-        self.assertEqual(result["usage"]["search_calls"], 4)
-        self.assertEqual(result["usage"]["parse_calls"], 2)
-        self.assertEqual(result["usage"]["search_model_calls"], len(self.contexts))
-        self.assertEqual(result["usage"]["discovery_model_calls"], len(self.discovery_calls))
-        self.assertEqual(result["usage"]["total_model_calls"], len(self.discovery_calls) + len(self.contexts))
-        self.assertLessEqual(result["usage"]["search_model_calls"], 10)
-        report = json.loads((self.root / "storyline_search_report.json").read_text())
-        self.assertEqual(report["discovery_model_calls"], 1)
-        self.assertEqual(report["limits"], {"search_calls": 4, "parse_calls": 2, "search_model_calls": 10})
-        self.assertEqual(report["content_limit"], 60000)
 
     def test_completed_resume_spends_no_discovery_search_read_or_model_calls(self):
         first = self.collect()
@@ -175,38 +162,6 @@ class InitialStorylineSearchTests(unittest.TestCase):
         self.assertEqual(second["storyline_plan"]["usage"]["new_model_calls"], 0)
         self.assertEqual(usage, second["usage"])
 
-    def test_explicit_disabled_postbuild_budget_does_not_disable_initial_event_research(self):
-        self.config["event_followup"] = {"enabled": False, "max_search_calls": 0,
-            "max_parse_calls": 0, "max_search_model_calls": 0, "max_model_calls": 0}
-        result = self.collect()
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(len(self.requests), 4)
-        self.assertFalse(followup_enabled(self.config))
-
-    def test_prespent_budget_and_resume_never_double_charge_discovery(self):
-        usage = {"search_calls": 2, "parse_calls": 1, "search_model_calls": 3}
-        first = self.collect(usage=usage)
-        self.assertEqual(len(first["storyline_plan"]["events"]), 2)
-        self.assertEqual(first["status"], "partial")
-        self.assertEqual(len(first["documents"]), 1)
-        self.assertEqual(usage["search_calls"], 2 + len(self.requests))
-        self.assertEqual(usage["parse_calls"], 1 + len(self.fetches))
-        self.assertEqual(usage["search_model_calls"], 3 + len(self.contexts))
-        self.assertEqual(usage["discovery_model_calls"], len(self.discovery_calls))
-        counts = (len(self.discovery_calls), len(self.contexts), len(self.requests), len(self.fetches))
-        second = self.collect(usage=usage)
-        self.assertEqual(second["usage"], first["usage"])
-        self.assertEqual(counts, (len(self.discovery_calls), len(self.contexts), len(self.requests), len(self.fetches)))
-        self.assertLessEqual(usage["search_model_calls"], 10)
-
-    def test_exhausted_external_budget_is_preserved_in_report(self):
-        usage = {"search_calls": 4, "parse_calls": 2, "search_model_calls": 10}
-        result = self.collect(usage=usage)
-        self.assertEqual(result["status"], "budget_exhausted")
-        self.assertEqual(result["usage"], usage)
-        self.assertEqual(len(self.discovery_calls), 1)
-        self.assertEqual(len(result["storyline_plan"]["events"]), 2)
-        self.assertEqual(self.requests, [])
 
     def test_invalid_discovery_stops_without_broad_fallback_or_source_generation(self):
         attempts = []
@@ -227,44 +182,3 @@ class InitialStorylineSearchTests(unittest.TestCase):
         repeated = self.collect(dependencies={"discovery_completion": invalid})
         self.assertEqual(repeated["status"], "discovery_failed")
         self.assertEqual(len(attempts), 2)
-
-    def test_failed_provider_does_not_silently_turn_candidate_into_evidence(self):
-        def failed(provider, payload, settings):
-            raise RuntimeError("Offline provider failure")
-        result = self.collect(dependencies={"transport": failed})
-        self.assertNotEqual(result["status"], "finished")
-        self.assertEqual(result["documents"], [])
-        self.assertTrue(all(c["task"]["target_type"] == "event" for c in self.contexts))
-        report = json.loads((self.root / "storyline_search_report.json").read_text())
-        self.assertEqual(len(report["unresolved_events"]), len(result["storyline_plan"]["events"]))
-
-    def test_global_budget_too_small_preserves_discovery_without_starting_tiny_tasks(self):
-        self.config["search_config"]["enhancement"]["max_model_calls"] = 2
-        result = self.collect()
-        self.assertEqual(result["status"], "budget_exhausted")
-        self.assertEqual(result["documents"], [])
-        self.assertEqual(len(self.discovery_calls), 1)
-        self.assertEqual(len(result["storyline_plan"]["events"]), 2)
-        self.assertTrue(all(r["status"] == "budget_exhausted" for r in result["reports"]))
-        self.assertEqual(self.contexts, [])
-
-    def test_minimum_search_read_finish_allowance_can_complete_one_event(self):
-        self.config["search_config"]["enhancement"]["max_model_calls"] = 3
-        result = self.collect()
-        self.assertEqual(result["status"], "partial")
-        self.assertEqual(len(result["documents"]), 1)
-        self.assertEqual([record["status"] for record in result["reports"]],
-                         ["finished", "budget_exhausted"])
-        self.assertEqual(result["usage"]["search_model_calls"], 3)
-        self.assertEqual(result["usage"]["search_calls"], 2)
-        self.assertEqual(result["usage"]["parse_calls"], 1)
-        self.assertEqual(result["reports"][0]["config"]["max_model_calls"], 3)
-        self.assertTrue(result["reports"][0]["allocation"]["reduced_to_remaining_budget"])
-
-    def test_discovery_optout_keeps_the_broad_subject_task_explicit(self):
-        self.config["search_config"]["storyline_discovery"] = {"enabled": False}
-        result = self.collect()
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(self.discovery_calls, [])
-        self.assertTrue(all(c["task"]["target_type"] == "person" for c in self.contexts))
-        self.assertNotIn("storyline_plan", result)

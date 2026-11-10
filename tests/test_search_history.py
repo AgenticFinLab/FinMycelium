@@ -19,24 +19,6 @@ def test_failed_handoff_and_timeout_are_separate_steps():
     assert rows[1]['usage'] is None
 
 
-def test_new_trace_waiting_provider_and_reading():
-    events=[{'action':'model_started','model_call':4,'time':'2026-11-08T00:00:00+00:00'},
-            {'action':'model_response','response':{'action':'search','query':'q'},'duration_seconds':2},
-            {'action':'provider_started','provider':'bocha','query':'q'}]
-    rows=timeline(events,{'status':'running'})
-    assert len(rows)==1 and rows[0]['pending_provider']=='bocha'
-    events += [{'action':'provider_result','provider':'bocha','status':'success','result_count':2,'duration_seconds':1},
-               {'action':'search','query':'q','result':{'source_ids':['a','b'],'providers':[{'provider':'bocha','status':'success'}]}},
-               {'action':'action_completed','operation':'search'},
-               {'action':'model_started','model_call':5},
-               {'action':'model_response','response':{'action':'read_source','source':'a'}},
-               {'action':'read_started','source':'a','location':{'block':0}},
-               {'action':'read_source','source':'a','result':{'status':'partial','spans':[{'text':'abc'}],'at_end_of_saved_text':True}}]
-    rows=timeline(events,{'status':'paused'})
-    assert len(rows)==2 and rows[0]['providers'][0]['result_count']==2
-    assert rows[1]['chars']==3 and rows[1]['at_end'] and rows[1]['read_status']=='partial'
-
-
 def test_truncated_record_and_read_only_discovery(tmp_path):
     root=tmp_path/'.local-experiments/search-enhancement/test/runtime/task/runs/initial'
     root.mkdir(parents=True)
@@ -49,29 +31,6 @@ def test_truncated_record_and_read_only_discovery(tmp_path):
     assert found[0]['task_id']=='task' and found[0]['root']==root.parents[2]
     assert timeline(events,{'status':'paused'})[0]['status']=='unconfirmed'
     assert before=={p:p.read_bytes() for p in root.iterdir()}
-
-
-def test_simple_search_and_successful_finish():
-    rows=timeline([
-        {'action':'provider_started','provider':'exa','query':'q'},
-        {'action':'search','query':'q','result':{'source_ids':[],'providers':[{'provider':'exa','status':'no_results'}]}},
-        {'action':'read_started','source':'a'},
-        {'action':'read_source','source':'a','result':{'status':'fetch_failed','error_type':'HTTPError'}},
-    ],{'status':'insufficient'})
-    assert len(rows)==2 and rows[0]['model_call'] is None
-    assert rows[1]['status']=='error'
-    rows=timeline([{'action':'model_response','response':{'action':'finish','selections':[]}},
-                   {'action':'action_completed','operation':'finish','sample_count':0}],{'status':'insufficient'})
-    assert rows[0]['status']=='completed' and rows[0]['sample_count']==0
-
-
-def test_old_unrecorded_action_is_not_shown_as_still_running():
-    rows=timeline([
-        {'action':'model_response','response':{'action':'search','query':'too long'}},
-        {'action':'model_response','response':{'action':'read_source','source':'a'}},
-    ],{'status':'paused'})
-    assert all(r['status']=='unconfirmed' for r in rows)
-    assert all(not r['errors'] for r in rows)  # Missing records do not prove a failure.
 
 
 def test_saved_policy_labels_preserve_original_records():

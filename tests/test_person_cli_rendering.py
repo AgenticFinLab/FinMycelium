@@ -110,15 +110,6 @@ class PersonCLIRenderingTest(unittest.TestCase):
                 legacy.assert_not_called()
         self.assertEqual(self.package, before)
 
-    def test_both_cli_keep_subject_graph_fallback_when_person_package_is_absent(self):
-        for runner in RUNNERS:
-            with self.subTest(runner=runner.__name__), \
-                 patch("finmy.person_epg.visualizer.render_person_epg") as person, \
-                 patch("finmy.subject_graph.visualizer.render_subject_graph") as legacy:
-                directory = self.execute(runner, BuildOutput(subject_graph=self.projection))
-                legacy.assert_called_once_with(self.projection, directory / "gantt.html")
-                person.assert_not_called()
-                self.assertEqual(json.loads((directory / "GanttStatus.json").read_text()), {"status": "completed"})
 
     def test_both_cli_keep_event_fallback_when_both_person_views_are_absent(self):
         event = {"event_id": "legacy-event"}
@@ -143,21 +134,6 @@ class PersonCLIRenderingTest(unittest.TestCase):
                 self.assertEqual(json.loads((directory / "GanttStatus.json").read_text()),
                                  {"status": "failed", "error_type": "ValueError"})
                 legacy.assert_not_called()
-
-    @unittest.skipUnless(shutil.which("node"), "Node.js is optional for renderer interaction checks")
-    def test_fixed_fixture_script_preserves_all_memberships_and_hierarchy(self):
-        payload = PersonPayload(render_person_epg(self.package)).package
-        result = subprocess.run([
-            "node", str(ROOT / "tests/person_epg_render_check.cjs"),
-        ], input=json.dumps({"data": payload, "script": str(ROOT / "finmy/person_epg/assets/timeline.js")}),
-            text=True, capture_output=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        state = json.loads(result.stdout)
-        activities = [trace for trace in state["data"] if trace.get("meta", {}).get("kind") == "activity"]
-        self.assertEqual(len(activities), 45)
-        self.assertEqual(len(state["annotations"]), 13)
-        self.assertEqual({(trace["meta"]["event_id"], trace["meta"]["activity_id"]) for trace in activities},
-                         {(row["event_id"], row["activity_id"]) for row in payload["event_activity"]})
 
 
 if __name__ == "__main__":

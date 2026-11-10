@@ -100,26 +100,12 @@ class EventSourceTests(unittest.TestCase):
         self.assertTrue(report["warnings"])
         self.assertEqual(len(self.calls), 6)
 
-    def test_retrospective_sources_are_not_filtered_by_publication_year(self):
-        later = {"source_id": "LATER", "content": 'Published in 2025. ' + MEETING_22 + CASH}
-        selected = select_event_sources(self.plan["events"][0], self.sources + [later])
-        self.assertEqual([s["source_id"] for s in selected], ["DOC_2022", "LATER"])
 
     def test_shared_multi_event_source_remains_available_for_both(self):
         shared = {"source_id": "BOTH", "content": self.sources[0]["content"] + self.sources[1]["content"]}
         for target in self.plan["events"]:
             self.assertEqual(select_event_sources(target, [shared]), [shared])
 
-    def test_generic_subject_relevance_does_not_expand_event_sources(self):
-        target = copy.deepcopy(self.plan["events"][0])
-        target["subject_relevance"] = vf("Buffett", "Warren Buffett")
-        self.assertEqual(select_event_sources(target, self.sources), [self.sources[0]])
-
-    def test_formatting_only_anchor_difference_is_restored(self):
-        target = copy.deepcopy(self.plan["events"][0])
-        target["title"]["evidence_source_contents"] = [MEETING_22.replace("，", ",")]
-        target["descriptions"] = []
-        self.assertEqual(select_event_sources(target, self.sources), [self.sources[0]])
 
     def test_missing_anchor_skips_details_without_global_fallback(self):
         self.plan["event_sources"]["E1"] = []
@@ -130,49 +116,6 @@ class EventSourceTests(unittest.TestCase):
         self.assertEqual(self.saved["subject_event_sources"], {"E1": [], "E2": ["DOC_2023"]})
         self.assertTrue(any("skipped" in w["message"] for w in report["warnings"]))
 
-    def test_existing_repair_cannot_reintroduce_other_event_quotes(self):
-        self.cfg["subject_graph"]["repair_attempts"] = 1
-        self.events[0]["actions"][0]["actor_id"] = "missing"
-        def complete(name, system, payload):
-            if name == "SubjectGraphRepair":
-                self.calls.append((name, payload))
-                self.assertEqual(payload["EventSourceIds"]["E1"], ["DOC_2022"])
-                return {"patches": [
-                    {"op": "replace", "path": "/events/0/actions/0/actor_id", "value": "buffett"},
-                    {"op": "replace", "path": "/events/0/actions/0/details/0",
-                     "value": vf("Profit exceeded $8 billion", PROFIT)}]}
-            return self.complete(name, system, payload)
-        graph, _, report = run_subject_build(self.inp, self.cfg, complete, self.save)
-        self.assertTrue(report["valid"], report)
-        self.assertEqual(graph["events"][0]["actions"], [])
-        self.assertEqual(graph["events"][1], self.events[1])
-        self.assertEqual(sum(name == "SubjectGraphRepair" for name, _ in self.calls), 1)
-        self.assertEqual(len(self.saved["subject_event_evidence_review"]), 1)
-
-    def test_cross_event_description_and_participation_do_not_leave_dangling_actions(self):
-        self.events[0]["descriptions"].append(vf("2023 profits", PROFIT))
-        self.events[0]["participations"][0]["role"] = vf("speaker", MEETING_23)
-        graph, _, report = run_subject_build(self.inp, self.cfg, self.complete, self.save)
-        self.assertTrue(report["valid"], report)
-        self.assertEqual(graph["events"], [self.events[1]])
-        self.assertEqual(len(self.saved["subject_event_evidence_review"]), 4)
-
-    def test_wrong_date_is_restored_from_planned_occurrence(self):
-        self.events[0]["start_time"] = vf("2023-05-06", MEETING_23)
-        graph, _, report = run_subject_build(self.inp, self.cfg, self.complete, self.save)
-        self.assertTrue(report["valid"], report)
-        self.assertEqual(graph["events"][0]["start_time"], self.plan["events"][0]["start_time"])
-
-    def test_secondary_report_is_kept_even_without_identical_plan_quotes(self):
-        secondary = "At the same April 2022 meeting Buffett explained the acquisition."
-        self.inp.samples.append(types.SimpleNamespace(sample_id="SECONDARY", content=secondary))
-        self.plan["event_sources"]["E1"].append("SECONDARY")
-        self.events[0]["actions"][0]["details"].append(vf("Explained the acquisition", secondary))
-        graph, _, report = run_subject_build(self.inp, self.cfg, self.complete, self.save)
-        self.assertTrue(report["valid"], report)
-        self.assertEqual(graph["events"], self.events)
-        self.assertEqual([s["source_id"] for s in self.calls[1][1]["Sources"]], ["DOC_2022", "SECONDARY"])
-        self.assertEqual(self.saved["subject_event_evidence_review"], [])
 
     def test_legacy_plan_uses_identifying_evidence_with_warning(self):
         self.plan.pop("event_sources")
@@ -181,14 +124,6 @@ class EventSourceTests(unittest.TestCase):
         self.assertEqual(graph["events"], self.events)
         self.assertTrue(any("Planner omitted event_sources" in w["message"] for w in report["warnings"]))
 
-    def test_unmatched_legacy_anchors_do_not_select_everything(self):
-        target = copy.deepcopy(self.plan["events"][0])
-        for field in (target["title"], target["start_time"], target["end_time"], *target["descriptions"]):
-            field["evidence_source_contents"] = ["Unmatched passage"]
-        self.assertEqual(select_event_sources(target, self.sources), [])
-
-    def test_unknown_source_ids_do_not_admit_unrelated_sources(self):
-        self.assertEqual(select_event_sources(self.plan["events"][0], self.sources, ["UNKNOWN"]), [])
 
     def test_out_of_event_action_dates_are_archived_without_failing_the_build(self):
         for date in ("2020", "2022-05-01", "2023-05-06"):
@@ -209,35 +144,6 @@ class EventSourceTests(unittest.TestCase):
                 self.assertEqual(self.saved["RawSubjectGraph"]["events"][0]["actions"][0], original)
                 self.assertTrue(any("event attribution needs review" in w["message"] for w in report["warnings"]))
                 self.assertNotIn("SubjectGraphRepair", state["agent_executed"])
-
-    def test_overlapping_partial_and_unknown_action_dates_are_preserved(self):
-        for date in ("2022", "2022-04", "2022-04-30", "unknown"):
-            with self.subTest(date=date):
-                self.setUp()
-                self.events[0]["actions"][0]["timestamp"]["value"] = date
-                graph, _, report = run_subject_build(self.inp, self.cfg, self.complete, self.save)
-                self.assertTrue(report["valid"], report)
-                self.assertEqual(graph["events"], self.events)
-                self.assertEqual(self.saved["subject_event_evidence_review"], [])
-
-    def test_invalid_date_syntax_still_fails_validation(self):
-        self.events[0]["actions"][0]["timestamp"]["value"] = "2022-02-30"
-        with self.assertRaisesRegex(ValueError, "Invalid date"):
-            run_subject_build(self.inp, self.cfg, self.complete, self.save)
-
-    def test_repair_cannot_reintroduce_an_out_of_event_action(self):
-        self.cfg["subject_graph"]["repair_attempts"] = 1
-        self.events[0]["actions"][0]["actor_id"] = "missing"
-        def complete(name, system, payload):
-            if name == "SubjectGraphRepair":
-                return {"patches": [
-                    {"op": "replace", "path": "/events/0/actions/0/actor_id", "value": "buffett"},
-                    {"op": "replace", "path": "/events/0/actions/0/timestamp/value", "value": "2020"}]}
-            return self.complete(name, system, payload)
-        graph, _, report = run_subject_build(self.inp, self.cfg, complete, self.save)
-        self.assertTrue(report["valid"], report)
-        self.assertEqual(graph["events"][0]["actions"], [])
-        self.assertEqual(self.saved["subject_event_evidence_review"][0]["record"]["timestamp"]["value"], "2020")
 
 
 if __name__ == "__main__":

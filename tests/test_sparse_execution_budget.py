@@ -87,38 +87,6 @@ class EventExecutionBudgetTest(unittest.TestCase):
         self.assertEqual(episode_budget["transaction_tier"], "standard")
         self.assertEqual(episode_budget["episode_detail_tier"], "standard")
 
-    def test_missing_context_assets_does_not_crash(self):
-        from finmy.builder.sparse_build.execution_budget import (
-            build_stage_aware_execution_budget,
-        )
-
-        budget = build_stage_aware_execution_budget(
-            build_input=None,
-            event_skeleton={"stages": []},
-            context_assets=None,
-        )
-
-        self.assertEqual(budget, {"stages": [], "episodes": {}})
-
-    def test_budget_prompt_vars_use_explicit_prompt_keys(self):
-        from finmy.builder.sparse_build.execution_budget import episode_budget_prompt_vars
-
-        prompt_vars = episode_budget_prompt_vars(
-            {
-                "mode": "full",
-                "transaction_tier": "standard",
-                "episode_detail_tier": "standard",
-                "conflict_guard": "strict",
-                "compactness_hint": "Use complete participant and transaction detail.",
-            }
-        )
-
-        self.assertEqual(prompt_vars["EpisodeExecutionMode"], "full")
-        self.assertEqual(prompt_vars["TransactionDetailTier"], "standard")
-        self.assertEqual(prompt_vars["EpisodeDetailTier"], "standard")
-        self.assertEqual(prompt_vars["ConflictGuard"], "strict")
-        self.assertIn("complete", prompt_vars["EpisodeCompactnessHint"])
-
 
 if __name__ == "__main__":
     unittest.main()

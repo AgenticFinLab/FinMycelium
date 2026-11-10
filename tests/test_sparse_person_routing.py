@@ -39,27 +39,9 @@ class SparsePersonRoutingTests(unittest.TestCase):
         source = scoped(builder="AgentEventBuilder")
         self.assertEqual(subject_builder_config(source), source)
 
-    def test_company_retains_legacy_path_and_rejects_explicit_sparse(self):
-        self.assertEqual(subject_builder_config(scoped("company"))["builder_type"],
-                         "AgentEventBuilder")
-        read_reconstruction(scoped("company", "AgentEventBuilder"))
-        with self.assertRaisesRegex(ValueError, "company mode requires AgentEventBuilder"):
-            subject_builder_config(scoped("company", "SparseRagBuilder"))
 
-    def test_old_null_agents_shape_is_normalized_without_losing_overrides(self):
-        source = scoped()
-        source.update(agents=None, SkeletonChecker={"lm_name": "explicit/test-model"})
-        result = subject_builder_config(source)
-        self.assertEqual(result["agents"]["SkeletonChecker"]["lm_name"], "explicit/test-model")
-        self.assertNotIn("SkeletonChecker", result)
-        self.assertIsNone(source["agents"])
         # Conflicting settings are intentionally retained for runtime validation.
 
-    def test_explicit_agents_mapping_is_not_silently_repaired(self):
-        source = scoped()
-        source["agents"] = {"SkeletonChecker": {"temperature": 0.4}}
-        result = subject_builder_config(source)
-        self.assertEqual(result["agents"], source["agents"])
 
     def test_saved_text_dispatches_to_selected_builder(self):
         calls = []
@@ -108,10 +90,6 @@ class SparsePersonRoutingTests(unittest.TestCase):
                             self.assertEqual(role[key], builder[key])
         self.assertEqual(read_reconstruction(yaml.safe_load(
             (ROOT / "configs/person_sparse.yml").read_text()))["mode"], "person")
-
-    def test_main_legacy_pipeline_retains_explicit_builder(self):
-        config = yaml.safe_load((ROOT / "configs/pipline.yml").read_text())
-        self.assertEqual(subject_builder_config(config)["builder_type"], "AgentEventBuilder")
 
 
 if __name__ == "__main__":

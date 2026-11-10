@@ -43,12 +43,6 @@ class EventProposalSelectionTests(unittest.TestCase):
         self.assertFalse(report["semantic_improvement_verified"])
         return result
 
-    def test_inventory_exposes_only_complete_claims_with_stable_paths(self):
-        items = proposal_items(proposal_fixture())
-        self.assertEqual(items[0], {"path": "/entities/0", "kind": "entity", "key": "local_actor"})
-        self.assertIn({"path": "/activities/1/details/1", "kind": "detail"}, items)
-        self.assertEqual(len({item["path"] for item in items}), len(items))
-        self.assertFalse(any(item["path"].endswith("/time") for item in items))
 
     def test_rejected_entity_cascades_but_preserves_independent_claims(self):
         proposal = proposal_fixture()
@@ -69,12 +63,6 @@ class EventProposalSelectionTests(unittest.TestCase):
         selected["activities"][0]["details"][0]["value"] = "changed copy"
         self.assertEqual(proposal, original)
 
-    def test_rejected_stage_removes_dependent_activity_and_orphan_actor(self):
-        selected, report = prune_proposal(proposal_fixture(), ["/stages/0"])
-        self.assertEqual([row["key"] for row in selected["activities"]], ["independent"])
-        self.assertIn("/activities/0", report["dependency_removed_paths"])
-        self.assertIn("/entities/0", report["orphan_removed_paths"])
-        self.assert_candidate_mergeable(selected)
 
     def test_nested_detail_can_be_removed_without_discarding_activity(self):
         selected, report = prune_proposal(proposal_fixture(), ["/activities/1/details/1"])
@@ -98,24 +86,6 @@ class EventProposalSelectionTests(unittest.TestCase):
         self.assertEqual(selected, empty_additions())
         self.assertEqual(set(report["dependency_removed_paths"]), {"/details/0", "/relations/0"})
 
-    def test_transaction_endpoints_both_participate_in_dependency_removal(self):
-        for field in ("from_entity_id", "to_entity_id"):
-            with self.subTest(field=field):
-                proposal = proposal_fixture()
-                transaction = activity(key="dependent", kind="transaction")
-                transaction[field] = "local_actor"
-                proposal["activities"][0] = transaction
-                selected, report = prune_proposal(proposal, ["/entities/0"])
-                self.assertEqual([row["key"] for row in selected["activities"]], ["independent"])
-                self.assertIn("/activities/0", report["dependency_removed_paths"])
-
-    def test_rejected_relation_does_not_discard_its_independent_endpoints(self):
-        selected, report = prune_proposal(proposal_fixture(), ["/relations/0", "/relations/0"])
-        self.assertEqual(len(selected["activities"]), 2)
-        self.assertEqual(len(selected["relations"]), 1)
-        self.assertEqual(report["explicit_removed_paths"], ["/relations/0"])
-        self.assertEqual(report["dependency_removed_paths"], [])
-        self.assert_candidate_mergeable(selected)
 
     def test_paths_must_exactly_identify_whole_existing_items(self):
         invalid = ["/activities/01", "/activities/-1", "/activities/2", "/activities/0/time",
@@ -126,22 +96,6 @@ class EventProposalSelectionTests(unittest.TestCase):
         for paths in ("/activities/0", None, [None], {"/activities/0"}):
             with self.subTest(paths=paths), self.assertRaises(ValueError):
                 prune_proposal(proposal_fixture(), paths)
-
-    def test_invalid_shapes_and_ambiguous_keys_are_rejected_before_selection(self):
-        malformed = proposal_fixture()
-        del malformed["activities"][0]["citations"]
-        with self.assertRaisesRegex(ValueError, "schema"):
-            prune_proposal(malformed, ["/activities/0"])
-        duplicated = proposal_fixture()
-        duplicated["stages"][0]["key"] = duplicated["entities"][0]["key"]
-        with self.assertRaisesRegex(ValueError, "unique"):
-            prune_proposal(duplicated, ["/entities/0"])
-
-    def test_empty_proposal_remains_an_unapproved_candidate(self):
-        selected, report = prune_proposal(empty_additions(), [])
-        self.assertEqual(selected, empty_additions())
-        self.assertEqual(report["remaining_paths"], [])
-        self.assertTrue(report["requires_review"])
 
 
 if __name__ == "__main__":

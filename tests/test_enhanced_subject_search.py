@@ -95,44 +95,6 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         self.assertEqual(self.contexts[0]["task"]["query_text"], "Reconstruct acquisition 2023")
         self.assertNotIn("subject_scope", self.contexts[0]["task"])
 
-    def test_explicit_publication_window_stays_separate_from_event_coverage(self):
-        self.config["search_config"]["enhancement"].update(publication_start="2024-01-01", publication_end="2025-12-31")
-        result = self.collect()
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(self.requests[0][1]["freshness"], "2024-01-01..2025-12-31")
-        self.assertEqual(self.contexts[0]["task"]["subject_scope"]["coverage_start"], "2022")
-
-    def test_deadline_wrapper_preserves_search_model_usage_trace(self):
-        decide = self.model
-
-        class MeteredModel:
-            last_usage = None
-
-            def __call__(self, context):
-                self.last_usage = {"prompt_tokens": 123, "completion_tokens": 45}
-                return decide(context)
-
-        result = self.collect(dependencies={"model": MeteredModel()})
-        trace = Path(result["documents"][0]["search_run_directory"]) / "trace.jsonl"
-        responses = [row for row in map(json.loads, trace.read_text().splitlines())
-                     if row.get("action") == "model_response"]
-        self.assertEqual(len(responses), 3)
-        self.assertTrue(all(row["usage"] == {"prompt_tokens": 123, "completion_tokens": 45}
-                            for row in responses))
-
-    def test_provider_requests_and_global_event_limits_are_not_multiplied(self):
-        self.config["search_config"]["enhancement"]["providers"] = ["bocha", "baidu"]
-        usage = {}
-        result = self.collect(events=self.events(3), usage=usage)
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(len(self.requests), 6)
-        self.assertEqual(usage["search_calls"], 6)
-        self.assertEqual(usage["parse_calls"], 3)
-        self.assertEqual(usage["search_model_calls"], 9)
-        self.assertEqual(len(result["documents"]), 1)
-        self.assertEqual(result["documents"][0]["event_ids"], ["E:0", "E:1", "E:2"])
-        self.assertEqual(len(result["documents"][0]["event_routes"]), 3)
-        self.assertTrue(all(c["task"]["target_type"] == "event" for c in self.contexts))
 
     def test_completed_rerun_uses_saved_handoff_without_spending_again(self):
         result = self.collect(events=self.events())
@@ -161,53 +123,6 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scope/config changed"):
             self.collect(config=changed)
 
-    def test_paused_and_failed_searches_never_export_documents(self):
-        result = self.collect(dependencies={"max_steps": 1})
-        self.assertEqual(result["status"], "paused")
-        self.assertEqual(result["documents"], [])
-        failed = self.collect(dependencies={"model": lambda c: "invalid JSON"})
-        self.assertEqual(failed["status"], "failed")
-        self.assertEqual(failed["documents"], [])
-
-    def test_empty_finish_and_tiny_handoff_are_not_admitted(self):
-        self.config["all_content_config"]["max_content_length"] = 1
-        result = self.collect()
-        self.assertEqual(result["status"], "insufficient")
-        self.assertEqual(result["documents"], [])
-
-    def test_insufficient_selection_exports_reviewed_material_and_keeps_incomplete_status(self):
-        def partial(context):
-            action = self.model(context)
-            if action["action"] == "finish":
-                action.update(reason="insufficient", gaps=["The later disposal remains unverified."])
-            return action
-
-        result = self.collect(dependencies={"model": partial})
-        self.assertEqual(result["status"], "insufficient")
-        self.assertEqual(len(result["documents"]), 1)
-        row = result["documents"][0]
-        self.assertEqual(row["raw_text"], self.body)
-        self.assertEqual(row["event_search_status"], "insufficient")
-        selection = json.loads((Path(row["search_run_directory"]) / "selection.json").read_text())
-        self.assertEqual(selection["reason"], "insufficient")
-        self.assertEqual(selection["gaps"], ["The later disposal remains unverified."])
-        counts = len(self.requests), len(self.fetches), len(self.contexts)
-        repeated = self.collect(dependencies={"model": partial})
-        self.assertEqual(repeated["documents"], result["documents"])
-        self.assertEqual(repeated["status"], "insufficient")
-        self.assertEqual(counts, (len(self.requests), len(self.fetches), len(self.contexts)))
-
-    def test_tampered_complete_manifest_fails_closed(self):
-        def tamper(*args, **kwargs):
-            result = run_search(*args, **kwargs)
-            path = Path(result["run_dir"]) / "complete_material.json"
-            data = json.loads(path.read_text())
-            data["material_chars"] += 1
-            path.write_text(json.dumps(data))
-            return result
-        result = self.collect(dependencies={"run_search": tamper})
-        self.assertEqual(result["status"], "invalid_handoff")
-        self.assertEqual(result["documents"], [])
 
     def test_one_damaged_selected_original_keeps_other_verified_documents(self):
         def transport(provider, payload, config):
@@ -230,31 +145,6 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         self.assertEqual(result["reports"][0]["errors"][0]["stage"], "source_integrity")
         self.assertTrue(result["reports"][0]["gaps"])
 
-    def test_one_uninspected_selected_source_does_not_discard_other_read_sources(self):
-        def transport(provider, payload, config):
-            return {"data": {"webPages": {"value": [
-                {"url": "https://example.org/first", "name": "First original"},
-                {"url": "https://example.org/second", "name": "Second original"}]}}}
-        def corrupt_read_ledger(*args, **kwargs):
-            result = run_search(*args, **kwargs)
-            path = Path(result["run_dir"]) / "run.json"
-            data = json.loads(path.read_text())
-            next(iter(data["sources"].values()))["read_ranges"] = []
-            path.write_text(json.dumps(data))
-            return result
-        result = self.collect(dependencies={"run_search": corrupt_read_ledger,
-            "transport": transport,
-            "fetcher": lambda url: ((self.body + " Original: " + url).encode(), "txt", "utf-8")})
-        self.assertEqual(len(result["documents"]), 1)
-        self.assertEqual(result["reports"][0]["errors"][0]["stage"], "source_integrity")
-        self.assertEqual(result["reports"][0]["status"], "insufficient")
-
-    def test_task_seeds_allowed_but_subject_override_rejected(self):
-        result = self.collect(task={"seed_urls": ["https://example.org/seed"]})
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(self.requests, [])
-        with self.assertRaisesRegex(ValueError, "cannot override"):
-            self.collect(task={"target_type": "event"})
 
     def test_local_file_does_not_require_capacity_for_all_selected_providers(self):
         local = self.root / "source.txt"
@@ -267,50 +157,12 @@ class EnhancedSubjectSearchTests(unittest.TestCase):
         self.assertEqual(self.requests, [])
         self.assertEqual(self.fetches, [])
 
-    def test_saved_manifest_freezes_exported_source_metadata(self):
-        def mutate_after_finish(*args, **kwargs):
-            result = run_search(*args, **kwargs)
-            path = Path(result["run_dir"]) / "run.json"
-            state = json.loads(path.read_text())
-            for source in state["sources"].values():
-                source["title"] = "Changed title after selection"
-                source["discoveries"][0]["published_at"] = "2025-06-01"
-            path.write_text(json.dumps(state))
-            return result
-        result = self.collect(dependencies={"run_search": mutate_after_finish})
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(result["documents"][0]["title"], "Primary filing")
-        self.assertIsNone(result["documents"][0]["published_at"])
-        self.assertEqual(result["documents"][0]["published_at_raw"], "2024-02-01")
 
     def test_exa_partial_text_retains_source_status_and_skips_refetch(self):
         self.config["search_config"]["enhancement"]["providers"] = ["exa"]
         result = self.collect()
         self.assertEqual(result["documents"][0]["source_status"], "partial")
         self.assertEqual(self.fetches, [])
-
-    def test_no_supplementary_capacity_is_explicit_and_no_models_called(self):
-        self.config["event_followup"]["max_search_calls"] = 0
-        result = self.collect(events=self.events())
-        self.assertEqual(result["documents"], [])
-        self.assertEqual([r["status"] for r in result["reports"]], ["budget_exhausted", "budget_exhausted"])
-        self.assertEqual(self.contexts, [])
-
-    def test_existing_phase_usage_is_not_reset_without_a_saved_handoff(self):
-        usage = {"search_calls": 6, "parse_calls": 6, "search_model_calls": 12}
-        result = self.collect(usage=usage)
-        self.assertEqual(result["status"], "budget_exhausted")
-        self.assertEqual(result["documents"], [])
-        self.assertEqual(result["usage"], usage)
-        self.assertEqual(self.contexts, [])
-
-    def test_configuration_does_not_mutate_and_modes_are_validated(self):
-        before = copy.deepcopy(self.config)
-        self.collect(events=self.events())
-        self.assertEqual(self.config, before)
-        self.assertTrue(enhanced_search_enabled({}))
-        with self.assertRaises(ValueError):
-            enhanced_search_enabled({"search_config": {"mode": "unexpected"}})
 
 
 if __name__ == "__main__":

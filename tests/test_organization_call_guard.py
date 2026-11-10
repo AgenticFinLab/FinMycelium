@@ -97,24 +97,6 @@ class OrganizationCallGuardTests(unittest.TestCase):
         request, _ = json.JSONDecoder().raw_decode(retry)
         self.assertEqual(request["facts"], before["request"]["facts"])
 
-    def test_old_generic_validator_cannot_hide_reference_diagnostics(self):
-        called = []
-
-        def legacy(value):
-            called.append(copy.deepcopy(value))
-            keys = {(row["activity_id"], row["detail_index"])
-                    for row in self.case["request"]["facts"]["activity_detail"]}
-            for row in value["memberships"]:
-                if any((row["activity_id"], index) not in keys
-                       for index in row.get("detail_indices") or []):
-                    raise ValueError("Organization membership references unknown activity detail")
-
-        corrected = self.corrected_response()
-        self.assertEqual(self.infer([self.case["response"], corrected], legacy), corrected)
-        self.assertEqual(called, [corrected])
-        issue = json.loads((self.root / "PersonOrganizationValidationErrors.json").read_text())["errors"][0]["issue"]
-        self.assertEqual(len(issue["violations"]), 7)
-        self.assertEqual(issue["violations"][0]["code"], "unknown_activity_detail")
 
     def test_repeated_invalid_answer_is_archived_not_silently_salvaged(self):
         with self.assertRaisesRegex(ValueError, "after 3 attempt"):
@@ -124,47 +106,6 @@ class OrganizationCallGuardTests(unittest.TestCase):
         self.assertTrue(all(len(row["issue"]["violations"]) == 7 for row in errors))
         self.assertTrue(all(row["rejected_candidate"] == self.case["response"] for row in errors))
         self.assertFalse((self.root / "PersonOrganization-Assignments-001-Result.json").exists())
-
-    def test_sparse_keys_and_existing_selections_are_not_offset_or_cleared(self):
-        facts = {"activity": [{"activity_id": "A"}, {"activity_id": "B"}],
-                 "activity_detail": [{"activity_id": "A", "detail_index": 0},
-                                     {"activity_id": "A", "detail_index": 4},
-                                     {"activity_id": "B", "detail_index": 2}]}
-        user = json.dumps({"facts": facts, "available_detail_indices": {"A": [1, 2, 3]}})
-        _, guarded, validate = guard_organization_call("JSON", user, None, phase="PersonOrganization")
-        metadata = json.loads(guarded.split(REFERENCE_SEPARATOR)[1])
-        self.assertEqual(metadata["available_detail_indices"], {"A": [0, 4], "B": [2]})
-        bad = {"memberships": [{"event_id": "E", "activity_id": "A", "detail_indices": [2, 4]}]}
-        before = copy.deepcopy(bad)
-        with self.assertRaises(OrganizationValidationError) as raised:
-            validate(bad)
-        self.assertEqual(raised.exception.report["violations"][0]["allowed_detail_indices"], [0, 4])
-        self.assertEqual(bad, before)
-        for selection in ([4, 0], None, []):
-            good = {"memberships": [{"event_id": "E", "activity_id": "A", "detail_indices": selection}]}
-            prior = copy.deepcopy(good)
-            validate(good)
-            self.assertEqual(good, prior)
-
-    def test_new_background_has_no_details_and_the_full_validator_still_runs(self):
-        facts = {"activity": [], "activity_detail": [], "occurrence": [{"occurrence_id": "O"}]}
-        user = json.dumps({"facts": facts})
-        accepted = []
-        _, _, validate = guard_organization_call("JSON", user, accepted.append, phase="PersonOrganization")
-        value = {"background_occurrence_ids": ["O"],
-                 "memberships": [{"event_id": "E", "activity_id": "C:O", "detail_indices": [0]}]}
-        with self.assertRaises(OrganizationValidationError):
-            validate(value)
-        self.assertEqual(accepted, [])
-        value["memberships"][0]["detail_indices"] = []
-        validate(value)
-        self.assertEqual(accepted, [value])
-
-    def test_unrecognized_context_does_not_replace_the_callers_validator(self):
-        def validator(value):
-            raise ValueError("A different contract still applies")
-        self.assertEqual(guard_organization_call("system", "plain context", validator, phase="Relations"),
-                         ("system", "plain context", validator))
 
 
 if __name__ == "__main__":

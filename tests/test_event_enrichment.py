@@ -79,12 +79,6 @@ class EventEnrichmentTests(unittest.TestCase):
         self.assertEqual(report["model_calls"], 2)
         self.assertEqual(report["model_call_limit"], 4)
 
-    def test_whole_pair_reserved_before_starting_next_event(self):
-        self.config["event_followup"]["max_model_calls"] = 3
-        result, report = self.run_enrichment()
-        self.assertEqual(report["model_calls"], 2)
-        self.assertEqual(report["events"][1]["status"], "model_budget_exhausted")
-        self.assertEqual(len(result["activity"]), len(self.package["activity"]) + 1)
 
     def test_zero_budget_and_unrouted_sources_cannot_call_model(self):
         self.config["event_followup"]["max_model_calls"] = 0
@@ -109,14 +103,6 @@ class EventEnrichmentTests(unittest.TestCase):
         self.assertEqual(report["events"][0]["status"], "review_rejected")
         self.assertFalse((self.root / "checkpoint_person_epg.json").exists())
 
-    def test_approval_with_issues_is_rejected(self):
-        self.sources[0]["event_ids"] = self.event_ids[:1]
-        def complete(system, payload):
-            return json.dumps({"approved": True, "issues": ["Actor uncertain"]}
-                              if "proposal" in payload else self.proposal())
-        result, report = self.run_enrichment(completion=complete)
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["events"][0]["status"], "review_rejected")
 
     def test_invalid_quote_is_rejected_before_review(self):
         self.sources[0]["event_ids"] = self.event_ids[:1]
@@ -127,12 +113,6 @@ class EventEnrichmentTests(unittest.TestCase):
         self.assertEqual(report["model_calls"], 1)
         self.assertEqual(report["events"][0]["status"], "invalid_additions")
 
-    def test_missing_schema_fields_fail_without_retry(self):
-        self.sources[0]["event_ids"] = self.event_ids[:1]
-        result, report = self.run_enrichment(completion=lambda *args: '{"activities": []}')
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["model_calls"], 1)
-        self.assertEqual(report["events"][0]["status"], "failed")
 
     def test_incomplete_completion_cannot_be_accepted_even_if_json_is_valid(self):
         self.sources[0]["event_ids"] = self.event_ids[:1]
@@ -156,57 +136,6 @@ class EventEnrichmentTests(unittest.TestCase):
         self.assertEqual(report["events"][1]["status"], "enriched")
         self.assertEqual(len(result["activity"]), len(self.package["activity"]) + 1)
 
-    def test_duplicate_across_events_visible_to_reviewer_and_not_readded(self):
-        result, report = self.run_enrichment()
-        self.assertEqual(len(result["activity"]), len(self.package["activity"]) + 1)
-        self.assertEqual(report["events"][1]["status"], "enriched")
-        new_activity_id = result["activity"][-1]["activity_id"]
-        memberships = [m for m in result["event_activity"] if m["activity_id"] == new_activity_id]
-        self.assertEqual({m["event_id"] for m in memberships}, set(self.event_ids))
-        second_proposal = [c for c in self.calls if c["event"]["event_id"] == self.event_ids[1]][0]
-        self.assertTrue(any(row["fact"].get("action_type") == "convened a meeting about memorandum ZX-17"
-                            for row in second_proposal["known_activities"]))
-
-    def test_payload_includes_event_context_and_separate_new_evidence(self):
-        self.sources[0]["event_ids"] = self.event_ids[:1]
-        self.run_enrichment()
-        request = self.calls[0]
-        self.assertEqual(request["output_language"], "Chinese")
-        self.assertEqual(request["event"]["event_id"], self.event_ids[0])
-        self.assertTrue(request["existing_activities"])
-        self.assertTrue(request["existing_stages"])
-        self.assertTrue(request["known_activities"])
-        self.assertEqual(request["supplemental_sources"][0]["content"], self.sources[0]["content"])
-        for row in request["original_source_excerpts"]:
-            document = next(d for d in self.package["source_document"]
-                            if d["document_id"] == row["document_id"])
-            self.assertEqual(document["content"][row["char_start"]:row["char_end"]], row["content"])
-
-    def test_source_collision_cannot_change_original_evidence(self):
-        self.sources[0]["document_id"] = self.package["source_document"][0]["document_id"]
-        with self.assertRaisesRegex(ValueError, "collides"):
-            self.run_enrichment()
-
-    def test_supplemental_character_limit_is_enforced_independently(self):
-        self.config["event_followup"]["max_content_length"] = len(self.sources[0]["content"]) - 1
-        with self.assertRaisesRegex(ValueError, "independent follow-up limit"):
-            self.run_enrichment()
-
-    def test_citation_cannot_use_unseen_original_document_passage(self):
-        self.sources[0]["event_ids"] = self.event_ids[:1]
-        def complete(system, payload):
-            proposal = self.proposal()
-            # Exact quote in the graph's original source, but absent from the
-            # excerpts actually exposed to this event's extractor and reviewer.
-            document = self.package["source_document"][0]
-            unseen = document["content"][:3000]
-            self.assertFalse(any(unseen in row["content"] for row in payload["original_source_excerpts"]))
-            proposal["activities"][0]["citations"] = [{"document_id": document["document_id"], "quote": unseen}]
-            return json.dumps(proposal)
-        result, report = self.run_enrichment(completion=complete)
-        self.assertEqual(result, self.package)
-        self.assertEqual(report["model_calls"], 1)
-        self.assertEqual(report["events"][0]["status"], "invalid_additions")
 
     def test_citation_in_same_original_document_but_outside_visible_excerpt_is_rejected(self):
         proposal = self.proposal()

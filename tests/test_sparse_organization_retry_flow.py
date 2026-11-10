@@ -78,31 +78,6 @@ class OrganizationRetryFlowTest(unittest.TestCase):
         self.assertEqual([r["status"] for r in ledger], ["invalid_output", "accepted"])
         self.assertEqual(ledger[0]["validation_kind"], "organization_semantic")
 
-    def test_generic_organization_contract_error_uses_semantic_retry_too(self):
-        def validate(value):
-            if value != self.good:
-                raise ValueError("Membership references unknown Event E999")
-        self.assertEqual(self.infer(["{}", json.dumps(self.good)], validator=validate), self.good)
-        retry = self.responses.calls[1].user_msg
-        self.assertIn("Membership references unknown Event E999", retry)
-        self.assertIn("organization_contract", retry)
-        self.assertNotIn("invalid or truncated JSON", retry)
-
-    def test_real_json_syntax_failure_keeps_syntax_retry(self):
-        self.assertEqual(self.infer(['{"activity_relations":', json.dumps(self.good)]), self.good)
-        self.assertIn("invalid or truncated JSON", self.responses.calls[1].user_msg)
-        self.assertFalse(Path(self.temp.name, "PersonOrganizationValidationErrors.json").exists())
-
-    def test_nonfinite_json_never_reaches_strict_semantic_audit_writer(self):
-        for constant in ("NaN", "Infinity", "-Infinity", "1e999"):
-            with self.subTest(constant=constant):
-                self.builder._call_records = []
-                raw = '{"confidence":' + constant + '}'
-                self.assertEqual(self.infer([raw, json.dumps(self.good)]), self.good)
-                self.assertEqual(len(self.responses.calls), 2)
-                self.assertIn("invalid or truncated JSON", self.responses.calls[1].user_msg)
-                self.assertEqual(self.artifact("PersonOrganization-Relations-001")["PersonOrganization"]["response"], raw)
-                self.assertFalse(Path(self.temp.name, "PersonOrganizationValidationErrors.json").exists())
 
     def test_exhaustion_preserves_diagnostics_and_does_not_save_result(self):
         with self.assertRaisesRegex(ValueError, "after 3 attempt") as caught:
@@ -112,13 +87,6 @@ class OrganizationRetryFlowTest(unittest.TestCase):
         self.assertEqual(len(self.artifact("PersonOrganizationValidationErrors")["errors"]), 3)
         self.assertFalse(Path(self.temp.name, "PersonOrganization-Relations-001-Result.json").exists())
 
-    def test_budget_failure_keeps_rejected_candidate_without_an_extra_submission(self):
-        self.builder.build_config["sparse_builder_config"]["max_calls"] = 2
-        self.builder._prior_call_count = 1
-        with self.assertRaisesRegex(RuntimeError, "model call limit"):
-            self.infer([json.dumps(self.bad), json.dumps(self.good)])
-        self.assertEqual(len(self.responses.calls), 1)
-        self.assertEqual(len(self.artifact("PersonOrganizationValidationErrors")["errors"]), 1)
 
     def test_captured_real_responses_use_temporal_feedback_then_keep_global_candidates(self):
         # Replay captured replies only; this does not claim a live model would

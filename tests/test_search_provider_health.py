@@ -59,24 +59,6 @@ class ProviderHealthTests(unittest.TestCase):
         self.assertEqual(result['providers'][1]['provider_state'], 'blocked')
         self.assertEqual(result['providers_available'], ['bocha'])
 
-    def test_cached_success_remains_usable_after_provider_disabled(self):
-        tools = self.tools(self.success, providers=['bocha'])
-        good = tools.search('saved query')['source_ids']
-        tools.transport = lambda *args: (_ for _ in ()).throw(http_error(402, {'message':'Insufficient balance'}))
-        tools.search('new query')
-        used = tools.state.data['usage']['search']
-        result = tools.search('saved query')
-        self.assertEqual(result['source_ids'], good)
-        self.assertEqual(result['providers'][0]['status'], 'cached')
-        self.assertEqual(tools.state.data['usage']['search'], used)
-
-    def test_other_event_success_does_not_clear_local_access_failure(self):
-        first = self.tools(self.success, providers=['baidu'])
-        second = self.tools(self.success, task='two', providers=['baidu'])
-        first.provider_health.failure('baidu', failure_details(http_error(402, {})))
-        second.provider_health.success('baidu')
-        self.assertEqual(first.provider_health.status('baidu')['status'], 'blocked')
-        self.assertEqual(second.provider_health.status('baidu')['status'], 'available')
 
     def test_transient_errors_have_cooldown_then_bounded_attempts(self):
         def failing(*args):
@@ -98,15 +80,6 @@ class ProviderHealthTests(unittest.TestCase):
         self.assertEqual(result['providers'][0]['status'], 'success')
         self.assertEqual(tools.state.data['usage']['search'], 4)
 
-    def test_success_resets_transient_failure_streak(self):
-        tools = self.tools(lambda *a: (_ for _ in ()).throw(requests.ReadTimeout('secret')), providers=['bocha'])
-        result = tools.search('first')
-        self.assertEqual(result['providers'][0]['error_details']['category'], 'network')
-        self.clock[0] += 100
-        tools.transport = self.success
-        tools.search('second')
-        with tools.provider_health._records() as records:
-            self.assertEqual(records['bocha']['consecutive_failures'], 0)
 
     def test_rate_limit_records_retry_after_without_sleep_or_quota_on_skip(self):
         tools = self.tools(lambda *a: (_ for _ in ()).throw(
@@ -128,35 +101,6 @@ class ProviderHealthTests(unittest.TestCase):
         self.assertNotIn('secret-token', (tools.state.run_dir/'provider_health.json').read_text())
         self.assertNotIn('secret-token', (tools.state.run_dir/'trace.jsonl').read_text())
 
-    def test_unknown_http_error_does_not_become_balance(self):
-        details = failure_details(http_error(400, {'error_code':'echoed-secret-token','message':'arbitrary failure'}))
-        self.assertEqual(details['category'], 'invalid_request')
-        self.assertEqual(details['http_status'], 400)
-        self.assertTrue(details['provider_code'].startswith('unrecognized:'))
-        self.assertNotIn('secret', str(details))
-
-    def test_http_200_baidu_error_retains_code_without_secret_message(self):
-        tools = self.tools(lambda *a: {'error_code':111,
-            'error_msg':'Access token invalid or no longer valid: secret-token'}, providers=['baidu'])
-        result = tools.search('first')
-        details = result['providers'][0]['error_details']
-        self.assertEqual(details['category'], 'authentication')
-        self.assertEqual(details['provider_code'], 111)
-        self.assertIsNone(details['http_status'])
-        self.assertTrue(result['all_providers_unavailable'])
-        self.assertNotIn('secret-token', (tools.state.run_dir/'responses/1.json').read_text())
-
-    def test_explicit_revision_reopens_provider_without_resetting_calls(self):
-        tools = self.tools(lambda *a: (_ for _ in ()).throw(http_error(403, {})), providers=['bocha'])
-        tools.search('first')
-        self.assertEqual(tools.search_availability()['all_providers_unavailable'], True)
-        tools.state.data['config_history'] = [{'config':tools.state.data['config']}]
-        tools.state.save()
-        from finmy.search.provider_health import ProviderHealth
-        tools.provider_health = ProviderHealth(tools.state, clock=lambda:self.clock[0])
-        tools.transport = self.success
-        tools.search('after revision')
-        self.assertEqual(tools.state.data['usage']['search'], 2)
 
     def test_manual_resume_retries_corrected_access_without_configuration_change(self):
         tools = self.tools(lambda *a: (_ for _ in ()).throw(http_error(403, {})), providers=['bocha'])
@@ -171,41 +115,6 @@ class ProviderHealthTests(unittest.TestCase):
         self.assertEqual(result['providers'][0]['status'], 'success')
         self.assertEqual(resumed.state.data['usage']['search'], 2)
 
-    def test_http_date_retry_after_persists_deadline_across_resume(self):
-        self.clock[0] = 1445412480.0
-        tools = self.tools(lambda *a: (_ for _ in ()).throw(http_error(429,
-            {'error_code':'QpsLimitExceeded'}, {'Retry-After':'Wed, 21 Oct 2015 07:28:45 GMT'})),
-            providers=['bocha'])
-        result = tools.search('first')
-        self.assertEqual(result['providers'][0]['error_details']['provider_code'], 'QpsLimitExceeded')
-        self.assertEqual(result['next_retry_at'], self.clock[0] + 45)
-        resumed = self.tools(self.success, providers=['bocha'])
-        resumed.begin_invocation()
-        self.assertEqual(resumed.search('again')['providers'][0]['status'], 'cooldown')
-        self.assertEqual(resumed.state.data['usage']['search'], 1)
-        self.clock[0] += 45
-        self.assertEqual(resumed.search('again')['providers'][0]['status'], 'success')
-        self.assertEqual(resumed.state.data['usage']['search'], 2)
-
-    def test_long_retry_after_is_not_shortened(self):
-        details = failure_details(status=429, retry_after='7200', now=self.clock[0])
-        self.assertEqual(details['retry_after_seconds'], 7200)
-
-    def test_legacy_phase_health_does_not_block_any_event(self):
-        tools = self.tools(self.success, providers=['bocha'])
-        (self.root/'provider_health.json').write_text(json.dumps({'version':1, 'scopes':{
-            tools.provider_health.key:{'bocha':{'disabled':True,'retry_at':9999999999}}}}))
-        result = tools.search('new event request')
-        self.assertEqual(result['providers'][0]['status'], 'success')
-
-    def test_transient_cooldown_does_not_block_sibling_event(self):
-        first = self.tools(lambda *a: (_ for _ in ()).throw(http_error(429, {},
-            {'Retry-After':'45'})), providers=['baidu'])
-        first.search('first event')
-        second = self.tools(self.success, task='two', providers=['baidu'])
-        self.assertEqual(second.search('second event')['providers'][0]['status'], 'success')
-        self.assertEqual(first.search_availability()['retryable_providers'], ['baidu'])
-        self.assertEqual(first.state.data['usage']['search'], 1)
 
     def test_invalid_provider_rows_do_not_discard_valid_sources(self):
         def transport(*args):

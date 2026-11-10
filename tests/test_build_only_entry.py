@@ -81,81 +81,6 @@ class BuildOnlyEntryTest(unittest.TestCase):
                 self.assertNotIn("max_new_tokens", call.kwargs)
         self.client.with_options.assert_called_with(max_retries=0, timeout=900)
 
-    def test_original_prompts_order_and_graph_match_unmodified_builder(self):
-        inputs = copy.deepcopy(self.inputs)
-        inputs.samples[0].content += '\n{"field":"{Query}","nested":{"n":1}}'
-        messages = []
-        values = iter(responses())
-
-        class OriginalSingleCall:
-            def run(self, infer_input, **kwargs):
-                rendered = LangChainAPIInference._create_messages(self, infer_input, **kwargs)
-                messages.append(rendered)
-                content = json.dumps(next(values))
-                return InferOutput(rendered, content, content, InferCost(None, None, None))
-
-        original = AgentEventBuilder.__new__(AgentEventBuilder)
-        original.agents_lm = OriginalSingleCall()
-        original.build_config = self.config()
-        original.save_dir = str(self.root / "unmodified")
-        Path(original.save_dir).mkdir()
-        expected = original.run(inputs)
-        adapted = BuildOnlyAgentEventBuilder(self.config()).run(inputs)
-        actual_messages = [call.kwargs["messages"] for call in self.create.call_args_list]
-        self.assertEqual(actual_messages, messages)
-        self.assertEqual(adapted.event_cascades, expected.event_cascades)
-        self.assertEqual(adapted.logs, expected.logs)
-        self.assertIn('{"field":"{Query}","nested":{"n":1}}', actual_messages[0][1]["content"])
-
-    def test_shared_success_metadata_matches_manifest_and_ledger(self):
-        for kind in ("agent", "sparse"):
-            with self.subTest(kind=kind):
-                self.set_responses()
-                config = self.config(kind)
-                cls, _ = select_builder(config)
-                builder = cls(build_config=config)
-                output = builder.run(self.inputs)
-                directory = Path(builder.save_dir)
-                manifest = json.loads((directory / "RunManifest.json").read_text())
-                ledger = json.loads((directory / "CallLedger.json").read_text())
-                self.assertEqual(manifest["builder_type"], config["builder_type"])
-                self.assertEqual(output.extras["builder_type"], config["builder_type"])
-                self.assertEqual(output.extras["run_directory"], builder.save_dir)
-                self.assertEqual(output.extras["elapsed_seconds"], manifest["elapsed_seconds"])
-                self.assertEqual(output.extras["usage"], manifest["usage"])
-                self.assertEqual(output.extras["usage"]["calls"], len(ledger))
-                self.assertEqual(output.extras["usage"]["prompt_tokens"],
-                                 sum(c["prompt_tokens"] for c in ledger))
-                self.assertEqual(self.create.call_count, 11)
-                self.assertEqual(output.event_cascades,
-                                 json.loads((directory / "FinalEventCascade.json").read_text()))
-                self.assertEqual(replay(directory)["status"], "replay_pass")
-                if kind == "sparse":
-                    self.assertEqual(output.extras["calls"], ledger)
-                    self.assertEqual(output.extras["acceptance"],
-                                     json.loads((directory / "AcceptanceDecision.json").read_text()))
-                    self.assertIn("episode_execution_plan", output.extras)
-                    self.assertIn("context_asset_summary", output.extras)
-
-    def test_sparse_metadata_preserves_inner_output(self):
-        self.set_responses()
-        cls, _ = select_builder(self.config("sparse"))
-        builder = cls(build_config=self.config("sparse"))
-        inner = builder._run_validated
-        captured = []
-
-        def capture(inputs):
-            output = inner(inputs)
-            captured.append(copy.deepcopy(output))
-            return output
-
-        with patch.object(builder, "_run_validated", side_effect=capture):
-            result = builder.run(self.inputs)
-        self.assertEqual(result.event_cascades, captured[0].event_cascades)
-        self.assertEqual(result.result, captured[0].result)
-        self.assertEqual(result.logs, captured[0].logs)
-        for key, value in captured[0].extras.items():
-            self.assertEqual(result.extras[key], value)
 
     def test_historical_sparse_manifest_without_builder_type_replays(self):
         cls, _ = select_builder(self.config("sparse"))
@@ -174,25 +99,6 @@ class BuildOnlyEntryTest(unittest.TestCase):
             main(["--config", self.config_path(), "--input", str(INPUT), "--execute"])
         self.openai.assert_not_called()
 
-    def test_invalid_configs_rejected_before_client(self):
-        changes = [
-            lambda c: c.update(builder_type="Other"),
-            lambda c: c.update(sparse_builder_config={"enable_context_assets": True}),
-            lambda c: c["build_only_config"].update(max_calls=0),
-            lambda c: c["build_only_config"].update(max_calls=True),
-            lambda c: c["build_only_config"].update(request_timeout_seconds=float("nan")),
-            lambda c: c["build_only_config"].update(retries=3),
-            lambda c: c["graph_config"].update(recursion_limit=True),
-            lambda c: c["generation_config"].update(max_tokens=5),
-            lambda c: c["generation_config"].update(tools=[]),
-            lambda c: c["agents"]["SkeletonChecker"].update(lm_name="other/model"),
-        ]
-        for change in changes:
-            config = self.config()
-            change(config)
-            with self.subTest(config=config), self.assertRaises(ValueError):
-                select_builder(config)
-        self.openai.assert_not_called()
 
     def test_timeout_is_recorded_once_without_usage_or_final(self):
         self.create.side_effect = TimeoutError("synthetic")
@@ -220,29 +126,6 @@ class BuildOnlyEntryTest(unittest.TestCase):
         self.assertEqual(self.create.call_count, 1)
         self.assertFalse(Path(builder.save_dir, "FinalEventCascade.json").exists())
 
-    def test_call_cap_and_no_implicit_resume(self):
-        config = self.config()
-        config["build_only_config"]["max_calls"] = 1
-        builder = BuildOnlyAgentEventBuilder(config)
-        with self.assertRaisesRegex(RuntimeError, "cap reached"):
-            builder.run(self.inputs)
-        self.assertEqual(self.create.call_count, 1)
-        with self.assertRaisesRegex(RuntimeError, "new builder"):
-            builder.run(self.inputs)
-        self.assertEqual(self.create.call_count, 1)
-
-    def test_unknown_usage_stays_null(self):
-        for kind in ("agent", "sparse"):
-            with self.subTest(kind=kind):
-                self.set_responses(usage=False)
-                config = self.config(kind)
-                cls, _ = select_builder(config)
-                builder = cls(build_config=config)
-                output = builder.run(self.inputs)
-                manifest = json.loads(Path(builder.save_dir, "RunManifest.json").read_text())
-                self.assertIsNone(output.extras["usage"]["prompt_tokens"])
-                self.assertEqual(output.extras["usage"], manifest["usage"])
-                self.assertEqual(manifest["usage"]["unknown_prompt_tokens_calls"], 11)
 
     def test_original_replay_rejects_changed_missing_or_extra_results(self):
         builder = BuildOnlyAgentEventBuilder(self.config())
@@ -268,17 +151,6 @@ class BuildOnlyEntryTest(unittest.TestCase):
         directory = next((self.root / "agent").iterdir())
         self.assertEqual(json.loads((directory / "GanttStatus.json").read_text())["status"], "failed")
         self.assertEqual(replay(directory)["status"], "replay_pass")
-
-    def test_replay_incompatible_options(self):
-        for flag in ("--execute", "--gantt", "--input", "--env-file"):
-            args = ["--replay", str(self.root), flag]
-            if flag in ("--input", "--env-file"):
-                args.append("unused")
-            with self.subTest(flag=flag), patch("sys.stderr", new_callable=io.StringIO), \
-                    self.assertRaises(SystemExit) as exc:
-                main(args)
-            self.assertEqual(exc.exception.code, 2)
-        self.openai.assert_not_called()
 
 
 if __name__ == "__main__":

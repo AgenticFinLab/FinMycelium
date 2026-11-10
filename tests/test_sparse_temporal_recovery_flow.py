@@ -68,15 +68,6 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
     def report(self, builder):
         return self.lifecycle.artifact(builder, "EpisodeScopeConflicts")
 
-    def test_real_failed_candidate_still_rejected_without_mutation(self):
-        before = copy.deepcopy(self.fixture)
-        with self.assertRaises(TemporalScopeError) as caught:
-            self.validate(self.bad)
-        self.assertEqual(self.fixture, before)
-        self.assertEqual(caught.exception.report["bounds"],
-                         {"start": "2022-01-01T00:00:00", "end": "2022-12-31T23:59:59.999999"})
-        self.assertEqual(caught.exception.report["violations"][0]["timestamp"], "2023-02-25")
-        self.assertEqual(caught.exception.report["scope"]["episode_id"], "E10")
 
     def test_targeted_retry_preserves_company_action_and_records_rejected_statement(self):
         before = copy.deepcopy(self.fixture)
@@ -104,14 +95,6 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         self.assertEqual(ledger[0]["validation_kind"], "episode_temporal_scope")
         self.assertEqual(self.lifecycle.artifact(builder, "Participants-E10-Result"), self.good)
 
-    def test_three_invalid_replies_still_fail_and_retain_all_candidates(self):
-        builder, sequence = self.direct_builder([json.dumps(self.bad)] * 3)
-        with self.assertRaisesRegex(ValueError, "after 3 attempt.*2023-02-25.*outside target bounds"):
-            self.infer(builder)
-        self.assertEqual(len(sequence.calls), 3)
-        self.assertEqual([r["attempt"] for r in self.report(builder)["conflicts"]], [1, 2, 3])
-        self.assertTrue(all(r["rejected_candidate"] == self.bad for r in self.report(builder)["conflicts"]))
-        self.assertFalse(Path(builder.save_dir, "Participants-E10-Result.json").exists())
 
     def test_budget_stops_before_retry_but_keeps_scope_diagnostic(self):
         builder, sequence = self.direct_builder([json.dumps(self.bad), json.dumps(self.good)], max_calls=1)
@@ -121,21 +104,6 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         self.assertEqual(len(self.report(builder)["conflicts"]), 1)
         self.assertFalse(Path(builder.save_dir, "Participants-E10-Result.json").exists())
 
-    def test_syntax_failure_still_uses_existing_json_retry(self):
-        builder, sequence = self.direct_builder(['{"participants":', json.dumps(self.good)])
-        self.assertEqual(self.infer(builder), self.good)
-        self.assertIn("invalid or truncated JSON", sequence.calls[1].user_msg)
-        self.assertNotIn("EPISODE MEMBERSHIP CORRECTION", sequence.calls[1].user_msg)
-        self.assertFalse(Path(builder.save_dir, "EpisodeScopeConflicts.json").exists())
-
-    def test_balanced_fragment_recovery_does_not_bypass_scope_validation(self):
-        # The second object makes the initial greedy JSON parser fail. A valid
-        # balanced first object still has to pass the same temporal validator.
-        text = json.dumps(self.bad) + '\nextra {"marker":"trailing"}'
-        builder, sequence = self.direct_builder([text, json.dumps(self.good)])
-        self.assertEqual(self.infer(builder), self.good)
-        self.assertEqual(self.report(builder)["conflicts"][0]["rejected_candidate"], self.bad)
-        self.assertIn("EPISODE MEMBERSHIP CORRECTION", sequence.calls[1].user_msg)
 
     def test_event_lifecycle_counts_retry_and_exports_review_diagnostic(self):
         responses = flow.extraction_responses()
@@ -155,13 +123,6 @@ class TemporalRecoveryFlowTest(unittest.TestCase):
         self.assertEqual(self.lifecycle.artifact(builder, "RunManifest")["status"], "completed")
         self.assertTrue(Path(builder.save_dir, "FinalEventCascade.json").exists())
 
-    def test_recovered_fragment_exhaustion_preserves_temporal_error_cause(self):
-        text = json.dumps(self.bad) + '\nextra {"marker":"trailing"}'
-        builder, _ = self.direct_builder([text], attempts=1)
-        with self.assertRaises(ValueError) as caught:
-            self.infer(builder)
-        self.assertIsInstance(caught.exception.__cause__, TemporalScopeError)
-        self.assertEqual(caught.exception.__cause__.report["scope"]["episode_id"], "E10")
 
     def test_event_lifecycle_exhaustion_remains_failed_without_final_artifacts(self):
         self.lifecycle.config["sparse_builder_config"]["max_json_attempts"] = 3

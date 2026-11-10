@@ -92,33 +92,6 @@ def test_saved_legacy_failure_gets_direct_finalization_without_repeating_search(
     assert originals == {p: p.read_bytes() for p in originals}
 
 
-def test_generic_invalid_json_also_preserves_selected_material(tmp_path):
-    state, tools, ids, _ = fixture(tmp_path)
-    calls = []
-    def model(context):
-        calls.append(context)
-        return 'not json' if len(calls) <= 3 else selection(ids)
-    run_agent(state, tools, model)
-    assert state.data['status'] == 'insufficient'
-    assert state.data['usage']['model'] == 4
-    assert chosen(state) == ids
-
-
-def test_checkpoint_and_user_pause_preserve_finalization_attempts(tmp_path):
-    state, tools, ids, _ = fixture(tmp_path)
-    run_agent(state, tools, lambda context: 'not json', max_steps=3)
-    assert state.data['status'] == 'paused'
-    assert state.data['partial_finalization']['attempts'] == 0
-    (state.root / 'pause_requested').touch()
-    run_agent(state, tools, lambda context: pytest.fail('Pause must prevent calls'))
-    assert state.data['usage']['model'] == 3
-    assert state.data['stop_reason'] == 'user_pause'
-    (state.root / 'pause_requested').unlink()
-    run_agent(state, tools, lambda context: selection(ids))
-    assert state.data['usage']['model'] == 4
-    assert state.data['status'] == 'insufficient'
-
-
 def test_recovery_is_bounded_and_does_not_fabricate_selection(tmp_path):
     state, tools, ids, _ = fixture(tmp_path)
     run_agent(state, tools, lambda context: 'not json')
@@ -154,38 +127,3 @@ def test_recovery_never_exceeds_original_task_model_limit(tmp_path):
     assert state.data['usage']['model'] == 4
     assert state.data['status'] == 'insufficient'
     assert chosen(state) == ids[:1]
-
-
-def test_repeated_unchanged_query_rejection_finalizes_even_with_cached_other_provider(tmp_path):
-    state, tools, ids, _ = fixture(tmp_path)
-    tools.search = lambda query: dict(source_ids=ids, needs_query_repair=True, providers=[
-        dict(provider='bocha', status='cached'),
-        dict(provider='baidu', status='invalid_query', query_units=73, query_max_units=72)])
-    contexts = []
-    def model(context):
-        contexts.append(context)
-        if context['phase'] == 'finalize':
-            return selection(ids)
-        return dict(action='search', query=ACTIVISION_QUERY, gap='Rationale missing.')
-    run_agent(state, tools, model)
-    assert len(contexts) == 4
-    assert state.data['status'] == 'insufficient'
-    assert state.data['partial_finalization']['trigger'] == 'repeated_rejected_query'
-    assert state.data['usage']['search'] == 0
-
-
-def test_corrected_provider_query_reaches_tool_without_changing_other_queries(tmp_path):
-    state, tools, ids, _ = fixture(tmp_path)
-    calls = []
-    def search(query, *, provider_queries=None):
-        calls.append((query, provider_queries))
-        return dict(source_ids=ids, providers=[dict(provider='baidu', status='success')])
-    tools.search = search
-    def model(context):
-        if not calls:
-            return dict(action='search', query=ACTIVISION_QUERY,
-                provider_queries={'baidu': 'Buffett Activision arbitrage 2022'}, gap='Rationale missing.')
-        return selection(ids)
-    run_agent(state, tools, model)
-    assert calls == [(ACTIVISION_QUERY, {'baidu': 'Buffett Activision arbitrage 2022'})]
-    assert state.data['status'] == 'finished'

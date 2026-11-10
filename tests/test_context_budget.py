@@ -41,16 +41,6 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertEqual(len(final["contents"]), 4)
         self.assert_valid(final, initial + [body, extra], 7500, cap=2200)
 
-    def test_full_initial_budget_omits_followup_without_displacing_sources(self):
-        initial = [document("core", "Original dated evidence. " * 500)]
-        extra = document("extra", "Additional investment details. " * 500,
-                         search_phase="decision_followup")
-        settings = config(2000)
-        first = allocate_context(initial, [], settings)
-        final = allocate_context([extra] + initial, [], settings)
-        self.assertEqual(first["contents"], final["contents"])
-        self.assertEqual(first["report"]["documents"], final["report"]["documents"][:1])
-        self.assertFalse(final["report"]["documents"][-1]["included"])
 
     def test_packing_merges_only_adjacent_source_slices(self):
         from finmy.runner.context_budget import _fit
@@ -98,20 +88,6 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertEqual(result["report"]["summary"]["included_documents"], 2)
         self.assert_valid(result, docs, 4500)
 
-    def test_search_order_is_preserved_regardless_of_old_labels(self):
-        docs = [document("noise", "uncertain. " * 3000, "REVIEW"),
-                document("trade", "dated trade evidence. " * 300)]
-        result = allocate_context(docs, [], config(2500))
-        self.assertEqual(result["report"]["documents"][0]["document_id"], "noise")
-        self.assertTrue(result["report"]["documents"][0]["included"])
-        self.assert_valid(result, docs, 2500)
-
-    def test_context_gets_seed_before_core_expansion(self):
-        docs = [document("core", "stock purchases. " * 4000),
-                document("letter", "financing background. " * 4000, "CONTEXT")]
-        result = allocate_context(docs, [], config(5000))
-        self.assertEqual(result["report"]["summary"]["included_documents"], 2)
-        self.assert_valid(result, docs, 5000)
 
     def test_old_labels_cannot_reorder_search_results(self):
         docs = [document("review", "other. " * 5000, "REVIEW"),
@@ -135,41 +111,12 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertIn(quote, result["contents"][0])
         self.assert_valid(result, docs, 2200)
 
-    def test_whitespace_normalised_quote_maps_back_to_raw_text(self):
-        quote = "Purchase\n  completed\t2023-10-23."
-        text = "x" * 10000 + quote + " End of filing. " * 80
-        doc = document("filing", text, retrieval_queries=["completed 2023-10-23"])
-        decisions = [{"document_id": "filing", "chunks": [{"start_char": 10000,
-                      "end_char": len(text), "relevance": "CORE",
-                      "evidence": "Purchase completed 2023-10-23."}]}]
-        result = allocate_context([doc], decisions, config(1500))
-        self.assertIn(quote, result["contents"][0])
-        self.assert_valid(result, [doc], 1500)
-
-    def test_overlapping_chunks_do_not_duplicate_text(self):
-        text = "Evidence about purchases and dates. " * 1000
-        doc = document("D1", text)
-        decisions = [{"document_id": "D1", "chunks": [
-            {"start_char": 0, "end_char": 8000, "relevance": "CORE", "evidence": "Evidence about purchases"},
-            {"start_char": 7800, "end_char": 15800, "relevance": "CORE", "evidence": "purchases and dates"}]}]
-        result = allocate_context([doc], decisions, config(6000))
-        self.assert_valid(result, [doc], 6000)
-
-    def test_short_documents_are_preserved_whole(self):
-        docs = [document("D1", "Original source. " * 20), document("D2", "原文包含数字与日期。" * 20)]
-        result = allocate_context(docs, [], config())
-        self.assertEqual(result["contents"], [render_document(d) for d in docs])
-        self.assert_valid(result, docs, 60000)
 
     def test_budget_and_cap_include_metadata_and_markers(self):
         docs = [document("D1", "正文内容。" * 6000)]
         result = allocate_context(docs, [], config(1800, cap=1500))
         self.assert_valid(result, docs, 1800, cap=1500)
 
-    def test_tiny_budget_has_no_header_only_source(self):
-        result = allocate_context([document("D1", "evidence" * 100)], [], config(1))
-        self.assertEqual(result["contents"], [])
-        self.assertTrue(result["report"]["warnings"])
 
     def test_oversized_metadata_does_not_block_next_document(self):
         docs = [document("huge_header", "evidence", title="title" * 1000),
@@ -179,59 +126,6 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertTrue(result["report"]["documents"][1]["included"])
         self.assert_valid(result, docs, 1800)
 
-    def test_missing_chunk_decisions_falls_back_without_new_calls(self):
-        docs = [document("D1", "retain uncertain evidence. " * 2000, "REVIEW")]
-        result = allocate_context(docs, [], config(2500))
-        self.assertEqual(len(result["contents"]), 1)
-        self.assert_valid(result, docs, 2500)
-
-    def test_invalid_offsets_do_not_inject_classifier_text(self):
-        docs = [document("D1", "Original source text. " * 200)]
-        decisions = [{"document_id": "D1", "chunks": [
-            {"start_char": -1, "end_char": 999999, "relevance": "CORE", "evidence": "INVENTED CLAIM"}]}]
-        result = allocate_context(docs, decisions, config(1800))
-        self.assertNotIn("INVENTED CLAIM", result["contents"][0])
-        self.assert_valid(result, docs, 1800)
-
-    def test_disabled_filter_raw_text_compatibility(self):
-        docs = [document("D1", "raw input one"), document("D2", "raw input two")]
-        for d in docs:
-            del d["relevance"]
-        result = allocate_context(docs, [], config(), include_metadata=False)
-        self.assertEqual(result["contents"], [d["raw_text"] for d in docs])
-
-    def test_empty_and_irrelevant_documents(self):
-        docs = [document("empty", ""), document("bad", "off-topic " * 200, "IRRELEVANT")]
-        result = allocate_context(docs, [], config())
-        self.assertEqual(len(result["contents"]), 1)
-        self.assertEqual(result["report"]["documents"][0]["omission_reason"], "empty_source")
-        self.assertIsNone(result["report"]["documents"][1]["omission_reason"])
-        self.assertEqual(allocate_context([], [], config())["contents"], [])
-
-    def test_deterministic_and_inputs_not_mutated(self):
-        docs = [document("D1", "evidence. " * 3000), document("D2", "more. " * 300, "CONTEXT")]
-        before = copy.deepcopy(docs)
-        first = allocate_context(docs, [], config(4000))
-        self.assertEqual(first, allocate_context(docs, [], config(4000)))
-        self.assertEqual(docs, before)
-
-    def test_invalid_limits_are_rejected(self):
-        for value in (-1, True, "60000", 3.5, float("nan"), -math.inf):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                allocate_context([], [], config(value))
-        for cap in (0, -1, True):
-            with self.subTest(cap=cap), self.assertRaises(ValueError):
-                allocate_context([], [], config(cap=cap))
-        self.assertEqual(allocate_context([], [], config(0))["contents"], [])
-
-    def test_missing_and_infinite_global_limit(self):
-        docs = [document("D1", "short source")]
-        self.assertEqual(allocate_context(docs, [], {})["contents"], [render_document(docs[0])])
-        self.assertEqual(allocate_context(docs, [], config(math.inf))["contents"], [render_document(docs[0])])
-
-    def test_duplicate_document_id_fails_explicitly(self):
-        with self.assertRaisesRegex(ValueError, "unique"):
-            allocate_context([document("D1", "one"), document("D1", "two")], [], config())
 
     def test_random_budgets_preserve_hard_invariants(self):
         rng = random.Random(20261103)

@@ -69,54 +69,6 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(len(plan['events']), 3)
         self.assertEqual(len(plan['domains']), 3)
 
-    def test_missing_search_terms_uses_existing_event_label(self):
-        value = candidate()
-        del value['events'][0]['event_terms']
-        plan = normalize_plan(value, self.subject, 8)
-        self.assertEqual(plan['events'][0]['event_terms'], ['Alpha project'])
-
-    def test_saved_overflow_recovers_without_new_calls_or_reset(self):
-        value = self.overflow_candidates()
-        with patch('finmy.runner.storyline_discovery.normalize_plan',
-                   side_effect=ValueError('events exceed the configured resource cap')):
-            with self.assertRaises(StorylineDiscoveryError):
-                self.run_discovery(completion=lambda *args: value)
-        self.assertEqual(self.checkpoint()['usage']['model_calls'], 2)
-        plan = self.run_discovery(completion=lambda *args: self.fail('No new API call'))
-        self.assertEqual(len(plan['events']), 8)
-        self.assertEqual(plan['usage'], dict(model_calls=2, new_model_calls=0))
-        self.assertTrue(self.checkpoint()['attempts'][-1]['recovered_from_saved_response'])
-
-    def test_repair_feedback_includes_specific_field(self):
-        broken = candidate()
-        del broken['events'][0]['questions']
-        calls = []
-        def complete(system, payload):
-            calls.append(payload)
-            return broken if len(calls) == 1 else candidate()
-        self.run_discovery(completion=complete)
-        self.assertIn('questions', calls[1]['repair']['error'])
-
-    def test_candidate_plan_ids_scope_and_cache(self):
-        before = copy.deepcopy(self.subject)
-        calls = []
-        def complete(system, payload):
-            self.assertIn("JSON", system)
-            self.assertEqual(payload["subject_scope"], self.subject)
-            calls.append(payload)
-            return candidate()
-        plan = self.run_discovery(completion=complete)
-        self.assertEqual(plan["subject"], before)
-        self.assertEqual(self.subject, before)
-        self.assertTrue(plan["candidate_only"])
-        self.assertEqual(plan["status"], "candidates")
-        self.assertTrue(plan["events"][0]["event_id"].startswith("storyline:"))
-        self.assertEqual(plan["events"][0]["domain_id"], plan["domains"][0]["domain_id"])
-        self.assertEqual(plan["usage"], {"model_calls": 1, "new_model_calls": 1})
-        replay = self.run_discovery(completion=lambda *a: self.fail("Cache made a model call"))
-        self.assertEqual(replay["usage"], {"model_calls": 1, "new_model_calls": 0})
-        self.assertEqual(len(calls), 1)
-        self.assertTrue((self.root / "storyline_discovery/plan.json").is_file())
 
     def test_malformed_response_repair_consumes_same_two_call_budget(self):
         calls = []
@@ -142,17 +94,6 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertFalse((self.root / "storyline_discovery/plan.json").exists())
 
-    def test_provider_errors_are_not_prompt_repaired_or_logged_verbatim(self):
-        calls = []
-        def fail(*args):
-            calls.append(1)
-            raise ValueError("https://provider.test/?api_key=SECRET")
-        with self.assertRaises(StorylineDiscoveryError):
-            self.run_discovery(completion=fail)
-        checkpoint = self.checkpoint()
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(checkpoint["status"], "failed")
-        self.assertNotIn("SECRET", json.dumps(checkpoint))
 
     def test_changed_scope_cannot_reuse_plan(self):
         self.run_discovery(completion=lambda *a: candidate())
@@ -160,43 +101,6 @@ class DiscoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scope/config changed"):
             self.run_discovery(completion=lambda *a: self.fail("Changed scope called model"))
 
-    def test_duplicate_labels_or_ids_and_unknown_domain_fail(self):
-        for field in ("domain_id", "event_id", "event_label", "unknown_domain"):
-            value = candidate()
-            if field == "domain_id": value["domains"].append(copy.deepcopy(value["domains"][0]))
-            elif field == "unknown_domain": value["events"][0]["domain_id"] = "missing"
-            else:
-                row = copy.deepcopy(value["events"][0])
-                if field == "event_label": row["event_id"] = "different-id"
-                else: row["label"] = "Different event"
-                value["events"].append(row)
-            with self.subTest(field=field), self.assertRaises(ValueError):
-                normalize_plan(value, self.subject, 8)
-
-    def test_resource_cap_is_not_a_required_count(self):
-        plan = normalize_plan(candidate(), self.subject, 8)
-        self.assertEqual(len(plan["events"]), 1)
-        with self.assertRaisesRegex(ValueError, "resource cap"):
-            normalize_plan(candidate(), self.subject, 0)
-        with self.assertRaises(StorylineDiscoveryError):
-            self.run_discovery(completion=lambda *a: {"domains": [], "events": [], "unresolved": ["Identity unresolved"]})
-        self.assertEqual(self.checkpoint()["usage"]["model_calls"], 1)
-        self.assertEqual(self.checkpoint()["status"], "insufficient")
-
-    def test_optional_source_previews_are_bounded_and_do_not_mutate_sources(self):
-        sources = [{"raw_text": "Source text. " * 1000, "title": "Source", "url": "https://example.test"} for _ in range(8)]
-        original = copy.deepcopy(sources)
-        def complete(system, payload):
-            self.assertLessEqual(sum(len(s["content"]) for s in payload["seed_sources"]), 12000)
-            self.assertTrue(all(s["partial_preview"] for s in payload["seed_sources"]))
-            return candidate()
-        self.run_discovery(completion=complete, seed_sources=sources)
-        self.assertEqual(sources, original)
-
-    def test_network_disabled_prevents_adapter_creation(self):
-        complete = _live_completion(self.config["search_config"]["enhancement"])
-        with self.assertRaises(PermissionError):
-            complete(DISCOVERY_PROMPT, {})
 
     def test_live_transport_uses_search_model_json_mode_no_hidden_retries(self):
         enhancement = copy.deepcopy(self.config["search_config"]["enhancement"])

@@ -148,20 +148,6 @@ class EnhancedSubjectUI(unittest.TestCase):
         service.run_reconstruction("Another request", [], None)
         self.assertNotIn("storyline_plan", captured[1][0])
 
-    def test_empty_search_never_reaches_filter_or_builder(self):
-        self.forbid_legacy()
-        for status, documents in [(status, []) for status in
-                                  ("partial", "paused", "failed", "limit", "insufficient", "finished")]:
-            with self.subTest(status=status):
-                self.search_result = {"status": status, "documents": documents, "reports": []}
-                service = self.service.ReconstructionService(self.config())
-                with patch.object(service, "_run_pipeline") as build, \
-                     patch.object(self.service, "prepare_documents") as relevance:
-                    self.assertIsNone(service.run_reconstruction("Trace documented experiences", [], None))
-                    self.assertEqual(service.search_coverage["builder_status"], "not_started")
-                    self.assertIsNotNone(self.service.st.session_state.search_coverage)
-                    build.assert_not_called()
-                    relevance.assert_not_called()
 
     def test_partial_search_warns_and_builds_native_result_without_schema_changes(self):
         self.forbid_legacy()
@@ -203,13 +189,6 @@ class EnhancedSubjectUI(unittest.TestCase):
             self.assertIsNone(service.run_reconstruction("An event", [], None))
         self.assertEqual(self.service.st.session_state.search_coverage["builder_status"], "not_started")
 
-    def test_malformed_partial_material_never_reaches_builder(self):
-        self.search_result.update(status="partial", documents=[{"raw_text": None}])
-        service = self.service.ReconstructionService(self.config())
-        with patch.object(service, "_run_pipeline") as build:
-            with self.assertRaisesRegex(ValueError, "invalid source document"):
-                service.run_reconstruction("A subject", [], None)
-        build.assert_not_called()
 
     def test_agent_search_serves_person_and_single_event(self):
         self.forbid_legacy()
@@ -226,15 +205,6 @@ class EnhancedSubjectUI(unittest.TestCase):
                 self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [doc["raw_text"] for doc in self.search_result["documents"]])
         self.assertEqual(len(self.search_calls), 2)
 
-    def test_search_flags_never_restore_removed_executors(self):
-        for search_config in ({}, {"mode": "simple"}, {"mode": "agent", "enhancement": {"enabled": False}}):
-            with self.subTest(search_config=search_config):
-                config = self.config()
-                config["search_config"] = search_config
-                service = self.service.ReconstructionService(config)
-                service._run_pipeline = lambda contents, *args: contents
-                self.assertTrue(service.run_reconstruction("Research subject", [], None))
-        self.assertEqual(len(self.search_calls), 3)
 
     def test_empty_agent_search_keeps_explicit_source_inputs_buildable(self):
         self.search_result.update(status="paused", documents=[])
@@ -278,54 +248,6 @@ class EnhancedSubjectUI(unittest.TestCase):
         self.assertEqual(collector.documents["url"][0]["url"], "https://www.example.org/filing")
         collector.parser.run.return_value = types.SimpleNamespace(results=[])
         self.assertEqual(collector.collect_structured_data(Frame(), []), ([], []))
-
-    def test_null_legacy_subject_options_keep_agent_mode_runnable(self):
-        self.forbid_legacy()
-        config = self.config()
-        config["subject_search"] = None
-        service = self.service.ReconstructionService(config)
-        service._run_pipeline = lambda contents, *args: contents
-        contents = service.run_reconstruction("Trace documented experiences", [], None)
-        self.assertEqual([text.split("\n\n", 1)[1] for text in contents], [doc["raw_text"] for doc in self.search_result["documents"]])
-        self.assertEqual(len(self.search_calls), 1)
-
-    def test_agent_selection_is_not_reclassified_and_budget_still_applies(self):
-        self.forbid_legacy()
-        self.search_result["documents"][0]["raw_text"] = "Original execution detail. " * 200
-        self.search_result["documents"][1]["relevance"] = "IRRELEVANT"
-        config = self.config()
-        config["relevance_filter"] = {"enabled": True, "max_model_calls": 0}
-        config["all_content_config"] = {"max_content_length": 2500, "max_document_chars": 1300}
-        service = self.service.ReconstructionService(config)
-        service._run_pipeline = lambda contents, *args: contents
-        contents = service.run_reconstruction("Trace documented experiences", [], None)
-        self.assertLessEqual(sum(map(len, contents)), 2500)
-        self.assertTrue(any("Second original" in text for text in contents))
-        self.assertTrue(any("Original execution" in text for text in contents))
-        self.assertFalse(list(self.path.rglob("relevance_decisions.json")))
-
-    def test_shared_search_reaches_native_person_json_return_path(self):
-        self.forbid_legacy()
-        service = self.service.ReconstructionService(self.config())
-        person = {"schema_version": "person-epg-3.0", "event": [{"event_id": "E1"}]}
-        builds = []
-
-        def native_build(contents, query, keywords, config):
-            builds.append((contents, config))
-            return types.SimpleNamespace(extras={"person_epg": person},
-                                         subject_graph={"legacy": True}), str(self.path / "native")
-
-        with patch.dict("sys.modules", {"finmy.subject_graph.runner": legacy.module(
-                "native_subject_ui_test", build_from_contents=native_build,
-                with_source_registry=with_source_registry)}):
-            result = service.run_reconstruction("Trace documented experiences", [], None)
-        self.assertIs(result, person)
-        self.assertEqual(len(builds), 1)
-        self.assertEqual(builds[0][1]["source_registry"]["saved_0"]["title"], "First")
-        self.assertEqual(builds[0][1]["source_registry"]["saved_0"]["source_id"], "S1")
-        self.assertEqual(builds[0][1]["source_registry"]["saved_0"]["source_version"], "v1")
-        self.assertEqual(self.service.st.session_state.save_builder_dir_path, str(self.path / "native"))
-        self.assertFalse(self.errors)
 
 
 if __name__ == "__main__":

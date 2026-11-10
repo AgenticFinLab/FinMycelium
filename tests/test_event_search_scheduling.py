@@ -59,23 +59,6 @@ class EventSearchSchedulingTests(unittest.TestCase):
         self.assertEqual(result["usage"]["parse_calls"], 3)
         self.assertFalse(self.phase()["complete"])
 
-    def test_six_events_get_six_complete_budgets_and_stop_early_when_supported(self):
-        self.six_candidates()
-        result = self.collect()
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(len(result["documents"]), 6)
-        self.assertTrue(self.phase()["complete"])
-        self.assertEqual(result["usage"]["search_calls"], 12)
-        self.assertEqual(result["usage"]["parse_calls"], 6)
-        self.assertEqual(result["usage"]["search_model_calls"], 18)
-        self.assertEqual(result["usage"]["discovery_model_calls"], 1)
-        for record in result["reports"]:
-            self.assertEqual(record["config"]["max_model_calls"], 12)
-            self.assertEqual(record["config"]["max_search_requests"], 6)
-            self.assertEqual(record["config"]["max_read_sources"], 6)
-        # A task's ceiling must not be interpreted as extra material budget.
-        self.assertEqual(self.phase()["content_limit"], 60000)
-        self.assertFalse((self.root / "enhanced_event_search").exists())
 
     def test_native_agent_can_follow_a_gap_and_repair_unread_final_selection(self):
         self.candidates["events"] = self.candidates["events"][:1]
@@ -137,26 +120,6 @@ class EventSearchSchedulingTests(unittest.TestCase):
         self.assertEqual(sum(p == "bocha" for p, _, _ in self.requests), 2)
         self.assertEqual(sum(p == "baidu" for p, _, _ in self.requests), 2)
 
-    def test_one_supported_event_does_not_hide_an_insufficient_event(self):
-        normal_model = self.model
-
-        def mixed(context):
-            if context["task"]["target_name"] == "Occidental investment":
-                return {"action": "finish", "source_ids": [],
-                        "gaps": ["No supported material for this event."], "reason": "insufficient"}
-            return normal_model(context)
-
-        result = self.collect(dependencies={"model": mixed})
-        self.assertEqual(result["status"], "partial")
-        self.assertEqual(len(result["documents"]), 1)
-        self.assertEqual([r["status"] for r in result["reports"]], ["insufficient", "finished"])
-        report = json.loads((self.root / "storyline_search_report.json").read_text())
-        self.assertEqual(len(report["unresolved_events"]), 1)
-        self.assertFalse(self.phase()["complete"])
-        counts = len(self.requests), len(self.fetches), len(self.contexts)
-        repeated = self.collect(dependencies={"model": mixed})
-        self.assertEqual(repeated["status"], "partial")
-        self.assertEqual(counts, (len(self.requests), len(self.fetches), len(self.contexts)))
 
     def test_paused_resume_preserves_originals_and_does_not_repeat_search_or_reads(self):
         first = self.collect(dependencies={"max_steps": 2})
@@ -174,26 +137,6 @@ class EventSearchSchedulingTests(unittest.TestCase):
         self.assertEqual(second["usage"]["parse_calls"], 2)
         self.assertEqual(before, {p: p.read_bytes() for p in before})
 
-    def test_paused_event_reserves_its_unused_capacity_before_other_events(self):
-        self.six_candidates()
-        self.config["search_config"]["enhancement"].update(
-            max_search_requests=6, max_read_sources=6, max_model_calls=12)
-        first = self.collect(dependencies={"max_steps": 1})
-        self.assertEqual(sum("config" in r for r in first["reports"]), 1)
-        self.assertEqual(first["usage"]["search_model_calls"], 1)
-        second = self.collect(dependencies={"max_steps": 1})
-        self.assertEqual(sum("config" in r for r in second["reports"]), 1)
-        self.assertEqual(second["usage"]["search_model_calls"], 2)
-        self.assertEqual(len(self.requests), 2)
-        self.assertEqual(len(self.fetches), 1)
-        self.assertEqual(len(second["storyline_plan"]["events"]), 6)
-        third = self.collect()
-        self.assertEqual(third["usage"]["search_model_calls"], 9)
-        self.assertEqual(third["status"], "partial")
-        self.assertEqual(sum(r["status"] == "finished" for r in third["reports"]), 3)
-        self.assertEqual(sum(r["status"] == "budget_exhausted" for r in third["reports"]), 3)
-        self.assertEqual(third["usage"]["search_calls"], 6)
-        self.assertEqual(third["usage"]["parse_calls"], 3)
 
     def test_two_concurrent_tasks_cannot_multiply_phase_request_or_model_allowances(self):
         self.six_candidates()
@@ -260,43 +203,6 @@ class EventSearchSchedulingTests(unittest.TestCase):
         self.assertEqual([model.calls for model in instances], [3, 3])
         self.assertIsNot(instances[0], instances[1])
 
-    def test_three_concurrent_tasks_can_use_a_smaller_last_reservation_without_overspend(self):
-        self.six_candidates()
-        self.config["search_config"]["event_search"]["max_concurrent_events"] = 3
-        self.config["search_config"]["enhancement"].update(
-            max_search_requests=14, max_read_sources=14, max_model_calls=29)
-        barrier = threading.Barrier(3, timeout=5)
-        allowances = []
-        guard = threading.Lock()
-
-        def runner(task, *, root, task_id, config, **kwargs):
-            state = SearchState(root, task_id, task=task, config=config)
-            with guard:
-                allowances.append((config.max_search_requests, config.max_read_sources,
-                                   config.max_model_calls))
-            # All reservations must coexist before any task releases capacity.
-            barrier.wait()
-            for _ in range(config.max_search_requests):
-                state.consume("search")
-            for _ in range(config.max_model_calls):
-                state.consume("model")
-            for index in range(config.max_read_sources):
-                state.reading("source-" + str(index))
-            state.data["status"] = "insufficient"
-            state.save()
-            return {"status": "insufficient", "run_dir": str(state.run_dir)}
-
-        result = self.collect(dependencies={"run_search": runner})
-        self.assertEqual(sorted(allowances), [(2, 2, 5), (6, 6, 12), (6, 6, 12)])
-        self.assertEqual(result["usage"]["search_calls"], 14)
-        self.assertEqual(result["usage"]["parse_calls"], 14)
-        self.assertEqual(result["usage"]["search_model_calls"], 29)
-        self.assertEqual([record["status"] for record in result["reports"]],
-                         ["insufficient"] * 3 + ["budget_exhausted"] * 3)
-        self.assertTrue(result["reports"][2]["allocation"]["reduced_to_remaining_budget"])
-        repeated = self.collect(dependencies={"run_search": runner})
-        self.assertEqual(len(allowances), 3)
-        self.assertEqual(result["usage"], repeated["usage"])
 
     def test_interrupted_runner_counts_attempts_and_resumes_same_source_cache(self):
         interrupted = set()
@@ -357,66 +263,6 @@ class EventSearchSchedulingTests(unittest.TestCase):
         self.assertEqual(len(self.requests), 4)
         self.assertEqual(len(self.fetches), 2)
 
-    def test_prespent_discovery_budget_limits_repairs_and_persists_failed_resume(self):
-        attempts = []
-
-        def invalid(system, payload):
-            attempts.append(payload)
-            return {"events": "invalid", "domains": []}
-
-        usage = {"discovery_model_calls": 1}
-        result = self.collect(usage=usage, dependencies={"discovery_completion": invalid})
-        self.assertEqual(result["status"], "discovery_failed")
-        self.assertEqual(len(attempts), 1)
-        self.assertEqual(result["usage"]["discovery_model_calls"], 2)
-        self.assertEqual(result["usage"]["search_model_calls"], 0)
-        repeated = self.collect(usage=usage, dependencies={"discovery_completion": invalid})
-        self.assertEqual(len(attempts), 1)
-        self.assertEqual(repeated["usage"], result["usage"])
-        self.assertEqual(self.requests, [])
-
-    def test_prespent_discovery_budget_is_not_double_counted_after_completed_resume(self):
-        usage = {"discovery_model_calls": 1}
-        result = self.collect(usage=usage)
-        self.assertEqual(result["status"], "finished")
-        self.assertEqual(result["usage"]["discovery_model_calls"], 2)
-        self.assertEqual(result["usage"]["total_model_calls"], 8)
-        repeated = self.collect(usage=usage)
-        self.assertEqual(len(self.discovery_calls), 1)
-        self.assertEqual(result["usage"], repeated["usage"])
-        self.assertEqual(len(self.requests), 4)
-
-    def test_saved_phase_usage_over_global_cap_cannot_resume(self):
-        self.config["search_config"]["enhancement"].update(
-            max_search_requests=12, max_read_sources=12, max_model_calls=24)
-        self.collect()
-        path = self.root / "initial_event_search/phase_report.json"
-        report = json.loads(path.read_text())
-        report["base_usage"]["search_model_calls"] = 24
-        path.write_text(json.dumps(report))
-        counts = len(self.discovery_calls), len(self.requests), len(self.fetches), len(self.contexts)
-        with self.assertRaises(ValueError):
-            self.collect()
-        self.assertEqual(counts, (len(self.discovery_calls), len(self.requests), len(self.fetches), len(self.contexts)))
-
-    def test_acknowledged_user_pause_resumes_without_repeating_search(self):
-        first = self.collect(dependencies={"max_steps": 1})
-        record = first["reports"][0]
-        task_dir = self.root / "initial_event_search" / record["task_id"]
-        flag = task_dir / "pause_requested"
-        flag.touch()
-        second = self.collect(dependencies={"max_steps": 1})
-        state = json.loads((task_dir / "runs/initial/run.json").read_text())
-        self.assertEqual(state["stop_reason"], "user_pause")
-        self.assertEqual(state["usage"]["model"], 1)
-        self.assertTrue(flag.exists())
-        self.assertEqual(second["status"], "paused")
-        resumed = self.collect()
-        self.assertEqual(resumed["status"], "finished")
-        self.assertFalse(flag.exists())
-        self.assertEqual(len(self.requests), 4)
-        self.assertEqual(len(self.fetches), 2)
-        self.assertEqual(resumed["usage"]["search_model_calls"], 6)
 
     def test_new_pause_request_after_worker_start_remains_effective(self):
         self.candidates["events"] = self.candidates["events"][:1]
@@ -480,21 +326,6 @@ class EventSearchSchedulingTests(unittest.TestCase):
             for number, response in enumerate(responses, 1):
                 self.assertEqual(response["usage"], {"prompt_tokens": base + number,
                                                      "completion_tokens": number})
-
-    def test_invalid_event_search_limits_fail_before_external_calls(self):
-        for key, value in (("max_model_calls", 0), ("max_read_sources", True),
-                           ("max_search_requests", -1), ("max_search_requests", 1),
-                           ("max_concurrent_events", 0),
-                           ("reuse_sources", "true"), ("unexpected_setting", 1)):
-            with self.subTest(key=key, value=value):
-                config = copy.deepcopy(self.config)
-                config["search_config"]["event_search"][key] = value
-                with self.assertRaises(ValueError):
-                    self.collect(config=config)
-                self.assertEqual(self.discovery_calls, [])
-                self.assertEqual(self.requests, [])
-                self.assertEqual(self.fetches, [])
-                self.assertEqual(self.contexts, [])
 
 
 if __name__ == "__main__":

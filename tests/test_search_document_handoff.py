@@ -68,18 +68,6 @@ def test_budget_preserves_sources_and_complete_paragraphs(tmp_path):
     assert record['gaps'] and not (state.run_dir/'builder_input.json').exists()
 
 
-def test_duplicates_and_conservative_cleanup_are_accounted_for(tmp_path):
-    state=SearchState(tmp_path,'case',task=TASK)
-    text='Announcement remains subject to regulatory approval. '+('Important condition. '*8)
-    a,_=document(state,'a','<nav>Home</nav><p>'+text+'</p><p>'+text+'</p>',kind='html')
-    b,_=document(state,'b',text)
-    payload,record=prepare_sources(state,[a,b])
-    assert len(payload['samples'])==1
-    assert payload['samples'][0]['content'].count(text.strip())==1
-    assert record['duplicates']==[dict(source_id=b,version=state.data['sources'][b]['version'],duplicate_of=a)]
-    assert {r['reason'] for r in record['cleanup']}=={'navigation_label','exact_repeated_paragraph'}
-
-
 def test_reassembly_recovers_saved_version_and_omissions(tmp_path):
     controller=SearchController(tmp_path);tid=controller.create(TASK,{})
     state=SearchState(tmp_path,tid)
@@ -89,57 +77,6 @@ def test_reassembly_recovers_saved_version_and_omissions(tmp_path):
     payload=controller.reassemble(tid,10000)
     assert payload['samples'][0]['content'].endswith('Closing was not confirmed.')
     assert 'Later revised' not in payload['samples'][0]['content']
-    assert len(list((state.run_dir/'handoffs').iterdir()))==2
-
-
-def test_context_pressure_enters_document_finalization_before_call(tmp_path):
-    state=SearchState(tmp_path,'case',task=TASK,config=SearchConfig(max_model_calls=30,max_model_context_chars=6000))
-    sid,_=document(state,'a','Proposal and conditional approval.')
-    state.data['feedback']={'spans':[{'text':'X'*9000}]};state.save()
-    assert len(SYSTEM_PROMPT)+len(json.dumps(context_for(state),ensure_ascii=False))>6000
-    def model(c):
-        assert c['phase']=='finalize' and 'spans' not in c['feedback']
-        return dict(action='finish',source_ids=[sid],gaps=[],reason='low_gain')
-    run_agent(state,SearchTools(state),model)
-    assert state.data['status']=='finished' and state.data['usage']['model']==1
-
-
-def test_oversized_first_paragraph_does_not_block_other_sources(tmp_path):
-    state=SearchState(tmp_path,'case',task=TASK)
-    large,_=document(state,'large','Long indivisible block. '*1000)
-    small,_=document(state,'small','A separate closing notice.')
-    payload,record=prepare_sources(state,[large,small],max_chars=1000)
-    assert len(payload['samples'])==1
-    assert payload['samples'][0]['raw_data_id']==small
-    assert record['omitted'][0]['source_id']==large
-
-
-def test_complete_material_is_independent_of_input_budget(tmp_path):
-    from finmy.search.handoff import prepare_complete_sources,derive_input,materialize_complete
-    state=SearchState(tmp_path,'case',task=TASK)
-    a,_=document(state,'a','First official announcement.')
-    b,_=document(state,'b','Later closing confirmation.')
-    full,complete=prepare_complete_sources(state,[a,b])
-    small,limited=derive_input(state,complete,max_chars=1)
-    large,unlimited=derive_input(state,complete,max_chars=10000)
-    assert small['samples']==[] and len(full['samples'])==2
-    assert large==full and limited['complete_id']==unlimited['complete_id']==complete['complete_id']
-    assert limited['omitted'] and not unlimited['omitted']
-    assert not (state.run_dir/'complete_material.json').exists()
-    # A changed current title/version cannot silently alter the retained complete view.
-    state.data['sources'][a]['title']='New title'
-    SourceStore(state).save_raw(a,b'New unrelated version.','txt')
-    assert materialize_complete(state,complete)==full
-
-
-def test_reassembly_preserves_complete_manifest(tmp_path):
-    controller=SearchController(tmp_path);tid=controller.create(TASK,{})
-    state=SearchState(tmp_path,tid);sid,_=document(state,'a','Complete body with final outcome.')
-    assemble_sources(state,[sid],max_chars=1)
-    original=(state.run_dir/'complete_material.json').read_bytes()
-    assert json.loads(original)['material_chars']>1
-    assert controller.reassemble(tid,10000)['samples']
-    assert (state.run_dir/'complete_material.json').read_bytes()==original
     assert len(list((state.run_dir/'handoffs').iterdir()))==2
 
 

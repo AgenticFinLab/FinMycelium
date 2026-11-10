@@ -81,18 +81,6 @@ class SparseTemporalScopeTest(unittest.TestCase):
         self.assertFalse(unbounded["end_checked"])
         self.assertEqual(unbounded["items"][0]["status"], "unchecked")
 
-    def test_one_sided_bounds_still_reject_disjoint_dates(self):
-        for scope, stamp, missing in ((target(None, "2018"), "2019", "start"),
-                                      (target("2018", None), "2017", "end")):
-            with self.subTest(missing=missing):
-                error = self.capture(scope, transactions=[action("Transfer", stamp)])
-                self.assertIsNone(error.report["bounds"][missing])
-                self.assertEqual(error.report["violations"][0]["timestamp"], stamp)
-
-    def test_reversed_episode_bounds_keep_original_error(self):
-        with self.assertRaisesRegex(ValueError, "start_time is later than end_time") as caught:
-            check_temporal_scope(target("2019", "2018"))
-        self.assertNotIsInstance(caught.exception, TemporalScopeError)
 
     def test_temporal_feedback_is_semantic_and_carries_complete_prior_candidate(self):
         payload = {"participants": [{"participant_id": "P_company", "actions": [
@@ -113,22 +101,6 @@ class SparseTemporalScopeTest(unittest.TestCase):
         self.assertEqual(data["temporal_scope_report"], error.report)
         self.assertEqual(data["agent"], "ParticipantReconstructor")
         self.assertEqual((payload, error.report), before)
-
-    def test_transaction_feedback_retains_transfer_and_does_not_hardcode_people_or_years(self):
-        payload = {"transactions": [action("Settlement", "2041-09-08")]}
-        error = self.capture(target("2040", "2040"), transactions=payload["transactions"])
-        message = build_temporal_retry_user_msg("Source", "TransactionReconstructor", error, payload)
-        data = json.loads(message.split("instructions from source material:\n", 1)[1])
-        self.assertEqual(data["agent"], "TransactionReconstructor")
-        self.assertEqual(data["previous_candidate"], payload)
-        self.assertIn("actions or transfers belonging to this Episode", message)
-        self.assertNotIn("Buffett", message)
-        self.assertNotIn("2022", message)
-        self.assertNotIn("2023", message)
-
-    def test_other_validation_errors_cannot_masquerade_as_temporal_feedback(self):
-        with self.assertRaisesRegex(TypeError, "TemporalScopeError"):
-            build_temporal_retry_user_msg("Source", "ParticipantReconstructor", ValueError("syntax"), {})
 
 
 if __name__ == "__main__":

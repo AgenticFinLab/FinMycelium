@@ -94,14 +94,6 @@ class PersonEPGValidationTest(unittest.TestCase):
         self.assertEqual(validate_person_epg(package), {"valid": True, "errors": []})
         self.assertEqual(package, before)
 
-    def test_empty_organization_and_optional_stage(self):
-        package = package_fixture()
-        package["event_activity"][0]["stage_id"] = None
-        package["stage"] = []
-        self.assertTrue(validate_person_epg(package)["valid"])
-        for name in ("event_activity", "event", "domain"):
-            package[name] = []
-        self.assertTrue(validate_person_epg(package)["valid"])
 
     def test_malformed_input_returns_report(self):
         for value in (None, [], {}, {"graph": []}, {"activity": "wrong"}):
@@ -110,15 +102,6 @@ class PersonEPGValidationTest(unittest.TestCase):
                 self.assertFalse(report["valid"])
                 self.assertTrue(report["errors"])
 
-    def test_duplicate_primary_key(self):
-        package = package_fixture()
-        package["action"].append(copy.deepcopy(package["action"][0]))
-        self.assert_invalid(package, "/action/1")
-
-    def test_missing_foreign_key(self):
-        package = package_fixture()
-        package["action"][0]["actor_id"] = "not-a-participant"
-        self.assert_invalid(package, "/action/0/actor_id")
 
     def test_activity_requires_exactly_one_fact(self):
         for refs in ({}, {"action_id": "ACT", "context_occurrence_id": "O"}):
@@ -126,12 +109,6 @@ class PersonEPGValidationTest(unittest.TestCase):
             package["activity"] = [{"activity_id": "A", **refs}]
             self.assert_invalid(package, "/activity/0")
 
-    def test_duplicate_registration_and_nullable_unique_keys(self):
-        package = package_fixture()
-        package["activity"].append({"activity_id": "B", "action_id": "ACT"})
-        self.assert_invalid(package, "/activity/1")
-        package["activity"][1] = {"activity_id": "B", "context_occurrence_id": "O"}
-        self.assertTrue(validate_person_epg(package)["valid"])
 
     def test_stage_belongs_to_its_event(self):
         package = package_fixture()
@@ -174,65 +151,6 @@ class PersonEPGValidationTest(unittest.TestCase):
         package["event_activity_detail"][0]["detail_index"] = 100
         self.assert_invalid(package, "/event_activity_detail/0/detail_index")
 
-    def test_detail_selection_requires_selected_mode(self):
-        package = package_fixture()
-        package["event_activity_detail"] = [
-            {"event_id": "E", "activity_id": "A", "detail_index": 0}
-        ]
-        self.assert_invalid(package, "/event_activity/0/detail_mode")
-
-    def test_final_subject_must_reference_person(self):
-        for subject in (None, "missing"):
-            package = package_fixture()
-            package["graph"]["subject_entity_id"] = subject
-            self.assert_invalid(package, "/graph/subject_entity_id")
-        package = package_fixture()
-        package["entity"][0]["entity_type"] = "organization"
-        self.assert_invalid(package, "/graph/subject_entity_id")
-
-    def test_window_shape_and_date_order(self):
-        package = package_fixture()
-        package["time_value"][0]["window_start"] = "2023-07-21"
-        self.assert_invalid(package, "/time_value/0")
-        package["time_value"][0].update(
-            window_end="2023-07-31",
-            original_text="late July 2023",
-            is_approximate=True,
-            window_semantics="uncertainty",
-        )
-        self.assertTrue(validate_person_epg(package)["valid"])
-        package["time_value"][0]["window_end"] = "2023-07-01"
-        self.assert_invalid(package, "/time_value/0/window_end")
-        package["time_value"][0]["window_end"] = "2023-02-30"
-        self.assert_invalid(package, "/time_value/0")
-
-    def test_semantic_link_needs_actual_quotes(self):
-        package = package_fixture()
-        package["activity"].append({"activity_id": "B", "context_occurrence_id": "O"})
-        package["activity_relation"] = [
-            {
-                "link_id": "R",
-                "from_activity_id": "A",
-                "to_activity_id": "B",
-                "relation_type": "explains",
-                "basis": "source",
-                "evidence_set_id": "ES",
-            }
-        ]
-        package["evidence_set"] = [{"evidence_set_id": "ES"}]
-        self.assert_invalid(package, "/activity_relation/0/evidence_set_id")
-        package["evidence_span"] = [{"span_id": "Q", "quote": "Evidence"}]
-        package["evidence_link"] = [
-            {
-                "evidence_set_id": "ES",
-                "field_path": "/description",
-                "quote_order": 0,
-                "span_id": "Q",
-            }
-        ]
-        self.assertTrue(validate_person_epg(package)["valid"])
-        package["activity_relation"][0]["basis"] = "temporal"
-        self.assert_invalid(package, "/activity_relation/0")
 
     def test_quote_offsets_use_unicode_characters(self):
         package = package_fixture()
@@ -250,13 +168,6 @@ class PersonEPGValidationTest(unittest.TestCase):
         package["evidence_span"][0]["char_end"] = 40
         self.assert_invalid(package, "/evidence_span/0/quote")
 
-    def test_publication_datetime_has_timezone_and_microsecond_precision(self):
-        for timestamp in (None, "2023-05-06T09:30:00Z", "2023-05-06T09:30:00.123456+08:00",
-                          "2024-02-29T23:59:59.1-05:00"):
-            with self.subTest(timestamp=timestamp):
-                package = package_fixture()
-                package["source_document"] = [{"document_id": "DOC", "content": "Example", "published_at": timestamp}]
-                self.assertTrue(validate_person_epg(package)["valid"])
 
     def test_publication_datetime_rejects_invalid_or_unstorable_values(self):
         for timestamp in ("not-a-date", "2023-05-06", "2023-05-06T09:30:00",

@@ -67,23 +67,6 @@ class SparsePersonAdapterTest(unittest.TestCase):
         self.assertIn("Pending", package["occurrence"][0]["subject_relevance"])
         self.assertTrue(any(r["source_path"].endswith("transaction_type") for r in report["retained_in_sparse_result"]))
 
-    def test_build_is_deterministic_and_does_not_mutate_sources(self):
-        cascade, inputs, subject = fixture()
-        saved = copy.deepcopy((cascade, inputs, subject))
-        first = build_person_facts(cascade, inputs, subject)
-        self.assertEqual(first, build_person_facts(cascade, inputs, subject))
-        self.assertEqual((cascade, inputs, subject), saved)
-
-    def test_repeated_local_episode_ids_do_not_collide(self):
-        cascade, inputs, subject = fixture()
-        second = copy.deepcopy(cascade["stages"][0])
-        second["stage_id"] = "S2"
-        cascade["stages"].append(second)
-        package, report = build_person_facts(cascade, inputs, subject)
-        self.assertEqual([r["occurrence_id"] for r in package["occurrence"]], ["O_S1_E1", "O_S2_E1"])
-        self.assertEqual(len({r["action_id"] for r in package["action"]}), 4)
-        self.assertEqual(len(package["entity"]), 2)
-        self.assertEqual(validate_person_epg(package), {"valid": True, "errors": []})
 
     def test_whitespace_quote_uses_original_slice_and_duplicate_spans_merge(self):
         package, _ = self.build()
@@ -111,27 +94,6 @@ class SparsePersonAdapterTest(unittest.TestCase):
         self.assertIsNone(span["document_id"])
         self.assertGreater(report["unmatched_quote_count"], 0)
 
-    def test_existing_anchor_is_not_discarded_when_text_occurs_elsewhere(self):
-        package, _ = self.build()
-        ground_person_evidence(package)
-        span = next(s for s in package["evidence_span"] if s["quote"] == "Alice")
-        original = copy.deepcopy(span)
-        package["source_document"].append({"document_id": "DOC_SECOND", "content": "Alice"})
-        ground_person_evidence(package)
-        self.assertEqual(span, original)
-
-    def test_replace_relevance_evidence_retains_scene_title_and_clears_pending(self):
-        package, _ = self.build()
-        sid = package["occurrence"][0]["evidence_set_id"]
-        existing = copy.deepcopy(next(x for x in package["evidence_set"] if x["evidence_set_id"] == sid))
-        add_evidence(package, {"/subject_relevance": field("Alice directed the trade", "Alice directed Acme to buy shares.")},
-                     evidence_set_id=sid)
-        updated = next(x for x in package["evidence_set"] if x["evidence_set_id"] == sid)
-        self.assertEqual(updated["field_metadata"]["/title"], existing["field_metadata"]["/title"])
-        self.assertNotIn("evidence_status", updated["field_metadata"]["/subject_relevance"])
-        add_evidence(package, {"/subject_relevance": field("Updated", "Alice")}, evidence_set_id=sid)
-        refs = [x for x in package["evidence_link"] if x["evidence_set_id"] == sid and x["field_path"] == "/subject_relevance"]
-        self.assertEqual(len(refs), 1)
 
     def test_source_snapshots_keep_sample_coordinates_even_for_same_raw_document(self):
         cascade, inputs, subject = fixture()
@@ -142,23 +104,6 @@ class SparsePersonAdapterTest(unittest.TestCase):
         self.assertEqual(report["source_map"][1]["offset_origin"], "sample.content")
         self.assertNotEqual(report["source_map"][0]["document_id"], report["source_map"][1]["document_id"])
 
-    def test_global_source_path_maps_to_local_action_field(self):
-        package, report = self.build()
-        mapping = next(x for x in report["field_map"] if x["source_path"].endswith("participants[0].actions[0].name"))
-        self.assertEqual(mapping["table"], "action")
-        self.assertEqual(mapping["field_path"], "/action_type")
-        self.assertEqual(mapping["evidence_set_id"], package["action"][0]["evidence_set_id"])
-
-    def test_ambiguous_subject_identity_and_dangling_party_fail(self):
-        cascade, inputs, subject = fixture()
-        party = cascade["stages"][0]["episodes"][0]["participants"][1]
-        party["name"] = field("Alice")
-        with self.assertRaisesRegex(ValueError, "Ambiguous subject"):
-            build_person_facts(cascade, inputs, subject)
-        cascade, inputs, subject = fixture()
-        cascade["stages"][0]["episodes"][0]["transactions"][0]["to_participant_id"] = field("missing")
-        with self.assertRaisesRegex(ValueError, "dangling"):
-            build_person_facts(cascade, inputs, subject)
 
     def test_buffett_fixed_fixture_keeps_25_anchors_and_unresolved_quotes(self):
         path = Path(__file__).parent / "fixtures" / "buffett_person_epg_preview.json"

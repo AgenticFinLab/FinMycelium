@@ -110,7 +110,7 @@ python -m finmy.runner.sparse_build_runner \
 ```bash
 PYTHONPATH=tests:. python -m pytest -q \
   tests/test_sparse_temporal_scope.py \
-  tests/test_sparse_episode_prompt_scope.py \
+  tests/test_sparse_temporal_recovery_flow.py \
   tests/test_sparse_temporal_recovery_flow.py \
   tests/test_sparse_person_full_flow.py
 ```

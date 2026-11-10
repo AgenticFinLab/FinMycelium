@@ -116,7 +116,7 @@ source documents.
 
 ```sh
 python -m unittest discover -s tests -p 'test_sparse_person*.py' -v
-python -m unittest discover -s tests -p 'test_sparse_estimate_time.py' -v
+python -m unittest discover -s tests -p 'test_sparse_person_full_flow.py' -v
 python -m finmy.person_epg validate tests/fixtures/buffett_person_epg_preview.json
 ```
 

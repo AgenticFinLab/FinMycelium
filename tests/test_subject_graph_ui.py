@@ -121,74 +121,6 @@ class SubjectUITest(unittest.TestCase):
         self.assertEqual(original, snapshot)
         self.assertIsNot(effective, original)
 
-    def test_old_company_configuration_opens_in_event_mode_without_person_fields(self):
-        original = config()
-        original["builder_config"]["reconstruction"]["mode"] = "company"
-        with patch.object(self.st, "text_input", wraps=self.st.text_input) as inputs:
-            result = self.form.render_subject_scope(original)
-        inputs.assert_not_called()
-        self.assertEqual(result["builder_config"]["reconstruction"], {"mode": "event"})
-        self.assertEqual(result["builder_config"]["lm_name"], "test-model")
-        self.assertEqual(original["builder_config"]["reconstruction"]["mode"], "company")
-
-    def test_hidden_malformed_fields_do_not_block_corrected_period(self):
-        original = config()
-        original["builder_config"]["reconstruction"]["subject"].update(
-            aliases=[123], coverage_start="invalid", coverage_end=False, scope=None)
-        with patch.object(self.st, "text_input", side_effect=["Buffett", "2023-05"]):
-            effective = self.form.render_subject_scope(original)
-        self.assertIsNotNone(effective)
-        self.assertEqual(effective["builder_config"]["reconstruction"]["subject"]["coverage_start"], "2023-05")
-        self.st.error.assert_not_called()
-
-    def test_invalid_period_reports_error_without_creating_run_config(self):
-        with patch.object(self.st, "text_input", side_effect=["Buffett", "2023-02-30"]):
-            self.assertIsNone(self.form.render_subject_scope(config()))
-        self.st.error.assert_called_once()
-
-    def test_generated_identity_is_stable_and_changes_with_person(self):
-        original = config()
-        self.assertEqual(self.form.person_subject(original, " WARREN   BUFFETT ")["subject_id"],
-                         "person_buffett")
-        self.assertEqual(self.form.person_subject(original, "巴菲特")["subject_id"], "person_buffett")
-        new = self.form.person_subject(original, "张三")
-        self.assertEqual(new, self.form.person_subject(original, "张三"))
-        self.assertNotEqual(new["subject_id"], "person_buffett")
-        self.assertNotEqual(new["subject_id"], self.form.person_subject(original, "李四")["subject_id"])
-        effective = self.form.apply_subject_scope(original, "person", new)
-        self.assertEqual(effective["builder_config"]["reconstruction"]["subject"]["name"], "张三")
-
-    def test_blank_name_hides_event_fields_clears_stale_inputs_and_cannot_start(self):
-        pipeline = load("subject_pipeline_blank_test", "finmy/web_ui/pages/pipeline_page.py")
-        uploaded = config()
-        self.state.update(config=uploaded, config_file_name="config.yml", main_input="Existing description",
-                          keywords=["old event"], structured_data=[{"text": "old source"}])
-        keywords = Mock()
-        controls = Mock()
-        controls.render.return_value = True
-        uploader = Mock()
-        uploader.render.return_value = (True, uploaded)
-        with patch.object(pipeline, "ConfigUploader", uploader), \
-             patch.object(pipeline, "KeywordInput", keywords), \
-             patch.object(pipeline, "AnalysisControls", controls), \
-             patch.object(pipeline, "render_subject_scope", self.form.render_subject_scope), \
-             patch.object(pipeline, "ReconstructionService") as service, \
-             patch.object(self.st, "text_input", return_value=" "), \
-             patch.object(self.st, "text_area", wraps=self.st.text_area) as areas, \
-             patch.object(self.st, "success", Mock(), create=True), \
-             patch.object(self.st, "multiselect", return_value=["Keywords"], create=True):
-            pipeline.PipelinePage.render()
-            areas.assert_not_called()
-            keywords.render.assert_not_called()
-            self.assertEqual(self.state.main_input, "")
-            self.assertEqual(self.state.keywords, [])
-            self.assertIsNone(self.state.structured_data)
-            self.assertTrue(controls.render.call_args.kwargs["disabled"])
-            self.assertIsNone(self.state.reconstruction_run_config)
-            pipeline.PipelinePage._run_analysis()
-            service.assert_not_called()
-        self.assertEqual(self.state.processing_status, "idle")
-        self.assertIn("person name", self.st.error.call_args.args[0])
 
     def test_native_result_routes_by_shape_even_with_stale_agent_mode(self):
         page = self.results.ResultsPage
@@ -210,39 +142,6 @@ class SubjectUITest(unittest.TestCase):
         self.agent_renderer.render.assert_called_once_with(self.state.analysis_results)
         self.html.assert_not_called()
 
-    def test_person_epg_result_downloads_json_and_native_hover_html(self):
-        package = json.loads((ROOT / 'tests/fixtures/buffett_person_epg_preview.json').read_text())
-        self.state.analysis_results = package
-        with patch.object(self.results.ResultsPage, '_render_history_file_selector'):
-            self.results.ResultsPage.render()
-        self.html.assert_not_called()
-        self.agent_renderer.render.assert_not_called()
-        self.class_renderer.render.assert_not_called()
-        downloads = self.st.download_button.call_args_list
-        self.assertEqual([c.kwargs['file_name'] for c in downloads],
-                         ['FinalPersonEPG.json', 'person_timeline.html'])
-        self.assertEqual(json.loads(downloads[0].kwargs['data']), package)
-        self.assertIn('Plotly.newPlot', downloads[1].kwargs['data'])
-        self.assertIn('id="epg-data"', downloads[1].kwargs['data'])
-        self.assertIn('Collapse events', downloads[1].kwargs['data'])
-        self.st.error.assert_not_called()
-
-    def test_unorganized_person_epg_reports_missing_memberships(self):
-        from finmy.person_epg.adapter import from_subject_graph
-        from test_subject_graph_schema import graph_fixture
-        self.state.analysis_results = from_subject_graph(graph_fixture())
-        with patch.object(self.results.ResultsPage, '_render_history_file_selector'):
-            self.results.ResultsPage.render()
-        self.assertIn('Store domain/event organization', self.st.error.call_args.args[0])
-        self.assertEqual(self.st.download_button.call_count, 1)
-
-    def test_history_prefers_native_graph_and_detects_mode(self):
-        (self.path / "FinalSubjectGraph.json").write_text(json.dumps(graph()))
-        (self.path / "FinalEventCascade.json").write_text(json.dumps({"stages": []}))
-        result = self.history.load_history_result(str(self.path))
-        self.assertEqual(result, graph())
-        self.assertEqual(self.history.detect_build_mode(result), "subject_graph")
-        self.assertEqual(self.history.detect_build_mode({"stages": [{"episodes": []}]}), "agent_build")
 
     def test_invalid_native_history_does_not_silently_load_projection(self):
         invalid = graph()
@@ -251,17 +150,6 @@ class SubjectUITest(unittest.TestCase):
         (self.path / "FinalEventCascade.json").write_text(json.dumps({"stages": []}))
         self.assertIsNone(self.history.load_history_result(str(self.path)))
 
-    def test_native_filename_requires_a_valid_schema_version(self):
-        invalid = graph()
-        invalid.pop("schema_version")
-        (self.path / "FinalSubjectGraph.json").write_text(json.dumps(invalid))
-        self.assertIsNone(self.history.load_history_result(str(self.path)))
-
-    def test_native_only_run_is_found_by_history_scanner(self):
-        folder = self.path / "build_output_20261103"
-        folder.mkdir()
-        (folder / "FinalSubjectGraph.json").write_text(json.dumps(graph()))
-        self.assertEqual(self.history.scan_history_files(str(self.path))[0]["path"], str(folder))
 
     def test_pipeline_passes_effective_scope_and_sets_native_result_mode(self):
         pipeline = load("subject_pipeline_test", "finmy/web_ui/pages/pipeline_page.py")

@@ -14,7 +14,7 @@ from finmy.person_epg.schema import DIRECTORY, JSON_SCHEMA, MODEL
 from finmy.person_epg.validation import validate_person_epg
 
 EXAMPLE = (
-    Path(__file__).resolve().parents[1] / "examples/data/person_epg/buffett_oxy.json"
+    Path(__file__).resolve().parents[1] / "tests/fixtures/buffett_person_epg_preview.json"
 )
 
 

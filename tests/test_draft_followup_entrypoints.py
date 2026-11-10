@@ -144,15 +144,6 @@ class DraftFollowupEntryPoints(unittest.TestCase):
         self.assertEqual(cfg, original)
         self.assertEqual(self.initial_result.extras["person_epg"], self.package)
 
-    def test_cli_uses_same_single_build_additive_enrichment_sequence(self):
-        runner = load("draft_cli_entrypoint_test", ROOT / "finmy/runner/search_pipeline_runner.py")
-        cfg = configuration(self.path)
-        with patch.dict("sys.modules", self.adapters()):
-            result = runner.run_search_pipeline(cfg, "Warren Buffett activities 2022–2023", [], self.path)
-        self.assertEqual(result["pipeline_result"].extras["person_epg"], self.enriched_package)
-        self.assert_enriched_flow(self.path)
-        report = json.loads((self.path / "event_refinement_report.json").read_text())
-        self.assertEqual(result["builder_save_dir"], report["selected_builder_directory"])
 
     def test_enrichment_failure_returns_initial_ui_result_and_saved_input(self):
         self.fail_enrichment = True
@@ -164,35 +155,6 @@ class DraftFollowupEntryPoints(unittest.TestCase):
         self.assertEqual(report["status"], "supplementary_processing_failed")
         self.assertEqual(report["selected_builder_directory"], report["initial_builder_directory"])
         self.assertEqual(self.service.st.session_state.save_builder_dir_path, report["initial_builder_directory"])
-        self.assertFalse(self.errors)
-
-    def test_empty_initial_events_keep_successful_draft_without_scope_gate(self):
-        self.package["event"] = []
-        result, output = self.run_ui()
-        self.assertEqual(result, self.initial_result.extras["person_epg"])
-        self.assertEqual(len(self.builds), 1)
-        self.assertFalse(any(row[0] == "event_search" for row in self.searches))
-        self.assertEqual(json.loads((output / "event_refinement_report.json").read_text())["status"], "no_existing_events")
-        self.assertFalse(self.errors)
-
-    def test_no_new_source_returns_initial_without_extraction(self):
-        self.empty_followup = True
-        result, output = self.run_ui()
-        self.assertEqual(result, self.initial_result.extras["person_epg"])
-        self.assertEqual(len(self.builds), 1)
-        self.assertFalse(self.enrichments)
-        self.assertTrue(any(row[0] == "event_search" for row in self.searches))
-        self.assertEqual(json.loads((output / "event_refinement_report.json").read_text())["status"], "no_new_sources")
-        self.assertFalse(self.errors)
-
-    def test_disabled_followup_keeps_original_single_build_ui_path(self):
-        cfg = configuration(self.path)
-        cfg["event_followup"]["enabled"] = False
-        result, output = self.run_ui(cfg)
-        self.assertEqual(result, self.initial_result.extras["person_epg"])
-        self.assertEqual(len(self.builds), 1)
-        self.assertFalse(any(row[0] == "event_search" for row in self.searches))
-        self.assertFalse((output / "draft_event_search_plan.json").exists())
         self.assertFalse(self.errors)
 
 

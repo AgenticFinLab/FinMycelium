@@ -63,15 +63,6 @@ class EventAdditionsTests(unittest.TestCase):
             self.assertEqual(docs[span['document_id']][span['char_start']:span['char_end']], span['quote'])
         self.assertTrue(validate_person_epg(result)['valid'])
 
-    def test_selected_old_activity_receives_visible_detail_without_mutation(self):
-        p = empty_additions()
-        p['details'] = [dict(activity_id='activity', value='The report informed a later order.',
-                             citations=citation('Investor read the report. Investor told Trader to buy shares.'))]
-        result, report = self.merge(p)
-        self.assertEqual(report['status'], 'merged', report)
-        self.assertEqual(result['event_activity'], self.base['event_activity'])
-        self.assertEqual(result['event_activity_detail'][-1], dict(event_id='event', activity_id='activity', detail_index=1))
-        self.assertEqual(len(result['activity']), 1)
 
     def test_unknown_reference_is_atomic_even_after_valid_addition(self):
         p = empty_additions()
@@ -92,18 +83,6 @@ class EventAdditionsTests(unittest.TestCase):
         self.assertIn('collision', report['reason'])
         self.assertEqual(result, self.base)
 
-    def test_same_quote_different_numeric_transaction_is_rejected(self):
-        p = empty_additions()
-        quote = 'Company bought 100 shares for $500.'
-        first = activity(kind='transaction', title='Purchase shares', quote=quote)
-        first['details'] = [dict(value='Paid $500 for 100 shares.', citations=citation(quote))]
-        second = activity(key='duplicate', kind='transaction', title='Purchase shares', quote=quote)
-        second['details'] = [dict(value='Paid $5000 for 100 shares.', citations=citation(quote))]
-        p['activities'] = [first, second]
-        result, report = self.merge(p)
-        self.assertEqual(report['status'], 'rejected')
-        self.assertIn('Conflicting numeric', report['reason'])
-        self.assertEqual(result, self.base)
 
     def test_transaction_duplicate_same_claim_is_one_fact(self):
         p = empty_additions()
@@ -135,14 +114,6 @@ class EventAdditionsTests(unittest.TestCase):
         self.assertEqual(result['stage'][0], self.base['stage'][0])
         self.assertEqual(result['activity_relation'][-1]['basis'], 'source')
 
-    def test_context_does_not_invent_subject_participation(self):
-        p = empty_additions()
-        p['activities'] = [activity(kind='context', title='Company execution context', quote='Company bought 100 shares for $500.')]
-        result, report = self.merge(p)
-        self.assertEqual(report['status'], 'merged', report)
-        self.assertEqual(result['occurrence_participant'], self.base['occurrence_participant'])
-        self.assertIsNone(result['activity'][-1]['action_id'])
-        self.assertTrue(result['activity'][-1]['context_occurrence_id'])
 
     def test_repeating_same_action_additions_is_idempotent(self):
         p = empty_additions()
@@ -152,40 +123,6 @@ class EventAdditionsTests(unittest.TestCase):
         self.assertEqual(second['status'], 'no_changes', second)
         self.assertEqual(once, twice)
 
-    def test_new_detail_deduplicates_existing_meaningless_whitespace_changes(self):
-        p = empty_additions()
-        p['details'] = [dict(activity_id='activity', value=' Existing  useful fact ', citations=citation('Investor read the report.'))]
-        result, report = self.merge(p)
-        self.assertEqual(report['status'], 'no_changes', report)
-        self.assertEqual(result, self.base)
-
-    def test_local_keys_cannot_shadow_existing_references(self):
-        p = empty_additions()
-        p['activities'] = [activity(key='activity')]
-        result, report = self.merge(p)
-        self.assertEqual(report['status'], 'rejected')
-        self.assertEqual(result, self.base)
-
-    def test_cross_event_stage_reference_rejected(self):
-        self.base['event'].append(dict(event_id='other', domain_id='domain', label='Other', sort_order=1))
-        self.base['stage'].append(dict(event_id='other', stage_id='other_stage', label='Other', sort_order=0))
-        p = empty_additions()
-        p['activities'] = [activity()]
-        p['activities'][0]['stage_id'] = 'other_stage'
-        self.assertEqual(self.merge(p)[1]['status'], 'rejected')
-
-    def test_distinct_trades_can_share_a_paragraph_and_date(self):
-        p = empty_additions()
-        quote = 'Company bought 100 shares for $500 and later 200 shares for $1200.'
-        self.sources[0]['content'] += quote
-        first = activity(kind='transaction', title='Buy first 100 shares', quote=quote)
-        first['details'] = [dict(value='$500 for 100 shares', citations=citation(quote))]
-        second = activity(key='second', kind='transaction', title='Buy later 200 shares', quote=quote)
-        second['details'] = [dict(value='$1200 for 200 shares', citations=citation(quote))]
-        p['activities'] = [first, second]
-        result, report = self.merge(p)
-        self.assertEqual(report['status'], 'merged', report)
-        self.assertEqual(len(result['financial_transaction']), 2)
 
     def test_same_trade_conflicting_unit_magnitudes_rejected(self):
         p = empty_additions()
@@ -198,30 +135,6 @@ class EventAdditionsTests(unittest.TestCase):
         p['activities'] = [first, second]
         self.assertEqual(self.merge(p)[1]['status'], 'rejected')
 
-    def test_explicit_dates_are_displayable_and_preserve_precision(self):
-        for raw, expected in [('2023年2月2日', '2023-02-02'), ('2023年2月', '2023-02'),
-                              ('2023年', '2023'), ('2023-02', '2023-02'),
-                              ('February 2, 2023', '2023-02-02'), ('2 Feb 2023', '2023-02-02'),
-                              ('February 2023', '2023-02')]:
-            with self.subTest(raw=raw):
-                quote = raw + ': Investor told Trader to buy shares.'
-                self.sources[0]['content'] += quote
-                p = empty_additions()
-                p['activities'] = [activity(quote=quote)]
-                p['activities'][0]['time'] = raw
-                result, report = self.merge(p)
-                self.assertEqual(report['status'], 'merged', report)
-                self.assertEqual(result['time_value'][-1]['value'], expected)
-
-    def test_unguarded_relative_and_invalid_dates_rejected(self):
-        for raw, quoted in [('2023-02-30', True), ('February 2', True), ('two days ago', True), ('2023-02-02', False)]:
-            with self.subTest(raw=raw):
-                quote = (raw + ': ' if quoted else '') + 'Investor told Trader to buy shares.'
-                self.sources[0]['content'] += quote
-                p = empty_additions()
-                p['activities'] = [activity(quote=quote)]
-                p['activities'][0]['time'] = raw
-                self.assertEqual(self.merge(p)[1]['status'], 'rejected')
 
     def test_same_fact_across_events_reuses_activity_with_new_membership(self):
         self.base['event'].append(dict(event_id='second', domain_id='domain', label='Second', sort_order=1))

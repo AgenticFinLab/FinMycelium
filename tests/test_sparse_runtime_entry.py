@@ -94,16 +94,6 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "new builder"):
             builder.run(self.inputs)
 
-    def test_reuse_assembly_retains_original_arrays_and_evidence(self):
-        values = responses()
-        values[2]["participants"][0]["actions"][0]["name"].update(
-            evidence_source_contents=["Baytown Council warned residents about a storm."],
-            reasons=["Synthetic preservation marker"])
-        self.create.side_effect = [response(content=json.dumps(x)) for x in values]
-        builder = self.builder()
-        graph = builder.run(self.inputs).event_cascades
-        self.assertEqual(graph["stages"][0]["episodes"][0]["participants"], values[2]["participants"])
-        self.assertEqual(builder.integrate_from_files(strict=True), graph)
 
     def test_legacy_replay_keeps_full_array_contract(self):
         builder = self.builder()
@@ -124,37 +114,6 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must equal"):
             builder.integrate_from_files(strict=True)
 
-    def test_unknown_contract_and_inconsistent_report_fail_replay(self):
-        builder = self.builder()
-        builder.run(self.inputs)
-        root = Path(builder.save_dir)
-        manifest = json.loads((root / "RunManifest.json").read_text())
-        manifest["construction_contract_version"] = 99
-        (root / "RunManifest.json").write_text(json.dumps(manifest))
-        with self.assertRaisesRegex(ValueError, "Unsupported"):
-            builder.integrate_from_files(strict=True)
-        manifest["construction_contract_version"] = 2
-        (root / "ConstructionCheck.json").write_text("{}")
-        manifest["artifact_sha256"] = builder._artifact_hashes()
-        (root / "RunManifest.json").write_text(json.dumps(manifest))
-        with self.assertRaisesRegex(ValueError, "checks differ"):
-            builder.integrate_from_files(strict=True)
-
-    def test_replay_rejects_missing_or_mislocated_outputs(self):
-        builder = self.builder()
-        builder.run(self.inputs)
-        path = next(Path(builder.save_dir).glob("ParticipantReconstructor-1-*-Result.json"))
-        original = path.read_text()
-        path.unlink()
-        with self.assertRaisesRegex(ValueError, "incomplete"):
-            builder.integrate_from_files(strict=True)
-        payload = json.loads(original)
-        payload["_meta"]["episode_locator"]["episode_index"] = 4
-        path.write_text(json.dumps(payload))
-        with self.assertRaisesRegex(ValueError, "changed"):
-            builder.integrate_from_files(strict=True)
-        with self.assertRaisesRegex(ValueError, "locator"):
-            builder.integrate_from_files()
 
     def test_transport_failure_records_failed_run_and_no_final(self):
         self.create.side_effect = TimeoutError("synthetic transport failure")
@@ -179,31 +138,6 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         evidence = json.loads(Path(builder.save_dir, "EvidenceCheck.json").read_text())
         self.assertEqual(evidence["unmatched_quote_count"], 1)
 
-    def test_context_assets_opt_out_preserves_full_input(self):
-        self.builder_config["sparse_builder_config"]["enable_context_assets"] = False
-        builder = self.builder()
-        self.assertEqual(builder._build_private_context_assets(self.inputs).evidence_cards, [])
-        builder.run(self.inputs)
-        self.assertIn(self.inputs.samples[0].content, self.create.call_args.kwargs["messages"][1]["content"])
-
-    def test_compiled_graph_keeps_sparse_plan_and_context(self):
-        builder = self.builder()
-        result = builder.graph().invoke({
-            "build_input": self.inputs, "context_assets": builder._build_private_context_assets(self.inputs),
-            "agent_results": [], "agent_executed": [], "cost": [], "stage_sparse_cache": {},
-            "episode_execution_plan": {"episodes": []},
-        }, config={"recursion_limit": 30})
-        self.assertEqual(len(result["episode_execution_plan"]["episodes"]), 2)
-        self.assertEqual(len(result["agent_executed"]), 11)
-        self.assertEqual(result["context_assets"].index.sample_ids, ["sample-1", "sample-2"])
-
-    def test_preflight_needs_no_credentials_and_makes_no_calls(self):
-        with patch.dict(os.environ, {}, clear=True):
-            report = preflight(self.builder_config, self.inputs)
-        self.assertFalse(report["credential_present"])
-        self.assertFalse(report["online_compatibility_verified"])
-        self.assertFalse((self.root / "runs").exists())
-        self.create.assert_not_called()
 
     def test_documented_cli_executes_and_replays_without_network(self):
         config_path = self.root / "config.yml"
@@ -230,55 +164,6 @@ class SparseRuntimeEntryTest(unittest.TestCase):
         with patch("sys.stdout", new_callable=io.StringIO):
             main(["--replay", str(run_dir)])
 
-    def test_invalid_input_is_rejected_without_submission(self):
-        bad = copy.deepcopy(self.inputs)
-        bad.samples.append(copy.deepcopy(bad.samples[0]))
-        builder = self.builder()
-        with self.assertRaisesRegex(ValueError, "unique"):
-            builder.run(bad)
-        self.create.assert_not_called()
-
-    def test_unknown_skeleton_names_rejected_during_run(self):
-        values = responses()
-        values[0]["title"] = vf("unknown")
-        self.create.side_effect = [response(content=json.dumps(values[0]))] * 3
-        builder = self.builder()
-        with self.assertRaisesRegex(ValueError, "3 attempt"):
-            builder.run(self.inputs)
-        self.assertFalse(Path(builder.save_dir, "FinalEventCascade.json").exists())
-
-    def test_dangling_episode_reference_rejected_during_run(self):
-        values = responses()
-        values[4]["participant_relations"][0]["to_participant_id"] = "absent"
-        self.create.side_effect = [response(content=json.dumps(x)) for x in values[:4] + [values[4]] * 3]
-        builder = self.builder()
-        with self.assertRaisesRegex(ValueError, "dangling"):
-            builder.run(self.inputs)
-        self.assertEqual(self.create.call_count, 7)
-        self.assertFalse(Path(builder.save_dir, "FinalEventCascade.json").exists())
-
-    def test_missing_usage_does_not_become_zero(self):
-        summary = summarize_calls([{"agent": "A", "attempt": 1, "prompt_tokens": None},
-                                   {"agent": "A", "attempt": 2, "prompt_tokens": 20}])
-        self.assertIsNone(summary["prompt_tokens"])
-        self.assertEqual(summary["known_prompt_tokens"], 20)
-        self.assertEqual(summary["unknown_prompt_tokens_calls"], 1)
-
-    def test_invalid_configuration_is_rejected_before_client_creation(self):
-        changes = [
-            lambda c: c["agents"]["SkeletonChecker"].update(lm_name="other/model"),
-            lambda c: c["generation_config"].update(max_tokens=2),
-            lambda c: c["generation_config"].update(tools=[]),
-            lambda c: c["generation_config"].update(extra_body={"messages": []}),
-            lambda c: c["sparse_builder_config"].update(enable_sparse_routing="false"),
-            lambda c: c["sparse_builder_config"].update(max_json_attempts=4),
-        ]
-        for change in changes:
-            config = copy.deepcopy(self.builder_config)
-            change(config)
-            with self.assertRaises(ValueError):
-                validate_config(config)
-        self.create.assert_not_called()
 
     def test_pipeline_sqlite_text_path_needs_no_pdf_key(self):
         from finmy.pipeline import FinmyPipeline

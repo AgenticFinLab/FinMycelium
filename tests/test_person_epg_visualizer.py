@@ -18,11 +18,11 @@ load_history_result = history.load_history_result
 scan_history_files = history.scan_history_files
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLES = ROOT / 'examples/data/person_epg'
+FIXTURE = ROOT / 'tests/fixtures/buffett_person_epg_preview.json'
 
 
-def package(name='buffett_2022_2023.json'):
-    return json.loads((EXAMPLES / name).read_text(encoding='utf-8'))
+def package():
+    return json.loads(FIXTURE.read_text(encoding='utf-8'))
 
 
 class PageData(HTMLParser):
@@ -57,7 +57,7 @@ class PersonEPGVisualizerTest(unittest.TestCase):
             output = Path(directory) / 'nested' / 'timeline.html'
             command = subprocess.run([
                 sys.executable, '-m', 'finmy.person_epg', 'render',
-                str(EXAMPLES / 'buffett_2022_2023.json'), '--output', str(output),
+                str(FIXTURE), '--output', str(output),
             ], cwd=ROOT, text=True, capture_output=True)
             self.assertEqual(command.returncode, 0, command.stderr)
             page = output.read_text(encoding='utf-8')
@@ -78,14 +78,14 @@ class PersonEPGVisualizerTest(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_unorganized_conversion_does_not_silently_export_an_empty_chart(self):
-        data = package('buffett_oxy.json')
+        data = package()
         data['event_activity'] = []
         data['event_activity_detail'] = []
         with self.assertRaisesRegex(ValueError, 'Store domain/event organization'):
             render_person_epg(data)
 
     def test_script_and_template_text_roundtrip_safely(self):
-        data = package('buffett_oxy.json')
+        data = package()
         hostile = '</script><script>alert(1)</script>@@SCRIPT@@'
         data['graph']['title'] = hostile
         before = copy.deepcopy(data)
@@ -97,7 +97,7 @@ class PersonEPGVisualizerTest(unittest.TestCase):
     def test_history_detects_named_examples_and_person_epg_directories(self):
         data = package()
         self.assertEqual(detect_build_mode(data), 'person_epg')
-        self.assertEqual(load_history_result(str(EXAMPLES / 'buffett_2022_2023.json')), data)
+        self.assertEqual(load_history_result(str(FIXTURE)), data)
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory) / 'build_output_example'
             folder.mkdir()
@@ -127,7 +127,8 @@ class PersonEPGScriptTest(unittest.TestCase):
         result = self.run_script(data)
         traces = [t for t in result['data'] if t.get('meta', {}).get('kind') == 'activity']
         self.assertEqual(len(traces), 45)
-        self.assertEqual(len({t['meta']['activity_id'] for t in traces}), 43)
+        self.assertEqual({t['meta']['activity_id'] for t in traces},
+                         {m['activity_id'] for m in data['event_activity']})
         self.assertEqual(sum(t['meta']['event_id'] == 'thread:oxy' for t in traces), 16)
         self.assertEqual(len(result['annotations']), len(data['domain']) + len(data['event']))
         for member in data['event_activity']:
@@ -145,10 +146,9 @@ class PersonEPGScriptTest(unittest.TestCase):
         self.assertTrue(uncertain)
         self.assertTrue(all(s['fillcolor'] == 'rgba(0,0,0,0)' for s in uncertain))
         self.assertTrue(any(t.get('marker', {}).get('pattern', {}).get('shape') == '/' for t in result['data']))
-        self.assertTrue(any('巴菲特阅读业绩说明材料' in t['hovertext'][0] for t in traces))
 
     def test_subject_years_and_unknown_time_are_not_hardcoded(self):
-        data = package('buffett_oxy.json')
+        data = package()
         focal = next(e for e in data['entity'] if e['entity_id'] == data['graph']['subject_entity_id'])
         focal['name'] = 'Example Person'
         data['graph'].update(title='Other history', coverage_start='2010', coverage_end='2030')

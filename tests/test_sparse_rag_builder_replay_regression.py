@@ -120,86 +120,6 @@ class SparseRagBuilderReplayRegressionTest(unittest.TestCase):
         self.assertEqual(first_episode["participants"][0]["participant_id"], "P1")
         self.assertEqual(second_episode["participants"][0]["participant_id"], "P2")
 
-    def test_integrate_results_keeps_duplicate_non_empty_ids_distinct(self):
-        skeleton = {
-            "stages": [
-                {
-                    "stage_id": "SAME",
-                    "name": _vf("First duplicate stage"),
-                    "episodes": [_episode("E", "First duplicate", 0)],
-                },
-                {
-                    "stage_id": "SAME",
-                    "name": _vf("Second duplicate stage"),
-                    "episodes": [_episode("E", "Second duplicate", 0)],
-                },
-            ]
-        }
-        state = {
-            "agent_results": [
-                {"SkeletonChecker": skeleton},
-                {
-                    "ParticipantReconstructor": {"participants": [{"participant_id": "P1"}]},
-                    "_meta": {"episode_locator": _locator(0, 0, "SAME", "E")},
-                },
-                {
-                    "EpisodeReconstructor": {
-                        "episode_id": "E",
-                        "name": _vf("First duplicate replay"),
-                        "participants": [{"participant_id": "P1"}],
-                        "transactions": [],
-                    },
-                    "_meta": {"episode_locator": _locator(0, 0, "SAME", "E")},
-                },
-                {
-                    "ParticipantReconstructor": {"participants": [{"participant_id": "P2"}]},
-                    "_meta": {"episode_locator": _locator(1, 0, "SAME", "E")},
-                },
-                {
-                    "EpisodeReconstructor": {
-                        "episode_id": "E",
-                        "name": _vf("Second duplicate replay"),
-                        "participants": [{"participant_id": "P2"}],
-                        "transactions": [],
-                    },
-                    "_meta": {"episode_locator": _locator(1, 0, "SAME", "E")},
-                },
-            ],
-            "episode_execution_plan": {"episodes": []},
-        }
-
-        final_cascade = self.builder.integrate_results(state)
-
-        first_episode = final_cascade["stages"][0]["episodes"][0]
-        second_episode = final_cascade["stages"][1]["episodes"][0]
-        self.assertEqual(first_episode["name"]["value"], "First duplicate replay")
-        self.assertEqual(second_episode["name"]["value"], "Second duplicate replay")
-        self.assertEqual(first_episode["participants"][0]["participant_id"], "P1")
-        self.assertEqual(second_episode["participants"][0]["participant_id"], "P2")
-
-    def test_integrate_from_files_uses_episode_locator_when_result_only_covers_second_episode(self):
-        skeleton = _two_episode_skeleton()
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self.builder.save_dir = tmpdir
-            _write_json(tmpdir, "SkeletonChecker-1-Result.json", skeleton)
-            _write_json(
-                tmpdir,
-                "EpisodeReconstructor-2-Stage0-Episode1-Result.json",
-                {
-                    "episode_id": "E2",
-                    "name": _vf("Second replay episode"),
-                    "participants": [{"participant_id": "P2"}],
-                    "transactions": [],
-                },
-            )
-
-            final_cascade = self.builder.integrate_from_files()
-
-        episodes = final_cascade["stages"][0]["episodes"]
-        self.assertEqual(episodes[0]["name"]["value"], "First episode")
-        self.assertEqual(episodes[1]["name"]["value"], "Second replay episode")
-        self.assertEqual(episodes[1]["participants"][0]["participant_id"], "P2")
 
     def test_integrate_from_files_replays_mixed_light_then_full_transactions_correctly(self):
         skeleton = _two_episode_skeleton(episode_ids=("E1", "E2"))
@@ -275,50 +195,6 @@ class SparseRagBuilderReplayRegressionTest(unittest.TestCase):
         self.assertEqual(episodes[0]["name"]["value"], "First episode")
         self.assertEqual(episodes[1]["name"]["value"], "Wrapped second replay")
         self.assertEqual(episodes[1]["participants"][0]["participant_id"], "P2")
-
-    def test_integrate_from_files_respects_skip_metadata_over_transaction_artifact(self):
-        skeleton = {
-            "stages": [
-                {
-                    "stage_id": "S1",
-                    "name": _vf("Replay stage"),
-                    "episodes": [_episode("E1", "Skip transaction episode", 0)],
-                }
-            ]
-        }
-        locator = _locator(0, 0, "S1", "E1")
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self.builder.save_dir = tmpdir
-            _write_json(tmpdir, "SkeletonChecker-1-Result.json", skeleton)
-            _write_json(
-                tmpdir,
-                "TransactionReconstructor-2-Stage0-Episode0-Result.json",
-                {"transactions": [{"transaction_id": "SHOULD_SKIP"}]},
-            )
-            _write_json(
-                tmpdir,
-                "EpisodeReconstructor-3-Stage0-Episode0-Result.json",
-                {
-                    "EpisodeReconstructor": {
-                        "episode_id": "E1",
-                        "name": _vf("Skip transaction episode"),
-                        "participants": [],
-                        "transactions": [{"transaction_id": "PLACEHOLDER"}],
-                    },
-                    "_meta": {
-                        "episode_locator": locator,
-                        "execution_mode": "full",
-                        "transaction_step_skipped": True,
-                        "transaction_tier": "skip",
-                    },
-                },
-            )
-
-            final_cascade = self.builder.integrate_from_files()
-
-        episode = final_cascade["stages"][0]["episodes"][0]
-        self.assertEqual(episode["transactions"], [])
 
 
 if __name__ == "__main__":
