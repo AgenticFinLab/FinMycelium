@@ -1,6 +1,6 @@
 # {{person_name}}: Research plan
 
-> Template instructions: Use this structure for every case. Replace placeholders and remove authoring instructions before delivery. Let the research determine the number of table rows and event descriptions. Write the plan in English by default, while retaining original names, source titles, and evidence quotations where required. Record source support separately from user confirmation. A plan with no confirmed events remains Pending confirmation; partial confirmation applies only to the recorded events and scopes.
+> Use this shared structure with detail appropriate to the person and available research. Replace placeholders and remove authoring instructions before delivery. Present current findings, keeping editing history in Git and the delivery summary. Write in English by default, retaining original names, source titles, and quotations as needed. Record source support separately from user confirmation; pending or partial confirmation applies to the relevant events and scopes.
 
 Save this plan as `EPG-dataset/person-epg/<person_directory>/research-plan.md`, creating the root and person directory if needed according to the Skill.
 
@@ -8,14 +8,12 @@ Save this plan as `EPG-dataset/person-epg/<person_directory>/research-plan.md`, 
 
 | Field | Content |
 | --- | --- |
-| person_id | {{Registered person ID, or an explicitly marked temporary ID; note the legacy subject_id correspondence when applicable}} |
+| person_id | {{Registered person ID from person-epg/people.csv, or an explicitly marked temporary ID}} |
 | Name and aliases | {{Established English name when available, original name, relevant aliases, and any necessary identity distinctions}} |
 | Research objective | {{The experiences or processes the user wants to understand}} |
-| Coverage | {{Full life history / period / topic; retain supported date precision}} |
+| Coverage | {{Full life history / period / topic and research coverage cutoff; retain supported date precision}} |
 | Scope notes | {{Inclusion criteria, necessary background, and explicit exclusions}} |
-| Plan version and date | {{Version identifier and actual preparation date}} |
 | Confirmation status | {{Pending confirmation, or a brief summary of partial/full confirmation referring to section 7}} |
-| Relationship to an existing plan | {{Initial plan, or the source version and proposed changes}} |
 
 ## 2. storyline catalog
 
@@ -31,15 +29,17 @@ Group events by a shared activity direction or subject; a storyline is an organi
 | --- | --- | --- | --- | --- | --- | --- |
 | {{ID}} | {{Primary storyline ID}} | {{Specific continuing matter, named in English}} | {{Precision supported by the sources}} | {{What can be researched independently}} | {{Public-source support / To verify}} | {{Source IDs}} |
 
-Reuse registered event IDs; newly registered events use `<person_id>-E0001` and subsequent sequence values, independent of storyline membership. Mark temporary references explicitly. Keep IDs consistent with the event descriptions below. This table records research candidates. Use `Public-source support` when read sources support the matter and the person's connection and the research scope can be explained. Otherwise use `To verify` and identify the key unresolved issue. Missing fine-grained details may remain research questions. Neither label records user confirmation or graph acceptance. Construction progress, artifact versions, and output links are maintained later through tasks and the person's master table.
+Reuse registered event IDs; newly registered events use `<person_id>-E0001` and subsequent sequence values, independent of storyline membership. Mark temporary references explicitly. Keep IDs consistent with the event descriptions below. This table records research candidates. Use `Public-source support` when read sources support the matter and the person's connection and the research scope can be explained. Otherwise use `To verify` and identify the key unresolved issue. Missing fine-grained details may remain research questions. Neither label records user confirmation or graph acceptance. Execution progress, ownership, and collected artifact paths are maintained in the person's `events.csv`; detailed run records stay with the task.
 
 ### Directory layout
 
-Show the researched catalog as a directory tree under the shared root. Expand this example to match the actual storylines and events above, using the same names, IDs, and primary memberships. Mark To verify candidates. Initially, storyline/event paths are proposed. After the revision self-review, create the directories that are ready under the Skill and mark each path as existing or planned. Explain any material deferrals briefly; directory creation does not change source-support or user-confirmation status.
+Adapt this tree to the researched storylines and events, using matching names and IDs. Show proposed paths initially; after revision directory preparation, distinguish existing and planned paths, including the README and progress CSV. Briefly explain deferred entries where useful. Directory preparation and task confirmation remain separate.
 
 ```text
 EPG-dataset/person-epg/
 └── {{person_directory}}/
+    ├── README.md
+    ├── events.csv
     ├── research-plan.md
     └── {{storyline_name}}/  # {{storyline_id}} · {{existing / planned}}
         └── {{event_name}}/  # {{event_id}} · {{support_status}} · {{existing / planned}}
@@ -47,7 +47,7 @@ EPG-dataset/person-epg/
 
 ## 4. event research descriptions
 
-Repeat the following block for each candidate. Keep it concise, with detail proportional to the matter. Reuse the plan's person identity, version, source index, and the event master table's support status; do not maintain a second catalog here. Unknowns should be explained rather than filled with invented facts.
+Repeat the following block for each candidate. Keep it concise, with detail proportional to the matter. Reuse the plan's person identity, source index, and the event master table's support status; do not maintain a second catalog here. Unknowns should be explained rather than filled with invented facts.
 
 ### {{event_id}} · {{event_name}}
 
@@ -97,14 +97,14 @@ Keep quotations accurate, in their original language, proportionate, and complia
 
 If no events have been confirmed, state Pending confirmation and the pending decisions; omit the empty confirmation table. Otherwise, record the actual decisions below. A decision may cover several event IDs together. Do not invent a confirmer, confirmation date, or formal ID, or treat confirmation of selected events as confirmation of the whole catalog.
 
-| Adopted plan version | Confirmed event IDs | Confirmed scope | Confirmation basis |
-| --- | --- | --- | --- |
-| {{Version actually confirmed}} | {{Explicitly confirmed IDs}} | {{Reference the event descriptions at that version and any explicitly approved scope limits}} | {{Actual user decision or supplied approval record; date/reference when available}} |
+| Confirmed event IDs | Confirmed scope | Confirmation basis |
+| --- | --- | --- |
+| {{Explicitly confirmed IDs}} | {{The selected event descriptions and any explicitly approved scope limits}} | {{Actual user decision or supplied approval record; date/reference when available}} |
 
-Unconfirmed events remain pending and do not block tasks for the confirmed subset. Keep the event master table's source-support status separate from this record. Retain prior decisions with the versions and scopes they confirmed.
+Unconfirmed events remain pending and do not block tasks for the confirmed subset. Keep the event master table's source-support status separate from this record. Preserve the confirmed scopes and decision basis.
 
-Each task uses a specific adopted plan version and event scope, preserving the content actually used. Subsequent plan revisions do not automatically change an existing task; record an explicitly agreed scope change against that task when needed.
+Keep the adopted plan content and confirmed scope in each task's run record; subsequent plan edits do not automatically change that task.
 
 Each handoff references the same event's `person_id / storyline_id / event_id`, names, cited overview, scope, connection to the person, research questions, and source leads from above, including any material unresolved issue. Avoid creating another independently maintained catalog. Runtime models, search providers, and construction budgets are selected in the subsequent task configuration.
 
-Use the adopted plan to populate catalog identity and scope fields. Event progress and accepted artifact links belong in the person's catalog; actual inputs, configuration, outputs, and costs belong in task records. Preserve existing registrations and graph-internal identifiers through explicit mappings rather than rewriting old assets.
+Use the adopted plan to populate catalog identity and scope fields. Event progress and accepted artifact paths belong in the person's `events.csv`; actual inputs, configuration, outputs, and costs belong in task records. Preserve existing registrations and graph-internal identifiers through explicit mappings rather than rewriting old assets.

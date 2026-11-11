@@ -48,13 +48,17 @@ The only required input is enough information to identify the person; a formal I
 
 If only a name is supplied, explore the person's publicly documented life and report the coverage actually achieved. Seek meaningful experiences and continuing processes rather than an inventory of everyday activities. Do not automatically restrict research to finance or impose predefined storylines. Follow explicit topic or period limits when supplied. Separate activity dates from publication dates: later retrospectives, interviews, and summaries are valid sources, with their retrospective nature identified; they do not automatically extend the activity scope.
 
-Discover candidate storylines and events during initial research; the user need not provide them beforehand. When revising a confirmed plan, preserve stable IDs and confirmation states, distinguish additions from proposed boundary changes, and explain those changes. Summarize the person, objective, scope, and existing-plan basis within the research plan itself. Do not create a separate intake report or require confirmation after every research step.
+Discover candidate storylines and events during initial research; the user need not provide them beforehand. When revising a confirmed plan, preserve stable IDs and confirmation states, distinguish additions from proposed boundary changes, and explain those changes. Keep the research plan focused on the current person, objective, scope, and findings. Do not create a separate intake report or require confirmation after every research step.
 
-Use the [research plan template](assets/research-plan-template.md) for the main deliverable: person and scope, a storyline table, an event master table with individual descriptions, sources, gaps, and matters awaiting confirmation. Deliver a version pending confirmation by default. A planning draft is not a final graph artifact.
+Use the [research plan template](assets/research-plan-template.md) for the main deliverable: person and scope, a storyline table, an event master table with individual descriptions, sources, gaps, and matters awaiting confirmation. Deliver the plan pending event selection and scope confirmation by default. A planning draft is not a final graph artifact.
 
-Use `EPG-dataset/person-epg/` as the common root for all person research directories. Within the actual EPG-dataset checkout, create or reuse `<person_directory>/` and save `research-plan.md` there. Reuse an existing directory for the same person; name a new one with the person's established English name when available. For example, Warren Buffett's plan belongs at `EPG-dataset/person-epg/Warren Buffett/research-plan.md`. Create missing root and person directories as part of saving the deliverable. Preserve existing plans and their confirmed versions when revising; do not create a second EPG-dataset inside FinMycelium.
+Use `EPG-dataset/person-epg/` as the common root for all person research directories. Within the actual EPG-dataset checkout, create or reuse `<person_directory>/` and save `research-plan.md` there. Reuse an existing directory for the same person; name a new one with the person's established English name when available. For example, Warren Buffett's plan belongs at `EPG-dataset/person-epg/Warren Buffett/research-plan.md`. Create missing root and person directories as part of saving the deliverable. Preserve confirmed decisions and stable IDs when revising; do not create a second EPG-dataset inside FinMycelium.
 
-The plan may be saved here while pending confirmation. Keep full source downloads, caches, and runtime logs in ignored working directories. Initially show storyline/event directories as a proposed tree. After the revision self-review, directly create missing `<storyline_directory>/<event_directory>/` paths beneath the person directory for events meeting step 3's planning-readiness conditions, without another directory-creation confirmation. Leave `To verify` candidates and paths affected by material unresolved grouping or boundary choices as planned; they do not block ready entries. Reuse existing directories and preserve their contents; this preparation only adds missing directories, without moving, renaming, or deleting existing assets. Update the plan's tree to distinguish existing from planned paths, with names, IDs, and memberships matching the catalog. Creating directories does not confirm construction tasks or register IDs. Graph files enter through the later construction and review workflow; do not create empty graph placeholders.
+Save the plan even when event selection is pending. Keep source downloads, caches, and logs in ignored working directories. Initially show a proposed storyline/event directory tree. After revision self-review, create the missing paths for candidates meeting step 3's planning conditions and having clear directory boundaries, preserving existing contents. Leave unresolved paths planned and show the actual directory state in the plan. This preparation needs no separate directory approval; task confirmation and graph construction remain later steps.
+
+At the same time, prepare `events.csv` from the [progress CSV template](assets/event-progress-template.csv), with one row per catalog event, and a short `README.md` from the [person entry template](assets/person-readme-template.md). Take IDs, names, storyline membership, and periods from the plan. New, unstarted rows use `planned`; unassigned owners and unavailable artifact paths stay blank.
+
+Use the CSV as the maintained progress index, with README navigation and any summaries based on it; detailed execution history belongs in run records. Reconcile updates by event ID, retaining actual progress, ownership, and artifact references. Explain catalog changes that affect those records. Progress states are `planned`, `in_progress`, `in_review`, `needs_revision`, and `accepted`; `accepted` denotes content/evidence approval and collection of the final JSON, Gantt, and review record. Artifact paths are relative to the person's directory.
 
 ## Web research method
 
@@ -121,15 +125,17 @@ Use this same skill and template for initial research and revisions. For a revis
 
 Assess review feedback against the sources, scope, and planning-readiness conditions above; reviewer suggestions are not automatically required changes. Correct demonstrated factual, identity, citation, and handoff inconsistencies. Treat alternative groupings, event splits, or additions as research judgments, explaining material choices rather than requiring a particular catalog.
 
-Use targeted follow-up and recheck affected content. The default planning cycle ends after initial research, one revision self-review, and directory preparation. Deliver the reviewed plan as the current working version, retaining open questions for later event-level research. The goal is a usable research handoff; resolving every uncertainty about the person's life is not required. Do not automatically add another review or polishing round. Later updates should respond to user requests, significant new evidence, or concrete problems affecting use.
+Use targeted follow-up and recheck affected content. The default planning cycle ends after initial research, one revision self-review, and directory preparation. Deliver the reviewed plan as the current research plan, retaining open questions for later event-level research. The goal is a usable research handoff; resolving every uncertainty about the person's life is not required. Do not automatically add another review or polishing round. Later updates should respond to user requests, significant new evidence, or concrete problems affecting use.
 
 Apply the planning-readiness conditions to each event. If a material issue still prevents handoff, identify the affected entry and its unresolved issue without reopening the whole plan or blocking ready entries. Do not turn case-specific findings into universal acceptance rules. Summarize material changes, prepared directories, and remaining questions; no content change is required when none is justified. Keep proposed changes pending confirmation while preserving earlier confirmations as described below.
 
 ## Markdown deliverable requirements
 
+Present the current research findings, scope, coverage cutoff, and substantive uncertainties concisely. Keep editing history in Git and delivery summaries, with adopted input snapshots in task records. Explain prior decisions only when they help the reader understand the current scope or an unresolved choice.
+
 Follow the shared template, with detail proportional to the research subject:
 
-- Person identity, research objective, overall scope, existing IDs, and plan version.
+- Person identity, research objective, overall scope, existing IDs, and the research coverage cutoff.
 - A storyline catalog and an event master table containing all candidates, with consistent names, periods, and primary memberships.
 - Each event's cited overview, connection to the person, explicit research scope, further questions, search leads, and unresolved matters.
 - Clickable sources and concise locators explaining what each source supports. Do not fabricate page visits, quotations, publication dates, or verification results.
@@ -139,11 +145,11 @@ Distinguish candidates with `Public-source support` from those `To verify`. Publ
 
 The master table is an index; each event description follows the template's four core sections: Event overview, Connection to the person, Research scope, and Further research. Keep source-supported findings separate from proposed scope and unanswered questions. Use the shared source IDs beside factual statements and preserve useful findings already obtained; planning need not withhold known facts merely because detailed evidence acquisition happens later. Do not turn the overview into a speculative stage/action structure or treat it as a substitute for construction evidence.
 
-State whether a selected period covers the whole event or only part of it. Ask specific follow-up questions without presupposing unverified actions or causes. Reuse the common person identity, plan version, and source index, keeping event references consistent with the master table. Avoid independently maintaining the same catalog in multiple files. Include a compact `person → storyline → event` directory tree derived from the catalog, with matching names, IDs, and primary memberships; identify candidates still To verify. After directory preparation, show which paths exist and which remain planned. An additional overview diagram is optional.
+State whether a selected period covers the whole event or only part of it. Ask specific follow-up questions without presupposing unverified actions or causes. Reuse the common person identity and source index, keeping event references consistent with the master table. Avoid independently maintaining the same catalog in multiple files. Include a compact `person → storyline → event` directory tree derived from the catalog, with matching names, IDs, and primary memberships; identify candidates still To verify. After directory preparation, show which paths exist and which remain planned. An additional overview diagram is optional.
 
 ## Stable identifiers and catalog mapping
 
-Reuse existing registered IDs even when they differ from the convention for new entries. For a person recorded under a legacy `subject_id`, retain that registered identity and record its correspondence to the planning `person_id`. Keep graph-internal IDs separately traceable; do not rewrite historical graphs to match catalog IDs.
+Look up person identities in the current `EPG-dataset/person-epg/people.csv` and reuse registered IDs. Keep graph-internal IDs and any authorized identity migration mappings in task or catalog records; they are not research findings.
 
 For newly registered entries, use:
 
@@ -158,23 +164,24 @@ Check existing registrations before allocating IDs. When formal registration has
 Keep the following responsibilities distinct:
 
 - **Research plan:** Candidate storylines and events, scopes, supporting sources, research questions, and confirmation records.
-- **`EPG-dataset/person-epg/README.md`:** Person index, ownership, coverage, and links to person directories.
-- **Each person's `README.md`:** Event progress, adopted plan and artifact versions, and JSON/Gantt/review links.
-- **Task records:** Actual IDs, adopted plan version, inputs, configuration, outputs, and costs.
+- **`EPG-dataset/person-epg/people.csv`:** Person registration, ownership, coverage, status, and research-plan links.
+- **Each person's `events.csv`:** Event execution progress and accepted JSON/Gantt/review paths.
+- **Root and person `README.md` files:** Navigation to the registries, research plans, and collected outputs.
+- **Task records:** Actual IDs, the adopted plan snapshot, inputs, configuration, outputs, and costs.
 
-Carry names, memberships, and scope from the adopted plan into the catalogs; update execution and artifact status from actual work. Avoid separately maintaining full research descriptions in each location. Preserve the existing `people.csv` and assets until the catalog handoff defines their compatibility or migration mapping. Creating directories and saving the research plan does not register its candidate events, migrate existing assets, or imply graph acceptance.
+Carry names, memberships, and scope from the adopted plan into the catalogs; update execution and artifact status from actual work. Avoid separately maintaining full research descriptions in each location. Update navigation links when an authorized registration changes; avoid manually duplicating CSV progress data in Markdown. Creating directories and saving the research plan does not register its candidate events, migrate existing assets, or imply graph acceptance.
 
 ## Confirmation and handoff
 
 Present the main storylines and events, significant uncertainties, and suggested research priorities. Priorities are recommendations, not a substitute for user confirmation. Focus user confirmation on the catalog, material boundaries, and priority tasks. Carry out routine searching, reading, and fact checking without per-step approval; seek clarification promptly when identity ambiguity or a material scope change would alter the research task.
 
-The user may confirm only a subset of events. Record the adopted plan version, confirmed event IDs and scopes, and the actual confirmation basis in the same plan. Other events remain pending or under investigation and do not block the confirmed subset. Confirmation does not upgrade source-support labels or imply graph acceptance.
+The user may confirm only a subset of events. Record confirmed event IDs, scopes, and the actual confirmation basis in the same plan. Other events remain pending or under investigation and do not block the confirmed subset. Confirmation does not upgrade source-support labels or imply graph acceptance.
 
-Each downstream task must identify the adopted plan version and the selected event's confirmed scope, retaining the content actually used. A later plan revision must not silently change an existing task. Keep prior confirmations associated with their original versions; when a task's scope needs to change, state the change and record the applicable confirmation rather than replacing the task's history. This rule does not require another manually maintained catalog or approval report.
+Each downstream task retains the plan content and confirmed scope actually used in its run record, so later plan edits do not change ongoing work. Record agreed scope changes against the affected task. Git references or content hashes can support this traceability.
 
-After confirmation, select one event from the same plan and hand off its confirmed `person_id / storyline_id / event_id`, names, cited overview, scope, connection to the person, research questions, source leads, material unresolved issues, and plan version. FinMycelium then performs formal search, input assembly, and construction for that task. Planning summaries and reference links do not replace actual construction evidence.
+After confirmation, select one event from the same plan and hand off its confirmed `person_id / storyline_id / event_id`, names, cited overview, scope, connection to the person, research questions, source leads, and material unresolved issues. FinMycelium then performs formal search, input assembly, and construction for that task. Planning summaries and reference links do not replace actual construction evidence.
 
-This skill delivers the research plan, prepared directories after self-review, and the confirmed task description when available. Graph construction, final content review, and formal artifact collection belong to subsequent workflow steps. The project's integration layer handles field and interface mappings.
+This skill delivers the research plan, prepared directories, event progress CSV and README entry after self-review, and the confirmed task description when available. Graph construction, final content review, and formal artifact collection belong to subsequent workflow steps. The project's integration layer handles field and interface mappings.
 
 ## Package resources and helper code
 
