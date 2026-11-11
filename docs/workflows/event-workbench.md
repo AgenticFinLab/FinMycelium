@@ -20,11 +20,12 @@ requires a separate start action and permission to use external interfaces.
 
 | Page | Responsibility |
 | --- | --- |
+| 数据集 (Dataset) | Read the configured EPG-dataset catalog, select one ordinary or person event, confirm scope and prepare a search. |
 | 事件数据 (Data) | Maintain the master table, confirm an event's scope, inspect its current step and initiate the next action. |
 | 新建检索 (Search) | Create an individual or batch of search tasks with reusable defaults and per-run overrides. |
 | 任务中心 (Tasks) | One list of actual search and build runs; select one to inspect progress, inputs and results. |
 | 待审 (Review) | Review material and graph versions, record decisions and preserve revisions. |
-| 设置 (Settings) | Separate search defaults from Builder defaults; inspect credential presence. |
+| 设置 (Settings) | Configure the local dataset root, separate search defaults from Builder defaults, and inspect credential presence. |
 
 The event list opens a separate detail view when you select a row. **返回事件列表**
 returns to the same filters. Use **显示 → 批量选择** for multi-event actions; additional
@@ -77,6 +78,56 @@ search and build are not mandatory repetitions. Imported graphs require explicit
 confirmation that they correspond to the event and its current input. Supplementary
 search creates another task; it does not erase earlier originals or approvals.
 
+## Select an event from EPG-dataset
+
+1. In **设置 → 接口与工作区**, save the local EPG-dataset root. This is a path on
+   the machine running the workbench, shared by ordinary and person events.
+2. Open **数据集**. Ordinary events come from `event-epg/events.csv`; person events
+   come from `person-epg/people.csv`, the person's `events.csv`, and the matching
+   event description in `research-plan.md`. An empty catalog stays empty: there is
+   no fallback to `data/events/`. Existing upload/manual-entry workflows remain available.
+3. Select an event, optionally filtering a person's events by storyline. Preview
+   the planning description, cited source leads, and summary destination. Adjust
+   the activity period and included/excluded scope for this task. Activity periods
+   do not automatically filter publication dates.
+4. Confirm the scope and destination. **保存检索任务** freezes the selected catalog
+   identity, relevant plan text, source-file hashes, scope, and search configuration
+   without execution. **确认并开始搜索** saves and explicitly starts the task when
+   external calls are enabled. Both use the existing common search form and controller.
+5. Follow the task in **任务中心**. The dataset page also lists earlier searches
+   for the selected event. Ordinary event tasks have local workbench scope records
+   separate from their catalog IDs and can use the existing material-review path.
+   Person tasks retain their person/storyline/event identity and can prepare a
+   separate [native single-event build](person-event-build.md) after material
+   confirmation. Each saved native draft has an expanded single-event Gantt;
+   it can be regenerated from the JSON without model calls. Content review remains
+   pending; no review Skill or automatic final acceptance is introduced.
+
+Saving task-specific edits never modifies the source CSV or research plan. Later
+catalog changes do not change existing task snapshots. Catalog status values do
+not grant workbench scope, evidence, or graph approval.
+
+### Automatic search summaries
+
+On a terminal search outcome, the background worker generates an English summary
+from saved records, without an additional model or Skill call. It saves locally
+first and publishes to the selected event:
+
+- Ordinary event: `event-epg/events/<event_id>/search-summary.md`.
+- Person event: `person-epg/<person>/<storyline>/<event>/search-summary.md`.
+
+The summary records the latest output, source URLs and acquisition states, input
+counts, gaps/stop notes, and a short run index. Incomplete or failed searches retain
+their actual status. Existing human notes outside the generated region are kept;
+retries do not duplicate run entries, and an older retry does not replace a newer
+output. The latest search output is separate from any adopted build input.
+
+Task details show **数据集检索汇总**, its save path and this task's report. If dataset
+publication fails, the local results remain available; **重新保存汇总** retries only
+saving. Background saving does not require the page to stay open. It neither starts
+construction nor marks a graph accepted, and never commits or pushes Git changes.
+Unlinked independent searches keep their existing local-only behavior.
+
 ## Execution and recovery boundaries
 
 - Search uses the existing controller and its cumulative limits. Pause waits for
@@ -89,14 +140,17 @@ search creates another task; it does not erase earlier originals or approvals.
   changed after task creation, create a new task against that version.
 - Builds currently support cancelling an unstarted task, not pausing a running
   model workflow. Page changes do not stop the worker. Failed/interrupted tasks are
-  never automatically replayed; a fresh task is an explicit potentially paid run.
+  never automatically replayed. Ordinary event builds require a fresh task;
+  native person-event builds support explicit checkpoint recovery with cumulative
+  usage retained, as described in [person event construction](person-event-build.md).
 - Batch search preparation is supported. Automatic batch build scheduling and its
   concurrency controls are not connected. Legacy task plans remain in a separate
   history section for inspection or cancellation, never treated as actual executions.
 - Provider-reported usage is retained; missing token or monetary information is not
   represented as zero. Credential presence is not a connectivity check.
-- Person/company search targets do not enable Hu's separate native person graph
-  implementation in this event workbench.
+- Catalog-linked person events use the native single-event construction path.
+  Choosing a person/company target in a standalone search does not by itself
+  create that catalog association or change the ordinary event Builder.
 
 ## Storage, provenance and export
 
@@ -107,6 +161,7 @@ are preserved; input snapshots and build tasks use additive tables.
 ```text
 output/workbench/
   workbench.sqlite3
+  dataset.json                    local dataset-root setting
   search/                         task originals, versions, input and traces
     profile.json                  reusable search defaults
   builds/BUILD-.../

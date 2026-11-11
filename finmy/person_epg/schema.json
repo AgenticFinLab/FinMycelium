@@ -1,0 +1,1505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:finmycelium:person-epg:3.0",
+  "title": "Person EPG 3.0 relational interchange",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "person-epg-3.0"
+    },
+    "graph": {
+      "$ref": "#/$defs/subject_graph"
+    },
+    "entity": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      }
+    },
+    "entity_alias": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity_alias"
+      }
+    },
+    "occurrence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence"
+      }
+    },
+    "occurrence_participant": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence_participant"
+      }
+    },
+    "participation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/participation"
+      }
+    },
+    "action": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "financial_transaction": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/financial_transaction"
+      }
+    },
+    "transaction_instrument": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/transaction_instrument"
+      }
+    },
+    "entity_relation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity_relation"
+      }
+    },
+    "relation_occurrence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relation_occurrence"
+      }
+    },
+    "source_document": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source_document"
+      }
+    },
+    "evidence_span": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence_span"
+      }
+    },
+    "evidence_set": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence_set"
+      }
+    },
+    "evidence_link": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence_link"
+      }
+    },
+    "time_value": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/time_value"
+      }
+    },
+    "occurrence_label": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence_label"
+      }
+    },
+    "activity": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/activity"
+      }
+    },
+    "activity_detail": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/activity_detail"
+      }
+    },
+    "domain": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/domain"
+      }
+    },
+    "event": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "stage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stage"
+      }
+    },
+    "event_activity": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event_activity"
+      }
+    },
+    "event_activity_detail": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event_activity_detail"
+      }
+    },
+    "activity_relation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/activity_relation"
+      }
+    }
+  },
+  "$defs": {
+    "subject_graph": {
+      "type": "object",
+      "properties": {
+        "graph_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "schema_version": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "subject_entity_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject_type": {
+          "const": "individual"
+        },
+        "title": {
+          "type": "string"
+        },
+        "coverage_start": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverage_end": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descriptions": {},
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "graph_id",
+        "schema_version",
+        "subject_type",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string"
+        },
+        "entity_type": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "attributes": {},
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "entity_id",
+        "name",
+        "entity_type",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "entity_alias": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "alias": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "entity_id",
+        "alias",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "occurrence": {
+      "type": "object",
+      "properties": {
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string"
+        },
+        "subject_relevance": {
+          "type": "string"
+        },
+        "start_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descriptions": {},
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "occurrence_id",
+        "title",
+        "subject_relevance",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "occurrence_participant": {
+      "type": "object",
+      "properties": {
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "entity_id": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "occurrence_id",
+        "entity_id"
+      ],
+      "additionalProperties": false
+    },
+    "participation": {
+      "type": "object",
+      "properties": {
+        "participation_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "entity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "role": {
+          "type": "string"
+        },
+        "start_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "participation_id",
+        "occurrence_id",
+        "entity_id",
+        "role",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "actor_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "action_type": {
+          "type": "string"
+        },
+        "timestamp_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "action_id",
+        "occurrence_id",
+        "actor_id",
+        "action_type",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "financial_transaction": {
+      "type": "object",
+      "properties": {
+        "transaction_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string"
+        },
+        "from_entity_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to_entity_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "details": {},
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "transaction_id",
+        "occurrence_id",
+        "name",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "transaction_instrument": {
+      "type": "object",
+      "properties": {
+        "transaction_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string"
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "transaction_id",
+        "ordinal",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "entity_relation": {
+      "type": "object",
+      "properties": {
+        "relation_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "from_entity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "to_entity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "relation_type": {
+          "type": "string"
+        },
+        "valid_from_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valid_to_time_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "relation_id",
+        "from_entity_id",
+        "to_entity_id",
+        "relation_type",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "relation_occurrence": {
+      "type": "object",
+      "properties": {
+        "relation_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "relation_id",
+        "occurrence_id",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "source_document": {
+      "type": "object",
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$",
+              "description": "ISO datetime with timezone and at most six fractional digits; stored as UTC DATETIME(6)."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "evidence_span": {
+      "type": "object",
+      "properties": {
+        "span_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "char_end": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "span_id",
+        "quote"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "document_id": {
+                  "type": "null"
+                },
+                "char_start": {
+                  "type": "null"
+                },
+                "char_end": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "required": [
+                "document_id",
+                "char_start",
+                "char_end"
+              ],
+              "properties": {
+                "document_id": {
+                  "not": {
+                    "type": "null"
+                  }
+                },
+                "char_start": {
+                  "not": {
+                    "type": "null"
+                  }
+                },
+                "char_end": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "evidence_set": {
+      "type": "object",
+      "properties": {
+        "evidence_set_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "field_metadata": {}
+      },
+      "required": [
+        "evidence_set_id"
+      ],
+      "additionalProperties": false
+    },
+    "evidence_link": {
+      "type": "object",
+      "properties": {
+        "evidence_set_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "field_path": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "quote_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "span_id": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "evidence_set_id",
+        "field_path",
+        "quote_order",
+        "span_id"
+      ],
+      "additionalProperties": false
+    },
+    "time_value": {
+      "type": "object",
+      "properties": {
+        "time_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "window_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "window_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "original_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "is_approximate": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "window_semantics": {
+          "enum": [
+            "uncertainty",
+            "duration",
+            null
+          ]
+        }
+      },
+      "required": [
+        "time_id",
+        "value"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "window_start": {
+                  "type": "null"
+                },
+                "window_end": {
+                  "type": "null"
+                },
+                "original_text": {
+                  "type": "null"
+                },
+                "is_approximate": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "required": [
+                "window_start",
+                "window_end",
+                "original_text",
+                "is_approximate"
+              ],
+              "properties": {
+                "window_start": {
+                  "not": {
+                    "type": "null"
+                  }
+                },
+                "window_end": {
+                  "not": {
+                    "type": "null"
+                  }
+                },
+                "original_text": {
+                  "not": {
+                    "type": "null"
+                  }
+                },
+                "is_approximate": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "required": [
+              "window_semantics"
+            ],
+            "properties": {
+              "window_semantics": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "window_start"
+            ],
+            "properties": {
+              "window_start": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "occurrence_label": {
+      "type": "object",
+      "properties": {
+        "occurrence_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "occurrence_id",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "activity": {
+      "type": "object",
+      "properties": {
+        "activity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "action_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transaction_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context_occurrence_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "activity_id"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "action_id"
+          ],
+          "properties": {
+            "action_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "transaction_id": {
+              "type": "null"
+            },
+            "context_occurrence_id": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "required": [
+            "transaction_id"
+          ],
+          "properties": {
+            "action_id": {
+              "type": "null"
+            },
+            "transaction_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "context_occurrence_id": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "required": [
+            "context_occurrence_id"
+          ],
+          "properties": {
+            "action_id": {
+              "type": "null"
+            },
+            "transaction_id": {
+              "type": "null"
+            },
+            "context_occurrence_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "activity_detail": {
+      "type": "object",
+      "properties": {
+        "activity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "detail_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "value": {
+          "type": "string"
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "activity_id",
+        "detail_index",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "domain": {
+      "type": "object",
+      "properties": {
+        "domain_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "domain_id",
+        "label",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "domain_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "event_id",
+        "domain_id",
+        "label",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "stage_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "boundary_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "event_id",
+        "stage_id",
+        "label",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "event_activity": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "activity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail_mode": {
+          "enum": [
+            "all",
+            "selected"
+          ]
+        },
+        "sort_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "event_id",
+        "activity_id",
+        "detail_mode",
+        "sort_order"
+      ],
+      "additionalProperties": false
+    },
+    "event_activity_detail": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "activity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "detail_index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "event_id",
+        "activity_id",
+        "detail_index"
+      ],
+      "additionalProperties": false
+    },
+    "activity_relation": {
+      "type": "object",
+      "properties": {
+        "link_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "from_activity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "to_activity_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "relation_type": {
+          "enum": [
+            "precedes",
+            "overlaps",
+            "executed_by",
+            "explains",
+            "responds_to",
+            "context_for"
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basis": {
+          "enum": [
+            "source",
+            "inferred",
+            "temporal"
+          ]
+        },
+        "evidence_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "link_id",
+        "from_activity_id",
+        "to_activity_id",
+        "relation_type",
+        "basis"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "relation_type": {
+                "not": {
+                  "enum": [
+                    "precedes",
+                    "overlaps"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "evidence_set_id"
+            ],
+            "properties": {
+              "evidence_set_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "temporal"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "relation_type": {
+                "enum": [
+                  "precedes",
+                  "overlaps"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "graph",
+    "entity",
+    "entity_alias",
+    "occurrence",
+    "occurrence_participant",
+    "participation",
+    "action",
+    "financial_transaction",
+    "transaction_instrument",
+    "entity_relation",
+    "relation_occurrence",
+    "source_document",
+    "evidence_span",
+    "evidence_set",
+    "evidence_link",
+    "time_value",
+    "occurrence_label",
+    "activity",
+    "activity_detail",
+    "domain",
+    "event",
+    "stage",
+    "event_activity",
+    "event_activity_detail",
+    "activity_relation"
+  ]
+}

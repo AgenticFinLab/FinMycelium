@@ -507,31 +507,45 @@ def task_workspace(store):
     controller = get_controller(str(store.root / "search"))
     builds = BuildController(store)
     events = {e["event_id"]:e for e in store.events()}
+    search_runs = [(tid, controller.inspect(tid)) for tid in controller.tasks()]
+    labels = {eid: display_name(event) for eid, event in events.items()}
+    def catalog_key(task):
+        ref = task.get('catalog')
+        return 'catalog:' + digest([ref['root'], ref['kind'], ref.get('person_id'), ref['event_id']])[:20] if ref else ''
+    build_runs = builds.tasks()
+    for build in build_runs:
+        key = catalog_key(build['body'])
+        if key: labels[key] = display_name(build['body']['event']) + ' · 数据集'
+    for _, run in search_runs:
+        key = catalog_key(run['task'])
+        if key: labels[key] = run['task']['target_name'] + ' · 数据集'
     if "task_event_filter" in st.session_state:
         st.session_state["ui-task-event"] = st.session_state.pop("task_event_filter")
         st.session_state["ui-task-kind"] = "全部类型"
         st.session_state["ui-task-state"] = "全部状态"
-    if st.session_state.get("ui-task-event", "") not in [""] + list(events):
+    if st.session_state.get("ui-task-event", "") not in [""] + list(labels):
         st.session_state["ui-task-event"] = ""
     scope, kind, state = st.columns([3, 1, 1])
     with scope:
-        eid = st.selectbox("按事件筛选", [""]+list(events), format_func=lambda k:display_name(events[k]) if k else "全部事件与独立研究", key="ui-task-event", label_visibility="collapsed")
+        eid = st.selectbox("按事件筛选", [""]+list(labels), format_func=lambda k:labels[k] if k else "全部事件与独立研究", key="ui-task-event", label_visibility="collapsed")
     with kind:
         kind_filter = st.selectbox("任务类型", ["全部类型", "检索", "构建"], key="ui-task-kind", label_visibility="collapsed")
     with state:
         state_filter = st.selectbox("运行状态", ["全部状态", "待启动", "运行中", "待检查", "需处理", "已取消"], key="ui-task-state", label_visibility="collapsed")
     records = []
-    for tid in controller.tasks():
-        data = controller.inspect(tid)
-        if not eid or data["task"].get("event_id") == eid:
+    related_ids = {data['task'].get('event_id') for _, data in search_runs if catalog_key(data['task']) == eid}
+    for tid, data in search_runs:
+        if not eid or data["task"].get("event_id") == eid or catalog_key(data['task']) == eid:
             records.append({"id":tid, "kind":"检索", "name":data["task"]["target_name"], "code":data["status"],
                             "status":STATUS.get(data["status"],data["status"]), "created":data.get("created_at", ""), "data":data})
-    for build in builds.tasks(eid or None):
+    for build in builds.tasks(eid if eid in events else None):
+        if eid.startswith('catalog:') and build['event_id'] not in related_ids and catalog_key(build['body']) != eid:
+            continue
         row = builds.reconcile(build["id"])
         records.append({"id":row["id"], "kind":"构建", "name":display_name(row["body"]["event"]),
                         "code":row["status"], "status":BUILD_LABELS[row["status"]], "created":row["created"], "data":row})
     buckets = {"待启动":{"ready"}, "运行中":{"running","queued"}, "待检查":{"finished","completed"},
-               "需处理":{"failed","limit","insufficient","paused","interrupted"}, "已取消":{"cancelled"}}
+               "需处理":{"failed","limit","insufficient","paused","interrupted","partial"}, "已取消":{"cancelled"}}
     records = [r for r in records if (kind_filter == "全部类型" or r["kind"] == kind_filter)
                and (state_filter == "全部状态" or r["code"] in buckets[state_filter])]
     records.sort(key=lambda r:r["created"], reverse=True)
@@ -633,6 +647,8 @@ def settings_page(store):
                 except ValueError as exc:
                     st.error(str(exc))
     with workspace:
+        from finmy.workbench.dataset_page import dataset_settings
+        dataset_settings(store)
         from dotenv import dotenv_values
         envfile = ROOT / '.env'
         env = dotenv_values(envfile) if envfile.is_file() else {}
@@ -660,7 +676,7 @@ def main():
     page = st.session_state.get("navigation", "数据")
     with st.sidebar:
         st.markdown('<div class="fm-brand"><strong>FinMycelium</strong><small>事件工作台 · EPG</small></div>', unsafe_allow_html=True)
-        for value, label, icon in [("数据","事件数据","table_view"), ("检索","新建检索","search"),
+        for value, label, icon in [("数据集","数据集","folder_open"), ("数据","事件数据","table_view"), ("检索","新建检索","search"),
                                    ("任务","任务中心","play_circle"), ("待审","待审","fact_check"), ("设置","设置","tune")]:
             if st.button(label, icon=":material/"+icon+":", type="primary" if page == value else "secondary", width="stretch", key="nav-"+value):
                 if value == "数据":
@@ -673,7 +689,8 @@ def main():
         st.caption("范围 → 资料 → 草稿 → 审核")
     if "notice" in st.session_state:
         st.toast(st.session_state.pop("notice"), icon=":material/check_circle:")
-    {"数据": data_page, "检索": search_page, "任务": tasks_page, "待审": review_page, "设置": settings_page}[page](store)
+    from finmy.workbench.dataset_page import dataset_page
+    {"数据集": dataset_page, "数据": data_page, "检索": search_page, "任务": tasks_page, "待审": review_page, "设置": settings_page}[page](store)
 
 
 if __name__ == "__main__":

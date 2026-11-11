@@ -52,6 +52,9 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
     write_json(revision / 'builder_input.json',payload)
     write_json(state.run_dir / 'selection.json',record)
     write_json(state.run_dir / 'builder_input.json',payload)
+    from .state import now
+    state.data.update(handoff_revision=revision.name, handoff_updated_at=now())
+    state.save()
     return payload
 
 
@@ -201,4 +204,7 @@ def assemble_sources(state, source_ids, *, complete_manifest=None, **options):
         write_json(folder / 'complete_material.json',complete_manifest)
         write_json(folder / 'selection.json',record)
         write_json(folder / 'builder_input.json',payload)
+    from .state import now
+    state.data.update(handoff_revision=revision.name, handoff_updated_at=now())
+    state.save()
     return payload

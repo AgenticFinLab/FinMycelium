@@ -218,6 +218,11 @@ output/search/<task_id>/
     handoffs/<revision>/              prior handoff revisions
 ```
 
+Dataset-linked workbench tasks also generate a local `search-summary.md` and
+publish the lightweight summary to their event directory in EPG-dataset. Source
+texts and raw responses remain here. The worker saves summaries independently of
+page rendering; see [dataset selection and automatic summaries](event-workbench.md#select-an-event-from-epg-dataset).
+
 Runtime files, raw responses, machine-specific notes and experiments stay outside Git.
 The shared repository holds code, configuration, documentation and small offline tests.
 SQLite/database files and their journal, WAL and SHM sidecars are ignored, including

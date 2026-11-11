@@ -97,6 +97,7 @@ class SearchController:
                                 gaps=old['gaps'],reason=old['reason'],max_chars=max_chars)
             state.data['status'] = 'finished' if payload['samples'] and old['reason'] != 'insufficient' else 'insufficient'
             state.save()
+            self._save_summary(task_id)
             return payload
 
     def start(self, task_id, steps=None):
@@ -105,6 +106,11 @@ class SearchController:
             state=self.inspect(task_id)
             if state['status'] in {'finished','insufficient'}:
                 raise ValueError('Task ended; review or create a new task')
+            if state['task'].get('catalog'):
+                from .state import digest
+                confirmation = state['task'].get('scope_confirmation', {})
+                if confirmation.get('scope_sha256') != digest(state['task'].get('research_scope')):
+                    raise ValueError('请确认数据集任务的本次研究范围')
             # Starting/resuming is explicit; no API is triggered by page rendering.
             if not self.dependencies and not state['config']['allow_network']:
                 raise ValueError('Enable external calls in task configuration before starting')
@@ -133,9 +139,33 @@ class SearchController:
                     state=SearchState(self.root,task_id)
                     state.data.update(status='failed',stop_reason=type(exc).__name__)
                     state.save()
+                state=SearchState(self.root,task_id)
+                if state.data['status'] in {'finished','insufficient','limit','failed'}:
+                    state.data['completed_at']=now()
+                    state.save()
+                    self._save_summary(task_id)
         except ValueError:
             # Another process owns this task; do not overwrite its state.
             return
+
+    def _save_summary(self, task_id):
+        from .summary import publish_summary
+        try:
+            return publish_summary(self.root, task_id)
+        except Exception as exc:
+            # Report generation must not turn successful retrieval into a failed search.
+            state = SearchState(self.root, task_id)
+            state.data['summary'] = {'status':'failed', 'error':str(exc), 'updated_at':now()}
+            state.save()
+            return state.data['summary']
+
+    def save_summary(self, task_id):
+        """Retry publication only: no providers, models or rebuilds."""
+        with task_lock(self.root, task_id):
+            data = self.inspect(task_id)
+            if not data['task'].get('catalog') or data['status'] not in {'finished','insufficient','limit','failed'}:
+                raise ValueError('此任务尚无可保存的数据集检索汇总')
+            return self._save_summary(task_id)
 
     def _simple(self, state):
         """Fixed supplied queries and original material; no search-side model."""
