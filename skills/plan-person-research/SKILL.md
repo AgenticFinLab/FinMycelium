@@ -1,0 +1,183 @@
+---
+name: plan-person-research
+description: Research a person's public life or a defined scope using a personal agent's own web search and browsing tools. Discover and organize storylines and events, then deliver a sourced Markdown research plan. Use for planning or revising person EPG research before construction, without launching FinMycelium search or Builder tasks.
+---
+
+# Plan person research
+
+Actively research public sources to turn the user's objective into a plan that can be discussed, confirmed, and executed one event at a time. Use this same skill and template for every person; express case differences in the inputs and deliverables.
+
+Codex or another personal agent executes this skill with its own search, page-opening, and document-reading capabilities. Do not use FinMycelium's Baidu, Bocha, Exa, or person-planning APIs for this discovery step. The project pipeline receives the confirmed plan and subsequently acquires evidence and constructs the selected event.
+
+For initial research or a revision, use the [prompt templates and session settings](references/launch-template.md). Keep case inputs in the prompt and shared research guidance in this skill.
+
+## Language policy
+
+- Write the research plan in English by default, including storyline and event names, scope descriptions, research questions, explanations, and status labels. A non-English conversation does not by itself change the deliverable language; follow an explicit user request for a different output language.
+- Use an established English form of a person's name when available, while retaining the original name and relevant aliases. Do not invent an official English name.
+- Preserve evidence quotations and source titles in their original language. If an English translation or explanation is useful, label it separately and keep the original; a translation must not replace the cited evidence.
+- Preserve IDs, URLs, and source locators exactly. Search and read in languages appropriate to the sources; English output does not imply English-only research.
+
+## Terminology and research units
+
+Use the hierarchy `person → storyline → event` consistently:
+
+| Level | Meaning |
+| --- | --- |
+| person | The individual being researched; retain their identity, aliases, and existing person_id. |
+| storyline | A thematic thread in the person's experiences, grouping events with a shared activity direction or subject. It organizes and aggregates events; it is not itself the construction unit. |
+| event | A concrete process centered on an identifiable matter, object, or objective, with an explainable scope. It is the unit for independent search, construction, review, and JSON/Gantt output. |
+
+For example, an illustrative hierarchy is `Warren Buffett → Investment and capital allocation → Occidental Petroleum investment process`. This explains the naming levels; actual candidates still require source research. A storyline is a grouping, while an event is a concrete research matter.
+
+Events in a storyline need not form a causal chain or occupy a continuous period. A storyline may initially contain only one discovered event; do not invent others to fill the catalog. An event may span years, contain multiple stages and actions, or remain ongoing. It does not require a known ending and is not synonymous with a single action.
+
+Use three boundary checks:
+
+- **Concrete matter:** Can the event be described as a specific undertaking or process? Sharing a person, company, or year is not enough to combine independent matters.
+- **Process continuity:** Negotiation, agreement, execution, and later adjustments may belong to the same matter. Separate reports or years do not automatically create separate events; independent projects involving the same company do not automatically form one event.
+- **Independent scope:** Can a downstream task state what to investigate, the relevant period, and adjacent matters excluded? A topic such as all of a person's investments is usually a storyline-level scope; a single agreement signing may be an action within an event. Judge the actual research subject rather than applying these examples mechanically.
+
+Do not split or merge events merely because of duration or document volume. A long event may initially be researched within an explicit period, retaining its relationship to the full matter instead of inventing a separate event for each task window. Explain disputed splits or merges for user confirmation.
+
+This step establishes the research catalog and its boundaries. Do not invent the event's stages, actions, transactions, or graph relations in advance.
+
+## Inputs and deliverables
+
+The only required input is enough information to identify the person; a formal ID is not required to begin. Research objectives, time or topic limits, existing master tables or plans, and reference materials are optional inputs. Read them when supplied. Clarify ambiguity when it would materially change the subject or scope, rather than requiring a lengthy intake form.
+
+If only a name is supplied, explore the person's publicly documented life and report the coverage actually achieved. Seek meaningful experiences and continuing processes rather than an inventory of everyday activities. Do not automatically restrict research to finance or impose predefined storylines. Follow explicit topic or period limits when supplied. Separate activity dates from publication dates: later retrospectives, interviews, and summaries are valid sources, with their retrospective nature identified; they do not automatically extend the activity scope.
+
+Discover candidate storylines and events during initial research; the user need not provide them beforehand. When revising a confirmed plan, preserve stable IDs and confirmation states, distinguish additions from proposed boundary changes, and explain those changes. Summarize the person, objective, scope, and existing-plan basis within the research plan itself. Do not create a separate intake report or require confirmation after every research step.
+
+Use the [research plan template](assets/research-plan-template.md) for the main deliverable: person and scope, a storyline table, an event master table with individual descriptions, sources, gaps, and matters awaiting confirmation. Deliver a version pending confirmation by default. A planning draft is not a final graph artifact.
+
+Use `EPG-dataset/person-epg/` as the common root for all person research directories. Within the actual EPG-dataset checkout, create or reuse `<person_directory>/` and save `research-plan.md` there. Reuse an existing directory for the same person; name a new one with the person's established English name when available. For example, Warren Buffett's plan belongs at `EPG-dataset/person-epg/Warren Buffett/research-plan.md`. Create missing root and person directories as part of saving the deliverable. Preserve existing plans and their confirmed versions when revising; do not create a second EPG-dataset inside FinMycelium.
+
+The plan may be saved here while pending confirmation. Keep full source downloads, caches, and runtime logs in ignored working directories. Initially show storyline/event directories as a proposed tree. After the revision self-review, directly create missing `<storyline_directory>/<event_directory>/` paths beneath the person directory for events meeting step 3's planning-readiness conditions, without another directory-creation confirmation. Leave `To verify` candidates and paths affected by material unresolved grouping or boundary choices as planned; they do not block ready entries. Reuse existing directories and preserve their contents; this preparation only adds missing directories, without moving, renaming, or deleting existing assets. Update the plan's tree to distinguish existing from planned paths, with names, IDs, and memberships matching the catalog. Creating directories does not confirm construction tasks or register IDs. Graph files enter through the later construction and review workflow; do not create empty graph placeholders.
+
+## Web research method
+
+These are research responsibilities, not a fixed number of search rounds or a rigid sequence. Adapt queries and reading depth to the subject, available material, and user constraints.
+
+### 1. Establish the person's research context
+
+Resolve the name, aliases, important roles, and relevant organizations to avoid identity confusion. Use sourced biographical overviews, official disclosures, public interviews, historical records, and reliable reporting to understand significant experiences and changes within the requested scope.
+
+Build an understanding of the subject before choosing categories. Do not impose a fixed biography outline and then search for material to fill every category. Model knowledge can help generate queries, but is not a source that has been checked.
+
+### 2. Discover concrete events
+
+Look for experiences with a continuing object, objective, or identifiable boundary, such as a particular investment, project, tenure, collaboration, charitable arrangement, or dispute. Record the person's actual connection to each matter instead of attributing every organizational action to the individual.
+
+Follow names, organizations, projects, dates, agreements, and reporting leads found in the material. Seek sources covering different periods or perspectives. Read relevant page or document content; search titles and snippets are discovery leads, not automatically sufficient evidence.
+
+An annual report, a meeting, or a shared date does not automatically make unrelated matters one event. Conversely, a continuing matter mentioned across years or multiple sources should not become duplicate events. If a meeting's own process is the research subject, assess its boundary as a candidate in its own right.
+
+### 3. Assess candidate relevance and boundaries
+
+For each event proposed for the plan, explain what it concerns, how the person participated or is connected, its approximate period, what belongs within its scope, which adjacent matters should remain separate, and what further research needs to establish.
+
+Find traceable sources for these judgments. Investigate important or disputed attributions and scope decisions further. Prefer more direct material where possible, and do not count syndicated copies as independent corroboration. Judge the strength and relevance of support rather than imposing a fixed number of sources. One clear, direct source may suffice for planning; multiple syndicated articles may still leave attribution unresolved.
+
+Distinguish observable actions, participants' public statements, media reporting, and research inferences. Do not treat a public statement as proof of private motivation or infer causation from chronology alone. Retain the date precision supported by the sources.
+
+A candidate is ready to propose for user confirmation when:
+
+- Read source material supports the existence of the concrete matter, beyond model memory or search titles.
+- The person's connection is explainable and supported, distinguishing personal participation, role or responsibility, public statements, and organizational actions.
+- The research scope is explainable: the matter, approximate period, main questions, and distinction from adjacent events.
+
+Use `Public-source support` for candidates meeting these planning conditions. If a key question about existence, personal connection, or scope remains unresolved, retain the candidate as `To verify`, with the issue identified. Missing detailed actions, exact dates, or transaction terms can remain downstream research questions without preventing a supported planning candidate. This step does not need to acquire all evidence required by the Builder; source support is separate from user confirmation and graph acceptance.
+
+### 4. Organize storylines and resolve duplication or overlap
+
+Group the discovered events into storylines, explaining what each grouping covers and how it differs from the others. Revisit candidate groupings when new evidence changes the picture. Do not prescribe a fixed number of groups or invent matters to make the structure symmetrical.
+
+Keep different years, reports, and phases of the same event together when appropriate. Similar names alone do not justify merging, and related matters need not be the same event. Assign each event one primary storyline in the master table. Describe connections across groups separately; flag unresolved membership for confirmation rather than duplicating the event.
+
+If a confirmed plan needs a rename, split, or merge, propose the change and its reason explicitly. Do not silently replace stable IDs or expand a confirmed task's scope.
+
+### 5. Review the plan and decide when to stop
+
+Before delivery, make one substantive review across four areas:
+
+- **Catalog and boundaries:** Check storyline groupings and events that may be duplicated, too broad, or unnecessarily fragmented.
+- **Sources and personal connection:** Check that recommended events and the person's connection have support in read material; do not substitute organizational actions for personal actions.
+- **Coverage and omissions:** Revisit the requested periods, roles, and topics. Check whether popular matters dominate the research or significant experiences remain unexplored. Use targeted follow-up research for important gaps, allowing new material to revise the initial interpretation.
+- **Delivery consistency:** Check that the master table, event descriptions, IDs, and source references agree, and that supported findings, research leads, and decisions awaiting confirmation are distinguishable.
+
+Repair specific problems and recheck affected content as needed. Repeated full reviews or a fixed number of PASS results are not acceptance criteria.
+
+Distinguish topics not yet searched, searches with no results, access failures, insufficient public evidence, and conflicting sources. Failure to find material does not establish that an event did not occur. A research plan does not claim exhaustive knowledge of a person's life.
+
+Stop research and deliver the plan for confirmation when the recommended events meet the planning-readiness conditions in step 3, overall coverage has been reviewed, and important gaps have been investigated or their unresolved status and reasons are stated. Remaining questions should chiefly concern detailed event-level evidence acquisition or explicitly marked leads still to verify. Do not impose a universal event count or search indefinitely.
+
+Respect the user's time and tool limits. If these limits or insufficient material prevent completion, deliver partial findings with the completed scope, unfinished work, and limitations identified; do not present a partial investigation as a completed coverage review.
+
+## Revising an existing plan
+
+Use this same skill and template for initial research and revisions. For a revision, re-read the current skill, template, and existing plan. Make one consolidated self-review across the four areas in step 5, identifying issues yourself even when no external review feedback is supplied. Retain useful findings and confirmed decisions.
+
+Assess review feedback against the sources, scope, and planning-readiness conditions above; reviewer suggestions are not automatically required changes. Correct demonstrated factual, identity, citation, and handoff inconsistencies. Treat alternative groupings, event splits, or additions as research judgments, explaining material choices rather than requiring a particular catalog.
+
+Use targeted follow-up and recheck affected content. The default planning cycle ends after initial research, one revision self-review, and directory preparation. Deliver the reviewed plan as the current working version, retaining open questions for later event-level research. The goal is a usable research handoff; resolving every uncertainty about the person's life is not required. Do not automatically add another review or polishing round. Later updates should respond to user requests, significant new evidence, or concrete problems affecting use.
+
+Apply the planning-readiness conditions to each event. If a material issue still prevents handoff, identify the affected entry and its unresolved issue without reopening the whole plan or blocking ready entries. Do not turn case-specific findings into universal acceptance rules. Summarize material changes, prepared directories, and remaining questions; no content change is required when none is justified. Keep proposed changes pending confirmation while preserving earlier confirmations as described below.
+
+## Markdown deliverable requirements
+
+Follow the shared template, with detail proportional to the research subject:
+
+- Person identity, research objective, overall scope, existing IDs, and plan version.
+- A storyline catalog and an event master table containing all candidates, with consistent names, periods, and primary memberships.
+- Each event's cited overview, connection to the person, explicit research scope, further questions, search leads, and unresolved matters.
+- Clickable sources and concise locators explaining what each source supports. Do not fabricate page visits, quotations, publication dates, or verification results.
+- Actual research coverage, duplication or overlap decisions, and matters requiring user confirmation.
+
+Distinguish candidates with `Public-source support` from those `To verify`. Public support does not mean the plan has been confirmed by the user or an event graph has passed review. Keep unverified candidates as research leads; they must not automatically become construction tasks.
+
+The master table is an index; each event description follows the template's four core sections: Event overview, Connection to the person, Research scope, and Further research. Keep source-supported findings separate from proposed scope and unanswered questions. Use the shared source IDs beside factual statements and preserve useful findings already obtained; planning need not withhold known facts merely because detailed evidence acquisition happens later. Do not turn the overview into a speculative stage/action structure or treat it as a substitute for construction evidence.
+
+State whether a selected period covers the whole event or only part of it. Ask specific follow-up questions without presupposing unverified actions or causes. Reuse the common person identity, plan version, and source index, keeping event references consistent with the master table. Avoid independently maintaining the same catalog in multiple files. Include a compact `person → storyline → event` directory tree derived from the catalog, with matching names, IDs, and primary memberships; identify candidates still To verify. After directory preparation, show which paths exist and which remain planned. An additional overview diagram is optional.
+
+## Stable identifiers and catalog mapping
+
+Reuse existing registered IDs even when they differ from the convention for new entries. For a person recorded under a legacy `subject_id`, retain that registered identity and record its correspondence to the planning `person_id`. Keep graph-internal IDs separately traceable; do not rewrite historical graphs to match catalog IDs.
+
+For newly registered entries, use:
+
+| Object | ID convention |
+| --- | --- |
+| person | The dataset's person-registration convention, currently `PERSON-0001`, `PERSON-0002`, and so on. |
+| storyline | `<person_id>-S0001`, with a sequence allocated within that person. |
+| event | `<person_id>-E0001`, with a separate sequence allocated within that person. |
+
+Check existing registrations before allocating IDs. When formal registration has not occurred, use explicitly marked temporary references; retain their correspondence when formal IDs are assigned. IDs must not depend on display names, row ordering, or run counts. Store storyline membership separately from the event ID so that a rename or regrouping does not change the event's identity. A retry, model change, or selected period within the same event does not automatically create a new event. For an agreed split or merge, assign new event IDs and preserve the old-to-new correspondence and earlier run references.
+
+Keep the following responsibilities distinct:
+
+- **Research plan:** Candidate storylines and events, scopes, supporting sources, research questions, and confirmation records.
+- **`EPG-dataset/person-epg/README.md`:** Person index, ownership, coverage, and links to person directories.
+- **Each person's `README.md`:** Event progress, adopted plan and artifact versions, and JSON/Gantt/review links.
+- **Task records:** Actual IDs, adopted plan version, inputs, configuration, outputs, and costs.
+
+Carry names, memberships, and scope from the adopted plan into the catalogs; update execution and artifact status from actual work. Avoid separately maintaining full research descriptions in each location. Preserve the existing `people.csv` and assets until the catalog handoff defines their compatibility or migration mapping. Creating directories and saving the research plan does not register its candidate events, migrate existing assets, or imply graph acceptance.
+
+## Confirmation and handoff
+
+Present the main storylines and events, significant uncertainties, and suggested research priorities. Priorities are recommendations, not a substitute for user confirmation. Focus user confirmation on the catalog, material boundaries, and priority tasks. Carry out routine searching, reading, and fact checking without per-step approval; seek clarification promptly when identity ambiguity or a material scope change would alter the research task.
+
+The user may confirm only a subset of events. Record the adopted plan version, confirmed event IDs and scopes, and the actual confirmation basis in the same plan. Other events remain pending or under investigation and do not block the confirmed subset. Confirmation does not upgrade source-support labels or imply graph acceptance.
+
+Each downstream task must identify the adopted plan version and the selected event's confirmed scope, retaining the content actually used. A later plan revision must not silently change an existing task. Keep prior confirmations associated with their original versions; when a task's scope needs to change, state the change and record the applicable confirmation rather than replacing the task's history. This rule does not require another manually maintained catalog or approval report.
+
+After confirmation, select one event from the same plan and hand off its confirmed `person_id / storyline_id / event_id`, names, cited overview, scope, connection to the person, research questions, source leads, material unresolved issues, and plan version. FinMycelium then performs formal search, input assembly, and construction for that task. Planning summaries and reference links do not replace actual construction evidence.
+
+This skill delivers the research plan, prepared directories after self-review, and the confirmed task description when available. Graph construction, final content review, and formal artifact collection belong to subsequent workflow steps. The project's integration layer handles field and interface mappings.
+
+## Package resources and helper code
+
+Keep research guidance and decision rules in this file and the shared output format in the template. If repeated formatting, ID-reference, or handoff checks later justify code, add it under this skill's `scripts/`. Put substantial supporting methodological guidance in `references/` when needed.
+
+Helper scripts should solve concrete repeated tasks, not turn research into a hidden model API call. Keep the research instructions within this package. Executing this skill does not depend on FinMycelium's automatic planning or construction programs.
