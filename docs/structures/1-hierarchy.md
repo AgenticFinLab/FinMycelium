@@ -70,7 +70,7 @@ flowchart TB
 | `π(a)` | 动作 a 的唯一所属 phase（全函数） |
 | `a ∈ A(p)` | 动作属于 phase p 的动作集 |
 
-> `A(p)` 两两不交，`{A(p)}` 是 `A(e)` 的划分；`G(p)` 是 phase 动作图，`G(s)`/`G(e)` 是逐层组合。`G(p) ⊆ G(s) ⊆ G(e)`（子图关系），不是“视图/投影”，也没有边界引用。
+> `A(p)` 两两不交，`{A(p)}` 是 `A(e)` 的划分；`G(p)` 是 phase 动作图，`G(s)`/`G(e)` 是逐层组合。`G(p) ⊆ G(s) ⊆ G(e)`（子图关系）。
 
 
 ### 1.1.2 人物—事件—事件内部的展开（phase 内是动作图：时间偏序 + 语义关系）
@@ -133,7 +133,7 @@ G(e) = (A(e), R(e))                         // event 动作图
 A(s) = ⊔_{p ∈ Ph(s)} A(p)                   // 不相交并
 R(s) = (⋃_{p ∈ Ph(s)} R(p)) ∪ R_crossphase(s)
 
-A(e) = ⊔_{s ∈ S(e)} A(s)                    // 不相交并
+A(e) = ⊔_{s ∈ S(e)} A(s)                    // 组合恒等式（A(e) 已给定）
 R(e) = (⋃_{s ∈ S(e)} R(s)) ∪ R_crossstage(e)
 ```
 
@@ -156,6 +156,8 @@ R(e) = (⋃_{s ∈ S(e)} R(s)) ∪ R_crossstage(e)
 **记录顺序**：可以 phase-first（先写各 phase 图，再组合），也可以 event-first（先有 event 图，再拆 phase 图）；两种顺序得到同一组图，不是两次建模。
 
 `G(e)` 不要求连通：如果 phase/stage 之间没有关系，`G(e)` 就是多个互不相连的分支。
+
+> `G(e)` 的完整数学/图论定义、与 Context/Evidence 的关系，见 [2-action-graph](2-action-graph.md) **2.7**。
 
 ---
 

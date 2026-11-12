@@ -289,7 +289,7 @@ flowchart TB
     GS2 --> GE
 ```
 
-**读法**：phase 图是基本单位；stage 图 = 该 stage 的 phase 图 + 跨 phase 边；event 图 = 各 stage 图 + 跨 stage 边。`G(p) ⊆ G(s) ⊆ G(e)`，是子图组合，不是“视图/投影”；动作只属于一个 phase，不复制。
+**读法**：phase 图是基本单位；stage 图 = 该 stage 的 phase 图 + 跨 phase 边；event 图 = 各 stage 图 + 跨 stage 边。`G(p) ⊆ G(s) ⊆ G(e)`，是子图组合；动作只属于一个 phase，不复制。
 
 **注意**：`G(e)` **不要求连通**。phase/stage 之间可能没有关系，此时 `G(e)` 是多个互不相连的分支；也可能有跨 phase/跨 stage 关系，此时分支被连起来。是否相连由证据决定。
 
@@ -369,18 +369,141 @@ flowchart LR
 - 归属依据：主要发生时间 / 主要目的 / 主要行为模式；
 - `A(p)` 两两不交，`{A(p)}` 是 `A(e)` 的划分；
 - **不允许“跨相位动作”**：如果行为跨两个 phase，拆成两个 phase 内的动作，用 `continues` / `responds_to` 等关系连接；
-- **不允许未归属动作**：完整描述必须给每个动作确定 phase；无法确定说明描述未完成，先补 phase 判定。
+- **不得出现无 phase 的动作**：完整描述必须给每个动作确定 phase；无法确定说明描述未完成，先补 phase 判定。
 
 | 情况 | 处理 |
 |---|---|
 | 动作完全在一个 phase 内 | 归入该 phase |
 | 行为跨两个 phase | 拆成两个 phase 内的动作 + 跨 phase 关系；不把同一动作挂两处 |
 | 行为跨两个 stage | 同上：拆成 stage 内动作 + 跨 stage 关系 |
-| 暂时无法确定属于哪个 phase | 描述未完成；先补 phase 判定，不新增“未归属”类别 |
+| 暂时无法确定属于哪个 phase | 描述未完成；先补 phase 判定，不把动作留成无 phase |
 
-## 2.7 示例的位置
+## 2.7 Event 动作图 `G(e)` 的完整定义
 
-为避免与 [6-illustrative-example](6-illustrative-example.md) 和 [8-formal-model](8-formal-model.md) 8.7 的完整示例重复/冲突，本篇不再另给第二个完整例子。关系类型示例见 2.4；动作图示例见 2.5；完整 Stage/Phase/Action 示例见 6.2.5 与 8.7。2.8 列常见错误，2.9 给文档关系。
+> 这一节是 `G(e)` 的**唯一权威定义**：先给集合定义，再给图论定义，最后说明它与 Event/Stage/Phase/Action/Context/Evidence 的关系。其他文档涉及 `G(e)` 时以本节为准。
+
+### 2.7.1 一句话
+
+> **`G(e)` 是 event 内所有 phase 动作图按 stage 逐层组合得到的动作图；它不是新增层级，也不是额外事实源。**
+
+### 2.7.2 集合定义
+
+对 event `e`：
+
+```
+A(p) = { a ∈ A(e) : π(a) = p }        // phase p 的动作集
+R(p) = { r : from(r), to(r) ∈ A(p) }  // phase 内记录的关系（两端都在 A(p)）
+G(p) = (A(p), R(p))                    // phase 动作图
+```
+
+组合：
+
+```
+A(s) = ⊔_{p ∈ Ph(s)} A(p)              // 不相交并
+R(s) = (⋃_{p ∈ Ph(s)} R(p)) ∪ R_crossphase(s)
+G(s) = (A(s), R(s))                    // stage 动作图
+
+A(e) = ⊔_{s ∈ S(e)} A(s)               // 组合恒等式（不是重新定义 A(e)）
+R(e) = (⋃_{s ∈ S(e)} R(s)) ∪ R_crossstage(e)
+G(e) = (A(e), R(e))                    // event 动作图
+```
+
+> `A(e)` 是给定的动作集合；`A(p)`、`A(s)` 由它派生。最后一行 `A(e)=⊔A(s)` 是**一致性恒等式**，表示组合结果不丢/不重动作，不是重新定义 `A(e)`。
+
+其中：
+
+```
+st(a) = 包含 π(a) 的 stage
+R_crossphase(s) = { r : from(r),to(r) ∈ A(s) 且 π(from(r)) ≠ π(to(r)) }
+R_crossstage(e) = { r : from(r),to(r) ∈ A(e) 且 st(from(r)) ≠ st(to(r)) }
+```
+
+- `A(p)` 两两不交，`{A(p)}` 是 `A(e)` 的划分；
+- `R_crossphase(s)`：同一 stage 内、不同 phase 的动作之间的关系；
+- `R_crossstage(e)`：不同 stage 的动作之间的关系；
+- 每个动作只属于一个 phase，**不复制动作**。
+
+### 2.7.3 图论定义
+
+`G(p)`、`G(s)`、`G(e)` 都是**带类型的有向多重图**：
+
+- 节点集：动作；
+- 边集：关系，每条边是 `(from, to, type, basis)`；
+- 同一对动作可以有多条不同类型的边（多重图）。
+
+它们之间是**子图 + 组合**关系：
+
+```
+G(p) ⊆ G(s) ⊆ G(e)
+A(p) ⊆ A(s) ⊆ A(e)
+R(p) ⊆ R(s) ⊆ R(e)
+```
+
+组合可以写成：
+
+```
+G(s) = (⊔_p A(p), (⋃_p R(p)) ∪ R_crossphase(s))
+G(e) = (⊔_s A(s), (⋃_s R(s)) ∪ R_crossstage(e))
+```
+
+- 先组合 phase 图得到 stage 图，再组合 stage 图得到 event 图；
+- 跨 phase 边只在 `G(s)` 补一次，跨 stage 边只在 `G(e)` 补一次；
+- `G(e)` **不要求连通**：没有关系的 phase/stage 会形成独立分支。
+
+### 2.7.4 与其他部分的关系
+
+| 部分 | 与 `G(e)` 的关系 |
+|---|---|
+| **Event** | `G(e)` 属于 event，是 event 的动作/关系整体；event 还拥有 stage/phase/context/evidence |
+| **Stage** | `G(s)` 是 `G(e)` 的子图；stage 是局面分段，不是图节点 |
+| **Phase** | `G(p)` 是 `G(s)` 的子图；phase 是行为模式分段，不是图节点 |
+| **Action** | 动作是 `G(e)` 的节点；每个动作唯一属于一个 phase |
+| **Context** | 上下文挂在 phase/action 上，**不是 `G(e)` 的节点或边** |
+| **Evidence** | 证据支撑 `G(e)` 中的动作/关系/**结构**，但证据本身不是图节点 |
+| **Specification** | 7 的规范约束 `G(e)` 如何组合、如何标注 |
+
+### 2.7.5 不变量
+
+| 编号 | 不变量 |
+|---|---|
+| **AG-1** | `{A(p)}` 是 `A(e)` 的划分；每个动作唯一属于一个 phase |
+| **AG-2** | `R(p) ⊆ R(s) ⊆ R(e)`，`R(p)` 只含 phase 内部关系 |
+| **AG-3** | 跨 phase 边只在 `G(s)` 出现一次；跨 stage 边只在 `G(e)` 出现一次 |
+| **AG-4** | `G(e)` 不要求连通；没有关系的阶段形成独立分支 |
+| **AG-5** | 不得出现无 phase 的动作；不允许一个动作挂到多个 phase；跨 phase 行为拆成 phase 内的动作 + 关系 |
+
+### 2.7.6 示例（沿用 6/8.7）
+
+```
+G(p₁) = ({a₁,a₂}, ∅)
+G(p₂) = ({a₃}, ∅)
+G(p₃) = ({a₄}, ∅)
+G(p₄) = ({a₅,a₆}, {(a₅,a₆,precedes,derived)})
+
+G(s₁) = ({a₁,a₂}, ∅)
+G(s₂) = ({a₃,a₄,a₅,a₆}, {(a₅,a₆,precedes,derived)} ∪ R_crossphase(s₂))
+
+G(e₁) = ({a₁..a₆}, R(e₁))
+```
+
+读法：
+
+- `G(p)` 是基本单位；
+- `G(s)` 加入跨 phase 边；
+- `G(e)` 加入跨 stage 边；
+- 同一批动作只出现一次，不是四张独立图。
+
+### 2.7.7 读图规则
+
+1. 节点是动作，不是 stage/phase；
+2. 边是关系，不是“层级包含”；
+3. stage/phase 只决定图的分组和组合层次；
+4. context/evidence 不是节点/边，是横切信息；
+5. `G(e)` 可以有多个互不相连的分支。
+
+### 2.7.8 示例位置
+
+为避免与 [6-illustrative-example](6-illustrative-example.md) 和 [8-formal-model](8-formal-model.md) 8.7 的完整示例重复，本篇不再另给第二个完整例子；关系类型见 2.4，偏序读法见 2.5.0，完整 Stage/Phase/Action 示例见 6.2.5 与 8.7。
 
 ---
 

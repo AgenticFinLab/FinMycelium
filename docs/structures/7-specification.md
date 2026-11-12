@@ -31,7 +31,7 @@
 | **Stage** | Event 中一个“局面/情境”相对稳定的时期；边界由局面实质变化决定 |
 | **Phase** | Stage 内一种相对稳定的“行为模式/子策略”时期；边界由行为模式变化决定 |
 | **Action** | 人物行为的最小记录单元；动作之间的先后/过程/交互/延续关系构成**动作图** |
-| **Action Graph** | Phase 动作图 `G(p)` 是基本单位；Stage 图 `G(s)` 由 Phase 图组合 + 跨 phase 边；Event 图 `G(e)` 由 Stage 图组合 + 跨 stage 边 |
+| **Action Graph** | Phase 动作图 `G(p)` 是基本单位；Stage 图 `G(s)` 由 Phase 图组合 + 跨 phase 边；Event 图 `G(e)` 由 Stage 图组合 + 跨 stage 边（完整定义见 [2-action-graph](2-action-graph.md) 2.7） |
 | **Context** | 动作/阶段发生时的环境、他人、人物状态；分 Phase 基准 `C(p)` 与 Action 差量 `ΔC(a)` |
 | **Evidence** | 支撑描述内容的来源、引文与支持模式；描述结构由证据派生 |
 
@@ -89,7 +89,7 @@ flowchart TB
 
 - 每个 Phase **必须**有一张动作图 `G(p) = (A(p), R(p))`（通常包含多个动作节点与关系；允许单动作或空，但必须说明），**不得**把 Phase 等同于单个 Action；
 - 动作节点**必须**是 Event 动作集合 `A(e)` 的成员；**每个动作必须唯一属于一个 Phase**，`A(p)` 两两不交，`{A(p)}` 是 `A(e)` 的划分；
-- **不得**有“未归属动作”，也**不得**把同一个动作挂到多个 Phase；跨 Phase 的行为**必须**拆成两个 Phase 内的动作 + 跨 phase 关系（`continues` / `responds_to` 等）；
+- **不得**出现无 phase 的动作，也**不得**把同一个动作挂到多个 Phase；跨 Phase 的行为**必须**拆成两个 Phase 内的动作 + 跨 phase 关系（`continues` / `responds_to` 等）；
 - Stage 动作图 `G(s)` **必须**由该 Stage 的 Phase 图组合，并补跨 phase 关系；Event 动作图 `G(e)` **必须**由 Stage 图组合，并补跨 stage 关系；
 - Phase 的动作图**可以**包含一个动作或为空，但**必须**在描述中说明原因（例如该阶段无记录行为）。
 

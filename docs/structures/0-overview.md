@@ -47,6 +47,7 @@ flowchart TB
 - 中层：event 内是 `Stage → Phase → 动作图`；
 - 内层：每个 phase 有一张动作图；stage 图由 phase 图组合，event 图由 stage 图组合；
 - 组合：`G(p) ⊆ G(s) ⊆ G(e)`；`G(e)` 不是新增层级，而是逐层组合的结果；
+- `G(e)` 的完整数学/图论定义与各层关系见 [2-action-graph](2-action-graph.md) **2.7**；
 - 横切：上下文（phase 基准 + action 差量）与证据（来源/引文/支持模式/缺口）挂在结构上。
 
 ---
@@ -74,7 +75,7 @@ flowchart TB
 - `Context` 是横切层，挂在 phase（基准）和 action（差量）上；
 - `Evidence` 支撑整棵结构，不是某一个层级的附属。
 
-**关键澄清**：**每个 phase 内部不是“一个动作”，而是一张由多个动作节点与关系构成的动作图 `G(p)`**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系。每个动作唯一属于一个 phase；`G(s)` 由 phase 图组合并补跨 phase 边，`G(e)` 由 stage 图组合并补跨 stage 边。跨 phase 的行为不是“一个动作挂两个 phase”，而是两个 phase 内的动作 + 关系（详见 [1-hierarchy](1-hierarchy.md) 1.1.3 与 [2-action-graph](2-action-graph.md) 2.5）。允许退化到单动作或空的 phase，但必须说明原因。
+**关键澄清**：**每个 phase 内部不是“一个动作”，而是一张由多个动作节点与关系构成的动作图 `G(p)`**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系。每个动作唯一属于一个 phase；`G(s)` 由 phase 图组合并补跨 phase 边，`G(e)` 由 stage 图组合并补跨 stage 边。跨 phase 的行为不是“一个动作挂两个 phase”，而是两个 phase 内的动作 + 关系（详见 [1-hierarchy](1-hierarchy.md) 1.1.3 与 [2-action-graph](2-action-graph.md) 2.7）。允许退化到单动作或空的 phase，但必须说明原因。
 
 ---
 
@@ -85,16 +86,18 @@ flowchart LR
     P["Person"] -->|选择| E["Event e_i"]
     E --> S["Stage"]
     S --> PH["Phase"]
-    PH --> G["Action Graph"]
-    G --> C["Context"]
-    G --> V["Evidence"]
+    PH --> GP["Phase 动作图 G(p)"]
+    GP --> GS["Stage 动作图 G(s)"]
+    GS --> GE["Event 动作图 G(e)"]
+    GE --> C["Context"]
+    GE --> V["Evidence"]
     C --> V
     E --> V
 ```
 
 **读法**：先确定人物；在人物的事件索引中选择一个 event；进入 event 的 stage/phase/action；每个动作挂上下文与证据；最后回到证据包复核。
 
-> 0.1.1、0.2、0.2.1 是同一结构的三张不同视图：总范式、对象模型、阅读路径；若只读一张，看 0.1.1。
+> 0.1.1、0.2、0.2.1 是同一结构的三张不同图：总范式、对象模型、阅读路径；若只读一张，看 0.1.1。
 
 ### 0.2.2 符号约定（设计层）
 
@@ -217,7 +220,8 @@ flowchart LR
 | 事件内部为什么分 stage / phase？边界怎么定？ | [1-hierarchy](1-hierarchy.md) 1.4–1.5 |
 | 什么是动作？什么不算动作？ | [2-action-graph](2-action-graph.md) 2.2 |
 | 动作之间有哪些关系？为什么不是一条链？ | [2-action-graph](2-action-graph.md) 2.4–2.5；[8-formal-model](8-formal-model.md) 8.3 |
-| phase 与动作图是什么关系？ | [2-action-graph](2-action-graph.md) 2.5–2.6；[8-formal-model](8-formal-model.md) 8.4 |
+| phase 与动作图是什么关系？ | [2-action-graph](2-action-graph.md) 2.5–2.7；[8-formal-model](8-formal-model.md) 8.4 |
+| `G(e)` 的完整定义是什么？ | [2-action-graph](2-action-graph.md) 2.7 |
 | 动作发生的环境/他人/人物状态如何进入结构？ | [3-context-model](3-context-model.md) |
 | 结构如何被证据支持、如何避免编造？ | [4-evidence](4-evidence.md) |
 | 这些设计有哪些替代方案与代价？ | [5-design-decisions](5-design-decisions.md) |
