@@ -13,10 +13,23 @@
 | **phase（行为阶段）** | stage 内一种相对稳定的行为模式/子目标/活动簇时期；边界是行为模式的变化 |
 | **action（动作）** | 有证据支持的行为单元：一个主体、一个目标、一个有界时间、一个可陈述且可证据化的行为 |
 | **action graph（动作图）** | 以动作为节点、以时间/因果/交互/连续关系为边的偏序图 |
-| **partial order（偏序）** | 只定义部分元素之间的先后；允许并行与顺序未知；不要求全序 |
-| **parallel（并行）** | 动作共现且无确定先后；包含真重叠与顺序未知两种情况 |
+| **partial order（偏序）** | 只定义部分元素之间的先后；允许并发与不可比；不要求全序 |
+| **concurrent（并发）** | 两个动作的发生区间可能重叠；是“不可比”的一种子情况 |
+| **incomparable（不可比）** | 既不能断定 `u≺v`，也不能断定 `v≺u`；包含并发与顺序未知 |
 | **order_unknown（顺序未知）** | 两个动作都发生但来源不足以判断先后 |
-| **behavior thread（行为线程）** | 同一方向/目标下的一组动作；可作为 phase 内可选的分组视图 |
+| **chain（链）** | 两两可比的动作子集；对应严格链式（totally ordered）的行为序列 |
+| **antichain（反链）** | 两两不可比的动作子集；可能并发，也可能顺序未知 |
+| **Hasse 图** | 偏序的传递约简；只保留覆盖关系 |
+| **fork / join（分叉/汇合）** | 出度 ≥ 2 / 入度 ≥ 2 的顶点；不需要额外的“合并节点” |
+| **diamond（菱形）** | 两条内部不相交路径共享起点与终点；分叉—汇合的典型结构 |
+| **SCC（强连通分量）** | 语义环的载体；SCC 缩图为 DAG |
+| **induced subgraph（诱导子图）** | 对顶点子集保留其内部边得到的子图 |
+| **quotient graph（商图）** | 按分区粗化后的图；相位层是对动作图的商 |
+| **cut edge（割边）** | 两端属于不同分区的边 |
+| **width / height（宽度/高度）** | 最大反链基数 / 最长链顶点数 |
+| **interval order（区间序）** | 由区间先后关系诱导的偏序；时间偏序的特例 |
+| **phase layer（相位层）** | 动作图按相位主归属 `π` 做的商图/粗化视图 |
+| **phase quotient（相位商图）** | `Q=(Phases,E_Q)`，块间存在边当且仅当原图存在跨块边 |
 | **pattern action（模式动作）** | 对重复性/周期性行为的聚合表示（时间窗 + 频次），避免一次一个节点 |
 | **context（上下文）** | 与动作直接相关的环境、他人、人物自身状态；分 phase baseline 与 action delta |
 | **phase baseline** | 一个 phase 内相对稳定的上下文 |
@@ -46,7 +59,7 @@ flowchart LR
 
 | 表示 | 中心 | 结构 | 本框架如何使用 |
 |---|---|---|---|
-| **EventCascade** | 事件怎么发展 | event → stage → episode → participant/action/relation/transaction | 借鉴“事件层级 + 证据字段”的思想；但不直接采用：其动作是 participant 附属，缺少偏序/并行/上下文 |
+| **EventCascade** | 事件怎么发展 | event → stage → episode → participant/action/relation/transaction | 借鉴“事件层级 + 证据字段”的思想；但不直接采用：其动作是 participant 附属，缺少时间偏序/并发结构/上下文 |
 | **person-epg-3.0** | 人物事实与证据 | 事实层（entity/occurrence/action/transaction/evidence/time）+ 组织层（event/stage/activity/relation） | 作为**事实与证据底座**；PBG 在其之上增加 phase、动作偏序图、上下文与准入规则 |
 | **PBG（本框架）** | 人物在这个事件里怎么行动 | event → stage → phase → 动作偏序图 + 上下文层 | 训练数据 + benchmark 的行为结构 |
 
@@ -58,7 +71,7 @@ flowchart LR
 | stage | stage | EventStage | PBG 的 stage 锚定“局面变化”；boundary_reason 思路可复用 |
 | phase | 无直接对应（可由 occurrence/activity 聚合） | Episode（但语义不同） | **phase ≠ episode**：phase 是人物行为模式段，episode 是事件过程子段；不要混用 |
 | action（节点） | action / activity | Participant.actions / Action | PBG 增加准入、去重、偏序、上下文链接 |
-| 动作边 | activity_relation（precedes/overlaps/…） | 无显式动作图 | PBG 增加并行/未知顺序、连续性、交互语义 |
+| 动作边 | activity_relation（precedes/overlaps/…） | 无显式动作图 | PBG 增加时间偏序（并发/不可比）、连续性、交互语义 |
 | 上下文（环境/他人/自身状态） | entity / entity_relation / 部分 occurrence 信息 | participant/relations | PBG 增加“三类上下文 + 六种链接语义 + belief 分离” |
 | 证据包 | source_document / evidence_span / evidence_set / evidence_link | VerifiableField（值+证据+理由） | PBG 要求证据包整体成为一等公民 |
 
@@ -69,7 +82,7 @@ flowchart LR
 ## 7.3 设计问答（FAQ）
 
 **Q1：为什么不是线性链？**
-真实人物在同一时期常有多条行为线程，来源也常无法确定先后。线性链会伪造顺序与因果；偏序图能保留并行与未知。
+真实人物在同一时期常存在多个互不可比的并发过程，来源也常无法确定先后。线性链会伪造顺序与因果；偏序图能保留并发与不可比结构。
 
 **Q2：为什么不在单案例里做 AND/XOR 控制流？**
 单案例的证据只能支持“先/后/重叠/未知”，不足以支持“与/或”逻辑。控制流属于跨案例的过程模型，不属于单个 sample。

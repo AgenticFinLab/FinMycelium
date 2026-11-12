@@ -19,10 +19,10 @@
 
 ## 0.2 为什么需要它
 
-现有事件表示（`EventCascade` 等）以“事件过程”为中心：动作挂在 participant 下，层级是事件→阶段→片段，动作之间缺少显式的并行、因果、跨阶段连续关系，也缺少对行为条件的系统建模。人物模拟的训练与评测需要的是**行为中心**的结构：
+现有事件表示（`EventCascade` 等）以“事件过程”为中心：动作挂在 participant 下，层级是事件→阶段→片段，动作之间缺少显式的时间偏序、因果、跨阶段连续关系，也缺少对行为条件的系统建模。人物模拟的训练与评测需要的是**行为中心**的结构：
 
-1. 同一时期人物往往同时推进多条行为线程（业务 / 资金 / 法律 / 舆论 / 关系）；
-2. 动作之间存在并行、串行、合并、回应、跨 phase 连续；
+1. 同一时期人物往往存在多个并发过程（如业务、资金、法律、舆论等），在偏序中表现为反链或互不可比的顶点集合；
+2. 动作之间存在并发（concurrent）、链式先后（chain）、分叉/汇合（fork/join）、回应与跨 phase 连续；
 3. 动作的解释依赖环境状态、相关他人、以及人物自身的目标、资源、约束与知识；
 4. 结构必须能被**判分**（benchmark），也必须能追溯到**证据**（dataset）。
 
@@ -48,7 +48,7 @@ PBG 就是为这四个需求设计的最小框架。
 | **stage** | 事件中的一个“局面/情境”时期；边界是情境、主导目标、关系格局或资源约束的实质变化 |
 | **phase** | 一个 stage 内一种相对稳定的“行为模式/子目标/活动簇”时期；边界是行为模式的变化 |
 | **action** | 有证据支持的一个行为单元：一个主体、一个目标、一个有界时间、一个可陈述且可证据化的行为 |
-| **动作图** | 以 action 为节点、以时间/因果/交互/连续关系为边的**偏序图**（partial order），允许并行与多线程 |
+| **动作图** | 以 action 为节点、以时间/因果/交互/连续关系为边的**偏序图**（partial order），允许并发（concurrent）与不可比（incomparable）结构，可含多条极大链 |
 | **上下文** | 与动作直接相关的环境状态、关系与他人、人物自身状态；分 phase 基准与动作差量两层 |
 | **证据包** | 围绕该人物与事件收集的多来源、可核验的信息集合；是一等公民，图是它的派生视图 |
 | **PBG** | 上述层级 + 动作图 + 上下文链接的完整框架 |
@@ -68,7 +68,7 @@ flowchart TB
         H["event → stage → phase<br/>局面锚点 + 行为模式锚点"]
     end
     subgraph L2["L2 行为层"]
-        G["动作偏序图<br/>多线程 / 并行 / 因果 / 跨 phase 连续"]
+        G["动作偏序图<br/>时间偏序 / 反链 / 因果 / 跨 phase 连续"]
     end
     subgraph L3["L3 上下文层"]
         C["phase baseline + action delta<br/>人物 / 环境 / 自身状态"]
@@ -92,7 +92,7 @@ flowchart TB
 
 | 编号 | 规则 | 详见 |
 |---|---|---|
-| **FR-1** | 单案例图 = **证据支持的行为偏序图**；并行 = 共现且无确定先后；允许多线程、多根多汇，不是单链 | [2-action-graph](2-action-graph.md) |
+| **FR-1** | 单案例图 = **证据支持的行为偏序图**；并发 = 区间重叠；顺序未知 = 不可比；允许多根多汇、多条极大链，不是单链 | [2-action-graph](2-action-graph.md) |
 | **FR-2** | 层级 `event → stage → phase → 动作图`；stage 是“局面”层，phase 是“行为模式”层；stage 分区 event，phase 分区 stage；允许 unknown gap；边界必须有证据 + 理由 | [1-hierarchy](1-hierarchy.md) |
 | **FR-3** | **动作准入四条必需**：主体相关、事件相关、过程相关、证据支持 | [2-action-graph](2-action-graph.md) |
 | **FR-4** | **动作排除与去重**：背景/评价/心理/微观操作/无关私人活动/无证据传闻不入图；同一行为一个节点多证据；重复性动作用模式节点 | [2-action-graph](2-action-graph.md) |
@@ -105,6 +105,8 @@ flowchart TB
 | **FR-11** | **生产与复核**：顶级 LLM 负责提议与蒸馏，框架规则负责校验，人工负责判断与冻结；prompt/skill 是执行层，不是定义层；stage/phase 评测分开 | [6-production-review-and-validation](6-production-review-and-validation.md) |
 
 > 这 11 条是框架的“宪法”。每个文件给出展开定义、图示与反模式；后续任何 schema、prompt、标注指南都不得与之冲突。
+>
+> **术语纪律**：本系列中的图论/序理论术语按标准数学含义使用（偏序、链、反链、Hasse 图、诱导子图、商图、割边、SCC、宽度/高度等）；不使用“线程/主线/支线”等叙事化类比。新术语必须先在 [7-glossary-and-mapping](7-glossary-and-mapping.md) 定义后使用。
 
 ---
 
@@ -114,7 +116,7 @@ flowchart TB
 |---|---|---|
 | [0-overview](0-overview.md) | 这个框架是什么、为什么、规则总览 | 框架总图 |
 | [1-hierarchy](1-hierarchy.md) | event/stage/phase 如何定义、如何切、有什么不变量 | 层级图、时间线 |
-| [2-action-graph](2-action-graph.md) | 动作图是什么语义、如何并行、动作如何准入与去重 | 多线程图、准入流程图 |
+| [2-action-graph](2-action-graph.md) | 动作图的形式化语义、相位分层、动作准入与去重 | 相位分层图、偏序图、准入流程图 |
 | [3-context-model](3-context-model.md) | 环境/他人/自身状态如何挂到动作上、belief 与事实如何分开 | 两段式上下文图 |
 | [4-evidence-and-provenance](4-evidence-and-provenance.md) | 证据包是什么、图和证据什么关系、完整性如何定义 | 证据流图 |
 | [5-benchmark-and-dataset](5-benchmark-and-dataset.md) | 如何从 PBG 派生训练数据与 benchmark 任务、如何切分与防泄漏 | 任务派生图 |
