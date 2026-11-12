@@ -59,10 +59,10 @@ and search implementation are unchanged.
 
 ## Files
 
-Native build artifacts stay in the ignored experiment area by default:
+Workbench build artifacts are written under the selected EPG-dataset root, in its Git-ignored `output/builds/` directory:
 
 ```text
-.local-experiments/person-epg/<task_id>/
+EPG-dataset/output/builds/<task_id>/
   input.json
   config.json
   snapshot.json
@@ -76,8 +76,9 @@ Native build artifacts stay in the ignored experiment area by default:
     ... phase outputs and evidence reports
 ```
 
-The task database and worker coordination remain in the existing workbench
-workspace. Original downloaded documents remain in search storage; the input and
+The output directory is frozen when the task is created; later dataset-setting
+changes do not move it. Existing tasks retain their saved paths. The task database
+and worker coordination remain in the existing workbench workspace. Original downloaded documents remain in search storage; the input and
 provenance identify which saved text was used. No automatic final-graph collection,
 CSV status update or Git operation occurs. Content-review automation and a review
 Skill are deferred; the workbench keeps the result as a draft pending review.

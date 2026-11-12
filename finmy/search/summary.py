@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import tempfile
 
-from finmy.dataset import within
+from finmy.dataset import within, summary_directory
 from .state import SearchState, digest, now
 
 BEGIN = '<!-- finmy-search-summary:start -->'
@@ -125,18 +125,11 @@ def publish_summary(root, task_id):
     atomic_text(local_path, prefix + BEGIN + '\n' + with_history(body, {task_id:entry}) + END + suffix)
     result = {'status':'pending', 'local_path':str(local_path), 'updated_at':now()}
     try:
-        root_path = Path(catalog['root'])
-        if not root_path.is_dir():
-            raise ValueError('数据集根目录已不存在')
-        relative = Path(catalog['event_dir'])
-        allowed = Path('event-epg/events') if catalog['kind'] == 'event' else Path('person-epg')
-        if not relative.is_relative_to(allowed) or relative == allowed:
-            raise ValueError('event 汇总目录不在对应的数据集分类下')
-        folder = within(root_path, relative)
+        folder = summary_directory(catalog)
         folder.mkdir(parents=True, exist_ok=True)
-        if (root_path / relative / 'search-summary.md').is_symlink():
+        if (folder / 'search-summary.md').is_symlink():
             raise ValueError('汇总不能写入符号链接')
-        target = within(root_path, relative / 'search-summary.md')
+        target = within(folder, 'search-summary.md')
         with directory_lock(folder):
             existing = target.read_text(encoding='utf-8') if target.exists() else ''
             prefix, previous, suffix = managed(existing)

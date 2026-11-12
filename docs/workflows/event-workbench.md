@@ -60,7 +60,8 @@ The launcher applies a workbench-only light theme. Shared presentation lives in
    uploads remain available. Scope changes require a new search before adoption.
 6. Approving evidence saves an immutable input snapshot with its hash and review ID.
    Material changes invalidate current approval without rewriting older snapshots.
-7. Create an AgentEventBuilder or SparseRagBuilder task from the confirmed input.
+7. Configure the EPG-dataset root in Settings, then create an AgentEventBuilder
+   or SparseRagBuilder task from the confirmed input.
    Select its model independently of search. Creating a task saves input, scope,
    model/configuration and code fingerprints, with no model call. In Tasks, inspect
    the snapshot, allow model calls and explicitly start the build.
@@ -111,10 +112,13 @@ not grant workbench scope, evidence, or graph approval.
 
 On a terminal search outcome, the background worker generates an English summary
 from saved records, without an additional model or Skill call. It saves locally
-first and publishes to the selected event:
+first and publishes under the dataset's Git-ignored output directory:
 
-- Ordinary event: `event-epg/events/<event_id>/search-summary.md`.
-- Person event: `person-epg/<person>/<storyline>/<event>/search-summary.md`.
+- Ordinary event: `output/search/event-epg/events/<event_id>/search-summary.md`.
+- Person event: `output/search/person-epg/<person>/<storyline>/<event>/search-summary.md`.
+
+The formal catalogs are not changed by search completion. A selected summary can
+be collected with reviewed artifacts later.
 
 The summary records the latest output, source URLs and acquisition states, input
 counts, gaps/stop notes, and a short run index. Incomplete or failed searches retain
@@ -154,21 +158,29 @@ Unlinked independent searches keep their existing local-only behavior.
 
 ## Storage, provenance and export
 
-SQLite records are stored in the Git-ignored `output/workbench/` directory.
-Set `FINMY_WORKBENCH_HOME` to use another ignored local workspace. Existing tables
-are preserved; input snapshots and build tasks use additive tables.
+Workbench databases, task coordination and original search storage remain in
+FinMycelium's Git-ignored `output/workbench/`. Set `FINMY_WORKBENCH_HOME` to use
+another local workspace. Direct build files and generated catalog search summaries
+are saved under the configured EPG-dataset root's Git-ignored `output/` directory.
+New ordinary builds require that dataset setting; person builds use their frozen
+catalog root. Each build retains its output path even if Settings later changes.
+Existing tasks keep their saved paths. Formal collection remains a separate step.
 
 ```text
-output/workbench/
+FinMycelium/output/workbench/
   workbench.sqlite3
   dataset.json                    local dataset-root setting
   search/                         task originals, versions, input and traces
     profile.json                  reusable search defaults
-  builds/BUILD-.../
+  builds/                         worker coordination
+EPG-dataset/output/
+  search/<catalog-event-path>/search-summary.md
+  builds/<BUILD-or-PBUILD-task-id>/
     input.json                    frozen actual input
     config.json, snapshot.json    Builder settings and provenance
-    preflight.json, worker.log
-    output/                       native Builder artifacts and run manifest
+    worker.log
+    output/                       ordinary Builder artifacts and run manifest
+    attempts/                     person-event JSON, Gantt and checks
 ```
 
 Event exports include master records, source records, input snapshots, review

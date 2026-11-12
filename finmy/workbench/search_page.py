@@ -112,12 +112,12 @@ def summary_panel(controller, task_id, data, *, active, read_only):
     summary = data.get('summary', {})
     with st.expander('数据集检索汇总', expanded=summary.get('status') == 'failed'):
         if summary.get('status') == 'saved':
-            st.success('检索汇总已自动保存到数据集')
+            st.success('检索汇总已自动保存到 output')
             st.code(summary['path'], language=None)
         elif summary.get('status') == 'failed':
-            st.warning('检索结果已保存，汇总未写入数据集：' + summary.get('error', '未知原因'))
+            st.warning('检索结果已保存，汇总未写入 output：' + summary.get('error', '未知原因'))
         else:
-            st.caption('检索结束后自动保存到本 event 的 search-summary.md；不自动启动构建。')
+            st.caption('检索结束后自动保存到 EPG-dataset/output/search/ 下本 event 的汇总；不自动启动构建。')
         # Show this task's local report, even if a later task updated the catalog summary.
         local = controller.root / task_id / 'runs/initial/search-summary.md'
         if local.is_file():

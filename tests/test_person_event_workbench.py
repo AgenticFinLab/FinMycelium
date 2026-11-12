@@ -69,15 +69,19 @@ def test_prepare_freezes_actual_input_and_sources(setup,tmp_path):
     assert builds.inspect(bid)['body']==body
 
 
-def test_worker_outputs_native_draft_in_experiment_only(setup,tmp_path):
+def test_worker_outputs_native_draft_in_dataset_output_only(setup,tmp_path):
     store,search,tid,requests=setup;builds=BuildController(store)
-    bid=builds.create_person(search,tid,confirmed=True,artifact_root=tmp_path/'runs')
+    bid=builds.create_person(search,tid,confirmed=True)
+    assert not (tmp_path/'dataset/output/builds'/bid).exists()
     queue(builds,bid);builds.run(bid,executor=execute(SyntheticModel()))
     row=builds.inspect(bid)
     assert row['status']=='completed',row['body']
     path=Path(row['body']['artifact_directory'])/row['body']['run_state']['output']
-    assert path.exists() and path.is_relative_to(tmp_path/'runs')
-    assert not list((tmp_path/'dataset').rglob('epg.json'))
+    assert path.exists() and path.is_relative_to(tmp_path/'dataset/output/builds'/bid)
+    assert (path.parent/'gantt.html').is_file()
+    assert not list((tmp_path/'dataset/person-epg').rglob('epg.json'))
+    assert not list((tmp_path/'dataset/person-epg').rglob('gantt.html'))
+    assert (Path(row['body']['artifact_directory'])/'input.json').is_file()
     with store.connection() as db:assert db.execute('SELECT COUNT(*) FROM graphs').fetchone()[0]==0
     assert requests==['search']
 

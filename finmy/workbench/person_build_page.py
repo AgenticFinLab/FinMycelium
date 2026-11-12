@@ -39,6 +39,7 @@ def person_build_panel(store, controller, row, labels):
     st.subheader(event['event_name']+' — '+event['person_name'])
     status(labels[row['status']], '人物 event 构建 · '+tid)
     st.caption(event['storyline_name']+' · '+event['event_id']+' · '+body['person_config']['lm_name'])
+    st.caption('构建输出：' + body['artifact_directory'])
     run=body.get('run_state',{})
     runtime=Path(body['artifact_directory'])/'state.json'
     if runtime.is_file():

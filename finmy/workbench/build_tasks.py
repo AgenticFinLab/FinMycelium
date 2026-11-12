@@ -12,6 +12,7 @@ import time
 
 import yaml
 
+from finmy.dataset import dataset_root, output_directory
 from finmy.search.control import task_lock, task_path
 from finmy.search.state import write_json
 from finmy.workbench.domain import digest, encoded, graph_from_bytes, validate_graph
@@ -89,8 +90,8 @@ class BuildController:
             raise ValueError("没有可用正文")
         input_hash = digest(bundle)
         task_id = identifier("BUILD-")
-        directory = task_path(self.root, task_id)
-        body = {"input": bundle, "input_hash": input_hash, "settings": settings,
+        directory = output_directory(dataset_root(self.store.root), 'builds', task_id)
+        body = {"artifact_directory": str(directory), "input": bundle, "input_hash": input_hash, "settings": settings,
                 "event": self.store.event(event_id), "scope_hash": self.store.target(event_id, "scope"),
                 "config": build_config(settings, directory), "code": code_version(),
                 "evidence_review": next(r for r in self.store.reviews(event_id)
@@ -107,7 +108,8 @@ class BuildController:
         bundle, provenance = freeze_search_input(search_controller, search_task_id, confirmed=confirmed)
         event = bundle['user_query']['extras']['person_event']
         task_id = identifier('PBUILD-')
-        artifacts = Path(artifact_root) if artifact_root is not None else ROOT / '.local-experiments/person-epg'
+        artifacts = (Path(artifact_root) if artifact_root is not None
+                     else output_directory(provenance['catalog']['root'], 'builds'))
         body = {'kind':'person_event', 'input':bundle, 'input_hash':digest(bundle),
                 'event':{'event_id':event['event_id'], 'event_name_en':event['event_name'] + ' — ' + event['person_name']},
                 'catalog':provenance['catalog'], 'provenance':provenance, 'scope_hash':digest(event['scope']),
@@ -163,7 +165,9 @@ class BuildController:
             self.save(task_id, "queued", body)
             try:
                 # Separate worker survives page changes and Streamlit restarts.
-                with (task_path(self.root, task_id) / "worker.log").open("ab") as log:
+                directory = Path(body.get('artifact_directory') or task_path(self.root, task_id))
+                directory.mkdir(parents=True, exist_ok=True)
+                with (directory / "worker.log").open("ab") as log:
                     worker = subprocess.Popen([sys.executable, "-m", "finmy.workbench.build_tasks",
                         "--root", str(self.store.root), "--task", task_id], cwd=ROOT,
                         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
@@ -222,7 +226,7 @@ class BuildController:
             if row["status"] != "queued":
                 return
             body = row["body"]
-            directory = task_path(self.root, task_id)
+            directory = Path(body.get('artifact_directory') or task_path(self.root, task_id))
             started = time.monotonic()
             try:
                 if not self.current(row):
@@ -231,9 +235,8 @@ class BuildController:
                     raise ValueError("CodeChangedSinceTaskCreation")
                 body.update(started=now(), pid=os.getpid())
                 self.save(task_id, "running", body)
+                directory.mkdir(parents=True, exist_ok=True)
                 if body.get('kind') == 'person_event':
-                    directory = Path(body['artifact_directory'])
-                    directory.mkdir(parents=True, exist_ok=True)
                     from finmy.person_epg.build import code_identity
                     if code_identity() != body['person_code']:
                         raise ValueError('CodeChangedSinceTaskCreation')

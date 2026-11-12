@@ -1,7 +1,7 @@
 """Dataset selection uses the common search form and controller."""
 import streamlit as st
 
-from finmy.dataset import DatasetCatalog, dataset_root, save_dataset_root
+from finmy.dataset import DatasetCatalog, dataset_root, save_dataset_root, output_directory, summary_directory
 from finmy.workbench.ui import heading, empty
 from finmy.workbench.workflow import navigate
 
@@ -15,9 +15,17 @@ def dataset_settings(store):
         if st.form_submit_button('保存数据集路径', icon=':material/folder:'):
             try:
                 save_dataset_root(store.root, root)
-                st.success('数据集路径已保存；未导入或改写主表')
+                st.success('数据集路径已保存；直接输出使用其 output/ 目录')
             except (ValueError, OSError) as exc:
                 st.error(str(exc))
+
+    root = dataset_root(store.root)
+    if root:
+        try:
+            st.caption('构建输出：' + str(output_directory(root, 'builds')))
+            st.caption('草稿和运行记录保存在 output/，审核后再收录到正式事件目录。')
+        except ValueError as exc:
+            st.warning(str(exc))
 
 
 def dataset_page(store):
@@ -53,7 +61,7 @@ def dataset_page(store):
         event_id = st.selectbox('选择 event', list(events),
             format_func=lambda e: f"{events[e]['event_name']} · {events[e]['period']} · {events[e].get('status', '')}", key=key)
         selection = catalog.select(event_id, person_id)
-        st.caption(f"目录 ID：{event_id} · 检索汇总：{selection['event_dir']}/search-summary.md")
+        st.caption(f"目录 ID：{event_id} · 检索汇总：{summary_directory(selection) / 'search-summary.md'}")
         if person_id:
             st.info('每次任务处理一条 event：先检索，确认材料后再创建人物构建任务。')
         with st.expander('研究说明与来源线索'):

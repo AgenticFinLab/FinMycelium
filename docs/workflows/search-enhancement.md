@@ -219,8 +219,9 @@ output/search/<task_id>/
 ```
 
 Dataset-linked workbench tasks also generate a local `search-summary.md` and
-publish the lightweight summary to their event directory in EPG-dataset. Source
-texts and raw responses remain here. The worker saves summaries independently of
+publish the lightweight summary under EPG-dataset's Git-ignored
+`output/search/<catalog-event-path>/` directory. Source texts and raw responses
+remain in search storage. The worker saves summaries independently of
 page rendering; see [dataset selection and automatic summaries](event-workbench.md#select-an-event-from-epg-dataset).
 
 Runtime files, raw responses, machine-specific notes and experiments stay outside Git.

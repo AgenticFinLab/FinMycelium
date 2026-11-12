@@ -39,6 +39,7 @@ def build_panel(store, task_id, row=None):
     st.subheader(display_name(body["event"]))
     status(LABELS[row["status"]], "构建 · " + task_id)
     st.write(body["config"]["builder_type"] + " · " + body["config"]["lm_name"])
+    st.caption('构建输出：' + str(body.get('artifact_directory') or controller.root / task_id))
     if not controller.current(row):
         st.warning("当前资料或审核已变化。此任务仍绑定旧输入；请重新确认资料，旧运行不会被改写。")
     stats([("输入条目", len(body["input"]["samples"]), "文档或来源片段"),

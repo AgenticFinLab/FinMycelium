@@ -37,6 +37,29 @@ def save_dataset_root(workspace, root):
     return catalog
 
 
+def output_directory(root, *parts):
+    """Resolve ignored run output without writing to the accepted catalogs."""
+    if not str(root).strip():
+        raise ValueError('请先在设置中填写 EPG-dataset 本地路径，以保存构建输出')
+    base = Path(root).expanduser().resolve()
+    if not base.is_dir():
+        raise ValueError('数据集根目录已不存在')
+    output = within(base, 'output')
+    if output != base / 'output':
+        raise ValueError('output 不能重定向到其他目录')
+    if output.exists() and not output.is_dir():
+        raise ValueError('output 必须是目录')
+    return within(output, Path(*(component(value) for value in parts))) if parts else output
+
+
+def summary_directory(catalog):
+    relative = Path(catalog['event_dir'])
+    allowed = Path('event-epg/events') if catalog['kind'] == 'event' else Path('person-epg')
+    if not relative.is_relative_to(allowed) or relative == allowed:
+        raise ValueError('event 汇总目录不在对应的数据集分类下')
+    return output_directory(catalog['root'], 'search', *relative.parts)
+
+
 def string_list(value):
     value = value or ''
     items = json.loads(value) if value.lstrip().startswith('[') else value.splitlines()

@@ -30,7 +30,7 @@ def setup(root, workspace, *, person=False):
     selection = catalog.select('PERSON-EVENT-TEST', 'PERSON-TEST') if person else catalog.select('EVENT-TEST')
     tid = create_catalog_search(store,c,selection,{},'simple',period=selection['period'],
                                include=selection['scope_include'],exclude=selection['scope_exclude'],confirmed=True,seeds=[])
-    return c, tid, root / selection['event_dir'] / 'search-summary.md', calls
+    return c, tid, root / 'output/search' / selection['event_dir'] / 'search-summary.md', calls
 
 
 def finish(c, tid):
@@ -52,6 +52,9 @@ def test_background_completion_publishes_without_open_page(tmp_path, person):
     assert 'PRIVATE_FULL_SOURCE_TEXT' not in text
     assert 'not automatically adopted' in text
     assert all(Path(p).read_bytes()==raw for p,raw in before.items())
+    assert target.is_relative_to(root/'output/search')
+    assert not list((root/'person-epg').rglob('search-summary.md'))
+    assert not list((root/'event-epg').rglob('search-summary.md'))
     assert set(p.name for p in target.parent.iterdir()) == {'search-summary.md'}
     assert calls == ['search']
 
@@ -172,7 +175,7 @@ def test_agent_mode_completion_uses_same_summary_path(tmp_path):
     data = c.inspect(tid)
     assert data['usage']['model'] == 3
     assert data['summary']['status'] == 'saved'
-    report = (root / selection['event_dir'] / 'search-summary.md').read_text()
+    report = (root / 'output/search' / selection['event_dir'] / 'search-summary.md').read_text()
     assert 'Exact date unverified' in report
     assert 'Complete material characters: Not recorded' not in report
 
@@ -185,5 +188,5 @@ def test_no_results_are_reported_as_insufficient(tmp_path):
     tid = create_catalog_search(store,c,selection,{},'simple',period='2024',include='Closing',exclude='',confirmed=True,seeds=[])
     c.start(tid);c.threads[tid].join(5)
     assert c.inspect(tid)['status'] == 'insufficient'
-    report = (root / selection['event_dir'] / 'search-summary.md').read_text()
+    report = (root / 'output/search' / selection['event_dir'] / 'search-summary.md').read_text()
     assert '- Status: insufficient' in report and 'No sources recorded.' in report

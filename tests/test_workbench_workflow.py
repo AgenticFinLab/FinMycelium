@@ -3,9 +3,12 @@ import io
 import json
 import socket
 import zipfile
+from pathlib import Path
 
 import pytest
 
+from finmy.dataset import save_dataset_root
+from dataset_fixture import fixture_dataset
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import digest
 from finmy.workbench.store import Store
@@ -22,6 +25,7 @@ def no_network(monkeypatch):
 @pytest.fixture
 def prepared(tmp_path):
     store = Store(tmp_path)
+    save_dataset_root(store.root, fixture_dataset(tmp_path / 'dataset'))
     eid = store.create_events([{"event_name_en":"Synthetic event", "description":"An offline transaction",
                                 "scope_include":"The transaction and its closing"}])[0]
     store.review(eid, "scope", "approved", "Reviewer", "", store.target(eid, "scope"))
@@ -64,6 +68,7 @@ def test_real_builder_offline_input_preflight(prepared, tmp_path, kind):
     inputs,_=load_inputs(path)
     _,config=select_builder(row["body"]["config"])
     assert preflight(config,inputs)["status"] == "offline_preflight_pass"
+    assert config['save_folder'] == str(tmp_path/'dataset/output/builds'/tid/'output')
     assert not store.graphs(eid)
     assert row["status"]=="ready"
 
@@ -229,6 +234,7 @@ def test_explicit_start_queues_one_worker_and_cannot_start_twice(prepared, monke
     monkeypatch.setattr(module.subprocess,"Popen",lambda args,**kwargs:(calls.append(args) or SimpleNamespace(pid=123)))
     controller.start(tid,allow_network=True)
     assert len(calls)==1
+    assert (Path(controller.inspect(tid)['body']['artifact_directory'])/'worker.log').is_file()
     assert "finmy.workbench.build_tasks" in calls[0]
     assert controller.inspect(tid)["status"]=="queued"
     with pytest.raises(ValueError):
@@ -245,3 +251,48 @@ def test_code_change_blocks_worker_before_execution(prepared, monkeypatch):
     monkeypatch.setattr(module,"code_version",lambda:{"commit":"different"})
     controller.run(tid,executor=lambda *a:pytest.fail("changed code must not execute"))
     assert controller.inspect(tid)["body"]["error_type"]=="CodeChangedSinceTaskCreation"
+
+
+def test_output_destination_is_frozen_and_catalogs_are_untouched(prepared, tmp_path):
+    store, eid = prepared
+    dataset = tmp_path/'dataset'
+    before = {p: p.read_bytes() for parent in ('person-epg', 'event-epg')
+              for p in (dataset/parent).rglob('*') if p.is_file()}
+    builds = BuildController(store)
+    tid = builds.create(eid, store.settings())
+    output = dataset/'output/builds'/tid
+    assert builds.inspect(tid)['body']['artifact_directory'] == str(output)
+    assert not output.exists()
+    other = fixture_dataset(tmp_path/'another-dataset')
+    save_dataset_root(store.root, other)
+    def execute(body, directory):
+        assert directory == output
+        return {'graph': graph(), 'usage': {'calls': 0}, 'run_directory': str(directory)}
+    queue(builds, tid)
+    builds.run(tid, executor=execute)
+    assert builds.inspect(tid)['status'] == 'completed'
+    assert all((output/name).is_file() for name in ('input.json', 'config.json', 'snapshot.json'))
+    assert not (other/'output').exists()
+    after = {p: p.read_bytes() for parent in ('person-epg', 'event-epg')
+             for p in (dataset/parent).rglob('*') if p.is_file()}
+    assert after == before
+
+
+def test_missing_dataset_setting_creates_no_build(prepared):
+    store, eid = prepared
+    (store.root/'dataset.json').unlink()
+    builds = BuildController(store)
+    with pytest.raises(ValueError, match='EPG-dataset'):
+        builds.create(eid, store.settings())
+    assert builds.tasks() == []
+
+
+def test_output_symlink_cannot_redirect_build_to_formal_catalog(prepared, tmp_path):
+    store, eid = prepared
+    dataset = tmp_path/'dataset'
+    (dataset/'output').symlink_to(dataset/'person-epg', target_is_directory=True)
+    builds = BuildController(store)
+    with pytest.raises(ValueError, match='output'):
+        builds.create(eid, store.settings())
+    assert builds.tasks() == []
+    assert not (dataset/'person-epg/builds').exists()
