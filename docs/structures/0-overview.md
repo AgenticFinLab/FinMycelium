@@ -33,9 +33,9 @@ flowchart TB
     P -->|e₁ … eₙ| E["Event"]
     E --> S["Stage"]
     S --> PH["Phase"]
-    PH --> G["Phase 动作视图 G(p)"]
-    E --> GE["Event 动作总图 G(e)"]
-    GE -.->|分组视图| G
+    PH --> G["Phase 动作图 G(p)"]
+    G -->|组合| GS["Stage 动作图 G(s)"]
+    GS -->|组合| GE["Event 动作图 G(e)"]
     PH -->|phase 基准| C["上下文层"]
     G -->|action 差量| C
     E -.->|证据支撑全部层级| V["证据层"]
@@ -44,9 +44,9 @@ flowchart TB
 **这张图是结构设计的总范式**：
 
 - 外层：人物拥有多个 event；每个 event 独立完整描述；
-- 中层：event 内是 `Stage → Phase → 动作视图`；
-- 内层：动作视图由多个动作节点与关系构成；phase 视图满足 `A(p) ⊆ A(e)`，并保留跨视图的边界引用；
-- 全局：`G(e)` 是 event 内**唯一的动作集合 + 关系集合**（canonical）；`G(p)` 是它的分组视图，不是另一层动作集合；
+- 中层：event 内是 `Stage → Phase → 动作图`；
+- 内层：每个 phase 有一张动作图；stage 图由 phase 图组合，event 图由 stage 图组合；
+- 组合：`G(p) ⊆ G(s) ⊆ G(e)`；`G(e)` 不是新增层级，而是逐层组合的结果；
 - 横切：上下文（phase 基准 + action 差量）与证据（来源/引文/支持模式/缺口）挂在结构上。
 
 ---
@@ -58,8 +58,9 @@ flowchart TB
     P["Person"] -->|拥有多个| E["Event"]
     E -->|划分为| S["Stage"]
     S -->|细分为| PH["Phase"]
-    PH -->|包含动作视图| G["Action Graph"]
-    E -->|全局动作集合| G
+    PH -->|包含动作图| G["Phase 动作图 G(p)"]
+    G -->|组合| GS["Stage 动作图 G(s)"]
+    GS -->|组合| GE["Event 动作图 G(e)"]
     PH -->|挂载| C["Context"]
     G -->|挂载动作差量| C
     E -.->|证据支撑全部层级| EV["Evidence"]
@@ -69,11 +70,11 @@ flowchart TB
 
 - `Person` 是顶层主语，拥有多个 `Event`；
 - `Event` 是独立描述单位，内部有 `Stage → Phase → Action`；
-- `Action` 是 event 级的**全局**行为集合；`Phase` 只是动作的分组/视图，不复制动作；
+- 每个 `Action` 唯一属于一个 `Phase`；`G(p)` 是 phase 动作图，`G(s)`/`G(e)` 由下层图逐层组合；
 - `Context` 是横切层，挂在 phase（基准）和 action（差量）上；
 - `Evidence` 支撑整棵结构，不是某一个层级的附属。
 
-**关键澄清**：**每个 phase 内部不是“一个动作”，而是一组由多个动作节点与关系构成的动作视图**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系；phase 的动作视图满足 `A(p) ⊆ A(e)`；event 动作总图 `G(e)` 是 event 范围内**唯一的动作集合 + 关系集合**，phase 视图只是它的分组视图。phase 之间通过跨相位动作与关系相连（详见 [1-hierarchy](1-hierarchy.md) 1.1.2 与 [2-action-graph](2-action-graph.md) 2.5）。允许退化到单动作或空的 phase，但必须说明原因。
+**关键澄清**：**每个 phase 内部不是“一个动作”，而是一张由多个动作节点与关系构成的动作图 `G(p)`**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系。每个动作唯一属于一个 phase；`G(s)` 由 phase 图组合并补跨 phase 边，`G(e)` 由 stage 图组合并补跨 stage 边。跨 phase 的行为不是“一个动作挂两个 phase”，而是两个 phase 内的动作 + 关系（详见 [1-hierarchy](1-hierarchy.md) 1.1.3 与 [2-action-graph](2-action-graph.md) 2.5）。允许退化到单动作或空的 phase，但必须说明原因。
 
 ---
 
@@ -103,9 +104,10 @@ flowchart LR
 | `E(P) = {e₁, …, eₙ}` | 人物的系列事件 |
 | `S(e)` | 事件 e 的局面阶段集合 |
 | `Ph(s)` | 阶段 s 的行为阶段集合 |
-| `A(e)` | 事件 e 的动作集合（event 级全局） |
-| `G(e)` | event 动作总图（canonical：唯一动作集合 + 关系集合） |
-| `G(p), G(s)` | phase / stage 的动作视图（不是单个动作） |
+| `A(e)` | 事件 e 的动作集合（按 phase 划分） |
+| `G(e)` | event 动作图：由 stage 图逐层组合 |
+| `G(s)` | stage 动作图：由 phase 图组合 + 跨 phase 边 |
+| `G(p)` | phase 动作图：本 phase 动作 + 内部关系 |
 | `I(x) = [l, r)` | 对象 x 的时间区间（半开区间） |
 | `a ≺ b` | 动作 a 先于 b（有证据的时间先后） |
 | `a ∥ b` | a 与 b 不可比（无先后证据或区间重叠） |
@@ -172,8 +174,8 @@ flowchart LR
 | [4-evidence](4-evidence.md) | 证据包、溯源、支持模式、验证与冲突处理的设计原则 |
 | [5-design-decisions](5-design-decisions.md) | 关键设计选择、替代方案与取舍、待定问题 |
 | [6-illustrative-example](6-illustrative-example.md) | 一个概念性示例：从人物到 event 再到动作与上下文 |
-| [7-specification](7-specification.md) | 设计规范：层级、动作视图、上下文、证据、未知处理的规范性要求与符合性检查 |
-| [8-formal-model](8-formal-model.md) | 形式化模型、命题、视图定义与完整规范示例 |
+| [7-specification](7-specification.md) | 设计规范：层级、动作图组合、上下文、证据、未知处理的规范性要求与符合性检查 |
+| [8-formal-model](8-formal-model.md) | 形式化模型、命题、逐层组合定义与完整规范示例 |
 
 ### 0.6.1 文档阅读地图
 
@@ -197,7 +199,7 @@ flowchart LR
 
 | 目标 | 含义 |
 |---|---|
-| **准确** | 定义、符号、层级关系、偏序/视图语义一致；示例与定义不冲突 |
+| **准确** | 定义、符号、层级关系、偏序/组合语义一致；示例与定义不冲突 |
 | **完整** | 人物/事件/阶段/行为阶段/动作/上下文/证据/规范/示例均有覆盖 |
 | **深入** | 给出形式化定义、命题、边界判据、替代方案与代价，而不只是结论 |
 | **可审阅** | 每篇有框架图/流程图/关系图；示例可逐步对照；规范有符合性检查 |
@@ -230,5 +232,5 @@ flowchart LR
 - 状态：讨论中；确认后冻结设计基线。
 - 变更记录：
   - `2026-11-12`：确立“人物 → 一系列 events → 每个 event 完整行为描述”的设计层定位；后续文档围绕该定位展开。
-  - `2026-11-12`：补充顶级框架图与设计规范（7-specification）；明确 phase 内是动作视图，而非单个 action。
-  - `2026-11-12`：补充形式化模型与规范示例（8-formal-model）；统一 `G(e)/G(s)/G(p)` 视图与偏序语义。
+  - `2026-11-12`：补充顶级框架图与设计规范（7-specification）；明确 phase 内是动作图，而非单个 action。
+  - `2026-11-12`：补充形式化模型与规范示例（8-formal-model）；统一 `G(e)/G(s)/G(p)` 逐层组合与偏序语义。

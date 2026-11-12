@@ -64,7 +64,7 @@ flowchart LR
 - A3（2020-02-10）**回应** A1；A4（2020-02-15）**回应** A2（推断）；A3 与 A4 有明确先后（2 月 10 日 → 2 月 15 日）。
 - A5（2020-04-20）**回应** A3、A4；A6（2020-06-01）**延续** A4 的监管沟通线，并在时间上晚于 A5。
 
-> 动作在 event 级只存一份；phase 只是“这个阶段看哪些动作”的视图。本示例不涉及跨相位动作；跨相位规则见 [2-action-graph](2-action-graph.md) 2.6 与 [8-formal-model](8-formal-model.md) 8.3.1。
+> 每个动作唯一属于一个 phase；phase 图逐层组合为 stage/event 图。本示例没有把动作挂到多个 phase；A4→A6 的 `continues` 是**跨 phase 关系**，不是“一个动作跨两个 phase”。
 
 ### 6.2.4 时间线（半开区间）
 
@@ -82,19 +82,19 @@ flowchart LR
 ```mermaid
 flowchart LR
     subgraph S1["S1 内部应对"]
-        subgraph P1["P1 内部会议与律师沟通（动作视图）"]
+        subgraph P1["P1 内部会议与律师沟通（动作图）"]
             A1["A1 内部会议"]
             A2["A2 与律师会面"]
         end
     end
     subgraph S2["S2 公开回应与披露"]
-        subgraph P2["P2 对外声明（动作视图）"]
+        subgraph P2["P2 对外声明（动作图）"]
             A3["A3 对外声明"]
         end
-        subgraph P3["P3 与监管沟通（动作视图）"]
+        subgraph P3["P3 与监管沟通（动作图）"]
             A4["A4 与监管沟通"]
         end
-        subgraph P4["P4 补充披露与正式调查（动作视图）"]
+        subgraph P4["P4 补充披露与正式调查（动作图）"]
             A5["A5 补充披露"]
             A6["A6 接受正式调查"]
         end
@@ -106,7 +106,7 @@ flowchart LR
     A6 -.->|continues| A4
 ```
 
-> 图中 A1、A2 之间**没有连线**：二者不可比（同日、来源未说明先后），`A1 ∥ A2` 不是边；`precedes` 是时间关系，`continues` 是延续关系，不能混为一谈。`responds_to` 的方向为“回应者 → 被回应者”，见 8.7.3。每个 phase 的动作视图由动作集 + 内部关系 + 边界引用构成：P1/P4 有多个动作，P2/P3 只有一个动作（允许，但已在表中说明）。
+> 图中 A1、A2 之间**没有连线**：二者不可比（同日、来源未说明先后），`A1 ∥ A2` 不是边；`precedes` 是时间关系，`continues` 是延续关系，不能混为一谈。`responds_to` 的方向为“回应者 → 被回应者”，见 8.7.3。每个 phase 有一张动作图 `G(p)`；stage/event 图由下层图组合。P1/P4 有多个动作，P2/P3 只有一个动作（允许，但已在表中说明）。
 
 **结构—上下文—证据的挂接关系**
 
@@ -160,4 +160,4 @@ flowchart LR
 5. **上下文**：phase 基准 + action 差量；belief 与事后事实分开。
 6. **证据**：每个关键内容有来源/引文或显式“推断/未知”；不宣称覆盖全部真实行为。
 
-> 同一示例的形式化版本（集合、偏序、视图、上下文、证据）见 [8-formal-model](8-formal-model.md) 8.7。
+> 同一示例的形式化版本（集合、偏序、逐层组合、上下文、证据）见 [8-formal-model](8-formal-model.md) 8.7。
