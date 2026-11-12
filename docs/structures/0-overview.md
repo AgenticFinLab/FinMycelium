@@ -32,15 +32,14 @@ flowchart TB
     P["Person<br/>人物：身份 + 背景"] -->|拥有多个| E["Event<br/>事件：可独立描述"]
     E -->|划分为| S["Stage<br/>局面阶段"]
     S -->|细分为| PH["Phase<br/>行为阶段"]
-    PH -->|包含动作视图| A["Action<br/>动作（行为单元）"]
-    E -->|全局动作集合| A
-    A -->|由关系连接| AG["Action Graph<br/>动作关系图"]
+    PH -->|包含动作子图| G["Action Graph<br/>多个动作节点 + 关系"]
+    E -->|全局动作集合| G
     PH -->|挂载| C["Context<br/>环境 / 他人 / 人物状态"]
-    A -->|挂载动作差量| C
+    G -->|挂载动作差量| C
     E -->|由| EV["Evidence<br/>来源与证据支持"]
     S --> EV
     PH --> EV
-    A --> EV
+    G --> EV
     C --> EV
 ```
 
@@ -52,6 +51,8 @@ flowchart TB
 - `Context` 是横切层，挂在 phase（基准）和 action（差量）上；
 - `Evidence` 支撑整棵结构，不是某一个层级的附属。
 
+**关键澄清**：**每个 phase 内部不是“一个动作”，而是一张由多个动作构成的偏序子图**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系；phase 是这张子图的视图，event 级动作图 `G(e)` 才包含该 event 的全部动作。phase 之间通过跨相位动作与关系相连（详见 [1-hierarchy](1-hierarchy.md) 1.1.2 与 [2-action-graph](2-action-graph.md) 2.5）。
+
 ---
 
 ### 0.2.1 阅读路径（从人物到证据）
@@ -61,9 +62,9 @@ flowchart LR
     P["Person<br/>人物"] -->|选择| E["Event e_i<br/>事件"]
     E --> S["Stage<br/>局面阶段"]
     S --> PH["Phase<br/>行为阶段"]
-    PH --> A["Action<br/>动作"]
-    A --> C["Context<br/>环境/他人/状态"]
-    A --> V["Evidence<br/>来源/引文"]
+    PH --> G["Action Graph<br/>多个动作节点 + 关系"]
+    G --> C["Context<br/>环境/他人/状态"]
+    G --> V["Evidence<br/>来源/引文"]
     C --> V
     E --> V
 ```
