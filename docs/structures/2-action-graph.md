@@ -197,7 +197,7 @@ flowchart LR
 1. **来源明确陈述**的关系（“因为…所以…”“in response to…”）——这是来源的主张，不是我们证明的因果；
 2. **我们自己的推断**——必须标注“推断”，不能伪装成事实。
 
-来源没说的关系，**宁可不连，也不要编**。详见 2.4.5。
+来源没说的关系，**宁可不连，也不要编**。详见 2.4.6。
 
 ### 2.4.3 交互关系
 
@@ -218,7 +218,47 @@ flowchart LR
 
 > 延续不是“同一动作重复出现”；动作本身只存一份，跨 phase 用“延续/中断/恢复”标注（见 2.6）。
 
-### 2.4.5 关于“因果”的说明
+### 2.4.5 关系类型矩阵
+
+| 组 | 类型 | `from → to` 读法 | 对称？ | 参与 `≺`？ | 需要 basis |
+|---|---|---|---|---|---|
+| 时间 | `precedes` | from 先于 to | 否 | 是 | 是 |
+| 时间 | `overlaps` | from 与 to 时间重叠 | 是 | 否 | 是 |
+| 时间 | `order_unknown` | from 与 to 谁先谁后未知 | 是 | 否 | 是 |
+| 过程 | `responds_to` | from 回应 to | 否 | 否 | 是 |
+| 过程 | `enables` | from 使能 to | 否 | 否 | 是 |
+| 过程 | `triggers` | from 触发 to | 否 | 否 | 是 |
+| 过程 | `prevents` | from 阻止 to | 否 | 否 | 是 |
+| 交互 | `communicates_with` | from 与 to 沟通 | 是 | 否 | 是 |
+| 交互 | `transacts_with` | from 与 to 交易 | 是 | 否 | 是 |
+| 交互 | `delegates_to` | from 委托 to | 否 | 否 | 是 |
+| 交互 | `joint_action` | from 与 to 共同行动 | 是 | 否 | 是 |
+| 延续 | `continues` | from 延续 to | 否 | 否 | 是 |
+| 延续 | `resumes` | from 恢复 to | 否 | 否 | 是 |
+| 延续 | `interrupted_by` | from 被 to 打断 | 否 | 否 | 是 |
+
+```mermaid
+flowchart TB
+    R["动作关系"]
+    R --> T["时间：precedes / overlaps / order_unknown"]
+    R --> S["过程：responds_to / enables / triggers / prevents"]
+    R --> I["交互：communicates_with / transacts_with / delegates_to / joint_action"]
+    R --> K["延续：continues / resumes / interrupted_by"]
+```
+
+**读法**：这张矩阵回答三件事——方向怎么读、是否对称、是否参与时间偏序 `≺`。只有 `precedes` 参与 `≺`；`overlaps` / `order_unknown` 只表达时间共存或未知，不参与先后；其他三组都不参与 `≺`。
+
+**示例映射（取自 6/8.7）**：
+
+| 关系 | 元组（from→to） | 读法 |
+|---|---|---|
+| `precedes` | `(a₁, a₃, precedes, derived)` | a₁ 先于 a₃ |
+| `responds_to` | `(a₃, a₁, responds_to, asserted)` | a₃ 回应 a₁ |
+| `continues` | `(a₆, a₄, continues, asserted)` | a₆ 延续 a₄ |
+
+> 交互类关系（communicates_with / transacts_with / delegates_to）的对象是**人物/组织**，通常记录为动作的参与者/上下文；只有 `joint_action` 是两个动作共同组成的动作-动作关系。
+
+### 2.4.6 关于“因果”的说明
 
 从现实世界的文档里，我们**无法识别真实因果**，只能记录“来源怎么说的”和“我们怎么推断的”。所以：
 
