@@ -6,13 +6,13 @@ Use the following project baseline for person research:
 
 | Setting          | Value                     |
 | ---------------- | ------------------------- |
-| Model            | GPT-6-Sol (`gpt-6-sol`) |
+| Model            | GPT-6.1 Sol (`gpt-6.1-sol`) |
 | Reasoning effort | High (`high`)           |
 | Web search       | Live search enabled       |
 
 Select the model and effort in the Codex window or at launch. Mentioning a model in the task prompt does not configure the session. These settings apply to the personal research agent; FinMycelium search and Builder models are configured in their own tasks. See the [official OpenAI model controls](https://learn.chatgpt.com/docs/models?surface=cli).
 
-For a new task, send the initial prompt, then the revision prompt after delivery. Revision covers self-review, any needed corrections, ready directories, the progress CSV, and the README entry. It can proceed without feedback from another window. This completes the normal planning cycle; retain open questions for event-level work. Use the same revision prompt for later updates when needed.
+For a new task, send the initial prompt, then the revision prompt after delivery. Revision covers self-review, catalog filtering, final numbering for a new catalog, a directory for every retained event, the progress CSV, the generated source CSV, and the README entry. It can proceed without feedback from another window. This completes the normal planning cycle; retain open questions for event-level work. Use the same revision prompt for later updates when needed.
 
 ## Initial research prompt
 

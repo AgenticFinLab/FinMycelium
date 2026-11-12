@@ -2,7 +2,7 @@
 
 > Use this shared structure with detail appropriate to the person and available research. Replace placeholders and remove authoring instructions before delivery. Present current findings, keeping editing history in Git and the delivery summary. Write in English by default, retaining original names, source titles, and quotations as needed. Record source support separately from user confirmation; pending or partial confirmation applies to the relevant events and scopes.
 
-Save this plan as `EPG-dataset/person-epg/<person_directory>/research-plan.md`, creating the root and person directory if needed according to the Skill.
+Save this plan as `EPG-dataset/person-epg/<person_directory>/research-plan.md`, creating the root and person directory if needed according to the Skill. Write catalog ID fields and the Primary storyline ID as plain identifiers without backticks or explanatory text; keep explanations in the appropriate prose fields.
 
 ## 1. person and research scope
 
@@ -29,20 +29,21 @@ Group events by a shared activity direction or subject; a storyline is an organi
 | --- | --- | --- | --- | --- | --- | --- |
 | {{ID}} | {{Primary storyline ID}} | {{Specific continuing matter, named in English}} | {{Precision supported by the sources}} | {{What can be researched independently}} | {{Public-source support / To verify}} | {{Source IDs}} |
 
-Reuse registered event IDs; newly registered events use `<person_id>-E0001` and subsequent sequence values, independent of storyline membership. Mark temporary references explicitly. Keep IDs consistent with the event descriptions below. This table records research candidates. Use `Public-source support` when read sources support the matter and the person's connection and the research scope can be explained. Otherwise use `To verify` and identify the key unresolved issue. Missing fine-grained details may remain research questions. Neither label records user confirmation or graph acceptance. Execution progress, ownership, and collected artifact paths are maintained in the person's `events.csv`; detailed run records stay with the task.
+For a new catalog, finalize consecutive event IDs from `<person_id>-E0001` after revision filtering, independent of storyline membership; preserve established IDs when updating an adopted catalog. Keep all references consistent. `To verify` may appear in an initial draft. Final delivery includes only events with `Public-source support`, an explainable personal connection, and a usable scope. Resolve, narrow, or omit other candidates during revision. Missing fine-grained evidence details may remain research questions. Source support does not record user confirmation or graph acceptance. Execution progress, ownership, and collected artifact paths are maintained in the person's `events.csv`; detailed run records stay with the task.
 
 ### Directory layout
 
-Adapt this tree to the researched storylines and events, using matching names and IDs. Show proposed paths initially; after revision directory preparation, distinguish existing and planned paths, including the README and progress CSV. Briefly explain deferred entries where useful. Directory preparation and task confirmation remain separate.
+Use `storyline_name` and `event_name` from `events.csv` exactly as directory names; place IDs in the tree comments, not in directory names. Label an unprepared initial tree as proposed once above the tree. After revision, the tree shows the actual directories for every retained event, together with the README and progress CSV. Tree comments contain IDs only; omit source-support and existence statuses. Omitted candidates have no entries in the final tree. Directory preparation and task confirmation remain separate.
 
 ```text
 EPG-dataset/person-epg/
 └── {{person_directory}}/
     ├── README.md
     ├── events.csv
+    ├── sources.csv
     ├── research-plan.md
-    └── {{storyline_name}}/  # {{storyline_id}} · {{existing / planned}}
-        └── {{event_name}}/  # {{event_id}} · {{support_status}} · {{existing / planned}}
+    └── {{storyline_name}}/  # {{storyline_id}}
+        └── {{event_name}}/  # {{event_id}}
 ```
 
 ## 4. event research descriptions
@@ -55,7 +56,7 @@ Repeat the following block for each candidate. Keep it concise, with detail prop
 
 #### Event overview
 
-{{Briefly explain the concrete matter using what the read sources establish. Include relevant background, major developments, or the latest documented state when they help explain the process. Cite source IDs beside the statements they support. For a To verify candidate, describe the lead and its limits explicitly. Do not force a trigger, causal explanation, or resolution when unknown.}}
+{{Briefly explain the concrete matter using what the read sources establish. Include relevant background, major developments, or the latest documented state when they help explain the process. Cite source IDs beside the statements they support. Do not force a trigger, causal explanation, or resolution when unknown.}}
 
 #### Connection to the person
 
@@ -81,7 +82,7 @@ Supported process facts may appear in the overview. Do not generate a completed 
 
 - Periods, topics, and source types actually researched: {{Briefly describe the work completed, including the coverage review actually performed}}.
 - Underexplored areas, access failures, or conflicts: {{Distinguish not searched, no results, inaccessible sources, and insufficient evidence}}.
-- Candidates that remain leads without adequate support: {{Reference their table IDs without presenting them as confirmed matters}}.
+- Material exclusions, if useful: {{Briefly name omitted matters and why they could not form usable events; no event IDs or pending-task list are needed}}.
 - Groupings, event boundaries, or plan changes requiring user confirmation: {{List material choices affecting subsequent tasks}}.
 - Suggested events to research first: {{Optional, with a concise reason}}.
 
@@ -90,6 +91,8 @@ Supported process facts may appear in the overview. Do not generate a completed 
 | Source ID | Original title and link | Publisher and publication date | Actual reading and locator | Supported judgment |
 | --- | --- | --- | --- | --- |
 | {{SRC-ID}} | {{Original-language title and a clickable source-page or document link; a separately labeled English gloss is optional}} | {{State unknown when unavailable}} | {{Body read / snippet only / access restricted; section, page, or paragraph as available}} | {{Related event or person identity and what the source supports}} |
+
+Generate the adjacent `sources.csv` from this table using the Skill’s export helper after updates; edit the index here rather than maintaining a second source list.
 
 Keep quotations accurate, in their original language, proportionate, and compliant with source-use limits. Label any English translation separately and retain the original quotation. Mark discovery-only sources explicitly; do not describe a search snippet as a full document you have read.
 
