@@ -16,10 +16,12 @@
 | `E(P) = {e₁, …, eₙ}` | 人物的有限事件集合，`n ≥ 1` |
 | `S(e), Ph(s), Ph(e)` | Event 的 Stage 集合、Stage 的 Phase 集合、Event 的全部 Phase |
 | `A(e)` | Event 的动作集合（有限） |
-| `R(e)` | Event 的动作关系集合 |
+| `R(e)` | 图 `G(e)` 的边集：每条边是 `(from, to, type, basis)` |
 | `G(e) = (A(e), R(e))` | Event 动作总图（canonical） |
 | `C(p), ΔC(a)` | Phase 基准上下文、Action 差量上下文 |
 | `Ev` | 证据包（Sources, Claims, Conflicts, Gaps） |
+
+**`R(e)` 是边集，不是额外数据**：`G(e)=(A(e),R(e))` 中，`A(e)` 是节点集，`R(e)` 是边集；一条边 `r=(a,b,type,basis)` 就是图中 `a→b` 的箭头。没有“图 + 另一份关系数据”两套东西；`type/basis` 只是边的标签与依据。phase 视图中的 `R(p)`、`∂R(p)` 都是 `R(e)` 的子集/引用，不复制边。
 
 **时间表示（关键约定）**：
 
