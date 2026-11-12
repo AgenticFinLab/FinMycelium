@@ -40,6 +40,12 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
         return
     active = controller.active(task_id)
     st.subheader(data['task']['target_name'])
+    catalog = data['task'].get('catalog')
+    if catalog:
+        st.caption(f"目录 event：{catalog['event_id']} · {catalog['event_dir']}")
+        if catalog['kind'] == 'person_event':
+            st.info('人物任务固定当前 event；检查实际材料后，可保存独立的原生人物构建任务。')
+        summary_panel(controller, task_id, data, active=active, read_only=read_only)
     show_status(STATUS.get(data['status'], data['status']), '检索 · ' + task_id[:12])
     providers = ' / '.join(PROVIDERS.get(p, p) for p in data['config']['providers'])
     st.caption(providers + ' · ' + (data['config'].get('lm_name') or '使用默认模型'))
@@ -129,6 +135,31 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
             st.warning(f'部分过程记录无法展示（{type(exc).__name__}），材料仍可检查。')
 
 
+def summary_panel(controller, task_id, data, *, active, read_only):
+    summary = data.get('summary', {})
+    with st.expander('数据集检索汇总', expanded=summary.get('status') == 'failed'):
+        if summary.get('status') == 'saved':
+            st.success('检索汇总已自动保存到数据集')
+            st.code(summary['path'], language=None)
+        elif summary.get('status') == 'failed':
+            st.warning('检索结果已保存，汇总未写入数据集：' + summary.get('error', '未知原因'))
+        else:
+            st.caption('检索结束后自动保存到本 event 的 search-summary.md；不自动启动构建。')
+        # Show this task's local report, even if a later task updated the catalog summary.
+        local = controller.root / task_id / 'runs/initial/search-summary.md'
+        if local.is_file():
+            report = local.read_text(encoding='utf-8')
+            st.markdown(report)
+            st.download_button('下载本次检索汇总', report, file_name='search-summary.md', mime='text/markdown', key='summary-download-'+task_id)
+        if not read_only and not active and data['status'] in {'finished','insufficient','limit','failed'}:
+            if st.button('重新保存汇总', key='summary-retry-'+task_id):
+                try:
+                    controller.save_summary(task_id)
+                    st.rerun()
+                except (ValueError, OSError) as exc:
+                    st.error(str(exc))
+
+
 def material_panel(controller, task_id, store, data, active, read_only=False):
     selection = data.get('selection')
     if selection:
@@ -177,7 +208,12 @@ def material_panel(controller, task_id, store, data, active, read_only=False):
         st.caption(f"采用 {len(selection['selected'])} {unit} · 遗漏记录 {len(selection['omitted'])} 项 · {selection['material_chars']} 字符")
         st.download_button('下载 Builder 输入',json.dumps(data['builder_input'],ensure_ascii=False,indent=2),
                            file_name=task_id+'-builder-input.json',mime='application/json',key='download-'+task_id)
-        st.caption('当前保存的交接版本。纳入事件后，在资料页确认实际输入，再创建构建任务。')
+        if data['task'].get('catalog', {}).get('kind') == 'person_event':
+            if not read_only:
+                from finmy.workbench.person_build_page import create_person_build
+                create_person_build(store, controller, task_id, data)
+        else:
+            st.caption('当前保存的交接版本。纳入事件后，在资料页确认实际输入，再创建构建任务。')
         if not read_only:
             with st.expander('调整本次输入长度并重新组装'):
                 length=st.number_input('本次 Builder 输入字符上限',min_value=1,value=selection['max_material_chars'],key='length-'+task_id)
@@ -266,6 +302,10 @@ def search_page(store):
         record = records[index]
         task_panel(get_controller(str(record['root'])),record['task_id'],store,read_only=True)
         return
+    search_form(store)
+
+
+def search_form(store, catalog=None):
     root = store.root/'search'
     controller = get_controller(str(root))
     profile = root/'profile.json'
@@ -273,12 +313,18 @@ def search_page(store):
     if profile.exists():
         defaults.update(json.loads(profile.read_text()))
     events = {e['event_id']:e for e in store.events()}
-    if 'search_event_ids' in st.session_state:
-        st.session_state['ui-search-events'] = [eid for eid in st.session_state.pop('search_event_ids') if eid in events]
-    chosen = st.multiselect('从主表选择事件（可批量）',list(events),format_func=lambda k:display_name(events[k]),key='ui-search-events',placeholder='留空可创建独立研究任务')
-    event_id = chosen[0] if chosen else ''
-    event = events.get(event_id,{})
-    case_key = 'ui-search-draft-' + ('batch' if len(chosen)>1 else event_id or 'independent') + '-'
+    if catalog:
+        chosen = []
+        event_id = ''
+        event = {'description':catalog['description'], 'keywords':catalog['key_words'], 'source_hints':catalog['seed_urls']}
+        case_key = 'ui-search-catalog-' + catalog['snapshot_sha256'][:16] + '-'
+    else:
+        if 'search_event_ids' in st.session_state:
+            st.session_state['ui-search-events'] = [eid for eid in st.session_state.pop('search_event_ids') if eid in events]
+        chosen = st.multiselect('从主表选择事件（可批量）',list(events),format_func=lambda k:display_name(events[k]),key='ui-search-events',placeholder='留空可创建独立研究任务')
+        event_id = chosen[0] if chosen else ''
+        event = events.get(event_id,{})
+        case_key = 'ui-search-draft-' + ('batch' if len(chosen)>1 else event_id or 'independent') + '-'
     is_batch = len(chosen)>1
     left, right = st.columns([7, 3])
     with left:
@@ -286,15 +332,28 @@ def search_page(store):
             st.subheader('研究对象与范围')
             if is_batch:
                 st.info(f'已选择 {len(chosen)} 个事件，各自采用主表中的名称、研究要求与范围。')
-            kind = st.selectbox('对象类型',['event','person'],format_func=lambda k:{'event':'事件','person':'人物'}[k],key=case_key+'kind',disabled=is_batch)
-            name = st.text_input('研究对象',display_name(event) if event else '',key=case_key+'name',disabled=is_batch)
-            query = st.text_area('研究要求',event.get('description',''),height=140,key=case_key+'query',disabled=is_batch,placeholder='描述需要查明的行动、参与者、交易和时间范围。')
+            kind = st.selectbox('对象类型',['event','person'],format_func=lambda k:{'event':'事件','person':'人物'}[k],key=case_key+'kind',disabled=is_batch or bool(catalog))
+            mode = 'agent'
+            name = st.text_input('研究对象',catalog['event_name'] if catalog else display_name(event) if event else '',key=case_key+'name',disabled=is_batch or bool(catalog))
+            if catalog:
+                from finmy.dataset import search_task
+                period = st.text_input('本次研究时期',catalog['period'],key=case_key+'period')
+                scope_include = st.text_area('本次纳入范围',catalog['scope_include'],key=case_key+'include')
+                scope_exclude = st.text_area('本次排除范围',catalog['scope_exclude'],key=case_key+'exclude')
+                st.caption('修改仅用于本次任务。活动时期不会自动变成资料发表日期筛选。')
+                query = ''
+                if scope_include.strip() and catalog['description'].strip():
+                    query = search_task(catalog,period=period,include=scope_include,exclude=scope_exclude)['query_text']
+                with st.expander('实际搜索要求预览'):
+                    st.text(query or '请补齐研究范围与主表中的事件说明。')
+            else:
+                query = st.text_area('研究要求',event.get('description',''),height=140,key=case_key+'query',disabled=is_batch,placeholder='描述需要查明的行动、参与者、交易和时间范围。')
             providers = st.multiselect('搜索服务',['baidu','bocha','exa'],default=defaults['providers'],format_func=lambda p:PROVIDERS[p]+' Search' if p=='exa' else PROVIDERS[p]+' Web Search',key='ui-search-providers')
             count = st.number_input('每次查询、每家服务的结果上限',min_value=1,max_value=50,value=defaults['max_results'],key='ui-search-count')
-            if event and not is_batch:
+            if event and not is_batch and not catalog:
                 st.caption(f"事件覆盖：{event.get('coverage_start') or '未限定'} → {event.get('coverage_end') or '未限定'} · 资料发表时间可另行设置")
         with st.expander('范围与已有来源'):
-            keywords = st.text_input('关键词（逗号分隔）',','.join(event.get('keywords',[])),key=case_key+'keywords',disabled=is_batch)
+            keywords = st.text_area('关键词（每行一项）','\n'.join(event.get('keywords',[])),key=case_key+'keywords') if catalog else st.text_input('关键词（逗号分隔）',','.join(event.get('keywords',[])),key=case_key+'keywords',disabled=is_batch)
             seeds = st.text_area('已有来源 URL（每行一个）','\n'.join(x for x in event.get('source_hints',[]) if x.startswith(('https://','http://'))),key=case_key+'seeds',disabled=is_batch)
             include = st.text_input('限定站点（逗号分隔）',','.join(defaults['include_domains']),key='ui-search-include')
             exclude = st.text_input('排除站点（逗号分隔）',','.join(defaults['exclude_domains']),key='ui-search-exclude')
@@ -324,8 +383,11 @@ def search_page(store):
             st.caption(f"累计搜索 {options['max_search_requests']} 次 · 阅读 {options['max_read_sources']} 个来源")
             st.caption(f"搜索模型：{lm_name or '未设置'}")
             enabled = st.checkbox('允许启动后调用外部搜索与模型',value=False,key='ui-search-allow')
-            st.caption('保存后进入任务中心；点击开始才执行。')
-            if st.button('保存检索任务',type='primary',icon=':material/add:',width='stretch'):
+            confirmed = st.checkbox('确认本次研究范围与保存目录',value=False,key=case_key+'confirmed') if catalog else False
+            st.caption('保存任务不会发起调用；明确启动后才运行。')
+            save = st.button('保存检索任务',type='secondary' if catalog else 'primary',icon=':material/add:',width='stretch')
+            start_search = st.button('确认并开始搜索',type='primary',icon=':material/play_arrow:',width='stretch') if catalog else False
+            if save or start_search:
                 try:
                     config=SearchConfig(**{**defaults,**options,'providers':providers,'max_results':count,
                         'lm_name':lm_name or None,'generation_config':{'max_tokens':output_tokens},
@@ -333,30 +395,46 @@ def search_page(store):
                         'include_domains':[s.strip() for s in include.split(',') if s.strip()],
                         'exclude_domains':[s.strip() for s in exclude.split(',') if s.strip()],
                         'publication_start':start or None,'publication_end':end or None})
-                    task=dict(target_type=kind,target_name=name,query_text=query,
-                              key_words=[s.strip() for s in keywords.split(',') if s.strip()],
-                              seed_urls=[s.strip() for s in seeds.splitlines() if s.strip()])
-                    for key in ('coverage_start','coverage_end','scope_include','scope_exclude','aliases'):
-                        if event.get(key):task[key]=event[key]
-                    if event_id:task['event_id']=event_id
-                    if chosen:
-                        for eid in chosen:
-                            if store.decision(eid, 'scope') != 'approved':
-                                raise ValueError(display_name(events[eid]) + '：请先在数据页确认研究范围')
-                    tids = []
-                    for eid in chosen or [None]:
-                        current = dict(task)
-                        if len(chosen) > 1:
-                            e = events[eid]
-                            current = dict(target_type='event', target_name=display_name(e), query_text=e['description'],
-                                           key_words=e['keywords'], seed_urls=[u for u in e['source_hints'] if u.startswith(('https://','http://'))])
-                            for key in ('coverage_start','coverage_end','scope_include','scope_exclude','aliases'):
-                                if e.get(key): current[key] = e[key]
-                        if eid:
-                            current['event_id'] = eid
-                            current['scope_hash'] = store.target(eid, 'scope')
-                        tids.append(controller.create(current, config))
+                    if catalog:
+                        from finmy.workbench.search_bridge import create_catalog_search
+                        if start_search and not enabled:
+                            raise ValueError('请先允许调用外部搜索与模型；也可仅保存任务')
+                        tids = [create_catalog_search(store,controller,catalog,config,mode,
+                            period=period,include=scope_include,exclude=scope_exclude,confirmed=confirmed,
+                            keywords=[s.strip() for s in keywords.splitlines() if s.strip()],
+                            seeds=[s.strip() for s in seeds.splitlines() if s.strip()])]
+                    else:
+                        task=dict(target_type=kind,target_name=name,query_text=query,
+                                  key_words=[s.strip() for s in keywords.split(',') if s.strip()],
+                                  seed_urls=[s.strip() for s in seeds.splitlines() if s.strip()])
+                        for key in ('coverage_start','coverage_end','scope_include','scope_exclude','aliases'):
+                            if event.get(key):task[key]=event[key]
+                        if event_id:task['event_id']=event_id
+                        if chosen:
+                            for eid in chosen:
+                                if store.decision(eid, 'scope') != 'approved':
+                                    raise ValueError(display_name(events[eid]) + '：请先在数据页确认研究范围')
+                        tids = []
+                        for eid in chosen or [None]:
+                            current = dict(task)
+                            if len(chosen) > 1:
+                                e = events[eid]
+                                current = dict(target_type='event', target_name=display_name(e), query_text=e['description'],
+                                               key_words=e['keywords'], seed_urls=[u for u in e['source_hints'] if u.startswith(('https://','http://'))])
+                                for key in ('coverage_start','coverage_end','scope_include','scope_exclude','aliases'):
+                                    if e.get(key): current[key] = e[key]
+                            if eid:
+                                current['event_id'] = eid
+                                current['scope_hash'] = store.target(eid, 'scope')
+                            tids.append(controller.create(current, config, mode))
                     tid = tids[0]
                     st.session_state['search-selected']=tid
-                    navigate('任务', **{'task-selected':tid, 'task_event_filter':'', 'notice':f'已创建 {len(tids)} 个检索任务；点击开始后才发起调用。'})
+                    message = f'已创建 {len(tids)} 个检索任务；点击开始后才发起调用。'
+                    if start_search:
+                        try:
+                            controller.start(tid)
+                            message = '任务已保存并开始搜索。'
+                        except (ValueError,OSError) as exc:
+                            message = '任务已保存，启动未完成：' + str(exc)
+                    navigate('任务', **{'task-selected':tid, 'task_event_filter':'', 'notice':message})
                 except (ValueError,TypeError) as exc:st.error(str(exc))

@@ -7,7 +7,7 @@ from finmy.workbench.workflow import navigate
 from finmy.workbench.ui import status, stats
 
 LABELS = {"ready":"待启动", "queued":"启动中", "running":"构建中", "completed":"已生成草稿，待审核",
-          "failed":"构建失败", "interrupted":"构建中断", "cancelled":"已取消"}
+          "failed":"构建失败", "interrupted":"构建中断", "cancelled":"已取消", "partial":"部分完成，待处理", "limit":"达到调用上限", "insufficient":"材料不足"}
 
 
 def create_build(store, event_id):
@@ -33,6 +33,9 @@ def build_panel(store, task_id, row=None):
     controller = BuildController(store)
     row = row or controller.reconcile(task_id)
     body = row["body"]
+    if body.get('kind') == 'person_event':
+        from .person_build_page import person_build_panel
+        return person_build_panel(store, controller, row, LABELS)
     st.subheader(display_name(body["event"]))
     status(LABELS[row["status"]], "构建 · " + task_id)
     st.write(body["config"]["builder_type"] + " · " + body["config"]["lm_name"])

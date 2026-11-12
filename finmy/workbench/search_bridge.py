@@ -81,4 +81,45 @@ def save_preview(controller, task_id, complete, limit):
         payload = assemble_sources(state, complete['source_ids'], complete_manifest=complete, max_chars=limit)
         # A manual input revision does not finish or resume the search. In
         # particular, paused searches keep their reason, quotas and resume state.
+        controller._save_summary(task_id)
         return payload
+
+
+def create_catalog_search(store, controller, selection, config, mode, *, period, include, exclude,
+                          confirmed=False, keywords=None, seeds=None, queries=None):
+    """Freeze one catalog event; only explicit scope confirmation creates a task."""
+    from finmy.dataset import search_task
+    from finmy.search.state import SearchConfig, digest, now
+    from finmy.workbench.domain import event_record, validate_url
+    if not confirmed:
+        raise ValueError('请先确认本次研究范围')
+    if mode not in {'agent', 'simple'}:
+        raise ValueError('无效检索模式')
+    config = SearchConfig(**config) if isinstance(config, dict) else config
+    task = search_task(selection, period=period, include=include, exclude=exclude)
+    if keywords is not None: task['key_words'] = keywords
+    if seeds is not None: task['seed_urls'] = seeds
+    if any(not isinstance(k, str) for k in task['key_words']):
+        raise ValueError('关键词需要字符串列表')
+    for url in task['seed_urls']: validate_url(url)
+    if queries: task['search_queries'] = queries
+    task['scope_confirmation'] = {'time': now(), 'scope_sha256': digest(task['research_scope']),
+                                  'basis': 'Explicit scope confirmation in the local workbench'}
+    if selection['kind'] == 'event':
+        # Local records are scope snapshots, not another catalog or an overwrite of existing data.
+        row = selection['event_row']
+        values = event_record(dict(event_name_en=selection['event_name'], description=selection['description'],
+            domain=row.get('domain', ''), category=row.get('category', ''),
+            scope_include=f"Activity period: {period or 'Unspecified'}\n{include}", scope_exclude=exclude,
+            keywords=task['key_words'], source_hints=task['seed_urls'], owner=row.get('owner', '')))
+        eid = 'CAT-' + digest([selection['root'], selection['event_id'], values])[:20]
+        values['event_id'] = eid
+        known = {e['event_id']: e for e in store.events()}
+        if eid not in known: store.create_events([values])
+        if store.decision(eid, 'scope') != 'approved':
+            store.review(eid, 'scope', 'approved', 'Local workbench user',
+                         'Confirmed this catalog task scope.', store.target(eid, 'scope'))
+        task['event_id'] = eid
+        task['scope_hash'] = store.target(eid, 'scope')
+    # Person tasks deliberately have no ordinary EventCascade Store ID.
+    return controller.create(task, config, mode)

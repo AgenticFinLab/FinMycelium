@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Person event · Gantt</title>
+<style>
+:root{color-scheme:light;font-family:Arial,sans-serif;color:#223440;background:#f5f7f9}
+*{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:1600px;margin:auto}
+header{padding:4px 0 18px;border-bottom:1px solid #dbe3e8}h1{font-size:26px;line-height:1.25;margin:8px 0 12px}
+h2{font-size:19px;margin:0 0 12px}h3{font-size:14px;margin:0 0 8px}p{line-height:1.55;margin:8px 0}
+.eyebrow{font-size:12px;color:#52697a;letter-spacing:.05em}.badge{display:inline-block;color:#705018;background:#fbf2da;border:1px solid #eddcb1;padding:5px 9px;border-radius:5px;font-size:12px}
+.muted{color:#526575;font-size:13px}.stats{display:flex;flex-wrap:wrap;gap:24px;padding:16px 0;font-size:13px}.stats strong{font-size:21px;margin-right:5px}
+.toolbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:10px 0}.toolbar p{flex:1;min-width:200px}
+button,select{font:inherit;background:white;border:1px solid #b8c6d0;border-radius:5px;padding:8px 12px;color:#223440}button{cursor:pointer}
+button:hover{background:#eaf0f5}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #2f6b9a;outline-offset:2px}
+.chart-scroll{overflow:auto;background:white;border:1px solid #dbe3e8;border-radius:7px}#event-timeline{min-width:900px}
+.inspection{margin-top:24px;padding:22px;background:white;border:1px solid #dbe3e8;border-radius:7px}
+label{display:block;font-size:13px;margin:8px 0}select{width:100%;margin:0 0 20px}
+.inspection-grid{display:grid;grid-template-columns:minmax(240px,1fr) minmax(280px,1.5fr);gap:30px}
+dl{margin:0}dt{font-size:12px;font-weight:bold;color:#526575;margin-top:13px}dd{margin:4px 0 0;font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.evidence{border-top:1px solid #e0e7ec;padding:14px 0}.evidence:first-child{border-top:0;padding-top:0}
+blockquote{margin:10px 0;padding-left:12px;border-left:3px solid #a8d5e8;font-size:14px;white-space:pre-wrap;line-height:1.6}
+a{color:#245d89;overflow-wrap:anywhere}.metadata{font-size:12px;line-height:1.5;color:#526575;overflow-wrap:anywhere}
+footer{font-size:12px;color:#526575;padding:20px 0;line-height:1.65;overflow-wrap:anywhere}
+@media(max-width:700px){body{padding:12px}h1{font-size:22px}.inspection{padding:16px}.inspection-grid{grid-template-columns:1fr;gap:24px}.stats{gap:16px}}
+</style>
+<script>/*__PLOTLY_BUNDLE__*/</script>
+</head>
+<body><main>
+<header><div class="eyebrow" id="identity"></div><h1 id="event-title"></h1><span class="badge">Draft · content review pending</span></header>
+<div class="stats" id="stats"></div>
+<div class="toolbar"><p class="muted">All stages and activities are expanded. Drag to pan; use the plot controls to zoom. Select a point or use the list below to inspect its record and evidence.</p><button id="reset" type="button">Reset view</button></div>
+<div class="chart-scroll"><div id="event-timeline" role="img" aria-label="Expanded event timeline"></div></div>
+<p class="muted">Dotted time spans show date precision or uncertainty, not continuous activity. Stage bars span their dated activities. Undated records stay visible without assigned dates. Participant positions are only for layout.</p>
+<section class="inspection" aria-label="Native graph records and evidence">
+<h2>Record &amp; evidence</h2><label for="record-select">Choose a stage, activity or relation</label><select id="record-select"></select>
+<div class="inspection-grid"><section><h3 id="record-title"></h3><dl id="fields"></dl></section><section><h3>Retained evidence</h3><div id="evidence"></div></section></div>
+</section>
+<footer><div>Generated from the same native person-event JSON. Evidence links and quoted text support inspection; rendering does not establish factual correctness.</div><div id="graph-identity"></div></footer>
+</main>
+<script>
+/*__PERSON_GANTT_DATA__*/
+const byId=id=>document.getElementById(id);
+function element(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(cls)e.className=cls;return e;}
+document.title=model.title+' · Person event Gantt';
+byId('event-title').textContent=model.title;
+byId('identity').textContent=model.person+' / '+model.storyline+' / '+model.event_id;
+byId('graph-identity').textContent='Native graph SHA-256: '+model.graph_sha256;
+for(const [key,label] of [['stages','stages'],['activities','activities'],['undated','without plotted dates'],['unassigned','retained, unassigned'],['sources','sources']]){
+ const s=element('span');s.append(element('strong',model.counts[key]),document.createTextNode(label));byId('stats').append(s);
+}
+const select=byId('record-select');
+for(const row of model.items){const option=element('option',row.kind+' · '+row.title+' · '+row.key);option.value=row.key;select.append(option);}
+function showRecord(key){
+ const row=model.items.find(x=>x.key===key);if(!row)return;select.value=key;
+ byId('record-title').textContent=row.kind+' · '+row.title;
+ byId('fields').replaceChildren();
+ for(const [name,value] of Object.entries(row.fields)){
+  if(value===null||value===undefined||value===''||(Array.isArray(value)&&!value.length))continue;
+  byId('fields').append(element('dt',name),element('dd',Array.isArray(value)?value.join('\n'):value));
+ }
+ const target=byId('evidence');target.replaceChildren();
+ if(!row.evidence.length)target.append(element('p','No evidence span is attached to this record. Inspect the source JSON before drawing a conclusion.','muted'));
+ for(const ev of row.evidence){
+  const card=element('div',undefined,'evidence');
+  card.append(element('div',ev.references.map(r=>r.field_path+' · '+r.evidence_set_id).join('; '),'metadata'));
+  card.append(element('blockquote',ev.quote));
+  const name=ev.title||ev.document_id||'Unresolved source';let url;
+  try{url=new URL(ev.url);if(!['https:','http:'].includes(url.protocol))url=null;}catch{url=null;}
+  if(url){const link=element('a',name);link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';card.append(link);}
+  else card.append(element('span',name));
+  const locator=ev.document_id?ev.document_id+' · characters ['+ev.char_start+', '+ev.char_end+') in the retained input':'Quote not located in a retained document';
+  card.append(element('div',ev.span_id+' · '+locator,'metadata'));
+  if(ev.published_at)card.append(element('div','Published: '+ev.published_at,'metadata'));
+  target.append(card);
+ }
+}
+select.addEventListener('change',()=>showRecord(select.value));showRecord(model.items[0].key);
+Plotly.newPlot('event-timeline',figure.data,figure.layout,{responsive:true,displaylogo:false,scrollZoom:false,
+ modeBarButtonsToRemove:['select2d','lasso2d'],toImageButtonOptions:{format:'png',filename:'person-event'}}).then(gd=>{
+ gd.on('plotly_click',ev=>{if(ev.points.length)showRecord(ev.points[0].customdata);});
+ byId('reset').addEventListener('click',()=>Plotly.relayout(gd,{'xaxis.range':figure.layout.xaxis.range,'yaxis.range':figure.layout.yaxis.range}));
+});
+</script></body></html>
