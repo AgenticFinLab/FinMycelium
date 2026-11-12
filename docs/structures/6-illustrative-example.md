@@ -108,6 +108,20 @@ flowchart LR
 
 > 图中 A1、A2 之间**没有连线**：二者不可比（同日、来源未说明先后），`A1 ∥ A2` 不是边；`precedes` 是时间关系，`continues` 是延续关系，不能混为一谈。`responds_to` 的方向为“回应者 → 被回应者”，见 8.7.3。每个 phase 的动作视图由动作集 + 内部关系 + 边界引用构成：P1/P4 有多个动作，P2/P3 只有一个动作（允许，但已在表中说明）。
 
+**结构—上下文—证据的挂接关系**
+
+```mermaid
+flowchart LR
+    E["Event E1"] --> S["Stage / Phase"]
+    S --> A["Action 动作"]
+    A --> C["Context: C(p) + ΔC(a)"]
+    A --> V["Evidence: Sup / Gap"]
+    S --> C
+    S --> V
+```
+
+**读法**：事件展开为 stage/phase；phase 与动作分别挂上下文；动作与 phase 都挂证据。上下文与证据不是事件的“附属段落”，而是结构的横切层：读任何动作时，都能沿这两条线回到条件与来源。
+
 ### 6.2.6 上下文（phase 基准 + action 差量）
 
 | 载体 | 环境 Env | 关系/他人 Rel | 人物状态 State | 支持模式/缺口 |
