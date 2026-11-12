@@ -1,7 +1,7 @@
 # 3 · 上下文：环境、他人与人物状态
 
-> 对应框架规则：**FR-7、FR-9**。框架层定义，不含字段/schema。
-> 关联：[2-action-graph](2-action-graph.md) · [4-evidence-and-provenance](4-evidence-and-provenance.md) · [5-benchmark-and-dataset](5-benchmark-and-dataset.md)
+> 本篇讨论上下文的设计，不涉及字段/schema/实现。
+> 关联：[0-overview](0-overview.md) · [1-hierarchy](1-hierarchy.md) · [2-action-graph](2-action-graph.md) · [4-evidence](4-evidence.md)
 
 ---
 
@@ -113,7 +113,7 @@ flowchart LR
 
 1. 动作的“条件/触发/知识来源”只能使用**动作时点可知**的信息。
 2. 事后才知道的事实可用于解释结果、写研究说明，但**不能作为该动作的原因/条件**。
-3. benchmark 中，任务输入只能给到时间切点 T 之前的证据与 belief；T 之后的内容是 gold/评测，不是输入。
+3. 描述动作时只能使用动作发生时可知的信息（包括人物当时的认知）；事后才公开的事实不能作为动作的原因或条件，只能用于说明结果。
 4. 无法判断“当时是否知道”时，标记 `unknown`，不要默认按 world 处理。
 
 ```mermaid
@@ -121,7 +121,7 @@ flowchart LR
     W["world 世界事实<br/>含事后信息"] -.->|禁止作为原因| A["动作 A（时间 T）"]
     B["belief 当时认知<br/>T 时点可知"] -->|条件 / 触发 / 知识来源| A
     A -->|结果| W2["结果状态"]
-    W -.->|仅用于解释/评测| E["评测与说明"]
+    W -.->|仅用于解释/结果| E["结果与说明"]
 ```
 
 ---
@@ -134,7 +134,7 @@ flowchart LR
 | **CTX-R2** | 每个上下文链接必须归属六种语义之一，禁止模糊“相关” |
 | **CTX-R3** | 最小化：只链“会改变对该动作解释或判断”的信息；无关人物/状态不链 |
 | **CTX-R4** | 证据化：每个链接要么可回指证据，要么显式标记 `inferred/unknown`；无证据不链 |
-| **CTX-R5** | 防泄漏：动作条件/触发/知识来源只能使用当时可知信息；事后事实只用于结果/评测 |
+| **CTX-R5** | 防泄漏：动作条件/触发/知识来源只能使用当时可知信息；事后事实只用于结果说明 |
 | **CTX-R6** | 未知显式：无法确认的状态写 `unknown`，不默认补齐 |
 
 ---
@@ -152,9 +152,9 @@ flowchart LR
 | 反模式 | 问题 | 修正 |
 |---|---|---|
 | 每个动作重复整段环境描述 | 上下文爆炸、评审冗余 | phase baseline + delta |
-| 用“相关”代替六种语义 | 无法解释、无法评测 | 强制类型化链接 |
+| 用“相关”代替六种语义 | 无法解释、无法比较 | 强制类型化链接 |
 | 把全量人物名单挂到动作上 | 噪声、图不可读 | 只链角色相关者 |
-| 用事后才知道的信息解释当时动作 | 时序倒置、benchmark 泄漏 | belief/world 分离 |
+| 用事后才知道的信息解释当时动作 | 时序倒置、用未来信息解释过去 | belief/world 分离 |
 | 为每个动作建完整世界状态模型 | 工作量爆炸、违背非目标 | 只收相关环境变量 + unknown |
 | 上下文无证据 | 变成模型臆测 | 证据化或标 inferred |
 
@@ -162,7 +162,7 @@ flowchart LR
 
 ## 3.9 与其他文件的关系
 
-- 规则来源：[0-overview](0-overview.md) FR-7、FR-9。
+- 总览与层级：[0-overview](0-overview.md)、[1-hierarchy](1-hierarchy.md)。
 - 动作节点/边：[2-action-graph](2-action-graph.md)。
-- 证据要求：[4-evidence-and-provenance](4-evidence-and-provenance.md)。
-- benchmark 的时间切分与防泄漏：[5-benchmark-and-dataset](5-benchmark-and-dataset.md)。
+- 证据要求：[4-evidence](4-evidence.md)。
+- 设计取舍与待定问题：[5-design-decisions](5-design-decisions.md)。

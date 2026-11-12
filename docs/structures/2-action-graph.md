@@ -2,8 +2,8 @@
 
 > 这一篇只回答一个问题：**描述一个人物在一个 event 里的行为时，动作怎么定义、记录什么、动作之间怎么连。**
 > 不讨论生产流程、模型调用、benchmark；那些不属于“描述结构”。
-> 对应框架规则 FR-1 / FR-3 / FR-4 / FR-5 / FR-6 / FR-12（总表见 [0-overview](0-overview.md)）。
-> 关联：[1-hierarchy](1-hierarchy.md) · [3-context-model](3-context-model.md) · [4-evidence-and-provenance](4-evidence-and-provenance.md)
+> 关联：[0-overview](0-overview.md) · [1-hierarchy](1-hierarchy.md) · [3-context-model](3-context-model.md) · [4-evidence](4-evidence.md)
+> 关联：[0-overview](0-overview.md) · [1-hierarchy](1-hierarchy.md) · [3-context-model](3-context-model.md) · [4-evidence](4-evidence.md)
 
 ---
 
@@ -20,7 +20,7 @@ event（一件可独立研究的事）
 - **stage / phase 是时间与情境背景**（见 [1-hierarchy](1-hierarchy.md)）；
 - **这一篇的核心是“动作”**：这个人物在这个 phase 里做了什么、和别的动作怎么连；
 - **环境、他人、人物状态**是动作的上下文（见 [3-context-model](3-context-model.md)）；
-- **证据**（来源、引文）挂在动作和关系上（见 [4-evidence-and-provenance](4-evidence-and-provenance.md)）。
+- **证据**（来源、引文）挂在动作和关系上（见 [4-evidence](4-evidence.md)）。
 
 一句话：**event/stage/phase 回答“什么时候、什么局面”；动作回答“这个人做了什么”。**
 
@@ -246,5 +246,5 @@ flowchart LR
 
 - [1-hierarchy](1-hierarchy.md)：event/stage/phase 怎么分、边界怎么定；
 - [3-context-model](3-context-model.md)：动作发生时的环境、他人、人物自身状态；
-- [4-evidence-and-provenance](4-evidence-and-provenance.md)：动作和关系的来源、引文、支持状态；
+- [4-evidence](4-evidence.md)：动作和关系的来源、引文、支持状态；
 - [0-overview](0-overview.md)：整个框架的总览与规则表。
