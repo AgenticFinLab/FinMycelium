@@ -17,7 +17,7 @@
 | `S(e), Ph(s), Ph(e)` | Event 的 Stage 集合、Stage 的 Phase 集合、Event 的全部 Phase |
 | `A(e)` | Event 的动作集合（有限） |
 | `R(e)` | Event 的动作关系集合 |
-| `G(e) = (A(e), R(e))` | Event 级动作图 |
+| `G(e) = (A(e), R(e))` | Event 动作总图（canonical） |
 | `C(p), ΔC(a)` | Phase 基准上下文、Action 差量上下文 |
 | `Ev` | 证据包（Sources, Claims, Conflicts, Gaps） |
 
@@ -177,6 +177,8 @@ R(p)    = { r ∈ R(e) : from(r), to(r) ∈ A(p) }   // 内部关系，R(p) ⊆ 
 View(p) = (A(p), R(p), ∂R(p))
 G(p)    = View(p)   // 本系列用 G(p) 作为简写
 ```
+
+**为什么保留 `G(e)`**：动作在 event 内只存一份；跨相位关系、未归属动作 `A₀` 需要一个事件级容器；`View(p)` 是对 `G(e)` 的截取 + 边界引用，不是另一套独立动作集合。因此 `G(e)` 不是阶段之上的“第二层”，而是 canonical graph。
 
 - `A(p) ⊆ A(e)` **恒成立**（不是“可能不是子集”）；
 - `View(p)` 是**视图对象**，不是图：`∂R(p)` 中的边一端指向视图外；

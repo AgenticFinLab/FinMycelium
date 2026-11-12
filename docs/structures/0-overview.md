@@ -33,8 +33,9 @@ flowchart TB
     P -->|e₁ … eₙ| E["Event"]
     E --> S["Stage"]
     S --> PH["Phase"]
-    PH --> G["Phase 内动作视图 G(p)"]
-    G -.->|phase 视图| GE["Event 级动作图 G(e)"]
+    PH --> G["Phase 动作视图 G(p)"]
+    E --> GE["Event 动作总图 G(e)"]
+    GE -.->|分组视图| G
     PH -->|phase 基准| C["上下文层"]
     G -->|action 差量| C
     E -.->|证据支撑全部层级| V["证据层"]
@@ -45,6 +46,7 @@ flowchart TB
 - 外层：人物拥有多个 event；每个 event 独立完整描述；
 - 中层：event 内是 `Stage → Phase → 动作视图`；
 - 内层：动作视图由多个动作节点与关系构成；phase 视图满足 `A(p) ⊆ A(e)`，并保留跨视图的边界引用；
+- 全局：`G(e)` 是 event 内**唯一的动作集合 + 关系集合**（canonical）；`G(p)` 是它的分组视图，不是另一层动作集合；
 - 横切：上下文（phase 基准 + action 差量）与证据（来源/引文/支持模式/缺口）挂在结构上。
 
 ---
@@ -71,7 +73,7 @@ flowchart TB
 - `Context` 是横切层，挂在 phase（基准）和 action（差量）上；
 - `Evidence` 支撑整棵结构，不是某一个层级的附属。
 
-**关键澄清**：**每个 phase 内部不是“一个动作”，而是一组由多个动作节点与关系构成的动作视图**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系；phase 的动作视图满足 `A(p) ⊆ A(e)`，event 级动作图 `G(e)` 才包含该 event 的全部动作。phase 之间通过跨相位动作与关系相连（详见 [1-hierarchy](1-hierarchy.md) 1.1.2 与 [2-action-graph](2-action-graph.md) 2.5）。允许退化到单动作或空的 phase，但必须说明原因。
+**关键澄清**：**每个 phase 内部不是“一个动作”，而是一组由多个动作节点与关系构成的动作视图**。动作是节点；动作之间有先后、并发/不可比、回应、延续等关系；phase 的动作视图满足 `A(p) ⊆ A(e)`；event 动作总图 `G(e)` 是 event 范围内**唯一的动作集合 + 关系集合**，phase 视图只是它的分组视图。phase 之间通过跨相位动作与关系相连（详见 [1-hierarchy](1-hierarchy.md) 1.1.2 与 [2-action-graph](2-action-graph.md) 2.5）。允许退化到单动作或空的 phase，但必须说明原因。
 
 ---
 
@@ -102,7 +104,7 @@ flowchart LR
 | `S(e)` | 事件 e 的局面阶段集合 |
 | `Ph(s)` | 阶段 s 的行为阶段集合 |
 | `A(e)` | 事件 e 的动作集合（event 级全局） |
-| `G(e)` | event 级动作图（动作 + 关系） |
+| `G(e)` | event 动作总图（canonical：唯一动作集合 + 关系集合） |
 | `G(p), G(s)` | phase / stage 的动作视图（不是单个动作） |
 | `I(x) = [l, r)` | 对象 x 的时间区间（半开区间） |
 | `a ≺ b` | 动作 a 先于 b（有证据的时间先后） |
