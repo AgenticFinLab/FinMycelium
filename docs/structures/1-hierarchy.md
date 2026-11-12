@@ -60,7 +60,7 @@ flowchart TB
 | `E(P) = {e₁, …, eₙ}` | 人物的事件集合（n ≥ 1） |
 | `S(e)` | event e 的 stage 集合；按时间排序 |
 | `Ph(s)` | stage s 的 phase 集合；按时间排序 |
-| `A(e)` | event e 的动作集合（全局） |
+| `A(e)` | event e 的动作集合（按 phase 划分） |
 | `G(e)` | event 动作图：由 stage 动作图逐层组合 |
 | `G(s)` | stage 动作图：由 phase 动作图组合 + 跨 phase 边 |
 | `G(p)` | phase 动作图：本 phase 的动作 + 内部关系 |
