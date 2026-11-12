@@ -19,8 +19,8 @@
 
 ```mermaid
 flowchart LR
-    P["Person Alex Chen"] --> E1["Event E1<br/>监管调查事件"]
-    P --> E2["Event E2<br/>公司融资事件"]
+    P["Person Alex Chen"] --> E1["Event E1"]
+    P --> E2["Event E2"]
     E1 --> S1["S1 内部应对"]
     E1 --> S2["S2 公开回应与披露"]
     S1 --> P1["P1 内部会议与律师沟通"]

@@ -49,10 +49,9 @@ flowchart TB
     S2 --> P3
     S2 --> P4
     P1 --> A
-    A -.->|动作可跨 phase| P2
 ```
 
-**读法**：箭头表示“区间被包含/动作落在其中”；`I(p) ⊆ I(s) ⊆ I(e)` 只有在端点已知时才能检查；动作区间可以与多个 phase 相交，因此动作不是 phase 的“私有子节点”。未知端点不画成具体区间，记为 `Unknown`。
+**读法**：箭头表示“区间被包含/动作落在其中”；`I(p) ⊆ I(s) ⊆ I(e)` 只有在端点已知时才能检查。动作可跨 phase，但包含树里不再画跨相位箭头，避免把“包含”与“跨相位”混在一起；跨相位规则见 8.3.1。未知端点记 `Unknown`，不画成具体区间。
 
 ---
 
@@ -146,13 +145,13 @@ P          = P_asserted ∪ P_derived
 flowchart TB
     R["R(e) 关系"]
     R --> T["R_t 时间关系"]
-    T --> PA["P_asserted<br/>observed/asserted precedes"]
-    T --> PD["P_derived<br/>区间推导 precedes"]
+    T --> PA["P_asserted"]
+    T --> PD["P_derived"]
     PA --> P["P = PA ∪ PD"]
     PD --> P
     P --> C{"双向冲突/环？"}
-    C -- "否" --> POS["≺ = 传递闭包(P)"]
-    C -- "是" --> CON["记录 Conflict<br/>≺ 仅局部/暂定"]
+    C -->|否| POS["≺ = 传递闭包(P)"]
+    C -->|是| CON["记录 Conflict"]
 ```
 
 **读法**：先不要把“所有时间关系”直接当成偏序。来源陈述的先序（asserted）与区间推导的先序（derived）分开；合并后先检查双向冲突与环；只有无冲突时才得到可用的 `≺`。冲突不是数据错误，而是必须保留的证据状态。
@@ -188,9 +187,9 @@ G(p)    = View(p)   // 本系列用 G(p) 作为简写
 
 ```mermaid
 flowchart LR
-    GE["G(e): A(e), R(e)"] --> A["A(p) = {a: p⊢a}"]
-    GE --> R["R(p): 两端在 A(p) 的关系"]
-    GE --> D["∂R(p): 恰一端在 A(p) 的关系"]
+    GE["G(e)"] --> A["A(p) 动作集"]
+    GE --> R["R(p) 内部关系"]
+    GE --> D["∂R(p) 边界引用"]
     A --> V["View(p)"]
     R --> V
     D --> V

@@ -29,20 +29,15 @@
 
 ```mermaid
 flowchart TB
-    P["Person<br/>身份 + 事件索引"]
-    P -->|e₁ … eₙ| E["Event<br/>时间 / 范围 / 摘要"]
-    E --> S["Stage<br/>局面阶段（按局面变化切）"]
-    S --> PH["Phase<br/>行为阶段（按行为模式变化切）"]
-    PH --> G["Phase 内动作视图 G(p)<br/>多个动作节点 + 关系"]
-    G -.->|G(p) 是 G(e) 的视图| GE["Event 级动作图 G(e)<br/>全部动作 + 关系"]
-    PH -->|基准 C(p)| C["上下文层<br/>环境 / 他人 / 人物状态"]
-    G -->|差量 ΔC(a)| C
-    E --> V["证据层<br/>来源 / 引文 / 支持模式 / 缺口"]
-    S --> V
-    PH --> V
-    G --> V
-    GE --> V
-    C --> V
+    P["Person"]
+    P -->|e₁ … eₙ| E["Event"]
+    E --> S["Stage"]
+    S --> PH["Phase"]
+    PH --> G["Phase 内动作视图 G(p)"]
+    G -.->|phase 视图| GE["Event 级动作图 G(e)"]
+    PH -->|phase 基准| C["上下文层"]
+    G -->|action 差量| C
+    E -.->|证据支撑全部层级| V["证据层"]
 ```
 
 **这张图是结构设计的总范式**：
@@ -58,18 +53,14 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    P["Person<br/>人物：身份 + 背景"] -->|拥有多个| E["Event<br/>事件：可独立描述"]
-    E -->|划分为| S["Stage<br/>局面阶段"]
-    S -->|细分为| PH["Phase<br/>行为阶段"]
-    PH -->|包含动作视图| G["Action Graph<br/>多个动作节点 + 关系"]
+    P["Person"] -->|拥有多个| E["Event"]
+    E -->|划分为| S["Stage"]
+    S -->|细分为| PH["Phase"]
+    PH -->|包含动作视图| G["Action Graph"]
     E -->|全局动作集合| G
-    PH -->|挂载| C["Context<br/>环境 / 他人 / 人物状态"]
+    PH -->|挂载| C["Context"]
     G -->|挂载动作差量| C
-    E -->|由| EV["Evidence<br/>来源与证据支持"]
-    S --> EV
-    PH --> EV
-    G --> EV
-    C --> EV
+    E -.->|证据支撑全部层级| EV["Evidence"]
 ```
 
 **读法**：
@@ -88,12 +79,12 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    P["Person<br/>人物"] -->|选择| E["Event e_i<br/>事件"]
-    E --> S["Stage<br/>局面阶段"]
-    S --> PH["Phase<br/>行为阶段"]
-    PH --> G["Action Graph<br/>多个动作节点 + 关系"]
-    G --> C["Context<br/>环境/他人/状态"]
-    G --> V["Evidence<br/>来源/引文"]
+    P["Person"] -->|选择| E["Event e_i"]
+    E --> S["Stage"]
+    S --> PH["Phase"]
+    PH --> G["Action Graph"]
+    G --> C["Context"]
+    G --> V["Evidence"]
     C --> V
     E --> V
 ```

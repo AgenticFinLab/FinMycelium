@@ -32,25 +32,16 @@
 
 ```mermaid
 flowchart LR
-    subgraph PB["phase baseline（阶段基准）"]
-        W["环境状态<br/>市场 / 监管 / 组织 / 舆论"]
-        R["关系与他人<br/>角色 / 关系 / 相关人的动作"]
-        P["人物状态<br/>目标 / 资源 / 约束"]
-        K["知识 / 信念<br/>当时可知的信息"]
-    end
-    A["动作 A"]
-    PB -->|条件 / 约束 / 知识来源| A
-    A -->|结果 / 影响| PB
-    subgraph DL["action delta（动作差量）"]
-        T["触发事件"]
-        O["关键对象 / 对手方"]
-        U["动作特有约束"]
-        F["动作特有结果"]
-    end
-    T --> A
-    O --> A
-    U --> A
-    A --> F
+    W["环境"] --> BASE["phase baseline C(p)"]
+    R["关系 / 他人"] --> BASE
+    P["人物状态"] --> BASE
+    K["知识 / 信念"] --> BASE
+    T["触发"] --> DELTA["action delta ΔC(a)"]
+    O["关键对象"] --> DELTA
+    U["特有约束"] --> DELTA
+    BASE --> A["动作 a"]
+    DELTA --> A
+    A --> F["结果 / 影响"]
 ```
 
 > 图中“知识/信念”是人物状态的子项，只是为了阅读方便单独画出；它仍属于 `State`。
@@ -167,8 +158,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    W["world 世界事实<br/>含事后信息"] -.->|禁止作为原因| A["动作 A（时间 T）"]
-    B["belief 当时认知<br/>T 时点可知"] -->|条件 / 触发 / 知识来源| A
+    W["world 世界事实"] -.->|禁止作为原因| A["动作 A（时间 T）"]
+    B["belief 当时认知"] -->|条件 / 触发 / 知识来源| A
     A -->|结果| W2["结果状态"]
     W -.->|仅用于解释/结果| E["结果与说明"]
 ```
@@ -197,15 +188,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph CTX["上下文层"]
-        ENV["环境 Env"]
-        REL["关系/他人 Rel"]
-        ST["人物状态 State<br/>目标/资源/约束/知识"]
-    end
-    PH["phase p"] -->|基准 C(p)| CTX
-    A["action a"] -->|差量 ΔC(a)| CTX
-    CTX -->|条件 / 触发 / 约束 / 知识来源| A
-    A -->|结果（仅描述性）| CTX
+    ENV["环境"] --> CTX["上下文 C(p)+ΔC(a)"]
+    REL["关系 / 他人"] --> CTX
+    ST["人物状态"] --> CTX
+    CTX -->|条件 / 触发 / 约束 / 知识来源| A["动作 a"]
+    A -->|结果（描述性）| CTX
 ```
 
 **读法**：phase 给出“这个局面下的默认背景”；action 只补“这个动作特有的条件/触发/约束/知识”；两者组合成该动作的完整上下文。
