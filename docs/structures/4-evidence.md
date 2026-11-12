@@ -177,4 +177,4 @@ flowchart LR
 - 证据的“覆盖缺口”是否需要成为结构的一等对象（Gap），还是只写在说明中？
 - 二手来源的转述是否可以支撑动作，还是必须追溯到一手来源？
 
-> 这些问题属于设计选择，见 [5-design-decisions](5-design-decisions.md)。
+> 这些问题属于设计选择，见 [5-design-decisions](5-design-decisions.md)；形式化定义见 [8-formal-model](8-formal-model.md)。

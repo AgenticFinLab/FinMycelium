@@ -191,7 +191,8 @@ flowchart TD
 - 动作与关系：[2-action-graph](2-action-graph.md)；
 - 上下文：[3-context-model](3-context-model.md)；
 - 证据：[4-evidence](4-evidence.md)；
-- 概念示例：[6-illustrative-example](6-illustrative-example.md)。
+- 概念示例：[6-illustrative-example](6-illustrative-example.md)；
+- 形式化模型与规范示例：[8-formal-model](8-formal-model.md)。
 
 ---
 

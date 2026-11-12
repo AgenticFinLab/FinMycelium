@@ -59,7 +59,7 @@ flowchart LR
 |---|---|
 | `C(p)` | phase p 的基准上下文（baseline） |
 | `ΔC(a)` | 动作 a 的上下文差量（delta） |
-| `C(a) = C(p) ⊕ ΔC(a)` | 动作 a 的完整上下文（组合，不是简单相加） |
+| `C(a) = C(π(a)) ⊕ ΔC(a)` | 动作 a 的完整上下文（`π(a)` 为主归属 phase；组合不是简单相加） |
 | `C = (Env, Rel, State)` | 上下文三类：环境、关系/他人、人物状态 |
 | `supp(c) ∈ {O, A, I, U}` | 上下文条目的支持状态：观察/记录、来源陈述、推断、未知 |
 | `t(a)` | 动作时点；`know(a)` 表示该时点人物可知的信息 |
@@ -192,4 +192,5 @@ flowchart LR
 - 总览与层级：[0-overview](0-overview.md)、[1-hierarchy](1-hierarchy.md)。
 - 动作节点/边：[2-action-graph](2-action-graph.md)。
 - 证据要求：[4-evidence](4-evidence.md)。
-- 设计取舍与待定问题：[5-design-decisions](5-design-decisions.md)。
+- 设计取舍与待定问题：[5-design-decisions](5-design-decisions.md)；
+- 形式化模型：[8-formal-model](8-formal-model.md)。

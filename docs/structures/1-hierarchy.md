@@ -311,4 +311,5 @@ action    |  a1    a2    |   a3        |  a4        |  a5    a6     |
 - 证据：[4-evidence](4-evidence.md)；
 - 设计取舍与待定问题：[5-design-decisions](5-design-decisions.md)；
 - 概念示例：[6-illustrative-example](6-illustrative-example.md)；
-- 设计规范与符合性检查：[7-specification](7-specification.md)。
+- 设计规范与符合性检查：[7-specification](7-specification.md)；
+- 形式化模型与完整示例：[8-formal-model](8-formal-model.md)。

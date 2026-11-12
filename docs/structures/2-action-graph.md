@@ -320,4 +320,5 @@ flowchart LR
 - [1-hierarchy](1-hierarchy.md)：event/stage/phase 怎么分、边界怎么定；
 - [3-context-model](3-context-model.md)：动作发生时的环境、他人、人物自身状态；
 - [4-evidence](4-evidence.md)：动作和关系的来源、引文、支持状态；
-- [0-overview](0-overview.md)：整个框架的总览与规则表。
+- [0-overview](0-overview.md)：整个框架的总览与规则表；
+- [8-formal-model](8-formal-model.md)：动作图/视图的严格定义与规范示例。
