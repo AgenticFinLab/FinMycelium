@@ -50,10 +50,16 @@ flowchart TB
 | `S(e)` | event e 的 stage 集合；按时间排序 |
 | `Ph(s)` | stage s 的 phase 集合；按时间排序 |
 | `A(e)` | event e 的动作集合（全局） |
+| `G(e)` | event 级动作图：动作节点 + 动作关系 |
+| `G(s)` | stage s 的动作视图（view） |
+| `G(p)` | phase p 的动作视图（由多个动作节点构成的子图） |
 | `I(e), I(s), I(p), I(a)` | 事件/阶段/行为阶段/动作的时间区间 |
 | `I(p) ⊆ I(s) ⊆ I(e)` | 时间包含关系（以区间表示） |
 | `a ∈ A(e)` | 动作属于该 event |
 | `p ⊢ a` | 动作 a 在 phase p 的视图中出现（主归属或跨相位） |
+
+> `G(p)`、`G(s)` 是 `G(e)` 的动作视图；跨 phase/跨 stage 动作可以出现在多个视图中，因此它们不是严格的子集关系，而是“同一动作集合的不同分组/投影”。
+
 
 ### 1.1.2 人物—事件—事件内部的展开（phase 内是动作子图）
 
@@ -304,4 +310,5 @@ action    |  a1    a2    |   a3        |  a4        |  a5    a6     |
 - 上下文：[3-context-model](3-context-model.md)；
 - 证据：[4-evidence](4-evidence.md)；
 - 设计取舍与待定问题：[5-design-decisions](5-design-decisions.md)；
-- 概念示例：[6-illustrative-example](6-illustrative-example.md)。
+- 概念示例：[6-illustrative-example](6-illustrative-example.md)；
+- 设计规范与符合性检查：[7-specification](7-specification.md)。

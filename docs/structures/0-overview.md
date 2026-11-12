@@ -23,6 +23,33 @@
 
 一句话：**人物 → 一系列 events → 每个 event 的完整行为描述**。
 
+### 0.1.1 顶级框架图（Paradigm）
+
+```mermaid
+flowchart TB
+    P["Person<br/>身份 + 事件索引"]
+    P -->|e₁ … eₙ| E["Event<br/>时间 / 范围 / 摘要"]
+    E --> S["Stage<br/>局面阶段（按局面变化切）"]
+    S --> PH["Phase<br/>行为阶段（按行为模式变化切）"]
+    PH --> G["Phase 内动作子图 G(p)<br/>多个动作节点 + 关系"]
+    G -.->|G(p) 是 G(e) 的视图| GE["Event 级动作图 G(e)<br/>全部动作 + 关系"]
+    PH -->|基准 C(p)| C["上下文层<br/>环境 / 他人 / 人物状态"]
+    G -->|差量 ΔC(a)| C
+    E --> V["证据层<br/>来源 / 引文 / 支持状态 / 缺口"]
+    S --> V
+    PH --> V
+    G --> V
+    GE --> V
+    C --> V
+```
+
+**这张图是结构设计的总范式**：
+
+- 外层：人物拥有多个 event；每个 event 独立完整描述；
+- 中层：event 内是 `Stage → Phase → 动作子图`；
+- 内层：动作子图由多个动作节点与关系构成；phase 视图是 event 级动作图 `G(e)` 的子图；
+- 横切：上下文（phase 基准 + action 差量）与证据（来源/引文/支持状态/缺口）挂在结构上。
+
 ---
 
 ## 0.2 设计对象模型
@@ -80,6 +107,8 @@ flowchart LR
 | `S(e)` | 事件 e 的局面阶段集合 |
 | `Ph(s)` | 阶段 s 的行为阶段集合 |
 | `A(e)` | 事件 e 的动作集合（event 级全局） |
+| `G(e)` | event 级动作图（动作 + 关系） |
+| `G(p), G(s)` | phase / stage 的动作视图（不是单个动作） |
 | `I(x) = [l, r)` | 对象 x 的时间区间（半开区间） |
 | `a ≺ b` | 动作 a 先于 b（有证据的时间先后） |
 | `a ∥ b` | a 与 b 不可比（无先后证据或区间重叠） |
@@ -144,6 +173,7 @@ flowchart LR
 | [4-evidence](4-evidence.md) | 证据包、溯源、支持状态、验证与冲突处理的设计原则 |
 | [5-design-decisions](5-design-decisions.md) | 关键设计选择、替代方案与取舍、待定问题 |
 | [6-illustrative-example](6-illustrative-example.md) | 一个概念性示例：从人物到 event 再到动作与上下文 |
+| [7-specification](7-specification.md) | 设计规范：层级、动作子图、上下文、证据、未知处理的规范性要求与符合性检查 |
 
 ---
 
@@ -153,3 +183,4 @@ flowchart LR
 - 状态：讨论中；确认后冻结设计基线。
 - 变更记录：
   - `2026-11-12`：确立“人物 → 一系列 events → 每个 event 完整行为描述”的设计层定位；后续文档围绕该定位展开。
+  - `2026-11-12`：补充顶级框架图与设计规范（7-specification）；明确 phase 内是动作子图，而非单个 action。
