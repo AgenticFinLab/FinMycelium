@@ -192,6 +192,23 @@ flowchart LR
 
 ---
 
+### 0.6.2 设计问题索引
+
+| 设计问题 | 主要回答位置 |
+|---|---|
+| 人物如何组织一系列事件？ | [1-hierarchy](1-hierarchy.md) 1.2–1.3 |
+| 事件内部为什么分 stage / phase？边界怎么定？ | [1-hierarchy](1-hierarchy.md) 1.4–1.5 |
+| 什么是动作？什么不算动作？ | [2-action-graph](2-action-graph.md) 2.2 |
+| 动作之间有哪些关系？为什么不是一条链？ | [2-action-graph](2-action-graph.md) 2.4–2.5；[8-formal-model](8-formal-model.md) 8.3 |
+| phase 与动作图是什么关系？ | [2-action-graph](2-action-graph.md) 2.5–2.6；[8-formal-model](8-formal-model.md) 8.4 |
+| 动作发生的环境/他人/人物状态如何进入结构？ | [3-context-model](3-context-model.md) |
+| 结构如何被证据支持、如何避免编造？ | [4-evidence](4-evidence.md) |
+| 这些设计有哪些替代方案与代价？ | [5-design-decisions](5-design-decisions.md) |
+| 一个完整例子怎么读？ | [6-illustrative-example](6-illustrative-example.md)、[8-formal-model](8-formal-model.md) 8.7 |
+| 如何判断结构是否符合设计？ | [7-specification](7-specification.md) |
+
+---
+
 ## 0.7 版本与状态
 
 - 当前：`v0.1` 设计稿（2026-11-12）。
