@@ -51,7 +51,10 @@ PBG 就是为这四个需求设计的最小框架。
 | **动作图** | 以 action 为节点、以时间/语义/交互/连续关系为边的**偏序图**（partial order），允许并发（concurrent）与不可比（incomparable）结构，可含多条极大链 |
 | **上下文** | 与动作直接相关的环境状态、关系与他人、人物自身状态；分 phase 基准与动作差量两层 |
 | **证据包** | 围绕该人物与事件收集的多来源、可核验的信息集合；是一等公民，图是它的派生视图 |
-| **PBG** | 上述层级 + 动作图 + 上下文链接的完整框架 |
+| **PBG** | 上述层级 + 动作图 + 上下文链接的完整框架（结构本身只到 L0–L3） |
+| **dataset（数据集）** | 一组 PBG sample 的集合，用于训练或分析；每个 sample 含证据包、结构、上下文 |
+| **benchmark（评测协议）** | 在同一批 sample 上定义的任务 + 切分 + 金标 + 指标；不是另一种结构 |
+| **下游用途（consumer）** | 使用 PBG 的训练 / 评测场景；不属于结构层（L4 只是用途标注） |
 | **closed-world 完整性** | benchmark 中“找全行为”的判定，相对于**固定证据包**定义，而非真实世界 |
 | **support status** | 节点/边/链接的证据状态：`observed` / `inferred` / `unknown` |
 
@@ -61,28 +64,36 @@ PBG 就是为这四个需求设计的最小框架。
 
 ```mermaid
 flowchart TB
-    subgraph L0["L0 证据层"]
-        EP["证据包<br/>多来源原文 / 片段 / 元数据 / 核验状态"]
+    subgraph STRUCT["PBG 结构（L0–L3）"]
+        subgraph L0["L0 证据层"]
+            EP["证据包<br/>多来源原文 / 片段 / 元数据 / 核验状态"]
+        end
+        subgraph L1["L1 层级"]
+            H["event → stage → phase<br/>局面锚点 + 行为模式锚点"]
+        end
+        subgraph L2["L2 行为层"]
+            G["动作偏序图<br/>时间偏序 / 语义关系 / 跨 phase 连续"]
+        end
+        subgraph L3["L3 上下文层"]
+            C["phase baseline + action delta<br/>人物 / 环境 / 自身状态"]
+        end
+        EP --> H --> G
+        C -.->|链接到 phase / 动作| G
     end
-    subgraph L1["L1 结构层"]
-        H["event → stage → phase<br/>局面锚点 + 行为模式锚点"]
+    subgraph USE["下游用途（不属于结构层）"]
+        DS["训练数据集<br/>完整 sample"]
+        BM["Benchmark<br/>切分 + 任务 + 金标 + 指标"]
     end
-    subgraph L2["L2 行为层"]
-        G["动作偏序图<br/>时间偏序 / 反链 / 语义关系 / 跨 phase 连续"]
-    end
-    subgraph L3["L3 上下文层"]
-        C["phase baseline + action delta<br/>人物 / 环境 / 自身状态"]
-    end
-    subgraph L4["L4 消费层"]
-        DS["训练数据集"]
-        BM["Benchmark 任务"]
-    end
-    EP --> H --> G
-    C -.->|链接到 phase / 动作| G
-    G --> DS
-    G --> BM
+    G --> USE
     BM -.->|缺口 / 复核反馈| EP
 ```
+
+**读法**：L0–L3 是 PBG 本身（结构层）；下面的“下游用途”**不是第四层结构**，而是同一结构的两种使用方式：
+
+- **训练数据集**：完整 sample（证据 + 完整图 + 上下文），用于训练/微调；
+- **Benchmark**：对同一批 sample 做时间切分，隐藏 T 之后的部分作为金标，输入只含 T 前信息——它是**评测协议**，不是另一套数据。
+
+如果当前只关心结构，可以忽略“下游用途”这块。详见 [5-benchmark-and-dataset](5-benchmark-and-dataset.md)。
 
 **图例约定**：实线箭头表示“产出/派生方向”；虚线箭头表示“链接/引用/反馈”；上下文层是横切维，不占层级。
 
@@ -120,7 +131,7 @@ flowchart TB
 | [2-action-graph](2-action-graph.md) | 动作图的形式化语义、相位分层、动作准入与去重 | 相位分层图、偏序图、准入流程图 |
 | [3-context-model](3-context-model.md) | 环境/他人/自身状态如何挂到动作上、belief 与事实如何分开 | 两段式上下文图 |
 | [4-evidence-and-provenance](4-evidence-and-provenance.md) | 证据包是什么、图和证据什么关系、完整性如何定义 | 证据流图 |
-| [5-benchmark-and-dataset](5-benchmark-and-dataset.md) | 如何从 PBG 派生训练数据与 benchmark 任务、如何切分与防泄漏 | 任务派生图 |
+| [5-benchmark-and-dataset](5-benchmark-and-dataset.md) | 训练数据集与评测协议（同一结构的两种下游用法）、切分与防泄漏 | 任务派生图 |
 | [6-production-review-and-validation](6-production-review-and-validation.md) | 生产流程、角色分工、校验清单、冻结与版本 | 生产流水线图、状态机 |
 | [7-glossary-and-mapping](7-glossary-and-mapping.md) | 术语、与现有 EventCascade / person-epg 的关系、设计问答 | 表示映射图 |
 

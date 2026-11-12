@@ -41,6 +41,9 @@
 | **post-hoc fact（事后事实）** | 动作之后才出现/公开、人物当时不可能知道的信息 |
 | **evidence package（证据包）** | 围绕人物与事件采集、选择、核验并冻结的信息集合 |
 | **support status** | `observed` / `inferred` / `unknown`，表示节点/边/链接的证据状态 |
+| **dataset（数据集）** | 一组 PBG sample 的集合；用于训练或分析，含证据包、结构、上下文 |
+| **benchmark（评测协议）** | 在同一批 sample 上定义的任务 + 切分 + 金标 + 指标；不是另一种结构 |
+| **consumer（下游用途）** | 使用 PBG 的训练/评测场景；不属于结构层 |
 | **closed-world** | 评测世界限定为固定证据包；完整性相对证据包定义 |
 | **IAA** | 标注者间一致性（inter-annotator agreement） |
 | **no-orphan rule（无孤点）** | 每个动作至少一条语义边连接到事件过程，否则不进图 |
