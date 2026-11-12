@@ -128,7 +128,7 @@ flowchart TB
 |---|---|---|
 | [0-overview](0-overview.md) | 这个框架是什么、为什么、规则总览 | 框架总图 |
 | [1-hierarchy](1-hierarchy.md) | event/stage/phase 如何定义、如何切、有什么不变量 | 层级图、时间线 |
-| [2-action-graph](2-action-graph.md) | 动作图的形式化语义、相位分层、动作准入与去重 | 相位分层图、偏序图、准入流程图 |
+| [2-action-graph](2-action-graph.md) | 动作怎么定义、记录什么、动作之间怎么连、怎么归到 phase | 动作图示意、关系表、完整小例子 |
 | [3-context-model](3-context-model.md) | 环境/他人/自身状态如何挂到动作上、belief 与事实如何分开 | 两段式上下文图 |
 | [4-evidence-and-provenance](4-evidence-and-provenance.md) | 证据包是什么、图和证据什么关系、完整性如何定义 | 证据流图 |
 | [5-benchmark-and-dataset](5-benchmark-and-dataset.md) | 训练数据集与评测协议（同一结构的两种下游用法）、切分与防泄漏 | 任务派生图 |
