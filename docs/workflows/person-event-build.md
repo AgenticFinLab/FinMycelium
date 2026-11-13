@@ -1,139 +1,142 @@
 # Build one person event
 
-The target engineering design is documented in
-[Person Event Builder](../person-event-builder/0-overview.md), following the
-[person-event structures](../person-event-structures/0-overview.md). The workflow
-below describes the currently implemented storage contract and operations.
-
-The dataset workbench can pass a reviewed search result to a native person-event
-build. A task reconstructs exactly the confirmed `person / storyline / event`.
-It uses the Person EPG storage contract (`person-epg-3.0`), independently of the
-ordinary AgentEventBuilder and SparseRagBuilder event paths.
+A task reconstructs one confirmed `person / storyline / event`, using
+`person-event-1.0` and the [engineering contract](../person-event-builder/0-overview.md).
+The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own protocols.
 
 ## Workbench flow
 
-1. Select a person event in **数据集**, confirm its scope, and run common search.
-2. Open the search task's material view. Inspect the saved originals, budgeted
-   input, omissions and gaps. In **构建本条人物 event**, choose the build model and
-   confirm the actual material. **保存人物构建任务** creates a frozen task without calls.
-3. In **任务中心**, explicitly allow model calls and choose **开始人物构建**.
-4. Inspect the draft JSON and its standalone Gantt, checks, source handoff and
-   call records. A completed execution is still a draft requiring content review.
+1. Configure the local EPG-dataset path, select an event in **数据集**, confirm its scope, and run common search.
+2. Inspect retained material, actual builder input and gaps. Under **构建本条人物 event**, choose the independent build model and limits, then confirm the material. **保存人物构建任务** freezes the task without model calls.
+3. In **任务中心**, explicitly allow calls and select **开始人物构建**.
+4. Inspect JSON, expanded Gantt, checks, source handoff and cumulative calls. Execution, completeness and rendering have separate statuses. A draft still requires content and evidence review.
 
-Search configuration and build configuration remain separate. The workbench
-exposes the build model, cumulative call limit (40), output token limit (12,288)
-and per-call context-character ceiling (160,000). JSON validation retries allow
-at most three attempts per phase; the per-call timeout is 900 seconds. These
-are execution limits, not quality targets. No step increases the confirmed input
-material budget or performs external supplementary search.
+The workbench exposes model, cumulative calls, per-call output tokens and context
+characters, extraction batch size, local reading limits and the optional repair round.
+Defaults live in `EventBuildConfig`: 40 model calls, 12,288 output tokens, 160,000
+context characters, 12,000-character body batches with 400-character overlap,
+24 local reads and 48,000 cumulative read characters. A local read returns at most
+4,000 text characters; local search returns at most four snippets. Metadata also
+counts toward the cumulative read-character budget. JSON attempts are capped at
+three per semantic task, transport timeout at 900 seconds, and final repair at one round.
 
-The material confirmation freezes the search handoff revision, exact sample text,
-source versions and hashes, catalog identity, research scope and source registry.
-Later search reassembly does not rewrite that build task. Activity periods remain
-textual scope guidance when they do not provide exact boundaries; they are not
-publication filters and are not padded to invented dates.
+These are limits, not quality targets. Character counts are not token counts.
+Search and build settings remain separate. Construction does not add external
+sources or increase the confirmed input budget.
 
 ## Construction and recovery
 
 ```text
-Confirmed event + original input
-  -> source-bound factual occurrences, actions and transactions
-  -> reconcile identity and duplicate facts
-  -> place relevant activities in the fixed event
-  -> supported stages, summary and activity relations
-  -> native JSON + structural/evidence reports -> standalone event Gantt
+Freeze identity, scope, source metadata and actual input
+  -> extract candidates across every handed body range
+  -> exact deduplication and scoped semantic consolidation where needed
+  -> jointly organize Stage / Phase and assign each Action
+  -> complete typed relations and baseline / delta Context
+  -> assemble, check, optionally repair once -> JSON and Gantt
 ```
 
-The layout is determined from confirmed IDs. There is no event-discovery or
-whole-person layout call. Source-grounded facts that remain unassigned retain a
-reason; the program does not manufacture a new event to place them. `storyline_id`
-is stored in Hu's native `domain_id` field. This mapping preserves the public
-schema while using the agreed terminology in task preparation.
+Four semantic roles propose scoped records or operations. The program assigns IDs,
+locates quotes, checks references and applies independent valid groups. Rejected
+neighbors remain in step responses and pending reports. Models can read upstream
+records and frozen sample ranges; later roles can retrieve local snippets. They
+cannot modify input, write files or perform external search. Local retrieval does
+not replace initial continuous body extraction.
 
-Recovery preserves accepted factual checkpoints and reusable organization replies.
-Input, code, model settings, checkpoint hashes and saved draft integrity are checked.
-An explicit recovery can raise the cumulative call ceiling, but never resets used
-calls. Changed inputs or implementation require a new task. Earlier draft attempts
-remain available. A hard call/context limit stops further submissions; it is not
-a quality certificate. Provider failures and incomplete phases are recorded as
-failed, partial or insufficient outcomes rather than silently treated as success.
+Calls are durably reserved before submission. Format retries, tool follow-up calls,
+repair and resumed calls share the cumulative limit. Missing usage stays unknown;
+no unsupported monetary cost is reported. Transport failures do not automatically
+refund or repeat calls.
 
-Quote alignment verifies retained text locations, not truth or semantic entailment.
-Unresolved quotations are reported for review. The ordinary Sparse evidence policy
-and search implementation are unchanged.
+**准备恢复构建** may raise the cumulative call ceiling. Used calls and per-task format
+attempts remain. Response checkpoints require matching input, implementation,
+prompt, semantic configuration and upstream dependencies. Corrupt responses are
+rejected. Changed input or code requires a new run. Previous attempts remain
+available, and restarting does not renew the final repair allowance.
 
-## Files
+Unprocessed body ranges, unassigned actions and failed required work produce a
+partial result. Legal unknowns, gaps and explicit conflicts may remain in a
+structurally complete draft. Quote matching proves location, not semantic entailment.
+Checks explicitly list what was not evaluated.
 
-Workbench build artifacts are written under the selected EPG-dataset root, in its Git-ignored `output/builds/` directory:
+## Files and direct use
+
+Workbench artifacts use the configured dataset's ignored `output/builds/`.
+Direct Python calls default to FinMycelium's ignored `output/builds/`:
 
 ```text
-EPG-dataset/output/builds/<task_id>/
+<output_root>/builds/<run_id>/
   input.json
   config.json
-  snapshot.json
+  provenance.json
   state.json
-  canonical-checkpoint.json
-  PersonOrganizationCheckpoint-Result.json
+  checkpoints/
   attempts/0001/
-    epg.json
-    gantt.html
+    facts.json
+    epg.json          # when a graph exists, including a marked partial graph
     checks.json
-    ... phase outputs and evidence reports
+    gantt.html
+    steps/
 ```
 
-The output directory is frozen when the task is created; later dataset-setting
-changes do not move it. Existing tasks retain their saved paths. The task database
-and worker coordination remain in the existing workbench workspace. Original downloaded documents remain in search storage; the input and
-provenance identify which saved text was used. No automatic final-graph collection,
-CSV status update or Git operation occurs. Content-review automation and a review
-Skill are deferred; the workbench keeps the result as a draft pending review.
+The workbench also retains its task snapshot. Provenance preserves supplied search
+handoff records, source versions and hashes alongside exact input and sample hashes.
+Acquisition, handed ranges and processed ranges are distinct: obtaining a source
+does not mean its full text was read. Originals remain in search storage.
 
-## Standalone Gantt
+```python
+import json
+from pathlib import Path
+from dotenv import load_dotenv
+from finmy.person_epg.build import run_event
+from finmy.person_epg.event.runtime import EventBuildConfig
 
-Every saved completed or partial draft is rendered independently. The expanded
-stage/activity timeline uses the original full event visualizer's Plotly style,
-participant symbols and relation styling. It reads native Person EPG tables;
-activities are not converted into EventCascade episodes. This is a single-event
-view, with no storyline/event/stage collapsing or whole-person aggregation.
+load_dotenv('.env', override=False)
+payload = json.loads(Path('confirmed-input.json').read_text())
+state = run_event(payload, config=EventBuildConfig(), allow_network=True)
+```
 
-Activity rows retain action, transaction or context identity. Participant and
-transaction arrows occupy a separate lane, where positions do not imply dates.
-Stage spans are derived from dated member activities. Unknown times stay visible
-without assigned dates; month/year precision and time windows remain intervals.
-The record selector also exposes retained, unassigned facts and relations that
-cannot be placed on the timeline. Selecting a record shows its fields, original
-quotes, source links and offsets in the actual retained input.
+An explicit directory may be supplied. Use the same directory and `resume=True`
+to recover it. Without an injected offline model, execution requires
+`allow_network=True`; saving a task grants no such permission.
 
-The HTML includes Plotly and opens offline. Its graph and file hashes are recorded
-in `state.json`, so the workbench only shows HTML matching the saved JSON. A
-rendering failure preserves the draft and build status. **从已保存 JSON 重新生成 Gantt**
-regenerates only the visualization, without search/model calls or changes to
-recorded model usage. Both JSON and HTML remain drafts pending content review.
+No build writes to the accepted `person-epg/` catalog, changes CSV execution status,
+performs Git operations or invokes a content-review Skill. Formal collection and
+whole-person aggregation remain separate work.
 
-## Implementation
+## Gantt and historical graphs
 
-The native schema, canonical fact logic, evidence binding, bounded organization
-and checkpoint reuse derive from Hu's `feat/person-epg-yuntao` at
-`77a234d882b305fa08c70bbaa545526ba0d67e37`. The schema files are retained unchanged;
-serialization and time/evidence helpers are extracted from their former modules.
+Standalone HTML includes Plotly and opens offline. It expands
+**Event → Stage → Phase → Action**. Each interval comes from that record's supported
+time. Occurrence windows and durations use distinct marks. Unknown times remain in
+a separate visible group; partial results are labeled.
 
-The implementation under `finmy/person_epg/` adapts those components to a fixed
-single event and an independent build-only entry. It does not import Hu's research
-discovery runner, whole-person orchestration, compatibility EventCascade export
-or collapsible visualization. Public search remains under `finmy/search/`.
+The record selector exposes Context, effective baseline/exclusion/delta associations,
+support modes, gaps, conflicts, relations, original quotes, source links and sample
+offsets. Conflicting precedence claims remain inspectable but do not define the
+consistent order view. Display omissions do not delete graph records.
 
-## Offline checks
+JSON, checks and HTML bind to the same exact graph-file bytes. Rendering failure
+preserves graph and build status. **从已保存 JSON 重新生成 Gantt** only redraws the
+saved graph, without model calls or changes to usage.
 
-From the repository root, using the project environment:
+Historical `person-epg-3.0` graphs retain their validator, hash interpretation and
+renderer. They are not silently converted. Their checkpoints cannot resume in the
+new protocol; rebuilding creates a new task from confirmed original input. The
+separately named legacy builder entry supports offline regression of historical assets.
+
+## Offline verification
+
+Using the project environment from the repository root:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
-  tests/test_dataset_catalog.py tests/test_dataset_summary.py \
-  tests/test_dataset_workbench.py tests/test_person_event_build.py \
-  tests/test_person_event_gantt.py tests/test_person_event_workbench.py
+  tests/test_person_event_contract.py tests/test_person_event_runtime.py \
+  tests/test_person_event_adoption.py tests/test_person_event_pipeline.py \
+  tests/test_person_event_rendering.py tests/test_person_event_build.py \
+  tests/test_person_event_gantt.py tests/test_search_build_contract.py
 ```
 
-The tests use temporary catalogs, synthetic sources and injected model responses.
-They check scope/input identity, source references, recovery, budget retention,
-summary saving and JSON/Gantt consistency without real search or model calls.
-They do not establish real-case content quality, coverage or cost.
+Tests use the authored design example, synthetic responses and temporary directories.
+They verify contracts, ownership, quote alignment, partial adoption, limits, recovery
+and artifact correspondence without real search or model calls. They do not establish
+real-case content quality, coverage or cost.
