@@ -149,7 +149,7 @@ flowchart LR
     B -->|responds_to 回应| C["c"]
     A -.->|order_unknown 顺序未知| D["d"]
     C -->|continues 延续| E["e"]
-    B -->|communicates_with 交互| D
+    B -->|joint_action 共同行动| D
 ```
 
 > 同一对动作可以同时有多条不同类型的关系；时间关系与语义关系分开记录，不能互相替代。
@@ -162,7 +162,7 @@ flowchart LR
 | `enables` / `triggers` / `prevents` | from 使能/触发/阻止 to | A1 使 A3 可行 |
 | `continues` / `resumes` | from 延续/恢复 to | A6 延续 A4 |
 | `interrupted_by` | from 被 to 打断 | A4 被 A5 打断 |
-| `communicates_with` / `transacts_with` / `joint_action` | 对称关系 | A4 与监管沟通 |
+| `joint_action` | 两个已有动作共同构成行为，对称关系 | A4 与 A5 共同完成一项安排 |
 | `precedes` / `overlaps` / `order_unknown` | from 相对 to 的时间关系 | A1 precedes A3 |
 
 关系元组统一写作 `(from, to, type, basis)`；方向有语义，不能随意交换。
@@ -201,12 +201,16 @@ flowchart LR
 
 ### 2.4.3 交互关系
 
-| 关系 | 含义 | 例子 |
+交互需要区分动作之间的关系与动作中的参与者：
+
+| 交互 | 含义 | 记录位置 |
 |---|---|---|
-| **沟通** | 与某人/某机构进行信息交流 | 与律师开会、向监管说明 |
-| **交易** | 与某人/某机构发生资金或资产转移 | 向投资者转账、出售资产 |
-| **委托/代理** | 让某人替自己做事 | 授权律师处理 |
-| **共同行动** | 与其他人一起做同一件事 | 与合伙人共同签约 |
+| **沟通** `communicates_with` | 与某人/某机构进行信息交流，如向监管说明 | 参与上下文，指明人物/组织及角色 |
+| **交易** `transacts_with` | 与某人/某机构发生资金或资产转移 | 参与上下文，指明对手方及角色 |
+| **委托/代理** `delegates_to` | 授权某人替自己做事 | 参与上下文，指明委托对象及角色 |
+| **共同行动** `joint_action` | 两个已有动作共同构成行为 | Action → Action 关系；两端均须符合主体行为的纳入条件 |
+
+一次“与合伙人共同签约”可以是一个主体 Action 加参与上下文，不为建立 `joint_action` 而另造他人的动作节点。他人的独立行为若触发或约束主体动作，仍按 Context 处理。
 
 ### 2.4.4 延续关系（phase 之间）
 
@@ -220,6 +224,8 @@ flowchart LR
 
 ### 2.4.5 关系类型矩阵
 
+本矩阵只列两端均为 Action 的 `R(e)`；参与上下文中的人物/组织交互不属于该边集合。
+
 | 组 | 类型 | `from → to` 读法 | 对称？ | 参与 `≺`？ | 需要 basis |
 |---|---|---|---|---|---|
 | 时间 | `precedes` | from 先于 to | 否 | 是 | 是 |
@@ -229,9 +235,6 @@ flowchart LR
 | 过程 | `enables` | from 使能 to | 否 | 否 | 是 |
 | 过程 | `triggers` | from 触发 to | 否 | 否 | 是 |
 | 过程 | `prevents` | from 阻止 to | 否 | 否 | 是 |
-| 交互 | `communicates_with` | from 与 to 沟通 | 是 | 否 | 是 |
-| 交互 | `transacts_with` | from 与 to 交易 | 是 | 否 | 是 |
-| 交互 | `delegates_to` | from 委托 to | 否 | 否 | 是 |
 | 交互 | `joint_action` | from 与 to 共同行动 | 是 | 否 | 是 |
 | 延续 | `continues` | from 延续 to | 否 | 否 | 是 |
 | 延续 | `resumes` | from 恢复 to | 否 | 否 | 是 |
@@ -242,7 +245,7 @@ flowchart TB
     R["动作关系"]
     R --> T["时间：precedes / overlaps / order_unknown"]
     R --> S["过程：responds_to / enables / triggers / prevents"]
-    R --> I["交互：communicates_with / transacts_with / delegates_to / joint_action"]
+    R --> I["交互：joint_action"]
     R --> K["延续：continues / resumes / interrupted_by"]
 ```
 
@@ -256,7 +259,7 @@ flowchart TB
 | `responds_to` | `(a₃, a₁, responds_to, asserted)` | a₃ 回应 a₁ |
 | `continues` | `(a₆, a₄, continues, asserted)` | a₆ 延续 a₄ |
 
-> 交互类关系（communicates_with / transacts_with / delegates_to）的对象是**人物/组织**，通常记录为动作的参与者/上下文；只有 `joint_action` 是两个动作共同组成的动作-动作关系。
+> `communicates_with / transacts_with / delegates_to` 的对象是**人物/组织**，记录在参与上下文，不属于 `R(e)`；交互类中只有 `joint_action` 表达两个已有动作之间的关系。
 
 ### 2.4.6 关于“因果”的说明
 

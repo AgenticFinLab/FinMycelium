@@ -44,7 +44,7 @@ source_registry[raw_data_id]
 
 最终图的 `source_id` 对应输入的 `raw_data_id`；`sample_id` 不能代替来源身份。同一来源的不同片段可以共同支持一个动作。版本与片段到原文件的映射保存在运行溯源中，不能把修改后的正文当成原 sample 继续使用。
 
-来源注册表的 `source_url` 映射为输出 Source 的 `url`。已有 `document_id` 可保留为溯源信息；`published_at`、`retrieved_at` 和标题缺失时保留空值，不通过推测填充。URL 与本地来源说明至少有一项可用。
+来源注册表的 `source_url` 映射为输出 Source 的 `url`。已有 `document_id` 可保留为溯源信息；`published_at`、`retrieved_at` 和标题缺失时保留空值，不通过推测填充。URL 与本地来源说明至少有一项可用。输入适配器从同一冻结来源版本保留已知的 `origin / source_type / content_status` 等元数据；有记录的字段不能在交接时丢弃，也不能用当前网页状态替代冻结版本。合并 `extras` 时保留其他键，本任务身份与来源映射发生冲突须先校验，不能静默覆盖。
 
 ## 1.3 公共值与 ID
 
@@ -60,7 +60,7 @@ source_registry[raw_data_id]
 | `object_id` | string | 对应对象的稳定 ID |
 | `field` | string | 对象内 JSON Pointer；空串表示整个对象 |
 
-依据引用不得以数组序号代替对象 ID。嵌套字段路径可以使用 JSON Pointer，但对象重排或局部字段修正后必须重新校验。
+依据引用不得以数组序号代替对象 ID。嵌套字段路径可以使用 JSON Pointer，但对象重排或局部字段修正后必须重新校验。步骤的 `pending / lineage` 和处理操作也使用 ObjectRef，此时 `collection` 还允许 `relation_candidates`，引用可在对应步骤快照中定位；这不允许最终图把候选或已被替代的旧对象当作有效 `premise_refs`。
 
 ## 1.4 时间 `Time`
 
@@ -146,9 +146,13 @@ Evidence：
 | `contexts` | 与本 Event 有关的环境、他人行为和主体状态 |
 | `relation_candidates` | `candidate_id`、已知动作引用、候选类型/来源表述及 support；尚未确认的端点允许为空并附原因 |
 | `sources / evidence` | 实际使用的来源和引文 |
-| `pending` | 待解决项目，保存对象引用、原因及相关证据 |
-| `lineage` | 拆分/合并的旧新对象 ID 对应、原因与关联步骤 |
+| `pending` | 待解决项目：`refs: ObjectRef[]`、`reason: string`、`evidence_ids: string[]`；尚无可引用对象时 refs 可为空，说明涉及的材料或候选 |
+| `lineage` | 程序记录的对象变更：`operation`、`input_refs / output_refs: ObjectRef[]`、`reason`、`step_id`；保留拆分、合并及转为 Context 的旧新对应 |
+
+关系候选的字段为 `candidate_id, from_action_id, to_action_id, type, description, support`，可附 `gaps / conflicts`。未知端点或类型使用 null 并说明 Gap；已知类型沿用图协议的关系类型。description 保留来源关系线索，不因端点尚未确定而丢弃。候选经端点、类型和依据确认后才形成带 `basis` 的正式 Relation。
 
 每个抽取批次先保存结果，再进入统一检查点；批次覆盖哪些 sample 和正文区间由执行记录保存。精确重复、实体身份、相同行为判断分开处理。不同时间的重复行为不能仅因文本相似而合并。事实被移出范围、并入其他记录或仍待判定，均要有去向，不能在后续摘要中消失。
+
+处理操作及部分采用规则见 [3.9](3-construction-flow.md#39-四类结果的最小返回协议)。操作输入、旧对象及未采用结果保留在步骤记录中；lineage 说明对应关系，不证明拆分后的每个对象都继承原对象全部支持。引用重定向必须能确定对应，不能确定的进入 pending。
 
 检查点不是最终图：它允许未归属动作与未定关系；完整图的归属、端点和层级必须满足 [图协议](2-graph-contract.md)。事实提取完成也不代表这些内容已通过审核。

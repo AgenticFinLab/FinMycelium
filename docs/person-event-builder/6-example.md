@@ -205,6 +205,7 @@
       ],
       "baseline_context_refs": [
         {
+          "context_ref_id": "CREF-1",
           "context_id": "CTX-1",
           "relation_type": "constraint",
           "support": [{"target": "/relation_type", "mode": "A", "evidence_ids": ["EV-2"]}]
@@ -243,6 +244,7 @@
       ],
       "baseline_context_refs": [
         {
+          "context_ref_id": "CREF-2",
           "context_id": "CTX-1",
           "relation_type": "constraint",
           "support": [{"target": "/relation_type", "mode": "A", "evidence_ids": ["EV-2"]}]
@@ -286,6 +288,7 @@
       ],
       "delta_context_refs": [
         {
+          "context_ref_id": "CREF-3",
           "context_id": "CTX-2",
           "relation_type": "knowledge-source",
           "entity_id": "DEMO-PERSON-0001",
@@ -584,7 +587,7 @@
 {
   "run_id": "DEMO-RUN-01",
   "input_sha256": "cdc9903c1f5ac503909a83b46e27b27d5decb6613e04c536ad1b026312ad0f26",
-  "graph_sha256": "e008604cf9e27b107b3f08008c3ec3d10adfb712d05e36913387438f4d16189f",
+  "graph_sha256": "a05625f641635a5ba97baa1173e3d21c9bcfaef93f5441d455febfd2668d0859",
   "artifact_hashes": {},
   "summary": {
     "checked": [

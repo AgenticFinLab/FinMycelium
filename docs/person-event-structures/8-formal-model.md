@@ -113,10 +113,12 @@ basis ∈ { observed, asserted, inferred, derived }
 ```
 R_t：precedes / overlaps / order_unknown
 R_s：responds_to / enables / triggers / prevents
-R_i：communicates_with / transacts_with / delegates_to / joint_action
+R_i：joint_action
 R_k：continues / interrupted_by / resumes
 R(e) = R_t ∪ R_s ∪ R_i ∪ R_k
 ```
+
+`R(e)` 的两端均在 `A(e)` 中。`communicates_with / transacts_with / delegates_to` 指向人物/组织，作为参与上下文的交互语义记录，不属于 `R_i` 或 `R(e)`；`joint_action` 只连接两个已纳入的主体动作，不据此增加他人的独立动作。
 
 `unknown` **不是边**：没有关系/没有证据时不建关系，用 `Gap` 记录；不得用一条 `unknown` 边表示“不知道”。
 

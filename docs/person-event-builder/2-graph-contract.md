@@ -64,6 +64,7 @@ ID 和文字字段为字符串，`time` 为 Time，`support` 为 Support[]。`ba
 | `action_type` | string，可选 | 粗分类，不用封闭分类表限制所有事件 |
 | `object` | object，条件必填 | `description` 与 `entity_refs`；对象已知时填写，非实体对象的 `entity_refs` 可为空 |
 | `delta_context_refs` | ContextRef[]，可选 | 相对所属 Phase 基准的特有上下文 |
+| `baseline_context_exclusions` | object[]，可选 | 明确不适用于本 Action 的基准关联及依据，见 2.4；缺省为空 |
 | `gaps / conflicts` | Gap[] / Conflict[]，可选 | 具体未知和来源分歧 |
 
 `actor.capacity` 为 `personal / official / delegated / unknown`。`entity_id` 是实际执行者；`role` 为职务/身份说明，`on_behalf_of` 引用其代表的实体。已知职务或代表关系必须保留；相关身份未知时标 Gap，不编造身份。代理行为必须有可追溯到焦点人物的授权或行为归属依据；无法确定归属时留在事实检查点待定，不能仅凭公司行为生成焦点人物 Action。
@@ -95,23 +96,34 @@ Context 保存可复用的上下文内容；ContextRef 保存该内容怎样作�
 
 | ContextRef 字段 | 类型 | 约定 |
 | --- | --- | --- |
+| `context_ref_id` | string | 程序分配的关联 ID，在本 Event 内唯一；不同 Phase/Action 的关联各有 ID |
 | `context_id` | string | 引用 Context |
 | `relation_type` | enum | `participation / condition / trigger / constraint / result / knowledge-source` |
 | `support` | Support[] | 本次关联的依据；与 Context 内容的支持分开 |
 | `entity_id / role` | string，条件必填 | participation 指明参与实体及角色；knowledge-source 必须指明知情实体；确实未知的参与实体/角色可省略但须有对应 Gap |
 | `interaction_type` | string，可选 | 如 `communicates_with / transacts_with / delegates_to`，细化参与关系 |
-| `qualification` | string，可选 | 相对基准的适用限制、补充或变化说明 |
+| `qualification` | string，可选 | 本条关联的适用限制或补充说明；文字本身不执行基准排除或覆盖 |
 | `gaps / conflicts` | Gap[] / Conflict[]，可选 | 关联层面的未知与分歧 |
 
 六种语义与方向遵循 [上下文设计](../person-event-structures/3-context-model.md)：参与、条件、触发、约束作用于行为，结果由行为指向状态；知识来源是信息指向人物，附在 Phase/Action 上仅表示本次适用范围。它不是 Action → Action 边。人物/组织在其他关联中有明确角色时同样保留；环境条件等不涉及参与人的关联不强制填写实体或角色。
 
-`C(a) = C(phase(a)) ⊕ ΔC(a)` 由以下规则读取，不另存完整上下文副本：
+`C(a) = C(phase(a)) ⊕ ΔC(a)` 由程序读取基准、显式排除和新增关联组成，不另存完整上下文副本。通常只需基准加差量；少数基准例外使用 Action 的 `baseline_context_exclusions`：
 
-1. 先检查基准条目在该动作时间和范围内是否适用；未知不当作已经成立。
-2. 只有关联含义完全相同才合并支持记录：比较 `context_id / relation_type / entity_id / role / interaction_type / qualification` 及适用范围。不同参与者、角色、交互方式或适用限制分别保留；未知不视为通配符，无法确认等价时不合并。不能仅按 Context ID 和关联类型去重。
-3. 差量可以用 `qualification` 限定基准适用范围；变更后的内容另有 Context 和依据，不覆盖原事实。
-4. 无法协调的差异保留为 Conflict；不采用“后写覆盖前写”。
-5. 结果不自动倒写成先前动作的条件；条件、触发和知识来源需要当时可知的依据，不能用事后信息代替。
+| 排除记录字段 | 类型 | 约定 |
+| --- | --- | --- |
+| `context_ref_id` | string | 必须指向本 Action 所属 Phase 中的一条基准关联，不指向 Context 内容或其他 Phase |
+| `reason` | string | 为什么该关联不适用于本动作 |
+| `support` | Support[] | 对本条排除的支持；`target` 使用 `/context_ref_id` 或 `/reason` |
+
+组合规则：
+
+1. 基准表示 Phase 内可共享的关联；适用时间、范围或认知状态不明的保留 Gap/Conflict，不把继承当成新的证据。程序检查可判定的时序与引用约束，不从 `qualification` 自行解析排除指令。
+2. 先取所属 Phase 的基准，移除通过检查且有可追溯支持的显式排除项，再加入 `delta_context_refs`。排除只影响本 Action 的有效上下文，不删除 Phase 基准或原 Context。缺少有效支持、引用越界或存在未决适用冲突的排除不能执行，留在步骤 pending 与检查结果中；相关关联的适用性须显式标为未知或冲突。
+3. 替换一条基准关联，用“明确排除旧关联 + 增加新差量关联”表达；两者作为同一 Action 的一次更新校验与保存。仅添加一个描述不同的 Context 不会自动取消基准。改变事实内容时创建有独立支持的 Context，不覆盖原事实。
+4. 只有关联含义完全相同才合并支持记录：比较 `context_id / relation_type / entity_id / role / interaction_type / qualification` 及适用范围。不同参与者、角色、交互方式或适用限制分别保留；未知不视为通配符，无法确认等价时不合并。有效视图合并时仍保留贡献关联的 ID，不能仅按 Context ID 和关联类型去重。
+5. 无法协调的差异保留为 Conflict；不采用“后写覆盖前写”。结果不自动倒写成先前动作的条件；条件、触发和知识来源需要当时可知的依据，不能用事后信息代替。
+
+例如，同一 Context 在 Phase 中分别关联“交易对手”和“顾问”，两条 ContextRef 有不同 ID。某 Action 只排除“顾问”时，必须引用那条关联的 ID；交易对手关联仍保留。没有基准例外的动作无需填写排除列表。
 
 Phase 应有最小必要的环境、关系/他人和主体状态基准；缺失的类别说明 Gap，不为填齐三类而编造内容。目标是解释行为，不建立世界状态推演引擎。
 
