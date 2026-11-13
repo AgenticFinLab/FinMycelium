@@ -1,5 +1,10 @@
 # Build one person event
 
+The target engineering design is documented in
+[Person Event Builder](../person-event-builder/0-overview.md), following the
+[person-event structures](../person-event-structures/0-overview.md). The workflow
+below describes the currently implemented storage contract and operations.
+
 The dataset workbench can pass a reviewed search result to a native person-event
 build. A task reconstructs exactly the confirmed `person / storyline / event`.
 It uses the Person EPG storage contract (`person-epg-3.0`), independently of the
