@@ -141,3 +141,143 @@ def test_empty_hierarchy_is_partial_not_complete(graph):
         action['phase_id'] = None
     assert not check_graph(graph)['valid']
     assert 'ACTION_PHASE_MISSING' in codes(check_graph(graph, complete=False))
+
+
+def test_unknown_precedence_does_not_enter_determined_order(graph, payload):
+    relation = graph['relations'][0]
+    relation['basis'] = 'asserted'
+    relation['support'] = []
+    relation['gaps'] = [{'target':'', 'reason':'No source establishes the relative order of these actions.'}]
+    # Unknown supported status can remain in the raw graph, but not as established precedence.
+    view = order_view(graph)
+    assert relation['relation_id'] not in view['relation_ids'], view
+
+
+def test_event_declared_time_conflict_blocks_derived_relation(graph, payload):
+    graph['event']['conflicts'] = [dict(target='', reason='The two sources disagree on the first action time.',
+        related_refs=[dict(collection='actions', object_id='ACTION-1', field='/time')],
+        alternatives=[dict(value=date, support=[dict(target='/value', mode='A', evidence_ids=['EV-3'])])
+                      for date in ('2020-02-01','2020-02-04')])]
+    report = check_graph(graph, payload)
+    assert any(i['code']=='DERIVED_RELATION_INVALID' for i in report['issues']), report
+
+
+def test_quote_end_cannot_exceed_frozen_sample(graph, payload):
+    evidence = next(e for e in graph['evidence'] if e['evidence_id']=='EV-3')
+    sample = next(s for s in payload['samples'] if s['sample_id']==evidence['sample_id'])
+    assert evidence['end'] == len(sample['content'])
+    evidence['end'] += 1000
+    report = check_graph(graph, payload)
+    assert not report['valid'], report
+
+
+def test_candidate_missing_endpoint_requires_explicit_gap(graph, payload):
+    facts = facts_from_graph(graph, payload)
+    facts['relation_candidates'] = [dict(candidate_id='CAND-UNKNOWN', from_action_id='ACTION-1', to_action_id=None,
+        type=None, description='The source suggests a link but the target is not identified.',
+        support=[dict(target='/description', mode='A', evidence_ids=['EV-3'])])]
+    report=check_graph(facts,payload)
+    assert not report['valid'], report
+
+
+@pytest.mark.parametrize('target', ['/actor', '/time', '/object'])
+def test_description_support_cannot_cover_other_critical_fields(graph, payload, target):
+    action = graph['actions'][0]
+    action['support'] = [s for s in action['support'] if s['target'] != target]
+    report = check_graph(graph, payload)
+    assert 'FIELD_SUPPORT_OR_GAP_REQUIRED' in codes(report)
+    assert any(i['field'].startswith(target) for i in report['issues'] if i['code']=='FIELD_SUPPORT_OR_GAP_REQUIRED')
+
+
+def test_parent_and_explicit_child_support_cover_the_same_actor(graph, payload):
+    action = graph['actions'][0]
+    parent = next(s for s in action['support'] if s['target']=='/actor')
+    action['support'].remove(parent)
+    action['support'] += [{**parent, 'target':'/actor/'+key} for key in action['actor']]
+    assert check_graph(graph, payload)['valid']
+
+
+def test_explicit_unknown_time_is_allowed_without_deriving_order(graph, payload):
+    action = graph['actions'][0]
+    action['time'] = unknown_time()
+    action['support'] = [s for s in action['support'] if s['target'] != '/time']
+    action.setdefault('gaps', []).append(dict(target='/time', reason='The action date is not established.'))
+    graph['relations'] = []
+    report = check_graph(graph, payload)
+    assert report['valid'], report
+    assert not report['order']['relation_ids']
+
+
+def test_gap_does_not_turn_unsupported_known_time_into_a_derived_premise(graph, payload):
+    action = graph['actions'][0]
+    action['support'] = [s for s in action['support'] if s['target'] != '/time']
+    action.setdefault('gaps', []).append(dict(target='/time', reason='This date remains unverified.'))
+    report = check_graph(graph, payload)
+    assert 'DERIVED_RELATION_INVALID' in codes(report)
+    assert graph['relations'][0]['relation_id'] not in report['order']['relation_ids']
+
+
+def test_unlocated_evidence_does_not_establish_precedence(graph, payload):
+    relation = graph['relations'][0]
+    relation.update(basis='asserted', support=[dict(target='',mode='A',evidence_ids=['EV-3'])])
+    evidence = next(e for e in graph['evidence'] if e['evidence_id']=='EV-3')
+    evidence.update(location_status='unmatched', start=None, end=None)
+    assert relation['relation_id'] not in order_view(graph, payload)['relation_ids']
+
+
+def test_candidate_gaps_preserve_a_partial_relationship_lead(graph, payload):
+    facts = facts_from_graph(graph, payload)
+    facts['relation_candidates'] = [dict(candidate_id='CAND', from_action_id='ACTION-1', to_action_id=None,
+        type=None, description='A relationship lead with an unidentified endpoint and type.',
+        support=[dict(target='/from_action_id', mode='A', evidence_ids=['EV-3'])],
+        gaps=[dict(target='/'+key, reason='Not established in the available material.') for key in ('to_action_id','type')])]
+    assert check_graph(facts, payload)['valid']
+
+
+@pytest.mark.parametrize('offset', [-1, True, 1.0, 10000])
+def test_invalid_quote_offsets_report_without_slice_errors(graph, payload, offset):
+    graph['evidence'][0]['start'] = offset
+    assert not check_graph(graph, payload)['valid']
+
+
+def facts_from_graph(graph, payload):
+    facts = seed_facts(payload)
+    for key in ('entities', 'actions', 'contexts', 'evidence'):
+        facts[key] = deepcopy(graph[key])
+    for action in facts['actions']:
+        action['phase_id'] = None
+        action['support'] = [s for s in action['support'] if s['target'] != '/phase_id']
+        action.pop('delta_context_refs', None)
+        action.pop('baseline_context_exclusions', None)
+    return facts
+
+
+def test_explicit_time_gap_prevents_using_an_old_citation_as_certain(graph, payload):
+    action = graph['actions'][0]
+    action.setdefault('gaps', []).append(dict(target='/time', reason='The retained date has not been established.'))
+    report = check_graph(graph, payload)
+    assert 'DERIVED_RELATION_INVALID' in codes(report)
+    assert graph['relations'][0]['relation_id'] not in report['order']['relation_ids']
+
+
+@pytest.mark.parametrize('declared_ids, valid', [(['R0'], False), (['R0', 'R1', 'R2'], True)])
+def test_raw_precedence_cycle_is_retained_and_completely_reported(graph, payload, declared_ids, valid):
+    from finmy.person_epg.event.proposals import reference
+    ids = [a['action_id'] for a in graph['actions']]
+    for action in graph['actions']:
+        action['time'] = unknown_time()
+        action['support'] = [s for s in action['support'] if s['target'] != '/time']
+        action.setdefault('gaps', []).append(dict(target='/time', reason='No reliable action date is known.'))
+    graph['relations'] = [dict(relation_id='R'+str(i), from_action_id=a, to_action_id=b,
+        type='precedes', basis='asserted', support=[dict(target='', mode='A', evidence_ids=['EV-1'])])
+        for i, (a,b) in enumerate(zip(ids, ids[1:]+ids[:1]))]
+    graph['event']['conflicts'] = [dict(target='', reason='Only this individual precedence claim was marked disputed.',
+        related_refs=[reference('relations', rid) for rid in declared_ids], alternatives=[
+            dict(value='The first action preceded the second.', support=[dict(target='/value',mode='A',evidence_ids=['EV-1'])]),
+            dict(value='That order remains disputed.', support=[dict(target='/value',mode='A',evidence_ids=['EV-2'])])])]
+    report = check_graph(graph, payload)
+    assert report['valid'] == valid, report
+    assert not report['order']['relation_ids']
+    assert len(graph['relations']) == 3
+    assert all('precedence_cycle' in report['order']['excluded'][rid] for rid in ('R0', 'R1', 'R2'))
+    assert ('TEMPORAL_CONFLICT_UNRECORDED' in codes(report)) == (not valid)

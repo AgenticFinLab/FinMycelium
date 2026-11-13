@@ -22,6 +22,122 @@ def has_time_conflict(record):
     return any(c['target'] in ('', '/time') or c['target'].startswith('/time/') for c in record.get('conflicts', []))
 
 
+def covers(target, field, *, root=False):
+    """JSON Pointer ancestry, without treating description support as every field."""
+    return target == field or bool(target and field.startswith(target + '/')) or (root and target == '')
+
+
+def field_conflicted(package, collection, oid, field):
+    record = index_records(package).get(collection, {}).get(oid, {})
+    for conflict in record.get('conflicts', []):
+        if covers(conflict['target'], field, root=True) or covers(field, conflict['target']):
+            return True
+    for index in index_records(package).values():
+        for owner in index.values():
+            for conflict in owner.get('conflicts', []):
+                for ref in conflict.get('related_refs', []):
+                    if ref['collection'] == collection and ref['object_id'] == oid and (
+                            covers(ref['field'], field, root=True) or covers(field, ref['field'])):
+                        return True
+    return False
+
+
+def located_evidence(evidence, indexes, samples=None):
+    if (not evidence or evidence.get('location_status') != 'matched'
+            or evidence.get('source_id') not in indexes['sources']):
+        return False
+    start, end = evidence.get('start'), evidence.get('end')
+    if type(start) is not int or type(end) is not int or not 0 <= start < end or end - start != len(evidence['quote']):
+        return False
+    if samples is not None:
+        sample = samples.get(evidence['sample_id'])
+        return bool(sample and sample['raw_data_id'] == evidence['source_id']
+                    and end <= len(sample['content']) and sample['content'][start:end] == evidence['quote']
+                    and evidence['sample_sha256'] == sha256(sample['content'].encode('utf-8')))
+    return True
+
+
+class SupportIndex:
+    """Deterministic provenance eligibility; no semantic entailment scoring."""
+    def __init__(self, package, payload=None):
+        self.package = package
+        self.records = index_records(package)
+        self.samples = {s['sample_id']: s for s in payload['samples']} if payload is not None else None
+
+    def supported(self, collection, oid, field, seen=frozenset(), *, respect_conflicts=True):
+        node = (collection, oid, field)
+        if node in seen:
+            return False
+        record = self.records.get(collection, {}).get(oid)
+        if record is None or (respect_conflicts and field_conflicted(self.package, collection, oid, field)):
+            return False
+        if any(covers(g['target'], field, root=True) for g in record.get('gaps', [])):
+            return False
+        try:
+            pointer(record, field)
+        except (KeyError, IndexError, TypeError, ValueError):
+            return False
+        if field == '/time':
+            return all(self.supported(collection, oid, '/time/' + side, seen) for side in ('start', 'end'))
+        # Relations are single propositions, including their endpoints and type.
+        root = collection in ('relations', 'relation_candidates') or field in ('', '/description', '/summary')
+        return any(covers(s['target'], field, root=root) and self.valid(s, seen | {node})
+                   for s in record.get('support', []))
+
+    def valid(self, support, seen=frozenset()):
+        evidence = support.get('evidence_ids', [])
+        premises = support.get('premise_refs', [])
+        if any(not located_evidence(self.records['evidence'].get(eid), self.records, self.samples) for eid in evidence):
+            return False
+        if support['mode'] in ('O', 'A'):
+            return bool(evidence)
+        return bool(support.get('reason') and (evidence or premises)
+                    and all(self.supported(r['collection'], r['object_id'], r['field'], seen) for r in premises))
+
+    def time_ready(self, collection, oid):
+        record = self.records.get(collection, {}).get(oid, {})
+        bounds = interval(record)
+        return bool(bounds and bounds[0] < bounds[1] and self.supported(collection, oid, '/time'))
+
+    def derived(self, relation):
+        a, b = (self.records['actions'].get(relation[k], {}) for k in ('from_action_id', 'to_action_id'))
+        if not all(self.time_ready('actions', relation[k]) for k in ('from_action_id', 'to_action_id')):
+            return False
+        ia, ib = interval(a), interval(b)
+        if relation['type'] == 'precedes':
+            valid = ia[1] <= ib[0]
+        elif relation['type'] == 'overlaps':
+            valid = a['time']['kind'] == b['time']['kind'] == 'duration' and max(ia[0], ib[0]) < min(ia[1], ib[1])
+        else:
+            return False
+        supports = [s for s in relation['support'] if s['mode'] == 'I' and self.valid(s)]
+        premises = {(r['collection'], r['object_id'], r['field']) for s in supports for r in s.get('premise_refs', [])}
+        required = {('actions', relation[k], '/time') for k in ('from_action_id', 'to_action_id')}
+        return valid and required <= premises
+
+
+def critical_fields(collection, record):
+    """Only explicit field contracts, not a requirement to annotate every scalar."""
+    fields = []
+    if collection == 'actions':
+        fields = ['/description', '/actor/entity_id', '/actor/capacity']
+        fields += ['/actor/' + key for key in ('role', 'on_behalf_of') if key in record['actor']]
+        if record.get('phase_id') is not None:
+            fields.append('/phase_id')
+        fields += ['/object/description'] if 'object' in record else ['/object']
+        if record.get('object', {}).get('entity_refs'):
+            fields.append('/object/entity_refs')
+    elif collection in ('stages', 'phases'):
+        fields = ['/description', '/boundary_reason']
+    elif collection == 'event' and 'summary' in record:
+        fields = ['/summary']
+    elif collection in ('relations', 'relation_candidates'):
+        fields = ['/from_action_id', '/to_action_id', '/type']
+    if collection in ('actions', 'stages', 'phases', 'event') and 'time' in record:
+        fields += ['/time/start', '/time/end']
+    return fields
+
+
 def reachable(edges, start, end):
     seen, queue = set(), deque([start])
     while queue:
@@ -34,8 +150,9 @@ def reachable(edges, start, end):
     return False
 
 
-def order_view(package):
+def order_view(package, payload=None):
     """Preserve raw claims; exclude every conflicting edge, not an arbitrary cycle cut."""
+    support = SupportIndex(package, payload)
     actions = {a['action_id']: a for a in package.get('actions', [])}
     candidates = [r for r in package.get('relations', [])
                   if r['type'] == 'precedes' and r['basis'] in ('observed', 'asserted', 'derived')
@@ -48,18 +165,29 @@ def order_view(package):
             if reference['collection'] == 'actions' and reference['field'].startswith('/time'):
                 conflicted_times.add(reference['object_id'])
     edges = defaultdict(set)
-    for relation in candidates:
-        edges[relation['from_action_id']].add(relation['to_action_id'])
     conflicts, excluded = [], {}
-    cycle_ids = {r['relation_id'] for r in candidates if reachable(edges, r['to_action_id'], r['from_action_id'])}
+    eligible = []
+    for relation in candidates:
+        rid = relation['relation_id']
+        # Detect cycles in supported raw claims before removing disputed edges.
+        # Filtering one declared edge first would silently cut an otherwise raw cycle.
+        if not all(support.supported('relations', rid, '/' + key, respect_conflicts=False)
+                   for key in ('from_action_id', 'to_action_id', 'type')):
+            excluded[rid] = ['unsupported_or_conflicted_relation']
+        elif relation['basis'] == 'derived' and not support.derived(relation):
+            excluded[rid] = ['invalid_time_premise']
+        else:
+            eligible.append(relation)
+            edges[relation['from_action_id']].add(relation['to_action_id'])
+    cycle_ids = {r['relation_id'] for r in eligible if reachable(edges, r['to_action_id'], r['from_action_id'])}
     if cycle_ids:
         conflicts.append(dict(relation_ids=sorted(cycle_ids), reason='Raw precedence claims form a cycle.'))
     for relation in candidates:
         rid, a, b = relation['relation_id'], actions[relation['from_action_id']], actions[relation['to_action_id']]
         ia, ib = interval(a), interval(b)
-        contradiction = ia and ib and not has_time_conflict(a) and not has_time_conflict(b) and (
+        contradiction = support.time_ready('actions', a['action_id']) and support.time_ready('actions', b['action_id']) and (
             ia[0] >= ib[1] or (a['time']['kind'] == b['time']['kind'] == 'duration' and ia[1] > ib[0]))
-        reasons = []
+        reasons = excluded.get(rid, [])
         if contradiction:
             conflicts.append(dict(relation_ids=[rid], reason='Precedence contradicts supported action intervals.'))
             reasons.append('known_time_conflict')
@@ -117,7 +245,7 @@ def check_graph(package, payload=None, *, complete=True):
         errors = [dict(path=i['field'], message=i['message']) for i in issues if i['severity'] == 'error']
         return dict(valid=not errors, errors=errors, issues=issues, order=order,
                     summary=dict(errors=len(errors), warnings=sum(i['severity'] == 'warning' for i in issues),
-                                 checked=['shape', 'identity', 'references', 'known_time_constraints', 'context_links']
+                                 checked=['shape', 'identity', 'references', 'field_support_coverage', 'known_time_constraints', 'context_links']
                                  + (['quote_locations', 'source_mapping'] if payload else []),
                                  not_checked=['semantic_support', 'real_world_completeness']
                                  + ([] if payload else ['quote_locations'])))
@@ -130,7 +258,7 @@ def check_graph(package, payload=None, *, complete=True):
             issue('SCHEMA_INVALID', error.message, field=path)
         report = result()
         report['summary']['checked'] = ['shape']
-        report['summary']['not_checked'] += ['identity', 'references', 'known_time_constraints', 'context_links']
+        report['summary']['not_checked'] += ['identity', 'references', 'field_support_coverage', 'known_time_constraints', 'context_links']
         return report
 
     indexes = index_records(package)
@@ -164,10 +292,16 @@ def check_graph(package, payload=None, *, complete=True):
         return True
 
     samples = {s['sample_id']: s for s in payload['samples']} if payload else {}
+    support_index = SupportIndex(package, payload)
     for eid, evidence in indexes['evidence'].items():
         foreign('sources', evidence['source_id'], 'evidence', eid, '/source_id')
-        if evidence['location_status'] == 'matched' and evidence['end'] <= evidence['start']:
-            issue('QUOTE_LOCATION_INVALID', 'Matched offsets must describe a nonempty interval.', 'evidence', eid)
+        if evidence['location_status'] == 'matched' and (
+                type(evidence['start']) is not int or type(evidence['end']) is not int
+                or not 0 <= evidence['start'] < evidence['end']
+                or evidence['end'] - evidence['start'] != len(evidence['quote'])):
+            issue('QUOTE_LOCATION_INVALID', 'Matched Unicode offsets must span exactly the nonempty quote.', 'evidence', eid)
+            if type(evidence['start']) is not int or type(evidence['end']) is not int:
+                continue
         if payload:
             sample = samples.get(evidence['sample_id'])
             if not sample or sample['raw_data_id'] != evidence['source_id']:
@@ -175,6 +309,8 @@ def check_graph(package, payload=None, *, complete=True):
                 continue
             if evidence['sample_sha256'] != sha256(sample['content'].encode('utf-8')):
                 issue('SAMPLE_HASH_MISMATCH', 'Evidence hash does not match the exact frozen text.', 'evidence', eid)
+            if evidence['location_status'] == 'matched' and evidence['end'] > len(sample['content']):
+                issue('QUOTE_LOCATION_INVALID', 'Quote offsets exceed the frozen sample.', 'evidence', eid)
             if evidence['location_status'] == 'matched' and sample['content'][evidence['start']:evidence['end']] != evidence['quote']:
                 issue('QUOTE_MISMATCH', 'Quote is not the exact original text at the retained offsets.', 'evidence', eid)
         if evidence['location_status'] != 'matched':
@@ -228,6 +364,13 @@ def check_graph(package, payload=None, *, complete=True):
     for collection, index in indexes.items():
         for oid, record in index.items():
             inspect(record, collection, oid)
+            for field in critical_fields(collection, record):
+                root = collection in ('relations', 'relation_candidates') or field in ('/description', '/summary')
+                covered = any(covers(s['target'], field, root=root) for s in record.get('support', []))
+                gap = any(covers(g['target'], field, root=root) for g in record.get('gaps', []))
+                conflict = field_conflicted(package, collection, oid, field)
+                if not (covered or gap or conflict):
+                    issue('FIELD_SUPPORT_OR_GAP_REQUIRED', 'This critical field needs its own support, Gap or Conflict.', collection, oid, field)
             if record.get('conflicts'):
                 issue('SOURCE_CONFLICT', 'Unresolved source claims are retained for review.', collection, oid, severity='warning')
             if 'time' in record:
@@ -344,23 +487,15 @@ def check_graph(package, payload=None, *, complete=True):
             for key in ('from_action_id', 'to_action_id'):
                 if relation[key] is not None:
                     foreign('actions', relation[key], collection, rid, '/' + key)
+            if collection == 'relation_candidates':
+                for key in ('from_action_id', 'to_action_id', 'type'):
+                    if relation[key] is None and not any(covers(g['target'], '/' + key) for g in relation.get('gaps', [])):
+                        issue('CANDIDATE_GAP_REQUIRED', 'An unknown candidate endpoint/type requires a corresponding Gap.', collection, rid, '/' + key)
             if relation['from_action_id'] and relation['from_action_id'] == relation['to_action_id']:
                 issue('SELF_RELATION', 'An action relation requires two different actions.', collection, rid)
-            if relation.get('basis') == 'derived':
-                a, b = (indexes['actions'].get(relation[k], {}) for k in ('from_action_id', 'to_action_id'))
-                ia, ib = interval(a), interval(b)
-                valid = ia and ib and not has_time_conflict(a) and not has_time_conflict(b)
-                if relation['type'] == 'precedes':
-                    valid = valid and ia[1] <= ib[0]
-                elif relation['type'] == 'overlaps':
-                    valid = valid and a['time']['kind'] == b['time']['kind'] == 'duration' and max(ia[0], ib[0]) < min(ia[1], ib[1])
-                else:
-                    valid = False
-                premises = {(r['collection'], r['object_id'], r['field']) for s in relation['support'] if s['mode'] == 'I' for r in s.get('premise_refs', [])}
-                required = {('actions', relation[k], '/time') for k in ('from_action_id', 'to_action_id')}
-                if not valid or not required <= premises:
-                    issue('DERIVED_RELATION_INVALID', 'Derived temporal relations need complete consistent intervals and their time premises.', collection, rid)
-    order = order_view(package)
+            if relation.get('basis') == 'derived' and not support_index.derived(relation):
+                issue('DERIVED_RELATION_INVALID', 'Derived temporal relations need supported consistent intervals and their time premises.', collection, rid)
+    order = order_view(package, payload)
     declared = set(order['declared_relation_ids'])
     for conflict in order['conflicts']:
         if not set(conflict['relation_ids']) <= declared:

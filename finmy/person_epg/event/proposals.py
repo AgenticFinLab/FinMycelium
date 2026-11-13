@@ -3,9 +3,9 @@ from copy import deepcopy
 
 from jsonschema import Draft202012Validator
 
-from .records import fingerprint, ground_quote, index_records
-from .schema import COLLECTION_IDS, FACTS_VERSION, GRAPH_VERSION, schema_for
-from .validation import check_graph, record_temporal_conflicts
+from .records import fingerprint, ground_quote, index_records, pointer
+from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_VERSION, schema_for
+from .validation import check_graph, covers, record_temporal_conflicts, SupportIndex
 
 FIELDS = {
     'extraction': ('entities', 'actions', 'contexts', 'relation_candidates'),
@@ -62,12 +62,68 @@ def _errors(package, payload):
     return {fingerprint(i): i for i in check_graph(package, payload, complete=False)['issues'] if i['severity'] == 'error'}
 
 
+def preserve_known_fields(originals, target, decision, package):
+    """Keep known conditional facts, or require an explicit supported correction."""
+    support_index = SupportIndex(package)
+    for old in originals:
+        paths = []
+        if 'actor' in old:
+            paths += ['/actor/' + key for key in ('entity_id', 'capacity', 'role', 'on_behalf_of') if key in old['actor']]
+            if 'object' in old:
+                # Wording may change; the known object and its entity identities remain.
+                if 'object' not in target:
+                    paths.append('/object')
+                if old['object'].get('entity_refs'):
+                    paths.append('/object/entity_refs')
+        if old.get('entity_refs'):
+            paths.append('/entity_refs')
+        for field in paths:
+            before = pointer(old, field)
+            try:
+                after = pointer(target, field)
+            except (KeyError, IndexError, TypeError, ValueError):
+                after = None
+            if before == after or (isinstance(before, list) and isinstance(after, list) and all(x in after for x in before)):
+                continue
+            new_support = [s for s in target.get('support', []) if s not in old.get('support', [])
+                           and covers(s['target'], field) and support_index.valid(s)]
+            retained_alternative = any(covers(c['target'], field) and any(
+                a['value'] == before and a['support'] and all(support_index.valid(s) for s in a['support'])
+                for a in c['alternatives']) for c in target.get('conflicts', []))
+            explicit_gap = any(covers(g['target'], field) for g in target.get('gaps', []))
+            corrected = bool(decision['evidence_ids'] and ((after is not None and new_support)
+                             or (retained_alternative and (after is not None or explicit_gap))))
+            if not corrected:
+                raise ValueError('Known field cannot disappear or change without a supported correction: ' + field)
+
+
+def preserve_context_refs(previous, proposed):
+    """Adopted association IDs retain their meaning and known applicability.
+
+    Additional support or previously unknown metadata may be supplied. A different
+    role/applicability is a distinct association, not an overwrite of an adopted ID.
+    Action-specific baseline exceptions use the existing exclusion mechanism.
+    """
+    if not previous:
+        return
+    if any(not isinstance(r, dict) or not isinstance(r.get('context_ref_id'), str) for r in proposed):
+        raise ValueError('Context associations require records and stable IDs')
+    by_id = {r['context_ref_id']: r for r in proposed}
+    fields = ('context_id', 'relation_type', 'entity_id', 'role', 'interaction_type', 'qualification')
+    for old in previous:
+        updated = by_id.get(old['context_ref_id'])
+        if updated is None:
+            raise ValueError('An adopted Context association cannot be silently removed; retain it or use a supported baseline exclusion')
+        if any(key in old and updated.get(key) != old[key] for key in fields):
+            raise ValueError('Retain known Context association fields; use a distinct association for different meaning')
+
+
 class Receiver:
     def __init__(self, package, payload, id_map, namespace, read_ranges=None):
         self.package, self.payload = deepcopy(package), payload
         self.ids, self.namespace = id_map, namespace
         self.read_ranges = read_ranges
-        self.report = dict(accepted=[], rejected=[], pending=[])
+        self.report = dict(accepted=[], accepted_items=[], rejected=[], pending=[], reported_pending=[])
 
     def reject(self, label, reason, refs=None, evidence_ids=None):
         item = dict(refs=refs or [], reason=str(reason), evidence_ids=evidence_ids or [])
@@ -89,6 +145,7 @@ class Receiver:
             return False
         self.package = candidate
         self.report['accepted'].append(label)
+        self.report['accepted_items'].append(dict(item=label, refs=deepcopy(refs or [])))
         return True
 
     def prepare(self, role, response):
@@ -112,8 +169,10 @@ class Receiver:
         for decision in response.get('decisions', []) + response.get('split_proposals', []):
             if not isinstance(decision, dict):
                 continue
-            for output in decision.get('outputs', []):
-                if isinstance(output, dict) and output.get('collection') in COLLECTION_IDS:
+            outputs = decision.get('outputs')
+            for output in outputs if isinstance(outputs, list) else []:
+                if (isinstance(output, dict) and isinstance(output.get('collection'), str)
+                        and output['collection'] in COLLECTION_IDS):
                     allocate(output['collection'], output.get('record'))
 
         known_context_refs = {r['context_ref_id'] for collection, key in [('phases', 'baseline_context_refs'), ('actions', 'delta_context_refs')]
@@ -158,6 +217,7 @@ class Receiver:
                 self.reject('pending', errors[0].message)
             else:
                 self.report['pending'].append(item)
+                self.report['reported_pending'].append(deepcopy(item))
         return response
 
     def add_records(self, records, collection, *, existing=False):
@@ -183,7 +243,8 @@ class Receiver:
         response = self.prepare('extraction', response)
         self.add_records(response['entities'], 'entities')
         records = [(c, r) for c in ('actions', 'contexts', 'relation_candidates') for r in response[c]]
-        ids = {(c, r.get(COLLECTION_IDS[c])): n for n, (c, r) in enumerate(records) if isinstance(r, dict)}
+        ids = {(c, r[COLLECTION_IDS[c]]): n for n, (c, r) in enumerate(records)
+               if isinstance(r, dict) and isinstance(r.get(COLLECTION_IDS[c]), str)}
         links = {n: set() for n in range(len(records))}
 
         def refs(value):
@@ -235,6 +296,11 @@ class Receiver:
         operation, refs, outputs = decision['operation'], decision['input_refs'], decision['outputs']
         if not isinstance(refs, list) or not refs or not isinstance(outputs, list) or not isinstance(decision['reason'], str) or not decision['reason'].strip():
             raise ValueError('Decision needs input refs, output list and reason')
+        if any(list(Draft202012Validator(schema_for('StepRef')).iter_errors(r)) for r in refs):
+            raise ValueError('Decision input references must follow the ObjectRef contract')
+        if (not isinstance(decision['evidence_ids'], list)
+                or any(not isinstance(e, str) for e in decision['evidence_ids'])):
+            raise ValueError('Decision evidence IDs must be strings')
         inputs = [(r['collection'], r['object_id']) for r in refs]
         if any(r.get('field') != '' for r in refs) or len(set(inputs)) != len(inputs) or not set(inputs) <= assigned or set(inputs) & consumed:
             raise ValueError('Decision consumes unassigned, duplicate or previously handled candidates')
@@ -242,9 +308,19 @@ class Receiver:
         originals = [indexes[c][oid] for c, oid in inputs]
         if any(e not in indexes['evidence'] or indexes['evidence'][e]['location_status'] != 'matched' for e in decision['evidence_ids']):
             raise ValueError('Decision evidence is not located')
-        if any(not isinstance(o, dict) or set(o) != {'collection', 'record'} for o in outputs):
+        if any(not isinstance(o, dict) or set(o) != {'collection', 'record'}
+               or not isinstance(o['collection'], str)
+               or o['collection'] not in ('entities', 'actions', 'contexts', 'relation_candidates')
+               or not isinstance(o['record'], dict)
+               or not isinstance(o['record'].get(COLLECTION_IDS[o['collection']]), str) for o in outputs):
             raise ValueError('Each output needs collection and record')
         output_ids = [(o['collection'], o['record'][COLLECTION_IDS[o['collection']]]) for o in outputs]
+        names = {'entities': 'Entity', 'actions': 'Action', 'contexts': 'Context', 'relation_candidates': 'Candidate'}
+        for output in outputs:
+            schema = {'$defs': FACTS_SCHEMA['$defs'], '$ref': '#/$defs/' + names[output['collection']]}
+            error = next(Draft202012Validator(schema).iter_errors(output['record']), None)
+            if error is not None:
+                raise ValueError('Invalid proposed fact: ' + error.message)
         if len(set(output_ids)) != len(output_ids):
             raise ValueError('Duplicate output IDs')
         if operation in ('keep', 'pending', 'exclude', 'split') and len(inputs) != 1:
@@ -258,7 +334,9 @@ class Receiver:
         elif operation == 'split':
             if len(outputs) < 2 or any(c != inputs[0][0] or oid in indexes[c] for c, oid in output_ids):
                 raise ValueError('split needs at least two new same-collection records')
-            if any(not output['record'].get('support') for output in outputs):
+            if any(not isinstance(output['record'].get('support'), list) or not output['record']['support']
+                   or any(list(Draft202012Validator(schema_for('Support')).iter_errors(s)) for s in output['record']['support'])
+                   for output in outputs):
                 raise ValueError('Every split result requires its own support')
             if any(ref['collection'] in ('stages', 'phases', 'relations') for output in outputs
                    for support in output['record']['support'] for ref in support.get('premise_refs', [])):
@@ -273,6 +351,7 @@ class Receiver:
             raise ValueError('Unknown consolidation operation')
         if operation in ('keep', 'merge') and outputs:
             target = outputs[0]['record']
+            preserve_known_fields(originals, target, decision, package)
             for old in originals:
                 for field in ('support', 'conflicts'):
                     if any(item not in target.get(field, []) for item in old.get(field, [])):
@@ -358,7 +437,7 @@ class Receiver:
                         raise ValueError('Invalid split assignment')
                     aid = assignment['action_id']
                     if (aid in seen or aid not in allowed | generated or ('actions', aid) in consumed
-                            or not assignment['support'] or any(s.get('target') != '/phase_id' for s in assignment['support'])):
+                            or not isinstance(assignment['support'], list) or not assignment['support'] or any(not isinstance(s, dict) or s.get('target') != '/phase_id' for s in assignment['support'])):
                         raise ValueError('Every new Action needs one supported assignment')
                     action = index_records(package)['actions'][aid]
                     action['phase_id'] = assignment['phase_id']
@@ -387,12 +466,16 @@ class Receiver:
             self.add_records(response[collection], collection)
         # Split, reference changes and all new assignments are one checked operation.
         for number, decision in enumerate(response['split_proposals']):
-            produced = {o.get('record', {}).get('action_id') for o in decision.get('outputs', [])} if isinstance(decision, dict) else set()
-            split_assignments.update(produced)
+            outputs = decision.get('outputs') if isinstance(decision, dict) else None
+            produced = {o['record']['action_id'] for o in outputs if isinstance(o, dict)
+                        and isinstance(o.get('record'), dict) and isinstance(o['record'].get('action_id'), str)} if isinstance(outputs, list) else set()
+            split_assignments.update(produced - set(index_records(self.package)['actions']))
             consumed = set()
 
             def split(package):
-                if not isinstance(decision, dict) or decision.get('operation') != 'split' or any(r.get('collection') != 'actions' for r in decision.get('input_refs', [])):
+                if (not isinstance(decision, dict) or decision.get('operation') != 'split'
+                        or not isinstance(decision.get('input_refs'), list)
+                        or any(not isinstance(r, dict) or r.get('collection') != 'actions' for r in decision['input_refs'])):
                     raise ValueError('Organization permits only supported Action splitting')
                 facts = {k: deepcopy(v) for k, v in package.items() if k not in ('stages', 'phases', 'relations')}
                 facts.update(schema_version=FACTS_VERSION, relation_candidates=[], pending=[], lineage=[])
@@ -401,7 +484,7 @@ class Receiver:
                 if len(assignments) != len(produced) or {a['action_id'] for a in assignments} != produced:
                     raise ValueError('Every split Action needs one assignment in the same response')
                 for assignment in assignments:
-                    if set(assignment) != {'action_id', 'phase_id', 'support'} or not assignment['support'] or any(s.get('target') != '/phase_id' for s in assignment['support']):
+                    if set(assignment) != {'action_id', 'phase_id', 'support'} or not isinstance(assignment['support'], list) or not assignment['support'] or any(not isinstance(s, dict) or s.get('target') != '/phase_id' for s in assignment['support']):
                         raise ValueError('Split assignments need /phase_id support')
                     action = index_records(facts)['actions'][assignment['action_id']]
                     action['phase_id'] = assignment['phase_id']
@@ -413,7 +496,7 @@ class Receiver:
                     output_refs=[reference('actions', aid) for aid in sorted(produced)], reason=decision['reason'], step_id=self.namespace))
         handled = set()
         for item in response['assignments']:
-            if isinstance(item, dict) and item.get('action_id') in split_assignments:
+            if isinstance(item, dict) and isinstance(item.get('action_id'), str) and item['action_id'] in split_assignments:
                 continue
             def change(package):
                 if not isinstance(item, dict) or set(item) != {'action_id', 'phase_id', 'support'}:
@@ -421,12 +504,13 @@ class Receiver:
                 aid = item['action_id']
                 if aid not in allowed or aid in handled or aid in split_assignments:
                     raise ValueError('Assignment is outside this task or belongs to an unaccepted split')
-                if not item['support'] or any(s.get('target') != '/phase_id' for s in item['support']):
+                if not isinstance(item['support'], list) or not item['support'] or any(not isinstance(s, dict) or s.get('target') != '/phase_id' for s in item['support']):
                     raise ValueError('Assignment needs explicit /phase_id support')
                 action = index_records(package)['actions'][aid]
                 action['phase_id'] = item['phase_id']
                 action['support'] = [s for s in action['support'] if s['target'] != '/phase_id'] + deepcopy(item['support'])
-            if self.apply('assignment:' + str(item.get('action_id')) if isinstance(item, dict) else 'assignment', change):
+            if self.apply('assignment:' + str(item.get('action_id')) if isinstance(item, dict) else 'assignment', change,
+                          [reference('actions', item['action_id'])] if isinstance(item, dict) and isinstance(item.get('action_id'), str) else []):
                 handled.add(item['action_id'])
         for aid in allowed - handled - {oid for _, oid in split_inputs}:
             self.reject('unassigned_action', 'Action lacks an accepted Phase assignment', [reference('actions', aid)])
@@ -478,11 +562,11 @@ class Receiver:
                     collection, update = updates[n]
                     if isinstance(update, dict):
                         key = 'baseline_context_refs' if collection == 'phases' else 'delta_context_refs'
-                        needed.update(r.get('context_id') for r in update.get(key, []) if isinstance(r, dict))
+                        needed.update(r.get('context_id') for r in update.get(key, []) if isinstance(r, dict) and isinstance(r.get('context_id'), str))
                 for n in list(remaining):
                     collection, update = updates[n]
                     key = 'baseline_context_refs' if collection == 'phases' else 'delta_context_refs'
-                    refs = {r.get('context_id') for r in update.get(key, []) if isinstance(r, dict)} if isinstance(update, dict) else set()
+                    refs = {r.get('context_id') for r in update.get(key, []) if isinstance(r, dict) and isinstance(r.get('context_id'), str)} if isinstance(update, dict) else set()
                     if refs & needed & contexts.keys():
                         group.add(n)
                         remaining.remove(n)
@@ -507,9 +591,13 @@ class Receiver:
                     if oid not in allowed or (collection, oid) in handled or (collection, oid) in touched:
                         raise ValueError('Context update is outside the assigned task or duplicated')
                     record = index_records(package)[collection][oid]
+                    for field in fields - {'baseline_context_exclusions'}:
+                        preserve_context_refs(record.get(field, []), update[field])
                     record.update({f: deepcopy(update[f]) for f in fields})
                     touched.append((collection, oid))
-            if self.apply('context_updates:' + ','.join(map(str, sorted(group))), change):
+            refs = [reference(c, u[COLLECTION_IDS[c]]) for n in sorted(group) for c, u in [updates[n]]
+                    if isinstance(u.get(COLLECTION_IDS[c]), str)]
+            if self.apply('context_updates:' + ','.join(map(str, sorted(group))), change, refs):
                 used_contexts.update(needed)
                 handled.update(touched)
         for cid in contexts.keys() - used_contexts:

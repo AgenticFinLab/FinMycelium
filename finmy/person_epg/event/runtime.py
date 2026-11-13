@@ -77,8 +77,23 @@ def write_json(path, value):
 
 
 def code_identity():
-    root = Path(__file__).parent
-    return fingerprint({p.name: sha256(p.read_bytes()) for p in sorted(root.glob('*.py'))})
+    """Repository-owned execution dependencies, excluding independent rendering.
+
+    Keep this list alongside the direct runner's imports. Workbench creation also
+    records its broader entry-point fingerprint; neither path may bypass this one.
+    """
+    event = Path(__file__).resolve().parent
+    root = event.parents[1]
+    files = {p for p in event.glob('*.py') if p.name != 'rendering.py'}
+    files.update(root / name for name in (
+        'person_epg/build.py',                    # Actual Model transport adapter.
+        'person_epg/input.py',                    # Confirmed identity validation.
+        'person_epg/building/completion_errors.py',
+        'generic.py',                            # Input dataclasses.
+        'dataset.py',                            # Resume artifact path validation.
+        'search/summary.py',                     # Shared run-directory lock.
+    ))
+    return fingerprint({p.relative_to(root).as_posix(): sha256(p.read_bytes()) for p in sorted(files)})
 
 
 def semantic_config(config):

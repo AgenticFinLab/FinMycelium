@@ -197,10 +197,54 @@ class Construction:
             self.graph, _ = self.receive('relate.' + str(number), 'relations', self.graph, request,
                                          action_ids=owned_actions, phase_ids=owned_phases)
 
+    @staticmethod
+    def outstanding(record):
+        """Project unresolved items without changing the original adoption evidence."""
+        report = deepcopy(record['report'])
+        resolved = {r['issue_fingerprint'] for r in record.get('resolutions', [])}
+        dismissed = [r for r in report['rejected'] if fingerprint(r) in resolved]
+        report['rejected'] = [r for r in report['rejected'] if fingerprint(r) not in resolved]
+        def pending_of(issue):
+            return {k: issue[k] for k in ('refs', 'reason', 'evidence_ids')}
+        report['pending'] = [p for p in report['pending']
+            if p in report.get('reported_pending', [])
+            or p not in [pending_of(r) for r in dismissed]
+            or p in [pending_of(r) for r in report['rejected']]]
+        return report
+
+    def record_resolutions(self, role, repaired):
+        """Only program-verifiable repairs clear matching rejection items.
+
+        A model-authored pending item is never discharged by silence in a later
+        response. Unmatched rejected proposals remain visible for review.
+        """
+        accepted = repaired['accepted']
+        assigned = {r['object_id'] for item in repaired.get('accepted_items', [])
+                    if item['item'].startswith('assignment:') for r in item['refs']}
+        updated = {(r['collection'], r['object_id']) for item in repaired.get('accepted_items', [])
+                   if item['item'].startswith('context_updates:') for r in item['refs']}
+        for record in self.reports:
+            if record['role'] != role or record['task_id'].startswith('repair.'):
+                continue
+            for issue in self.outstanding(record)['rejected']:
+                refs = {(r['collection'], r['object_id']) for r in issue['refs']}
+                done = (issue['item'] == 'event_overview' and 'event_overview' in accepted)
+                if issue['item'] == 'unassigned_action' or issue['item'].startswith('assignment:'):
+                    ids = {oid for collection, oid in refs if collection == 'actions'}
+                    if not ids and issue['item'].startswith('assignment:'):
+                        ids = {issue['item'].split(':', 1)[1]}
+                    done = bool(ids) and ids <= assigned
+                if issue['item'] == 'missing_context_update' or issue['item'].startswith('context_updates:'):
+                    done = bool(refs) and refs <= updated
+                if done:
+                    record.setdefault('resolutions', []).append(dict(
+                        issue_fingerprint=fingerprint(issue), resolved_by='repair.' + role))
+
     def repair(self):
         checks = check_graph(self.graph, self.run.payload)
         # One round handles concrete failed organization/association work, not legal uncertainty.
-        unresolved = [r for r in self.reports if r['role'] in ('organization', 'relations') and r['report']['rejected']]
+        unresolved = [dict(r, report=self.outstanding(r)) for r in self.reports
+                      if r['role'] in ('organization', 'relations') and self.outstanding(r)['rejected']]
         if not unresolved and checks['valid']:
             return
         if not self.run.config.final_repair_rounds:
@@ -255,16 +299,14 @@ class Construction:
             self.graph, report = self.receive('repair.' + role, role, self.graph, request, **scope)
             if role == 'organization':
                 self.retain_splits(report)
-            if not report['rejected'] and not report['pending']:
-                for record in self.reports:
-                    if record['role'] == role and not record['task_id'].startswith('repair.'):
-                        record['resolved_by'] = 'repair.' + role
+            self.record_resolutions(role, report)
 
     def finish(self, execution_status, reason=None):
         self.save_facts()
         if self.graph is None and self.facts['actions']:
             self.graph = graph_from_facts(self.facts)
-        unresolved = [r for r in self.reports if not r.get('resolved_by') and (r['report']['rejected'] or r['report']['pending'])]
+        unresolved = [dict(r, report=self.outstanding(r)) for r in self.reports
+                      if self.outstanding(r)['rejected'] or self.outstanding(r)['pending']]
         coverage_done = bool(self.coverage) and all(r['status'] == 'processed' for r in self.coverage)
         report = check_graph(self.graph, self.run.payload) if self.graph else check_graph(self.facts, self.run.payload)
         facts_check = check_graph(self.facts, self.run.payload)

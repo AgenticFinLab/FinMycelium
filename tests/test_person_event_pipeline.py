@@ -8,7 +8,7 @@ import pytest
 
 from test_person_event_contract import FIXTURES, graph, payload
 from finmy.person_epg.event.build import body_ranges, run_event
-from finmy.person_epg.event.proposals import Receiver, graph_from_facts, replace_references
+from finmy.person_epg.event.proposals import Receiver, graph_from_facts, reference, replace_references
 from finmy.person_epg.event.records import IdMap, seed_facts, sha256
 from finmy.person_epg.event.runtime import EventBuildConfig
 from finmy.person_epg.event.validation import check_graph
@@ -163,3 +163,84 @@ def test_final_repair_round_is_not_replenished(tmp_path, payload):
     count = len(base.calls)
     second = run_event(payload, tmp_path, model=omit_assignments, resume=True)
     assert second['result_status'] == 'partial' and len(base.calls) == count
+
+
+def test_unrelated_pending_survives_local_relation_repair(tmp_path, payload):
+    base = SyntheticEventModel()
+    unresolved_reason = 'A further focal action is evidenced but has not been extracted or assigned.'
+    def model(system, user, name):
+        req = json.loads(user)['task']
+        if name == 'repair.relations':
+            # Complete the requested association fields, without resolving the missing action.
+            return dict(contexts=[], relations=[], phase_context_updates=[],
+                action_context_updates=[dict(action_id=aid, delta_context_refs=[], baseline_context_exclusions=[])
+                                        for aid in req['assigned_action_ids']], evidence=[], pending=[])
+        value = base(system, user, name)
+        if name == 'relate.0':
+            aid = req['assigned_action_ids'][0]
+            value['pending'].append(dict(refs=[reference('actions', aid)], reason=unresolved_reason, evidence_ids=[]))
+            value['relations'].append(dict(relation_id='INVALID-NEIGHBOR', from_action_id=aid,
+                to_action_id='ABSENT-ACTION', type='responds_to', basis='asserted',
+                support=deepcopy(value['relations'][-1]['support'])))
+        return value
+    state = run_event(payload, tmp_path / 'repair', model=model)
+    adoption = json.loads((tmp_path / 'repair' / 'attempts/0001/adoption.json').read_text())
+    before = next(r for r in adoption if r['task_id']=='relate.0')
+    assert any(p['reason'] == unresolved_reason for p in before['report']['pending'])
+    assert state['final_repair_used']
+    assert state['result_status'] == 'partial', {'status':state['result_status'], 'pending_marked_resolved_by':before.get('resolved_by')}
+    checks = json.loads((tmp_path / 'repair' / state['checks']).read_text())
+    assert any(p['reason'] == unresolved_reason for r in checks['unresolved_tasks'] for p in r['report']['pending'])
+
+
+@pytest.mark.parametrize('explicit_pending', [False, True])
+def test_repair_resolves_only_its_verified_work(tmp_path, payload, explicit_pending):
+    base = SyntheticEventModel()
+    reason = 'An additional focal action still needs extraction and assignment.'
+    def model(system, user, name):
+        value = base(system, user, name)
+        if name == 'relate.0':
+            omitted = value['action_context_updates'].pop()
+            if explicit_pending:
+                value['pending'].append(dict(refs=[reference('actions', omitted['action_id'])],
+                    reason=reason, evidence_ids=[]))
+        if name == 'repair.relations':
+            request = json.loads(user)['task']
+            return dict(contexts=[], relations=[], phase_context_updates=[],
+                action_context_updates=[dict(action_id=aid, delta_context_refs=[], baseline_context_exclusions=[])
+                    for aid in request['assigned_action_ids']], evidence=[], pending=[])
+        return value
+    state = run_event(payload, tmp_path, model=model)
+    assert state['result_status'] == ('partial' if explicit_pending else 'draft')
+    checks = json.loads((tmp_path / state['checks']).read_text())
+    pending = [p for r in checks['unresolved_tasks'] for p in r['report']['pending']]
+    assert any(p['reason'] == reason for p in pending) == explicit_pending
+    assert not any(r['report']['rejected'] for r in checks['unresolved_tasks'])
+    count = len(base.calls)
+    resumed = run_event(payload, tmp_path, model=model, resume=True)
+    assert resumed['result_status'] == state['result_status']
+    assert len(base.calls) == count
+
+
+def test_missing_action_field_support_is_rejected_before_completion(tmp_path, payload):
+    base = SyntheticEventModel()
+    def model(system, user, name):
+        value = base(system, user, name)
+        if name.startswith('extract.'):
+            for action in value['actions']:
+                action['support'] = [s for s in action['support'] if s['target'] not in ('/actor','/time')]
+        return value
+    state = run_event(payload, tmp_path, model=model)
+    assert state['result_status'] == 'partial'
+    checks = json.loads((tmp_path / state['checks']).read_text())
+    assert any('FIELD_SUPPORT_OR_GAP_REQUIRED' in issue['reason'] for r in checks['unresolved_tasks'] for issue in r['report']['rejected'])
+    assert not state['final_repair_used']
+
+
+def test_valid_information_gap_completes_without_a_repair_round(tmp_path, payload):
+    model = SyntheticEventModel()
+    model.graph['actions'][0].setdefault('gaps', []).append(dict(
+        target='/action_type', reason='No narrower action category is established.'))
+    state = run_event(payload, tmp_path, model=model)
+    assert state['result_status'] == 'draft'
+    assert len(model.calls) == 5 and not state['final_repair_used']

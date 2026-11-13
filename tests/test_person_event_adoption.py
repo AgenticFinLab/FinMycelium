@@ -1,8 +1,10 @@
 from copy import deepcopy
 
-from test_person_event_contract import graph, payload
+import pytest
+
+from test_person_event_contract import facts_from_graph, graph, payload
 from finmy.person_epg.event.proposals import Receiver, reference, replace_references
-from finmy.person_epg.event.records import IdMap
+from finmy.person_epg.event.records import IdMap, seed_facts
 
 
 def test_relation_context_addition_and_action_update_are_atomic(graph, payload):
@@ -96,3 +98,140 @@ def test_supported_split_and_forward_hierarchy_are_adopted_together(graph, paylo
     assert old['action_id'] not in {a['action_id'] for a in result['actions']}
     assert report['lineage'][0]['operation'] == 'split'
     assert check_graph(result, payload)['valid']
+
+
+
+@pytest.mark.parametrize('malformed', [None, [None], [{'collection': 'actions', 'record': None}]])
+def test_malformed_split_does_not_abort_independent_assignments(graph, payload, malformed):
+    facts = facts_from_graph(graph, payload)
+    from finmy.person_epg.event.proposals import graph_from_facts
+    phases = deepcopy(graph['phases'])
+    for phase in phases:
+        phase['baseline_context_refs'] = []
+    response = dict(stages=graph['stages'], phases=phases,
+        assignments=[dict(action_id=a['action_id'],phase_id=a['phase_id'], support=[s for s in a['support'] if s['target']=='/phase_id'])
+                     for a in graph['actions']],
+        split_proposals=[dict(operation='split',input_refs=[reference('actions','ACTION-1')], outputs=malformed, reason='Malformed neighbor', evidence_ids=[])],
+        event_overview={k:deepcopy(graph['event'][k]) for k in ('time','summary','support')}, evidence=[], pending=[])
+    result, report = Receiver(graph_from_facts(facts), payload, IdMap(), 'bad-split-neighbor').organize(response)
+    assert report['rejected'] and any(a['phase_id'] for a in result['actions'])
+
+
+def test_known_actor_role_and_representation_cannot_silently_disappear(graph, payload):
+    facts = facts_from_graph(graph, payload)
+    action = facts['actions'][0]
+    action['actor'].update(capacity='official', role='Chair', on_behalf_of='ENTITY-OFFICE')
+    revised = deepcopy(action)
+    revised['actor'].pop('role')
+    revised['actor'].pop('on_behalf_of')
+    response = dict(decisions=[dict(operation='keep', input_refs=[reference('actions', action['action_id'])],
+        outputs=[dict(collection='actions', record=revised)], reason='Normalize wording only.', evidence_ids=[])],
+        evidence=[], pending=[])
+    result, report = Receiver(facts, payload, IdMap(), 'keep-known-fields').consolidate(response, {('actions', action['action_id'])})
+    final = next(a for a in result['actions'] if a['action_id']==action['action_id'])
+    assert final['actor'].get('role') == 'Chair' and final['actor'].get('on_behalf_of') == 'ENTITY-OFFICE', report
+
+
+@pytest.mark.parametrize('delete_object', [False, True])
+def test_known_object_and_entities_survive_wording_changes(graph, payload, delete_object):
+    facts = facts_from_graph(graph, payload)
+    action = facts['actions'][0]
+    action['object']['entity_refs'] = ['ENTITY-OFFICE']
+    revised = deepcopy(action)
+    if delete_object:
+        revised.pop('object')
+    else:
+        revised['description'] = 'A reworded acknowledgement of the restriction.'
+        revised['object']['description'] = 'The documented disclosure restriction.'
+    response = dict(decisions=[dict(operation='keep', input_refs=[reference('actions',action['action_id'])],
+        outputs=[dict(collection='actions',record=revised)], reason='Clarify wording.', evidence_ids=[])], evidence=[],pending=[])
+    result, report = Receiver(facts,payload,IdMap(),'wording').consolidate(response,{('actions',action['action_id'])})
+    assert bool(report['rejected']) == delete_object
+    assert next(a for a in result['actions'] if a['action_id']==action['action_id'])['object']['entity_refs'] == ['ENTITY-OFFICE']
+
+
+def test_explicit_supported_role_correction_is_not_frozen(graph, payload):
+    facts = facts_from_graph(graph, payload)
+    action = facts['actions'][0]
+    action['actor'].update(capacity='official',role='Chair',on_behalf_of='ENTITY-OFFICE')
+    revised = deepcopy(action)
+    revised['actor']['role'] = 'Director'
+    revised['support'].append(dict(target='/actor/role',mode='A',evidence_ids=['EV-3']))
+    response = dict(decisions=[dict(operation='keep', input_refs=[reference('actions',action['action_id'])],
+        outputs=[dict(collection='actions',record=revised)], reason='Correct the role using the cited record.',evidence_ids=['EV-3'])], evidence=[],pending=[])
+    result, report = Receiver(facts,payload,IdMap(),'role-correction').consolidate(response,{('actions',action['action_id'])})
+    assert not report['rejected'],report
+    assert next(a for a in result['actions'] if a['action_id']==action['action_id'])['actor']['role'] == 'Director'
+    assert result['lineage'][-1]['reason'] == response['decisions'][0]['reason']
+
+
+def test_malformed_assignment_does_not_discard_valid_neighbors(graph, payload):
+    from finmy.person_epg.event.proposals import graph_from_facts
+    facts = facts_from_graph(graph, payload)
+    phases = deepcopy(graph['phases'])
+    for phase in phases:
+        phase['baseline_context_refs'] = []
+    response = dict(stages=graph['stages'], phases=phases,
+        assignments=[dict(action_id=[], phase_id='PHASE-1', support=[None])] + [
+            dict(action_id=a['action_id'], phase_id=a['phase_id'], support=[s for s in a['support'] if s['target']=='/phase_id'])
+            for a in graph['actions']], split_proposals=[], evidence=[], pending=[])
+    result, report = Receiver(graph_from_facts(facts),payload,IdMap(),'bad-assignment').organize(response)
+    assert report['rejected'] and all(a['phase_id'] for a in result['actions'])
+
+
+def test_malformed_correction_conflict_does_not_abort_independent_keep(graph, payload):
+    facts = facts_from_graph(graph,payload)
+    first, second = facts['actions'][:2]
+    first['actor'].update(capacity='official', role='Chair')
+    revised = deepcopy(first)
+    revised['actor']['role'] = 'Director'
+    revised['conflicts'] = [dict(target='/actor/role', reason='Source disagreement.', alternatives=[
+        dict(value='Chair',support=[None]),
+        dict(value='Director',support=[dict(target='/value',mode='A',evidence_ids=['EV-3'])])])]
+    response = dict(decisions=[
+        dict(operation='keep',input_refs=[reference('actions',first['action_id'])],
+            outputs=[dict(collection='actions',record=revised)],reason='Role correction.',evidence_ids=['EV-3']),
+        dict(operation='keep',input_refs=[reference('actions',second['action_id'])],
+            outputs=[],reason='Keep the independent record.',evidence_ids=[])],evidence=[],pending=[])
+    assigned = {('actions',a['action_id']) for a in (first,second)}
+    result, report = Receiver(facts,payload,IdMap(),'after').consolidate(response,assigned)
+    assert 'decision:1' in report['accepted'] and report['rejected']
+    assert next(a for a in result['actions'] if a['action_id']==first['action_id'])['actor']['role']=='Chair'
+
+@pytest.mark.parametrize('field', ['role', 'qualification'])
+def test_existing_context_association_metadata_cannot_disappear(graph, payload, field):
+    from finmy.person_epg.event.validation import check_graph
+    phase = graph['phases'][0]
+    known = phase['baseline_context_refs'][0]
+    known.update(entity_id='ENTITY-OFFICE', role='Issuing office', qualification='Applies only to external disclosures.')
+    known['support'] = [dict(target='',mode='A',evidence_ids=['EV-2'])]
+    assert check_graph(graph,payload)['valid']
+    replacement = deepcopy(known)
+    replacement.pop(field)
+    response = dict(contexts=[],relations=[],phase_context_updates=[dict(
+        phase_id=phase['phase_id'],baseline_context_refs=[replacement])],action_context_updates=[],evidence=[],pending=[])
+    result, report = Receiver(graph,payload,IdMap(),'metadata').relate(response,action_ids=[],phase_ids=[phase['phase_id']])
+    updated = next(p for p in result['phases'] if p['phase_id']==phase['phase_id'])['baseline_context_refs'][0]
+    assert report['rejected']
+    assert updated == known
+
+
+def test_existing_context_association_can_gain_support_and_a_distinct_role(graph, payload):
+    phase = graph['phases'][0]
+    known = phase['baseline_context_refs'][0]
+    known.update(entity_id='ENTITY-OFFICE', role='Issuing office', qualification='External disclosures only.')
+    known['support'] = [dict(target='', mode='A', evidence_ids=['EV-2'])]
+    enriched = deepcopy(known)
+    enriched['support'].append(dict(target='', mode='A', evidence_ids=['EV-3']))
+    distinct = deepcopy(known)
+    distinct.update(context_ref_id='NEW-ADVISOR-REF', role='Advisor')
+    response = dict(contexts=[], relations=[], phase_context_updates=[dict(
+        phase_id=phase['phase_id'], baseline_context_refs=[enriched, distinct])],
+        action_context_updates=[], evidence=[], pending=[])
+    result, report = Receiver(graph, payload, IdMap(), 'distinct-role').relate(
+        response, action_ids=[], phase_ids=[phase['phase_id']])
+    assert not report['rejected'], report
+    refs = next(p for p in result['phases'] if p['phase_id'] == phase['phase_id'])['baseline_context_refs']
+    assert len(refs) == 2
+    assert {r['role'] for r in refs} == {'Issuing office', 'Advisor'}
+    assert next(r for r in refs if r['context_ref_id'] == known['context_ref_id'])['support'] == enriched['support']
