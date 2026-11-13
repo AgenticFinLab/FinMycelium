@@ -13,7 +13,15 @@ from finmy.search.state import digest
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.store import Store
 from finmy.workbench import search_page
-from test_person_event_build import payload, SyntheticModel, TEXT
+from test_person_event_pipeline import SyntheticEventModel as SyntheticModel
+from test_person_event_contract import FIXTURES
+
+
+def payload():
+    return json.loads((FIXTURES/'input.json').read_text())
+
+
+TEXT = '\n'.join(sample['content'] for sample in payload()['samples'])
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +49,8 @@ def setup(tmp_path):
 
 def execute(model):
     def wrapped(body,directory):
-        state=run_event(body['input'],directory,body['person_config'],model=model,resume=body.get('resume',False))
+        model.bind(body['input'])
+        state=run_event(body['input'],directory,body['person_config'],model=model,resume=body.get('resume',False),provenance=body['provenance'])
         graph=json.loads((directory/state['output']).read_text()) if state.get('output') else None
         return {'state':state,'graph':graph}
     return wrapped
@@ -82,6 +91,8 @@ def test_worker_outputs_native_draft_in_dataset_output_only(setup,tmp_path):
     assert not list((tmp_path/'dataset/person-epg').rglob('epg.json'))
     assert not list((tmp_path/'dataset/person-epg').rglob('gantt.html'))
     assert (Path(row['body']['artifact_directory'])/'input.json').is_file()
+    provenance=json.loads((Path(row['body']['artifact_directory'])/'provenance.json').read_text())
+    assert provenance['search_handoff']==row['body']['provenance']
     with store.connection() as db:assert db.execute('SELECT COUNT(*) FROM graphs').fetchone()[0]==0
     assert requests==['search']
 
@@ -95,7 +106,7 @@ def test_native_task_resume_keeps_usage(setup,tmp_path):
     assert len(model.calls)==1 and builds.inspect(bid)['status']=='ready'
     queue(builds,bid);builds.run(bid,executor=execute(model))
     assert builds.inspect(bid)['status']=='completed'
-    assert sum('Extract' in n for n in model.calls)==1
+    assert sum(n.startswith('extract.') for n in model.calls)==1
 
 
 def test_handoff_tamper_is_detected_before_task_creation(setup,tmp_path):

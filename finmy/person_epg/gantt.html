@@ -28,11 +28,11 @@ footer{font-size:12px;color:#526575;padding:20px 0;line-height:1.65;overflow-wra
 <script>/*__PLOTLY_BUNDLE__*/</script>
 </head>
 <body><main>
-<header><div class="eyebrow" id="identity"></div><h1 id="event-title"></h1><span class="badge">Draft · content review pending</span></header>
+<header><div class="eyebrow" id="identity"></div><h1 id="event-title"></h1><span class="badge" id="result-label">Draft · content review pending</span></header>
 <div class="stats" id="stats"></div>
-<div class="toolbar"><p class="muted">All stages and activities are expanded. Drag to pan; use the plot controls to zoom. Select a point or use the list below to inspect its record and evidence.</p><button id="reset" type="button">Reset view</button></div>
+<div class="toolbar"><p class="muted" id="timeline-help">All stages and activities are expanded. Drag to pan; use the plot controls to zoom. Select a point or use the list below to inspect its record and evidence.</p><button id="reset" type="button">Reset view</button></div>
 <div class="chart-scroll"><div id="event-timeline" role="img" aria-label="Expanded event timeline"></div></div>
-<p class="muted">Dotted time spans show date precision or uncertainty, not continuous activity. Stage bars span their dated activities. Undated records stay visible without assigned dates. Participant positions are only for layout.</p>
+<p class="muted" id="time-help">Dotted time spans show date precision or uncertainty, not continuous activity. Stage bars span their dated activities. Undated records stay visible without assigned dates. Participant positions are only for layout.</p>
 <section class="inspection" aria-label="Native graph records and evidence">
 <h2>Record &amp; evidence</h2><label for="record-select">Choose a stage, activity or relation</label><select id="record-select"></select>
 <div class="inspection-grid"><section><h3 id="record-title"></h3><dl id="fields"></dl></section><section><h3>Retained evidence</h3><div id="evidence"></div></section></div>
@@ -47,7 +47,10 @@ document.title=model.title+' · Person event Gantt';
 byId('event-title').textContent=model.title;
 byId('identity').textContent=model.person+' / '+model.storyline+' / '+model.event_id;
 byId('graph-identity').textContent='Native graph SHA-256: '+model.graph_sha256;
-for(const [key,label] of [['stages','stages'],['activities','activities'],['undated','without plotted dates'],['unassigned','retained, unassigned'],['sources','sources']]){
+if(model.result_label)byId('result-label').textContent=model.result_label;
+if(model.timeline_help)byId('timeline-help').textContent=model.timeline_help;
+if(model.time_help)byId('time-help').textContent=model.time_help;
+for(const [key,label] of (model.stat_labels||[['stages','stages'],['activities','activities'],['undated','without plotted dates'],['unassigned','retained, unassigned'],['sources','sources']])){
  const s=element('span');s.append(element('strong',model.counts[key]),document.createTextNode(label));byId('stats').append(s);
 }
 const select=byId('record-select');

@@ -170,7 +170,7 @@ def check_identity(package, event):
     return validation
 
 
-def run_event(payload, directory, config=None, *, allow_network=False, model=None, resume=False):
+def run_legacy_event(payload, directory, config=None, *, allow_network=False, model=None, resume=False):
     config = PersonBuildConfig(**config) if isinstance(config, dict) else config or PersonBuildConfig()
     event = validate_input(payload)
     if model is None and not allow_network:
@@ -261,3 +261,9 @@ def run_event(payload, directory, config=None, *, allow_network=False, model=Non
             state['finished_at'] = now()
             execution.persist()
         return deepcopy(state)
+
+
+def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None):
+    """Build new tasks with person-event-1.0; historical readers remain versioned."""
+    from .event.build import run_event as build_person_event
+    return build_person_event(payload, directory, config, allow_network=allow_network, model=model, resume=resume, provenance=provenance)

@@ -4,7 +4,7 @@ import socket
 
 import pytest
 
-from finmy.person_epg.build import run_event
+from finmy.person_epg.build import run_legacy_event as run_event
 from finmy.person_epg.rendering import read_gantt, render_saved_event
 from finmy.person_epg.visualizer_gantt import event_view, PersonEventGanttVisualizer, render_event
 from test_person_event_build import payload, SyntheticModel

@@ -1,0 +1,71 @@
+{
+  "user_query": {
+    "query_text": "Reconstruct Mina Lee's response under the disclosure restriction during 1–7 February 2020.",
+    "key_words": [
+      "Mina Lee",
+      "disclosure restriction"
+    ],
+    "extras": {
+      "person_event": {
+        "person_id": "DEMO-PERSON-0001",
+        "person_name": "Mina Lee",
+        "storyline_id": "DEMO-STORYLINE-01",
+        "storyline_name": "Public communication",
+        "event_id": "DEMO-EVENT-01",
+        "event_name": "Response under a disclosure restriction",
+        "scope": {
+          "period": "1–7 February 2020",
+          "include": "The restriction, Lee's acknowledgement, internal briefing and public response.",
+          "exclude": "Other projects and later communication."
+        },
+        "aliases": []
+      },
+      "source_registry": {
+        "SRC-1": {
+          "title": "Synthetic record 1",
+          "source_url": null,
+          "origin": "Authored example, sample SAMPLE-1; not a real publication.",
+          "published_at": null,
+          "retrieved_at": null,
+          "source_type": "synthetic_record",
+          "content_status": "full_text"
+        },
+        "SRC-2": {
+          "title": "Synthetic record 2",
+          "source_url": null,
+          "origin": "Authored example, sample SAMPLE-2; not a real publication.",
+          "published_at": null,
+          "retrieved_at": null,
+          "source_type": "synthetic_record",
+          "content_status": "full_text"
+        },
+        "SRC-3": {
+          "title": "Synthetic record 3",
+          "source_url": null,
+          "origin": "Authored example, sample SAMPLE-3; not a real publication.",
+          "published_at": null,
+          "retrieved_at": null,
+          "source_type": "synthetic_record",
+          "content_status": "full_text"
+        }
+      }
+    }
+  },
+  "samples": [
+    {
+      "sample_id": "SAMPLE-1",
+      "raw_data_id": "SRC-1",
+      "content": "On 1 February 2020, the Harbor Project Office issued a disclosure restriction. The restriction applied to Mina Lee's public statements and remained in effect through 7 February 2020. On 1 February 2020, Mina Lee, acting in her personal capacity, received and acknowledged the restriction."
+    },
+    {
+      "sample_id": "SAMPLE-2",
+      "raw_data_id": "SRC-2",
+      "content": "On 3 February 2020, Mina Lee, acting in her personal capacity, held an internal briefing about the disclosure restriction. From 1 through 4 February 2020, Lee focused on internal preparation."
+    },
+    {
+      "sample_id": "SAMPLE-3",
+      "raw_data_id": "SRC-3",
+      "content": "On 5 February 2020, Mina Lee, acting in her personal capacity, published a response. The response addressed questions raised in the internal briefing on 3 February. From 5 through 7 February 2020, Lee focused on public communication."
+    }
+  ]
+}

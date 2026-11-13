@@ -50,6 +50,9 @@ def _time(row):
 
 def event_view(package):
     """A read-only display projection; every item keeps its native identifiers."""
+    if package.get('schema_version') == 'person-event-1.0':
+        from .event.rendering import event_view as person_event_view
+        return person_event_view(package)
     result = validate_person_epg(package)
     if not result['valid']:
         raise ValueError('Invalid native person graph: ' + str(result['errors'][:2]))
@@ -291,6 +294,9 @@ def _script_json(value):
 
 def render_event(package):
     """Return an offline standalone HTML without modifying the native graph."""
+    if package.get('schema_version') == 'person-event-1.0':
+        from .event.rendering import render_event as render_person_event
+        return render_person_event(package)
     view = event_view(package)
     figure = PersonEventGanttVisualizer().plot_event(view)
     items = [{k:v for k,v in row.items() if k in {'key','kind','title','fields','evidence'}} for row in view['items']]

@@ -22,12 +22,17 @@ def create_person_build(store, controller, task_id, data):
             calls=st.number_input('累计模型调用上限',min_value=1,value=40)
             tokens=st.number_input('每次输出 token 上限',min_value=1,value=12288)
             context=st.number_input('单次模型上下文字符上限',min_value=1,value=160000)
+            batch=st.number_input('连续正文抽取批次字符数',min_value=401,value=12000)
+            local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=24)
+            local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=48000)
+            repair=st.checkbox('允许最多一轮最终定向修正',value=True)
             st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
         confirmed=st.checkbox('我已检查本次实际材料与缺口，确认用于这条 event 的构建')
         if st.form_submit_button('保存人物构建任务',type='primary'):
             try:
                 tid=BuildController(store).create_person(controller,task_id,
-                    dict(lm_name=model if '/' in model else 'ark/'+model,max_calls=calls,max_new_tokens=tokens,max_context_chars=context),
+                    dict(lm_name=model if '/' in model else 'ark/'+model,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
+                         extraction_chars=batch,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
             except (ValueError,OSError) as exc:
@@ -52,7 +57,13 @@ def person_build_panel(store, controller, row, labels):
            ('尝试次数',run.get('attempts',0),'恢复复用有效检查点')])
     if run.get('calls'):
         last=run['calls'][-1]
-        st.caption('最近阶段：'+last['phase']+' · '+last['status'])
+        st.caption('最近阶段：'+last.get('task_id',last.get('phase','unknown'))+' · '+last['status'])
+    if run.get('execution_status'):
+        st.caption('执行：'+run['execution_status']+' · 结果：'+run['result_status']+' · 绘图：'+run['render_status'])
+        coverage=run.get('coverage',[])
+        if coverage:
+            done=sum(r['status']=='processed' for r in coverage)
+            st.caption(f'正文区间处理：{done}/{len(coverage)}；部分采用或未处理的区间保留在检查结果中。')
     if row['status']=='ready':
         allowed=st.checkbox('允许本次构建调用模型接口',key='person-allow-'+tid)
         a,b=st.columns(2)
@@ -70,10 +81,12 @@ def person_build_panel(store, controller, row, labels):
     else:
         st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
         if row['status'] in {'partial','failed','interrupted','limit'}:
+            if body.get('graph_schema_version') != 'person-event-1.0':
+                st.info('这是历史协议任务，可查看保存的产物或重新绘图；重新构建请建立新任务。')
             cap=st.number_input('恢复后的累计调用上限',min_value=body['person_config']['max_calls'],
                                 value=body['person_config']['max_calls'],key='person-resume-cap-'+tid)
             st.caption('计数保留；准备恢复不会调用模型，仍需明确启动。')
-            if st.button('准备恢复构建',key='person-resume-'+tid):
+            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=body.get('graph_schema_version')!='person-event-1.0'):
                 try:
                     controller.prepare_person_resume(tid,max_calls=cap);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))
@@ -81,10 +94,15 @@ def person_build_panel(store, controller, row, labels):
         try:
             graph_path=within(body['artifact_directory'],run['output'])
             graph=json.loads(graph_path.read_text())
-            if digest(graph)!=run['graph_sha256']:raise ValueError('Saved graph integrity mismatch')
+            current=graph.get('schema_version')=='person-event-1.0'
+            if (digest(graph_path.read_bytes()) if current else digest(graph))!=run['graph_sha256']:raise ValueError('Saved graph integrity mismatch')
             st.caption('已保存的草稿：'+str(graph_path))
-            stats([('Event',len(graph['event']),'固定当前事项'),('活动',len(graph['activity']),'保留原始事实与证据'),
-                   ('阶段',len(graph['stage']),'按已支持的过程组织')])
+            if current:
+                stats([('Event',1,'固定当前事项'),('Stage',len(graph['stages']),'局面阶段'),
+                       ('Phase',len(graph['phases']),'行为模式'),('Action',len(graph['actions']),'有依据的主体行动')])
+            else:
+                stats([('Event',len(graph['event']),'固定当前事项'),('活动',len(graph['activity']),'保留原始事实与证据'),
+                       ('阶段',len(graph['stage']),'按已支持的过程组织')])
             st.download_button('下载人物 event JSON',encoded(graph),tid+'-epg.json',key='person-json-'+tid)
             st.subheader('本条 event 的 Gantt')
             st.caption('直接读取这份人物 JSON；全部展开。可点击图元查看原记录与证据。')
@@ -110,6 +128,13 @@ def person_build_panel(store, controller, row, labels):
                 checks=within(body['artifact_directory'],run['checks'])
                 st.json(json.loads(checks.read_text()),expanded=False)
         except (OSError,ValueError,KeyError) as exc:st.error(str(exc))
+    elif run.get('facts'):
+        with st.expander('已保存事实与未完成项'):
+            facts_path=within(body['artifact_directory'],run['facts'])
+            if digest(facts_path.read_bytes()) == run.get('facts_sha256'):
+                st.json(json.loads(facts_path.read_text()),expanded=False)
+                if run.get('checks'):
+                    st.json(json.loads(within(body['artifact_directory'],run['checks']).read_text()),expanded=False)
     st.caption('JSON 和 Gantt 均为待内容审核的草稿；当前不启动审核 Skill，也不会自动收录到正式数据集。')
     with st.expander('本次范围、输入与运行记录'):
         st.json(event,expanded=False)

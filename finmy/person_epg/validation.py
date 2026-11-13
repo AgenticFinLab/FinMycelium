@@ -171,6 +171,9 @@ def validate_person_epg(package, *, require_normalized_times=False):
     Shape errors are returned before relational checks, so malformed JSON values
     cannot leak Python indexing/type errors through the public interface.
     """
+    if isinstance(package, dict) and package.get('schema_version') == 'person-event-1.0':
+        from .event.validation import check_graph
+        return check_graph(package)
     errors = [
         {"path": _pointer(error.absolute_path), "message": error.message}
         for error in Draft202012Validator(JSON_SCHEMA).iter_errors(package)

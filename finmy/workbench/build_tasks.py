@@ -103,14 +103,17 @@ class BuildController:
     def create_person(self, search_controller, search_task_id, config=None, *, confirmed=False, artifact_root=None):
         from dataclasses import asdict
         from finmy.person_epg.input import freeze_search_input
-        from finmy.person_epg.build import PersonBuildConfig, code_identity
-        config = PersonBuildConfig(**(config or {}))
+        from finmy.person_epg.build import code_identity
+        from finmy.person_epg.event.runtime import EventBuildConfig
+        from finmy.person_epg.event.records import validate_input
+        config = EventBuildConfig(**(config or {}))
         bundle, provenance = freeze_search_input(search_controller, search_task_id, confirmed=confirmed)
+        validate_input(bundle)
         event = bundle['user_query']['extras']['person_event']
         task_id = identifier('PBUILD-')
         artifacts = (Path(artifact_root) if artifact_root is not None
                      else output_directory(provenance['catalog']['root'], 'builds'))
-        body = {'kind':'person_event', 'input':bundle, 'input_hash':digest(bundle),
+        body = {'kind':'person_event', 'graph_schema_version':config.graph_schema_version, 'input':bundle, 'input_hash':digest(bundle),
                 'event':{'event_id':event['event_id'], 'event_name_en':event['event_name'] + ' — ' + event['person_name']},
                 'catalog':provenance['catalog'], 'provenance':provenance, 'scope_hash':digest(event['scope']),
                 'input_confirmation':{'time':now(), 'basis':'User confirmed the actual material and known gaps'},
@@ -123,17 +126,19 @@ class BuildController:
         return task_id
 
     def prepare_person_resume(self, task_id, *, max_calls=None):
-        from finmy.person_epg.build import PersonBuildConfig
+        from finmy.person_epg.event.runtime import EventBuildConfig
         with task_lock(self.root,task_id):
             row=self.inspect(task_id);body=row['body']
             if body.get('kind')!='person_event' or row['status'] not in {'failed','interrupted','partial','limit'}:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
             config=dict(body['person_config'])
+            if body.get('graph_schema_version') != 'person-event-1.0':
+                raise ValueError('旧协议任务可查看或重绘；请用确认过的原始输入建立新构建任务')
             if max_calls is not None:
                 if max_calls < config['max_calls']:
                     raise ValueError('恢复不得降低累计调用上限')
                 config['max_calls']=max_calls
-            PersonBuildConfig(**config)
+            EventBuildConfig(**config)
             body.update(person_config=config,resume=(Path(body['artifact_directory'])/'state.json').is_file())
             self.save(task_id,'ready',body)
 
@@ -240,17 +245,24 @@ class BuildController:
                     from finmy.person_epg.build import code_identity
                     if code_identity() != body['person_code']:
                         raise ValueError('CodeChangedSinceTaskCreation')
-                write_json(directory / "input.json", body["input"])
-                write_json(directory / "config.json", {"builder_config": body["config"]})
+                if body.get('kind') != 'person_event':
+                    write_json(directory / "input.json", body["input"])
+                    write_json(directory / "config.json", {"builder_config": body["config"]})
                 write_json(directory / "snapshot.json", body)
                 if body.get('kind') == 'person_event':
                     result = (executor or execute_person_build)(body, directory)
-                    from finmy.person_epg.build import check_identity
                     if result.get('graph') is not None:
-                        check_identity(result['graph'], body['input']['user_query']['extras']['person_event'])
+                        graph = result['graph']
+                        if graph.get('schema_version') != body.get('graph_schema_version'):
+                            raise ValueError('Build output protocol does not match the frozen task')
+                        from finmy.person_epg.event.validation import check_graph
+                        checks = check_graph(graph, body['input'], complete=False)
+                        if any(i['code'] in {'SCHEMA_INVALID', 'INPUT_IDENTITY_CHANGED', 'SOURCE_METADATA_CHANGED',
+                                             'SAMPLE_HASH_MISMATCH', 'QUOTE_MISMATCH'} for i in checks['issues']):
+                            raise ValueError('Person output does not match the confirmed input')
                     body.update(run_state=result['state'], usage=result['state']['calls'],
                                 run_directory=str(directory), elapsed_seconds=time.monotonic()-started, finished=now())
-                    self.save(task_id,result['state']['status'],body)
+                    self.save(task_id,person_task_status(result['state']),body)
                     return
                 result = (executor or execute_build)(body, directory)
                 graph = result["graph"]
@@ -297,11 +309,21 @@ def execute_person_build(body, directory):
     from finmy.person_epg.build import run_event
     from finmy.dataset import within
     load_dotenv(ROOT / '.env', override=False)
-    state = run_event(body['input'], directory, body['person_config'], allow_network=True, resume=body.get('resume',False))
+    if body.get('graph_schema_version') != 'person-event-1.0':
+        raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
+    state = run_event(body['input'], directory, body['person_config'], allow_network=True, resume=body.get('resume',False), provenance=body['provenance'])
     graph = json.loads(within(directory,state['output']).read_text()) if state.get('output') else None
-    if graph is not None and digest(graph) != state['graph_sha256']:
+    if graph is not None and digest(within(directory,state['output']).read_bytes()) != state['graph_sha256']:
         raise ValueError('Saved person draft integrity mismatch')
     return {'state':state, 'graph':graph}
+
+
+def person_task_status(state):
+    """Project the three execution/result/render axes into the existing task list."""
+    execution = state['execution_status']
+    if execution != 'finished':
+        return execution
+    return {'draft':'completed', 'partial':'partial', 'none':'insufficient'}[state['result_status']]
 
 
 if __name__ == "__main__":

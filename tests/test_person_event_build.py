@@ -4,7 +4,7 @@ import socket
 
 import pytest
 
-from finmy.person_epg.build import run_event, check_identity
+from finmy.person_epg.build import run_legacy_event as run_event, check_identity
 from finmy.person_epg.input import validate_scope
 from finmy.search.state import digest
 

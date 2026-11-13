@@ -77,19 +77,45 @@ def freeze_search_input(controller, task_id, *, confirmed=False):
         validate_scope(event)
         payload = deepcopy(original)
         registry, origins = {}, []
+        previous_extras = deepcopy(payload['user_query'].get('extras') or {})
+        previous_registry = previous_extras.get('source_registry', {})
+        if not isinstance(previous_registry, dict):
+            raise ValueError('Invalid pre-existing source registry')
         selected = data['selection'].get('selected', [])
         for sid in dict.fromkeys(s['raw_data_id'] for s in payload['samples']):
             source = data['sources'][sid]
             versions = {r['version'] for r in selected if r['source_id'] == sid}
             if not versions:
                 raise ValueError('交接材料缺少来源版本')
-            for version in sorted(versions):
-                SourceStore(state).document(sid, version)  # Verify retained originals, never fetch.
-            registry[sid] = {'document_id': 'DOC_' + sid, 'source_url': source['url'], 'title': source.get('title'),
-                             'published_at': source.get('published_at')}
+            documents = {version: SourceStore(state).document(sid, version) for version in sorted(versions)}
+            # Metadata comes from the selected immutable version, not the latest fetch.
+            def agreed(field):
+                values = [document.get(field) for document in documents.values()]
+                return values[0] if all(value == values[0] for value in values) else None
+            old = previous_registry.get(sid, {})
+            if not isinstance(old, dict):
+                raise ValueError('Invalid pre-existing source metadata')
+            frozen = {'document_id': old.get('document_id') or 'DOC_' + sid,
+                      'source_url': source['url'], 'title': source.get('title') or None,
+                      'published_at': source.get('published_at'), 'retrieved_at': agreed('retrieved_at')}
+            for key in ('origin', 'source_type'):
+                if source.get(key) is not None:
+                    frozen[key] = source[key]
+            if agreed('status') is not None:
+                frozen['content_status'] = agreed('status')
+            for key, value in frozen.items():
+                if old.get(key) is not None and value is not None and old[key] != value:
+                    raise ValueError('Frozen source metadata conflicts with existing input: ' + key)
+            registry[sid] = {**old, **{key: value for key, value in frozen.items() if value is not None or key not in old}}
             origins.append({'source_id': sid, 'versions': sorted(versions),
-                            'parsed_hashes': {v: source['parsed_hashes'][v] for v in versions}})
-        payload['user_query']['extras'] = {'person_event': event, 'source_registry': registry}
+                            'parsed_hashes': {v: source['parsed_hashes'][v] for v in versions},
+                            'version_metadata': {v: {k: doc.get(k) for k in ('retrieved_at', 'status', 'kind', 'parser_version')}
+                                                 for v, doc in documents.items()}})
+        previous_event = previous_extras.get('person_event')
+        if previous_event is not None and (not isinstance(previous_event, dict)
+                or any(value != event.get(key) for key, value in previous_event.items())):
+            raise ValueError('Confirmed person event conflicts with existing input')
+        payload['user_query']['extras'] = {**previous_extras, 'person_event': event, 'source_registry': registry}
         validate_input(payload)
         provenance = {'search_task_id': task_id, 'handoff_revision': revision,
                       'search_input_sha256': digest(original), 'selection': deepcopy(data['selection']),
