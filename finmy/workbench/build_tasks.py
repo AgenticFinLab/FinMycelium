@@ -17,6 +17,7 @@ from finmy.model_config import model_name
 from finmy.search.control import task_lock, task_path
 from finmy.search.state import write_json
 from finmy.workbench.domain import digest, encoded, graph_from_bytes, validate_graph
+from finmy.workbench.collection import ordinary_adoptions, prepare_collection, publish_collection, search_snapshot
 from finmy.workbench.store import Store, identifier, now
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -97,8 +98,10 @@ class BuildController:
                 "config": build_config(settings, directory), "code": code_version(),
                 "evidence_review": next(r for r in self.store.reviews(event_id)
                     if r["kind"] == "evidence" and r["target"] == input_hash), "attempt": 1}
-        with self.store.connection() as db:
-            db.execute("INSERT INTO build_tasks VALUES(?,?,?,?,?)", (task_id, event_id, encoded(body), "ready", now()))
+        adoptions = ordinary_adoptions(self.store, event_id, bundle)
+        if adoptions:
+            body['catalog'] = adoptions[0]['catalog']
+        self._save_prepared(task_id, event_id, body, adoptions)
         return task_id
 
     def create_person(self, search_controller, search_task_id, config=None, *, confirmed=False, artifact_root=None):
@@ -121,10 +124,26 @@ class BuildController:
                 'person_config':asdict(config), 'code':code_version(), 'person_code':code_identity(),
                 'config':{'builder_type':'PersonEvent', 'lm_name':config.lm_name},
                 'artifact_directory':str((artifacts/task_id).resolve()), 'resume':False}
-        with self.store.connection() as db:
-            db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',
-                       (task_id,event['event_id'],encoded(body),'ready',now()))
+        with task_lock(search_controller.root, search_task_id):
+            adopted = search_snapshot(search_controller, search_task_id)
+        if (adopted['search_input_sha256'] != provenance['search_input_sha256']
+                or adopted['handoff_revision'] != provenance['handoff_revision']):
+            raise ValueError('检索交接已变化，请重新确认构建输入')
+        self._save_prepared(task_id, event['event_id'], body, [adopted])
         return task_id
+
+    def _save_prepared(self, task_id, event_id, body, adoptions):
+        collection = prepare_collection(task_id, body, adoptions)
+        if collection:
+            body['search_collection'] = collection
+        def previous_manifest(previous_id):
+            with self.store.connection() as db:
+                row = db.execute('SELECT body FROM build_tasks WHERE id=?', (previous_id,)).fetchone()
+            return json.loads(row['body']).get('search_collection', {}).get('manifest_sha256') if row else None
+        with publish_collection(body.get('catalog'), collection, manifest_lookup=previous_manifest):
+            with self.store.connection() as db:
+                db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',
+                           (task_id,event_id,encoded(body),'ready',now()))
 
     def prepare_person_resume(self, task_id, *, max_calls=None):
         from finmy.person_epg.event.runtime import EventBuildConfig

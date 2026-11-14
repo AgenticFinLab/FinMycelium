@@ -121,8 +121,8 @@ first and publishes under the dataset's Git-ignored output directory:
 - Ordinary event: `output/search/event-epg/events/<event_id>/search-summary.md`.
 - Person event: `output/search/person-epg/<person>/<storyline>/<event>/search-summary.md`.
 
-The formal catalogs are not changed by search completion. A selected summary can
-be collected with reviewed artifacts later.
+Search completion does not change formal event directories. After input confirmation,
+saving a build task collects an adopted search snapshot as described below.
 
 The summary records the latest output, source URLs and acquisition states, input
 counts, gaps/stop notes, and a short run index. Incomplete or failed searches retain
@@ -136,6 +136,32 @@ saving. Background saving does not require the page to stay open. It neither sta
 construction nor marks a graph accepted, and never commits or pushes Git changes.
 Independent searches do not publish a catalog summary; when a workbench dataset
 is configured, they still export their task records under `workbench/search/`.
+
+### Adopted search and reviewed graphs
+
+Saving a confirmed build task collects three lightweight files under the catalog
+event's `search/`: `search-summary.md`, `sources.csv`, and `manifest.json`. Person
+builds use the existing actual-material confirmation; ordinary builds use the
+existing evidence review after adopting search material. This does not start a worker.
+
+The source CSV contains only actual build inputs. The manifest pins the search task,
+handoff revision, source versions, input hash, configuration and known gaps, with
+relative runtime references. Source bodies remain under ignored `output/`.
+An ordinary input may also include manually added material, explicitly identified
+without a search origin. Independent tasks without a catalog association do not
+create catalog files.
+
+Search retries, reassembly and shared-record refreshes never replace an adopted
+collection. A newly confirmed build may adopt a successor; the previous build row
+retains the exact snapshot and its portable build record retains the manifest.
+Manual edits to collection files are protected. A save failure rolls back the
+collection rather than leaving a new adopted record without its build task.
+
+Reviewed graphs are collected later into the event's `epg/epg.json`, `epg/gantt.html`
+and `epg/review.md`, with accepted paths updated in `events.csv`. Graph review and
+collection remain explicit subsequent work; this step does not mark an event accepted.
+Both `person-epg/<person>/<storyline>/<event>/` and `event-epg/events/<event_id>/`
+use this `search/` and `epg/` layout.
 
 ## Execution and recovery boundaries
 
@@ -256,10 +282,12 @@ EPG-dataset/output/                 ignored runtime and drafts
     output/                        ordinary Builder artifacts and run manifest
     attempts/                      person-event JSON, Gantt and checks
 EPG-dataset/workbench/              portable records for Git
-  search/<task_id>/
-    task.json                      identity, scope, configuration and fingerprints
-    summary.json                   execution status, usage, gaps and input manifest
-    sources.csv                    source URLs and acquisition/input status
+  search/
+    README.md                      generated task index: event, model, status, input size
+    <YYYYMMDD-HHMMSS>_<event-name>_<short-task-id>/
+      task.json                    identity, scope, configuration and fingerprints
+      summary.json                 execution status, usage, gaps and input manifest
+      sources.csv                  source URLs and acquisition/input status
   build/<task_id>/
     task.json, summary.json
   events/<workbench-event_id>/
@@ -272,6 +300,9 @@ EPG-dataset/workbench/              portable records for Git
 Saving tasks, search completion/pause and committed workbench edits or reviews
 refresh their shared records without a model call. Missing token/cost reports
 remain unknown. Settings → **更新共享记录** retries export without rerunning tasks.
+Search record names use creation time in Asia/Shanghai and remain stable across
+retries and configuration/status changes. Full task IDs and ignored runtime paths
+are unchanged; old ID-only shared folders migrate when exported.
 Export failures preserve saved work and appear in Settings. Shared records support
 inspection and provenance; they are not a full runtime backup or instructions to
 start/approve work. They omit source bodies, raw responses, credentials and absolute

@@ -88,6 +88,13 @@ Direct Python calls default to FinMycelium's ignored `output/builds/`:
     steps/
 ```
 
+When the user confirms the material and saves a workbench build task, its fixed
+search record is collected into the catalog event's `search/` (`search-summary.md`,
+`sources.csv`, `manifest.json`). Runtime output remains in the paths above.
+After content and evidence review, collect final `epg.json`, `gantt.html`, and
+`review.md` under the event's `epg/`, then update accepted paths in `events.csv`.
+Saving or executing a build does not perform graph acceptance.
+
 The workbench also retains its task snapshot. Provenance preserves supplied search
 handoff records, source versions and hashes alongside exact input and sample hashes.
 Acquisition, handed ranges and processed ranges are distinct: obtaining a source

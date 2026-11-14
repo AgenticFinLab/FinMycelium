@@ -7,4 +7,4 @@
 - [Source index CSV](sources.csv): generated from the research plan; update the plan and regenerate this file.
 - [Progress status definitions](../README.md#event-progress).
 
-Maintain event progress in `events.csv`. Artifact paths are relative to this directory and are filled when reviewed outputs are collected. Add person-level aggregate links here when those outputs are available.
+Maintain event progress in `events.csv`. Artifact paths are relative to this directory and are filled when reviewed outputs are collected under `<storyline>/<event>/epg/`. Adopted build-search records live under the same event's `search/`. Add person-level aggregate links here when those outputs are available.

@@ -16,7 +16,7 @@ from finmy.workbench.model_picker import model_picker
 
 def create_person_build(store, controller, task_id, data):
     st.subheader('构建本条人物 event')
-    st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；模型与检索侧独立。')
+    st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；采用的检索记录会自动收录到该事件的 search/。')
     model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
     with st.form('person-build-create-'+task_id):
         with st.expander('构建上限'):
@@ -47,6 +47,8 @@ def person_build_panel(store, controller, row, labels):
     status(labels[row['status']], '人物 event 构建 · '+tid)
     st.caption(event['storyline_name']+' · '+event['event_id']+' · '+body['person_config']['lm_name'])
     st.caption('构建输出：' + body['artifact_directory'])
+    if body.get('search_collection'):
+        st.caption('已采用检索：' + str(Path(body['catalog']['root'])/body['search_collection']['directory']))
     run=body.get('run_state',{})
     runtime=Path(body['artifact_directory'])/'state.json'
     if runtime.is_file():

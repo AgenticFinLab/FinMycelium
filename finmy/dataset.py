@@ -52,6 +52,33 @@ def output_directory(root, *parts):
     return within(output, Path(*(component(value) for value in parts))) if parts else output
 
 
+def catalog_event_directory(catalog):
+    """The formal catalog destination, separate from ignored execution output."""
+    root = Path(catalog['root']).expanduser().resolve()
+    relative = Path(catalog['event_dir'])
+    kind = catalog.get('kind')
+    valid = ((kind == 'event' and len(relative.parts) == 3
+              and relative.parts[:2] == ('event-epg', 'events')
+              and relative.name == component(catalog['event_id']))
+             or (kind == 'person_event' and len(relative.parts) == 4
+                 and relative.parts[0] == 'person-epg'))
+    if not valid or any(component(p) != p for p in relative.parts):
+        raise ValueError('事件收录路径不符合数据集目录约定')
+    path = within(root, relative)
+    if path != root/relative:
+        raise ValueError('事件收录目录不能经过符号链接')
+    return path
+
+
+def accepted_artifact_paths(catalog):
+    """Registry-relative paths; callers fill them only after graph acceptance."""
+    root = Path(catalog['root']).expanduser().resolve()
+    folder = catalog_event_directory(catalog)/'epg'
+    base = root/'event-epg' if catalog['kind'] == 'event' else root.joinpath(*Path(catalog['event_dir']).parts[:2])
+    return {key: str((folder/name).relative_to(base)) for key, name in
+            (('epg_path', 'epg.json'), ('gantt_path', 'gantt.html'), ('review_path', 'review.md'))}
+
+
 def summary_directory(catalog):
     relative = Path(catalog['event_dir'])
     allowed = Path('event-epg/events') if catalog['kind'] == 'event' else Path('person-epg')

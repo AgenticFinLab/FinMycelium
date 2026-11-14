@@ -186,8 +186,8 @@ def test_csv_uses_the_same_frozen_publication_date(tmp_path):
         discoveries=[dict(provider='exa', published_at='2011-03-18T10:00:00Z')])
     assemble_sources(state, [sid])
     store.register('https://example.org/report', discovery=dict(provider='baidu', published_at='2013-01-01'))
-    export_search(root, 'case')
-    rows = list(csv.DictReader((dataset/'workbench/search/case/sources.csv').open()))
+    folder = export_search(root, 'case')
+    rows = list(csv.DictReader((folder/'sources.csv').open()))
     assert rows[0]['published_at'] == '2011-03-18'
 
 

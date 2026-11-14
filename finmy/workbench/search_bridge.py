@@ -16,6 +16,9 @@ def adopt_sources(controller, task_id, store):
             raise ValueError('事件范围已变化；请按新范围检索，旧任务材料仍保留可下载。')
         payload=data.get('builder_input')
         if not payload or not payload['samples']:raise ValueError('没有可纳入的材料')
+        # Pin the handoff now; later reassembly must not relabel adopted Store text.
+        from finmy.workbench.collection import search_snapshot
+        snapshot = search_snapshot(controller, task_id, data) if data['task'].get('catalog') else None
         existing={s['sha256']:s['id'] for s in store.sources(event_id)}
         record_path = controller.root/task_id/'runs/initial/workbench_sources.json'
         previous = json.loads(record_path.read_text()) if record_path.exists() else {}
@@ -45,7 +48,7 @@ def adopt_sources(controller, task_id, store):
                 store.include_source(event_id, row['source_id'], False)
         for sid in new_ids:
             store.include_source(event_id, sid, True)
-        write_json(record_path,dict(event_id=event_id,mapping=mapping))
+        write_json(record_path,dict(event_id=event_id,mapping=mapping,search_snapshot=snapshot))
         return added
 
 

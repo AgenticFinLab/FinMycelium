@@ -319,8 +319,20 @@ publish the lightweight summary under EPG-dataset's Git-ignored
 remain in search storage. The worker saves summaries independently of
 page rendering. Workbench databases and search originals live in the dataset's
 ignored `output/workbench/`; portable task/scope/configuration records, source indexes
-and execution summaries are also exported under `workbench/search/<task_id>/` for
-Git review. Direct command-line search keeps its existing output location. See [dataset selection and automatic summaries](event-workbench.md#select-an-event-from-epg-dataset).
+and execution summaries are also exported under
+`workbench/search/<YYYYMMDD-HHMMSS>_<event-name>_<short-task-id>/` for Git review.
+Creation times use Asia/Shanghai; model and status changes do not rename a task.
+`workbench/search/README.md` automatically indexes events, models, statuses and input sizes.
+Full task IDs and runtime directories remain unchanged. Existing ID-only shared record
+directories migrate on export; `finmy.workbench.records.migrate_search_records(dataset_root)`
+can migrate saved records without runtime files or service calls.
+Direct command-line search keeps its existing output location. See [dataset selection and automatic summaries](event-workbench.md#select-an-event-from-epg-dataset).
+
+When confirmed material becomes a workbench build task, the event's formal
+`search/` receives `search-summary.md`, `sources.csv` and `manifest.json` for the
+adopted handoff. This collection is separate from all-attempt workbench records
+and from the event's reviewed `epg/` artifacts. Search reruns do not overwrite it.
+See [adopted search and reviewed graphs](event-workbench.md#adopted-search-and-reviewed-graphs).
 
 Runtime files, raw responses, machine-specific notes and experiments stay outside Git.
 The shared repository holds code, configuration, documentation and small offline tests.

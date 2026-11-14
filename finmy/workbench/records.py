@@ -1,12 +1,16 @@
 """Portable workbench records; exclude source bodies, secrets and machine paths."""
 import csv
 from contextlib import closing
+from datetime import datetime, timezone
 import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import sqlite3
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+import unicodedata
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo
 
 from finmy.dataset import DatasetCatalog, component, dataset_root, within
 from finmy.search.state import now
@@ -16,7 +20,7 @@ README = """# Workbench records
 
 FinMycelium maintains these lightweight records for Git review and collaboration.
 
-- search/<task_id>/: task scope/configuration, execution summary and source index.
+- [Search records](search/README.md): task scope/configuration, execution summary and source index.
 - build/<task_id>/: frozen input manifest/configuration and execution summary.
 - events/<event_id>/: workbench edits/history, source and graph indexes, and review decisions.
 - plans/<task_id>.json: historical task plans, explicitly separate from executed tasks.
@@ -150,6 +154,116 @@ def input_manifest(bundle):
                         for s in bundle.get('samples', [])]}
 
 
+def search_record_name(record, *, full_id=False):
+    """A fixed creation-time label; model and execution status are not identity."""
+    task_id = component(record['task_id'])
+    stamp = datetime.fromisoformat(record['created_at'])
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    stamp = stamp.astimezone(ZoneInfo('Asia/Shanghai')).strftime('%Y%m%d-%H%M%S')
+    title = (record.get('catalog', {}).get('event_name')
+             or record.get('research_request', {}).get('target_name') or 'search')
+    title = unicodedata.normalize('NFKC', title).casefold()
+    slug = re.sub(r'[\W_]+', '-', title).strip('-')
+    slug = slug.encode('utf-8')[:96].decode('utf-8', errors='ignore').rstrip('-') or 'search'
+    return f'{stamp}_{slug}_{task_id if full_id else task_id[:12]}'
+
+
+def _record_task(folder):
+    if folder.is_symlink() or (folder/'task.json').is_symlink():
+        raise ValueError('共享检索记录不能是符号链接')
+    path = folder/'task.json'
+    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
+
+
+def _search_folder(base, record):
+    """Called under the search-directory lock; never replace another task."""
+    task_id = component(record['task_id'])
+    folder = base/search_record_name(record)
+    existing = _record_task(folder)
+    if existing and existing['task_id'] != task_id:
+        folder = base/search_record_name(record, full_id=True)
+        existing = _record_task(folder)
+    if existing and existing['task_id'] != task_id:
+        raise ValueError('共享检索记录目录已属于其他任务')
+    legacy = base/task_id
+    if legacy.exists() or legacy.is_symlink():
+        old = _record_task(legacy)
+        if not old or old.get('task_id') != task_id or folder.exists():
+            raise ValueError('旧检索记录身份不符或存在重复目录；原记录已保留')
+        legacy.rename(folder)
+    elif not folder.exists():
+        folder.mkdir()
+    elif not existing and any(folder.iterdir()):
+        raise ValueError('共享检索记录缺少任务身份；原记录已保留')
+    return folder
+
+
+def _search_index(root, base):
+    """Small generated navigation; full IDs and provenance remain in task.json."""
+    def cell(value):
+        value = ' '.join(str(value if value is not None else '—').split())
+        return re.sub(r'([\\`*_\[\]()<>|])', r'\\\1', value)
+    entries, seen = [], set()
+    for folder in sorted(base.iterdir()):
+        if not folder.is_dir() and not folder.is_symlink():
+            continue
+        task = _record_task(folder)
+        if not task:
+            continue
+        if task['task_id'] in seen:
+            raise ValueError('共享检索记录存在重复任务 ID；请检查原记录')
+        seen.add(task['task_id'])
+        summary_path = folder/'summary.json'
+        if summary_path.is_symlink():
+            raise ValueError('共享检索汇总不能是符号链接')
+        summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+        if summary.get('task_id', task['task_id']) != task['task_id']:
+            raise ValueError('检索任务与汇总的 ID 不一致')
+        stamp = datetime.fromisoformat(task['created_at'])
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        stamp = stamp.astimezone(ZoneInfo('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M:%S')
+        model = task.get('configuration', {}).get('lm_name') if task.get('mode') != 'simple' else 'Simple (no model)'
+        values = [stamp, task.get('research_request', {}).get('target_name'),
+                  task.get('catalog', {}).get('event_id') or task.get('workbench_event_id'),
+                  model, summary.get('status'), summary.get('input_characters')]
+        link = f"[{cell(task['task_id'][:12])}]({quote(folder.name)}/)"
+        entries.append((stamp, task['task_id'], '| ' + ' | '.join(map(cell, values)) + ' | ' + link + ' |'))
+    lines = ['# Search records', '',
+             'Automatically updated from task records. Times use Asia/Shanghai (UTC+08:00).',
+             'Directories use creation time, event name and a short task ID; retry and model/status changes keep the directory.',
+             'Full task IDs, scope and configuration remain in each task.json. Runtime directories keep the full task ID.',
+             'Execution status does not imply evidence approval or an accepted EPG.', '',
+             '| Created | Event | Event ID | Model | Status | Builder input characters | Task record |',
+             '| --- | --- | --- | --- | --- | ---: | --- |']
+    lines.extend(row for _, _, row in sorted(entries))
+    save(base, 'README.md', '\n'.join(lines) + '\n')
+    readme = root/'workbench/README.md'
+    if readme.is_symlink():
+        raise ValueError('共享记录说明不能是符号链接')
+    text = readme.read_text(encoding='utf-8').replace(
+        '- search/<task_id>/: task scope/configuration, execution summary and source index.',
+        '- [Search records](search/README.md): task scope/configuration, execution summary and source index.')
+    save(readme.parent, readme.name, text)
+
+
+def migrate_search_records(root):
+    """Rename portable records only, even when their runtime is not available."""
+    root, base = destination(root, 'search')
+    changes = []
+    with directory_lock(base):
+        for folder in sorted(base.iterdir()):
+            if not folder.is_dir() and not folder.is_symlink():
+                continue
+            task = _record_task(folder)
+            if task and folder.name == task['task_id']:
+                renamed = _search_folder(base, task)
+                changes.append((folder.name, renamed.name))
+        _search_index(root, base)
+    return changes
+
+
 def export_search(search_root, task_id):
     """Read latest state under the export lock; never change the run."""
     task_id = component(task_id)
@@ -158,8 +272,8 @@ def export_search(search_root, task_id):
     root = initial['task'].get('catalog', {}).get('root') or dataset_root(Path(search_root).parent)
     if not root:
         return None
-    root, folder = destination(root, 'search', task_id)
-    with directory_lock(folder):
+    root, base = destination(root, 'search')
+    with directory_lock(base):
         data = json.loads((run / 'run.json').read_text())
         task, config = data['task'], data['config']
         record = {'kind': 'search', 'task_id': task_id, 'created_at': data['created_at'],
@@ -210,9 +324,11 @@ def export_search(search_root, task_id):
                    'gaps': selection.get('gaps', []), 'token_usage': token_usage,
                    'monetary_cost': None, 'content_review': 'not_implied_by_execution',
                    'handoff': input_manifest(payload) if payload else None}
+        folder = _search_folder(base, record)
         save(folder, 'task.json', record)
         save(folder, 'summary.json', summary)
         save(folder, 'sources.csv', source_csv(rows))
+        _search_index(root, base)
     return folder
 
 
@@ -275,6 +391,9 @@ def export_database(workspace):
                 'research_scope': (body.get('input', {}).get('user_query', {}).get('extras') or {}).get('person_event', {}).get('scope')
                     or pick(body.get('event', {}), ('coverage_start', 'coverage_end', 'scope_include', 'scope_exclude')),
                 'search_handoff': pick(body.get('provenance', {}), ('search_task_id', 'handoff_revision', 'search_input_sha256')),
+                'search_collection': ({**pick(body['search_collection'], ('directory', 'manifest_sha256')),
+                    'manifest': json.loads(body['search_collection']['files']['manifest.json'])}
+                    if body.get('search_collection') else None),
                 'evidence_review': pick(body.get('evidence_review', {}), ('id', 'target', 'decision', 'reviewer', 'note', 'created')),
                 'configuration': config, 'code': body.get('code'), 'person_code': body.get('person_code'),
                 'input_confirmation': body.get('input_confirmation'), 'scope_sha256': body.get('scope_hash'),

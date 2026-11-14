@@ -56,6 +56,13 @@ def read(path):
     return json.loads(path.read_text())
 
 
+def search_record(root, task_id):
+    matches = [path.parent for path in (root/'workbench/search').glob('*/task.json')
+               if read(path)['task_id']==task_id]
+    assert len(matches)==1
+    return matches[0]
+
+
 def test_workspace_is_in_dataset_and_bootstrap_has_no_runtime(tmp_path):
     project = tmp_path / 'code'
     assert resolve_workspace(project) is None
@@ -91,7 +98,7 @@ def test_legacy_migration_preserves_task_bytes_and_id(tmp_path):
     assert (target / 'workbench.sqlite3').read_bytes() == db_before
     assert not calls
     assert all(r['status'] == 'saved' for r in records.export_all(target))
-    assert read(root / 'workbench/search' / tid / 'task.json')['runtime_directory'] == f'output/workbench/search/{tid}'
+    assert read(search_record(root, tid) / 'task.json')['runtime_directory'] == f'output/workbench/search/{tid}'
 
 
 def test_switching_keeps_previous_workspace_and_refuses_active_runs(workspace, tmp_path):
@@ -121,11 +128,14 @@ def test_switching_keeps_previous_workspace_and_refuses_active_runs(workspace, t
 def test_ready_and_finished_search_records_are_automatic_and_private(workspace):
     _, root, store = workspace
     c, tid, calls = search(store, root)
-    folder = root / 'workbench/search' / tid
+    folder = search_record(root, tid)
+    assert folder.name.endswith('_'+tid[:12]) and folder.name != tid
     task = read(folder / 'task.json')
     assert task['catalog']['event_id'] == 'PERSON-EVENT-TEST'
     assert task['research_scope']['include'] == 'The appointment and term.'
     assert read(folder / 'summary.json')['status'] == 'ready'
+    index = root/'workbench/search/README.md'
+    assert tid[:12] in index.read_text() and '| ready |' in index.read_text()
     assert not calls
     c.configure(tid, {'max_builder_material_chars': 90000})
     revised = read(folder / 'task.json')
@@ -136,6 +146,7 @@ def test_ready_and_finished_search_records_are_automatic_and_private(workspace):
     assert not c.active(tid)
     summary = read(folder / 'summary.json')
     assert summary['status'] == 'finished'
+    assert '| finished |' in index.read_text()
     assert summary['source_count'] == summary['input_source_count'] == 1
     assert summary['token_usage']['attempted_model_calls'] == 0
     assert summary['token_usage']['total_tokens'] == 0
@@ -153,6 +164,89 @@ def test_ready_and_finished_search_records_are_automatic_and_private(workspace):
     assert not list((root / 'person-epg').rglob('epg.json'))
 
 
+def test_search_record_names_use_creation_time_not_model_or_status():
+    record = {'task_id':'a11eef5ce4134cb4ad6c224da7ba3875',
+              'created_at':'2026-11-14T07:03:51+00:00',
+              'catalog':{'event_name':'Goldman Sachs crisis investment'},
+              'configuration':{'lm_name':'model/first'}}
+    expected = '20261114-150351_goldman-sachs-crisis-investment_a11eef5ce413'
+    assert records.search_record_name(record)==expected
+    record.update(status='failed',configuration={'lm_name':'model/second'})
+    assert records.search_record_name(record)==expected
+
+
+def test_legacy_shared_record_migration_preserves_bytes_without_runtime(tmp_path):
+    root = fixture_dataset(tmp_path/'dataset')
+    tid = 'a'*32
+    folder = root/'workbench/search'/tid
+    folder.mkdir(parents=True)
+    original = {'task_id':tid, 'created_at':'2026-11-14T01:02:03Z',
+                'catalog':{'event_id':'PERSON-TEST-E1','event_name':'Appointment'},
+                'research_request':{'target_name':'Person — Appointment'},
+                'configuration':{'lm_name':'model/example'}, 'mode':'agent',
+                'runtime_directory':f'output/workbench/search/{tid}'}
+    records.save(folder,'task.json',original)
+    records.save(folder,'summary.json',{'task_id':tid,'status':'finished','input_characters':1234})
+    records.save(folder,'sources.csv','source_id,url\nsource-1,https://example.org/notice\n')
+    (root/'workbench/README.md').write_text(
+        '# Custom introduction\n\n- search/<task_id>/: task scope/configuration, execution summary and source index.\n\nKeep this note.\n')
+    before = {p.name:p.read_bytes() for p in folder.iterdir()}
+    changes = records.migrate_search_records(root)
+    renamed = search_record(root,tid)
+    assert changes==[(tid,'20261114-090203_appointment_aaaaaaaaaaaa')]
+    assert renamed.name==changes[0][1] and not folder.exists()
+    assert {p.name:p.read_bytes() for p in renamed.iterdir()}==before
+    assert not (root/'output').exists()
+    readme = (root/'workbench/README.md').read_text()
+    assert 'Keep this note.' in readme and '[Search records](search/README.md)' in readme
+    index = root/'workbench/search/README.md'
+    assert f']({renamed.name}/)' in index.read_text()
+    assert '| finished | 1234 |' in index.read_text()
+    snapshot = index.read_bytes(),index.stat().st_mtime_ns
+    assert records.migrate_search_records(root)==[]
+    assert (index.read_bytes(),index.stat().st_mtime_ns)==snapshot
+
+
+def test_export_after_legacy_migration_reuses_folder_and_keeps_runtime(workspace):
+    _,root,store = workspace
+    controller,tid,_ = search(store,root,mode='agent')
+    folder = search_record(root,tid)
+    legacy = folder.with_name(tid)
+    folder.rename(legacy)
+    runtime = controller.root/tid/'runs/initial/run.json'
+    before = runtime.read_bytes()
+    assert records.export_search(controller.root,tid)==folder
+    assert not legacy.exists() and runtime.read_bytes()==before
+    controller.configure(tid,{'lm_name':'tokenhub/glm-5.3-flash'})
+    assert search_record(root,tid)==folder
+    assert 'tokenhub/glm-5.3-flash' in (root/'workbench/search/README.md').read_text()
+
+
+def test_search_record_short_id_collision_does_not_overwrite(tmp_path):
+    root = fixture_dataset(tmp_path/'dataset')
+    search_root = root/'output/workbench/search'
+    folders=[]
+    for tid in ['123456789abc'+'0'*20,'123456789abc'+'1'*20]:
+        state=SearchState(search_root,tid,task={'target_type':'event','target_name':'Same event',
+            'query_text':'Same scope','catalog':{'root':str(root)}})
+        state.data['created_at']='2026-11-14T01:02:03Z';state.save()
+        folders.append(records.export_search(search_root,tid))
+    assert folders[0]!=folders[1]
+    assert folders[0].name.endswith('_123456789abc')
+    assert folders[1].name.endswith('_123456789abc'+'1'*20)
+    assert read(folders[0]/'task.json')['task_id']=='123456789abc'+'0'*20
+    assert records.export_search(search_root,'123456789abc'+'1'*20)==folders[1]
+
+
+def test_search_record_labels_are_safe_and_support_non_english_names():
+    record={'task_id':'case','created_at':'2026-11-14T01:02:03Z',
+            'research_request':{'target_name':'../测试 / acquisition | title '*100}}
+    name=records.search_record_name(record)
+    assert name.startswith('20261114-090203_测试-acquisition-title-')
+    assert len(name.encode('utf-8'))<255
+    assert '/' not in name and '..' not in name and name.endswith('_case')
+
+
 def test_missing_model_usage_stays_unknown_and_traces_are_not_copied(workspace):
     _, root, store = workspace
     c, tid, _ = search(store, root, mode='agent')
@@ -162,7 +256,7 @@ def test_missing_model_usage_stays_unknown_and_traces_are_not_copied(workspace):
                  'response': 'PRIVATE_MODEL_RESPONSE'})
     state.save()
     records.sync_search(c.root, tid)
-    summary = read(root / 'workbench/search' / tid / 'summary.json')
+    summary = read(search_record(root, tid) / 'summary.json')
     assert summary['token_usage']['total_tokens'] is None
     assert summary['token_usage']['reported_total_tokens'] == 12
     assert 'PRIVATE_MODEL_RESPONSE' not in json.dumps(summary)
@@ -302,7 +396,7 @@ def test_paused_and_independent_tasks_export_without_catalog_acceptance(workspac
     c.start(tid, steps=1)
     c.threads[tid].join(10)
     assert not c.active(tid)
-    assert read(root / 'workbench/search' / tid / 'summary.json')['status'] == 'paused'
+    assert read(search_record(root, tid) / 'summary.json')['status'] == 'paused'
     other = c.create(dict(target_type='event', target_name='Independent', query_text='Research the synthetic appointment'), {}, 'simple')
-    assert read(root / 'workbench/search' / other / 'task.json')['catalog'] == {}
-    assert read(root / 'workbench/search' / other / 'summary.json')['status'] == 'ready'
+    assert read(search_record(root, other) / 'task.json')['catalog'] == {}
+    assert read(search_record(root, other) / 'summary.json')['status'] == 'ready'
