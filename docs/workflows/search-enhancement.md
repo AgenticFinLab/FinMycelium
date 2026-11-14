@@ -31,6 +31,7 @@ The agent assists relevance and gap decisions; it is not a factual completeness 
 | `finmy/search/tools.py` | Common Baidu Web Search, Bocha Web Search and Exa Search adapters |
 | `finmy/search/sources.py` | HTML/PDF/TXT acquisition, original versions, hashes and read locations |
 | `finmy/search/agent.py` | Shared decision prompt, search/read/finish actions, bounded recovery |
+| `finmy/search/protocol.py` | Search model output settings and single-action JSON decoding |
 | `finmy/search/handoff.py` | Complete manifest, source provenance and existing Builder contract |
 | `finmy/search/budget.py` | Deterministic paragraph allocation; no model or network calls |
 | `finmy/search/control.py`, `pipeline.py`, `__main__.py` | Lifecycle, writer locks, Python and CLI entry points |
@@ -82,6 +83,22 @@ CLI reads process environment variables; it does not automatically load `.env`.
 Saved tasks and profiles retain their recorded settings; new defaults do not silently
 rewrite them. Characters, model tokens, request counts and fees are different measures.
 Selecting all three providers consumes three requests per uncached query round.
+
+Search decisions use one JSON action per model response. The TokenHub presets
+`deepseek/deepseek-flash` and `deepseek-v4-pro-202606` use
+`response_format: {type: json_object}` with `thinking: {type: disabled}`, following
+the [TokenHub DeepSeek JSON-mode guidance](https://cloud.tencent.com/document/product/1823/132248).
+This search-only policy overrides conflicting output-format and thinking settings at
+request time, including on resume; it leaves saved task settings, sampling defaults,
+budgets and Builder requests intact. Other models retain their configured protocol.
+The trace records the effective request controls as `request_options`.
+
+The decoder accepts a single JSON object, optionally enclosed in one JSON code fence.
+It rejects empty content, duplicate keys, multiple objects, commentary and XML/DSML
+tool markup without guessing an action. Invalid responses use the existing bounded
+retry loop and cumulative call accounting; no separate repair-model call is added.
+JSON mode constrains syntax, while action and source validation still determine
+whether a response can be executed.
 
 All selected providers receive the same query for initial search and follow-up. Baidu
 uses Web Search standard with rewrite off by default; Bocha uses Web Search with summary;

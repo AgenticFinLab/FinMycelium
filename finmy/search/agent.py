@@ -5,6 +5,7 @@ from .state import LimitReached, write_json
 from .tools import search_constraints
 from .sources import SourceStore
 from .handoff import assemble, assemble_sources
+from .protocol import parse_action, request_parameters, request_record
 
 SYSTEM_PROMPT = '''You prepare source evidence for event/person/company reconstruction.
 Research the original scope, using process questions about actions, participants,
@@ -30,7 +31,8 @@ Do not claim a fact is missing from a document based only on a partial preview.
 read_progress.at_end_of_saved_text is separate from source completeness (partial).
 In phase finalize, return finish only. Otherwise finish as soon as useful core sources
 are available; leave minor uncertainties as gaps rather than repeatedly researching them.
-Return one JSON object only:
+Choose exactly one of the following action shapes and return one JSON object only.
+Do not append explanations, commentary tags, XML/DSML, or a second action:
 {"action":"search","query":"short specific query","gap":"Missing fact and why existing material is insufficient"}
 {"action":"read_source","source":"source_id or public URL","location":{"block":0,"offset":0}}
 {"action":"finish","source_ids":["id of an inspected source"],
@@ -50,6 +52,7 @@ class LmbaseModel:
         self.config = config
         self.adapter = None
         self.last_usage = None
+        self.last_request_options = None
 
     def __call__(self, context):
         if not self.config.allow_network:
@@ -61,12 +64,14 @@ class LmbaseModel:
             self.adapter = ModelAPIInference(lm_name=self.config.lm_name,
                                                  generation_config=self.config.generation_config)
             self.adapter.client = self.adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
-        params = self.adapter.request_parameters(self.config.generation_config)
+        params = request_parameters(self.config.lm_name,
+                                    self.adapter.request_parameters(self.config.generation_config))
         if 'max_new_tokens' in params:
             params['max_tokens'] = params.pop('max_new_tokens')
         if not any(k in params for k in ('max_tokens','max_completion_tokens')):
             raise ValueError('Configure search model output token limit explicitly')
         self.last_usage = None
+        self.last_request_options = request_record(params)
         response = self.adapter.client.chat.completions.create(
             model=self.adapter.model_name,
             messages=[{'role':'system','content':SYSTEM_PROMPT},
@@ -182,8 +187,9 @@ def run_agent(state, tools, model=None, *, max_steps=None):
             state.trace(dict(action='model_started',model_call=state.data['usage']['model'],phase=context['phase']))
             raw=model(context)
             state.trace(dict(action='model_response',response=raw,usage=getattr(model,'last_usage',None),
+                             request_options=getattr(model,'last_request_options',None),
                              model_call=state.data['usage']['model'],duration_seconds=round(time.monotonic()-started,3)))
-            action=json.loads(raw) if isinstance(raw,str) else raw
+            action=parse_action(raw)
             if isinstance(action, dict):
                 if context['phase']=='finalize' and action.get('action')!='finish':
                     raise ValueError('Reserved finalization call: return finish with evidence and gaps; no new search/read')
@@ -201,7 +207,8 @@ def run_agent(state, tools, model=None, *, max_steps=None):
             # Error classes and validation messages, never provider/credential exceptions.
             state.data['feedback']={'error':type(exc).__name__,
                 'hint':str(exc) if isinstance(exc,(ValueError,KeyError)) else 'Operation failed; inspect local status'}
-            state.trace(dict(action='action_error',model_call=state.data['usage']['model'],error=state.data['feedback']))
+            state.trace(dict(action='action_error',model_call=state.data['usage']['model'],error=state.data['feedback'],
+                             request_options=getattr(model,'last_request_options',None)))
             if state.data['invalid_actions']>=3:
                 state.data.update(status='failed',stop_reason='repeated_invalid_action')
         state.save()
