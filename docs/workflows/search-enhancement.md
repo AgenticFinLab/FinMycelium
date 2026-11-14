@@ -1,7 +1,7 @@
 # Search enhancement
 
 Enhanced search combines Baidu / Bocha / Exa acquisition, source-level handoff,
-and material allocation within a 60,000-character Builder input budget.
+and material allocation within a 90,000-character Builder input budget.
 It prepares material for draft EPG construction and review. It does not change Builder
 algorithms, EPG schemas or visualization formats.
 
@@ -57,8 +57,8 @@ Search `lm_name` and `builder_config.lm_name` are independent. Search defaults t
 `ark/doubao-seed-2-1-lite-260915`; the existing build-only examples select their own model.
 Use `tokenhub/<console-model-id>` to select TokenHub independently for either stage;
 model IDs containing `/` retain that namespace. These are model services, separate
-from the Baidu/Bocha/Exa search services. Existing default models and search limits
-are unchanged. TokenHub uses OpenAI Chat Completions; its thinking models may include
+from the Baidu/Bocha/Exa search services. Model selection is independent of the search
+limits below. TokenHub uses OpenAI Chat Completions; its thinking models may include
 reasoning in the output token limit. Account/model availability needs a separately
 authorized connectivity check; configuring a key does not verify access. See the
 [TokenHub protocol documentation](https://cloud.tencent.com/document/product/1823/135872).
@@ -71,10 +71,10 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | `providers` | `[bocha]`; select any combination of `baidu`, `bocha`, `exa` |
 | `max_results` | 5 per query per provider |
 | `max_search_requests` | 12 per task, shared across providers, initial search and follow-up |
-| `max_read_sources` | 12 distinct sources; rereading a source does not consume a new source slot |
-| `max_model_calls` | 30 attempted search-side model requests, including failures |
+| `max_read_sources` | 20 distinct sources; rereading a source does not consume a new source slot |
+| `max_model_calls` | 40 attempted search-side model requests, including failures |
 | `max_read_chars` | 12,000 per source-read operation |
-| `max_builder_material_chars` | 60,000 across sample contents, including source labels and omission markers |
+| `max_builder_material_chars` | 90,000 across sample contents, including source labels and omission markers |
 | `max_model_context_chars` | 100,000 for the serialized decision context and system prompt |
 | `generation_config.max_tokens` | 4,096 answer tokens on the current Ark Seed model; reasoning is separate |
 | `timeout` | 120 seconds per request |
@@ -166,6 +166,30 @@ and does not automatically approve evidence or launch a Builder. After confirmin
 the actual input, create a separate Builder task. See [event workbench](event-workbench.md)
 for versioned inputs, draft review and execution boundaries.
 
+## Reading relevant passages and stopping
+
+The shared `read_source` action accepts either `query` or a sequential `location`.
+A query ranks temporary text windows in the saved body using lexical relevance and
+returns original passages with nearby context, keeping their version, page/block and
+character offsets. It uses the same per-read character limit and distinct-source quota,
+without a search API or an additional model call. An uncached source still requires the
+ordinary fetch. No fixed number of matching passages is imposed; the read budget applies.
+
+Query reads prefer matching text that has not already been read. They have no sequential
+`next_location`, since the returned passages can be disjoint; use another query or an
+explicit location for further inspection. `no_match` is a vocabulary-dependent result,
+not proof that a fact is absent. Temporary windows do not rewrite stored parsing.
+
+The agent sees saved-body availability, actual characters read and a preview from a
+previously read passage. `reviewed` only means that a nonempty passage was inspected.
+Before stopping, it should examine promising unread sources and relevant sections for
+core process gaps, especially personal actions versus corporate transactions. There is
+no minimum source count and no requirement to read every candidate or whole document.
+`finish.reason_detail` records why remaining leads do not justify further reading;
+older callers may omit it. These semantic decisions remain advisory, with existing
+budgets and forced finalization unchanged. Saved handoff bodies are still packaged
+independently of what the model has read.
+
 ## Complete material and input budgeting
 
 `finish` supplies inspected `source_ids`, gap notes and a stop reason. The program
@@ -178,20 +202,46 @@ retrieval queries. It is independent of the input budget and reconstructs the se
 saved bodies without duplicating the evidence tree. “Complete” describes that saved
 selection; provider-returned text remains `partial` and is not certified full-page text.
 
+PDF parsing retains the page number and character offsets into extracted page text.
+It prefers paragraph-like boundaries and uses sentence/line boundaries for long passages,
+with a soft target of 1,600 characters per block. This is text segmentation, not recovery
+of PDF layout semantics; words and table rows are not cut to enforce that target.
+Saved raw bytes and parsed versions are immutable. Reusing a saved version preserves
+its original parser, locations, status and retrieval time.
+
+New handoffs freeze source titles, retrieval times and reported publication dates with
+the selected text. Provider dates agree at day precision or remain unknown/conflicted,
+with their original values and providers retained for review. No date is inferred from
+an event period, URL or PDF filename. Publication metadata does not verify an event date.
+
 Budget allocation is applied only when complete material exceeds the limit:
 
-- Allocate half the budget across sources using max-min fair quotas; select lexical BM25
-  original-paragraph windows using the task, keywords and attempted search queries.
+- Allocate half the budget across sources using max-min fair quotas. For catalog tasks,
+  use the event name and included scope, keywords and attempted search queries; exclusions
+  and planning prose are not positive retrieval queries. Unstructured tasks retain their
+  original query. The full original task is still passed to the Builder.
+- Select BM25 text windows. Per document and query, consider all anchors with
+  at least half the highest score, plus one neighboring block on each side. There is
+  no fixed anchor-count cap; source allocation and the total character budget limit
+  what is retained. These are
+  deterministic relevance heuristics, not factual support scores. When no lexical match
+  exists, allow only a bounded opening-block preview.
+- Keep a compact source whole when it fits its fair share of the final budget, before
+  expanding long-document windows. This avoids discarding clauses from short notices
+  while spare budget remains.
 - Share the remaining space, first completing anchor context, then adding ranked windows
-  in stable source-ID rounds. Restore original paragraph order and mark omitted gaps.
+  in stable source-ID rounds. Do not expand beyond those windows merely to fill the budget.
+  Restore original block order and mark omitted gaps.
 - Count headers and omission markers toward the budget. Keep omitted paragraphs in the
-  complete material. Do not split long paragraphs, create replacement summaries or raise
-  the input limit automatically.
+  complete material, distinguishing relevance selection from material-limit omissions.
+  Do not cut selected blocks, generate replacement summaries or raise the limit automatically.
 
 If everything fits, preserve the full input unchanged. Allocation uses a deterministic heuristic,
 not a guarantee of semantic completeness. `selection.json` records allocations and
 omissions. Queries are frozen in new complete manifests; old manifests fall back to their
-original task and keywords, never later searches. Reassembly retains previous revisions.
+original task and keywords, never later searches. The allocation policy is frozen in
+new manifests; existing manifests without that field retain their prior allocation
+behavior. Reassembly retains previous revisions. No extra model call is used for assembly.
 
 ## Hand off to Agent or Sparse
 
@@ -224,12 +274,12 @@ optional Matcher processing and database storage before the Builder. With Matche
 material may be selected again. The build-only route is the direct route for a reviewed
 search package: it retains the search sample IDs and text without those extra stages.
 
-For a separate person-EPG implementation, use the same source-text payload and set
-its Builder reconstruction mode, identity, period and topic explicitly. Search
-`target_type: person` does not configure that Builder. URLs and titles are retained
-in sample text and search records; this export does not yet populate
-`user_query.extras.source_registry` for structured person-source metadata.
-Cross-branch scope/metadata wiring is separate from this event-search integration.
+For the native person-event path, the workbench freezes the confirmed single-event scope
+and adds `user_query.extras.person_event` and `source_registry` through
+`finmy.person_epg.input.freeze_search_input`. Source metadata comes from the selected
+handoff, including publication and retrieval dates; the original sample text is unchanged.
+Legacy handoffs can recover provider dates, recording the consulted metadata in provenance.
+Search `target_type: person` alone does not configure a person Builder.
 
 ## Storage and verification
 
@@ -270,6 +320,7 @@ Run the focused offline search and handoff checks from the repository root:
 python -m pytest -q -p no:cacheprovider \
   tests/test_search_enhancement.py tests/test_search_agent_regressions.py \
   tests/test_search_document_handoff.py tests/test_search_budget.py \
+  tests/test_search_materials.py \
   tests/test_search_control.py tests/test_search_build_contract.py \
   tests/test_non_ui_search_runner.py
 ```

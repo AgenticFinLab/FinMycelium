@@ -4,6 +4,8 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 import ipaddress
+import json
+import re
 import socket
 
 from .state import digest, now, write_json
@@ -44,6 +46,35 @@ class ParagraphParser(HTMLParser):
             self.current.append(text)
 
 
+def pdf_blocks(text, page, max_chars=1600):
+    """Located slices of extracted page text, not claimed PDF layout paragraphs.
+
+    Prefer blank lines and sentence-ending line breaks. For long uninterrupted
+    passages use sentence/line boundaries; never split a word or table row merely
+    to meet the soft size target. Offsets preserve every extracted character.
+    """
+    boundaries = {0, len(text)}
+    boundaries.update(m.end() for m in re.finditer(r'\n[ \t]*\n|[.!?。！？][\"”’)]?[ \t]*\n', text))
+    blocks = []
+    points = sorted(boundaries)
+    for start, end in zip(points, points[1:]):
+        while end - start > max_chars:
+            passage = text[start:end]
+            # Prefer complete extracted lines, including rows with dotted leaders.
+            pattern = r'\n' if '\n' in passage else r'[.!?。！？][\"”’)]?\s+'
+            candidates = [start + m.end() for m in re.finditer(pattern, passage)]
+            before = [p for p in candidates if p <= start + max_chars]
+            cut = max(before) if before else next(iter(candidates), end)
+            if cut == end:
+                break
+            blocks.append(dict(page=page, paragraph=len(blocks)+1,
+                               start=start, end=cut, text=text[start:cut]))
+            start = cut
+        blocks.append(dict(page=page, paragraph=len(blocks)+1,
+                           start=start, end=end, text=text[start:end]))
+    return blocks or [dict(page=page, paragraph=1, start=0, end=0, text='')]
+
+
 def parse_document(raw, kind, encoding='utf-8'):
     if kind == 'pdf':
         try:
@@ -53,8 +84,8 @@ def parse_document(raw, kind, encoding='utf-8'):
         reader = PdfReader(BytesIO(raw))
         if reader.is_encrypted:
             raise ValueError('Encrypted PDF')
-        return [{'page': i + 1, 'paragraph': 1, 'text': page.extract_text() or ''}
-                for i, page in enumerate(reader.pages)]
+        return [block for i, page in enumerate(reader.pages)
+                for block in pdf_blocks(page.extract_text() or '', i + 1)]
     text = raw.decode(encoding)
     if kind == 'html':
         parser = ParagraphParser()
@@ -108,6 +139,8 @@ class SourceStore:
         sid = digest(url)[:24]
         entry = self.state.data['sources'].setdefault(sid, dict(
             source_id=sid, url=url, title=title, status='unread', discoveries=[], versions=[]))
+        if not entry.get('title') and title:
+            entry['title'] = title
         if discovery is not None:
             entry['discoveries'].append(discovery)
         self.state.save()
@@ -128,6 +161,12 @@ class SourceStore:
         entry = self.state.data['sources'][sid]
         version = digest(raw)
         folder = self.state.root / 'sources' / sid / version
+        if version in entry['versions']:
+            # Reusing raw bytes must also reuse their saved parser and locations.
+            document = self.document(sid, version)
+            entry.update(version=version, status=document['status'])
+            self.state.save()
+            return document
         folder.mkdir(parents=True, exist_ok=True)
         (folder / 'raw').write_bytes(raw)
         try:
@@ -137,13 +176,15 @@ class SourceStore:
             blocks, status = [], 'parser_failed'
             entry['error_type'] = type(exc).__name__
         document = dict(version=version, blocks=blocks, status=status, kind=kind,
-                        retrieved_at=now(), parser_version='search-v1', encoding=encoding)
+                        retrieved_at=now(), parser_version='search-v2', encoding=encoding)
         if not (folder / 'parsed.json').exists():
             write_json(folder / 'parsed.json', document)
+        else:
+            document = json.loads((folder / 'parsed.json').read_text())
         if version not in entry['versions']:
             entry['versions'].append(version)
         entry.setdefault('parsed_hashes', {})[version] = digest((folder / 'parsed.json').read_bytes())
-        entry.update(version=version, status=status)
+        entry.update(version=version, status=document['status'])
         self.state.save()
         return document
 
@@ -161,9 +202,13 @@ class SourceStore:
             raise ValueError('Parsed source integrity mismatch')
         return json.loads(parsed)
 
-    def read(self, sid, block=0, offset=0):
+    def read(self, sid, block=0, offset=0, *, query=None):
         if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
             raise ValueError('Invalid source location')
+        if query is not None and (not isinstance(query, str) or not query.strip()):
+            raise ValueError('Reading query must be nonempty text')
+        if query is not None and (block or offset):
+            raise ValueError('Choose a reading query or an explicit location, not both')
         entry = self.state.data['sources'][sid]
         self.state.reading(sid)
         if not entry.get('version'):
@@ -176,6 +221,23 @@ class SourceStore:
                 return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__)
         doc = self.document(sid)
         blocks = doc['blocks']
+        if query is not None:
+            from .reading import targeted_spans, read_coverage
+            spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,
+                                            entry.get('read_ranges', []))
+            ranges = entry.setdefault('read_ranges', [])
+            for span in spans:
+                record = dict(version=doc['version'], **{k:span[k] for k in ('block','start','end')})
+                if record not in ranges:
+                    ranges.append(record)
+            saved_chars, read_chars = read_coverage(doc, ranges)
+            at_end = bool(saved_chars) and read_chars == saved_chars
+            # Query windows can be disjoint; they do not have a sequential next cursor.
+            entry['read_progress'] = dict(version=doc['version'], next_location=None,
+                                          at_end_of_saved_text=at_end, **reading)
+            self.state.save()
+            return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=spans,
+                        next_location=None, at_end_of_saved_text=at_end, reading=reading)
         if block > len(blocks) or (block == len(blocks) and offset):
             raise ValueError('Unknown block')
         if blocks and (block == len(blocks) or

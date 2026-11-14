@@ -29,10 +29,10 @@ class SearchConfig:
     providers: list = field(default_factory=lambda: ['bocha'])
     max_results: int = 5
     max_search_requests: int = 12
-    max_read_sources: int = 12
-    max_model_calls: int = 30
+    max_read_sources: int = 20
+    max_model_calls: int = 40
     max_read_chars: int = 12000
-    max_builder_material_chars: int = 60000
+    max_builder_material_chars: int = 90000
     include_domains: list = field(default_factory=list)
     exclude_domains: list = field(default_factory=list)
     publication_start: str | None = None

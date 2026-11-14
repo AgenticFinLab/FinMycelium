@@ -159,6 +159,7 @@ def test_default_search_profile_matches_python_and_leaves_network_off():
     assert saved==asdict(SearchConfig())
     assert saved['lm_name']=='ark/doubao-seed-2-1-lite-260915'
     assert saved['allow_network'] is False
+    assert saved['max_builder_material_chars'] == 90000
     for name in ('build_only_agent.yml','build_only_sparse.yml'):
         builder=yaml.safe_load((repo/'configs'/name).read_text())
         assert builder['builder_config']['lm_name']!=saved['lm_name']
@@ -167,7 +168,7 @@ def test_default_search_profile_matches_python_and_leaves_network_off():
 def test_daily_limits_and_followup_gap_guard(tmp_path):
     from finmy.search.agent import execute_action
     cfg=SearchConfig(providers=['baidu','bocha','exa'])
-    assert (cfg.max_results,cfg.max_search_requests,cfg.max_read_sources,cfg.max_model_calls)==(5,12,12,30)
+    assert (cfg.max_results,cfg.max_search_requests,cfg.max_read_sources,cfg.max_model_calls)==(5,12,20,40)
     state=SearchState(tmp_path,'case',task=task(),config=cfg)
     calls=[]
     def observed(provider,payload,config):
@@ -188,7 +189,7 @@ def test_daily_limits_and_followup_gap_guard(tmp_path):
 
 
 def test_existing_task_keeps_previously_saved_limits(tmp_path):
-    old=SearchConfig(max_results=10,max_search_requests=50,max_read_sources=30,max_model_calls=60)
+    old=SearchConfig(max_results=10,max_search_requests=50,max_read_sources=12,max_model_calls=30,max_builder_material_chars=60000)
     SearchState(tmp_path,'case',task=task(),config=old)
     restored=SearchState(tmp_path,'case')
     assert asdict(restored.config)==asdict(old)

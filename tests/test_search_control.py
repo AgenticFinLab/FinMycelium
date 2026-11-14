@@ -26,7 +26,7 @@ def test_writer_lock_and_config_revision_preserve_usage(tmp_path):
     controller.configure(tid,{'max_model_calls':70})
     data=controller.inspect(tid)
     assert data['usage']['model']==1
-    assert data['config_history'][0]['config']['max_model_calls']==30
+    assert data['config_history'][0]['config']['max_model_calls']==40
 
 def test_continued_span_union_can_be_selected(tmp_path):
     state=SearchState(tmp_path,'case',task=TASK,config=SearchConfig(max_read_chars=4))

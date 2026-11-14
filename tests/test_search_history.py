@@ -88,3 +88,18 @@ def test_saved_policy_labels_preserve_original_records():
         assert budget_policy_label(saved) == expected
         assert saved == before
     assert budget_policy_label({'mode': 'spans'}) == '按片段组装'
+
+
+def test_directed_reading_and_stop_explanation_survive_trace_projection():
+    rows=timeline([
+        {'action':'read_started','source':'a','query':'negotiation'},
+        {'action':'read_source','source':'a','result':{'status':'success',
+            'spans':[{'text':'Original terms.'}], 'reading':{'mode':'query','query':'negotiation','matching_windows':4},
+            'next_location':None,'at_end_of_saved_text':False}},
+        {'action':'model_response','response':{'action':'finish','source_ids':['a'],
+            'gaps':['Personal participation unconfirmed'],'reason':'low_gain','reason_detail':'Remaining leads duplicate existing announcements.'}},
+        {'action':'action_completed','operation':'finish','sample_count':1},
+    ],{'status':'finished'})
+    assert rows[0]['query']=='negotiation' and rows[0]['reading']['mode']=='query'
+    assert not rows[0]['at_end'] and rows[0]['chars']==len('Original terms.')
+    assert rows[1]['reason_detail']=='Remaining leads duplicate existing announcements.'

@@ -8,7 +8,9 @@ from collections import Counter
 
 from .sources import SourceStore
 
-BUDGET_POLICY = 'balanced_source_windows_v1'
+LEGACY_POLICY = 'balanced_source_windows_v1'
+BUDGET_POLICY = 'balanced_source_windows_v2'
+MIN_RELATIVE_SCORE = 0.5
 
 
 def fair_quotas(lengths, budget):
@@ -47,7 +49,7 @@ def render(entry, document, blocks, markers=False):
     return ''.join(parts)
 
 
-def allocate_input(state, complete, budget, queries=()):
+def allocate_input(state, complete, budget, queries=(), *, focused=False):
     from .handoff import materialize_complete
     full=materialize_complete(state,complete)
     quotas=fair_quotas({e['source_id']:e['material_chars'] for e in complete['selected']},budget)
@@ -57,7 +59,7 @@ def allocate_input(state, complete, budget, queries=()):
         if entry['material_chars']<=quota:
             blocks=list(entry['blocks']);decisions[sid]={'mode':'full_document'}
         else:
-            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,queries)
+            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,queries,focused=focused)
         content=render(entry,document,blocks,markers=len(blocks)<len(entry['blocks']))
         if blocks:
             selected.append(dict(source_id=sid,version=entry['version'],blocks=blocks,material_chars=len(content),quota=quota))
@@ -87,7 +89,7 @@ def tokens(text):
     return result
 
 
-def rank_blocks(entry,document,queries):
+def rank_blocks(entry,document,queries, *, focused=False):
     indexes=entry['blocks'];bags=[Counter(tokens(document['blocks'][i]['text'])) for i in indexes]
     n=len(bags);avg=sum(sum(b.values()) for b in bags)/max(n,1) or 1
     df=Counter(t for bag in bags for t in bag)
@@ -104,12 +106,17 @@ def rank_blocks(entry,document,queries):
                     idf=math.log(1+(n-df[term]+0.5)/(df[term]+0.5))
                     score+=idf*tf*2.5/(tf+1.5*(0.25+0.75*length/avg))
             if score>0:scores.append((index,score))
-        rankings.append(dict(query=query,ranking=sorted(scores,key=lambda x:(-x[1],x[0]))))
+        if focused and scores:
+            # Relative within each document/query, not a cross-document truth score.
+            floor = max(score for _,score in scores) * MIN_RELATIVE_SCORE
+            scores = [(index,score) for index,score in scores if score >= floor]
+        ranking=sorted(scores,key=lambda x:(-x[1],x[0]))
+        rankings.append(dict(query=query,ranking=ranking))
     return rankings
 
 
-def retrieved_blocks(entry,document,quota,queries):
-    rankings=rank_blocks(entry,document,queries)
+def retrieved_blocks(entry,document,quota,queries, *, focused=False):
+    rankings=rank_blocks(entry,document,queries,focused=focused)
     picked=set();decisions=[];positions={i:k for k,i in enumerate(entry['blocks'])}
     def fits(candidate):
         return len(render(entry,document,sorted(candidate),markers=len(candidate)<len(entry['blocks'])))<=quota
@@ -117,6 +124,7 @@ def retrieved_blocks(entry,document,quota,queries):
         for i in entry['blocks']:
             if not fits(picked|{i}):break
             picked.add(i)
+            if focused:break  # Bounded preview when lexical evidence is absent.
         return sorted(picked),dict(mode='no_lexical_match_prefix',anchors=[])
     cursors=[0]*len(rankings)
     while True:
@@ -136,7 +144,7 @@ def retrieved_blocks(entry,document,quota,queries):
         if not added:break
     # Use remaining quota to recover nearby original context, without synthesizing text.
     expanded=[]
-    if picked:
+    if picked and not focused:
         while True:
             available=sorted((i for i in entry['blocks'] if i not in picked),
                              key=lambda i:(min(abs(positions[i]-positions[j]) for j in picked),i))
@@ -147,16 +155,26 @@ def retrieved_blocks(entry,document,quota,queries):
                               query_count=len(rankings),k1=1.5,b=0.75)
 
 
-def shared_input(state,complete,budget,queries):
+def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
+    if policy not in {LEGACY_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
+    focused = policy == BUDGET_POLICY
     if type(budget) is not int or budget<=0:raise ValueError('Positive integer budget required')
     if complete['material_chars']<=budget:
-        return allocate_input(state,complete,budget,queries)
-    _,base=allocate_input(state,complete,max(1,budget//2),queries)
+        return allocate_input(state,complete,budget,queries,focused=focused)
+    _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused)
     entries={e['source_id']:e for e in complete['selected']}
     store=SourceStore(state)
     docs={sid:store.document(sid,e['version']) for sid,e in entries.items()}
     picked={sid:set() for sid in entries}
     for e in base['selected']:picked[e['source_id']]=set(e['blocks'])
+    compact_sources=[]
+    if focused:
+        # Preserve a complete compact source when it fits its final fair share.
+        # Long sources use bounded windows; their spare space is not a fill target.
+        final_quotas=fair_quotas({sid:e['material_chars'] for sid,e in entries.items()},budget)
+        for sid,e in entries.items():
+            if e['material_chars']<=final_quotas[sid]:
+                picked[sid]=set(e['blocks']);compact_sources.append(sid)
     def text(sid,blocks):
         return render(entries[sid],docs[sid],sorted(blocks),markers=len(blocks)<len(entries[sid]['blocks']))
     sizes={sid:len(text(sid,picked[sid])) for sid in entries}
@@ -167,7 +185,7 @@ def shared_input(state,complete,budget,queries):
     repairs={sid:[window(sid,a['anchor']) for a in base['decisions'].get(sid,{}).get('anchors',[])] for sid in entries}
     additions={}
     for sid,e in entries.items():
-        ranks=rank_blocks(e,docs[sid],queries);seq=[];seen=set()
+        ranks=rank_blocks(e,docs[sid],queries,focused=focused);seq=[];seen=set()
         for rank in range(max((len(r['ranking']) for r in ranks),default=0)):
             for r in ranks:
                 if rank<len(r['ranking']):
@@ -192,6 +210,20 @@ def shared_input(state,complete,budget,queries):
             content=text(sid,picked[sid]);samples.append(dict(sample_id=sid+'-document',raw_data_id=sid,content=content))
             selected.append(dict(source_id=sid,version=e['version'],blocks=sorted(picked[sid]),material_chars=len(content)))
         excluded=sorted(set(e['blocks'])-picked[sid])
-        if excluded:omitted.append(dict(source_id=sid,blocks=excluded,retained_in_complete=True))
-    return dict(user_query=complete['user_query'],samples=samples),dict(budget_policy=BUDGET_POLICY,complete_id=complete['complete_id'],selected=selected,omitted=omitted,
+        if excluded:
+            if focused:
+                ranks=rank_blocks(e,docs[sid],queries,focused=True)
+                eligible=set().union(*(window(sid,index) for r in ranks for index,_ in r['ranking']))
+                if not eligible:eligible=set(e['blocks'][:1])
+                for reason,blocks in [('material_limit', sorted(set(excluded)&eligible)),
+                                      ('relevance_selection', sorted(set(excluded)-eligible))]:
+                    if blocks:omitted.append(dict(source_id=sid,blocks=blocks,retained_in_complete=True,omission_reason=reason))
+            else:
+                omitted.append(dict(source_id=sid,blocks=excluded,retained_in_complete=True))
+    result = dict(budget_policy=policy,complete_id=complete['complete_id'],selected=selected,omitted=omitted,
         material_chars=sum(sizes.values()),max_material_chars=budget,base_fraction=0.5,base_quotas=base['quotas'],base_decisions=base['decisions'],pool_actions=actions,unused_chars=remaining)
+    if focused:
+        result.update(min_relative_score=MIN_RELATIVE_SCORE,context_neighbors=1,
+                      compact_source_ids=sorted(compact_sources),
+                      unused_reason='Budget is a ceiling; no expansion beyond eligible original-text windows')
+    return dict(user_query=complete['user_query'],samples=samples),result

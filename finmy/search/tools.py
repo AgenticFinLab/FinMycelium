@@ -17,6 +17,8 @@ def search_constraints(config):
     """Expose the same limits used by payload validation to the decision model."""
     return dict(providers=config.providers, requests_per_new_query=len(config.providers),
                 follow_up_requires_gap=True,
+                source_reading=dict(query_or_location=True, max_chars=config.max_read_chars,
+                                    query_uses_saved_body=True, consumes_search_requests=False),
                 max_results_per_provider=config.max_results,
                 query_max_units=BAIDU_QUERY_UNITS if 'baidu' in config.providers else None,
                 query_unit_rule='U+4E00..U+9FFF counts 2; each other character counts 1',
@@ -156,11 +158,15 @@ class SearchTools:
         self.state.trace(dict(action='search',query=query,result=result))
         return result
 
-    def read_source(self, source, location=None):
+    def read_source(self, source, location=None, *, query=None):
+        if query is not None and (not isinstance(query, str) or not query.strip()):
+            raise ValueError('Reading query must be nonempty text')
+        if query is not None and location:
+            raise ValueError('Choose a reading query or an explicit location, not both')
         if source not in self.state.data['sources']:
             source = self.sources.register(source)
         started = time.monotonic()
-        self.state.trace(dict(action='read_started',source=source,location=location or {}))
-        result = self.sources.read(source, **(location or {}))
+        self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))
+        result = self.sources.read(source, **(location or {}), query=query)
         self.state.trace(dict(action='read_source',source=source,result=result,duration_seconds=round(time.monotonic()-started,3)))
         return result

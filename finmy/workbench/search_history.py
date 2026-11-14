@@ -11,6 +11,7 @@ def budget_policy_label(selection):
     # Persisted identifiers from older runs remain readable as descriptive labels.
     labels = {
         BUDGET_POLICY: '材料预算分配（来源配额与共享余量）',
+        'balanced_source_windows_v1': '材料预算分配（来源配额与共享余量）',
         'c2_base_shared_bm25_windows_v1': '材料预算分配（来源配额与共享余量）',
         'source_order_complete_paragraphs': '按来源顺序保留完整段落',
         'fair_source_quotas_bm25_windows': '按来源配额选取原文段落',
@@ -64,9 +65,9 @@ def timeline(events, data):
                 if not isinstance(action, dict):
                     raise ValueError('not an action')
                 # Only the public action decision, never internal model reasoning.
-                current['decision'] = {k: action[k] for k in ('action', 'query', 'gap', 'source', 'location', 'source_ids', 'gaps', 'reason') if k in action}
+                current['decision'] = {k: action[k] for k in ('action', 'query', 'gap', 'source', 'location', 'source_ids', 'gaps', 'reason', 'reason_detail') if k in action}
                 current['action'] = action.get('action', 'model')
-                for key in ('query', 'gap', 'source', 'location', 'source_ids', 'gaps', 'reason'):
+                for key in ('query', 'gap', 'source', 'location', 'source_ids', 'gaps', 'reason', 'reason_detail'):
                     if key in action:
                         current[key] = action[key]
                 selected = action.get('source_ids', action.get('selections', action.get('evidence_ids', [])))
@@ -91,6 +92,8 @@ def timeline(events, data):
             if current is None or current['status'] != 'waiting':
                 current = new(event, 'read_source')
             current.update(action='read_source', source=event.get('source'), location=event.get('location'))
+            if event.get('query') is not None:
+                current['query'] = event['query']
         elif kind in {'search', 'read_source'}:
             if current is None or current['status'] != 'waiting':
                 current = new(event, kind)
@@ -110,7 +113,7 @@ def timeline(events, data):
                 current.update(source=event.get('source'), read_status=result.get('status'),
                                chars=sum(len(s.get('text', '')) for s in result.get('spans', [])),
                                span_count=len(result.get('spans', [])), next_location=result.get('next_location'),
-                               at_end=result.get('at_end_of_saved_text'),
+                               at_end=result.get('at_end_of_saved_text'), reading=result.get('reading'),
                                read_duration=event.get('duration_seconds'), spans=result.get('spans', []))
                 if result.get('error_type'):
                     current['errors'].append({'error': result['error_type']})

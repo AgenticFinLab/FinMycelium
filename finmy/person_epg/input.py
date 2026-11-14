@@ -4,6 +4,7 @@ import json
 
 from finmy.search.control import task_lock
 from finmy.search.sources import SourceStore
+from finmy.search.metadata import publication_metadata
 from finmy.search.state import SearchState, digest
 
 
@@ -95,9 +96,17 @@ def freeze_search_input(controller, task_id, *, confirmed=False):
             old = previous_registry.get(sid, {})
             if not isinstance(old, dict):
                 raise ValueError('Invalid pre-existing source metadata')
+            metadata = [r['metadata'] for r in selected if r['source_id'] == sid and 'metadata' in r]
+            if metadata and any(value != metadata[0] for value in metadata):
+                raise ValueError('Selected source metadata disagrees across versions')
+            # New handoffs pin metadata alongside text. Legacy records can still
+            # recover provider dates, with the consulted values retained in provenance.
+            details = metadata[0] if metadata else {
+                'source_url': source['url'], 'title': source.get('title') or None,
+                **publication_metadata(source)}
             frozen = {'document_id': old.get('document_id') or 'DOC_' + sid,
-                      'source_url': source['url'], 'title': source.get('title') or None,
-                      'published_at': source.get('published_at'), 'retrieved_at': agreed('retrieved_at')}
+                      'source_url': details['source_url'], 'title': details.get('title'),
+                      'published_at': details['published_at'], 'retrieved_at': agreed('retrieved_at')}
             for key in ('origin', 'source_type'):
                 if source.get(key) is not None:
                     frozen[key] = source[key]
@@ -108,6 +117,7 @@ def freeze_search_input(controller, task_id, *, confirmed=False):
                     raise ValueError('Frozen source metadata conflicts with existing input: ' + key)
             registry[sid] = {**old, **{key: value for key, value in frozen.items() if value is not None or key not in old}}
             origins.append({'source_id': sid, 'versions': sorted(versions),
+                            'source_metadata': deepcopy(details),
                             'parsed_hashes': {v: source['parsed_hashes'][v] for v in versions},
                             'version_metadata': {v: {k: doc.get(k) for k in ('retrieved_at', 'status', 'kind', 'parser_version')}
                                                  for v, doc in documents.items()}})

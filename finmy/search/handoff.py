@@ -1,6 +1,7 @@
 """Copy located original passages into the unchanged Builder input contract."""
 from .state import write_json
 from .sources import SourceStore
+from .metadata import source_metadata
 
 
 def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
@@ -113,13 +114,20 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
             duplicates.append(dict(source_id=sid, version=version, duplicate_of=fingerprints[fingerprint]))
             continue
         fingerprints[fingerprint] = sid
+        metadata = source_metadata(entry, document)
         header = f"[source={sid} version={version} status={document['status']}]\n{entry['url']}\n{entry['title']}\n"
+        if metadata['published_at']:
+            header += f"Publication date (source/provider metadata): {metadata['published_at']}\n"
+        elif metadata['publication_candidates']:
+            header += f"Publication date: {metadata['publication_status']} (see source metadata)\n"
+        if metadata['retrieved_at']:
+            header += f"Retrieved at: {metadata['retrieved_at']}\n"
         documents.append(dict(source_id=sid, version=version, blocks=blocks, header=header,
-                              full_chars=len(header)+len(body), source_status=document['status']))
+                              metadata=metadata, full_chars=len(header)+len(body), source_status=document['status']))
 
     selected = [dict(source_id=d['source_id'], version=d['version'],
                      blocks=[i for i, _ in d['blocks']], header=d['header'],
-                     material_chars=d['full_chars'], source_status=d['source_status']) for d in documents]
+                     metadata=d['metadata'], material_chars=d['full_chars'], source_status=d['source_status']) for d in documents]
     task = state.data['task']
     record = dict(mode='complete_sources', source_ids=source_ids, source_versions=selected_versions,
                   user_query=dict(query_text=task['query_text'], key_words=task.get('key_words', [])),
@@ -128,7 +136,11 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
                   unselected_sources=sorted(set(state.data['sources'])-set(source_ids)), review_required=True,
                   scope='All retained saved bodies after cleanup; not a claim of complete source acquisition or fact verification')
     from .state import digest
-    queries = [task['query_text'], ' '.join(task.get('key_words', []))]
+    scope = task.get('research_scope', {})
+    # Structured scope avoids promoting exclusions, planning prose and source-index
+    # descriptions into positive retrieval terms. Do not ban those words in evidence.
+    focus = (task.get('catalog', {}).get('event_name') or task['target_name']) + '. ' + scope.get('include', '')
+    queries = [focus if scope.get('include') else task['query_text'], ' '.join(task.get('key_words', []))]
     trace = state.run_dir / 'trace.jsonl'
     if trace.exists():
         import json
@@ -137,6 +149,8 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
             if event.get('action') == 'provider_started' and event.get('query'):
                 queries.append(event['query'])
     record['retrieval_queries'] = list(dict.fromkeys(q for q in queries if q.strip()))
+    from .budget import BUDGET_POLICY
+    record['budget_policy'] = BUDGET_POLICY
     record['complete_id'] = digest(record)
     return materialize_complete(state, record), record
 
@@ -161,20 +175,25 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced'):
     # Accept the previous argument as an alias; always write the current policy ID.
     if budget_policy not in {'balanced', 'c2'}:
         raise ValueError('Unknown input budget policy')
-    from .budget import BUDGET_POLICY, shared_input
+    from .budget import LEGACY_POLICY, shared_input
     limit = state.config.max_builder_material_chars if max_chars is None else max_chars
     query = complete['user_query']
     queries = complete.get('retrieval_queries', [query['query_text'], ' '.join(query.get('key_words', []))])
-    payload, allocation = shared_input(state, complete, limit, queries)
+    policy = complete.get('budget_policy', LEGACY_POLICY)
+    payload, allocation = shared_input(state, complete, limit, queries, policy=policy)
     entries = {e['source_id']: e for e in complete['selected']}
-    selected = [dict(e, source_status=entries[e['source_id']]['source_status']) for e in allocation['selected']]
+    selected = [dict(e, source_status=entries[e['source_id']]['source_status'],
+                     **({'metadata':entries[e['source_id']]['metadata']} if 'metadata' in entries[e['source_id']] else {}))
+                for e in allocation['selected']]
     omitted = list(complete['omitted']) + [dict(e, version=entries[e['source_id']]['version'],
-        omission_reason='material_limit', note='Retained in complete material; omitted only from this input')
+        omission_reason=e.get('omission_reason','material_limit'), note='Retained in complete material; omitted only from this input')
         for e in allocation['omitted']]
     notes = list(complete['gaps'])
     if any(o['omission_reason'] == 'material_limit' for o in omitted):
         notes.append('Some complete paragraphs were omitted by the material limit; review the omission record.')
-    record = dict(mode='sources', budget_policy=BUDGET_POLICY,
+    if any(o['omission_reason'] == 'relevance_selection' for o in omitted):
+        notes.append('Some saved text is outside the selected relevance windows; it remains in complete material for review.')
+    record = dict(mode='sources', budget_policy=policy,
         complete_id=complete['complete_id'], complete_material_chars=complete['material_chars'],
         complete_source_count=len(complete['selected']), source_ids=complete['source_ids'],
         source_versions=complete['source_versions'], selected=selected, omitted=omitted,

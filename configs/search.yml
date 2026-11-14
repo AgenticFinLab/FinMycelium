@@ -3,10 +3,10 @@
 providers: [bocha]  # Select baidu, bocha, exa, or a list of them.
 max_results: 5
 max_search_requests: 12
-max_read_sources: 12
-max_model_calls: 30
+max_read_sources: 20
+max_model_calls: 40
 max_read_chars: 12000
-max_builder_material_chars: 60000  # Input budget; complete selected material is retained separately.
+max_builder_material_chars: 90000  # Input budget; complete selected material is retained separately.
 include_domains: []
 exclude_domains: []
 publication_start: null

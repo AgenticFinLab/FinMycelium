@@ -182,11 +182,12 @@ def export_search(search_root, task_id):
         payload = json.loads(payload_path.read_text()) if payload_path.exists() else {}
         used = {s['raw_data_id'] for s in payload.get('samples', [])}
         rows = []
+        from finmy.search.metadata import publication_metadata
+        selected_metadata = {r['source_id']:r['metadata'] for r in selection.get('selected', []) if 'metadata' in r}
         for sid, source in sorted(data['sources'].items()):
-            published = next((d.get('published_at') for d in source.get('discoveries', [])
-                              if d.get('published_at')), None)
+            metadata = selected_metadata.get(sid) or publication_metadata(source)
             rows.append(dict(source_id=sid, title=source.get('title', ''), url=public_url(source.get('url')),
-                             published_at=published, status=source.get('status'),
+                             published_at=metadata['published_at'], status=source.get('status'),
                              version=source.get('version'), in_input=sid in used))
         reported = []
         trace = run / 'trace.jsonl'
