@@ -25,8 +25,8 @@ The workbench uses continuous execution with Start/Continue, Pause and Retry for
 tasks. Retry continues the saved task rather than clearing it. CLI/Python single-step
 execution and pause/resume use the same persisted state.
 The agent assists relevance and gap decisions; it is not a factual completeness verifier.
-Directed reading uses the same within-document relative BM25 threshold as material allocation
-(half the best score), with neighboring context and no fixed match-count cap. Already-read
+Directed reading uses a within-document relative BM25 threshold
+(40% of the best score), with neighboring context and no fixed match-count cap. Already-read
 strong matches do not promote weak matches into the next read. Explicit locations remain
 available; filtered or unmatched text is not evidence that a fact is absent.
 
@@ -240,17 +240,25 @@ Budget allocation is applied only when complete material exceeds the limit:
   and planning prose are not positive retrieval queries. Unstructured tasks retain their
   original query. The full original task is still passed to the Builder.
 - Select BM25 text windows. Per document and query, consider all anchors with
-  at least half the highest score, plus one neighboring block on each side. There is
-  no fixed anchor-count cap; source allocation and the total character budget limit
-  what is retained. These are
-  deterministic relevance heuristics, not factual support scores. When no lexical match
+  at least 50% of the highest score in the initial assembly pass, plus one neighboring
+  block on each side. There is no fixed anchor-count cap; source allocation and the
+  total character budget limit what is retained. These are deterministic relevance
+  heuristics, not factual support scores. When no lexical match
   exists, allow only a bounded opening-block preview.
 - Keep a compact source whole when it fits its fair share of the final budget, before
   expanding long-document windows. This avoids discarding clauses from short notices
   while spare budget remains.
 - Share the remaining space, first completing anchor context, then adding ranked windows
-  in stable source-ID rounds. Do not expand beyond those windows merely to fill the budget.
-  Restore original block order and mark omitted gaps.
+  in stable source-ID rounds. With spare budget, lower the assembly threshold to 40%,
+  then 30%, appending eligible windows without removing or reallocating any selected
+  blocks. Count only newly added text and retain whole blocks; skip windows that do
+  not fit. Stop at the budget or when no eligible window fits at the 30% floor,
+  without padding. Restore original block order and mark omitted gaps.
+- Record the policy, assembly code hash and each threshold stage. Directed reading
+  remains fixed at 40%. New handoffs use the progressive policy; explicitly reassembling
+  an old handoff creates a new revision under this policy while retaining its original
+  source versions, complete-material manifest and previous handoff files. Stored v1/v2
+  manifests retain their historical allocation rules when replayed without an override.
 - Count headers and omission markers toward the budget. Keep omitted paragraphs in the
   complete material, distinguishing relevance selection from material-limit omissions.
   Do not cut selected blocks, generate replacement summaries or raise the limit automatically.

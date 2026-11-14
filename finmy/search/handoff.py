@@ -170,16 +170,16 @@ def materialize_complete(state, record):
     return dict(user_query=record['user_query'], samples=samples)
 
 
-def derive_input(state, complete, *, max_chars=None, budget_policy='balanced'):
+def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', allocation_policy=None):
     """Allocate source quotas and share remaining space within the input budget."""
-    # Accept the previous argument as an alias; always write the current policy ID.
+    # Keep the caller-label alias; policy replay follows the manifest unless explicitly overridden.
     if budget_policy not in {'balanced', 'c2'}:
         raise ValueError('Unknown input budget policy')
     from .budget import LEGACY_POLICY, shared_input
     limit = state.config.max_builder_material_chars if max_chars is None else max_chars
     query = complete['user_query']
     queries = complete.get('retrieval_queries', [query['query_text'], ' '.join(query.get('key_words', []))])
-    policy = complete.get('budget_policy', LEGACY_POLICY)
+    policy = allocation_policy or complete.get('budget_policy', LEGACY_POLICY)
     payload, allocation = shared_input(state, complete, limit, queries, policy=policy)
     entries = {e['source_id']: e for e in complete['selected']}
     selected = [dict(e, source_status=entries[e['source_id']]['source_status'],
@@ -213,9 +213,13 @@ def prepare_sources(state, source_ids, *, gaps=None, reason='', max_chars=None, 
 
 def assemble_sources(state, source_ids, *, complete_manifest=None, **options):
     limit = options.pop('max_chars',None)
+    allocation_policy = options.pop('allocation_policy',None)
     if complete_manifest is None:
         _, complete_manifest = prepare_complete_sources(state,source_ids,**options)
-    payload, record = derive_input(state,complete_manifest,max_chars=limit)
+    payload, record = derive_input(state,complete_manifest,max_chars=limit,allocation_policy=allocation_policy)
+    from pathlib import Path
+    from .state import digest
+    record['assembly_code_sha256'] = digest({p.name:digest(p.read_bytes()) for p in Path(__file__).parent.glob('*.py')})
     import uuid
     revision = state.run_dir / 'handoffs' / uuid.uuid4().hex
     for folder in (revision,state.run_dir):

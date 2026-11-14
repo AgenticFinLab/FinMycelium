@@ -320,6 +320,12 @@ def export_search(search_root, task_id):
                    'source_count': len(rows), 'input_source_count': len(used),
                    'input_characters': sum(len(s['content']) for s in payload.get('samples', [])),
                    'handoff_revision': data.get('handoff_revision'),
+                   'handoff_updated_at': data.get('handoff_updated_at'),
+                   'assembly_policy': selection.get('budget_policy'),
+                   'assembly_code_sha256': selection.get('assembly_code_sha256'),
+                   'assembly_threshold_stages': [
+                       pick(stage, ('threshold', 'material_chars'))
+                       for stage in selection.get('allocation', {}).get('threshold_stages', [])],
                    'complete_material_characters': selection.get('complete_material_chars'),
                    'gaps': selection.get('gaps', []), 'token_usage': token_usage,
                    'monetary_cost': None, 'content_review': 'not_implied_by_execution',

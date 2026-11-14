@@ -99,7 +99,9 @@ def test_budget_does_not_fill_distant_unrelated_sections(tmp_path):
     _, complete = prepare_complete_sources(state, [sid])
     body, selection = derive_input(state, complete, max_chars=8000)
     assert 'Conditions require divestment' in body['samples'][0]['content']
-    assert 'Retail discounts' not in body['samples'][0]['content']
+    # Progressive matching may add the immediate neighbor of a later anchor,
+    # but must not fill distant unrelated blocks just to consume the budget.
+    assert set(selection['selected'][0]['blocks']) <= {0, 1, 2, 3}
     assert selection['material_chars'] < 2000
     assert any(o['omission_reason'] == 'relevance_selection' for o in selection['omitted'])
     legacy = deepcopy(complete)

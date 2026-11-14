@@ -86,12 +86,14 @@ class SearchController:
 
     def reassemble(self, task_id, max_chars):
         from .handoff import assemble, assemble_sources
+        from .budget import BUDGET_POLICY
         with task_lock(self.root,task_id):
             state=SearchState(self.root,task_id)
+            previous_revision = state.data.get('handoff_revision')
             old=json.loads((state.run_dir/'selection.json').read_text())
             complete_path=state.run_dir/'complete_material.json'
             if old.get('mode') == 'sources' and complete_path.exists():
-                payload=assemble_sources(state,old['source_ids'],complete_manifest=json.loads(complete_path.read_text()),max_chars=max_chars)
+                payload=assemble_sources(state,old['source_ids'],complete_manifest=json.loads(complete_path.read_text()),max_chars=max_chars,allocation_policy=BUDGET_POLICY)
             elif old.get('mode') == 'sources':
                 payload = assemble_sources(state,old['source_ids'],versions=old['source_versions'],
                                            gaps=old['gaps'],reason=old['reason'],max_chars=max_chars)
@@ -100,6 +102,9 @@ class SearchController:
                                 gaps=old['gaps'],reason=old['reason'],max_chars=max_chars)
             state.data['status'] = 'finished' if payload['samples'] and old['reason'] != 'insufficient' else 'insufficient'
             state.save()
+            state.trace(dict(action='handoff_reassembled',previous_revision=previous_revision,
+                             handoff_revision=state.data.get('handoff_revision'),max_chars=max_chars,
+                             budget_policy=json.loads((state.run_dir/'selection.json').read_text()).get('budget_policy')))
             self._save_summary(task_id)
             return payload
 

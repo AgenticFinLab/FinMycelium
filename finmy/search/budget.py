@@ -9,8 +9,10 @@ from collections import Counter
 from .sources import SourceStore
 
 LEGACY_POLICY = 'balanced_source_windows_v1'
-BUDGET_POLICY = 'balanced_source_windows_v2'
-MIN_RELATIVE_SCORE = 0.5
+FIXED_POLICY = 'balanced_source_windows_v2'
+BUDGET_POLICY = 'balanced_source_windows_v3'
+ASSEMBLY_THRESHOLDS = (0.5, 0.4, 0.3)
+MIN_RELATIVE_SCORE = 0.4
 
 
 def fair_quotas(lengths, budget):
@@ -49,7 +51,7 @@ def render(entry, document, blocks, markers=False):
     return ''.join(parts)
 
 
-def allocate_input(state, complete, budget, queries=(), *, focused=False):
+def allocate_input(state, complete, budget, queries=(), *, focused=False, min_relative_score=None):
     from .handoff import materialize_complete
     full=materialize_complete(state,complete)
     quotas=fair_quotas({e['source_id']:e['material_chars'] for e in complete['selected']},budget)
@@ -59,7 +61,7 @@ def allocate_input(state, complete, budget, queries=(), *, focused=False):
         if entry['material_chars']<=quota:
             blocks=list(entry['blocks']);decisions[sid]={'mode':'full_document'}
         else:
-            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,queries,focused=focused)
+            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,queries,focused=focused,min_relative_score=min_relative_score)
         content=render(entry,document,blocks,markers=len(blocks)<len(entry['blocks']))
         if blocks:
             selected.append(dict(source_id=sid,version=entry['version'],blocks=blocks,material_chars=len(content),quota=quota))
@@ -89,7 +91,7 @@ def tokens(text):
     return result
 
 
-def rank_blocks(entry,document,queries, *, focused=False):
+def rank_blocks(entry,document,queries, *, focused=False, min_relative_score=None):
     indexes=entry['blocks'];bags=[Counter(tokens(document['blocks'][i]['text'])) for i in indexes]
     n=len(bags);avg=sum(sum(b.values()) for b in bags)/max(n,1) or 1
     df=Counter(t for bag in bags for t in bag)
@@ -108,15 +110,15 @@ def rank_blocks(entry,document,queries, *, focused=False):
             if score>0:scores.append((index,score))
         if focused and scores:
             # Relative within each document/query, not a cross-document truth score.
-            floor = max(score for _,score in scores) * MIN_RELATIVE_SCORE
+            floor = max(score for _,score in scores) * (MIN_RELATIVE_SCORE if min_relative_score is None else min_relative_score)
             scores = [(index,score) for index,score in scores if score >= floor]
         ranking=sorted(scores,key=lambda x:(-x[1],x[0]))
         rankings.append(dict(query=query,ranking=ranking))
     return rankings
 
 
-def retrieved_blocks(entry,document,quota,queries, *, focused=False):
-    rankings=rank_blocks(entry,document,queries,focused=focused)
+def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relative_score=None):
+    rankings=rank_blocks(entry,document,queries,focused=focused,min_relative_score=min_relative_score)
     picked=set();decisions=[];positions={i:k for k,i in enumerate(entry['blocks'])}
     def fits(candidate):
         return len(render(entry,document,sorted(candidate),markers=len(candidate)<len(entry['blocks'])))<=quota
@@ -156,12 +158,17 @@ def retrieved_blocks(entry,document,quota,queries, *, focused=False):
 
 
 def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
-    if policy not in {LEGACY_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
-    focused = policy == BUDGET_POLICY
+    if policy not in {LEGACY_POLICY, FIXED_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
+    focused = policy != LEGACY_POLICY
+    thresholds = ASSEMBLY_THRESHOLDS if policy == BUDGET_POLICY else (0.5,)
+    initial_threshold = thresholds[0]
     if type(budget) is not int or budget<=0:raise ValueError('Positive integer budget required')
     if complete['material_chars']<=budget:
-        return allocate_input(state,complete,budget,queries,focused=focused)
-    _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused)
+        payload, record = allocate_input(state,complete,budget,queries,focused=focused,min_relative_score=initial_threshold)
+        if policy == BUDGET_POLICY:
+            record.update(thresholds=list(thresholds), threshold_stages=[], full_material_retained=True)
+        return payload, record
+    _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused,min_relative_score=initial_threshold)
     entries={e['source_id']:e for e in complete['selected']}
     store=SourceStore(state)
     docs={sid:store.document(sid,e['version']) for sid,e in entries.items()}
@@ -183,16 +190,21 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         blocks=entries[sid]['blocks'];p=blocks.index(index)
         return set(blocks[max(0,p-1):p+2])
     repairs={sid:[window(sid,a['anchor']) for a in base['decisions'].get(sid,{}).get('anchors',[])] for sid in entries}
-    additions={}
-    for sid,e in entries.items():
-        ranks=rank_blocks(e,docs[sid],queries,focused=focused);seq=[];seen=set()
-        for rank in range(max((len(r['ranking']) for r in ranks),default=0)):
-            for r in ranks:
-                if rank<len(r['ranking']):
-                    anchor=r['ranking'][rank][0]
-                    if anchor not in seen:seq.append(window(sid,anchor));seen.add(anchor)
-        additions[sid]=seq
-    for phase,queues in [('complete_anchor_context',repairs),('additional_ranked_windows',additions)]:
+    def additions(threshold):
+        queues = {}
+        for sid,e in entries.items():
+            ranks=rank_blocks(e,docs[sid],queries,focused=focused,min_relative_score=threshold)
+            seq=[];seen=set()
+            for rank in range(max((len(r['ranking']) for r in ranks),default=0)):
+                for r in ranks:
+                    if rank<len(r['ranking']):
+                        anchor=r['ranking'][rank][0]
+                        if anchor not in seen:seq.append(window(sid,anchor));seen.add(anchor)
+            queues[sid]=seq
+        return queues
+
+    def consume(phase, queues, threshold):
+        nonlocal remaining
         while True:
             changed=False
             for sid in sorted(entries):
@@ -201,9 +213,18 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
                     if candidate==picked[sid]:continue
                     length=len(text(sid,candidate));cost=length-sizes[sid]
                     if cost>remaining:continue
-                    actions.append(dict(phase=phase,source_id=sid,added_blocks=sorted(candidate-picked[sid]),incremental_chars=cost))
+                    actions.append(dict(phase=phase,source_id=sid,added_blocks=sorted(candidate-picked[sid]),
+                                        incremental_chars=cost,threshold=threshold))
                     picked[sid]=candidate;sizes[sid]=length;remaining-=cost;changed=True;break
             if not changed:break
+
+    stages=[]
+    consume('complete_anchor_context',repairs,initial_threshold)
+    for threshold in thresholds:
+        # Lower thresholds append to the existing selection, never reallocate it.
+        consume('additional_ranked_windows',additions(threshold),threshold)
+        stages.append(dict(threshold=threshold,material_chars=sum(sizes.values()),
+                           selected_blocks={sid:sorted(blocks) for sid,blocks in picked.items()}))
     selected=[];samples=[];omitted=[]
     for sid,e in entries.items():
         if picked[sid]:
@@ -212,7 +233,7 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         excluded=sorted(set(e['blocks'])-picked[sid])
         if excluded:
             if focused:
-                ranks=rank_blocks(e,docs[sid],queries,focused=True)
+                ranks=rank_blocks(e,docs[sid],queries,focused=True,min_relative_score=thresholds[-1])
                 eligible=set().union(*(window(sid,index) for r in ranks for index,_ in r['ranking']))
                 if not eligible:eligible=set(e['blocks'][:1])
                 for reason,blocks in [('material_limit', sorted(set(excluded)&eligible)),
@@ -223,7 +244,9 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
     result = dict(budget_policy=policy,complete_id=complete['complete_id'],selected=selected,omitted=omitted,
         material_chars=sum(sizes.values()),max_material_chars=budget,base_fraction=0.5,base_quotas=base['quotas'],base_decisions=base['decisions'],pool_actions=actions,unused_chars=remaining)
     if focused:
-        result.update(min_relative_score=MIN_RELATIVE_SCORE,context_neighbors=1,
+        result.update(min_relative_score=thresholds[-1],context_neighbors=1,
                       compact_source_ids=sorted(compact_sources),
                       unused_reason='Budget is a ceiling; no expansion beyond eligible original-text windows')
+    if policy == BUDGET_POLICY:
+        result.update(thresholds=list(thresholds),threshold_stages=stages,full_material_retained=False)
     return dict(user_query=complete['user_query'],samples=samples),result
