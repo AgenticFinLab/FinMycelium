@@ -80,11 +80,22 @@ def person_build_panel(store, controller, row, labels):
             controller.cancel(tid);st.rerun()
     elif row['status'] in {'running','queued'}:
         st.info('构建在后台运行；阶段结果与用量会保存在本次运行目录。')
+        pause_pending = (Path(body['artifact_directory'])/'pause_requested').is_file()
+        if pause_pending:
+            st.info('已请求暂停；当前调用结束并保存后，不再启动下一次模型调用。请等状态变为“已暂停”再关机。')
+        if st.button('暂停构建', key='person-pause-'+tid, disabled=pause_pending,
+                     help='保留检查点和累计用量，不打断当前模型响应。'):
+            try:
+                controller.pause_person(tid);st.rerun()
+            except (ValueError,OSError) as exc:st.error(str(exc))
     elif row['status']=='completed':
         st.success('已保存本条 event 的原生人物 JSON 草稿，待内容与证据审核。')
     else:
-        st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
-        if row['status'] in {'partial','failed','interrupted','limit'}:
+        if row['status']=='paused':
+            st.info('已暂停；检查点和累计用量已保存，可以关闭电脑，之后恢复原任务。')
+        else:
+            st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
+        if row['status'] in {'partial','failed','interrupted','limit','paused'}:
             if body.get('graph_schema_version') != 'person-event-1.0':
                 st.info('这是历史协议任务，可查看保存的产物或重新绘图；重新构建请建立新任务。')
             cap=st.number_input('恢复后的累计调用上限',min_value=body['person_config']['max_calls'],

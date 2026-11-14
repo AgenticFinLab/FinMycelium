@@ -10,7 +10,7 @@ from finmy.search.summary import directory_lock
 from .prompts import system_prompt
 from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference, validate_envelope
 from .records import IdMap, fingerprint, index_records, seed_facts, validate_input
-from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, now, write_json
+from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now, write_json
 from .schema import COLLECTION_IDS
 from .validation import check_graph
 
@@ -374,6 +374,10 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
             construction.relate()
             construction.repair()
             return construction.finish('finished')
+        except PauseRequested as exc:
+            result = construction.finish('paused', str(exc))
+            (execution.directory/'pause_requested').unlink(missing_ok=True)
+            return result
         except LimitReached as exc:
             return construction.finish('limit', str(exc))
         except (KeyboardInterrupt, SystemExit):

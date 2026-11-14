@@ -7,7 +7,7 @@ from finmy.workbench.workflow import navigate
 from finmy.workbench.ui import status, stats
 from finmy.workbench.model_picker import model_picker
 
-LABELS = {"ready":"待启动", "queued":"启动中", "running":"构建中", "completed":"已生成草稿，待审核",
+LABELS = {"ready":"待启动", "queued":"启动中", "running":"构建中", "paused":"已暂停", "completed":"已生成草稿，待审核",
           "failed":"构建失败", "interrupted":"构建中断", "cancelled":"已取消", "partial":"部分完成，待处理", "limit":"达到调用上限", "insufficient":"材料不足"}
 
 

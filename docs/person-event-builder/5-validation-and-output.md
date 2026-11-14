@@ -65,7 +65,7 @@
 
 | 字段 | 值 | 含义 |
 | --- | --- | --- |
-| `execution_status` | `ready / running / finished / limit / interrupted / failed` | 是否执行中，以及为何停止 |
+| `execution_status` | `ready / running / paused / finished / limit / interrupted / failed` | 是否执行中，以及为何停止 |
 | `result_status` | `none / partial / draft` | 无可用结果、部分结果、结构完成的草稿 |
 | `render_status` | `not_started / completed / failed` | Gantt 是否生成 |
 

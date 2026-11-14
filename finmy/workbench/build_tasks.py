@@ -143,7 +143,8 @@ class BuildController:
         return task_id
 
     def _save_prepared(self, task_id, event_id, body, adoptions):
-        collection = prepare_collection(task_id, body, adoptions)
+        created = now()
+        collection = prepare_collection(task_id, body, adoptions, created_at=created)
         if collection:
             body['search_collection'] = collection
         def previous_manifest(previous_id):
@@ -153,13 +154,13 @@ class BuildController:
         with publish_collection(body.get('catalog'), collection, manifest_lookup=previous_manifest):
             with self.store.connection() as db:
                 db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',
-                           (task_id,event_id,encoded(body),'ready',now()))
+                           (task_id,event_id,encoded(body),'ready',created))
 
     def prepare_person_resume(self, task_id, *, max_calls=None):
         from finmy.person_epg.event.runtime import EventBuildConfig
         with task_lock(self.root,task_id):
             row=self.inspect(task_id);body=row['body']
-            if body.get('kind')!='person_event' or row['status'] not in {'failed','interrupted','partial','limit'}:
+            if body.get('kind')!='person_event' or row['status'] not in {'failed','interrupted','partial','limit','paused'}:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
             check_person_code(body)
             config=dict(body['person_config'])
@@ -170,8 +171,20 @@ class BuildController:
                     raise ValueError('恢复不得降低累计调用上限')
                 config['max_calls']=max_calls
             EventBuildConfig(**config)
+            (Path(body['artifact_directory'])/'pause_requested').unlink(missing_ok=True)
             body.update(person_config=config,resume=(Path(body['artifact_directory'])/'state.json').is_file())
             self.save(task_id,'ready',body)
+
+    def pause_person(self, task_id):
+        from finmy.person_epg.event.runtime import write_json as write_control
+        row = self.inspect(task_id)
+        if row['body'].get('kind') != 'person_event' or row['status'] not in {'queued', 'running'}:
+            raise ValueError('只有运行中的人物构建任务可请求暂停')
+        check_person_code(row['body'])
+        # The worker owns the execution lock. A separate request file lets the
+        # current response finish; it does not overwrite live task state.
+        write_control(Path(row['body']['artifact_directory'])/'pause_requested',
+                   {'task_id': task_id, 'requested_at': now()})
 
     def current(self, row):
         eid, body = row["event_id"], row["body"]
@@ -345,7 +358,7 @@ def execute_person_build(body, directory):
         raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
     state = run_event(body['input'], directory, body['person_config'], allow_network=True, resume=body.get('resume',False), provenance=body['provenance'])
     graph = json.loads(within(directory,state['output']).read_text()) if state.get('output') else None
-    if graph is not None and digest(within(directory,state['output']).read_bytes()) != state['graph_sha256']:
+    if graph is not None and hashlib.sha256(within(directory,state['output']).read_bytes()).hexdigest() != state['graph_sha256']:
         raise ValueError('Saved person draft integrity mismatch')
     return {'state':state, 'graph':graph}
 

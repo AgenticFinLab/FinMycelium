@@ -13,15 +13,16 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 from finmy.dataset import DatasetCatalog, component, dataset_root, within
-from finmy.search.state import now
+from finmy.search.state import now, digest
 from finmy.search.summary import atomic_text, directory_lock
+from finmy.workbench.material_status import confirmations, saved_confirmations, matching_builds, disposition
 
 README = """# Workbench records
 
 FinMycelium maintains these lightweight records for Git review and collaboration.
 
 - [Search records](search/README.md): task scope/configuration, execution summary and source index.
-- build/<task_id>/: frozen input manifest/configuration and execution summary.
+- [Build records](build/README.md): frozen input manifest/configuration and execution summary.
 - events/<event_id>/: workbench edits/history, source and graph indexes, and review decisions.
 - plans/<task_id>.json: historical task plans, explicitly separate from executed tasks.
 
@@ -158,7 +159,7 @@ def input_manifest(bundle):
                         for s in bundle.get('samples', [])]}
 
 
-def search_record_name(record, *, full_id=False):
+def search_record_name(record, *, full_id=False, kind='search'):
     """A fixed creation-time label; model and execution status are not identity."""
     task_id = component(record['task_id'])
     stamp = datetime.fromisoformat(record['created_at'])
@@ -166,11 +167,15 @@ def search_record_name(record, *, full_id=False):
         stamp = stamp.replace(tzinfo=timezone.utc)
     stamp = stamp.astimezone(ZoneInfo('Asia/Shanghai')).strftime('%Y%m%d-%H%M%S')
     title = (record.get('catalog', {}).get('event_name')
-             or record.get('research_request', {}).get('target_name') or 'search')
+             or record.get('research_request', {}).get('target_name') or record.get('event_name') or kind)
     title = unicodedata.normalize('NFKC', title).casefold()
     slug = re.sub(r'[\W_]+', '-', title).strip('-')
-    slug = slug.encode('utf-8')[:96].decode('utf-8', errors='ignore').rstrip('-') or 'search'
+    slug = slug.encode('utf-8')[:96].decode('utf-8', errors='ignore').rstrip('-') or kind
     return f'{stamp}_{slug}_{task_id if full_id else task_id[:12]}'
+
+
+def build_record_name(record, **kwargs):
+    return search_record_name(record, full_id=True, kind='build')
 
 
 def _record_task(folder):
@@ -180,13 +185,19 @@ def _record_task(folder):
     return json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
 
 
-def _search_folder(base, record):
-    """Called under the search-directory lock; never replace another task."""
+def _record_folder(base, record, naming):
+    """Called under the export lock; never replace another task."""
     task_id = component(record['task_id'])
-    folder = base/search_record_name(record)
+    matches = [p for p in base.iterdir() if (p.is_dir() or p.is_symlink())
+               and (old := _record_task(p)) and old.get('task_id') == task_id]
+    if len(matches) > 1:
+        raise ValueError('共享记录存在重复任务 ID；原记录已保留')
+    if matches and matches[0].name != task_id:
+        return matches[0]  # Once named, metadata and status changes never rename it.
+    folder = base/naming(record)
     existing = _record_task(folder)
     if existing and existing['task_id'] != task_id:
-        folder = base/search_record_name(record, full_id=True)
+        folder = base/naming(record, full_id=True)
         existing = _record_task(folder)
     if existing and existing['task_id'] != task_id:
         raise ValueError('共享检索记录目录已属于其他任务')
@@ -201,6 +212,93 @@ def _search_folder(base, record):
     elif not existing and any(folder.iterdir()):
         raise ValueError('共享检索记录缺少任务身份；原记录已保留')
     return folder
+
+
+def _search_folder(base, record):
+    return _record_folder(base, record, search_record_name)
+
+
+def find_build_record(root, task_id):
+    """Resolve stable IDs, including manifests written before directory renaming."""
+    task_id = component(task_id)
+    base = within(root, 'workbench/build')
+    found = [p/'task.json' for p in base.iterdir() if p.is_dir()
+             and (record := _record_task(p)) and record.get('task_id') == task_id] if base.exists() else []
+    if len(found) > 1:
+        raise ValueError('共享构建记录存在重复任务 ID')
+    return found[0] if found else None
+
+
+def _build_index(root, base):
+    from finmy.search.summary import cell
+    lines = ['# Build records', '',
+             'Automatically updated; creation times use Asia/Shanghai (UTC+08:00).',
+             'Directories use creation time, event name and task ID; resumes keep the directory.',
+             'Task IDs and runtime paths stay unchanged. Look up historical manifest paths by task ID here.',
+             'Execution and material confirmation do not imply graph acceptance.', '',
+             '| Created | Person | Event | Model | Status | Search task | Build record |',
+             '| --- | --- | --- | --- | --- | --- | --- |']
+    entries, seen = [], set()
+    searches = {}
+    search_base = root/'workbench/search'
+    if search_base.exists():
+        for folder in search_base.iterdir():
+            if (folder.is_dir() or folder.is_symlink()) and (record := _record_task(folder)):
+                searches[record['task_id']] = folder.name
+    for folder in sorted(base.iterdir()):
+        if not folder.is_dir() and not folder.is_symlink():
+            continue
+        task = _record_task(folder)
+        if not task:
+            continue
+        if task['task_id'] in seen:
+            raise ValueError('共享构建记录存在重复任务 ID')
+        seen.add(task['task_id'])
+        path = folder/'summary.json'
+        if path.is_symlink():
+            raise ValueError('共享构建汇总不能是符号链接')
+        summary = json.loads(path.read_text()) if path.exists() else {}
+        if summary.get('task_id', task['task_id']) != task['task_id']:
+            raise ValueError('构建任务与汇总的 ID 不一致')
+        stamp = datetime.fromisoformat(task['created_at'])
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        stamp = stamp.astimezone(ZoneInfo('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M:%S')
+        manifest = task.get('search_collection', {}).get('manifest', {}) if task.get('search_collection') else {}
+        handoffs = manifest.get('search_handoffs') or [task.get('search_handoff', {})]
+        search_ids = sorted({h['search_task_id'] for h in handoffs if h.get('search_task_id')})
+        values = [stamp, task.get('catalog', {}).get('person_name'),
+                  task.get('catalog', {}).get('event_name') or task.get('event_name') or task['event_id'],
+                  task.get('configuration', {}).get('lm_name'), summary.get('status')]
+        search_links = ', '.join(f'[{cell(tid[:12])}](../search/{quote(searches[tid])}/)'
+                                 if tid in searches else cell(tid) for tid in search_ids)
+        link = f"[{cell(task['task_id'])}]({quote(folder.name)}/)"
+        entries.append((stamp, task['task_id'], '| '+' | '.join(map(cell, values))+' | '+search_links+' | '+link+' |'))
+    lines.extend(row for _, _, row in sorted(entries))
+    save(base, 'README.md', '\n'.join(lines)+'\n')
+    readme = root/'workbench/README.md'
+    if readme.is_symlink():
+        raise ValueError('共享记录说明不能是符号链接')
+    save(readme.parent, readme.name, readme.read_text().replace(
+        '- build/<task_id>/: frozen input manifest/configuration and execution summary.',
+        '- [Build records](build/README.md): frozen input manifest/configuration and execution summary.'))
+
+
+def migrate_build_records(root):
+    """Rename portable records without editing frozen manifests or runtime files."""
+    root, parent = destination(root)
+    _, base = destination(root, 'build')
+    changes = []
+    with directory_lock(parent):
+        for folder in sorted(base.iterdir()):
+            if not folder.is_dir() and not folder.is_symlink():
+                continue
+            task = _record_task(folder)
+            if task and folder.name == task['task_id']:
+                renamed = _record_folder(base, task, build_record_name)
+                changes.append((folder.name, renamed.name))
+        _build_index(root, base)
+    return changes
 
 
 def _search_index(root, base):
@@ -300,6 +398,10 @@ def export_search(search_root, task_id):
         selection = json.loads(selection_path.read_text()) if selection_path.exists() else {}
         payload_path = run / 'builder_input.json'
         payload = json.loads(payload_path.read_text()) if payload_path.exists() else {}
+        adopted = matching_builds(task_id, data.get('handoff_revision'), digest(payload) if payload else None,
+                                  saved_confirmations(Path(search_root).resolve().parent))
+        decision = disposition(data, adopted)
+        record.update(build_disposition=decision, confirmed_build_tasks=adopted)
         used = {s['raw_data_id'] for s in payload.get('samples', [])}
         rows = []
         from finmy.search.metadata import publication_metadata
@@ -321,7 +423,7 @@ def export_search(search_root, task_id):
                     reported.append(item['usage'])
         token_usage = token_summary(reported, data['usage']['model'])
         summary = {'task_id': task_id, 'status': data['status'],
-                   'build_disposition': data.get('build_disposition', 'pending'), 'updated_at': data['updated_at'],
+                   'build_disposition': decision, 'confirmed_build_tasks': adopted, 'updated_at': data['updated_at'],
                    'completed_at': data.get('completed_at'), 'stop_reason': data.get('stop_reason'),
                    'requests': data['usage'], 'read_sources': len(data['read_sources']),
                    'source_count': len(rows), 'input_source_count': len(used),
@@ -377,7 +479,9 @@ def export_database(workspace):
                 for r in sources]))
             graphs = rows('graphs', 'id,sha256,parent_id,note,input_hash,created', 'WHERE event_id=? ORDER BY created,id', (eid,))
             save(folder, 'graphs.json', {'event_id': eid, 'versions': graphs})
-        for row in rows('build_tasks'):
+        build_rows = rows('build_tasks')
+        build_bases = {}
+        for row in build_rows:
             tid = component(row['id']); body = json.loads(row['body'])
             owner = body.get('catalog', {}).get('root') or root
             artifact = body.get('artifact_directory')
@@ -385,7 +489,12 @@ def export_database(workspace):
                 path = Path(artifact).resolve()
                 if path.parent.name == 'builds' and path.parent.parent.name == 'output':
                     owner = path.parents[2]
-            owner, folder = destination(owner, 'build', tid)
+            owner, build_base = destination(owner, 'build')
+            build_bases[owner] = build_base
+            identity = {'task_id': tid, 'created_at': row['created'],
+                        'catalog': pick(body.get('catalog', {}), CATALOG_KEYS),
+                        'event_name': body.get('event', {}).get('event_name_en') or body.get('event', {}).get('event_name') or row['event_id']}
+            folder = _record_folder(build_base, identity, build_record_name)
             config = pick(body.get('config', {}), ('builder_type', 'lm_name'))
             if body.get('person_config'):
                 from finmy.person_epg.event.runtime import EventBuildConfig
@@ -398,7 +507,7 @@ def export_database(workspace):
                     ('enable_sparse_routing', 'enable_context_assets', 'max_calls', 'context_top_k',
                      'max_context_chars', 'excerpt_char_limit', 'max_card_tokens', 'max_json_attempts',
                      'request_timeout_seconds', 'evidence_policy', 'output_language'))
-            save(folder, 'task.json', {'kind': body.get('kind', 'event'), 'task_id': tid, 'event_id': row['event_id'],
+            save(folder, 'task.json', {**identity, 'kind': body.get('kind', 'event'), 'task_id': tid, 'event_id': row['event_id'],
                 'created_at': row['created'], 'catalog': pick(body.get('catalog', {}), CATALOG_KEYS),
                 'input_sha256': body.get('input_hash'), 'input': input_manifest(body.get('input', {})),
                 'research_scope': (body.get('input', {}).get('user_query', {}).get('extras') or {}).get('person_event', {}).get('scope')
@@ -417,6 +526,13 @@ def export_database(workspace):
                 'run_state': pick(body.get('run_state', {}),
                     ('execution_status', 'result_status', 'render_status', 'output', 'checks', 'facts')),
                 'artifact_directory': relative(artifact, owner), 'content_review': 'not_implied_by_execution'})
+        for owner, build_base in build_bases.items():
+            _build_index(owner, build_base)
+        # A newly saved build confirms the exact search revision automatically.
+        # Failed/cancelled builds retain that confirmation; no runtime is changed.
+        for tid in sorted({c['search_task_id'] for c in confirmations(build_rows)}):
+            if (workspace/'search'/component(tid)/'runs/initial/run.json').is_file():
+                export_search(workspace/'search', tid)
         for row in rows('jobs'):
             body = json.loads(row['body'])
             _, folder = destination(root, 'plans')

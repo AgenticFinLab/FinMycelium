@@ -53,6 +53,10 @@ class LimitReached(Exception):
     pass
 
 
+class PauseRequested(Exception):
+    pass
+
+
 class InvalidResponse(ValueError):
     pass
 
@@ -249,6 +253,12 @@ class Execution:
         digest = write_json(path, value)
         return str(path.relative_to(self.directory)), digest
 
+    def check_pause(self):
+        # Never interrupt transport or checkpoint publication. The controller
+        # clears this request only when the user explicitly prepares a resume.
+        if (self.directory / 'pause_requested').is_file():
+            raise PauseRequested('Paused between model calls; checkpoints and cumulative usage are retained')
+
     def infer(self, task_id, system, request, package, validator):
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', task_id):
             raise ValueError('Invalid task ID')
@@ -270,6 +280,7 @@ class Execution:
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
         corpus = Corpus(self.payload, package, self.config)
         while task['invalid_attempts'] < self.config.max_json_attempts:
+            self.check_pause()
             user = dict(task=request, read_results=task['read_results'])
             if task.get('validation_error'):
                 user['validation_error'] = task['validation_error']

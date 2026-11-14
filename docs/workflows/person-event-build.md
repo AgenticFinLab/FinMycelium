@@ -75,6 +75,15 @@ rejected. Preparation and startup reject a changed workbench implementation befo
 queuing a worker. Changed input or code requires a new run. Previous attempts remain
 available, and restarting does not renew the final repair allowance.
 
+While a person build is queued or running, **暂停构建** requests a stop between
+model calls. The current response, validation and checkpoint publication finish;
+no next request, format retry or local-reading follow-up is submitted after the
+pause boundary. Wait for **已暂停** before shutting down. If the last required call
+finishes the build, it may complete normally instead. A transport failure remains
+a failure rather than being hidden as a pause. **准备恢复构建** followed by an explicit
+start reuses valid checkpoints and retains cumulative usage. Closing the interface
+alone does not pause its independent worker.
+
 Unprocessed body ranges, unassigned actions and failed required work produce a
 partial result. Legal unknowns, gaps and explicit conflicts may remain in a
 structurally complete draft. Quote matching proves location, not semantic entailment.

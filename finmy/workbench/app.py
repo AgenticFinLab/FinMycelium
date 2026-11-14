@@ -26,6 +26,7 @@ from finmy.workbench.search_page import search_page, get_controller, task_panel
 from finmy.workbench.workflow import STEPS, progress, navigate, event_searches, search_status_code, search_status_label
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.build_page import create_build, build_panel, LABELS as BUILD_LABELS
+from finmy.workbench.material_status import confirmations, confirmed_builds, saved_confirmations
 
 
 def notice(text):
@@ -466,9 +467,10 @@ def details(store, eid):
             graph_panel(store, eid)
         elif section == "运行记录":
             runs = event_searches(store, controller, eid)
+            adopted = saved_confirmations(store.root)
             for tid, data in runs:
                 with st.container(horizontal=True, vertical_alignment="center"):
-                    st.write("检索 · " + search_status_label(data))
+                    st.write("检索 · " + search_status_label(data, confirmed_builds(tid, data, adopted)))
                     if st.button("打开任务", key="open-"+tid):
                         navigate("任务", **{"task-selected": tid, "task_event_filter": eid})
             for build in BuildController(store).tasks(eid):
@@ -505,6 +507,7 @@ def task_workspace(store):
         ref = task.get('catalog')
         return 'catalog:' + digest([ref['root'], ref['kind'], ref.get('person_id'), ref['event_id']])[:20] if ref else ''
     build_runs = builds.tasks()
+    adopted = confirmations(build_runs)
     for build in build_runs:
         key = catalog_key(build['body'])
         if key: labels[key] = display_name(build['body']['event']) + ' · 数据集'
@@ -523,20 +526,21 @@ def task_workspace(store):
     with kind:
         kind_filter = st.selectbox("任务类型", ["全部类型", "检索", "构建"], key="ui-task-kind", label_visibility="collapsed")
     with state:
-        state_filter = st.selectbox("运行状态", ["全部状态", "待启动", "运行中", "待检查", "需处理", "不参与构建", "已取消"], key="ui-task-state", label_visibility="collapsed")
+        state_filter = st.selectbox("运行状态", ["全部状态", "待启动", "运行中", "待检查", "已确认用于构建", "需处理", "不参与构建", "已取消"], key="ui-task-state", label_visibility="collapsed")
     records = []
     related_ids = {data['task'].get('event_id') for _, data in search_runs if catalog_key(data['task']) == eid}
     for tid, data in search_runs:
         if not eid or data["task"].get("event_id") == eid or catalog_key(data['task']) == eid:
-            records.append({"id":tid, "kind":"检索", "name":data["task"]["target_name"], "code":search_status_code(data),
-                            "status":search_status_label(data), "created":data.get("created_at", ""), "data":data})
+            matched = confirmed_builds(tid, data, adopted)
+            records.append({"id":tid, "kind":"检索", "name":data["task"]["target_name"], "code":search_status_code(data, matched),
+                            "status":search_status_label(data, matched), "created":data.get("created_at", ""), "data":data})
     for build in builds.tasks(eid if eid in events else None):
         if eid.startswith('catalog:') and build['event_id'] not in related_ids and catalog_key(build['body']) != eid:
             continue
         row = builds.reconcile(build["id"])
         records.append({"id":row["id"], "kind":"构建", "name":display_name(row["body"]["event"]),
                         "code":row["status"], "status":BUILD_LABELS[row["status"]], "created":row["created"], "data":row})
-    buckets = {"待启动":{"ready"}, "运行中":{"running","queued"}, "待检查":{"finished","completed"},
+    buckets = {"待启动":{"ready"}, "运行中":{"running","queued"}, "待检查":{"finished","completed"}, "已确认用于构建":{"confirmed"},
                "需处理":{"failed","limit","insufficient","paused","interrupted","partial"}, "不参与构建":{"excluded"}, "已取消":{"cancelled"}}
     records = [r for r in records if (kind_filter == "全部类型" or r["kind"] == kind_filter)
                and (state_filter == "全部状态" or r["code"] in buckets[state_filter])]

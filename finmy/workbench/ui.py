@@ -36,7 +36,7 @@ def heading(title, subtitle=None):
 def tone(label):
     if any(word in label for word in ("失败", "修订", "退回", "中断", "问题")):
         return "danger"
-    if label in {"已通过", "已收录", "已确认"}:
+    if label in {"已通过", "已收录", "已确认", "已确认用于构建"}:
         return "success"
     if any(word in label for word in ("运行中", "构建中", "检索中", "启动中")):
         return "active"

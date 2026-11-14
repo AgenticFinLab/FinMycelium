@@ -303,7 +303,7 @@ def test_build_configuration_and_person_call_usage_export(workspace):
     controller = BuildController(store)
     tid = controller.create(eid, {'model': 'ark/doubao-seed-2-0-pro-260215',
                                   'builder': 'SparseRagBuilder', 'concurrency': 1})
-    folder = root / 'workbench/build' / tid
+    folder = records.find_build_record(root, tid).parent
     task = read(folder / 'task.json')
     assert task['configuration']['sparse_builder_config']['enable_context_assets'] is True
     assert task['configuration']['sparse_builder_config']['evidence_policy'] == 'report'
@@ -366,7 +366,7 @@ def test_person_build_record_links_exact_search_input_and_scope(workspace):
     c.threads[tid].join(10)
     builds = BuildController(store)
     bid = builds.create_person(c, tid, confirmed=True)
-    folder = root / 'workbench/build' / bid
+    folder = records.find_build_record(root, bid).parent
     record = read(folder / 'task.json')
     assert record['kind'] == 'person_event'
     assert record['research_scope'] == c.inspect(tid)['task']['research_scope']

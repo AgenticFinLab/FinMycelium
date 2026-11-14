@@ -13,7 +13,7 @@ from finmy.search.sources import SourceStore
 from finmy.search.state import SearchState, digest
 from finmy.search.metadata import publication_metadata
 from finmy.search.summary import cell, directory_lock
-from finmy.workbench.records import CATALOG_KEYS, pick, public_url, relative, search_config
+from finmy.workbench.records import CATALOG_KEYS, pick, public_url, relative, search_config, build_record_name, find_build_record
 
 LEGACY_FILES = ('search-summary.md', 'sources.csv', 'manifest.json')
 FILES = (*LEGACY_FILES, 'builder-input.json')
@@ -108,7 +108,7 @@ def ordinary_adoptions(store, event_id, bundle):
     return adopted
 
 
-def prepare_collection(task_id, body, adoptions):
+def prepare_collection(task_id, body, adoptions, *, created_at):
     """The build row retains the confirmed input and collection when the event adopts a successor."""
     if not adoptions:
         return None
@@ -143,7 +143,8 @@ def prepare_collection(task_id, body, adoptions):
     manifest = dict(format_version=2, kind='adopted_search', catalog=pick(catalog, CATALOG_KEYS),
         build_task_id=task_id, input_sha256=body['input_hash'], input_file='builder-input.json', confirmation=review,
         research_scope=adoptions[0]['scope'], input_characters=sum(len(s['content']) for s in samples.values()),
-        input_sample_count=len(samples), build_record=f'workbench/build/{task_id}/task.json',
+        input_sample_count=len(samples), build_record='workbench/build/'+build_record_name(
+            dict(task_id=task_id, created_at=created_at, catalog=catalog))+'/task.json',
         runtime_directory=relative(body['artifact_directory'], root),
         search_handoffs=[{k: deepcopy(v) for k, v in a.items() if k not in {'catalog', 'scope_hash', 'sources'}}
                          for a in adoptions],
@@ -218,8 +219,8 @@ def publish_collection(catalog, collection, *, manifest_lookup=None):
                 previous = component(old.get('build_task_id', ''))
                 expected = manifest_lookup(previous) if manifest_lookup else None
                 if expected is None:
-                    record = root/'workbench/build'/previous/'task.json'
-                    saved = json.loads(record.read_text()).get('search_collection', {}) if record.is_file() else {}
+                    record = find_build_record(root, previous)
+                    saved = json.loads(record.read_text()).get('search_collection', {}) if record else {}
                     expected = saved.get('manifest_sha256')
                 if expected != digest(before['manifest.json']):
                     raise ValueError('已有收录清单与构建快照不一致，已保留')

@@ -7,6 +7,7 @@ import streamlit as st
 from finmy.dataset import DatasetCatalog, dataset_root, save_dataset_root, output_directory, summary_directory
 from finmy.workbench.ui import heading, empty
 from finmy.workbench.workflow import navigate
+from finmy.workbench.material_status import confirmed_builds, saved_confirmations
 
 
 def dataset_settings(store=None):
@@ -100,10 +101,11 @@ def dataset_page(store):
             if all(ref.get(k) == selection.get(k) for k in ('root', 'kind', 'event_id', 'person_id')):
                 history.append((tid, run))
         if history:
+            adopted = saved_confirmations(store.root)
             with st.expander(f'历史检索（{len(history)}）'):
                 for tid, run in sorted(history, key=lambda r:r[1]['created_at'], reverse=True):
                     left, right = st.columns([4, 1])
-                    left.write(f"{run['created_at'][:19]} · {search_status_label(run)} · {tid[:12]}")
+                    left.write(f"{run['created_at'][:19]} · {search_status_label(run, confirmed_builds(tid, run, adopted))} · {tid[:12]}")
                     if right.button('查看任务', key='catalog-history-'+tid):
                         navigate('任务', **{'task-selected':tid, 'task_event_filter':''})
         search_form(store, catalog=selection)

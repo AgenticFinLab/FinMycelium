@@ -87,7 +87,8 @@ def test_person_collection_requires_confirmation_and_keeps_originals(setup):
     assert controller.inspect(tid) == before and calls == ['search']
     assert all(p.read_bytes() == text for p, text in tables.items())
     assert not (folder.parent/'epg').exists()
-    shared = json.loads((root/'workbench/build'/bid/'task.json').read_text())
+    from finmy.workbench.records import find_build_record
+    shared = json.loads(find_build_record(root, bid).read_text())
     assert 'PRIVATE ORIGINAL' not in json.dumps(shared)
     assert shared['search_collection']['manifest'] == manifest
     assert shared['search_collection']['manifest_sha256'] == digest((folder/'manifest.json').read_bytes())

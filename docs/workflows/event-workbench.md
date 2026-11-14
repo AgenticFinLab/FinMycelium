@@ -299,8 +299,10 @@ EPG-dataset/workbench/              portable records for Git
       task.json                    identity, scope, configuration and fingerprints
       summary.json                 execution status, usage, gaps and input manifest
       sources.csv                  source URLs and acquisition/input status
-  build/<task_id>/
-    task.json, summary.json
+  build/
+    README.md                      generated index: event, model, status and source search
+    <YYYYMMDD-HHMMSS>_<event-name>_<BUILD-or-PBUILD-task-id>/
+      task.json, summary.json
   events/<workbench-event_id>/
     event.json                     editable record and revision history
     sources.csv, graphs.json       indexes, not original source or graph bodies
@@ -311,9 +313,21 @@ EPG-dataset/workbench/              portable records for Git
 Saving tasks, search completion/pause and committed workbench edits or reviews
 refresh their shared records without a model call. Missing token/cost reports
 remain unknown. Settings → **更新共享记录** retries export without rerunning tasks.
-Search record names use creation time in Asia/Shanghai and remain stable across
+Search and build record names use creation time in Asia/Shanghai and remain stable across
 retries and configuration/status changes. Full task IDs and ignored runtime paths
 are unchanged; old ID-only shared folders migrate when exported.
+Frozen collection manifests retain their historical contents and hashes; their
+build task IDs resolve through the build index even when an old path was renamed.
+New collection manifests use the readable build-record path directly.
+
+After a build task is successfully saved, its exact search handoff is displayed as
+**已确认用于构建** rather than **待检查材料**. This is derived from saved confirmation,
+handoff revision and input hash, without changing the search execution status.
+Failed or cancelled builds retain material confirmation. Reassembling a new handoff
+requires confirmation of that new version. **不参与构建** overrides participation
+without deleting previous confirmations or saved builds. Shared search records
+and their index reflect the same decision; no additional review action is required.
+
 Export failures preserve saved work and appear in Settings. Shared records support
 inspection and provenance; they are not a full runtime backup or instructions to
 start/approve work. They omit source bodies, raw responses, credentials and absolute

@@ -14,6 +14,7 @@ from finmy.workbench.workflow import navigate, SEARCH_STATUS as STATUS, search_s
 from finmy.workbench.search_process import render_process, PROVIDERS
 from finmy.workbench.ui import heading, status as show_status, stats, empty
 from finmy.workbench.search_history import budget_policy_label, experiment_runs
+from finmy.workbench.material_status import confirmed_builds, saved_confirmations
 
 
 @st.cache_resource
@@ -31,10 +32,13 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
         if catalog['kind'] == 'person_event':
             st.info('人物任务固定当前 event；检查实际材料后，可保存独立的原生人物构建任务。')
         summary_panel(controller, task_id, data, active=active, read_only=read_only)
-    show_status(search_status_label(data), '检索 · ' + task_id[:12])
+    adopted = confirmed_builds(task_id, data, saved_confirmations(store.root))
+    show_status(search_status_label(data, adopted), '检索 · ' + task_id[:12])
+    if adopted:
+        st.caption('当前交接版本已确认用于构建：' + '、'.join(adopted))
     excluded = data.get('build_disposition') == 'excluded'
     if not read_only:
-        label = '恢复为待检查' if excluded else '不参与构建'
+        label = ('恢复参与构建' if adopted else '恢复为待检查') if excluded else '不参与构建'
         if st.button(label, key='build-disposition-'+task_id, disabled=active,
                      help='保留材料与用量；不撤销已有构建或已纳入的资料，可随时恢复。'):
             try:
