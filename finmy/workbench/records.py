@@ -98,7 +98,11 @@ def build_usage(value):
         # Person-event state retains every reserved call, including failures.
         reported = [c['usage'] for c in value if isinstance(c.get('usage'), dict)]
         return {**token_summary(reported, len(value)), 'calls': [
-            {**pick(c, ('call_id', 'status', 'started_at', 'duration_seconds', 'usage_status')),
+            {**pick(c, ('call_id', 'status', 'started_at', 'duration_seconds', 'usage_status',
+                       'error_type', 'error_chain', 'http_status', 'request_id')),
+             'transport': pick(c.get('transport', {}), ('mode', 'phase', 'chunks', 'content_chars',
+                 'reasoning_chars', 'first_chunk_seconds', 'duration_seconds', 'finish_reason',
+                 'stream_exhausted', 'http_status', 'request_id', 'response_id', 'error_type', 'error_chain')),
              'usage': numbers(c['usage']) if isinstance(c.get('usage'), dict) else None} for c in value]}
     return numbers(value) if isinstance(value, (int, dict)) else None
 

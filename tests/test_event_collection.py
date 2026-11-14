@@ -315,3 +315,31 @@ def test_excluded_search_is_not_a_pending_event_material(setup):
     controller.set_build_disposition(tid, 'pending')
     assert progress(store, eid, controller)[0] == 2
     assert adopt_sources(controller, tid, store) > 0
+
+
+@pytest.mark.parametrize('status', ['ready', 'failed'])
+@pytest.mark.parametrize('fingerprint', ['code_version', 'code_identity'])
+def test_changed_code_is_rejected_before_start_or_resume(setup, monkeypatch, status, fingerprint):
+    from finmy.workbench import build_tasks
+    from finmy.person_epg import build
+    _, store, controller, _ = setup
+    tid, _ = finish(setup)
+    builds = BuildController(store)
+    bid = builds.create_person(controller, tid, confirmed=True)
+    row = builds.inspect(bid)
+    if status == 'failed':
+        builds.save(bid, 'failed', row['body'])
+    before = builds.inspect(bid)
+    if fingerprint == 'code_version':
+        monkeypatch.setattr(build_tasks, 'code_version', lambda: {'commit': 'changed'})
+    else:
+        monkeypatch.setattr(build_tasks, 'code_version', lambda: before['body']['code'])
+        monkeypatch.setattr(build, 'code_identity', lambda: 'changed')
+    monkeypatch.setattr(build_tasks.subprocess, 'Popen', lambda *a, **k: pytest.fail('No worker allowed'))
+    with pytest.raises(ValueError, match='代码已变化'):
+        if status == 'ready':
+            builds.start(bid, allow_network=True)
+        else:
+            builds.prepare_person_resume(bid)
+    assert builds.inspect(bid) == before
+    assert not Path(before['body']['artifact_directory']).exists()

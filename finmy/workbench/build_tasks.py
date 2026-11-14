@@ -45,6 +45,13 @@ def code_version():
             "python_sources_sha256": digest(files)}
 
 
+def check_person_code(body):
+    if body.get('kind') == 'person_event':
+        from finmy.person_epg.build import code_identity
+        if body['code'] != code_version() or body['person_code'] != code_identity():
+            raise ValueError('构建代码已变化，请从已确认的检索材料创建新任务；旧任务与用量保留')
+
+
 def build_config(settings, directory):
     Store.validate_configuration(settings)
     kind = settings["builder"]
@@ -154,6 +161,7 @@ class BuildController:
             row=self.inspect(task_id);body=row['body']
             if body.get('kind')!='person_event' or row['status'] not in {'failed','interrupted','partial','limit'}:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
+            check_person_code(body)
             config=dict(body['person_config'])
             if body.get('graph_schema_version') != 'person-event-1.0':
                 raise ValueError('旧协议任务可查看或重绘；请用确认过的原始输入建立新构建任务')
@@ -189,6 +197,7 @@ class BuildController:
             if not self.current(row):
                 raise ValueError("输入或审核状态已变化，请重新确认并创建构建任务")
             body = row["body"]
+            check_person_code(body)
             body.update(start_requested=now(), queued_at=time.time())
             self.save(task_id, "queued", body)
             try:

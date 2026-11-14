@@ -61,15 +61,41 @@ def transport(monkeypatch):
     def handle(request):
         body = json.loads(request.content)
         state['requests'].append((request, body))
+        if 'connection_error' in state:
+            raise state['connection_error']
+        headers = state.get('headers', {'x-request-id': 'request-fixture-123'})
         if state['status'] != 200:
-            return httpx.Response(state['status'], json={'error': {'message': 'synthetic error'}})
+            return httpx.Response(state['status'], headers=headers,
+                json={'error': {'message': state.get('error_message', 'synthetic error')}})
         content = next(state['contents']) if 'contents' in state else state['content']
+        usage = {'prompt_tokens': 20, 'completion_tokens': 15, 'total_tokens': 35,
+                 'completion_tokens_details': {'reasoning_tokens': 5}}
+        if body.get('stream'):
+            def delta(value, finish=None):
+                return {'choices': [{'index': 0, 'delta': value, 'finish_reason': finish}]}
+            chunks = state.get('stream_chunks', [
+                delta({'role': 'assistant', 'reasoning_content': 'private reasoning'}),
+                delta({'content': content[:4]}), delta({'content': content[4:]}),
+                {**delta({}, state['finish']), 'usage': usage}, {'choices': [], 'usage': usage}])
+            class Events(httpx.SyncByteStream):
+                def __iter__(self):
+                    yield b': heartbeat\n\n'
+                    for chunk in chunks:
+                        value = {'id': 'test-response', 'object': 'chat.completion.chunk',
+                                 'created': 1, 'model': body['model'], **chunk}
+                        yield ('data: ' + json.dumps(value) + '\n\n').encode()
+                    if 'stream_error' in state:
+                        raise state['stream_error']
+                    if state.get('send_done', True):
+                        yield b'data: [DONE]\n\n'
+                def close(self):
+                    state['closed_streams'] = state.get('closed_streams', 0) + 1
+            return httpx.Response(200, headers={**headers, 'content-type': 'text/event-stream'}, stream=Events())
         return httpx.Response(200, json={
             'id': 'test-response', 'object': 'chat.completion', 'created': 1, 'model': body['model'],
             'choices': [{'index': 0, 'finish_reason': state['finish'],
                          'message': {'role': 'assistant', 'content': content}}],
-            'usage': {'prompt_tokens': 20, 'completion_tokens': 15, 'total_tokens': 35,
-                      'completion_tokens_details': {'reasoning_tokens': 5}},
+            'usage': usage,
         })
 
     def client(**kwargs):
@@ -273,6 +299,8 @@ def test_each_preset_reaches_its_role_transport_with_the_exact_model_id(transpor
     else:
         assert body['max_tokens'] == cap
     assert_sampling(body, remote_model)
+    if purpose == 'build':
+        assert body['stream'] is True and body['stream_options'] == {'include_usage': True}
     assert len(transport['requests']) == 1
 
 

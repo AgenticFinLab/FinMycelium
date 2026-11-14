@@ -11,6 +11,8 @@ import uuid
 
 from .records import fingerprint, index_records, json_bytes, pointer, sha256
 from .schema import FACTS_VERSION, GRAPH_VERSION
+from ..building.model_transport import error_metadata
+from ..building.completion_errors import IncompleteCompletionError
 
 
 @dataclass
@@ -86,7 +88,8 @@ def code_identity():
     root = event.parents[1]
     files = {p for p in event.glob('*.py') if p.name != 'rendering.py'}
     files.update(root / name for name in (
-        'person_epg/build.py',                    # Actual Model transport adapter.
+        'person_epg/build.py',                    # Model entry point.
+        'person_epg/building/model_transport.py', # Streaming transport and diagnostics.
         'model_api.py',                          # Shared model-service transport.
         'model_config.py',                       # Provider and endpoint resolution.
         'person_epg/input.py',                    # Confirmed identity validation.
@@ -319,9 +322,12 @@ class Execution:
             except LimitReached:
                 call['status'] = 'limit'
                 raise
+            except IncompleteCompletionError as exc:
+                call.update(status='incomplete', **error_metadata(exc))
+                raise
             except (ValueError, KeyError, TypeError, IndexError) as exc:
                 if not received:
-                    call.update(status='transport_error', error_type=type(exc).__name__)
+                    call.update(status='transport_error', **error_metadata(exc))
                     raise
                 call['status'] = 'invalid_output'
                 task['invalid_attempts'] += 1
@@ -330,9 +336,12 @@ class Execution:
                     raise InvalidResponse(task['validation_error']) from exc
             except BaseException as exc:
                 call.update(status='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'transport_error',
-                            error_type=type(exc).__name__)
+                            **error_metadata(exc))
                 raise
             finally:
+                transport = deepcopy(getattr(self.model, 'last_diagnostics', None))
+                if transport is not None:
+                    call['transport'] = transport
                 usage = deepcopy(getattr(self.model, 'last_usage', None))
                 call.update(duration_seconds=round(time.monotonic() - started, 3), usage=usage,
                             usage_status='reported' if usage is not None else 'unknown')

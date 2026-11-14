@@ -18,6 +18,20 @@ different model services. TokenHub thinking models can count reasoning toward th
 output limit; a truncated response remains incomplete, with reported usage retained.
 Provider selection does not enable external search inside construction.
 
+Person builders receive streaming responses for all configured model services.
+Reasoning chunks keep the connection active but are not mixed into the JSON answer.
+Only a normally exhausted stream with `finish_reason=stop` and a nonempty text
+answer proceeds to JSON validation; interrupted, truncated, refused and tool-call
+responses never create a successful response checkpoint. Reported cumulative usage
+is retained once, and missing usage remains unknown. There is no automatic retry
+or fallback to a second non-streaming request.
+
+Call records retain transport phase, chunk/character counts, first-chunk and total
+elapsed times, finish reason, available request/response IDs and HTTP status.
+Failures also retain exception class names along the cause chain. Diagnostics
+exclude raw error messages, URLs, headers, credentials and reasoning text.
+
+
 The workbench exposes model, cumulative calls, per-call output tokens and context
 characters, extraction batch size, local reading limits and the optional repair round.
 Defaults live in `EventBuildConfig`: 40 model calls, 12,288 output tokens, 160,000
@@ -25,7 +39,7 @@ context characters, 12,000-character body batches with 400-character overlap,
 24 local reads and 48,000 cumulative read characters. A local read returns at most
 4,000 text characters; local search returns at most four snippets. Metadata also
 counts toward the cumulative read-character budget. JSON attempts are capped at
-three per semantic task, transport timeout at 900 seconds, and final repair at one round.
+three per semantic task, transport I/O timeout at 900 seconds, and final repair at one round.
 
 These are limits, not quality targets. Character counts are not token counts.
 Search and build settings remain separate. Construction does not add external
@@ -57,7 +71,8 @@ refund or repeat calls.
 **准备恢复构建** may raise the cumulative call ceiling. Used calls and per-task format
 attempts remain. Response checkpoints require matching input, implementation,
 prompt, semantic configuration and upstream dependencies. Corrupt responses are
-rejected. Changed input or code requires a new run. Previous attempts remain
+rejected. Preparation and startup reject a changed workbench implementation before
+queuing a worker. Changed input or code requires a new run. Previous attempts remain
 available, and restarting does not renew the final repair allowance.
 
 Unprocessed body ranges, unassigned actions and failed required work produce a

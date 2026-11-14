@@ -22,6 +22,7 @@ from .building.person_organization import apply_organization
 from .building.organization_batches import organize_person_plan
 from .building.organization_resume import OrganizationResume
 from .building.completion_errors import IncompleteCompletionError
+from .building.model_transport import StreamingModel as Model, error_metadata
 
 
 @dataclass
@@ -49,32 +50,6 @@ def code_identity():
     root = Path(__file__).resolve().parents[1]
     return digest({str(p.relative_to(root)): digest(p.read_bytes()) for p in sorted(root.rglob('*'))
                    if p.is_file() and p.suffix in {'.py', '.json'} and 'url_collector' not in p.parts})
-
-
-class Model:
-    def __init__(self, config):
-        self.config = config
-        self.adapter = None
-        self.last_usage = None
-
-    def __call__(self, system, user, name):
-        if self.adapter is None:
-            from finmy.model_api import ModelAPIInference
-            self.adapter = ModelAPIInference(lm_name=self.config.lm_name, generation_config={})
-            self.adapter.client = self.adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
-        self.last_usage = None
-        parameters = self.adapter.request_parameters(dict(max_tokens=self.config.max_new_tokens))
-        response = self.adapter.client.chat.completions.create(model=self.adapter.model_name,
-            messages=[{'role':'system', 'content':system}, {'role':'user', 'content':user}],
-            **parameters)
-        self.last_usage = response.usage.model_dump() if response.usage else None
-        choice = response.choices[0] if response.choices else None
-        if choice is None or choice.finish_reason != 'stop' or getattr(choice.message, 'refusal', None) or getattr(choice.message, 'tool_calls', None):
-            raise IncompleteCompletionError(name, finish_reason=getattr(choice, 'finish_reason', None),
-                refusal=bool(getattr(choice.message, 'refusal', None)) if choice else False,
-                tool_calls=bool(getattr(choice.message, 'tool_calls', None)) if choice else False,
-                output_limit=self.config.max_new_tokens)
-        return choice.message.content
 
 
 def parse_response(raw):
@@ -150,11 +125,14 @@ class Execution:
                     raise
                 user = original + '\n\nCorrect the response to match the supplied contract. Validation: ' + str(exc)[:1200]
             except Exception as exc:
-                record.update(status='transport_error', error_type=type(exc).__name__)
+                record.update(status='transport_error', **error_metadata(exc))
                 raise RuntimeError(type(exc).__name__) from exc
             finally:
                 record.update(duration_seconds=round(time.monotonic()-started, 3),
                               usage=deepcopy(getattr(self.model, 'last_usage', None)))
+                transport = deepcopy(getattr(self.model, 'last_diagnostics', None))
+                if transport is not None:
+                    record['transport'] = transport
                 self.persist()
 
 

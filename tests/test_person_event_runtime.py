@@ -114,7 +114,7 @@ def test_invalid_request_does_not_spend_model_call(tmp_path, payload):
 
 
 @pytest.mark.parametrize('dependency', ['person_epg/build.py', 'person_epg/input.py',
-    'person_epg/building/completion_errors.py', 'generic.py', 'dataset.py', 'search/summary.py',
+    'person_epg/building/completion_errors.py', 'person_epg/building/model_transport.py', 'generic.py', 'dataset.py', 'search/summary.py',
     'model_api.py', 'model_config.py'])
 def test_runtime_fingerprint_covers_external_execution_dependencies(monkeypatch, dependency):
     from finmy.person_epg.event.runtime import code_identity
@@ -129,7 +129,7 @@ def test_runtime_fingerprint_covers_external_execution_dependencies(monkeypatch,
 
 
 @pytest.mark.parametrize('dependency', ['person_epg/build.py', 'person_epg/input.py',
-    'model_api.py', 'model_config.py'])
+    'person_epg/building/model_transport.py', 'model_api.py', 'model_config.py'])
 def test_changed_external_execution_code_refuses_resume_without_new_calls(tmp_path, payload, monkeypatch, dependency):
     model = Model([{'ok': True}])
     run = Execution(tmp_path, payload, EventBuildConfig(), model)
