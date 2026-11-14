@@ -80,3 +80,27 @@ def test_credentials_load_only_on_explicit_enabled_start(tmp_path,monkeypatch):
     c.start(tid);c.threads[tid].join(3)
     assert os.environ['FINMY_TEST_CREDENTIAL']=='fixture-only'
     monkeypatch.delenv('FINMY_TEST_CREDENTIAL')
+
+
+def test_failed_task_retry_continues_full_run_with_cumulative_usage(tmp_path):
+    url='https://example.org/acquisition'
+    outputs=iter(['invalid']*3 + ['invalid',dict(action='read_source',source=url),
+                               dict(action='finish',source_ids=[],gaps=['Unresolved'],reason='insufficient')])
+    fetched=[]
+    def fetch(source):
+        fetched.append(source)
+        return b'The fictional acquisition was announced.', 'txt', 'utf-8'
+    controller=SearchController(tmp_path,model=lambda context:next(outputs),fetcher=fetch,
+                                transport=lambda *a:pytest.fail('No search action'))
+    task_id=controller.create(TASK,{'max_model_calls':10})
+    controller.start(task_id);controller.threads[task_id].join(3)
+    assert not controller.active(task_id)
+    failed=controller.inspect(task_id)
+    assert failed['status']=='failed' and failed['usage']['model']==3
+    controller.start(task_id);controller.threads[task_id].join(3)
+    assert not controller.active(task_id)
+    retried=controller.inspect(task_id)
+    assert retried['status']=='insufficient'
+    assert retried['usage']=={'model':6,'search':0}
+    assert retried['task']==failed['task'] and retried['config']==failed['config']
+    assert len(retried['read_sources'])==1 and fetched==[url]

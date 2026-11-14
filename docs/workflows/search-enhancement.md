@@ -21,8 +21,9 @@ The same search-side agent and tools serve all cases. The logical steps are:
 5. Identify important remaining gaps; return to search when useful, or finish with unresolved gaps.
 6. Retain the complete selected material, then allocate the Builder input within its budget.
 
-Continuous execution is the normal path. Single-step execution and pause/resume use the
-same persisted state, so users need not manually operate each step for every case.
+The workbench uses continuous execution with Start/Continue, Pause and Retry for failed
+tasks. Retry continues the saved task rather than clearing it. CLI/Python single-step
+execution and pause/resume use the same persisted state.
 The agent assists relevance and gap decisions; it is not a factual completeness verifier.
 
 | Location | Responsibility |
@@ -97,8 +98,15 @@ The decoder accepts a single JSON object, optionally enclosed in one JSON code f
 It rejects empty content, duplicate keys, multiple objects, commentary and XML/DSML
 tool markup without guessing an action. Invalid responses use the existing bounded
 retry loop and cumulative call accounting; no separate repair-model call is added.
-JSON mode constrains syntax, while action and source validation still determine
-whether a response can be executed.
+The prompt requests only the next action and waits for program feedback. Research-plan
+citation labels are separate from runtime source IDs; planning notes are not proof of
+reading in the current run. JSON mode is requested from the provider, but returned content
+still passes strict decoding and validation before execution.
+
+Three consecutive execution errors stop the run. An explicit retry after this failure
+starts a fresh consecutive-error window; pause/single-step checkpoints do not reset it.
+All attempted model requests still count toward the original cumulative task budget,
+and prior logs and source versions are retained.
 
 All selected providers receive the same query for initial search and follow-up. Baidu
 uses Web Search standard with rewrite off by default; Bocha uses Web Search with summary;

@@ -75,7 +75,8 @@ def parse_action(raw):
         action = json.loads(text, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
     except json.JSONDecodeError as exc:
         raise InvalidActionOutput(
-            'Return exactly one JSON action object; no commentary, XML/DSML, or multiple actions') from exc
+            'No action was executed. Return only ONE next action as a JSON object, then stop '
+            'and wait for tool feedback; no sequence, commentary or XML/DSML.') from exc
     if not isinstance(action, dict):
         raise InvalidActionOutput('Action must be one JSON object, not an array or scalar')
     return action

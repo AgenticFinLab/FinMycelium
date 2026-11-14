@@ -147,10 +147,77 @@ def test_resume_preserves_failure_history_source_bytes_and_cumulative_calls(tmp_
     original_trace = (state.run_dir/'trace.jsonl').read_bytes()
     originals = {p:p.read_bytes() for p in (state.root/'sources').rglob('*') if p.is_file()}
     resumed = SearchState(tmp_path, 'resume')
+    retry = iter([DSML, json.dumps({'action':'finish','source_ids':[sid],'gaps':[],'reason':'supported'})])
     run_agent(resumed, SearchTools(resumed, fetcher=lambda *a:pytest.fail('Do not refetch')),
-        lambda context:json.dumps({'action':'finish','source_ids':[sid],'gaps':[],'reason':'supported'}))
+              lambda context:next(retry))
     assert resumed.data['status'] == 'finished'
-    assert resumed.data['usage'] == {'model':7,'search':0}
+    assert resumed.data['usage'] == {'model':8,'search':0}
+    trace = [json.loads(line) for line in (state.run_dir/'trace.jsonl').read_text().splitlines()]
+    retries = [row for row in trace if row['action']=='retry_started']
+    assert len(retries)==1 and retries[0]['previous_invalid_actions']==3
+    assert retries[0]['model_calls_used']==6
     assert resumed.data['sources'][sid] == source
     assert (state.run_dir/'trace.jsonl').read_bytes().startswith(original_trace)
     assert all(p.read_bytes() == data for p, data in originals.items())
+
+
+@pytest.mark.parametrize('trailing', [json.dumps(READ), DSML])
+def test_rejected_sequence_and_catalog_id_do_not_execute_before_corrected_action(tmp_path, trailing):
+    task = {**TASK, 'seed_urls':[READ['source']],
+            'research_notes':'SRC-5 was read during planning; this is not a runtime ID.'}
+    sid = digest(READ['source'])[:24]
+    contexts, fetched = [], []
+    responses = iter([
+        json.dumps(READ) + trailing,
+        json.dumps({'action':'read_source','source':'SRC-5'}),
+        json.dumps({'action':'read_source','source':sid}),
+        json.dumps({'action':'finish','source_ids':[sid],'gaps':[],'reason':'supported'}),
+    ])
+    def model(context):
+        contexts.append(deepcopy(context))
+        if len(contexts)<=3:
+            assert fetched==[] and not context['sources'][0]['reviewed']
+        return next(responses)
+    def fetch(url):
+        fetched.append(url)
+        return b'The fictional acquisition closed.', 'txt', 'utf-8'
+    result = run_search(task, root=tmp_path, task_id='case', model=model, fetcher=fetch,
+                        transport=lambda *a:pytest.fail('No search action'))
+    assert result['status']=='finished' and result['usage']=={'model':4,'search':0}
+    assert fetched==[READ['source']]
+    assert 'No action was executed' in contexts[1]['feedback']['hint']
+    assert 'Research-plan citations are not runtime IDs' in contexts[2]['feedback']['hint']
+    state = SearchState(tmp_path, 'case')
+    assert list(state.data['sources'])==[sid]
+    assert [a['action'] for a in state.data['actions']]==['read_source','finish']
+
+
+@pytest.mark.parametrize('source', ['SRC-5', 'unknown-id', 'file:///tmp/source.txt'])
+def test_unknown_read_id_is_rejected_without_mutation_or_fetch(tmp_path, source):
+    state = SearchState(tmp_path, 'case', task=TASK)
+    tools = SearchTools(state, fetcher=lambda *a:pytest.fail('No fetch for an unknown ID'))
+    tools.sources.register(READ['source'])
+    before = deepcopy(state.data)
+    files = {p:p.read_bytes() for p in state.root.rglob('*') if p.is_file()}
+    with pytest.raises(ValueError, match='Unknown runtime source ID'):
+        tools.read_source(source)
+    assert state.data==before
+    assert files=={p:p.read_bytes() for p in state.root.rglob('*') if p.is_file()}
+
+
+def test_checkpoints_preserve_error_streak_and_retry_cannot_reset_total_budget(tmp_path):
+    state = SearchState(tmp_path, 'case', task=TASK, config=SearchConfig(max_model_calls=5))
+    tools = SearchTools(state, transport=lambda *a:pytest.fail('No valid action'))
+    model = lambda context:DSML
+    for expected in (1,2,3):
+        run_agent(state, tools, model, max_steps=1)
+        state = SearchState(tmp_path, 'case')
+        tools = SearchTools(state)
+        assert state.data['invalid_actions']==expected
+        assert state.data['status']==('failed' if expected==3 else 'paused')
+    run_agent(state, tools, model)
+    assert state.data['status']=='limit' and state.data['stop_reason']=='model_limit'
+    assert state.data['usage']=={'model':5,'search':0}
+    assert state.data['invalid_actions']==2
+    run_agent(state, tools, lambda *a:pytest.fail('No calls left'))
+    assert state.data['usage']['model']==5

@@ -48,15 +48,16 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
                     controller.pause(task_id)
                     st.info('已请求暂停；当前请求结束后保存状态。')
             else:
-                if st.button('开始／继续', key='start-'+task_id, type='primary'):
+                if st.button('开始／继续', key='start-'+task_id, type='primary', disabled=data['status']=='failed'):
                     try:
                         controller.start(task_id)
                         st.rerun()
                     except ValueError as exc:
                         st.error(str(exc))
-                if data.get('mode') != 'simple' and st.button('执行一步', key='step-'+task_id):
+                if st.button('重试', key='retry-'+task_id, disabled=data['status']!='failed',
+                             help='继续失败的原任务，保留已有材料和累计用量。'):
                     try:
-                        controller.start(task_id, steps=1)
+                        controller.start(task_id)
                         st.rerun()
                     except ValueError as exc:
                         st.error(str(exc))
@@ -84,7 +85,7 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
         stats([('搜索请求', f"{data['usage']['search']} / {data['config']['max_search_requests']}", '按每家服务计数'),
                ('阅读来源', f"{len(data['read_sources'])} / {data['config']['max_read_sources']}", '不同来源'),
                ('模型请求', f"{data['usage']['model']} / {data['config']['max_model_calls']}", '搜索侧模型')])
-        st.caption('上限使用率不代表检索完成度。执行一步包含一次模型决策及工具执行。')
+        st.caption('上限使用率不代表检索完成度；重试会保留已有材料和累计用量。')
         with st.expander('范围、模型与原始配置'):
             st.json({'task_id':task_id, 'task':data['task'], 'config':data['config']}, expanded=False)
         if not read_only:

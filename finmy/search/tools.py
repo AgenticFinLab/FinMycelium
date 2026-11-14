@@ -2,6 +2,7 @@
 import os
 import time
 from dataclasses import asdict
+from urllib.parse import urlsplit
 from .sources import SourceStore
 from .state import LimitReached, digest, write_json
 
@@ -164,6 +165,9 @@ class SearchTools:
         if query is not None and location:
             raise ValueError('Choose a reading query or an explicit location, not both')
         if source not in self.state.data['sources']:
+            if urlsplit(source).scheme not in {'http', 'https'}:
+                raise ValueError('Unknown runtime source ID; copy source_id from sources or use a public '
+                                 'HTTP(S) URL. Research-plan citations are not runtime IDs; nothing was read.')
             source = self.sources.register(source)
         started = time.monotonic()
         self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))

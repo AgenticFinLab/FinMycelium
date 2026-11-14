@@ -52,7 +52,7 @@ def render_process(controller, task_id, data, *, read_only=False):
     elif data.get('status') in {'failed', 'limit'}:
         st.warning('任务尚未成功交接；查看下面的失败步骤及停止原因。')
     if not rows:
-        st.caption('保存任务不会启动调用。点击“执行一步”后，这里展示一次决策及其执行结果。')
+        st.caption('保存任务不会启动调用。点击“开始／继续”后，这里展示决策及执行结果；失败后可点击“重试”。')
     else:
         errors = sum(bool(r['errors']) for r in rows)
         a, b, c = st.columns(3)
