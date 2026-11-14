@@ -90,7 +90,9 @@ Direct Python calls default to FinMycelium's ignored `output/builds/`:
 
 When the user confirms the material and saves a workbench build task, its fixed
 search record is collected into the catalog event's `search/` (`search-summary.md`,
-`sources.csv`, `manifest.json`). Runtime output remains in the paths above.
+`sources.csv`, `manifest.json`, `builder-input.json`). The input JSON preserves the exact
+confirmed payload, including text and person/source metadata, with hashes in the manifest.
+Runtime output remains in the paths above.
 After content and evidence review, collect final `epg.json`, `gantt.html`, and
 `review.md` under the event's `epg/`, then update accepted paths in `events.csv`.
 Saving or executing a build does not perform graph acceptance.

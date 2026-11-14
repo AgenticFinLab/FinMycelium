@@ -337,8 +337,9 @@ can migrate saved records without runtime files or service calls.
 Direct command-line search keeps its existing output location. See [dataset selection and automatic summaries](event-workbench.md#select-an-event-from-epg-dataset).
 
 When confirmed material becomes a workbench build task, the event's formal
-`search/` receives `search-summary.md`, `sources.csv` and `manifest.json` for the
-adopted handoff. This collection is separate from all-attempt workbench records
+`search/` receives `builder-input.json`, `search-summary.md`, `sources.csv` and
+`manifest.json` for the adopted handoff. The input file contains the exact confirmed
+Builder payload and is covered by the manifest hashes. This collection is separate from all-attempt workbench records
 and from the event's reviewed `epg/` artifacts. Search reruns do not overwrite it.
 See [adopted search and reviewed graphs](event-workbench.md#adopted-search-and-reviewed-graphs).
 

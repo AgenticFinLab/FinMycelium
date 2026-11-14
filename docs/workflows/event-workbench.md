@@ -139,8 +139,12 @@ is configured, they still export their task records under `workbench/search/`.
 
 ### Adopted search and reviewed graphs
 
-Saving a confirmed build task collects three lightweight files under the catalog
-event's `search/`: `search-summary.md`, `sources.csv`, and `manifest.json`. Person
+Saving a confirmed build task collects the adopted input and its records under the catalog
+event's `search/`: `builder-input.json`, `search-summary.md`, `sources.csv`, and
+`manifest.json`. The input JSON is the exact frozen Builder payload, including query,
+identity/source metadata and original selected text. Its file hash and structured-input
+hash are recorded in the manifest. These confirmed files belong in Git; original
+downloads, unselected bodies and runtime logs remain ignored. Person
 builds use the existing actual-material confirmation; ordinary builds use the
 existing evidence review after adopting search material. This does not start a worker.
 

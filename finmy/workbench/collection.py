@@ -15,7 +15,8 @@ from finmy.search.metadata import publication_metadata
 from finmy.search.summary import cell, directory_lock
 from finmy.workbench.records import CATALOG_KEYS, pick, public_url, relative, search_config
 
-FILES = ('search-summary.md', 'sources.csv', 'manifest.json')
+LEGACY_FILES = ('search-summary.md', 'sources.csv', 'manifest.json')
+FILES = (*LEGACY_FILES, 'builder-input.json')
 FIELDS = ('input_sample_id', 'search_task_id', 'source_id', 'title', 'url', 'published_at',
           'status', 'versions', 'parsed_hashes', 'content_sha256', 'characters')
 
@@ -108,7 +109,7 @@ def ordinary_adoptions(store, event_id, bundle):
 
 
 def prepare_collection(task_id, body, adoptions):
-    """The build row retains this small snapshot when the event adopts a successor."""
+    """The build row retains the confirmed input and collection when the event adopts a successor."""
     if not adoptions:
         return None
     catalog = adoptions[0]['catalog']
@@ -117,6 +118,8 @@ def prepare_collection(task_id, body, adoptions):
         if catalog_event_directory(adoption['catalog']) != folder.parent:
             raise ValueError('采用的检索材料指向不同事件目录')
     bundle = body['input']
+    if digest(bundle) != body['input_hash']:
+        raise ValueError('实际构建输入与固定哈希不一致')
     samples = {s['sample_id']: s for s in bundle['samples']}
     sources = [deepcopy(s) for a in adoptions for s in a['sources']]
     for source in sources:
@@ -137,8 +140,8 @@ def prepare_collection(task_id, body, adoptions):
     review = (body.get('input_confirmation') or
               pick(body.get('evidence_review', {}), ('id', 'reviewer', 'note', 'created', 'decision', 'target')))
     root = Path(catalog['root']).resolve()
-    manifest = dict(format_version=1, kind='adopted_search', catalog=pick(catalog, CATALOG_KEYS),
-        build_task_id=task_id, input_sha256=body['input_hash'], confirmation=review,
+    manifest = dict(format_version=2, kind='adopted_search', catalog=pick(catalog, CATALOG_KEYS),
+        build_task_id=task_id, input_sha256=body['input_hash'], input_file='builder-input.json', confirmation=review,
         research_scope=adoptions[0]['scope'], input_characters=sum(len(s['content']) for s in samples.values()),
         input_sample_count=len(samples), build_record=f'workbench/build/{task_id}/task.json',
         runtime_directory=relative(body['artifact_directory'], root),
@@ -156,7 +159,8 @@ def prepare_collection(task_id, body, adoptions):
         f"- Build input SHA256: {body['input_hash']}",
         f"- Input: {len(samples)} samples; {manifest['input_characters']:,} characters.",
         '- The user confirmed this material for construction; this is not final graph acceptance.',
-        '- Generated at build-task creation. Source bodies and logs remain in ignored output storage.',
+        '- Generated at build-task creation. builder-input.json contains the exact confirmed Builder input.',
+        '- Other source bodies, original downloads and logs remain in ignored output storage.',
         '- sources.csv lists only the actual build input. manifest.json pins the handoffs and input hashes.',
         '', '## Confirmed scope', '']
     for key in ('period', 'include', 'exclude'):
@@ -170,7 +174,8 @@ def prepare_collection(task_id, body, adoptions):
     lines += ['', '## Known gaps', '', 'Search Agent observations; input confirmation does not resolve these gaps.', '']
     gaps = list(dict.fromkeys(g for a in adoptions for g in a['gaps']))
     lines += ['- '+cell(g) for g in gaps] or ['- No gap assessment recorded; completeness is not implied.']
-    files = {'sources.csv': stream.getvalue(), 'search-summary.md': '\n'.join(lines)+'\n'}
+    files = {'sources.csv': stream.getvalue(), 'search-summary.md': '\n'.join(lines)+'\n',
+             'builder-input.json': json.dumps(bundle, ensure_ascii=False, sort_keys=True, indent=2)+'\n'}
     manifest['file_sha256'] = {name: digest(content.encode()) for name, content in files.items()}
     files['manifest.json'] = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)+'\n'
     return dict(directory=str(folder.relative_to(root)), files=files,
@@ -203,10 +208,11 @@ def publish_collection(catalog, collection, *, manifest_lookup=None):
             before = {p.name: p.read_bytes() for p in folder.iterdir()}
             if before:
                 old = json.loads(before.get('manifest.json', b'{}'))
-                if (set(before) != set(FILES) or old.get('kind') != 'adopted_search'
+                expected_files = {1: set(LEGACY_FILES), 2: set(FILES)}.get(old.get('format_version'))
+                if (set(before) != expected_files or old.get('kind') != 'adopted_search'
                         or old.get('catalog', {}).get('event_id') != catalog['event_id']
                         or any(digest(before[name]) != old.get('file_sha256', {}).get(name)
-                               for name in FILES if name != 'manifest.json')):
+                               for name in before if name != 'manifest.json')):
                     raise ValueError('已有收录文件被手动更改或无法识别，已保留')
             if before:
                 previous = component(old.get('build_task_id', ''))

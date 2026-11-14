@@ -71,17 +71,24 @@ def test_person_collection_requires_confirmation_and_keeps_originals(setup):
     body = builds.inspect(bid)['body']
     assert builds.inspect(bid)['status'] == 'ready'
     assert not Path(body['artifact_directory']).exists()  # no worker or graph construction
-    assert set(contents(folder)) == {'manifest.json', 'search-summary.md', 'sources.csv'}
+    assert set(contents(folder)) == {'manifest.json', 'search-summary.md', 'sources.csv', 'builder-input.json'}
     manifest = json.loads((folder/'manifest.json').read_text())
     assert manifest['build_task_id'] == bid and manifest['input_sha256'] == digest(body['input'])
     assert manifest['search_handoffs'][0]['handoff_revision'] == before['handoff_revision']
     assert manifest['search_handoffs'][0]['search_input_sha256'] == digest(before['builder_input'])
     assert manifest['graph_acceptance'] == 'not_implied'
-    assert 'PRIVATE ORIGINAL' not in '\n'.join(v.decode() for v in contents(folder).values())
+    frozen = json.loads((folder/'builder-input.json').read_text())
+    assert frozen == body['input']
+    assert digest(frozen) == manifest['input_sha256']
+    assert manifest['input_file'] == 'builder-input.json'
+    assert manifest['file_sha256']['builder-input.json'] == digest((folder/'builder-input.json').read_bytes())
+    assert 'PRIVATE ORIGINAL' in (folder/'builder-input.json').read_text()
+    assert 'PRIVATE ORIGINAL' not in '\n'.join(v.decode() for k,v in contents(folder).items() if k != 'builder-input.json')
     assert controller.inspect(tid) == before and calls == ['search']
     assert all(p.read_bytes() == text for p, text in tables.items())
     assert not (folder.parent/'epg').exists()
     shared = json.loads((root/'workbench/build'/bid/'task.json').read_text())
+    assert 'PRIVATE ORIGINAL' not in json.dumps(shared)
     assert shared['search_collection']['manifest'] == manifest
     assert shared['search_collection']['manifest_sha256'] == digest((folder/'manifest.json').read_bytes())
 
@@ -133,10 +140,14 @@ def test_ordinary_collection_uses_reviewed_subset_and_frozen_handoff(setup):
     assert manual['search_task_id'] == '' and manual['status'] == 'workbench_material'
     assert manifest['confirmation']['reviewer'] == 'Test reviewer'
     assert 'PRIVATE' not in (folder/'manifest.json').read_text()
+    frozen = json.loads((folder/'builder-input.json').read_text())
+    assert frozen == body['input']
+    assert source['id'] not in {s['sample_id'] for s in frozen['samples']}
+    assert any(s['content'] == 'PRIVATE MANUAL MATERIAL' for s in frozen['samples'])
     assert not (folder.parent/'epg').exists() and calls == ['search']
 
 
-@pytest.mark.parametrize('filename', ['manifest.json', 'sources.csv', 'search-summary.md'])
+@pytest.mark.parametrize('filename', ['manifest.json', 'sources.csv', 'search-summary.md', 'builder-input.json'])
 def test_collection_preserves_manual_edits(setup, filename):
     _, store, controller, _ = setup
     tid, choice = finish(setup)
@@ -216,3 +227,48 @@ def test_failed_directory_publish_keeps_original_collection(setup, monkeypatch):
         builds.create_person(controller, tid, confirmed=True)
     assert contents(folder) == before and len(builds.tasks()) == 1
     assert not list(folder.parent.glob('.search-*'))
+
+
+def test_legacy_collection_upgrades_on_confirmed_save_only(setup, monkeypatch):
+    from finmy.workbench import build_tasks, collection as collection_module
+    _, store, controller, _ = setup
+    tid, choice = finish(setup)
+    prepare = build_tasks.prepare_collection
+    def legacy(*args, **kwargs):
+        collection = prepare(*args, **kwargs)
+        files = collection['files']; files.pop('builder-input.json')
+        manifest = json.loads(files['manifest.json'])
+        manifest['format_version'] = 1
+        manifest.pop('input_file')
+        manifest['file_sha256'].pop('builder-input.json')
+        files['manifest.json'] = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)+'\n'
+        collection['manifest_sha256'] = digest(files['manifest.json'].encode())
+        return collection
+    builds = BuildController(store)
+    with monkeypatch.context() as patch:
+        patch.setattr(build_tasks, 'prepare_collection', legacy)
+        patch.setattr(collection_module, 'FILES', collection_module.LEGACY_FILES)
+        first = builds.create_person(controller, tid, confirmed=True)
+    first_body = deepcopy(builds.inspect(first)['body'])
+    folder = catalog_event_directory(choice)/'search'
+    old = contents(folder)
+    assert 'builder-input.json' not in old
+    controller.reassemble(tid,10000)
+    assert contents(folder) == old
+    second = builds.create_person(controller,tid,confirmed=True)
+    assert json.loads((folder/'manifest.json').read_text())['format_version'] == 2
+    assert json.loads((folder/'builder-input.json').read_text()) == builds.inspect(second)['body']['input']
+    assert builds.inspect(first)['body'] == first_body
+    assert not list(folder.parent.glob('.search-*'))
+
+
+def test_missing_confirmed_input_is_not_treated_as_legacy_collection(setup):
+    _,store,controller,_ = setup
+    tid,choice = finish(setup);builds = BuildController(store)
+    builds.create_person(controller,tid,confirmed=True)
+    folder = catalog_event_directory(choice)/'search'
+    (folder/'builder-input.json').unlink()
+    before = contents(folder)
+    with pytest.raises(ValueError,match='保留'):
+        builds.create_person(controller,tid,confirmed=True)
+    assert contents(folder) == before and len(builds.tasks()) == 1
