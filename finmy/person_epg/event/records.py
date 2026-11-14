@@ -17,6 +17,11 @@ def json_bytes(value):
     return (json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n').encode('utf-8')
 
 
+def prompt_json(value):
+    """Compact model input; durable artifacts retain their readable serialization."""
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+
+
 def fingerprint(value):
     """json-canonical-v1; deliberately distinct from on-disk artifact hashes."""
     return sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'),

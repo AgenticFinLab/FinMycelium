@@ -12,6 +12,8 @@ from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference,
 from .records import IdMap, fingerprint, index_records, seed_facts, validate_input
 from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now, write_json
 from .schema import COLLECTION_IDS
+from .feedback import correction_scope, correction_issues, validate_correction, unresolved_report, reserved_records
+from .context import navigation, sized_request
 from .validation import check_graph
 
 
@@ -29,21 +31,7 @@ def body_ranges(payload, config):
 
 def brief(package):
     """Global navigation index. Exact records remain available through read_records."""
-    result = {}
-    for collection in ('entities', 'actions', 'contexts', 'stages', 'phases', 'relation_candidates'):
-        result[collection] = []
-        key = COLLECTION_IDS[collection]
-        for record in package.get(collection, []):
-            item = {k: deepcopy(v) for k, v in record.items() if k in
-                    (key, 'name', 'actor', 'type', 'time', 'category', 'phase_id', 'stage_id', 'from_action_id', 'to_action_id')}
-            if 'description' in record:
-                item['description_preview'] = record['description'][:280]
-                item['description_truncated'] = len(record['description']) > 280
-            result[collection].append(item)
-    result['evidence_index'] = [{k: deepcopy(v) for k, v in e.items() if k != 'quote'} |
-                                {'quote_preview': e['quote'][:200], 'quote_truncated': len(e['quote']) > 200}
-                               for e in package.get('evidence', [])]
-    return result
+    return navigation(package)
 
 
 def ambiguity_groups(facts):
@@ -79,13 +67,73 @@ class Construction:
         self.ids = IdMap(execution.state['id_map'])
 
     def request(self, role, package, **fields):
-        return dict(role=role, identity=self.run.payload['user_query']['extras']['person_event'],
-                    query_text=self.run.payload['user_query']['query_text'], facts_index=brief(package),
+        base = dict(role=role, identity=self.run.payload['user_query']['extras']['person_event'],
+                    query_text=self.run.payload['user_query']['query_text'],
                     read_limits=dict(read_chars=self.run.config.read_chars, retrieval_top_k=self.run.config.retrieval_top_k),
                     **fields)
+        return sized_request(base, package, self.run.config.max_context_chars - len(system_prompt(role)),
+                             reserve=self.run.config.read_chars + 1024)
 
-    def receive(self, task_id, role, package, request, **scope):
-        raw = self.run.infer(task_id, system_prompt(role), request, package, lambda v: validate_envelope(role, v))
+    def receive(self, task_id, role, package, request, *, reserved=None, **scope):
+        system = system_prompt(role)
+        group = self.run.attempt_group(task_id, system, request, package)
+        records, allowed = [], None
+        result = package
+        for number in range(self.run.config.max_json_attempts):
+            step_id = task_id if number == 0 else task_id + '.correct.' + str(number)
+            validator = (lambda v: validate_envelope(role, v)) if allowed is None else \
+                (lambda v: validate_correction(role, v, allowed))
+            try:
+                raw = self.run.infer(step_id, system, request, result, validator, attempt_group=group)
+            except InvalidResponse:
+                if not records:
+                    raise
+                break  # Preserve adopted facts and the outstanding rejection evidence.
+            result, record = self.adopt(step_id, role, result, request, raw, reserved=allowed or reserved, **scope)
+            records.append(record)
+            if number:
+                self.resolve_fact_corrections(records[:-1], record)
+                # A repaired refusal's generated pending is removed only if nothing
+                # else still owns it. Model-authored pending never disappears here.
+                live = [p for r in self.reports for p in self.outstanding(r)['pending']]
+                discharged = [{k: i[k] for k in ('refs', 'reason', 'evidence_ids')}
+                    for r in records for i in r['report']['rejected']
+                    if fingerprint(i) in {x['issue_fingerprint'] for x in r.get('resolutions', [])}]
+                if 'pending' in result:
+                    result['pending'] = [p for p in result['pending'] if p not in discharged or p in live]
+            if result.get('schema_version') == self.facts['schema_version']:
+                self.facts = result
+                self.save_facts()  # A pause/error during correction must retain valid neighbors.
+            combined = unresolved_report(records, self.outstanding)
+            handled = {(ref['collection'], ref['object_id']) for r in records[1:]
+                       for item in r['report']['accepted_items'] for ref in item['refs']}
+            allowed = correction_scope(role, combined, result, handled)
+            if not allowed:
+                break
+            self.run.reject_proposals(group, fingerprint(dict(task_id=step_id, response=raw)), combined['rejected'])
+            fields = {k: deepcopy(v) for k, v in request.items() if k not in (
+                'role', 'identity', 'query_text', 'facts_index', 'read_limits', 'related_records', 'context_selection')}
+            fields['correction'] = dict(issues=correction_issues(combined['rejected'], allowed), allowed_records=allowed)
+            if role == 'consolidation':
+                scope = dict(assigned={(c, oid) for c, ids in allowed.items() for oid in ids})
+                fields['assigned'] = [reference(c, oid) for c, oid in sorted(scope['assigned'])]
+                fields['candidates'] = [dict(collection=c, record=index_records(result)[c][oid])
+                                         for c, oid in sorted(scope['assigned'])]
+            request = self.request(role, result, **fields)
+        return result, unresolved_report(records, self.outstanding)
+
+    def resolve_fact_corrections(self, previous, correction):
+        accepted = {(r['collection'], r['object_id']) for record in [*previous[1:], correction]
+                    for item in record['report']['accepted_items'] for r in item['refs']}
+        for record in previous:
+            for issue in self.outstanding(record)['rejected']:
+                refs = {(r['collection'], r['object_id']) for r in issue['refs']
+                        if isinstance(r, dict) and 'collection' in r and 'object_id' in r}
+                if refs and refs <= accepted:
+                    record.setdefault('resolutions', []).append(dict(issue_fingerprint=fingerprint(issue),
+                        resolved_by=correction['task_id']))
+
+    def adopt(self, task_id, role, package, request, raw, *, reserved=None, **scope):
         namespace = task_id + ':' + fingerprint(dict(request=request, response=raw))
         ranges = defaultdict(list)
         if 'body' in request:
@@ -101,21 +149,38 @@ class Construction:
         for evidence in package['evidence']:
             if evidence['location_status'] == 'matched':
                 ranges[evidence['sample_id']].append((evidence['start'], evidence['end']))
-        receiver = Receiver(package, self.run.payload, self.ids, namespace, ranges)
+        receiver = Receiver(package, self.run.payload, self.ids, namespace, ranges, reserved=reserved)
         method = {'extraction': receiver.extract, 'consolidation': receiver.consolidate,
                   'organization': receiver.organize, 'relations': receiver.relate}[role]
         result, report = method(raw, **scope)
         record = dict(task_id=task_id, role=role, report=report)
+        if role == 'extraction' and 'body' in request:
+            record['body_processed'] = True
         self.reports.append(record)
         self.run.state['id_map'] = self.ids.mapping
         self.run.persist()
         self.run.save(task_id + '-adoption.json', dict(**record, package_fingerprint=fingerprint(result)))
-        return result, report
+        return result, record
 
     def save_facts(self):
+        self.sync_coverage()
         path, digest = self.run.save('facts.json', self.facts)
         self.run.state.update(facts=path, facts_sha256=digest, coverage=self.coverage)
         self.run.persist()
+
+    def sync_coverage(self):
+        """Body delivery/processing and unresolved proposals are different facts."""
+        for number, block in enumerate(self.coverage):
+            task_id = 'extract.' + str(number)
+            records = [r for r in self.reports if r['task_id'] == task_id or r['task_id'].startswith(task_id + '.correct.')]
+            if any(r.get('body_processed') for r in records):
+                block['body_status'] = 'processed'
+                report = unresolved_report(records, self.outstanding)
+                block['proposal_status'] = 'unresolved' if report['rejected'] or report['pending'] else 'resolved'
+                block['status'] = 'partial' if block['proposal_status'] == 'unresolved' else 'processed'
+            else:
+                block['body_status'] = 'failed' if block['status'] == 'failed' else 'not_processed'
+                block['proposal_status'] = 'not_processed'
 
     def extract(self):
         ranges = list(body_ranges(self.run.payload, self.run.config))
@@ -191,7 +256,8 @@ class Construction:
             owned_actions = action_ids[start:start + 24]
             owned_phases = phase_ids if number == 0 else []
             request = self.request('relations', self.graph, assigned_action_ids=owned_actions,
-                assigned_phase_ids=owned_phases, relation_candidates=self.facts['relation_candidates'],
+                assigned_phase_ids=owned_phases, relation_candidates=[c for c in self.facts['relation_candidates']
+                    if c.get('from_action_id') in owned_actions or c.get('to_action_id') in owned_actions],
                 assigned_records=dict(actions=[a for a in self.graph['actions'] if a['action_id'] in owned_actions],
                                      phases=[p for p in self.graph['phases'] if p['phase_id'] in owned_phases]))
             self.graph, _ = self.receive('relate.' + str(number), 'relations', self.graph, request,
@@ -223,6 +289,7 @@ class Construction:
                     if item['item'].startswith('assignment:') for r in item['refs']}
         updated = {(r['collection'], r['object_id']) for item in repaired.get('accepted_items', [])
                    if item['item'].startswith('context_updates:') for r in item['refs']}
+        adopted = {(r['collection'], r['object_id']) for item in repaired.get('accepted_items', []) for r in item['refs']}
         for record in self.reports:
             if record['role'] != role or record['task_id'].startswith('repair.'):
                 continue
@@ -236,6 +303,14 @@ class Construction:
                     done = bool(ids) and ids <= assigned
                 if issue['item'] == 'missing_context_update' or issue['item'].startswith('context_updates:'):
                     done = bool(refs) and refs <= updated
+                if issue['item'].startswith(('stages:', 'phases:', 'relation:')):
+                    done = bool(refs) and refs <= adopted
+                if issue['item'].startswith('context:'):
+                    ids = {oid for collection, oid in refs if collection == 'contexts'}
+                    linked = {ref['context_id'] for collection, field in (
+                        ('phases', 'baseline_context_refs'), ('actions', 'delta_context_refs'))
+                        for record in self.graph[collection] for ref in record.get(field, [])}
+                    done = bool(ids) and ids <= linked
                 if done:
                     record.setdefault('resolutions', []).append(dict(
                         issue_fingerprint=fingerprint(issue), resolved_by='repair.' + role))
@@ -296,7 +371,8 @@ class Construction:
                     action_ids = [a['action_id'] for a in self.graph['actions']]
                 scope = dict(action_ids=action_ids, phase_ids=phase_ids)
                 request = self.request(role, self.graph, repair_issues=task['issues'], assigned_action_ids=action_ids, assigned_phase_ids=phase_ids)
-            self.graph, report = self.receive('repair.' + role, role, self.graph, request, **scope)
+            self.graph, report = self.receive('repair.' + role, role, self.graph, request,
+                reserved=reserved_records(task['issues']), **scope)
             if role == 'organization':
                 self.retain_splits(report)
             self.record_resolutions(role, report)
@@ -307,7 +383,8 @@ class Construction:
             self.graph = graph_from_facts(self.facts)
         unresolved = [dict(r, report=self.outstanding(r)) for r in self.reports
                       if self.outstanding(r)['rejected'] or self.outstanding(r)['pending']]
-        coverage_done = bool(self.coverage) and all(r['status'] == 'processed' for r in self.coverage)
+        body_done = bool(self.coverage) and all(r['body_status'] == 'processed' for r in self.coverage)
+        coverage_done = body_done and all(r['proposal_status'] == 'resolved' for r in self.coverage)
         report = check_graph(self.graph, self.run.payload) if self.graph else check_graph(self.facts, self.run.payload)
         facts_check = check_graph(self.facts, self.run.payload)
         if self.graph:
@@ -328,10 +405,15 @@ class Construction:
             summary=report['summary'], issues=report['issues'], review_required=True,
             coverage=self.coverage, unresolved_tasks=unresolved,
             result_status=result, execution_status=execution_status)
-        if not coverage_done:
+        if not body_done:
             checks['issues'].append(dict(code='BODY_PROCESSING_INCOMPLETE', severity='warning', artifact='facts',
                 object_type='event', object_id=self.facts['event']['event_id'], field='',
-                message='Some handed body ranges or their proposals remain unprocessed or unresolved.'))
+                message='Some handed body ranges have not produced a processed response.'))
+            checks['summary']['warnings'] += 1
+        if any(r['proposal_status'] == 'unresolved' for r in self.coverage):
+            checks['issues'].append(dict(code='PROPOSALS_UNRESOLVED', severity='warning', artifact='facts',
+                object_type='event', object_id=self.facts['event']['event_id'], field='',
+                message='Body processing returned candidate work that remains rejected or pending.'))
             checks['summary']['warnings'] += 1
         checks_path, checks_hash = self.run.save('checks.json', checks)
         self.run.save('adoption.json', self.reports)

@@ -9,7 +9,7 @@ import re
 import time
 import uuid
 
-from .records import fingerprint, index_records, json_bytes, pointer, sha256
+from .records import fingerprint, index_records, json_bytes, pointer, sha256, prompt_json
 from .schema import FACTS_VERSION, GRAPH_VERSION
 from ..building.model_transport import error_metadata
 from ..building.completion_errors import IncompleteCompletionError
@@ -259,12 +259,27 @@ class Execution:
         if (self.directory / 'pause_requested').is_file():
             raise PauseRequested('Paused between model calls; checkpoints and cumulative usage are retained')
 
-    def infer(self, task_id, system, request, package, validator):
+    def attempt_group(self, task_id, system, request, package):
+        return task_id + '-' + fingerprint(dict(system=system, request=request, package=package,
+            config=semantic_config(self.config), code=self.state['code_sha256']))[:16]
+
+    def reject_proposals(self, group, response_key, issues):
+        """Adoption failures spend the same persisted allowance as invalid JSON.
+
+        Replay of a cached response does not spend a second attempt.
+        """
+        budget = self.state.setdefault('validation_attempts', {}).setdefault(group, {})
+        budget.setdefault('adoption:' + response_key, dict(kind='adoption', issues=deepcopy(issues)))
+        self.persist()
+
+    def infer(self, task_id, system, request, package, validator, *, attempt_group=None):
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', task_id):
             raise ValueError('Invalid task ID')
         dependency = fingerprint(dict(system=system, request=request, package=package,
                                       config=semantic_config(self.config), code=self.state['code_sha256']))
         key = task_id + '-' + dependency[:16]
+        group = attempt_group or key
+        budget = self.state.setdefault('validation_attempts', {}).setdefault(group, {})
         checkpoint = self.directory / 'checkpoints' / (key + '.json')
         if checkpoint.is_file():
             try:
@@ -279,12 +294,12 @@ class Execution:
                 self.persist()
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
         corpus = Corpus(self.payload, package, self.config)
-        while task['invalid_attempts'] < self.config.max_json_attempts:
+        while len(budget) < self.config.max_json_attempts:
             self.check_pause()
             user = dict(task=request, read_results=task['read_results'])
             if task.get('validation_error'):
                 user['validation_error'] = task['validation_error']
-            user_text = json_bytes(user).decode('utf-8')
+            user_text = prompt_json(user)
             if len(system) + len(user_text) > self.config.max_context_chars:
                 raise LimitReached('model_context_chars')
             if len(self.state['calls']) >= self.config.max_calls:
@@ -343,7 +358,8 @@ class Execution:
                 call['status'] = 'invalid_output'
                 task['invalid_attempts'] += 1
                 task['validation_error'] = str(exc)[:1600]
-                if task['invalid_attempts'] >= self.config.max_json_attempts:
+                budget['format:' + call_id] = dict(kind='protocol', message=task['validation_error'])
+                if len(budget) >= self.config.max_json_attempts:
                     raise InvalidResponse(task['validation_error']) from exc
             except BaseException as exc:
                 call.update(status='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'transport_error',

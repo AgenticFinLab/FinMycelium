@@ -62,6 +62,24 @@ def _errors(package, payload):
     return {fingerprint(i): i for i in check_graph(package, payload, complete=False)['issues'] if i['severity'] == 'error'}
 
 
+class ProposalError(ValueError):
+    def __init__(self, issues):
+        self.issues = issues
+        super().__init__('; '.join(f"{i['code']} {i['object_type']}:{i['object_id']}{i['field']}: {i['message']}"
+                                 for i in issues[:4]))
+
+
+def merge_aliases(current, proposed):
+    """A canonical identity is immutable; alias additions are not identity edits."""
+    if ({k: v for k, v in current.items() if k != 'aliases'} !=
+            {k: v for k, v in proposed.items() if k != 'aliases'}):
+        raise ValueError('Canonical entity ID, name and type cannot be overwritten')
+    aliases = proposed.get('aliases', [])
+    if not isinstance(aliases, list) or any(not isinstance(a, str) for a in aliases):
+        raise ValueError('Entity aliases must be strings')
+    current['aliases'] = list(dict.fromkeys([*current.get('aliases', []), *aliases]))
+
+
 def preserve_known_fields(originals, target, decision, package):
     """Keep known conditional facts, or require an explicit supported correction."""
     support_index = SupportIndex(package)
@@ -119,10 +137,11 @@ def preserve_context_refs(previous, proposed):
 
 
 class Receiver:
-    def __init__(self, package, payload, id_map, namespace, read_ranges=None):
+    def __init__(self, package, payload, id_map, namespace, read_ranges=None, reserved=None):
         self.package, self.payload = deepcopy(package), payload
         self.ids, self.namespace = id_map, namespace
         self.read_ranges = read_ranges
+        self.reserved = reserved or {}
         self.report = dict(accepted=[], accepted_items=[], rejected=[], pending=[], reported_pending=[])
 
     def reject(self, label, reason, refs=None, evidence_ids=None):
@@ -137,9 +156,10 @@ class Receiver:
             change(candidate)
             introduced = [v for k, v in _errors(candidate, self.payload).items() if k not in before]
             if introduced:
-                raise ValueError('; '.join(i['code'] + ': ' + i['message'] for i in introduced[:4]))
+                raise ProposalError(introduced)
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             self.reject(label, exc, refs)
+            self.report['rejected'][-1]['issues'] = deepcopy(getattr(exc, 'issues', []))
             if proposal is not None:
                 self.report['rejected'][-1]['proposal'] = deepcopy(proposal)
             return False
@@ -160,7 +180,7 @@ class Receiver:
             key = COLLECTION_IDS[collection]
             temporary = record.get(key)
             if isinstance(temporary, str) and temporary.strip():
-                mappings[collection][temporary] = (temporary if temporary in indexes[collection]
+                mappings[collection][temporary] = (temporary if temporary in indexes[collection] or temporary in self.reserved.get(collection, [])
                     else self.ids.assign(collection, temporary, self.namespace))
 
         for collection in COLLECTION_IDS:
@@ -185,7 +205,7 @@ class Receiver:
             elif isinstance(value, dict):
                 rid = value.get('context_ref_id')
                 if 'context_id' in value and isinstance(rid, str) and rid.strip():
-                    mappings['context_refs'][rid] = rid if rid in known_context_refs else self.ids.assign('context_refs', rid, self.namespace)
+                    mappings['context_refs'][rid] = rid if rid in known_context_refs or rid in self.reserved.get('context_refs', []) else self.ids.assign('context_refs', rid, self.namespace)
                 for item in value.values():
                     associations(item)
         associations(response)
@@ -231,13 +251,17 @@ class Receiver:
                     raise ValueError('Missing record ID')
                 current = index_records(package)[collection].get(record[key])
                 if current:
+                    if collection == 'entities':
+                        merge_aliases(current, record)
+                        return
                     if current != record:
                         raise ValueError('This role cannot overwrite an existing record')
                     return
                 if collection == 'actions' and record.get('phase_id') is not None:
                     raise ValueError('Extraction cannot assign Phase')
                 package[collection].append(deepcopy(record))
-            self.apply(label, change, proposal=record)
+            self.apply(label, change, [reference(collection, record[key])] if isinstance(record, dict)
+                       and isinstance(record.get(key), str) else [], proposal=record)
 
     def extract(self, response):
         response = self.prepare('extraction', response)
@@ -284,6 +308,8 @@ class Receiver:
                         raise ValueError('Extraction cannot assign hierarchy')
                     package[collection].append(deepcopy(record))
             self.apply('candidates:' + ','.join(map(str, sorted(component))), change,
+                       [reference(records[n][0], records[n][1][COLLECTION_IDS[records[n][0]]]) for n in sorted(component)
+                        if isinstance(records[n][1], dict) and isinstance(records[n][1].get(COLLECTION_IDS[records[n][0]]), str)],
                        proposal=[dict(collection=records[n][0], record=records[n][1]) for n in sorted(component)])
         if not any(response[c] for c in FIELDS['extraction']) and not response.get('note') and not response['pending']:
             self.reject('empty_extraction', 'Explain why this body range contains no in-scope facts, or record pending work')
@@ -395,7 +421,8 @@ class Receiver:
 
             def change(package):
                 handled.update(self.decision(package, decision, assigned, consumed))
-            if self.apply('decision:' + str(number), change, proposal=decision):
+            refs = decision.get('input_refs', []) if isinstance(decision, dict) else []
+            if self.apply('decision:' + str(number), change, refs if isinstance(refs, list) else [], proposal=decision):
                 consumed.update(handled)
         for collection, oid in sorted(assigned - consumed):
             self.reject('unhandled_candidate', 'Candidate lacks an accepted decision', [reference(collection, oid)])
@@ -597,11 +624,16 @@ class Receiver:
                     touched.append((collection, oid))
             refs = [reference(c, u[COLLECTION_IDS[c]]) for n in sorted(group) for c, u in [updates[n]]
                     if isinstance(u.get(COLLECTION_IDS[c]), str)]
-            if self.apply('context_updates:' + ','.join(map(str, sorted(group))), change, refs):
+            proposal = dict(contexts=[contexts[cid] for cid in sorted(needed) if cid in contexts],
+                phase_context_updates=[deepcopy(updates[n][1]) for n in sorted(group) if updates[n][0] == 'phases'],
+                action_context_updates=[deepcopy(updates[n][1]) for n in sorted(group) if updates[n][0] == 'actions'])
+            if self.apply('context_updates:' + ','.join(map(str, sorted(group))), change, refs, proposal=proposal):
                 used_contexts.update(needed)
                 handled.update(touched)
         for cid in contexts.keys() - used_contexts:
-            self.reject('context:' + str(cid), 'New Context has no accepted association; preserve it as pending')
+            self.reject('context:' + str(cid), 'New Context has no accepted association; preserve it as pending',
+                        [reference('contexts', cid)])
+            self.report['rejected'][-1]['proposal'] = deepcopy(contexts[cid])
         for record in response['relations']:
             def relation(package):
                 if not isinstance(record, dict) or record.get('from_action_id') not in allowed_actions:
@@ -614,6 +646,8 @@ class Receiver:
                     package['relations'].append(deepcopy(record))
                 record_temporal_conflicts(package)
             refs = [reference('actions', record['from_action_id'])] if isinstance(record, dict) and record.get('from_action_id') in allowed_actions else []
+            if isinstance(record, dict) and isinstance(record.get('relation_id'), str):
+                refs.append(reference('relations', record['relation_id']))
             self.apply('relation:' + str(record.get('relation_id')) if isinstance(record, dict) else 'relation', relation, refs, proposal=record)
         for collection, allowed in [('phases', allowed_phases), ('actions', allowed_actions)]:
             for oid in allowed:

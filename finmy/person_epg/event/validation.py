@@ -116,25 +116,37 @@ class SupportIndex:
         return valid and required <= premises
 
 
+FIELD_SUPPORT = {
+    'actions': {
+        'required': ['/description', '/actor/entity_id', '/actor/capacity'],
+        'optional_actor': ['role', 'on_behalf_of'],
+        'object': ['/object/description', '/object/entity_refs'],
+        'assigned': '/phase_id',
+    },
+    'stages': {'required': ['/description', '/boundary_reason']},
+    'phases': {'required': ['/description', '/boundary_reason']},
+    'event': {'required': ['/summary']},
+    'relations': {'required': ['/from_action_id', '/to_action_id', '/type']},
+    'relation_candidates': {'required': ['/from_action_id', '/to_action_id', '/type']},
+}
+TIME_SUPPORT = ('/time/start', '/time/end')
+
+
 def critical_fields(collection, record):
     """Only explicit field contracts, not a requirement to annotate every scalar."""
-    fields = []
+    fields = list(FIELD_SUPPORT.get(collection, {}).get('required', []))
     if collection == 'actions':
-        fields = ['/description', '/actor/entity_id', '/actor/capacity']
-        fields += ['/actor/' + key for key in ('role', 'on_behalf_of') if key in record['actor']]
+        contract = FIELD_SUPPORT[collection]
+        fields += ['/actor/' + key for key in contract['optional_actor'] if key in record['actor']]
         if record.get('phase_id') is not None:
-            fields.append('/phase_id')
-        fields += ['/object/description'] if 'object' in record else ['/object']
+            fields.append(contract['assigned'])
+        fields += [contract['object'][0]] if 'object' in record else ['/object']
         if record.get('object', {}).get('entity_refs'):
-            fields.append('/object/entity_refs')
-    elif collection in ('stages', 'phases'):
-        fields = ['/description', '/boundary_reason']
-    elif collection == 'event' and 'summary' in record:
-        fields = ['/summary']
-    elif collection in ('relations', 'relation_candidates'):
-        fields = ['/from_action_id', '/to_action_id', '/type']
+            fields.append(contract['object'][1])
+    elif collection == 'event' and 'summary' not in record:
+        fields = []
     if collection in ('actions', 'stages', 'phases', 'event') and 'time' in record:
-        fields += ['/time/start', '/time/end']
+        fields += TIME_SUPPORT
     return fields
 
 
