@@ -13,7 +13,10 @@ python -m finmy.workbench --port 8537
 ```
 
 Open `http://localhost:8537`. The service listens on loopback only. Opening pages,
-saving configuration and creating tasks do not call external services. Execution
+saving configuration and creating tasks do not call external services.
+On first start, select the local EPG-dataset root; subsequent starts reopen its
+workspace. The optional `--dataset-root /path/to/EPG-dataset` launcher argument
+saves the same setting. Execution
 requires a separate start action and permission to use external interfaces.
 
 ## Pages and daily operation
@@ -88,8 +91,9 @@ search creates another task; it does not erase earlier originals or approvals.
    event description in `research-plan.md`. An empty catalog stays empty: there is
    no fallback to `data/events/`. Existing upload/manual-entry workflows remain available.
 3. Select an event, optionally filtering a person's events by storyline. Preview
-   the planning description, cited source leads, and summary destination. Adjust
-   the activity period and included/excluded scope for this task. Activity periods
+   the planning description, cited source leads, and summary destination. The
+   activity period and included/excluded scope come from the catalog and research
+   plan by default; edit only for an intentional scope change. Activity periods
    do not automatically filter publication dates.
 4. Confirm the scope and destination. **保存检索任务** freezes the selected catalog
    identity, relevant plan text, source-file hashes, scope, and search configuration
@@ -130,7 +134,8 @@ Task details show **数据集检索汇总**, its save path and this task's repor
 publication fails, the local results remain available; **重新保存汇总** retries only
 saving. Background saving does not require the page to stay open. It neither starts
 construction nor marks a graph accepted, and never commits or pushes Git changes.
-Unlinked independent searches keep their existing local-only behavior.
+Independent searches do not publish a catalog summary; when a workbench dataset
+is configured, they still export their task records under `workbench/search/`.
 
 ## Execution and recovery boundaries
 
@@ -228,30 +233,56 @@ control; Kimi's older `thinking` controls are rejected before a request.
 
 ## Storage, provenance and export
 
-Workbench databases, task coordination and original search storage remain in
-FinMycelium's Git-ignored `output/workbench/`. Set `FINMY_WORKBENCH_HOME` to use
-another local workspace. Direct build files and generated catalog search summaries
-are saved under the configured EPG-dataset root's Git-ignored `output/` directory.
-New ordinary builds require that dataset setting; person builds use their frozen
-catalog root. Each build retains its output path even if Settings later changes.
-Existing tasks keep their saved paths. Formal collection remains a separate step.
+The configured EPG-dataset owns workbench runtime data and shared task records.
+SQLite and original material remain ignored; portable JSON/CSV records belong in
+Git. FinMycelium retains only an ignored local pointer at
+`output/workbench-location.json`. An explicit `FINMY_WORKBENCH_HOME` still selects
+a custom runtime directory, with shared records exported to its configured dataset.
 
 ```text
-FinMycelium/output/workbench/
-  workbench.sqlite3
-  dataset.json                    local dataset-root setting
-  search/                         task originals, versions, input and traces
-    profile.json                  reusable search defaults
-  builds/                         worker coordination
-EPG-dataset/output/
+EPG-dataset/output/                 ignored runtime and drafts
+  workbench/
+    workbench.sqlite3
+    dataset.json                   local dataset-root setting
+    search/                        original material, versions, input and traces
+      profile.json                 reusable search defaults
+    builds/                        worker coordination
+    record-exports/                export success/failure status
   search/<catalog-event-path>/search-summary.md
   builds/<BUILD-or-PBUILD-task-id>/
-    input.json                    frozen actual input
-    config.json, snapshot.json    Builder settings and provenance
+    input.json                     frozen actual input
+    config.json, snapshot.json     Builder settings and provenance
     worker.log
-    output/                       ordinary Builder artifacts and run manifest
-    attempts/                     person-event JSON, Gantt and checks
+    output/                        ordinary Builder artifacts and run manifest
+    attempts/                      person-event JSON, Gantt and checks
+EPG-dataset/workbench/              portable records for Git
+  search/<task_id>/
+    task.json                      identity, scope, configuration and fingerprints
+    summary.json                   execution status, usage, gaps and input manifest
+    sources.csv                    source URLs and acquisition/input status
+  build/<task_id>/
+    task.json, summary.json
+  events/<workbench-event_id>/
+    event.json                     editable record and revision history
+    sources.csv, graphs.json       indexes, not original source or graph bodies
+    reviews.json                   decisions and frozen-input manifests
+  plans/<task_id>.json              legacy plans, separate from executions
 ```
+
+Saving tasks, search completion/pause and committed workbench edits or reviews
+refresh their shared records without a model call. Missing token/cost reports
+remain unknown. Settings → **更新共享记录** retries export without rerunning tasks.
+Export failures preserve saved work and appear in Settings. Shared records support
+inspection and provenance; they are not a full runtime backup or instructions to
+start/approve work. They omit source bodies, raw responses, credentials and absolute
+machine paths. Git commits and pushes remain explicit actions.
+
+For a legacy workspace, close the service before moving its entire runtime tree.
+Preserve the SQLite file and task directories together, verify any saved absolute
+artifact references, then select the dataset. Startup detects the old database
+instead of silently creating an empty replacement. Selecting another dataset keeps
+the previous workspace intact and requires active runs to finish first. Each build
+retains its frozen artifact path. Formal collection remains separate.
 
 Event exports include master records, source records, input snapshots, review
 history, search summaries, build records and all graph revisions. `FinalEPG.json`
@@ -272,7 +303,7 @@ In the existing environment, without real search or model calls:
 python -m pytest -q -p no:cacheprovider \
   tests/test_workbench.py tests/test_workbench_workflow.py \
   tests/test_search_control.py tests/test_search_document_handoff.py \
-  tests/test_search_budget.py
+  tests/test_search_budget.py tests/test_workbench_storage.py
 ```
 
 These checks cover preserved data, approval invalidation, immutable inputs,

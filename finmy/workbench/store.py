@@ -52,11 +52,16 @@ class Store:
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
+        changed = False
         try:
             with db:
                 yield db
+            changed = bool(db.total_changes)
         finally:
             db.close()
+        if changed:
+            from finmy.workbench.records import sync_database
+            sync_database(self.root)
 
     def events(self):
         with self.connection() as db:

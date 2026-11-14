@@ -1,4 +1,7 @@
 """Dataset selection uses the common search form and controller."""
+import json
+import os
+from pathlib import Path
 import streamlit as st
 
 from finmy.dataset import DatasetCatalog, dataset_root, save_dataset_root, output_directory, summary_directory
@@ -6,24 +9,43 @@ from finmy.workbench.ui import heading, empty
 from finmy.workbench.workflow import navigate
 
 
-def dataset_settings(store):
+def dataset_settings(store=None):
+    from finmy.workbench.workspace import select_workspace
+    from finmy.workbench.records import export_all
     st.subheader('EPG-dataset 本地路径')
     with st.form('dataset-settings'):
-        root = st.text_input('数据集根目录', value=dataset_root(store.root),
+        root = st.text_input('数据集根目录', value=dataset_root(store.root) if store else '',
                              placeholder='/path/to/EPG-dataset', key='ui-dataset-root')
-        st.caption('填写运行工作台的机器上的目录。普通事件与人物事件共用，配置只保存在本地工作区。')
+        st.caption('普通事件与人物事件共用。数据库和原始运行资料保存在 output/workbench/；共享任务记录保存在 workbench/。')
         if st.form_submit_button('保存数据集路径', icon=':material/folder:'):
             try:
-                save_dataset_root(store.root, root)
-                st.success('数据集路径已保存；直接输出使用其 output/ 目录')
+                if store and os.environ.get('FINMY_WORKBENCH_HOME'):
+                    save_dataset_root(store.root, root)
+                else:
+                    select_workspace(Path(__file__).resolve().parents[2], root,
+                                     current=store.root if store else None)
+                st.rerun()
             except (ValueError, OSError) as exc:
                 st.error(str(exc))
 
+    if store is None:
+        return
     root = dataset_root(store.root)
     if root:
         try:
             st.caption('构建输出：' + str(output_directory(root, 'builds')))
             st.caption('草稿和运行记录保存在 output/，审核后再收录到正式事件目录。')
+            st.caption('共享任务记录：' + str(Path(root) / 'workbench'))
+            if st.button('更新共享记录', icon=':material/sync:'):
+                results = export_all(store.root)
+                if any(r['status'] == 'failed' for r in results):
+                    st.error('部分记录导出失败，原任务仍保留；请检查目录权限后重试。')
+                else:
+                    st.success('共享记录已更新；未启动任务，也未提交 Git。')
+            failures = [p for p in (store.root / 'record-exports').glob('*.json')
+                        if json.loads(p.read_text()).get('status') == 'failed']
+            if failures:
+                st.warning(f'{len(failures)} 项共享记录待重新导出；原任务与结果不受影响。')
         except ValueError as exc:
             st.warning(str(exc))
 

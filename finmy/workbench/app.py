@@ -660,7 +660,19 @@ def main():
     st.set_page_config(page_title="FinMycelium | 事件工作台", page_icon=":material/account_tree:", layout="wide")
     apply_style()
     keep_ui_state()
-    store = Store(os.environ.get("FINMY_WORKBENCH_HOME", str(ROOT / "output/workbench")))
+    from finmy.workbench.workspace import resolve_workspace
+    from finmy.workbench.dataset_page import dataset_settings
+    try:
+        workspace = resolve_workspace(ROOT)
+    except (ValueError, OSError) as exc:
+        st.error(str(exc))
+        dataset_settings(None)
+        return
+    if workspace is None:
+        heading('工作区', '选择 EPG-dataset，保存工作台任务与运行记录。')
+        dataset_settings(None)
+        return
+    store = Store(workspace)
     if "navigate_to" in st.session_state:
         st.session_state["navigation"] = st.session_state.pop("navigate_to")
         if st.session_state["navigation"] == "数据" and st.session_state.get("detail_id"):

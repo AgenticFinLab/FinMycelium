@@ -68,6 +68,9 @@ Checks explicitly list what was not evaluated.
 ## Files and direct use
 
 Workbench artifacts use the configured dataset's ignored `output/builds/`.
+Its SQLite and search originals live in `output/workbench/`; portable task and
+execution records are exported to `workbench/` for Git review (see
+[workbench storage](event-workbench.md#storage-provenance-and-export)).
 Direct Python calls default to FinMycelium's ignored `output/builds/`:
 
 ```text

@@ -49,6 +49,7 @@ class SearchController:
             state=SearchState(self.root,task_id,task=task,config=config)
             state.data['mode']=mode
             state.save()
+        self._sync_records(task_id)
         return task_id
 
     def inspect(self, task_id):
@@ -80,6 +81,7 @@ class SearchController:
             state.data.setdefault('config_history',[]).append(dict(time=now(),config=state.data['config']))
             state.data['config']=asdict(config)
             state.save()
+        self._sync_records(task_id)
 
     def reassemble(self, task_id, max_chars):
         from .handoff import assemble, assemble_sources
@@ -144,6 +146,8 @@ class SearchController:
                     state.data['completed_at']=now()
                     state.save()
                     self._save_summary(task_id)
+                else:
+                    self._sync_records(task_id)
         except ValueError:
             # Another process owns this task; do not overwrite its state.
             return
@@ -158,6 +162,12 @@ class SearchController:
             state.data['summary'] = {'status':'failed', 'error':str(exc), 'updated_at':now()}
             state.save()
             return state.data['summary']
+        finally:
+            self._sync_records(task_id)
+
+    def _sync_records(self, task_id):
+        from finmy.workbench.records import sync_search
+        return sync_search(self.root, task_id)
 
     def save_summary(self, task_id):
         """Retry publication only: no providers, models or rebuilds."""
