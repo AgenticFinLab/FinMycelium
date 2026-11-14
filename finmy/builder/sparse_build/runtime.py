@@ -106,7 +106,8 @@ def code_identity():
         dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True))
     except (OSError, subprocess.CalledProcessError):
         head, dirty = None, None
-    sources = list(Path(__file__).parent.glob("*.py")) + [root / "finmy/builder/agent_build/structure.py"]
+    sources = list(Path(__file__).parent.glob("*.py")) + [root / "finmy/builder/agent_build/structure.py",
+        root / "finmy/model_api.py", root / "finmy/model_config.py"]
     hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sources if p.is_file()}
     from lmbase.inference.api_call import LangChainAPIInference

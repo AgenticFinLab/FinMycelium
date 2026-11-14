@@ -4,6 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import streamlit as st
+from finmy.workbench.model_picker import model_picker
 
 from finmy.search.control import SearchController
 from finmy.search.state import SearchConfig, SearchState
@@ -330,7 +331,7 @@ def search_form(store, catalog=None):
             end = b.text_input('资料发表结束日期',defaults['publication_end'] or '',placeholder='YYYY-MM-DD',key='ui-search-end')
             st.caption('留空可纳入事后报道和总结；与事件发生时间不同。')
         with st.expander('预算与模型参数'):
-            lm_name = st.text_input('搜索侧模型',defaults.get('lm_name') or '',key='ui-search-model',help='provider/model；简单搜索不会调用模型。')
+            lm_name = model_picker(defaults.get('lm_name') or '', 'ui-search-model', purpose='search', label='搜索模型')
             options = {}
             cols = st.columns(2)
             for i,(field,label) in enumerate([('max_search_requests','累计搜索请求上限'),('max_read_sources','不同阅读来源上限'),
@@ -339,7 +340,7 @@ def search_form(store, catalog=None):
                                   ('timeout','单次请求超时（秒）')]):
                 options[field] = cols[i%2].number_input(label,min_value=1,value=defaults[field],key='ui-search-'+field)
             output_tokens = st.number_input('模型答案 token 上限',min_value=1,value=defaults['generation_config'].get('max_tokens',4096),key='ui-search-tokens')
-            st.caption('Ark Seed 的答案上限不包含推理 token；模型与构建侧独立配置。')
+            st.caption('模型与构建侧独立；简单搜索不调用模型。输出上限是否包含推理 token 取决于模型，TokenHub 思考模式需为推理预留额度。')
             rewrite = st.checkbox('百度 query 改写',value=defaults['baidu_rewrite'],key='ui-search-rewrite')
     with right:
         with st.container(border=True, key="search-summary"):

@@ -13,7 +13,7 @@ from typing import Optional, Any, Dict, List
 from langgraph.graph import MessagesState
 from langgraph.graph.state import CompiledStateGraph
 
-from lmbase.inference.api_call import LangChainAPIInference
+from finmy.model_api import ModelAPIInference
 
 # from lmbase.inference.model_call import LLMInference
 from lmbase.utils.tools import BaseContainer
@@ -112,7 +112,7 @@ class BaseBuilder(ABC):
         model_name = self.build_config["lm_name"]
 
         if "api" in lm_type.lower():
-            self.agents_lm = LangChainAPIInference(
+            self.agents_lm = ModelAPIInference(
                 lm_name=model_name,
                 generation_config=self.build_config["generation_config"],
             )

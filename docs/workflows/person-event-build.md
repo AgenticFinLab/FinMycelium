@@ -11,6 +11,13 @@ The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own proto
 3. In **任务中心**, explicitly allow calls and select **开始人物构建**.
 4. Inspect JSON, expanded Gantt, checks, source handoff and cumulative calls. Execution, completeness and rendering have separate statuses. A draft still requires content and evidence review.
 
+Choose the model service and its console model ID separately. TokenHub uses
+`lm_name="tokenhub/<console-model-id>"`, with local `HUNYUAN_API_KEY` and
+`HUNYUAN_BASE_URL` (HTTPS origin or `/v1` base). Search and construction may select
+different model services. TokenHub thinking models can count reasoning toward the
+output limit; a truncated response remains incomplete, with reported usage retained.
+Provider selection does not enable external search inside construction.
+
 The workbench exposes model, cumulative calls, per-call output tokens and context
 characters, extraction batch size, local reading limits and the optional repair round.
 Defaults live in `EventBuildConfig`: 40 model calls, 12,288 output tokens, 160,000

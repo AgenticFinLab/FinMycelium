@@ -36,6 +36,20 @@ MODELS = {
     "DeepSeek V4.1 Flash": "deepseek-v4-1-flash-261017",
     "Doubao Seed 2.1 Lite": "doubao-seed-2-1-lite-260915",
 }
+# Role-specific workbench presets. Values are exact TokenHub API model IDs.
+TOKENHUB_MODELS = {
+    'build': {
+        'GLM-5.3': 'glm-5.3',
+        'Kimi K3.1 Pro': 'kimi-k3.1-pro',
+        'DeepSeek V4 Pro 0813（原厂直供）': 'deepseek-v4-pro-202606',
+        'Hy4': 'hy4',
+    },
+    'search': {
+        'GLM-5.3-Flash': 'glm-5.3-flash',
+        'DeepSeek Flash（原厂直供）': 'deepseek/deepseek-flash',
+    },
+}
+
 DEFAULT_MODEL = next(iter(MODELS.values()))
 MAX_UPLOAD = 20 * 1024 * 1024
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z")

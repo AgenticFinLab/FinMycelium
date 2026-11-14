@@ -15,12 +15,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from finmy.workbench.domain import (
-    FIELDS, MODELS, LANGUAGES, RELATIONS, TABLE_LABELS,
+    FIELDS, LANGUAGES, RELATIONS, TABLE_LABELS,
     date_bounds, digest, display_name, editable_fields, encoded, export_table,
     extract_text, graph_from_bytes, read_matrix, read_table, unwrap,
 )
 from finmy.workbench.ui import heading, apply_style, status as show_status, table_status, stats, step_strip, empty, keep_ui_state, local_timestamp
 from finmy.workbench.store import Store
+from finmy.workbench.model_picker import model_picker
 from finmy.workbench.search_page import search_page, get_controller, task_panel, STATUS
 from finmy.workbench.workflow import STEPS, progress, navigate, event_searches
 from finmy.workbench.build_tasks import BuildController
@@ -121,15 +122,6 @@ def import_events(store):
             notice(f"已导入 {len(rows)} 个事件")
     except Exception as exc:
         st.error(f"导入检查未通过：{exc}")
-
-
-def model_picker(default, key):
-    names = list(MODELS) + ["自定义"]
-    selected = next((k for k, v in MODELS.items() if v == default), "自定义")
-    label = st.selectbox("模型", names, index=names.index(selected), key=key)
-    if label == "自定义":
-        return st.text_input("Ark 模型 / 接入点 ID", default if selected == "自定义" else "", key=key + "-custom")
-    return MODELS[label]
 
 
 def data_page(store):
@@ -635,7 +627,7 @@ def settings_page(store):
         search_settings(store)
     with build:
         settings = store.settings()
-        model = model_picker(settings['model'], 'default-model')
+        model = model_picker(settings['model'], 'default-model', purpose='build', label='默认构建模型')
         with st.form('settings'):
             methods = ['SparseRagBuilder','AgentEventBuilder']
             builder = st.selectbox('构建方法', methods, index=methods.index(settings['builder']))
@@ -653,7 +645,7 @@ def settings_page(store):
         envfile = ROOT / '.env'
         env = dotenv_values(envfile) if envfile.is_file() else {}
         rows = []
-        for name,key in [('Ark','ARK_API_KEY'),('Bocha','BOCHA_API_KEY'),('Baidu','BAIDUSEARCH_API_KEY'),('Exa','EXA_API_KEY')]:
+        for name,key in [('Ark','ARK_API_KEY'),('TokenHub','HUNYUAN_API_KEY'),('Bocha','BOCHA_API_KEY'),('Baidu','BAIDUSEARCH_API_KEY'),('Exa','EXA_API_KEY')]:
             configured = bool(os.environ.get(key,env.get(key)))
             rows.append({'服务':name,'密钥配置':'已配置' if configured else '未配置','连接':'未检查'})
         st.subheader('接口状态')

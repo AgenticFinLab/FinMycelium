@@ -13,6 +13,7 @@ import time
 import yaml
 
 from finmy.dataset import dataset_root, output_directory
+from finmy.model_config import model_name
 from finmy.search.control import task_lock, task_path
 from finmy.search.state import write_json
 from finmy.workbench.domain import digest, encoded, graph_from_bytes, validate_graph
@@ -48,7 +49,7 @@ def build_config(settings, directory):
     kind = settings["builder"]
     filename = "build_only_sparse.yml" if kind == "SparseRagBuilder" else "build_only_agent.yml"
     config = yaml.safe_load((ROOT / "configs" / filename).read_text())["builder_config"]
-    config["lm_name"] = "ark/" + settings["model"]
+    config["lm_name"] = model_name(settings["model"])
     config["save_folder"] = str(Path(directory).resolve() / "output")
     return config
 

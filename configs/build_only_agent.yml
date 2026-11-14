@@ -4,7 +4,7 @@ builder_config:
   lm_name: ark/doubao-seed-2-0-pro-260215
   generation_config:
     max_new_tokens: 12288
-    temperature: 0.2
+    temperature: 1.0
     top_p: 0.95
   save_folder: output/build-only/agent
   graph_config:

@@ -57,15 +57,16 @@ class LmbaseModel:
         if not self.config.lm_name:
             raise ValueError('An independent search lm_name is required')
         if self.adapter is None:
-            from lmbase.inference.api_call import LangChainAPIInference
-            self.adapter = LangChainAPIInference(lm_name=self.config.lm_name,
+            from finmy.model_api import ModelAPIInference
+            self.adapter = ModelAPIInference(lm_name=self.config.lm_name,
                                                  generation_config=self.config.generation_config)
             self.adapter.client = self.adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
-        params = dict(self.config.generation_config)
+        params = self.adapter.request_parameters(self.config.generation_config)
         if 'max_new_tokens' in params:
             params['max_tokens'] = params.pop('max_new_tokens')
         if not any(k in params for k in ('max_tokens','max_completion_tokens')):
             raise ValueError('Configure search model output token limit explicitly')
+        self.last_usage = None
         response = self.adapter.client.chat.completions.create(
             model=self.adapter.model_name,
             messages=[{'role':'system','content':SYSTEM_PROMPT},

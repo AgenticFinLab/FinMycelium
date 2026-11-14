@@ -8,6 +8,7 @@ import sys
 
 import yaml
 
+from finmy.model_config import api_key_variable, model_name
 from finmy.builder.base import BuildInput
 from finmy.builder.sparse_build.main_build import SparseRagBuilder
 from finmy.builder.sparse_build.runtime import digest, validate_config, validate_input
@@ -27,9 +28,7 @@ def load_inputs(path):
 def preflight(config, build_input):
     validate_config(config)
     validate_input(build_input)
-    provider = config["lm_name"].split("/", 1)[0].lower()
-    if provider not in {"ark", "deepseek", "openai", "qwen", "aihubmix"}:
-        raise ValueError("Provider is not supported by the installed lmbase adapter")
+    provider = model_name(config["lm_name"]).split("/", 1)[0]
     target = Path(config["save_folder"]).resolve()
     parent = target
     while not parent.exists():
@@ -37,7 +36,7 @@ def preflight(config, build_input):
     if not parent.is_dir() or not os.access(parent, os.W_OK):
         raise ValueError("Output directory is not writable")
     return {"status": "offline_preflight_pass", "model": config["lm_name"],
-            "credential_present": bool(os.environ.get(provider.upper() + "_API_KEY")),
+            "credential_present": bool(os.environ.get(api_key_variable(provider))),
             "online_compatibility_verified": False, "sample_count": len(build_input.samples),
             "source_characters": sum(len(s.content) for s in build_input.samples),
             "output_root": str(target)}

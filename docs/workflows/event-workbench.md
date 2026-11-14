@@ -139,7 +139,11 @@ Unlinked independent searches keep their existing local-only behavior.
 - Builds reuse the corresponding `configs/build_only_agent.yml` or
   `configs/build_only_sparse.yml` defaults, including call/time limits. Sparse
   retains local retrieval and `evidence_policy: report`. The workbench model field
-  currently accepts Ark model/endpoint IDs, consistent with its existing settings.
+  lets users select a model service and its model ID independently for search and
+  construction. Saved configuration uses `provider/model`; bare IDs in older
+  settings still mean Ark. TokenHub reads `HUNYUAN_API_KEY` and `HUNYUAN_BASE_URL`
+  from the local environment. No key or endpoint is written to task settings.
+  The interface shows credential presence without querying models or starting calls.
 - Build inputs and approval are checked again before execution. If source code
   changed after task creation, create a new task against that version.
 - Builds currently support cancelling an unstarted task, not pausing a running
@@ -155,6 +159,72 @@ Unlinked independent searches keep their existing local-only behavior.
 - Catalog-linked person events use the native single-event construction path.
   Choosing a person/company target in a standalone search does not by itself
   create that catalog association or change the ordinary event Builder.
+
+## Model selection
+
+Search settings and search-task forms share one set of TokenHub presets. Build
+settings, ordinary event builds and person-event builds share another:
+
+| Purpose | Display name | TokenHub model ID |
+|---|---|---|
+| Build | GLM-5.3 | `glm-5.3` |
+| Build | Kimi K3.1 Pro | `kimi-k3.1-pro` |
+| Build | DeepSeek V4 Pro 0813 (direct supply) | `deepseek-v4-pro-202606` |
+| Build | Hy4 | `hy4` |
+| Search | GLM-5.3-Flash | `glm-5.3-flash` |
+| Search | DeepSeek Flash (direct supply) | `deepseek/deepseek-flash` |
+
+Select **Tencent TokenHub**, then the desired preset. Saved model names have the
+`tokenhub/` prefix; the API receives the exact ID above, including any `/` inside
+it. **自定义** remains available and preserves previously saved custom models.
+Switching model service requires a model selection; existing defaults and budgets
+are not overwritten. All TokenHub models use the configured regional base URL and
+key. Presets are not a live account availability check.
+
+The shared model adapter applies the following sampling policy to these presets
+in search, person-event builds and ordinary Agent/Sparse builds. It overrides
+inherited `temperature` / `top_p` values, including those in `extra_body`.
+
+Ark presets use the [official Agent sampling recommendation](https://console.volcengine.com/ark/region:cn-beijing/docs/agent-model-invocation-practice):
+
+| Ark model ID | temperature | top_p |
+|---|---|---|
+| `doubao-seed-2-0-pro-260215` | 1.0 | 0.95 |
+| `doubao-seed-2-1-lite-260915` | 1.0 | 0.95 |
+| `glm-5-2-260617` | 1.0 | 0.95 |
+| `deepseek-v4-pro-ga-260813` | 1.0 | 0.95 |
+| `deepseek-v4-1-flash-261017` | 1.0 | 0.95 in thinking mode; 1.0 when disabled |
+
+Seed 2.0 Pro fixes these values server-side. For DeepSeek V4.1 Flash, explicit
+`thinking.type=disabled` or `reasoning_effort=none` selects `top_p=1.0`; the adapter
+preserves the caller's thinking controls. With the OpenAI Python SDK, put the
+nonstandard `thinking` object in `extra_body`. The thinking-mode value of 0.95 follows
+the Agent recommendation, rather than the no-tools service default of 1.0. See the
+[Chat API model exceptions](https://docs.volcengine.com/docs/ark/chat-api?lang=zh) and
+[thinking controls](https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh).
+Legacy bare Ark IDs use the same policy. Person-event builds obtain sampling from
+the adapter; they do not impose a separate temperature on the selected model.
+
+| TokenHub models | temperature | top_p | Basis |
+|---|---|---|---|
+| `glm-5.3`, `glm-5.3-flash` | 1.0 | 0.95 | Model-specific recommended defaults |
+| `deepseek-v4-pro-202606`, `deepseek/deepseek-flash` | 1.0 | 1.0 | Recommended temperature and platform-default top_p |
+| `hy4` | 0.9 | 1.0 | Model guide's temperature and platform-default top_p |
+| `kimi-k3.1-pro` | Fixed 1.0 | Fixed 0.95 | Omitted from requests as recommended by the model guide |
+
+See the [GLM guide](https://cloud.tencent.com/document/product/1823/132061),
+[DeepSeek guide](https://cloud.tencent.com/document/product/1823/132248),
+[Hy4 guide](https://intl.cloud.tencent.com/zh/document/product/1300/80695),
+[Kimi guide](https://cloud.tencent.com/document/product/1823/132232) and
+[platform parameter defaults](https://cloud.tencent.com/document/product/1823/135872).
+Unlisted model IDs retain their supplied sampling configuration, or service
+defaults when no sampling parameters are supplied.
+The preset policy does not change call budgets, thinking depth or output limits;
+the direct adapter's fallback remains 8192 output tokens.
+
+For Kimi K3.1 Pro, the adapter sends the configured output limit as
+`max_completion_tokens`. It uses `reasoning_effort` for optional thinking-depth
+control; Kimi's older `thinking` controls are rejected before a request.
 
 ## Storage, provenance and export
 

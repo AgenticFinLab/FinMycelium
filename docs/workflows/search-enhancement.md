@@ -46,12 +46,21 @@ credentials when updating the example. Fill the selected services' keys:
 | Variable | Used by |
 |---|---|
 | `ARK_API_KEY` | Default search model; also Builders configured with an Ark model |
+| `HUNYUAN_API_KEY` | TokenHub models used by search and/or construction |
+| `HUNYUAN_BASE_URL` | TokenHub HTTPS origin or `/v1` base for the key’s region |
 | `BAIDUSEARCH_API_KEY` | Baidu Web Search |
 | `BOCHA_API_KEY` | Bocha Web Search |
 | `EXA_API_KEY` | Exa Search and the text returned by that search call |
 
 Search `lm_name` and `builder_config.lm_name` are independent. Search defaults to
 `ark/doubao-seed-2-1-lite-260915`; the existing build-only examples select their own model.
+Use `tokenhub/<console-model-id>` to select TokenHub independently for either stage;
+model IDs containing `/` retain that namespace. These are model services, separate
+from the Baidu/Bocha/Exa search services. Existing default models and search limits
+are unchanged. TokenHub uses OpenAI Chat Completions; its thinking models may include
+reasoning in the output token limit. Account/model availability needs a separately
+authorized connectivity check; configuring a key does not verify access. See the
+[TokenHub protocol documentation](https://cloud.tencent.com/document/product/1823/135872).
 Only selected providers need keys. The workbench loads the repository `.env` on an
 explicitly enabled start, without overriding existing environment variables. The search
 CLI reads process environment variables; it does not automatically load `.env`.
@@ -131,7 +140,7 @@ From **事件数据**, confirm scope and choose one or several events to prepare
 New-task advanced settings expose the request timeout and context limit; stopped tasks can revise them under **调整运行上限**. Saved profiles
 retain their configured values until explicitly changed.
 The handoff panel describes the recorded material allocation, and **设置 →
-接口与工作区** includes Ark, Baidu, Bocha and Exa configuration presence without displaying
+接口与工作区** includes Ark, TokenHub, Baidu, Bocha and Exa configuration presence without displaying
 keys. Workbench simple mode runs fixed queries without a search model, using the common
 providers/readers and the existing span-based handoff. Enhanced mode uses source-level
 budget allocation. The original simple full runner keeps its own existing behavior.

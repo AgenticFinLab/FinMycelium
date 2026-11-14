@@ -59,13 +59,14 @@ class Model:
 
     def __call__(self, system, user, name):
         if self.adapter is None:
-            from lmbase.inference.api_call import LangChainAPIInference
-            self.adapter = LangChainAPIInference(lm_name=self.config.lm_name, generation_config={})
+            from finmy.model_api import ModelAPIInference
+            self.adapter = ModelAPIInference(lm_name=self.config.lm_name, generation_config={})
             self.adapter.client = self.adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
         self.last_usage = None
+        parameters = self.adapter.request_parameters(dict(max_tokens=self.config.max_new_tokens))
         response = self.adapter.client.chat.completions.create(model=self.adapter.model_name,
             messages=[{'role':'system', 'content':system}, {'role':'user', 'content':user}],
-            max_tokens=self.config.max_new_tokens, temperature=0.2, top_p=0.95)
+            **parameters)
         self.last_usage = response.usage.model_dump() if response.usage else None
         choice = response.choices[0] if response.choices else None
         if choice is None or choice.finish_reason != 'stop' or getattr(choice.message, 'refusal', None) or getattr(choice.message, 'tool_calls', None):

@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from finmy.model_config import model_name
 from finmy.workbench.domain import DEFAULT_MODEL, SCOPE_FIELDS, digest, encoded, event_record, export_table, stored_record, validate_graph, validate_url
 
 
@@ -243,8 +244,10 @@ class Store:
     def validate_configuration(config):
         if set(config) != {"model", "builder", "concurrency"} or config["builder"] not in {"SparseRagBuilder", "AgentEventBuilder"}:
             raise ValueError("无效的构建配置")
-        if not isinstance(config["model"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}", config["model"]):
-            raise ValueError("模型 ID 格式不正确")
+        try:
+            model_name(config["model"])
+        except ValueError as exc:
+            raise ValueError("请选择模型服务并填写有效的模型 ID") from exc
         if type(config["concurrency"]) is not int or not 1 <= config["concurrency"] <= 32:
             raise ValueError("并发数需在 1–32 之间")
 

@@ -11,16 +11,18 @@ from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded
 from finmy.workbench.workflow import navigate
 from finmy.workbench.ui import stats, status
+from finmy.workbench.model_picker import model_picker
 
 
 def create_person_build(store, controller, task_id, data):
     st.subheader('构建本条人物 event')
     st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；模型与检索侧独立。')
+    model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
     with st.form('person-build-create-'+task_id):
-        model=st.text_input('人物构建 Ark 模型／接入点 ID',value=store.settings()['model'])
         with st.expander('构建上限'):
             calls=st.number_input('累计模型调用上限',min_value=1,value=40)
-            tokens=st.number_input('每次输出 token 上限',min_value=1,value=12288)
+            tokens=st.number_input('每次输出 token 上限',min_value=1,value=12288,
+                help='是否包含推理 token 取决于所选模型；TokenHub 思考模式需要为推理和最终答案留出额度。')
             context=st.number_input('单次模型上下文字符上限',min_value=1,value=160000)
             batch=st.number_input('连续正文抽取批次字符数',min_value=401,value=12000)
             local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=24)
@@ -31,7 +33,7 @@ def create_person_build(store, controller, task_id, data):
         if st.form_submit_button('保存人物构建任务',type='primary'):
             try:
                 tid=BuildController(store).create_person(controller,task_id,
-                    dict(lm_name=model if '/' in model else 'ark/'+model,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
+                    dict(lm_name=model,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
                          extraction_chars=batch,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})

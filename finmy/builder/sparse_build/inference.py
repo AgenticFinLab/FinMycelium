@@ -1,10 +1,10 @@
 """Preserve completion status and usage for the sparse builder only."""
 
-from lmbase.inference.api_call import LangChainAPIInference
+from finmy.model_api import ModelAPIInference
 from lmbase.inference.base import InferCost, InferOutput
 
 
-class SparseAPIInference(LangChainAPIInference):
+class SparseAPIInference(ModelAPIInference):
     def __init__(self, lm_name, generation_config, timeout=900):
         super().__init__(lm_name=lm_name, generation_config=generation_config)
         # Account for every submission ourselves; SDK retries would be invisible.

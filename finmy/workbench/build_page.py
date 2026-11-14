@@ -5,6 +5,7 @@ from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded, display_name
 from finmy.workbench.workflow import navigate
 from finmy.workbench.ui import status, stats
+from finmy.workbench.model_picker import model_picker
 
 LABELS = {"ready":"待启动", "queued":"启动中", "running":"构建中", "completed":"已生成草稿，待审核",
           "failed":"构建失败", "interrupted":"构建中断", "cancelled":"已取消", "partial":"部分完成，待处理", "limit":"达到调用上限", "insufficient":"材料不足"}
@@ -15,11 +16,10 @@ def create_build(store, event_id):
     st.subheader("构建 draft EPG")
     st.caption("使用已确认的输入快照；模型与搜索配置独立。创建任务不会调用模型。")
     defaults = store.settings()
+    model = model_picker(defaults["model"], "ui-build-model-" + event_id, purpose="build", label="构建模型")
     with st.form("create-build-"+event_id):
         methods = ["SparseRagBuilder", "AgentEventBuilder"]
-        method, model_column = st.columns([2, 3])
-        builder = method.selectbox("构建方法", methods, index=methods.index(defaults["builder"]))
-        model = model_column.text_input("构建 Ark 模型／接入点 ID", defaults["model"])
+        builder = st.selectbox("构建方法", methods, index=methods.index(defaults["builder"]))
         st.caption("沿用对应 build-only 配置的调用上限；Sparse 保持 report 与局部检索。")
         if st.form_submit_button("创建构建任务", type="primary"):
             try:

@@ -87,6 +87,8 @@ def code_identity():
     files = {p for p in event.glob('*.py') if p.name != 'rendering.py'}
     files.update(root / name for name in (
         'person_epg/build.py',                    # Actual Model transport adapter.
+        'model_api.py',                          # Shared model-service transport.
+        'model_config.py',                       # Provider and endpoint resolution.
         'person_epg/input.py',                    # Confirmed identity validation.
         'person_epg/building/completion_errors.py',
         'generic.py',                            # Input dataclasses.
