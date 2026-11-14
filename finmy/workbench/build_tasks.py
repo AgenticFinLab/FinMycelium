@@ -125,7 +125,10 @@ class BuildController:
                 'config':{'builder_type':'PersonEvent', 'lm_name':config.lm_name},
                 'artifact_directory':str((artifacts/task_id).resolve()), 'resume':False}
         with task_lock(search_controller.root, search_task_id):
-            adopted = search_snapshot(search_controller, search_task_id)
+            current = search_controller.inspect(search_task_id)
+            if current.get('build_disposition') == 'excluded':
+                raise ValueError('该任务已标记不参与构建，请先恢复为待检查')
+            adopted = search_snapshot(search_controller, search_task_id, current)
         if (adopted['search_input_sha256'] != provenance['search_input_sha256']
                 or adopted['handoff_revision'] != provenance['handoff_revision']):
             raise ValueError('检索交接已变化，请重新确认构建输入')

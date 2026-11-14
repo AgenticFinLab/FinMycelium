@@ -201,7 +201,7 @@ def test_legacy_shared_record_migration_preserves_bytes_without_runtime(tmp_path
     assert 'Keep this note.' in readme and '[Search records](search/README.md)' in readme
     index = root/'workbench/search/README.md'
     assert f']({renamed.name}/)' in index.read_text()
-    assert '| finished | 1234 |' in index.read_text()
+    assert '| finished | pending | 1234 |' in index.read_text()
     snapshot = index.read_bytes(),index.stat().st_mtime_ns
     assert records.migrate_search_records(root)==[]
     assert (index.read_bytes(),index.stat().st_mtime_ns)==snapshot

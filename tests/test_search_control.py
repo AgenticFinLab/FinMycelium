@@ -115,3 +115,28 @@ def test_failed_task_retry_continues_full_run_with_cumulative_usage(tmp_path):
     assert retried['task']==failed['task'] and retried['config']==failed['config']
     assert len(retried['read_sources'])==1 and fetched==[url]
     assert trace_path.read_bytes().startswith(trace_before)
+
+
+def test_build_disposition_is_reversible_and_blocks_execution(tmp_path):
+    from finmy.workbench.workflow import search_status_code, search_status_label
+    controller = SearchController(tmp_path)
+    tid = controller.create(TASK, {})
+    before = controller.inspect(tid)
+    with task_lock(tmp_path, tid):
+        with pytest.raises(ValueError):
+            controller.set_build_disposition(tid, 'excluded')
+    controller.set_build_disposition(tid, 'excluded')
+    assert search_status_code(controller.inspect(tid)) == 'excluded'
+    assert search_status_label(controller.inspect(tid)) == '不参与构建'
+    with pytest.raises(ValueError, match='恢复'):
+        controller.start(tid)
+    controller = SearchController(tmp_path)  # persists across interface restarts
+    controller.set_build_disposition(tid, 'pending')
+    after = controller.inspect(tid)
+    assert after['status'] == before['status'] == 'ready'
+    assert after['usage'] == before['usage']
+    assert len(after['build_disposition_history']) == 2
+    state = SearchState(tmp_path, tid)
+    state.data['status'] = 'running'; state.save()
+    with pytest.raises(ValueError, match='暂停'):
+        controller.set_build_disposition(tid, 'excluded')

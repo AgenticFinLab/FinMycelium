@@ -272,3 +272,46 @@ def test_missing_confirmed_input_is_not_treated_as_legacy_collection(setup):
     with pytest.raises(ValueError,match='保留'):
         builds.create_person(controller,tid,confirmed=True)
     assert contents(folder) == before and len(builds.tasks()) == 1
+
+
+def test_excluded_search_preserves_input_and_existing_build(setup):
+    root, store, controller, calls = setup
+    tid, choice = finish(setup)
+    builds = BuildController(store)
+    first = builds.create_person(controller, tid, confirmed=True)
+    frozen = deepcopy(builds.inspect(first))
+    folder = catalog_event_directory(choice)/'search'
+    saved = contents(folder)
+    before = controller.inspect(tid)
+    controller.set_build_disposition(tid, 'excluded')
+    after = controller.inspect(tid)
+    for key in ('status', 'usage', 'builder_input', 'selection', 'sources', 'handoff_revision'):
+        assert after[key] == before[key]
+    with pytest.raises(ValueError, match='不参与构建'):
+        builds.create_person(controller, tid, confirmed=True)
+    shared = [json.loads(p.read_text()) for p in (root/'workbench/search').glob('*/task.json')]
+    record = next(r for r in shared if r['task_id'] == tid)
+    assert record['build_disposition'] == 'excluded'
+    assert record['build_disposition_history'][-1]['value'] == 'excluded'
+    assert builds.inspect(first) == frozen and contents(folder) == saved
+    controller.reassemble(tid, 10000)
+    assert controller.inspect(tid)['build_disposition'] == 'excluded'
+    controller.set_build_disposition(tid, 'pending')
+    builds.create_person(controller, tid, confirmed=True)
+    assert len(builds.tasks()) == 2 and calls == ['search']
+
+
+def test_excluded_search_is_not_a_pending_event_material(setup):
+    from finmy.workbench.workflow import progress
+    _, store, controller, _ = setup
+    tid, _ = finish(setup, person=False)
+    eid = controller.inspect(tid)['task']['event_id']
+    store.review(eid, 'scope', 'approved', 'Reviewer', '', store.target(eid, 'scope'))
+    assert progress(store, eid, controller)[0] == 2
+    controller.set_build_disposition(tid, 'excluded')
+    assert progress(store, eid, controller)[0] == 1
+    with pytest.raises(ValueError, match='不参与构建'):
+        adopt_sources(controller, tid, store)
+    controller.set_build_disposition(tid, 'pending')
+    assert progress(store, eid, controller)[0] == 2
+    assert adopt_sources(controller, tid, store) > 0

@@ -4,6 +4,20 @@ from finmy.workbench.domain import digest
 STEPS = ["确认范围", "检索资料", "检查材料", "构建草稿", "审核修订", "收录导出"]
 
 
+SEARCH_STATUS = {'ready': '待启动', 'running': '运行中', 'paused': '已暂停',
+                 'finished': '待检查材料', 'insufficient': '资料不足',
+                 'limit': '达到运行上限', 'failed': '运行失败', 'excluded': '不参与构建'}
+
+
+def search_status_code(data):
+    return 'excluded' if data.get('build_disposition') == 'excluded' else data['status']
+
+
+def search_status_label(data):
+    code = search_status_code(data)
+    return SEARCH_STATUS.get(code, code)
+
+
 def event_searches(store, controller, event_id):
     records = []
     for tid in controller.tasks():
@@ -22,6 +36,7 @@ def progress(store, event_id, controller=None):
         runs = event_searches(store, controller, event_id) if controller else []
         if any(controller.active(tid) for tid, _ in runs):
             return 1, "检索中", "查看任务"
+        runs = [(tid, d) for tid, d in runs if d.get("build_disposition") != "excluded"]
         if any(d.get("builder_input", {}).get("samples") for _, d in runs if d.get("builder_input")):
             return 2, "待检查检索材料", "查看任务"
         return 1, "待检索／补充资料", "开始检索"

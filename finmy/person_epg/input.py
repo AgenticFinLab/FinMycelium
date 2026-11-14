@@ -57,6 +57,8 @@ def freeze_search_input(controller, task_id, *, confirmed=False):
         raise ValueError('请先确认实际构建材料与已知缺口')
     with task_lock(controller.root, task_id):
         data = controller.inspect(task_id)
+        if data.get('build_disposition') == 'excluded':
+            raise ValueError('该任务已标记不参与构建，请先恢复为待检查')
         task = data['task']; catalog = task.get('catalog', {})
         if catalog.get('kind') != 'person_event':
             raise ValueError('请选择已关联人物 event 的检索任务')

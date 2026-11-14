@@ -51,7 +51,8 @@ def dataset_settings(store=None):
 
 
 def dataset_page(store):
-    from finmy.workbench.search_page import search_form, get_controller, STATUS
+    from finmy.workbench.search_page import search_form, get_controller
+    from finmy.workbench.workflow import search_status_label
     heading('数据集', '选择一个 event，确认本次范围后使用公共搜索。')
     try:
         catalog = DatasetCatalog(dataset_root(store.root))
@@ -102,7 +103,7 @@ def dataset_page(store):
             with st.expander(f'历史检索（{len(history)}）'):
                 for tid, run in sorted(history, key=lambda r:r[1]['created_at'], reverse=True):
                     left, right = st.columns([4, 1])
-                    left.write(f"{run['created_at'][:19]} · {STATUS.get(run['status'], run['status'])} · {tid[:12]}")
+                    left.write(f"{run['created_at'][:19]} · {search_status_label(run)} · {tid[:12]}")
                     if right.button('查看任务', key='catalog-history-'+tid):
                         navigate('任务', **{'task-selected':tid, 'task_event_filter':''})
         search_form(store, catalog=selection)

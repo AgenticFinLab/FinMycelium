@@ -227,7 +227,7 @@ def _search_index(root, base):
         model = task.get('configuration', {}).get('lm_name') if task.get('mode') != 'simple' else 'Simple (no model)'
         values = [stamp, task.get('research_request', {}).get('target_name'),
                   task.get('catalog', {}).get('event_id') or task.get('workbench_event_id'),
-                  model, summary.get('status'), summary.get('input_characters')]
+                  model, summary.get('status'), summary.get('build_disposition', 'pending'), summary.get('input_characters')]
         link = f"[{cell(task['task_id'][:12])}]({quote(folder.name)}/)"
         entries.append((stamp, task['task_id'], '| ' + ' | '.join(map(cell, values)) + ' | ' + link + ' |'))
     lines = ['# Search records', '',
@@ -235,8 +235,8 @@ def _search_index(root, base):
              'Directories use creation time, event name and a short task ID; retry and model/status changes keep the directory.',
              'Full task IDs, scope and configuration remain in each task.json. Runtime directories keep the full task ID.',
              'Execution status does not imply evidence approval or an accepted EPG.', '',
-             '| Created | Event | Event ID | Model | Status | Builder input characters | Task record |',
-             '| --- | --- | --- | --- | --- | ---: | --- |']
+             '| Created | Event | Event ID | Model | Status | Build disposition | Builder input characters | Task record |',
+             '| --- | --- | --- | --- | --- | --- | ---: | --- |']
     lines.extend(row for _, _, row in sorted(entries))
     save(base, 'README.md', '\n'.join(lines) + '\n')
     readme = root/'workbench/README.md'
@@ -277,6 +277,8 @@ def export_search(search_root, task_id):
         data = json.loads((run / 'run.json').read_text())
         task, config = data['task'], data['config']
         record = {'kind': 'search', 'task_id': task_id, 'created_at': data['created_at'],
+                  'build_disposition': data.get('build_disposition', 'pending'),
+                  'build_disposition_history': data.get('build_disposition_history', []),
                   'mode': data.get('mode', 'agent'), 'catalog': pick(task.get('catalog', {}), CATALOG_KEYS),
                   'research_scope': task.get('research_scope'),
                   'research_request': pick(task, ('target_type', 'target_name', 'query_text', 'key_words', 'search_queries')),
@@ -314,7 +316,8 @@ def export_search(search_root, task_id):
                 if item.get('action') == 'model_response' and isinstance(item.get('usage'), dict):
                     reported.append(item['usage'])
         token_usage = token_summary(reported, data['usage']['model'])
-        summary = {'task_id': task_id, 'status': data['status'], 'updated_at': data['updated_at'],
+        summary = {'task_id': task_id, 'status': data['status'],
+                   'build_disposition': data.get('build_disposition', 'pending'), 'updated_at': data['updated_at'],
                    'completed_at': data.get('completed_at'), 'stop_reason': data.get('stop_reason'),
                    'requests': data['usage'], 'read_sources': len(data['read_sources']),
                    'source_count': len(rows), 'input_source_count': len(used),

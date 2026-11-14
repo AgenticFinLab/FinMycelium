@@ -8,6 +8,8 @@ from finmy.search.state import write_json
 def adopt_sources(controller, task_id, store):
     with task_lock(controller.root,task_id):
         data=controller.inspect(task_id)
+        if data.get('build_disposition') == 'excluded':
+            raise ValueError('该任务已标记不参与构建，请先恢复为待检查')
         event_id=data['task'].get('event_id')
         if not event_id:raise ValueError('该检索任务未关联主表事件')
         store.event(event_id)

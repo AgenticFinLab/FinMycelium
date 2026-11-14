@@ -69,6 +69,25 @@ class SearchController:
         thread=self.threads.get(task_id)
         return bool(thread and thread.is_alive())
 
+    def set_build_disposition(self, task_id, disposition):
+        """Record a reversible adoption choice without altering retrieval results."""
+        if disposition not in {'pending', 'excluded'}:
+            raise ValueError('Invalid build disposition')
+        with self.guard:
+            if self.active(task_id):
+                raise ValueError('请先暂停检索，再设置是否参与构建')
+            with task_lock(self.root, task_id):
+                state = SearchState(self.root, task_id)
+                if state.data['status'] == 'running':
+                    raise ValueError('请先暂停检索，再设置是否参与构建')
+                previous = state.data.get('build_disposition', 'pending')
+                if previous != disposition:
+                    state.data.setdefault('build_disposition_history', []).append(
+                        dict(time=now(), previous=previous, value=disposition))
+                    state.data['build_disposition'] = disposition
+                    state.save()
+        self._sync_records(task_id)
+
     def pause(self, task_id):
         path=task_path(self.root,task_id)
         if not (path/'runs/initial/run.json').exists(): raise ValueError('Unknown task')
@@ -112,6 +131,8 @@ class SearchController:
         with self.guard:
             if self.active(task_id): raise ValueError('This task is already running')
             state=self.inspect(task_id)
+            if state.get('build_disposition') == 'excluded':
+                raise ValueError('该任务已标记不参与构建，请先恢复为待检查')
             if state['status'] in {'finished','insufficient'}:
                 raise ValueError('Task ended; review or create a new task')
             if state['task'].get('catalog'):

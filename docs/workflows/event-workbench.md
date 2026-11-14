@@ -137,6 +137,13 @@ construction nor marks a graph accepted, and never commits or pushes Git changes
 Independent searches do not publish a catalog summary; when a workbench dataset
 is configured, they still export their task records under `workbench/search/`.
 
+Search tasks retained only for comparison can be marked **不参与构建** in their task
+panel. This reversible choice removes them from pending-material checks and has
+its own task filter; retrieval status, material, usage and downloads remain intact.
+Restore the task before starting it again or adopting its material for a new build.
+Existing adopted material and build snapshots are unaffected. The choice and its
+history are exported with the shared search records.
+
 ### Adopted search and reviewed graphs
 
 Saving a confirmed build task collects the adopted input and its records under the catalog

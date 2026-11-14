@@ -10,7 +10,7 @@ from finmy.search.control import SearchController
 from finmy.search.state import SearchConfig, SearchState
 from finmy.search.sources import SourceStore
 from finmy.workbench.domain import display_name
-from finmy.workbench.workflow import navigate
+from finmy.workbench.workflow import navigate, SEARCH_STATUS as STATUS, search_status_label
 from finmy.workbench.search_process import render_process, PROVIDERS
 from finmy.workbench.ui import heading, status as show_status, stats, empty
 from finmy.workbench.search_history import budget_policy_label, experiment_runs
@@ -19,10 +19,6 @@ from finmy.workbench.search_history import budget_policy_label, experiment_runs
 @st.cache_resource
 def get_controller(root):
     return SearchController(root, env_file=Path(__file__).resolve().parents[2]/'.env')
-
-
-STATUS={'ready':'待启动','running':'运行中','paused':'已暂停','finished':'待检查材料',
-        'insufficient':'资料不足','limit':'达到运行上限','failed':'运行失败'}
 
 
 def task_panel(controller, task_id, store, read_only=False, data=None):
@@ -35,7 +31,20 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
         if catalog['kind'] == 'person_event':
             st.info('人物任务固定当前 event；检查实际材料后，可保存独立的原生人物构建任务。')
         summary_panel(controller, task_id, data, active=active, read_only=read_only)
-    show_status(STATUS.get(data['status'], data['status']), '检索 · ' + task_id[:12])
+    show_status(search_status_label(data), '检索 · ' + task_id[:12])
+    excluded = data.get('build_disposition') == 'excluded'
+    if not read_only:
+        label = '恢复为待检查' if excluded else '不参与构建'
+        if st.button(label, key='build-disposition-'+task_id, disabled=active,
+                     help='保留材料与用量；不撤销已有构建或已纳入的资料，可随时恢复。'):
+            try:
+                controller.set_build_disposition(task_id, 'pending' if excluded else 'excluded')
+                st.rerun()
+            except (ValueError, OSError) as exc:
+                st.error(str(exc))
+    if excluded:
+        st.caption('已标记不参与构建，保留结果供查看与下载。检索运行状态：' + ('已完成检索' if data['status'] == 'finished' else STATUS.get(data['status'], data['status'])))
+        read_only = True
     providers = ' / '.join(PROVIDERS.get(p, p) for p in data['config']['providers'])
     st.caption(providers + ' · ' + ('简单搜索' if data.get('mode') == 'simple' else data['config'].get('lm_name') or '未设置模型'))
     ended = data['status'] in {'finished', 'insufficient'}
