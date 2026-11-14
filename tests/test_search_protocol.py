@@ -119,28 +119,31 @@ def test_sdk_loop_search_read_finish_preserves_provider_and_budget_rules(tmp_pat
     assert all(r['request_options']['thinking'] == {'type':'disabled'} for r in responses)
 
 
-def test_empty_json_mode_content_stops_within_existing_failure_budget(tmp_path, transport):
+def test_empty_json_mode_content_stops_at_total_call_budget(tmp_path, transport):
     transport['content'] = '  \n  '
     config = SearchConfig(lm_name='tokenhub/deepseek/deepseek-flash', allow_network=True, max_model_calls=8)
     result = run_search(TASK, root=tmp_path, task_id='empty', config=config,
                         model=LmbaseModel(config), transport=lambda *a:pytest.fail('No valid search action'))
-    assert result['status'] == 'failed' and result['usage'] == {'model':3,'search':0}
-    assert result['builder_input_path'] is None and len(transport['requests']) == 3
+    assert result['status'] == 'limit' and result['usage'] == {'model':8,'search':0}
+    assert result['builder_input_path'] is None and len(transport['requests']) == 8
     state = SearchState(tmp_path, 'empty')
     assert state.data['feedback']['error'] == 'InvalidActionOutput'
     assert 'Empty' in state.data['feedback']['hint']
     trace = [json.loads(line) for line in (state.run_dir/'trace.jsonl').read_text().splitlines()]
-    assert sum(r['usage']['total_tokens'] for r in trace if r['action']=='model_response') == 105
+    assert sum(r['usage']['total_tokens'] for r in trace if r['action']=='model_response') == 280
 
 
-def test_resume_preserves_failure_history_source_bytes_and_cumulative_calls(tmp_path):
+def test_legacy_failed_task_preserves_history_source_bytes_and_cumulative_calls(tmp_path):
     state = SearchState(tmp_path, 'resume', task=TASK, config=SearchConfig(max_model_calls=30))
     responses = iter([json.dumps(READ)+'\nextra', json.dumps(READ)+DSML, json.dumps(READ),
                       DSML, DSML, DSML])
     tools = SearchTools(state, transport=lambda *a:pytest.fail('No search action'),
                         fetcher=lambda url:(b'Original synthetic evidence.', 'txt', 'utf-8'))
-    run_agent(state, tools, lambda context:next(responses))
-    assert state.data['status'] == 'failed'
+    run_agent(state, tools, lambda context:next(responses), max_steps=6)
+    assert state.data['status'] == 'paused'
+    # Snapshot left by the previous three-error policy; do not rewrite old runs.
+    state.data.update(status='failed', stop_reason='repeated_invalid_action')
+    state.save()
     assert state.data['usage'] == {'model':6,'search':0}
     sid = state.data['read_sources'][0]
     source = deepcopy(state.data['sources'][sid])
@@ -214,10 +217,10 @@ def test_checkpoints_preserve_error_streak_and_retry_cannot_reset_total_budget(t
         state = SearchState(tmp_path, 'case')
         tools = SearchTools(state)
         assert state.data['invalid_actions']==expected
-        assert state.data['status']==('failed' if expected==3 else 'paused')
+        assert state.data['status']=='paused'
     run_agent(state, tools, model)
     assert state.data['status']=='limit' and state.data['stop_reason']=='model_limit'
     assert state.data['usage']=={'model':5,'search':0}
-    assert state.data['invalid_actions']==2
+    assert state.data['invalid_actions']==5
     run_agent(state, tools, lambda *a:pytest.fail('No calls left'))
     assert state.data['usage']['model']==5

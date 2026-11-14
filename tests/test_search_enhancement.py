@@ -103,12 +103,12 @@ class SearchTests(unittest.TestCase):
         with self.assertRaises(ValueError): store.read(sid,block=-1)
 
     def test_defaults_and_offline_transport(self):
+        from finmy.search.errors import SearchConfigurationError
         state=self.state()
         payload=request_payload('baidu','deal',state.config)
         self.assertEqual(payload['resource_type_filter'],[{'type':'web','top_k':5}])
         self.assertFalse(payload['query_policy']['enable_rewrite'])
-        result=SearchTools(state).search('deal')
-        self.assertEqual(result['providers'][0]['error_type'],'PermissionError')
+        with self.assertRaises(SearchConfigurationError): SearchTools(state).search('deal')
 
     def test_malformed_response_is_failure_not_empty_success(self):
         state=self.state()
@@ -168,13 +168,13 @@ class AgentTests(unittest.TestCase):
         again=run_search(**kwargs)
         self.assertEqual(again['usage'],result['usage'])
 
-    def test_invalid_actions_stop_and_count_across_resume(self):
+    def test_invalid_actions_consume_total_budget_across_resume(self):
         from finmy.search.pipeline import run_search
         opts=dict(root=self.tmp.name,task_id='task',model=lambda c:'bad json')
-        self.assertEqual(run_search(self.task,max_steps=2,**opts)['status'],'paused')
+        self.assertEqual(run_search(self.task,config={'max_model_calls':8},max_steps=2,**opts)['status'],'paused')
         result=run_search(**opts)
-        self.assertEqual(result['status'],'failed')
-        self.assertEqual(result['usage']['model'],3)
+        self.assertEqual(result['status'],'limit')
+        self.assertEqual(result['usage']['model'],8)
 
     def test_model_cap_no_fabricated_finish(self):
         from finmy.search.pipeline import run_search

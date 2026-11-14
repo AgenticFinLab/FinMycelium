@@ -83,24 +83,35 @@ def test_credentials_load_only_on_explicit_enabled_start(tmp_path,monkeypatch):
 
 
 def test_failed_task_retry_continues_full_run_with_cumulative_usage(tmp_path):
+    from finmy.search.errors import SearchConfigurationError
     url='https://example.org/acquisition'
-    outputs=iter(['invalid']*3 + ['invalid',dict(action='read_source',source=url),
-                               dict(action='finish',source_ids=[],gaps=['Unresolved'],reason='insufficient')])
+    repaired=False
+    def model(context):
+        if not context['prior_actions']:
+            return dict(action='read_source',source=url)
+        if not repaired:
+            raise SearchConfigurationError('Search model API rejected access; correct the key before retrying.')
+        return dict(action='finish',source_ids=[context['sources'][0]['source_id']],gaps=[],reason='supported')
     fetched=[]
     def fetch(source):
         fetched.append(source)
         return b'The fictional acquisition was announced.', 'txt', 'utf-8'
-    controller=SearchController(tmp_path,model=lambda context:next(outputs),fetcher=fetch,
+    controller=SearchController(tmp_path,model=model,fetcher=fetch,
                                 transport=lambda *a:pytest.fail('No search action'))
     task_id=controller.create(TASK,{'max_model_calls':10})
     controller.start(task_id);controller.threads[task_id].join(3)
     assert not controller.active(task_id)
     failed=controller.inspect(task_id)
-    assert failed['status']=='failed' and failed['usage']['model']==3
+    assert failed['status']=='failed' and failed['usage']['model']==2
+    assert failed['stop_reason']=='configuration_error'
+    trace_path=tmp_path/task_id/'runs/initial/trace.jsonl'
+    trace_before=trace_path.read_bytes()
+    repaired=True
     controller.start(task_id);controller.threads[task_id].join(3)
     assert not controller.active(task_id)
     retried=controller.inspect(task_id)
-    assert retried['status']=='insufficient'
-    assert retried['usage']=={'model':6,'search':0}
+    assert retried['status']=='finished'
+    assert retried['usage']=={'model':3,'search':0}
     assert retried['task']==failed['task'] and retried['config']==failed['config']
     assert len(retried['read_sources'])==1 and fetched==[url]
+    assert trace_path.read_bytes().startswith(trace_before)

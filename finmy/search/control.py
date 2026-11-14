@@ -9,6 +9,7 @@ import threading
 import uuid
 
 from .state import SearchConfig, SearchState, now, write_json
+from .errors import SearchConfigurationError
 
 
 def task_path(root, task_id):
@@ -140,6 +141,9 @@ class SearchController:
                 except Exception as exc:
                     state=SearchState(self.root,task_id)
                     state.data.update(status='failed',stop_reason=type(exc).__name__)
+                    if isinstance(exc, SearchConfigurationError):
+                        state.data['stop_reason']='configuration_error'
+                        state.data['feedback']={'error':type(exc).__name__, 'hint':str(exc)}
                     state.save()
                 state=SearchState(self.root,task_id)
                 if state.data['status'] in {'finished','insufficient','limit','failed'}:

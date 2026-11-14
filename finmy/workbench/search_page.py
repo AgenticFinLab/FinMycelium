@@ -78,9 +78,12 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
         if data.get('stop_reason'):
             reasons={'fixed_queries_completed':'固定查询已完成', 'user_pause':'手动暂停', 'checkpoint':'到达检查点',
                      'model_context_limit':'上下文达到长度上限', 'model_limit':'达到模型调用上限',
+                     'configuration_error':'接口鉴权或配置有误，修正后可重试',
                      'repeated_invalid_action':'连续执行错误，任务已停止', 'supported':'已准备可供检查的材料',
                      'low_gain':'继续补搜收益较低', 'insufficient':'证据不足'}
             st.caption('停止原因：' + reasons.get(data['stop_reason'], data['stop_reason']))
+            if data['stop_reason']=='configuration_error':
+                st.error((data.get('feedback') or {}).get('hint', '请检查接口配置后重试。'))
         st.markdown('**累计用量 / 上限**')
         stats([('搜索请求', f"{data['usage']['search']} / {data['config']['max_search_requests']}", '按每家服务计数'),
                ('阅读来源', f"{len(data['read_sources'])} / {data['config']['max_read_sources']}", '不同来源'),

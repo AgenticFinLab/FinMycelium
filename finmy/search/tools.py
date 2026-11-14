@@ -4,6 +4,7 @@ import time
 from dataclasses import asdict
 from urllib.parse import urlsplit
 from .sources import SourceStore
+from .errors import SearchConfigurationError, api_configuration_error
 from .state import LimitReached, digest, write_json
 
 ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', 'BAIDUSEARCH_API_KEY'),
@@ -36,7 +37,7 @@ def request_payload(provider, query, config):
             raise ValueError(f'Query has {units} units; Baidu limit is {BAIDU_QUERY_UNITS} '
                              f'(CJK characters count 2, others 1). Shorten or split this rejected query: {query[:120]!r}')
         if bool(start) != bool(end):
-            raise ValueError('Baidu requires both publication bounds')
+            raise SearchConfigurationError('Baidu requires both publication bounds; correct the task configuration before retrying.')
         payload = dict(messages=[{'role':'user','content':query}], edition='standard',
                        search_source='baidu_search_v2', query_policy={'enable_rewrite':config.baidu_rewrite},
                        resource_type_filter=[{'type':'web','top_k':config.max_results}])
@@ -49,9 +50,9 @@ def request_payload(provider, query, config):
         return payload
     if provider == 'bocha':
         if config.include_domains or config.exclude_domains:
-            raise ValueError('Bocha domain filter mapping is not yet verified')
+            raise SearchConfigurationError('Bocha domain filter mapping is not yet verified; correct the task configuration before retrying.')
         if bool(start) != bool(end):
-            raise ValueError('Bocha requires both publication bounds')
+            raise SearchConfigurationError('Bocha requires both publication bounds; correct the task configuration before retrying.')
         payload = dict(query=query, summary=True, count=config.max_results)
         if start:
             payload['freshness'] = start + '..' + end
@@ -72,12 +73,12 @@ def request_payload(provider, query, config):
 
 def http_transport(provider, payload, config):
     if not config.allow_network:
-        raise PermissionError('Network execution is disabled')
+        raise SearchConfigurationError('Network execution is disabled; enable external calls before retrying.')
     import requests
     url, key_name = ENDPOINTS[provider]
     key = os.environ.get(key_name)
     if not key:
-        raise ValueError('Missing credential: ' + key_name)
+        raise SearchConfigurationError('Set ' + key_name + ' before retrying this task.')
     headers = {'Content-Type': 'application/json'}
     headers['x-api-key' if provider == 'exa' else 'Authorization'] = key if provider == 'exa' else 'Bearer ' + key
     response = requests.post(url, json=payload, headers=headers, timeout=config.timeout)
@@ -89,6 +90,8 @@ def normalize(provider, response):
     if not isinstance(response, dict):
         raise ValueError('Malformed provider response')
     if provider == 'bocha':
+        if response.get('code') in (401, 403):
+            raise SearchConfigurationError('Bocha rejected access; check BOCHA_API_KEY and permissions before retrying this task.')
         if response.get('code', 200) != 200:
             raise ValueError('Bocha reported failure')
         items = response['data']['webPages']['value']
@@ -121,6 +124,7 @@ class SearchTools:
         payloads = {p:request_payload(p, query, config) for p in config.providers}
         found, outcomes = [], []
         for provider, payload in payloads.items():
+            configuration_error = None
             key = digest([provider, payload])
             cached = self.state.data['cache'].get(key)
             if cached is not None:
@@ -136,9 +140,9 @@ class SearchTools:
             self.state.trace(dict(action='provider_started',provider=provider,query=query))
             try:
                 response = self.transport(provider, payload, config)
+                items = normalize(provider, response)[:config.max_results]
                 write_json(self.state.run_dir / 'responses' / (str(self.state.data['usage']['search']) + '.json'),
                            dict(provider=provider, request=payload, response=response))
-                items = normalize(provider, response)[:config.max_results]
                 ids = []
                 for item in items:
                     sid = self.sources.register(item['url'],title=item['title'],
@@ -153,10 +157,14 @@ class SearchTools:
                 outcomes.append(dict(provider=provider,status='success' if ids else 'no_results'))
             except Exception as exc:
                 outcomes.append(dict(provider=provider,status='failed',error_type=type(exc).__name__))
+                configuration_error = (exc if isinstance(exc, SearchConfigurationError)
+                                       else api_configuration_error(exc, provider + ' search API'))
             self.state.trace(dict(action='provider_result',**outcomes[-1],
                                   result_count=len(ids) if outcomes[-1]['status'] in {'success','no_results'} else None,
                                   duration_seconds=round(time.monotonic()-started,3)))
             self.state.save()
+            if configuration_error:
+                raise configuration_error
         result = dict(source_ids=list(dict.fromkeys(found)), providers=outcomes)
         self.state.trace(dict(action='search',query=query,result=result))
         return result

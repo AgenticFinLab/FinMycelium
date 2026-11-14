@@ -1,6 +1,8 @@
 """One search-side decision model; tools and budgets remain deterministic."""
 import json
+import os
 import time
+from .errors import SearchConfigurationError, api_configuration_error
 from .state import LimitReached, write_json
 from .tools import search_constraints
 from .sources import SourceStore
@@ -54,27 +56,44 @@ class LmbaseModel:
         self.last_request_options = None
 
     def __call__(self, context):
+        self.last_usage = None
+        self.last_request_options = None
         if not self.config.allow_network:
             raise PermissionError('Model execution is disabled')
         if not self.config.lm_name:
-            raise ValueError('An independent search lm_name is required')
-        if self.adapter is None:
-            from finmy.model_api import ModelAPIInference
-            self.adapter = ModelAPIInference(lm_name=self.config.lm_name,
-                                                 generation_config=self.config.generation_config)
-            self.adapter.client = self.adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
-        params = request_parameters(self.config.lm_name,
-                                    self.adapter.request_parameters(self.config.generation_config))
+            raise SearchConfigurationError('Configure an independent search lm_name before retrying.')
+        try:
+            if self.adapter is None:
+                from finmy.model_config import api_key_variable, model_name
+                variable = api_key_variable(model_name(self.config.lm_name).split('/', 1)[0])
+                if not os.environ.get(variable):
+                    raise SearchConfigurationError('Set ' + variable + ' before retrying this task.')
+                from finmy.model_api import ModelAPIInference
+                self.adapter = ModelAPIInference(lm_name=self.config.lm_name,
+                                                     generation_config=self.config.generation_config)
+                self.adapter.client = self.adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
+            params = request_parameters(self.config.lm_name,
+                                        self.adapter.request_parameters(self.config.generation_config))
+        except SearchConfigurationError:
+            raise
+        except (ValueError, ImportError) as exc:
+            raise SearchConfigurationError(
+                'Invalid search model setup; check the model ID, endpoint, generation settings and dependencies before retrying.') from exc
         if 'max_new_tokens' in params:
             params['max_tokens'] = params.pop('max_new_tokens')
         if not any(k in params for k in ('max_tokens','max_completion_tokens')):
-            raise ValueError('Configure search model output token limit explicitly')
-        self.last_usage = None
+            raise SearchConfigurationError('Configure search model output token limit explicitly before retrying.')
         self.last_request_options = request_record(params)
-        response = self.adapter.client.chat.completions.create(
-            model=self.adapter.model_name,
-            messages=[{'role':'system','content':SYSTEM_PROMPT},
-                      {'role':'user','content':json.dumps(context,ensure_ascii=False)}], **params)
+        try:
+            response = self.adapter.client.chat.completions.create(
+                model=self.adapter.model_name,
+                messages=[{'role':'system','content':SYSTEM_PROMPT},
+                          {'role':'user','content':json.dumps(context,ensure_ascii=False)}], **params)
+        except Exception as exc:
+            configuration_error = api_configuration_error(exc, 'Search model API')
+            if configuration_error:
+                raise configuration_error from exc
+            raise
         self.last_usage = response.usage.model_dump() if response.usage else None
         if not response.choices or response.choices[0].finish_reason != 'stop':
             raise ValueError('Model completion was interrupted or truncated')
@@ -180,15 +199,15 @@ def run_agent(state, tools, model=None, *, max_steps=None):
         return state.data
     model=model or LmbaseModel(state.config)
     steps=0
-    if (state.data['status'] == 'failed'
-            and state.data.get('stop_reason') == 'repeated_invalid_action'):
-        # A new explicit invocation gets a fresh consecutive-error window;
-        # cumulative request limits, evidence and the trace remain unchanged.
+    if state.data['status'] == 'failed':
+        # Only an explicit invocation resumes a failed task. Error counts are
+        # diagnostic; request limits, evidence and the trace remain cumulative.
         state.trace(dict(action='retry_started',
+                         previous_stop_reason=state.data.get('stop_reason'),
                          previous_invalid_actions=state.data.get('invalid_actions', 0),
                          model_calls_used=state.data['usage']['model']))
-        state.data['invalid_actions']=0
-        state.data.pop('stop_reason', None)
+    state.data.pop('stop_reason', None)
+    state.data.pop('completed_at', None)
     state.data['status']='running'
     while max_steps is None or steps<max_steps:
         if (state.root / 'pause_requested').exists():
@@ -230,14 +249,19 @@ def run_agent(state, tools, model=None, *, max_steps=None):
             state.data['feedback']={'error':'limit','kind':str(exc)}
             state.trace(dict(action='action_limited',model_call=state.data['usage']['model'],error=state.data['feedback']))
         except Exception as exc:
-            state.data['invalid_actions']=state.data.get('invalid_actions',0)+1
+            configuration_error = isinstance(exc, (SearchConfigurationError, PermissionError))
+            if not configuration_error:
+                state.data['invalid_actions']=state.data.get('invalid_actions',0)+1
             # Error classes and validation messages, never provider/credential exceptions.
             state.data['feedback']={'error':type(exc).__name__,
-                'hint':str(exc) if isinstance(exc,(ValueError,KeyError)) else 'Operation failed; inspect local status'}
+                'hint':str(exc) if isinstance(exc,(ValueError,KeyError)) else (
+                    'Execution access is denied; check external-call permission and local file access before retrying.'
+                    if isinstance(exc, PermissionError) else 'Operation failed; inspect local status')}
             state.trace(dict(action='action_error',model_call=state.data['usage']['model'],error=state.data['feedback'],
+                             recoverable=not configuration_error,
                              request_options=getattr(model,'last_request_options',None)))
-            if state.data['invalid_actions']>=3:
-                state.data.update(status='failed',stop_reason='repeated_invalid_action')
+            if configuration_error:
+                state.data.update(status='failed',stop_reason='configuration_error')
         state.save()
         if state.data['status'] in {'finished','insufficient','failed'}:
             break

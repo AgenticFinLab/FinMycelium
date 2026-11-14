@@ -107,10 +107,17 @@ citation labels are separate from runtime source IDs; planning notes are not pro
 reading in the current run. JSON mode is requested from the provider, but returned content
 still passes strict decoding and validation before execution.
 
-Three consecutive execution errors stop the run. An explicit retry after this failure
-starts a fresh consecutive-error window; pause/single-step checkpoints do not reset it.
-All attempted model requests still count toward the original cumulative task budget,
-and prior logs and source versions are retained.
+Invalid action output and correctable action parameters are fed back to the model and
+continue within the cumulative model-call budget. Consecutive-error counts are diagnostic;
+they do not stop the task. No automatic restart loop or hidden SDK retries are added.
+Missing credentials, invalid local service settings and API request/access rejections
+(HTTP 400/401/403/404/422) stop for operator correction. Website acquisition failures
+remain source outcomes; they are not API-credential failures.
+After correcting the cause, use Retry on the same task. All attempted calls, prior logs,
+source versions and budget usage are retained; retry does not grant a new budget.
+The workbench loads `.env` without overriding process variables: after changing a key
+there, restart the workbench to load it, then retry. Legacy tasks stopped by consecutive
+errors can also be retried under this policy.
 
 All selected providers receive the same query for initial search and follow-up. Baidu
 uses Web Search standard with rewrite off by default; Bocha uses Web Search with summary;
@@ -158,7 +165,7 @@ reports individual outcomes. Linux/WSL file locks reject simultaneous writers to
 same task. Pause takes effect after the current operation.
 
 After the first search, follow-up queries require a concrete `gap` reason. SDK retries
-are disabled; three consecutive invalid actions stop the run. The final one or two
+are disabled; correctable failures consume the same total model-call budget. The final one or two
 model requests are reserved for `finish`. Context pressure first switches to compact
 finalization; if that still exceeds the limit, execution pauses before a request.
 These controls bound work; they do not force a successful handoff after a failure.
