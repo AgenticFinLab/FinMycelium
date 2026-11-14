@@ -168,3 +168,28 @@ def test_finalization_can_stop_with_unread_sources_and_explicit_gap(tmp_path):
     run_agent(state,SearchTools(state),decide)
     assert state.data['status']=='insufficient' and not state.data['read_sources']
     assert state.data['usage']=={'search':0,'model':1}
+
+
+def test_weak_matches_do_not_fill_read_budget_or_reappear_after_strong_matches(tmp_path):
+    text='\n\n'.join([
+        'The parties discussed an initial proposal.',
+        'Aster acquisition financing terms were negotiated.',
+        'The agreement remained conditional on approval.',
+        'Routine warehouse operations. ' * 100,
+        'Seasonal financing covers inventory.',
+        'Routine warehouse operations. ' * 100,
+        'Seasonal financing covers logistics.',
+    ])
+    state, store, sid, document=saved(tmp_path,text,max_read_chars=12000)
+    first=store.read(sid,query='Aster acquisition financing negotiated')
+    content='\n'.join(s['text'] for s in first['spans'])
+    assert 'Aster acquisition' in content and 'conditional on approval' in content
+    assert 'Seasonal financing' not in content
+    assert sum(len(s['text']) for s in first['spans']) < 12000
+    second=store.read(sid,query='Aster acquisition financing negotiated')
+    assert second['spans']==[] and second['reading']['match_status']=='already_read'
+    assert second['reading']['matching_windows']==first['reading']['matching_windows']
+    assert second['reading']['unread_matching_windows']==0
+    # Filtering is navigation only: the original weak matches remain explicitly readable.
+    index=next(i for i,b in enumerate(document['blocks']) if 'Seasonal financing' in b['text'])
+    assert 'Seasonal financing' in store.read(sid,block=index)['spans'][0]['text']

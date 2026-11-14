@@ -25,6 +25,10 @@ The workbench uses continuous execution with Start/Continue, Pause and Retry for
 tasks. Retry continues the saved task rather than clearing it. CLI/Python single-step
 execution and pause/resume use the same persisted state.
 The agent assists relevance and gap decisions; it is not a factual completeness verifier.
+Directed reading uses the same within-document relative BM25 threshold as material allocation
+(half the best score), with neighboring context and no fixed match-count cap. Already-read
+strong matches do not promote weak matches into the next read. Explicit locations remain
+available; filtered or unmatched text is not evidence that a fact is absent.
 
 | Location | Responsibility |
 |---|---|

@@ -31,8 +31,10 @@ def request_payload(provider, query, config):
         raise ValueError('Query must be nonempty')
     start, end = config.publication_start, config.publication_end
     if provider == 'baidu':
-        if sum(2 if '\u4e00' <= c <= '\u9fff' else 1 for c in query) > BAIDU_QUERY_UNITS:
-            raise ValueError('Shorten or split query to Baidu 72-unit limit')
+        units = sum(2 if '\u4e00' <= c <= '\u9fff' else 1 for c in query)
+        if units > BAIDU_QUERY_UNITS:
+            raise ValueError(f'Query has {units} units; Baidu limit is {BAIDU_QUERY_UNITS} '
+                             f'(CJK characters count 2, others 1). Shorten or split this rejected query: {query[:120]!r}')
         if bool(start) != bool(end):
             raise ValueError('Baidu requires both publication bounds')
         payload = dict(messages=[{'role':'user','content':query}], edition='standard',

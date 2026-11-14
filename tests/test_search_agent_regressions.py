@@ -193,3 +193,28 @@ def test_existing_task_keeps_previously_saved_limits(tmp_path):
     SearchState(tmp_path,'case',task=task(),config=old)
     restored=SearchState(tmp_path,'case')
     assert asdict(restored.config)==asdict(old)
+
+
+def test_rejected_query_feedback_includes_length_and_query_without_provider_calls(tmp_path):
+    config=SearchConfig(providers=['baidu','bocha','exa'],max_model_calls=6)
+    state=SearchState(tmp_path,'case',task=task(),config=config)
+    too_long='合并' * 19
+    calls=[]
+    contexts=[]
+    def observed(provider,payload,config):
+        calls.append(provider)
+        return transport(provider,payload,config)
+    def decide(context):
+        contexts.append(context)
+        if len(contexts)==1:return dict(action='search',query=too_long)
+        if len(contexts)==2:
+            assert calls==[] and context['remaining']['search']==12
+            assert '76 units' in context['feedback']['hint']
+            assert 'limit is 72' in context['feedback']['hint']
+            assert too_long in context['feedback']['hint']
+            return dict(action='search',query='Synthetic merger closing')
+        return dict(action='finish',source_ids=[],gaps=['Sources not yet inspected'],reason='insufficient')
+    run_agent(state,SearchTools(state,transport=observed),decide)
+    assert state.data['status']=='insufficient'
+    assert state.data['usage']=={'model':3,'search':3}
+    assert calls==['baidu','bocha','exa']

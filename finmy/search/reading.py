@@ -1,7 +1,7 @@
 """Question-directed reading of saved text, with original offsets and one read budget."""
 import re
 
-from .budget import rank_blocks, tokens
+from .budget import MIN_RELATIVE_SCORE, rank_blocks, tokens
 from .sources import pdf_blocks
 
 
@@ -31,7 +31,8 @@ def targeted_spans(document, query, limit, read_ranges):
     """Rank temporary text windows, then read anchors and nearby context within limit.
 
     Temporary windows never replace saved parsing or alter original evidence locations.
-    No fixed match-count cap. Previously read matches yield to unread matches; explicit
+    No fixed match-count cap. Low-score tails are excluded before accounting for read ranges.
+    Previously read matches yield to unread matches; explicit
     location reads remain available for rereading. Lexical matches are navigation hints.
     """
     windows = []
@@ -39,7 +40,7 @@ def targeted_spans(document, query, limit, read_ranges):
         for part in pdf_blocks(block['text'], block.get('page', 0)):
             if part['text'].strip():
                 windows.append(dict(block=i, start=part['start'], end=part['end'], text=part['text']))
-    ranked = rank_blocks({'blocks': list(range(len(windows)))}, {'blocks': windows}, [query])
+    ranked = rank_blocks({'blocks': list(range(len(windows)))}, {'blocks': windows}, [query], focused=True)
     ranking = ranked[0]['ranking'] if ranked else []
     current = [r for r in read_ranges if r['version'] == document['version']]
     chosen = []
@@ -90,7 +91,8 @@ def targeted_spans(document, query, limit, read_ranges):
     reading = dict(mode='query', query=query,
                    match_status='matched' if spans else 'already_read' if ranking else 'no_match',
                    matching_windows=len(ranking), unread_matching_windows=unread_matches,
-                   note='Lexical navigation, not a coverage verdict. Refine terms/aliases or read an explicit location when needed.')
+                   min_relative_score=MIN_RELATIVE_SCORE,
+                   note='Relevant lexical matches only, not all word hits or a coverage verdict. Refine terms or read an explicit location when needed.')
     if preview is not None:
         reading['preview_location'] = preview
     return spans, reading
