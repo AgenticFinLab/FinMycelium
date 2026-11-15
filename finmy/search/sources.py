@@ -2,6 +2,7 @@
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
+import time
 from urllib.parse import urlsplit, urlunsplit
 import ipaddress
 import json
@@ -22,20 +23,31 @@ class ParagraphParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.parts, self.current, self.hidden = [], [], 0
+        self.scopes = {'article': 0, 'main': 0}
+        self.scoped_parts = {'article': [], 'main': []}
 
     def flush(self):
         text = ''.join(self.current).strip()
         if text:
             self.parts.append(text)
+            for tag, depth in self.scopes.items():
+                if depth:
+                    self.scoped_parts[tag].append(text)
         self.current = []
 
     def handle_starttag(self, tag, attrs):
+        if tag in self.scopes:
+            self.flush()
+            self.scopes[tag] += 1
         if tag in {'script', 'style', 'noscript'}:
             self.hidden += 1
         if not self.hidden and tag in {'p', 'div', 'br', 'li', 'tr', 'h1', 'h2', 'h3', 'section'}:
             self.flush()
 
     def handle_endtag(self, tag):
+        if tag in self.scopes:
+            self.flush()
+            self.scopes[tag] = max(0, self.scopes[tag] - 1)
         if tag in {'script', 'style', 'noscript'}:
             self.hidden = max(0, self.hidden - 1)
         if not self.hidden and tag in {'p', 'div', 'li', 'tr', 'h1', 'h2', 'h3', 'section'}:
@@ -91,7 +103,8 @@ def parse_document(raw, kind, encoding='utf-8'):
         parser = ParagraphParser()
         parser.feed(text)
         parser.flush()
-        blocks = parser.parts
+        # Keep introductions/questions alongside a nested article inside <main>.
+        blocks = parser.scoped_parts['main'] or parser.scoped_parts['article'] or parser.parts
     elif kind == 'txt':
         blocks = [x for x in text.split('\n\n') if x.strip()]
     else:
@@ -99,25 +112,31 @@ def parse_document(raw, kind, encoding='utf-8'):
     return [{'paragraph': i + 1, 'text': p} for i, p in enumerate(blocks)]
 
 
-def fetch_public(url, config):
+def fetch_public(url, config, *, timeout=None):
     """Bounded ordinary HTML/PDF download; redirects are validated individually."""
     if not config.allow_network:
         raise PermissionError('Network execution is disabled')
     import requests
     from urllib.parse import urljoin
+    deadline = time.monotonic() + timeout if timeout is not None else None
     for _ in range(6):
         url = canonical_url(url)
         p = urlsplit(url)
         addresses = socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == 'https' else 80))
         if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
             raise ValueError('Non-public source address')
-        with requests.get(url, timeout=config.timeout, stream=True, allow_redirects=False) as response:
+        remaining = config.timeout if deadline is None else deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Document download deadline exceeded')
+        with requests.get(url, timeout=min(config.timeout, remaining), stream=True, allow_redirects=False) as response:
             if response.is_redirect:
                 url = urljoin(url, response.headers['Location'])
                 continue
             response.raise_for_status()
             chunks, size = [], 0
             for chunk in response.iter_content(65536):
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError('Document download deadline exceeded')
                 size += len(chunk)
                 if size > config.max_download_bytes:
                     raise ValueError('Document exceeds download limit')
@@ -129,10 +148,31 @@ def fetch_public(url, config):
     raise ValueError('Too many redirects')
 
 
+def extends_saved_body(previous, candidate):
+    """Require recognizable original text and additional body, not a longer error page.
+
+    This is an acquisition guard, not a semantic completeness verdict.
+    """
+    def normalized(text):
+        return ' '.join(re.findall(r'\w+', text.casefold()))
+    old = normalized(' '.join(b['text'] for b in previous))
+    new = normalized(' '.join(b['text'] for b in candidate))
+    if len(new) < len(old) + max(100, len(old) // 10):
+        return False
+    # Skip short headings: a shared title alone does not establish body continuity.
+    anchors = [normalized(b['text'])[:160] for b in previous
+               if len(normalized(b['text'])) >= 160]
+    if not anchors:
+        return len(old) >= 40 and old in new
+    return sum(anchor in new for anchor in anchors) >= (len(anchors) + 1) // 2
+
+
 class SourceStore:
     def __init__(self, state, fetcher=None):
         self.state = state
         self.fetcher = fetcher or (lambda url: fetch_public(url, state.config))
+        self.partial_fetcher = fetcher or (lambda url: fetch_public(url, state.config, timeout=min(20, state.config.timeout)))
+        self.can_complete_partial = fetcher is not None or state.config.allow_network
 
     def register(self, url, *, title='', discovery=None):
         url = canonical_url(url)
@@ -176,7 +216,7 @@ class SourceStore:
             blocks, status = [], 'parser_failed'
             entry['error_type'] = type(exc).__name__
         document = dict(version=version, blocks=blocks, status=status, kind=kind,
-                        retrieved_at=now(), parser_version='search-v2', encoding=encoding)
+                        retrieved_at=now(), parser_version='search-v3', encoding=encoding)
         if not (folder / 'parsed.json').exists():
             write_json(folder / 'parsed.json', document)
         else:
@@ -202,6 +242,42 @@ class SourceStore:
             raise ValueError('Parsed source integrity mismatch')
         return json.loads(parsed)
 
+    def complete_partial(self, sid):
+        """Try the original URL once before its partial body is first inspected.
+
+        Keep cached originals on failure; never rebase already-read locations or
+        priority annotations onto a different document version.
+        """
+        entry = self.state.data['sources'][sid]
+        version = entry.get('version')
+        if (not self.can_complete_partial or entry.get('status') != 'partial'
+                or not version or urlsplit(entry['url']).scheme not in {'http', 'https'}
+                or any(r['version'] == version and r['end'] > r['start'] for r in entry.get('read_ranges', []))
+                or version in entry.get('acquisition_attempts', {})):
+            return
+        old = self.document(sid, version)
+        attempt = dict(status='started', previous_version=version, started_at=now())
+        entry.setdefault('acquisition_attempts', {})[version] = attempt
+        self.state.save()
+        self.state.trace(dict(action='source_acquisition_started', source=sid, **attempt))
+        started = time.monotonic()
+        try:
+            raw, kind, encoding = self.partial_fetcher(entry['url'])
+            if len(raw) > self.state.config.max_download_bytes:
+                raise ValueError('Document exceeds download limit')
+            blocks = parse_document(raw, kind, encoding)
+            if extends_saved_body(old['blocks'], blocks):
+                document = self.save_raw(sid, raw, kind, encoding)
+                attempt.update(status='expanded', version=document['version'],
+                               saved_chars=sum(len(b['text']) for b in document['blocks']))
+            else:
+                attempt.update(status='kept_cached', reason='No recognizable body expansion')
+        except Exception as exc:
+            attempt.update(status='kept_cached', error_type=type(exc).__name__)
+        attempt['duration_seconds'] = round(time.monotonic() - started, 3)
+        self.state.save()
+        self.state.trace(dict(action='source_acquisition_result', source=sid, **attempt))
+
     def read(self, sid, block=0, offset=0, *, query=None):
         if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
             raise ValueError('Invalid source location')
@@ -219,6 +295,9 @@ class SourceStore:
                 entry.update(status='fetch_failed', error_type=type(exc).__name__)
                 self.state.save()
                 return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__)
+        # An explicit nonzero cursor belongs to the existing saved version.
+        if not block and not offset:
+            self.complete_partial(sid)
         doc = self.document(sid)
         blocks = doc['blocks']
         if query is not None:

@@ -51,7 +51,8 @@ The launcher applies a workbench-only light theme. Shared presentation lives in
    Batch creation shares configuration, while each event retains its own scope,
    usage and outputs. It creates individual tasks; it does not silently start them.
    Search also accepts an independent research request without a master-table event.
-3. In Tasks, start, step, pause or continue a search. Runtime records and results
+3. In Tasks, start, pause or continue a search; use **重试** after a failure.
+   Retry preserves the saved task and cumulative usage. Runtime records and results
    are visible there. Search completion means material is ready for inspection,
    not that evidence is exhaustive or approved. Detailed traces are expandable.
 4. Inspect sources and the current budgeted handoff. Advanced source selection is

@@ -17,7 +17,7 @@ The same search-side agent and tools serve all cases. The logical steps are:
 1. Record the research object, original requirement and optional scope.
 2. Generate a process-oriented query and search all selected providers.
 3. Acquire and inspect saved source bodies; record partial content and failures.
-4. Select useful sources, preserving original text rather than generating replacement summaries.
+4. Review inspected sources and record explicit exclusions; preserve original text for handoff.
 5. Identify important remaining gaps; return to search when useful, or finish with unresolved gaps.
 6. Retain the complete selected material, then allocate the Builder input within its budget.
 
@@ -30,6 +30,31 @@ Directed reading uses a within-document relative BM25 threshold
 strong matches do not promote weak matches into the next read. Explicit locations remain
 available; filtered or unmatched text is not evidence that a fact is absent.
 
+Before first inspection of a partial search-returned body, the reader attempts the
+original public URL once with a request timeout capped at 20 seconds, also subject
+to the configured timeout and size limit. A recognizable expanded body is
+saved as a new version; blocked, shorter or unrelated responses leave the cached text
+available. Already-inspected versions and explicit cursors remain stable. Acquisition
+attempts are logged; no additional search/model request is made. HTML parsing prefers
+the article/main body when present. This does not guarantee access to full interviews
+or paywalled content: the agent must retain the acquisition limitation and may follow
+an accessible original or transcript within the existing budget.
+
+Source choice precedes character allocation. There is no separate retained-source
+count cap; the separate reading budget still limits which sources can enter the pool.
+Review all inspected sources for useful actions, qualifications, outcomes and independent
+or conflicting support. A statement spanning several matters can
+support this event with its shared scope intact. At agent finish, all inspected current
+source bodies enter the candidate pool unless explicitly excluded with a short reason
+in `source_exclusions` (`{"source_id": "reason"}`). `source_ids` lists proposed retained
+sources; unmentioned inspected bodies are conservatively retained rather than silently
+lost. Unread candidates are not admitted. Explicit exclusions, automatic retention and
+source versions are frozen in `source_review`; these are relevance decisions, not fact
+verification. Cleanup, duplicate removal and the usual character allocation follow.
+More free space can accommodate more retained sources, but reassembly of a frozen
+manifest cannot promote unread URLs or reverse a source-selection decision. Legacy
+span handoffs and explicit programmatic source lists retain their existing semantics.
+
 | Location | Responsibility |
 |---|---|
 | `finmy/search/state.py` | Task/config validation, saved state, cumulative usage |
@@ -37,7 +62,7 @@ available; filtered or unmatched text is not evidence that a fact is absent.
 | `finmy/search/sources.py` | HTML/PDF/TXT acquisition, original versions, hashes and read locations |
 | `finmy/search/reading.py` | Located query reads, cached rereads and bounded original excerpts |
 | `finmy/search/agent.py` | Shared decision prompt, search/read/finish actions, bounded recovery |
-| `finmy/search/evidence.py` | Validate and pin model passage-selection advice against inspected originals |
+| `finmy/search/evidence.py` | Account for inspected sources and exclusions; validate passage priorities against saved originals |
 | `finmy/search/protocol.py` | Search model output settings and single-action JSON decoding |
 | `finmy/search/handoff.py` | Complete manifest, source provenance and existing Builder contract |
 | `finmy/search/budget.py` | Deterministic paragraph allocation; no model or network calls |
@@ -109,7 +134,11 @@ retry loop and cumulative call accounting; no separate repair-model call is adde
 The prompt requests only the next action and waits for program feedback. Research-plan
 citation labels are separate from runtime source IDs; planning notes are not proof of
 reading in the current run. JSON mode is requested from the provider, but returned content
-still passes strict decoding and validation before execution.
+still passes strict decoding and validation before execution. Reads may include an optional
+`gap` explanation. Finish uses `reason_detail`; the explanatory alias
+`finalization_reason` is also accepted, with `reason_detail` taking precedence. Explanations stay
+in the run record, never in source evidence, and cannot override the controlled stop
+reason or budgets. Unknown action fields are reported explicitly for correction.
 
 Invalid action output and correctable action parameters are fed back to the model and
 continue within the cumulative model-call budget. Consecutive-error counts are diagnostic;
@@ -259,8 +288,9 @@ Each entry must refer to an inspected interval in a saved source; the program pi
 its version. Optional explicit versions must match. The reason is model advice,
 stored separately from source text, and is never copied into Builder evidence.
 Invalid entries receive diagnostic feedback without aborting the valid search/read
-action or remaining handoff. Final `source_ids` still determine retained sources;
-omitted or superseded annotations remain visible in the omission record.
+action or remaining handoff. Final `source_ids` and explicit `source_exclusions`
+account for retention; inspected sources omitted from both remain candidates.
+Omitted or superseded annotations remain visible in the omission record.
 The generated search summary reports annotation retention and the advisory personal
 participation assessment; exact locations and allocation outcomes remain in `selection.json`.
 
@@ -274,7 +304,8 @@ factual completeness or turn a corporate action into a personal action.
 
 ## Complete material and input budgeting
 
-`finish` supplies inspected `source_ids`, gap notes and a stop reason. The program
+`finish` supplies proposed `source_ids`, optional reasoned `source_exclusions`, gap
+notes and a stop reason. The program completes the inspected-source pool, then
 packages each selected saved body, not only the excerpt seen by the search model.
 It removes only empty paragraphs, exact navigation labels and long exact repeated
 paragraphs, and deduplicates identical document bodies. Original files remain intact.
@@ -299,24 +330,33 @@ an event period, URL or PDF filename. Publication metadata does not verify an ev
 
 Budget allocation is applied only when complete material exceeds the limit:
 
-- Allocate half the budget across sources using max-min fair quotas. For catalog tasks,
-  use the event name and included scope, keywords and attempted search queries. Person
-  identity stays bound to that event. Successful query reads of retained source versions
-  also contribute their actual questions, with source/version provenance frozen in
-  `reading_queries`. Queries from omitted or superseded source versions and reads with no
-  passages are excluded. Exclusions and planning prose are not positive retrieval queries.
-  Unstructured tasks retain their original query; the full task still reaches the Builder.
+- Allocate half the budget across sources using max-min fair quotas. Each source uses
+  its own successful reading questions and the confirmed research scope for core content.
+  Long-document expansion uses only that source's questions; when none exist, it falls
+  back to the research scope. Multiple questions are retained without a fixed count cap.
+  Questions from other sources, superseded versions or reads without passages do not
+  expand that document. Search queries remain in the acquisition history.
+- Freeze the positive research scope in `scope_queries` and source/version questions in
+  `reading_queries`. For catalog tasks, scope uses the event name, included scope and
+  keywords, with person identity bound to that event. Exclusions and planning prose are
+  not positive queries. Unstructured tasks retain their original query; the full task
+  still reaches the Builder. The allocation's `query_plan` records the actual core and
+  expansion queries for each source.
 - Select BM25 text windows. Per document and query, consider all anchors with
   at least 50% of the highest score in the initial assembly pass, plus one neighboring
   block on each side. There is no fixed anchor-count cap; source allocation and the
   total character budget limit what is retained. These are deterministic relevance
-  heuristics, not factual support scores. When no lexical match
+  heuristics, not factual support scores. When the first context block explicitly
+  refers backward (for example, "at that point"), shared-space windows include one
+  additional preceding block when it fits; this expansion is not recursive.
+  When no lexical match
   exists, allow only a bounded opening-block preview.
 - Keep a compact source whole when it fits its fair share of the final budget, before
   expanding long-document windows. This avoids discarding clauses from short notices
   while spare budget remains.
 - Prioritize validated marked paragraphs from the remaining budget, with adjacent
-  original context when it fits. Keep complete paragraphs and restore original order.
+  original context when it fits: try two blocks on each side, then one, then the marked
+  paragraph alone. Keep complete paragraphs and restore original order.
   The source core allowance remains protected; priorities cannot increase the budget.
   Record any priority paragraph that cannot fit. Invalid/missing suggestions fall
   back to the ordinary allocation; unmarked relevant material remains eligible.
@@ -330,8 +370,10 @@ Budget allocation is applied only when complete material exceeds the limit:
   of long bodies remains fixed at 40%. New handoffs use the evidence-priority policy;
   without priority locations it follows the same progressive allocation. Explicitly reassembling
   an old handoff creates a new revision under this policy while retaining its original
-  source versions, complete-material manifest and previous handoff files. Stored v1/v2/v3
-  manifests retain their historical allocation rules when replayed without an override.
+  source versions, complete-material manifest and previous handoff files. Upgrading an
+  older manifest without frozen scope queries uses its saved research task for fallback.
+  Stored balanced and earlier evidence-priority policies retain their historical allocation
+  rules when replayed without an override.
 - Count headers and omission markers toward the budget. Keep omitted paragraphs in the
   complete material, distinguishing relevance selection from material-limit omissions.
   Do not cut selected blocks, generate replacement summaries or raise the limit automatically.

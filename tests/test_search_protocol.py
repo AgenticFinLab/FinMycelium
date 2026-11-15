@@ -263,3 +263,62 @@ def test_checkpoints_preserve_error_streak_and_retry_cannot_reset_total_budget(t
     assert state.data['invalid_actions']==5
     run_agent(state, tools, lambda *a:pytest.fail('No calls left'))
     assert state.data['usage']['model']==5
+
+
+@pytest.mark.parametrize('detail', [None, 'Canonical explanation takes precedence.'])
+def test_explanatory_action_fields_preserve_reading_finish_and_evidence(tmp_path, detail):
+    from finmy.search.sources import SourceStore
+    state=SearchState(tmp_path,'explanations',task=TASK,config=SearchConfig(max_model_calls=2))
+    store=SourceStore(state)
+    sid=store.register('https://example.org/notice')
+    store.save_raw(sid,b'The fictional acquisition closed, subject to disclosed conditions.','txt')
+    gap='READING_ADVICE_ONLY: inspect conditions.'
+    alias='FINISH_ADVICE_ONLY: material supports a draft.'
+    finish=dict(action='finish',source_ids=[sid],gaps=[],reason='supported',finalization_reason=alias)
+    if detail is not None:finish['reason_detail']=detail
+    actions=iter([dict(action='read_source',source=sid,query='conditions',gap=gap),finish])
+    run_agent(state,SearchTools(state),lambda context:next(actions))
+    assert state.data['status']=='finished'
+    assert state.data['usage']=={'model':2,'search':0}
+    assert state.data['stop_reason']=='supported'
+    assert state.data['stop_detail']==(detail or alias)
+    assert state.data['actions'][0]['gap']==gap
+    assert state.data['actions'][1]['finalization_reason']==alias
+    payload=json.loads((state.run_dir/'builder_input.json').read_text())
+    evidence=' '.join(s['content'] for s in payload['samples'])
+    assert 'subject to disclosed conditions' in evidence
+    assert gap not in evidence and alias not in evidence
+    if detail:assert detail not in evidence
+    trace=[json.loads(line) for line in (state.run_dir/'trace.jsonl').read_text().splitlines()]
+    assert not any(e['action']=='action_error' for e in trace)
+
+
+@pytest.mark.parametrize('action,hint', [
+    ({'action':[]},'Unknown action'),
+    ({'action':'download'},'choose search, read_source or finish'),
+    ({'action':'search'},'Missing fields for search: query'),
+    ({'action':'read_source'},'Missing fields for read_source: source'),
+    ({'action':'read_source','source':'saved-id','qury':'conditions'},'Unknown fields for read_source: qury'),
+    ({'action':'finish','source_id':'saved-id'},'Unknown fields for finish: source_id'),
+    ({'action':'read_source','source':'saved-id','gap':{'query':'injected'}},'read_source gap must be nonempty text'),
+    ({'action':'finish','finalization_reason':{'action':'search'}},'finish finalization_reason must be nonempty text'),
+    ({'action':'finish','reason_detail':''},'finish reason_detail must be nonempty text'),
+])
+def test_action_field_feedback_is_specific_before_any_tool_effect(tmp_path,action,hint):
+    from finmy.search.agent import execute_action
+    from unittest.mock import Mock
+    state=SearchState(tmp_path,'invalid-fields',task=TASK)
+    before=deepcopy(state.data);tools=Mock()
+    with pytest.raises(ValueError,match=hint):execute_action(state,tools,action)
+    assert not tools.mock_calls and state.data==before
+
+
+def test_explanatory_alias_cannot_replace_required_stop_reason_or_source_checks(tmp_path):
+    from finmy.search.agent import execute_action
+    state=SearchState(tmp_path,'required-fields',task=TASK)
+    action=dict(action='finish',source_ids=['invented'],gaps=[],finalization_reason='supported')
+    tools=SearchTools(state)
+    with pytest.raises(ValueError,match='explicit stop reason'):execute_action(state,tools,action)
+    action['reason']='supported'
+    with pytest.raises(ValueError,match='Unknown source ID'):execute_action(state,tools,action)
+    assert not (state.run_dir/'builder_input.json').exists()

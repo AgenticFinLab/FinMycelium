@@ -1,6 +1,6 @@
 """Material budget allocation: BM25 windows, source quotas and shared remaining space.
 
-No model calls, network, source-specific rules, or paragraph splitting.
+No model calls, network, case-specific rules, or paragraph splitting.
 """
 import math
 import re
@@ -11,7 +11,9 @@ from .sources import SourceStore
 LEGACY_POLICY = 'balanced_source_windows_v1'
 FIXED_POLICY = 'balanced_source_windows_v2'
 ADAPTIVE_POLICY = 'balanced_source_windows_v3'
-BUDGET_POLICY = 'evidence_priority_windows_v1'
+PRIORITY_POLICY = 'evidence_priority_windows_v1'
+SOURCE_QUERY_POLICY = 'evidence_priority_windows_v2'
+BUDGET_POLICY = 'evidence_priority_windows_v3'
 ASSEMBLY_THRESHOLDS = (0.5, 0.4, 0.3)
 MIN_RELATIVE_SCORE = 0.4
 
@@ -52,7 +54,7 @@ def render(entry, document, blocks, markers=False):
     return ''.join(parts)
 
 
-def allocate_input(state, complete, budget, queries=(), *, focused=False, min_relative_score=None):
+def allocate_input(state, complete, budget, queries=(), *, focused=False, min_relative_score=None, source_queries=None):
     from .handoff import materialize_complete
     full=materialize_complete(state,complete)
     quotas=fair_quotas({e['source_id']:e['material_chars'] for e in complete['selected']},budget)
@@ -62,7 +64,8 @@ def allocate_input(state, complete, budget, queries=(), *, focused=False, min_re
         if entry['material_chars']<=quota:
             blocks=list(entry['blocks']);decisions[sid]={'mode':'full_document'}
         else:
-            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,queries,focused=focused,min_relative_score=min_relative_score)
+            selected_queries=source_queries[sid] if source_queries is not None else queries
+            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,selected_queries,focused=focused,min_relative_score=min_relative_score)
         content=render(entry,document,blocks,markers=len(blocks)<len(entry['blocks']))
         if blocks:
             selected.append(dict(source_id=sid,version=entry['version'],blocks=blocks,material_chars=len(content),quota=quota))
@@ -158,21 +161,56 @@ def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relativ
                               query_count=len(rankings),k1=1.5,b=0.75)
 
 
+def source_query_plan(state,complete):
+    """Bind inspected questions to their saved source/version; freeze the fallback."""
+    fallback=complete.get('scope_queries')
+    if fallback is None:
+        # Explicitly upgrading an old manifest uses its saved research task,
+        # never new search history. Ordinary replay still selects the old policy.
+        from .handoff import research_scope_queries
+        fallback=research_scope_queries(state.data['task'])
+    plan={}
+    for entry in complete['selected']:
+        sid,version=entry['source_id'],entry['version']
+        own=list(dict.fromkeys(q['query'].strip() for q in complete.get('reading_queries',[])
+            if q.get('source_id')==sid and q.get('version')==version
+            and isinstance(q.get('query'),str) and q['query'].strip()))
+        plan[sid]=dict(version=version,basis='source_reading' if own else 'research_scope',
+                       queries=own or list(fallback),
+                       core_queries=list(dict.fromkeys(own+list(fallback))))
+    return plan
+
+
+def refers_to_previous(text):
+    """A bounded cue for missing antecedents; it never certifies interpretation."""
+    lead = text.strip()[:180]
+    return bool(re.match(r'(?:This|That|These|Those|It|They|He|She|But|However|Instead)\b', lead, re.I)
+                or re.search(r'\b(?:all of this|at that point|as a result|in response)\b', lead, re.I)
+                or re.match(r'(?:这|那|他|她|它|但|然而|因此|对此)', lead))
+
+
 def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
-    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
+    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
     focused = policy != LEGACY_POLICY
-    thresholds = ASSEMBLY_THRESHOLDS if policy in {ADAPTIVE_POLICY,BUDGET_POLICY} else (0.5,)
+    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,BUDGET_POLICY}
+    progressive = priority or policy == ADAPTIVE_POLICY
+    plan=source_query_plan(state,complete) if policy in {SOURCE_QUERY_POLICY,BUDGET_POLICY} else None
+    core_queries={sid:p['core_queries'] for sid,p in plan.items()} if plan is not None else None
+    thresholds = ASSEMBLY_THRESHOLDS if progressive else (0.5,)
     initial_threshold = thresholds[0]
     if type(budget) is not int or budget<=0:raise ValueError('Positive integer budget required')
     if complete['material_chars']<=budget:
-        payload, record = allocate_input(state,complete,budget,queries,focused=focused,min_relative_score=initial_threshold)
-        if policy in {ADAPTIVE_POLICY,BUDGET_POLICY}:
+        payload, record = allocate_input(state,complete,budget,queries,focused=focused,min_relative_score=initial_threshold,
+                                         source_queries=core_queries)
+        if progressive:
             record.update(thresholds=list(thresholds), threshold_stages=[], full_material_retained=True)
-        if policy == BUDGET_POLICY:
+        if priority:
             record['priority_decisions'] = [dict(passage=p,status='retained')
                                             for p in complete.get('priority_passages',[])]
+        if plan is not None:record['query_plan']=plan
         return payload, record
-    _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused,min_relative_score=initial_threshold)
+    _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused,min_relative_score=initial_threshold,
+                         source_queries=core_queries)
     entries={e['source_id']:e for e in complete['selected']}
     store=SourceStore(state)
     docs={sid:store.document(sid,e['version']) for sid,e in entries.items()}
@@ -190,14 +228,18 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         return render(entries[sid],docs[sid],sorted(blocks),markers=len(blocks)<len(entries[sid]['blocks']))
     sizes={sid:len(text(sid,picked[sid])) for sid in entries}
     remaining=budget-sum(sizes.values());actions=[]
-    def window(sid,index):
+    def window(sid,index,radius=1):
         blocks=entries[sid]['blocks'];p=blocks.index(index)
-        return set(blocks[max(0,p-1):p+2])
+        start=max(0,p-radius)
+        if policy==BUDGET_POLICY and radius==1 and start and refers_to_previous(docs[sid]['blocks'][blocks[start]]['text']):
+            start-=1  # One antecedent paragraph, not recursive document expansion.
+        return set(blocks[start:p+radius+1])
     repairs={sid:[window(sid,a['anchor']) for a in base['decisions'].get(sid,{}).get('anchors',[])] for sid in entries}
     def additions(threshold):
         queues = {}
         for sid,e in entries.items():
-            ranks=rank_blocks(e,docs[sid],queries,focused=focused,min_relative_score=threshold)
+            selected_queries=plan[sid]['queries'] if plan is not None else queries
+            ranks=rank_blocks(e,docs[sid],selected_queries,focused=focused,min_relative_score=threshold)
             seq=[];seen=set()
             for rank in range(max((len(r['ranking']) for r in ranks),default=0)):
                 for r in ranks:
@@ -223,7 +265,7 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
             if not changed:break
 
     priority_decisions=[]
-    if policy == BUDGET_POLICY:
+    if priority:
         for passage in complete.get('priority_passages',[]):
             sid = passage['source_id'];anchor = passage['block']
             if sid not in entries or passage['version']!=entries[sid]['version'] or anchor not in entries[sid]['blocks']:
@@ -232,8 +274,11 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
             # Source core coverage remains protected. Priority hints add whole
             # original paragraphs and, where possible, their neighboring context.
             status='material_limit'
-            for candidate,kind in ((picked[sid]|window(sid,anchor),'with_context'),
-                                   (picked[sid]|{anchor},'paragraph_only')):
+            candidates=[(picked[sid]|window(sid,anchor),'with_context'),
+                        (picked[sid]|{anchor},'paragraph_only')]
+            if policy==BUDGET_POLICY:
+                candidates.insert(0,(picked[sid]|window(sid,anchor,radius=2),'with_context'))
+            for candidate,kind in candidates:
                 length=len(text(sid,candidate));cost=length-sizes[sid]
                 if cost>remaining:continue
                 actions.append(dict(phase='priority_passage',source_id=sid,
@@ -257,7 +302,8 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         excluded=sorted(set(e['blocks'])-picked[sid])
         if excluded:
             if focused:
-                ranks=rank_blocks(e,docs[sid],queries,focused=True,min_relative_score=thresholds[-1])
+                selected_queries=plan[sid]['queries'] if plan is not None else queries
+                ranks=rank_blocks(e,docs[sid],selected_queries,focused=True,min_relative_score=thresholds[-1])
                 eligible=set().union(*(window(sid,index) for r in ranks for index,_ in r['ranking']))
                 if not eligible:eligible=set(e['blocks'][:1])
                 for reason,blocks in [('material_limit', sorted(set(excluded)&eligible)),
@@ -271,9 +317,13 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         result.update(min_relative_score=thresholds[-1],context_neighbors=1,
                       compact_source_ids=sorted(compact_sources),
                       unused_reason='Budget is a ceiling; no expansion beyond eligible original-text windows')
-    if policy in {ADAPTIVE_POLICY,BUDGET_POLICY}:
+    if progressive:
         result.update(thresholds=list(thresholds),threshold_stages=stages,full_material_retained=False)
-    if policy == BUDGET_POLICY:
+    if plan is not None:result['query_plan']=plan
+    if policy==BUDGET_POLICY:
+        result['context_policy']=dict(priority_neighbors=2, ordinary_neighbors=1,
+                                      preceding_antecedent_extra=1, recursive=False)
+    if priority:
         # A passage that did not fit early may have been included by later passes.
         for item in priority_decisions:
             p=item['passage'];sid=p['source_id']

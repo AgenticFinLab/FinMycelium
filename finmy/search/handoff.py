@@ -81,7 +81,19 @@ def _clean_blocks(document):
     return kept, removed
 
 
-def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', versions=None):
+def research_scope_queries(task):
+    """Prefer structured positive scope; preserve unstructured research requests."""
+    scope=task.get('research_scope',{})
+    catalog=task.get('catalog',{})
+    focus=(catalog.get('event_name') or task['target_name'])+'. '+scope.get('include','')
+    queries=[focus if scope or catalog.get('event_name') else task['query_text'],
+             ' '.join(task.get('key_words',[]))]
+    if catalog.get('kind')=='person_event' and catalog.get('person_name'):
+        queries.append(catalog['person_name']+'. '+focus)
+    return list(dict.fromkeys(q.strip() for q in queries if q.strip()))
+
+
+def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', versions=None, source_review=None):
     """Build a document package without writes, network requests, or model calls.
 
     A source must have been inspected, but every packaged paragraph need not have been
@@ -136,15 +148,8 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
                   unselected_sources=sorted(set(state.data['sources'])-set(source_ids)), review_required=True,
                   scope='All retained saved bodies after cleanup; not a claim of complete source acquisition or fact verification')
     from .state import digest
-    scope = task.get('research_scope', {})
-    # Structured scope avoids promoting exclusions, planning prose and source-index
-    # descriptions into positive retrieval terms. Do not ban those words in evidence.
-    focus = (task.get('catalog', {}).get('event_name') or task['target_name']) + '. ' + scope.get('include', '')
-    queries = [focus if scope.get('include') else task['query_text'], ' '.join(task.get('key_words', []))]
-    catalog = task.get('catalog', {})
-    if catalog.get('kind') == 'person_event' and catalog.get('person_name'):
-        # Bind the focal person's identity to this event, never their whole life.
-        queries.append(catalog['person_name'] + '. ' + focus)
+    record['scope_queries'] = research_scope_queries(task)
+    queries = list(record['scope_queries'])
     retained_versions = {d['source_id']: d['version'] for d in documents}
     reading_queries = []
     trace = state.run_dir / 'trace.jsonl'
@@ -171,6 +176,8 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     record['priority_passages'],record['priority_omissions'] = retained_passages(state,retained_versions)
     if state.data.get('person_evidence'):
         record['person_evidence'] = dict(state.data['person_evidence'])
+    if source_review is not None:
+        record['source_review'] = source_review
     from .budget import BUDGET_POLICY
     record['budget_policy'] = BUDGET_POLICY
     record['complete_id'] = digest(record)
@@ -228,6 +235,8 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', a
         unselected_sources=complete['unselected_sources'], review_required=True,
         retrieval_queries=queries, allocation=allocation,
         scope='Budgeted input derived from independently retained complete material')
+    if 'source_review' in complete:
+        record['source_review'] = complete['source_review']
     return payload, record
 
 
