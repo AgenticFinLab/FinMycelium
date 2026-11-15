@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 from .sources import SourceStore
 from .errors import SearchConfigurationError, api_configuration_error
 from .state import LimitReached, digest, write_json
+from .reading import unread_ranges
 
 ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', 'BAIDUSEARCH_API_KEY'),
              'bocha': ('https://api.bocha.cn/v1/web-search', 'BOCHA_API_KEY'),
@@ -25,7 +26,8 @@ def search_constraints(config):
                 max_results_per_provider=config.max_results,
                 query_max_units=BAIDU_QUERY_UNITS if 'baidu' in config.providers else None,
                 query_unit_rule='U+4E00..U+9FFF counts 2; each other character counts 1',
-                strategy='All selected providers receive the same short question; split distinct questions.')
+                provider_queries='Optional mapping of selected providers to language/alias variants of the same question',
+                strategy='All selected providers search the same question; optional provider_queries adapts its expression, not its scope.')
 
 
 def request_payload(provider, query, config):
@@ -119,26 +121,34 @@ class SearchTools:
         self.sources = SourceStore(state, fetcher)
         self.transport = transport or http_transport
 
-    def search(self, query):
+    def search(self, query, *, provider_queries=None):
         config = self.state.config
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError('Query must be nonempty')
+        if provider_queries is None:
+            provider_queries = {}
+        if (not isinstance(provider_queries, dict) or set(provider_queries) - set(config.providers)
+                or any(not isinstance(q, str) or not q.strip() for q in provider_queries.values())):
+            raise ValueError('provider_queries must map selected providers to nonempty query strings')
         # Validate all selected providers before any request; never silently truncate.
-        payloads = {p:request_payload(p, query, config) for p in config.providers}
+        queries = {p:provider_queries.get(p, query) for p in config.providers}
+        payloads = {p:request_payload(p, queries[p], config) for p in config.providers}
         found, outcomes = [], []
         for provider, payload in payloads.items():
             configuration_error = None
             key = digest([provider, payload])
             cached = self.state.data['cache'].get(key)
             if cached is not None:
-                outcomes.append(dict(provider=provider, status='cached'))
+                outcomes.append(dict(provider=provider, query=queries[provider], status='cached'))
                 found.extend(cached)
                 continue
             try:
                 self.state.consume('search')
             except LimitReached:
-                outcomes.append(dict(provider=provider,status='limit'))
+                outcomes.append(dict(provider=provider,query=queries[provider],status='limit'))
                 continue
             started = time.monotonic()
-            self.state.trace(dict(action='provider_started',provider=provider,query=query))
+            self.state.trace(dict(action='provider_started',provider=provider,query=queries[provider]))
             try:
                 response = self.transport(provider, payload, config)
                 items = normalize(provider, response)[:config.results_for(provider)]
@@ -147,7 +157,7 @@ class SearchTools:
                 ids = []
                 for item in items:
                     sid = self.sources.register(item['url'],title=item['title'],
-                        discovery=dict(provider=provider,query=query,options=payload,
+                        discovery=dict(provider=provider,query=queries[provider],options=payload,
                                        snippet=item['snippet'],summary=item['summary'],published_at=item['published_at']))
                     ids.append(sid)
                     # Search-returned text may be incomplete. Never label it a full document.
@@ -155,9 +165,9 @@ class SearchTools:
                         self.sources.save_raw(sid, item['text'].encode(), 'txt', partial=True)
                 self.state.data['cache'][key] = ids
                 found.extend(ids)
-                outcomes.append(dict(provider=provider,status='success' if ids else 'no_results'))
+                outcomes.append(dict(provider=provider,query=queries[provider],status='success' if ids else 'no_results'))
             except Exception as exc:
-                outcomes.append(dict(provider=provider,status='failed',error_type=type(exc).__name__))
+                outcomes.append(dict(provider=provider,query=queries[provider],status='failed',error_type=type(exc).__name__))
                 configuration_error = (exc if isinstance(exc, SearchConfigurationError)
                                        else api_configuration_error(exc, provider + ' search API'))
             self.state.trace(dict(action='provider_result',**outcomes[-1],
@@ -167,7 +177,7 @@ class SearchTools:
             if configuration_error:
                 raise configuration_error
         result = dict(source_ids=list(dict.fromkeys(found)), providers=outcomes)
-        self.state.trace(dict(action='search',query=query,result=result))
+        self.state.trace(dict(action='search',query=query,provider_queries=provider_queries,result=result))
         return result
 
     def read_source(self, source, location=None, *, query=None):
@@ -185,7 +195,21 @@ class SearchTools:
                                  'HTTP(S) URL. Research-plan citations are not runtime IDs; nothing was read.')
             source = self.sources.register(source)
         started = time.monotonic()
+        previous = list(self.state.data['sources'][source].get('read_ranges', []))
         self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))
         result = self.sources.read(source, **(location or {}), query=query)
+        current = [r for r in previous if r['version'] == result.get('version')]
+        new_chars = 0
+        for span in result.get('spans', []):
+            new_chars += sum(b-a for a,b in unread_ranges(span['block'], span['start'], span['end'], current))
+            current.append(span)
+        result['progress'] = dict(new_chars=new_chars,
+            returned_chars=sum(len(s['text']) for s in result.get('spans', [])))
+        if not new_chars:
+            result['progress']['hint'] = ('No new original text. Mark useful already-read passages now; '
+                'use an unread location, another source or a targeted search, or finish with gaps. '
+                'Changing keywords on a fully read saved body does not acquire missing article parts.')
+        self.state.data['sources'][source]['last_read'] = result['progress']
+        self.state.save()
         self.state.trace(dict(action='read_source',source=source,result=result,duration_seconds=round(time.monotonic()-started,3)))
         return result

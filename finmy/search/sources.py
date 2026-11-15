@@ -2,6 +2,8 @@
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import time
 from urllib.parse import urlsplit, urlunsplit
 import ipaddress
@@ -167,6 +169,42 @@ def extends_saved_body(previous, candidate):
     return sum(anchor in new for anchor in anchors) >= (len(anchors) + 1) // 2
 
 
+def fetch_failure(exc):
+    """Safe acquisition diagnostics, without exception strings or response bodies."""
+    response = getattr(exc, 'response', None)
+    code = getattr(response, 'status_code', None)
+    code = code if isinstance(code, int) else None
+    if code in {401, 403, 451} or isinstance(exc, PermissionError):
+        category, retryable = 'access_denied', False
+    elif code in {404, 410}:
+        category, retryable = 'not_found', False
+    elif code == 429:
+        category, retryable = 'rate_limited', True
+    elif code == 408 or (code is not None and code >= 500):
+        category, retryable = 'server_error', True
+    elif code is None and (isinstance(exc, OSError) or type(exc).__name__ in {'Timeout', 'ReadTimeout', 'ConnectTimeout', 'ConnectionError'}):
+        category, retryable = 'network_error', True
+    else:
+        category, retryable = 'request_error', False
+    retry_after = 30 if code == 429 else 0
+    value = (getattr(response, 'headers', {}) or {}).get('Retry-After', '')
+    if value:
+        try:
+            retry_after = max(0, int(value))
+        except (ValueError, TypeError):
+            try:
+                deadline = parsedate_to_datetime(value)
+                if deadline.tzinfo is None:
+                    deadline = deadline.replace(tzinfo=timezone.utc)
+                retry_after = max(0, int((deadline-datetime.now(timezone.utc)).total_seconds()))
+            except (ValueError, TypeError, OverflowError):
+                pass
+    return dict(error_type=type(exc).__name__, http_status=code, category=category,
+                retryable=retryable, retry_after_seconds=retry_after,
+                hint='Trace an accessible original by its title, author, quote or an observed link. '
+                     'A failed fetch does not establish irrelevance; snippets are not source bodies.')
+
+
 class SourceStore:
     def __init__(self, state, fetcher=None):
         self.state = state
@@ -273,7 +311,7 @@ class SourceStore:
             else:
                 attempt.update(status='kept_cached', reason='No recognizable body expansion')
         except Exception as exc:
-            attempt.update(status='kept_cached', error_type=type(exc).__name__)
+            attempt.update(status='kept_cached', **fetch_failure(exc))
         attempt['duration_seconds'] = round(time.monotonic() - started, 3)
         self.state.save()
         self.state.trace(dict(action='source_acquisition_result', source=sid, **attempt))
@@ -288,13 +326,32 @@ class SourceStore:
         entry = self.state.data['sources'][sid]
         self.state.reading(sid)
         if not entry.get('version'):
+            attempts = entry.setdefault('fetch_attempts', [])
+            if attempts:
+                last = attempts[-1]
+                error = last.get('error', dict(retryable=True, category='interrupted'))
+                elapsed = (datetime.now(timezone.utc)-datetime.fromisoformat(last['time'])).total_seconds()
+                wait = max(0, error.get('retry_after_seconds', 0)-elapsed)
+                if not error.get('retryable', False) or len(attempts) >= 2 or wait > 0:
+                    return dict(source_id=sid, status='fetch_failed', error_type=entry.get('error_type'),
+                                fetch_error=error, retry_skipped=True, retry_in_seconds=round(wait, 1),
+                                attempts=len(attempts))
+            attempt = dict(time=now(), status='started')
+            attempts.append(attempt)
+            self.state.save()
             try:
                 raw, kind, encoding = self.fetcher(entry['url'])
                 self.save_raw(sid, raw, kind, encoding)
-            except Exception as exc:
-                entry.update(status='fetch_failed', error_type=type(exc).__name__)
+                attempt['status'] = entry['status']
+                entry.pop('fetch_error', None)
                 self.state.save()
-                return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__)
+            except Exception as exc:
+                error = fetch_failure(exc)
+                attempt.update(status='fetch_failed', error=error)
+                entry.update(status='fetch_failed', error_type=type(exc).__name__, fetch_error=error)
+                self.state.save()
+                return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__,
+                            fetch_error=error, attempts=len(attempts))
         # An explicit nonzero cursor belongs to the existing saved version.
         if not block and not offset:
             self.complete_partial(sid)

@@ -45,11 +45,26 @@ is not mandatory. Long-body lexical matching does not translate: use source-lang
 keywords or explicit reading locations. Apply the same evidence standards across
 languages, trace useful secondary accounts to accessible original records, and keep
 original titles, quotations and body text. Any translation is labeled separately.
+The `search` action accepts optional `provider_queries`, mapping selected providers to
+language or alias variants of the same question. Unspecified providers receive `query`.
+Each actual query is validated, cached and recorded separately, using the same provider
+budgets and result limits. This does not add a translation model call or require bilingual
+duplication. Provider observations expose Chinese discovery hints and actual attempted
+queries; they are navigation signals, not evidence-quality scores. Inspect results before
+spending the remaining query rounds so important gaps and inaccessible originals can
+receive a targeted follow-up.
 
 Directed reading uses a within-document relative BM25 threshold
 (40% of the best score), with neighboring context and no fixed match-count cap. Already-read
 strong matches do not promote weak matches into the next read. Explicit locations remain
 available; filtered or unmatched text is not evidence that a fact is absent.
+Each read reports returned characters and newly inspected original characters, including
+explicit-location rereads. The agent may verify known text and mark important passages.
+Three consecutive operations adding no original text, new candidate or validated priority
+mark produce a redirect hint; six require finalization with `low_gain` or `insufficient`
+and unresolved gaps. Query/cursor changes and replayed text alone do not reset this counter.
+New original intervals or new valid marks do. This persisted operational limit does not
+certify coverage, change the handoff contract or prevent progressive reading of long files.
 
 Before first inspection of a partial search-returned body, the reader attempts the
 original public URL once with a request timeout capped at 20 seconds, also subject
@@ -60,6 +75,13 @@ attempts are logged; no additional search/model request is made. HTML parsing pr
 the article/main body when present. This does not guarantee access to full interviews
 or paywalled content: the agent must retain the acquisition limitation and may follow
 an accessible original or transcript within the existing budget.
+Acquisition errors record HTTP status, error category and retry eligibility without
+response bodies or exception strings. A source with no cached body gets at most two
+fetch attempts per saved run, with the second reserved for transient network/server
+errors; denied or missing pages are not fetched repeatedly. `Retry-After` is respected
+without sleeping inside the reader. Failed partial-body expansion still keeps the cached
+original. The agent can search a title, author or quote for an accessible original, or
+follow an observed link to another part; no page URL or missing text is invented.
 
 Source choice precedes character allocation. There is no separate retained-source
 count cap; the separate reading budget still limits which sources can enter the pool.
@@ -82,6 +104,7 @@ span handoffs and explicit programmatic source lists retain their existing seman
 | `finmy/search/tools.py` | Common Baidu Web Search, Bocha Web Search and Exa Search adapters |
 | `finmy/search/sources.py` | HTML/PDF/TXT acquisition, original versions, hashes and read locations |
 | `finmy/search/reading.py` | Located query reads, cached rereads and bounded original excerpts |
+| `finmy/search/progress.py` | Provider language observations and persisted research progress |
 | `finmy/search/agent.py` | Shared decision prompt, search/read/finish actions, bounded recovery |
 | `finmy/search/evidence.py` | Account for inspected sources and exclusions; validate passage priorities against saved originals |
 | `finmy/search/protocol.py` | Search model output settings and single-action JSON decoding |
