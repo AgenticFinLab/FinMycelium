@@ -9,7 +9,7 @@ import uuid
 from finmy.search.summary import directory_lock
 from .prompts import system_prompt
 from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference, validate_envelope
-from .records import IdMap, fingerprint, index_records, seed_facts, validate_input
+from .records import IdMap, fingerprint, index_records, seed_facts, validate_input, prompt_json
 from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now, write_json
 from .schema import COLLECTION_IDS
 from .feedback import correction_scope, correction_issues, validate_correction, unresolved_report, reserved_records
@@ -71,16 +71,23 @@ class Construction:
                     query_text=self.run.payload['user_query']['query_text'],
                     read_limits=dict(read_chars=self.run.config.read_chars, retrieval_top_k=self.run.config.retrieval_top_k),
                     **fields)
+        reserve = self.run.config.read_chars + 1024
+        if role == 'relations':
+            reserve = max(reserve, self.run.config.max_context_chars // 4)
+            base['read_limits']['max_record_refs'] = 20
         return sized_request(base, package, self.run.config.max_context_chars - len(system_prompt(role)),
-                             reserve=self.run.config.read_chars + 1024)
+                             reserve=reserve)
 
     def receive(self, task_id, role, package, request, *, reserved=None, **scope):
         system = system_prompt(role)
+        request = self.run.task_request(task_id, system, request, package)
         group = self.run.attempt_group(task_id, system, request, package)
         records, allowed = [], None
         result = package
         for number in range(self.run.config.max_json_attempts):
             step_id = task_id if number == 0 else task_id + '.correct.' + str(number)
+            if number:
+                request = self.run.task_request(step_id, system, request, result)
             validator = (lambda v: validate_envelope(role, v)) if allowed is None else \
                 (lambda v: validate_correction(role, v, allowed))
             try:
@@ -248,20 +255,48 @@ class Construction:
                         reason='Resolve relation endpoint after Action split.', evidence_ids=[]))
         self.save_facts()
 
+    def relation_request(self, actions, phases):
+        return self.request('relations', self.graph, assigned_action_ids=actions,
+            assigned_phase_ids=phases, relation_candidates=[c for c in self.facts['relation_candidates']
+                if c.get('from_action_id') in actions or c.get('to_action_id') in actions],
+            assigned_records=dict(actions=[a for a in self.graph['actions'] if a['action_id'] in actions],
+                                 phases=[p for p in self.graph['phases'] if p['phase_id'] in phases]))
+
     def relate(self):
-        # Batches partition ownership. No Cartesian expansion of action pairs.
-        action_ids = [a['action_id'] for a in self.graph['actions']]
-        phase_ids = [p['phase_id'] for p in self.graph['phases']]
-        for number, start in enumerate(range(0, max(1, len(action_ids)), 24)):
-            owned_actions = action_ids[start:start + 24]
-            owned_phases = phase_ids if number == 0 else []
-            request = self.request('relations', self.graph, assigned_action_ids=owned_actions,
-                assigned_phase_ids=owned_phases, relation_candidates=[c for c in self.facts['relation_candidates']
-                    if c.get('from_action_id') in owned_actions or c.get('to_action_id') in owned_actions],
-                assigned_records=dict(actions=[a for a in self.graph['actions'] if a['action_id'] in owned_actions],
-                                     phases=[p for p in self.graph['phases'] if p['phase_id'] in owned_phases]))
+        # Own each Action/Phase once, while all other endpoints remain navigable.
+        actions = [a['action_id'] for a in self.graph['actions']]
+        phases = [p['phase_id'] for p in self.graph['phases']]
+        action_phases = {a['action_id']: a.get('phase_id') for a in self.graph['actions']}
+        reserve = max(self.run.config.read_chars + 1024, self.run.config.max_context_chars // 4)
+        initial_limit = self.run.config.max_context_chars - reserve
+        number = 0
+        while actions or phases or number == 0:
+            owned_actions, owned_phases = [], []
+            request = self.relation_request([], [])
+            for aid in actions:
+                pid = action_phases[aid]
+                candidate_phases = owned_phases + ([pid] if pid in phases and pid not in owned_phases else [])
+                candidate = self.relation_request(owned_actions + [aid], candidate_phases)
+                if len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit:
+                    break
+                owned_actions.append(aid); owned_phases = candidate_phases; request = candidate
+            # Empty Phases still need a baseline. An oversized Action+Phase pair
+            # may first process the Phase, then retry the Action independently.
+            if not actions or not owned_actions:
+                for pid in phases:
+                    if pid in owned_phases:
+                        continue
+                    candidate = self.relation_request(owned_actions, owned_phases + [pid])
+                    if len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit:
+                        break
+                    owned_phases.append(pid); request = candidate
+            if (actions or phases) and not (owned_actions or owned_phases):
+                raise LimitReached('model_context_chars')  # Never truncate required records to fit.
             self.graph, _ = self.receive('relate.' + str(number), 'relations', self.graph, request,
                                          action_ids=owned_actions, phase_ids=owned_phases)
+            actions = [aid for aid in actions if aid not in owned_actions]
+            phases = [pid for pid in phases if pid not in owned_phases]
+            number += 1
 
     @staticmethod
     def outstanding(record):

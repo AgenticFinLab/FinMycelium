@@ -82,7 +82,7 @@ def write_json(path, value):
     return sha256(data)
 
 
-def code_identity():
+def code_manifest():
     """Repository-owned execution dependencies, excluding independent rendering.
 
     Keep this list alongside the direct runner's imports. Workbench creation also
@@ -102,7 +102,11 @@ def code_identity():
         'dataset.py',                            # Resume artifact path validation.
         'search/summary.py',                     # Shared run-directory lock.
     ))
-    return fingerprint({p.relative_to(root).as_posix(): sha256(p.read_bytes()) for p in sorted(files)})
+    return {p.relative_to(root).as_posix(): sha256(p.read_bytes()) for p in sorted(files)}
+
+
+def code_identity():
+    return fingerprint(code_manifest())
 
 
 def semantic_config(config):
@@ -154,7 +158,18 @@ class Corpus:
                 value = pointer(indexes[reference['collection']][reference['object_id']], reference['field'])
                 values.append(dict(ref=reference, value=value))
             if len(json_bytes(values).decode('utf-8')) > self.config.read_chars:
-                raise ValueError('Requested records exceed read_chars; select narrower fields')
+                detail = []
+                for value in values:
+                    size = len(json_bytes([value]).decode('utf-8'))
+                    if size <= self.config.read_chars:
+                        continue
+                    content = value['value']
+                    keys = range(len(content)) if isinstance(content, list) else content if isinstance(content, dict) else []
+                    paths = [value['ref']['field'] + '/' + str(k).replace('~', '~0').replace('/', '~1') for k in keys][:8]
+                    detail.append(dict(ref=value['ref'], characters=size, child_paths=paths))
+                raise ValueError('Record read exceeds limit: ' + prompt_json(dict(
+                    requested_chars=len(json_bytes(values).decode('utf-8')), limit=self.config.read_chars,
+                    oversized_fields=detail, hint='Select fewer refs or indexed child fields; no values were truncated.')))
             return values
         if tool == 'search':
             if set(request) != {'tool', 'query'} or not isinstance(request['query'], str) or not request['query'].strip():
@@ -174,6 +189,23 @@ class Corpus:
             return [dict(sample_id=sid, source_id=self.samples[sid]['raw_data_id'], start=start,
                          end=start + len(text), text=text) for _, sid, start, text in matches[:self.config.retrieval_top_k]]
         raise ValueError('Unknown read tool; allowed: read_sample, read_records, search')
+
+
+    def pages(self, request):
+        """Partition complete refs before delivery; no model-assisted splitting."""
+        if request.get('tool') != 'read_records':
+            return [(request, self.read(request))]
+        if set(request) != {'tool', 'refs'} or not isinstance(request['refs'], list) or not 1 <= len(request['refs']) <= 20:
+            raise ValueError('read_records needs between 1 and 20 refs')
+        pages, refs, values = [], [], []
+        for ref in request['refs']:
+            item = self.read(dict(tool='read_records', refs=[ref]))[0]
+            if values and len(json_bytes(values + [item]).decode('utf-8')) > self.config.read_chars:
+                pages.append((dict(tool='read_records', refs=refs), values))
+                refs, values = [], []
+            refs.append(deepcopy(ref)); values.append(item)
+        pages.append((dict(tool='read_records', refs=refs), values))
+        return pages
 
 
 class Execution:
@@ -197,6 +229,9 @@ class Execution:
             if (self.state['input_sha256'] != input_hash
                     or sha256((self.directory / 'input.json').read_bytes()) != input_hash):
                 raise ValueError('Frozen input changed; create a new run')
+            if self.state.get('compatible_recovery'):
+                from .recovery import validate_recovery
+                validate_recovery(self.directory, self.state)
             if self.state['code_sha256'] != code_identity():
                 raise ValueError('Implementation changed; create a new run')
             retained = self.directory / 'provenance.json'
@@ -259,6 +294,12 @@ class Execution:
         if (self.directory / 'pause_requested').is_file():
             raise PauseRequested('Paused between model calls; checkpoints and cumulative usage are retained')
 
+    def task_request(self, task_id, system, request, package):
+        if self.state.get('compatible_recovery'):
+            from .recovery import upstream_request
+            return upstream_request(self, task_id, system, request, package)
+        return request
+
     def attempt_group(self, task_id, system, request, package):
         return task_id + '-' + fingerprint(dict(system=system, request=request, package=package,
             config=semantic_config(self.config), code=self.state['code_sha256']))[:16]
@@ -281,6 +322,9 @@ class Execution:
         group = attempt_group or key
         budget = self.state.setdefault('validation_attempts', {}).setdefault(group, {})
         checkpoint = self.directory / 'checkpoints' / (key + '.json')
+        if not checkpoint.is_file() and self.state.get('compatible_recovery'):
+            from .recovery import import_checkpoint
+            import_checkpoint(self, task_id, system, request, package, dependency, checkpoint, validator, attempt_group=group)
         if checkpoint.is_file():
             try:
                 cached = json.loads(checkpoint.read_text())
@@ -322,20 +366,32 @@ class Execution:
                 if 'read_requests' in value:
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:
                         raise InvalidResponse('Return either read_requests or the role result, never both')
+                    pages = []
                     for read in value['read_requests']:
                         if request.get('role') == 'extraction' and read.get('tool') == 'search':
                             raise InvalidResponse('Initial extraction reads its continuous body ranges; local search is for later roles')
-                        if len(self.state['reads']) >= self.config.max_read_calls:
-                            raise LimitReached('read_calls')
-                        result = corpus.read(read)
+                        pages.extend((read, part, result) for part, result in corpus.pages(read))
+                    # Each delivered page spends existing read quotas. Save progress before stopping.
+                    for number, (original, read, result) in enumerate(pages):
                         chars = len(json_bytes(result).decode('utf-8'))
-                        if sum(r['chars'] for r in self.state['reads']) + chars > self.config.max_read_chars:
-                            raise LimitReached('read_chars')
-                        record = dict(call_id=call_id, task_id=task_id, request=read, result=result,
-                                      chars=chars, result_fingerprint=fingerprint(result))
+                        reason = ('read_calls' if len(self.state['reads']) >= self.config.max_read_calls else
+                                  'read_chars' if sum(r['chars'] for r in self.state['reads']) + chars > self.config.max_read_chars else None)
+                        next_results = task['read_results'] + [dict(request=read, result=result)]
+                        next_user = dict(task=request, read_results=next_results)
+                        if not reason and len(system) + len(prompt_json(next_user)) > self.config.max_context_chars:
+                            reason = 'model_context_chars'
+                        if reason:
+                            task['read_delivery'] = dict(status='limited', reason=reason,
+                                delivered_pages=number, remaining_requests=[p[1] for p in pages[number:]])
+                            self.persist()
+                            raise LimitReached(reason)
+                        record = dict(call_id=call_id, task_id=task_id, request=read, original_request=original,
+                                      result=result, chars=chars, result_fingerprint=fingerprint(result))
                         self.state['reads'].append(record)
                         task['read_results'].append(dict(request=read, result=result))
                         task['read_requests'].append(read)
+                        task['read_delivery'] = dict(status='completed' if number == len(pages)-1 else 'delivering',
+                            delivered_pages=number+1, remaining_requests=[p[1] for p in pages[number+1:]])
                         self.persist()
                     call['status'] = 'read_requested'
                     task.pop('validation_error', None)

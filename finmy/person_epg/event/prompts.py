@@ -98,7 +98,14 @@ split_proposals:[] and event_overview:{time,summary,support,gaps?,conflicts?}. D
 rewrite Actions. Only a supported Action split may use the consolidation split
 contract and must include all new assignments in this same response. The overview
 describes observed actions, not a template filled from the research scope.""",
-    'relations': """Complete only the assigned Action and Phase Context fields. Return
+    'relations': """Complete only the assigned Action and Phase Context fields.
+Read assigned_records and related_records before requesting them again. The index
+contains compact identity entries for records already supplied in full. Use the global index
+to locate other endpoints; cross-batch target Actions remain valid. Prefer precise
+fields for unresolved associations instead of bulk-reading entire collections.
+Each read_records request accepts at most 20 refs; the program pages whole refs
+within read_chars. For an oversized record, request the needed child fields.
+Return
 contexts, relations, phase_context_updates:[{phase_id,baseline_context_refs}],
 action_context_updates:[{action_id,delta_context_refs,baseline_context_exclusions}].
 These are complete lists for the assigned fields, including empty lists when no

@@ -48,7 +48,14 @@ def code_version():
 def check_person_code(body):
     if body.get('kind') == 'person_event':
         from finmy.person_epg.build import code_identity
-        if body['code'] != code_version() or body['person_code'] != code_identity():
+        current = code_version()
+        same_code = body['code'] == current
+        if body.get('read_recovery') and body['code']['python_sources_sha256'] == current['python_sources_sha256']:
+            from finmy.person_epg.event.recovery import validate_recovery
+            state = json.loads((Path(body['artifact_directory'])/'state.json').read_text())
+            validate_recovery(Path(body['artifact_directory']), state)
+            same_code = body['read_recovery'] == state.get('compatible_recovery')
+        if not same_code or body['person_code'] != code_identity():
             raise ValueError('构建代码已变化，请从已确认的检索材料创建新任务；旧任务与用量保留')
 
 
@@ -155,6 +162,69 @@ class BuildController:
             with self.store.connection() as db:
                 db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',
                            (task_id,event_id,encoded(body),'ready',created))
+
+    def prepare_person_read_recovery(self, task_id):
+        """Explicit offline repair migration; never queue/start a worker."""
+        from finmy.person_epg.event.recovery import compatible_workbench, prepare_record_recovery
+        from finmy.person_epg.build import code_identity
+        from finmy.search.summary import directory_lock
+        with task_lock(self.root, task_id):
+            row = self.inspect(task_id); body = row['body']
+            if body.get('kind') != 'person_event' or row['status'] != 'failed':
+                raise ValueError('Choose the failed native person Event task')
+            if body.get('read_recovery'):
+                check_person_code(body)
+                return dict(task_id=task_id, recovery=body['read_recovery'], ready_to_resume=True, model_started=False)
+            if not compatible_workbench(body['code']):
+                raise ValueError('Workbench changes exceed the supported read repair')
+            directory = Path(body['artifact_directory'])
+            with directory_lock(directory):
+                from finmy.person_epg.event.records import json_bytes
+                state = json.loads((directory/'state.json').read_text())
+                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state['input_sha256']
+                        or body['person_config'] != state['config']):
+                    raise ValueError('Recovery retains the exact saved input and all current budgets')
+                recovery = prepare_record_recovery(directory)
+                body.setdefault('code_history', []).append(dict(code=body['code'], person_code=body['person_code'], recovery=recovery))
+                body.update(code=code_version(), person_code=code_identity(), read_recovery=recovery, resume=True)
+                self.save(task_id, 'failed', body)
+            return dict(task_id=task_id, recovery=recovery, ready_to_resume=True, model_started=False)
+
+    def prepare_person_relation_recovery(self, task_id, *, max_context_chars, max_read_calls, max_read_chars):
+        """Prepare an audited relation repair; the owner starts the worker separately."""
+        from finmy.person_epg.event.recovery import (RELATION_RECORD, compatible_relation_workbench,
+                                                   prepare_relation_recovery, validate_recovery)
+        from finmy.person_epg.event.records import json_bytes
+        from finmy.person_epg.build import code_identity
+        from finmy.search.summary import directory_lock
+        with task_lock(self.root, task_id):
+            row = self.inspect(task_id); body = row['body']
+            if body.get('kind') != 'person_event' or row['status'] not in {'limit', 'ready'}:
+                raise ValueError('Choose the stopped native person Event task')
+            if body.get('read_recovery', {}).get('record') == RELATION_RECORD:
+                check_person_code(body)
+            elif not compatible_relation_workbench(body['code']):
+                raise ValueError('Workbench changes exceed the supported relation repair')
+            directory = Path(body['artifact_directory'])
+            with directory_lock(directory):
+                state = json.loads((directory/'state.json').read_text())
+                previous = state['config']
+                if state.get('compatible_recovery', {}).get('record') == RELATION_RECORD:
+                    recorded = validate_recovery(directory, state)
+                    previous = recorded['previous_config']
+                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state['input_sha256']
+                        or body['person_config'] not in (previous, state['config'])):
+                    raise ValueError('Recovery requires the exact saved input and recorded configuration')
+                recovery = prepare_relation_recovery(directory, max_context_chars=max_context_chars,
+                    max_read_calls=max_read_calls, max_read_chars=max_read_chars)
+                state = json.loads((directory/'state.json').read_text())
+                if body.get('read_recovery') != recovery:
+                    body.setdefault('code_history', []).append(dict(code=body['code'], person_code=body['person_code'],
+                        person_config=body['person_config'], recovery=recovery))
+                body.update(code=code_version(), person_code=code_identity(), person_config=state['config'],
+                    read_recovery=recovery, resume=True, run_state=state)
+                self.save(task_id, row['status'], body)
+            return dict(task_id=task_id, recovery=recovery, ready_to_resume=True, model_started=False)
 
     def prepare_person_resume(self, task_id, *, max_calls=None):
         from finmy.person_epg.event.runtime import EventBuildConfig
@@ -298,7 +368,9 @@ class BuildController:
             try:
                 if not self.current(row):
                     raise ValueError("InputOrApprovalChanged")
-                if code_version() != body["code"]:
+                if body.get("kind") == "person_event":
+                    check_person_code(body)
+                elif code_version() != body["code"]:
                     raise ValueError("CodeChangedSinceTaskCreation")
                 body.update(started=now(), pid=os.getpid())
                 self.save(task_id, "running", body)

@@ -7,12 +7,15 @@ from .records import index_records, prompt_json
 from .schema import COLLECTION_IDS
 
 
-def navigation(package, preview=160, role=None):
+def navigation(package, preview=160, role=None, supplied=None):
     result = {}
     for collection in ('entities', 'actions', 'contexts', 'stages', 'phases', 'relation_candidates'):
         key = COLLECTION_IDS[collection]
         result[collection] = []
         for record in package.get(collection, []):
+            if (collection, record[key]) in (supplied or set()):
+                result[collection].append({k: record[k] for k in (key, 'name', 'phase_id', 'stage_id') if k in record})
+                continue
             compact_context = collection == 'contexts' and role in ('extraction', 'consolidation')
             fields = (key, 'name', 'aliases', 'actor', 'type', 'category', 'perspective', 'entity_refs',
                       'phase_id', 'stage_id', 'from_action_id', 'to_action_id')
@@ -102,8 +105,10 @@ def sized_request(base, package, max_chars, reserve):
     """Compress navigation first; never truncate the body or assigned operations."""
     request = deepcopy(base)
     limit = max(0, max_chars - reserve)
+    supplied = {(collection, record[COLLECTION_IDS[collection]])
+                for collection, records in base.get('assigned_records', {}).items() for record in records}
     for preview in (160, 80, 0):
-        request['facts_index'] = navigation(package, preview, base['role'])
+        request['facts_index'] = navigation(package, preview, base['role'], supplied)
         if len(prompt_json(dict(task=request, read_results=[]))) <= limit:
             break
     records = task_records(base['role'], package, base)
