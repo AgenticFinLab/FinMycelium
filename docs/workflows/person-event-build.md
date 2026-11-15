@@ -42,6 +42,12 @@ counts toward the cumulative read-character budget. JSON attempts are capped at
 three per semantic task, transport I/O timeout at 900 seconds, and final repair at one round.
 
 These are limits, not quality targets. Character counts are not token counts.
+The context cap includes instructions, task metadata and serialized records, not just
+the extraction batch. A `model_context_chars` stop can happen before the first API
+request; inspect attempted calls before attributing it to the model service.
+The standard resume control raises cumulative calls only, not the context cap.
+For an unstarted task saved with the wrong context budget, create a new task from
+the same confirmed input with the intended settings.
 Search and build settings remain separate. Construction does not add external
 sources or increase the confirmed input budget.
 
@@ -74,6 +80,12 @@ prompt, semantic configuration and upstream dependencies. Corrupt responses are
 rejected. Preparation and startup reject a changed workbench implementation before
 queuing a worker. Changed input or code requires a new run. Previous attempts remain
 available, and restarting does not renew the final repair allowance.
+
+The backend also contains narrowly scoped, explicit migrations for record-reading
+and relation-task repairs. These require verified predecessor code and artifact
+hashes, preserve prior attempts and record the migration before ordinary resume.
+They are not a general code-mismatch bypass or a workbench control for arbitrary
+budget changes; unsupported changes still require a new task.
 
 While a person build is queued or running, **暂停构建** requests a stop between
 model calls. The current response, validation and checkpoint publication finish;

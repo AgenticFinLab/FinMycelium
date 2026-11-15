@@ -103,7 +103,10 @@ in `source_exclusions` (`{"source_id": "reason"}`). `source_ids` lists proposed 
 sources; unmentioned inspected bodies are conservatively retained rather than silently
 lost. Unread candidates are not admitted. Explicit exclusions, automatic retention and
 source versions are frozen in `source_review`; these are relevance decisions, not fact
-verification. Cleanup, duplicate removal and the usual character allocation follow.
+verification. Known unread-source exclusions are stored separately as
+`uninspected_exclusions`, with `evidence_reviewed=false`; their explanations do not
+prove the body was inspected or inaccessible. Unknown IDs and unread-source admission
+still fail validation. Cleanup, duplicate removal and the usual character allocation follow.
 More free space can accommodate more retained sources, but reassembly of a frozen
 manifest cannot promote unread URLs or reverse a source-selection decision. Legacy
 span handoffs and explicit programmatic source lists retain their existing semantics.
@@ -186,7 +189,15 @@ CLI reads process environment variables; it does not automatically load `.env`.
 
 Saved tasks and profiles retain their recorded settings; new defaults do not silently
 rewrite them. Characters, model tokens, request counts and fees are different measures.
-Selecting all three providers consumes three requests per uncached query round.
+Selecting all three providers consumes three requests per uncached query round;
+24 provider requests allow at most eight full rounds.
+The 5/3/3 result limits allow up to 88 returned entries before deduplication; they do
+not require eight rounds, 88 distinct URLs or a matching number of retained sources.
+
+After a code update, restart the workbench before creating a new experiment so its
+loaded search modules match the installed code. Inspect the saved task settings and
+`selection.json` budget policy; a file-based code fingerprint alone does not prove a
+long-running process reloaded every module. Existing runs retain their saved handoffs.
 
 Search decisions use one JSON action per model response. The TokenHub presets
 `deepseek/deepseek-flash` and `deepseek-v4-pro-202606` use
