@@ -76,10 +76,11 @@ def test_json_policy_is_search_only_and_survives_sdk_extra_body_merge(transport,
     assert build_body['max_tokens'] == 12288
 
 
-@pytest.mark.parametrize('remote', ['deepseek-v4-1-flash-261017', 'glm-5-3-flash-260828'])
+@pytest.mark.parametrize('remote,effort', [
+    ('deepseek-v4-1-flash-261017', 'high'), ('glm-5-3-flash-260828', 'low')])
 @pytest.mark.parametrize('prefix', ['', 'ark/'])
 @pytest.mark.parametrize('conflicting', [False, True])
-def test_ark_search_low_thinking_and_json_policy_on_actual_wire(transport, remote, prefix, conflicting):
+def test_ark_search_thinking_and_json_policy_on_actual_wire(transport, remote, effort, prefix, conflicting):
     options = {'max_tokens': 2048}
     if conflicting:
         options.update(response_format={'type': 'json_object'}, thinking={'type': 'disabled'},
@@ -96,7 +97,7 @@ def test_ark_search_low_thinking_and_json_policy_on_actual_wire(transport, remot
     assert str(request.url) == 'https://ark.cn-beijing.volces.com/api/v3/chat/completions'
     assert body['model'] == remote
     assert body['thinking'] == {'type': 'enabled'}
-    assert body['reasoning_effort'] == 'low'
+    assert body['reasoning_effort'] == effort
     assert (body['temperature'], body['top_p'], body['max_tokens']) == (1.0, 0.95, 2048)
     assert not {'enable_thinking', 'thinking_budget', 'tools', 'tool_choice'} & body.keys()
     if remote.startswith('deepseek'):
@@ -106,7 +107,7 @@ def test_ark_search_low_thinking_and_json_policy_on_actual_wire(transport, remot
         assert 'response_format' not in body
         assert 'response_format' not in model.last_request_options
     assert model.last_request_options['thinking'] == {'type': 'enabled'}
-    assert model.last_request_options['reasoning_effort'] == 'low'
+    assert model.last_request_options['reasoning_effort'] == effort
     assert options == before
     builder = Model(EventBuildConfig(lm_name=prefix+remote))
     builder('Return JSON', 'Synthetic evidence', 'Extract')

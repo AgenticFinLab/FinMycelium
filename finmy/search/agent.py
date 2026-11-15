@@ -32,7 +32,8 @@ Return exactly ONE JSON action, then wait; no commentary/XML/DSML or invented re
 Follow tool_constraints; aim below 60 units for a 72-unit query limit. Put rationale
 in gap (also allowed on reads). Split distinct questions. Copy runtime IDs; SRC-*
 planning citations are not reads. For sequential reading replace query with location:
-{"block":0,"offset":0}. Copy read_location; block/start/end is an evidence range.
+{"action":"read_source","source":"runtime ID","location":{"block":0,"offset":0}}
+Keep block/offset inside location. Copy read_location; block/start/end is an evidence range.
 
 Mark decisive PREVIOUSLY READ passages on the next action. At finish add only missing
 priority_passages (empty if none):
@@ -46,26 +47,23 @@ Assess separately from chronology; corporate records alone do not prove personal
 attribution. Pursue important questions while leads and budget remain. Keep finish JSON
 compact (about 1,000 output tokens): concise gaps/details, no repeated quotes or marks.
 
-Inspect useful seeds, then gaps. Long bodies may need different questions, aliases or
-explicit locations. already_read replays originals, not new acquisition; no_match is
-lexical, not absence. reviewed means inspected, not verified. Attempts are not coverage.
-First reading of a partial body tries its public URL once. Cached text can remain
-incomplete: reaching its end is not obtaining the full article. For important missing
-interview/letter text, follow accessible originals/transcripts within budget or record
-inaccessibility; do not guess.
+Choose reads by evidence gain, not provider or cache. body_available=false is not
+irrelevance: read_source fetches URLs. Prefer useful unanswered leads to repeated
+background. Trace secondary/inaccessible sources via explicit original links or search
+by title, author or quote; never invent URLs. Explain reads briefly in gap.
 
-Stop redundant work; no minimum source count or need to spend all budget. Pursue important
-gaps with promising unread leads. Distinguish unattempted, insufficient and inaccessible.
-In phase finalize return finish ONLY; explain its constraint in reason_detail and gaps.
-Review ALL inspected sources: keep actions, context, qualifications, outcomes, independent
-support and conflicts even when some facts repeat; drop unusable bodies/pure duplicates.
-List useful IDs in source_ids. To exclude a read source, use source_exclusions:
-{"runtime ID":"brief reason: outside scope, unusable or pure duplication"}. Never list
-an ID in both. Unmentioned inspected bodies remain candidates automatically; merely
-omitting an ID does not discard it. No retained-source count cap or pre-trimming to the
-Builder budget. The program cleans saved bodies, validates marks and allocates text.
-Unread URLs and model explanations are not evidence.
-Useful material may be handed off with explicit unknowns.
+Read useful seeds, then gaps. Vary questions, aliases or locations. already_read replays;
+no_match is lexical, not absence; reviewed is not verified. Attempts are not coverage.
+Partial bodies get one URL fetch attempt; their end may not be the article's end. Seek missing originals/transcripts within budget.
+
+No provider quotas, minimum counts or budget-spending target. Report important unattempted,
+inaccessible and unsupported leads separately in gaps. In finalize return finish ONLY;
+explain the constraint. Keep useful inspected actions, context, qualifications, outcomes,
+independent support and conflicts despite shared facts. List source_ids; exclude only with
+source_exclusions: {"runtime ID":"outside scope, unusable or pure duplicate"}, never both.
+Unmentioned inspected sources remain candidates. Do not cap sources or pre-trim for Builder;
+the program cleans bodies, validates marks and allocates text. Unread URLs, snippets and
+model explanations are not evidence. Explicit unknowns need not prevent handoff.
 '''
 
 
@@ -189,9 +187,15 @@ def context_for(state, *, finalize=False):
             source['version'] = entry['version']
             source['priority_passages'] = [p for p in state.data.get('priority_passages',[])
                                           if p['source_id']==sid and p['version']==entry['version']]
-        elif not finalizing:
-            source['leads'] = [{k:str(d.get(k) or '')[:350] for k in ('provider','snippet','summary')}
-                               for d in entry['discoveries'][-2:]]
+        else:
+            # Keep discovery hints for uncached candidates as well as cached ones.
+            # Short hints survive finalization so unresolved leads can be named;
+            # they are never treated as inspected evidence or fetched implicitly.
+            limit = 160 if finalizing else 350
+            source['leads'] = [{k:str(d.get(k) or '')[:limit] for k in ('provider','snippet','summary')}
+                               for d in entry['discoveries'][-1 if finalizing else -2:]]
+        if entry.get('status') == 'fetch_failed':
+            source['fetch_error'] = entry.get('error_type', 'Acquisition failed')
         sources.append(source)
     feedback = state.data.get('feedback')
     if finalizing and isinstance(feedback, dict):
@@ -201,7 +205,11 @@ def context_for(state, *, finalize=False):
                 search_attempts=searches, finalization_reason=finalization_reason,
                 reading_summary=dict(candidates=len(sources),
                     inspected=sum(s['reviewed'] for s in sources),
-                    saved_unread=sum(s['body_available'] and not s['reviewed'] for s in sources)),
+                    unread_candidates=sum(not s['reviewed'] for s in sources),
+                    saved_unread=sum(s['body_available'] and not s['reviewed'] for s in sources),
+                    unfetched_candidates=sum(not s['reviewed'] and not s['body_available']
+                                             and s['status']=='unread' for s in sources),
+                    fetch_failed=sum(s['status']=='fetch_failed' for s in sources)),
                 phase='finalize' if finalizing else 'research',
                 allowed_actions=['finish'] if finalizing else ['search','read_source','finish'],
                 tool_constraints={} if finalizing else search_constraints(state.config),
@@ -241,8 +249,11 @@ def execute_action(state, tools, action):
     fields=allowed[kind]|{'priority_passages'}|({'person_evidence'} if kind=='finish' else set())
     unknown=set(action)-fields
     if unknown:
+        cursor_hint = (' For a position read, put block/offset inside location, '
+                       'for example location: {"block": 0, "offset": 0}.'
+                       if kind=='read_source' and unknown & {'block','offset'} else '')
         raise ValueError(f'Unknown fields for {kind}: {", ".join(sorted(map(str,unknown)))}. '
-                         f'Allowed fields: {", ".join(sorted(fields))}')
+                         f'Allowed fields: {", ".join(sorted(fields))}' + cursor_hint)
     missing={'search':{'query'},'read_source':{'source'}}.get(kind,set())-set(action)
     if missing:
         raise ValueError(f'Missing fields for {kind}: {", ".join(sorted(missing))}')

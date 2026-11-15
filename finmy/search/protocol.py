@@ -17,16 +17,16 @@ JSON_MODE_MODELS = {
 
 # Search-agent policy; GLM Flash always thinks and has no verified JSON mode.
 # https://docs.volcengine.com/docs/ark/deep-thinking
-ARK_LOW_THINKING_MODELS = {
-    'ark/deepseek-v4-1-flash-261017',
-    'ark/glm-5-3-flash-260828',
+ARK_SEARCH_THINKING_EFFORTS = {
+    'ark/deepseek-v4-1-flash-261017': 'high',
+    'ark/glm-5-3-flash-260828': 'low',
 }
 
 
 def request_parameters(lm_name, parameters):
     result = deepcopy(parameters)
     name = model_name(lm_name)
-    if name in JSON_MODE_MODELS or name in ARK_LOW_THINKING_MODELS:
+    if name in JSON_MODE_MODELS or name in ARK_SEARCH_THINKING_EFFORTS:
         extra = result.get('extra_body', {})
         if not isinstance(extra, dict):
             raise ValueError('extra_body must be an object')
@@ -36,9 +36,9 @@ def request_parameters(lm_name, parameters):
                     'thinking_budget', 'reasoning_effort'):
             result.pop(key, None)
             extra.pop(key, None)
-        if name in ARK_LOW_THINKING_MODELS:
+        if name in ARK_SEARCH_THINKING_EFFORTS:
             extra['thinking'] = {'type': 'enabled'}
-            result['reasoning_effort'] = 'low'
+            result['reasoning_effort'] = ARK_SEARCH_THINKING_EFFORTS[name]
             if name == 'ark/deepseek-v4-1-flash-261017':
                 result['response_format'] = {'type': 'json_object'}
                 # Model policy ran before this search override. An inherited

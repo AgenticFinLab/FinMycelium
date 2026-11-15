@@ -15,7 +15,7 @@ baidu_rewrite: false
 allow_network: false
 lm_name: ark/deepseek-v4-1-flash-261017  # Search only; never inherited by Builder.
 generation_config:
-  max_tokens: 4096  # Ark answer limit; max_completion_tokens instead caps answer + reasoning.
+  max_tokens: 4096  # Includes reasoning + answer on the default Ark DeepSeek model.
 timeout: 120  # Per-request timeout; saved tasks retain their own values.
 max_download_bytes: 20000000
 max_model_context_chars: 100000  # Conservative character guard, not a model token guarantee.

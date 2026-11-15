@@ -25,6 +25,17 @@ The workbench uses continuous execution with Start/Continue, Pause and Retry for
 tasks. Retry continues the saved task rather than clearing it. CLI/Python single-step
 execution and pause/resume use the same persisted state.
 The agent assists relevance and gap decisions; it is not a factual completeness verifier.
+Candidate reading prioritizes likely evidence gain for important unresolved questions.
+Cached-body availability and provider identity are not relevance scores. Unfetched
+candidates retain their titles, URLs and discovery hints; the decision context counts
+all unread candidates, cached unread bodies, unfetched candidates and failed fetches
+separately. Compact unread hints remain available at finalization. Fetch errors are
+visible, but displaying a candidate does not fetch it or admit it as evidence.
+The agent can use the existing `read_source` to fetch a promising uncached URL, or
+trace an original through an explicit link or a targeted `search`. These operations
+consume the existing budgets. There are no provider quotas or additional reviewer
+calls. Important unattempted, inaccessible or insufficiently supported leads belong
+in `gaps`; unused candidates do not prevent handoff.
 Directed reading uses a within-document relative BM25 threshold
 (40% of the best score), with neighboring context and no fixed match-count cap. Already-read
 strong matches do not promote weak matches into the next read. Explicit locations remain
@@ -86,8 +97,10 @@ credentials when updating the example. Fill the selected services' keys:
 | `EXA_API_KEY` | Exa Search and the text returned by that search call |
 
 Search `lm_name` and `builder_config.lm_name` are independent. Search defaults to
-`ark/deepseek-v4-1-flash-261017` with low thinking and JSON output; the existing
-build-only examples select their own model. Existing saved tasks and local profiles
+`ark/deepseek-v4-1-flash-261017` with high thinking and JSON output. Ark
+`glm-5-3-flash-260828` retains low thinking without forced JSON mode. These
+search-only settings leave Builder requests unchanged; build-only examples select
+their own model. Existing saved tasks and local profiles
 retain their recorded model unless explicitly changed in settings.
 Use `tokenhub/<console-model-id>` to select TokenHub independently for either stage;
 model IDs containing `/` retain that namespace. These are model services, separate
@@ -122,8 +135,8 @@ Search decisions use one JSON action per model response. The TokenHub presets
 `deepseek/deepseek-flash` and `deepseek-v4-pro-202606` use
 `response_format: {type: json_object}` with `thinking: {type: disabled}`, following
 the [TokenHub DeepSeek JSON-mode guidance](https://cloud.tencent.com/document/product/1823/132248).
-This search-only policy overrides conflicting output-format and thinking settings at
-request time, including on resume; it leaves saved task settings, sampling defaults,
+These search-only policies override conflicting output-format and thinking settings at
+request time, including on resume; they leave saved task settings, sampling defaults,
 budgets and Builder requests intact. Other models retain their configured protocol.
 The trace records the effective request controls as `request_options`.
 
@@ -135,7 +148,8 @@ The prompt requests only the next action and waits for program feedback. Researc
 citation labels are separate from runtime source IDs; planning notes are not proof of
 reading in the current run. JSON mode is requested from the provider, but returned content
 still passes strict decoding and validation before execution. Reads may include an optional
-`gap` explanation. Finish uses `reason_detail`; the explanatory alias
+`gap` explanation. Position reads use `location: {"block": 0, "offset": 0}`; cursor
+fields at action level are rejected with a correction hint. Finish uses `reason_detail`; the explanatory alias
 `finalization_reason` is also accepted, with `reason_detail` taking precedence. Explanations stay
 in the run record, never in source evidence, and cannot override the controlled stop
 reason or budgets. Unknown action fields are reported explicitly for correction.
