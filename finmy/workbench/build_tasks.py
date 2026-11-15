@@ -162,6 +162,9 @@ class BuildController:
             row=self.inspect(task_id);body=row['body']
             if body.get('kind')!='person_event' or row['status'] not in {'failed','interrupted','partial','limit','paused'}:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
+            state_path = Path(body['artifact_directory']) / 'state.json'
+            if state_path.is_file() and json.loads(state_path.read_text()).get('offline_revisions'):
+                raise ValueError('已有人工收尾修订；继续模型构建请从相同确认输入新建任务，保留当前修订')
             check_person_code(body)
             config=dict(body['person_config'])
             if body.get('graph_schema_version') != 'person-event-1.0':
@@ -254,6 +257,20 @@ class BuildController:
         except ValueError:
             pass  # A live worker owns the lock.
         return self.inspect(task_id)
+
+    def close_person_pending(self, task_id, decisions, *, expected_state_sha256, reviewer):
+        from finmy.person_epg.event.closure import close_pending
+        with worker_lock(self.root, task_id, blocking=False):
+            row = self.inspect(task_id)
+            if row['body'].get('kind') != 'person_event' or row['status'] not in {'partial', 'completed'}:
+                raise ValueError('只有已结束的人物图可进行离线收尾')
+            body = row['body']
+            state = close_pending(body['artifact_directory'], decisions,
+                expected_state_sha256=expected_state_sha256, reviewer=reviewer)
+            body.update(run_state=state, revised_at=state['updated_at'],
+                        offline_revisions=state['offline_revisions'])
+            self.save(task_id, person_task_status(state), body)
+            return state
 
     def render_person(self, task_id):
         """Regenerate a saved native draft's HTML without starting a worker/model."""

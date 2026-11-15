@@ -366,3 +366,24 @@ These checks cover preserved data, approval invalidation, immutable inputs,
 Agent/Sparse input preflight, draft attribution after input changes, failed workers
 and explicit execution gates. They do not certify live model availability or final
 EPG content quality.
+
+## Offline person-event completion
+
+In a finished person build, open **检查与收尾**. Inspect each pending item,
+its evidence and the retained Context. Leave actual unfinished work pending.
+For an already processed item, select the corresponding Context and explain
+what is supported, what remains unknown, and why the construction disposition
+is complete. **保存处置并重新检查** saves a successor under the run's
+`revisions/`, retains the original artifacts and state, and refreshes checks,
+Gantt and workbench records without search or model calls.
+
+This first version supports explicit extraction pending items backed by an
+already adopted Context and matching evidence. It does not clear rejected
+proposals, unread material or unresolved Action assignments. Unresolved items
+and structural errors keep the result partial; only satisfied completion
+requirements produce draft. Unknowns remain in the graph as Gap. This is not
+content acceptance, and does not collect the result into the formal catalog.
+
+After an offline revision, further model construction uses a new task from the
+confirmed input. Resuming old model checkpoints must not overwrite a human
+revision or silently discard its dispositions.

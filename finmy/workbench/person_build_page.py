@@ -105,6 +105,9 @@ def person_build_panel(store, controller, row, labels):
                 try:
                     controller.prepare_person_resume(tid,max_calls=cap);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))
+    if row['status'] in {'partial', 'completed'}:
+        from .closure_page import closure_panel
+        closure_panel(controller, row)
     if run.get('output'):
         try:
             graph_path=within(body['artifact_directory'],run['output'])
