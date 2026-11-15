@@ -13,7 +13,8 @@ FIXED_POLICY = 'balanced_source_windows_v2'
 ADAPTIVE_POLICY = 'balanced_source_windows_v3'
 PRIORITY_POLICY = 'evidence_priority_windows_v1'
 SOURCE_QUERY_POLICY = 'evidence_priority_windows_v2'
-BUDGET_POLICY = 'evidence_priority_windows_v3'
+CONTEXT_POLICY = 'evidence_priority_windows_v3'
+BUDGET_POLICY = 'evidence_priority_windows_v4'
 ASSEMBLY_THRESHOLDS = (0.5, 0.4, 0.3)
 MIN_RELATIVE_SCORE = 0.4
 
@@ -95,7 +96,7 @@ def tokens(text):
     return result
 
 
-def rank_blocks(entry,document,queries, *, focused=False, min_relative_score=None):
+def rank_blocks(entry,document,queries, *, focused=False, min_relative_score=None, query_coverage=False):
     indexes=entry['blocks'];bags=[Counter(tokens(document['blocks'][i]['text'])) for i in indexes]
     n=len(bags);avg=sum(sum(b.values()) for b in bags)/max(n,1) or 1
     df=Counter(t for bag in bags for t in bag)
@@ -104,6 +105,8 @@ def rank_blocks(entry,document,queries, *, focused=False, min_relative_score=Non
         terms=tuple(sorted(set(tokens(query))))
         if not terms or terms in seen:continue
         seen.add(terms);scores=[]
+        weights={t:math.log(1+(n-df[t]+0.5)/(df[t]+0.5)) for t in terms if df[t]}
+        total_weight=sum(weights.values())
         for index,bag in zip(indexes,bags):
             score=0.;length=sum(bag.values())
             for term in terms:
@@ -111,7 +114,14 @@ def rank_blocks(entry,document,queries, *, focused=False, min_relative_score=Non
                 if tf:
                     idf=math.log(1+(n-df[term]+0.5)/(df[term]+0.5))
                     score+=idf*tf*2.5/(tf+1.5*(0.25+0.75*length/avg))
-            if score>0:scores.append((index,score))
+            if score>0:
+                if query_coverage:
+                    # A match on generic report vocabulary alone should not
+                    # outrank a paragraph covering the specific reading question.
+                    # This is a soft lexical weight, never a semantic exclusion.
+                    coverage=sum(w for t,w in weights.items() if bag[t])/total_weight
+                    score*=coverage * coverage
+                scores.append((index,score))
         if focused and scores:
             # Relative within each document/query, not a cross-document truth score.
             floor = max(score for _,score in scores) * (MIN_RELATIVE_SCORE if min_relative_score is None else min_relative_score)
@@ -190,11 +200,13 @@ def refers_to_previous(text):
 
 
 def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
-    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
+    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, CONTEXT_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
     focused = policy != LEGACY_POLICY
-    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,BUDGET_POLICY}
+    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY}
+    query_coverage = policy == BUDGET_POLICY
+    context_retention = policy in {CONTEXT_POLICY,BUDGET_POLICY}
     progressive = priority or policy == ADAPTIVE_POLICY
-    plan=source_query_plan(state,complete) if policy in {SOURCE_QUERY_POLICY,BUDGET_POLICY} else None
+    plan=source_query_plan(state,complete) if policy in {SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY} else None
     core_queries={sid:p['core_queries'] for sid,p in plan.items()} if plan is not None else None
     thresholds = ASSEMBLY_THRESHOLDS if progressive else (0.5,)
     initial_threshold = thresholds[0]
@@ -231,7 +243,7 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
     def window(sid,index,radius=1):
         blocks=entries[sid]['blocks'];p=blocks.index(index)
         start=max(0,p-radius)
-        if policy==BUDGET_POLICY and radius==1 and start and refers_to_previous(docs[sid]['blocks'][blocks[start]]['text']):
+        if context_retention and radius==1 and start and refers_to_previous(docs[sid]['blocks'][blocks[start]]['text']):
             start-=1  # One antecedent paragraph, not recursive document expansion.
         return set(blocks[start:p+radius+1])
     repairs={sid:[window(sid,a['anchor']) for a in base['decisions'].get(sid,{}).get('anchors',[])] for sid in entries}
@@ -239,7 +251,7 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         queues = {}
         for sid,e in entries.items():
             selected_queries=plan[sid]['queries'] if plan is not None else queries
-            ranks=rank_blocks(e,docs[sid],selected_queries,focused=focused,min_relative_score=threshold)
+            ranks=rank_blocks(e,docs[sid],selected_queries,focused=focused,min_relative_score=threshold,query_coverage=query_coverage)
             seq=[];seen=set()
             for rank in range(max((len(r['ranking']) for r in ranks),default=0)):
                 for r in ranks:
@@ -276,7 +288,7 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
             status='material_limit'
             candidates=[(picked[sid]|window(sid,anchor),'with_context'),
                         (picked[sid]|{anchor},'paragraph_only')]
-            if policy==BUDGET_POLICY:
+            if context_retention:
                 candidates.insert(0,(picked[sid]|window(sid,anchor,radius=2),'with_context'))
             for candidate,kind in candidates:
                 length=len(text(sid,candidate));cost=length-sizes[sid]
@@ -303,7 +315,7 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         if excluded:
             if focused:
                 selected_queries=plan[sid]['queries'] if plan is not None else queries
-                ranks=rank_blocks(e,docs[sid],selected_queries,focused=True,min_relative_score=thresholds[-1])
+                ranks=rank_blocks(e,docs[sid],selected_queries,focused=True,min_relative_score=thresholds[-1],query_coverage=query_coverage)
                 eligible=set().union(*(window(sid,index) for r in ranks for index,_ in r['ranking']))
                 if not eligible:eligible=set(e['blocks'][:1])
                 for reason,blocks in [('material_limit', sorted(set(excluded)&eligible)),
@@ -320,7 +332,9 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
     if progressive:
         result.update(thresholds=list(thresholds),threshold_stages=stages,full_material_retained=False)
     if plan is not None:result['query_plan']=plan
-    if policy==BUDGET_POLICY:
+    if query_coverage:
+        result['ranking_policy']='bm25_idf_query_coverage_shared'
+    if context_retention:
         result['context_policy']=dict(priority_neighbors=2, ordinary_neighbors=1,
                                       preceding_antecedent_extra=1, recursive=False)
     if priority:

@@ -3,6 +3,7 @@ import copy
 import socket
 import pytest
 from finmy.search.state import SearchState, digest
+from finmy.search.budget import BUDGET_POLICY
 from finmy.search.sources import SourceStore
 from finmy.search.handoff import prepare_complete_sources, derive_input, materialize_complete
 
@@ -27,7 +28,7 @@ def test_full_fit_exact_and_default_policy(tmp_path):
     full, c = prepare_complete_sources(s, ids)
     p, r = derive_input(s, c, max_chars=10000)
     assert p == full == materialize_complete(s, c)
-    assert r['budget_policy'] == 'evidence_priority_windows_v3'
+    assert r['budget_policy'] == BUDGET_POLICY
     assert 'variant' not in r['allocation']
     assert not r['omitted'] and all(e['source_status'] == 'partial' for e in r['selected'])
 
@@ -102,5 +103,5 @@ def test_previous_argument_preserves_text_but_writes_current_policy(tmp_path):
     current = derive_input(s, complete, max_chars=500)
     previous = derive_input(s, complete, max_chars=500, budget_policy='c2')
     assert previous == current
-    assert current[1]['budget_policy'] == 'evidence_priority_windows_v3'
+    assert current[1]['budget_policy'] == BUDGET_POLICY
     assert 'variant' not in current[1]['allocation']

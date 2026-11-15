@@ -54,6 +54,13 @@ queries; they are navigation signals, not evidence-quality scores. Inspect resul
 spending the remaining query rounds so important gaps and inaccessible originals can
 receive a targeted follow-up.
 
+For person events, assess personal participation during initial inspection, alongside
+chronology. Prioritize an important personal-action gap before spending the remaining
+query rounds on additional terms or peripheral endpoints; a complete chronology is not
+required first. This is decision guidance, not a fixed query quota or a claim that each
+case has private negotiations. Public decisions, communications, commitments, responses
+and adjustments may be supported across investment, family, charity or other storylines.
+
 Directed reading uses a within-document relative BM25 threshold
 (40% of the best score), with neighboring context and no fixed match-count cap. Already-read
 strong matches do not promote weak matches into the next read. Explicit locations remain
@@ -86,7 +93,10 @@ follow an observed link to another part; no page URL or missing text is invented
 Source choice precedes character allocation. There is no separate retained-source
 count cap; the separate reading budget still limits which sources can enter the pool.
 Review all inspected sources for useful actions, qualifications, outcomes and independent
-or conflicting support. A statement spanning several matters can
+or conflicting support. Judge added personal-action evidence separately from new event
+terms. Repeating transaction terms or being a secondary source is not by itself a reason
+to drop a useful attributed statement; retain its qualifications or trace the original.
+Commentary and speculation are not promoted to facts. A statement spanning several matters can
 support this event with its shared scope intact. At agent finish, all inspected current
 source bodies enter the candidate pool unless explicitly excluded with a short reason
 in `source_exclusions` (`{"source_id": "reason"}`). `source_ids` lists proposed retained
@@ -114,6 +124,20 @@ span handoffs and explicit programmatic source lists retain their existing seman
 | `finmy/workbench/search_*.py` | Search controls, progress, material review and local experiment history |
 | `finmy/runner/search_pipeline_runner.py` | Opt-in enhanced search alongside the original simple chain |
 | `configs/search.yml` | Search-only defaults, independent of Builder configuration |
+
+For additional long-document windows competing for the shared handoff remainder, BM25
+scores are weighted by the squared fraction
+of query-term IDF weight covered by the paragraph (using terms found in that document).
+This reduces anchors matching only broad dates or report vocabulary; it is a lexical
+navigation heuristic, not semantic verification. Use distinctive names and actions for
+reading questions. Validated priority originals and their context, source core coverage,
+compact documents and the 50% → 40% → 30% expansion remain protected within budget.
+No named-company rules, financial vocabulary blacklist or model assembly call is added.
+The weighting affects shared-remainder assembly only, not the initial source-core
+allocation, directed reading or explicit priority marks. Saved manifests keep
+their allocation policy for reproducible replay; new runs use the current policy. A source
+can remain long when relevant tables or necessary neighboring paragraphs are themselves
+long. The budget is a ceiling, not a target to fill with unrelated sections.
 
 ## Credentials and configuration
 
@@ -199,7 +223,8 @@ The workbench loads `.env` without overriding process variables: after changing 
 there, restart the workbench to load it, then retry. Legacy tasks stopped by consecutive
 errors can also be retried under this policy.
 
-All selected providers receive the same query for initial search and follow-up. Baidu
+Selected providers receive the common query unless a same-question variant is supplied
+in `provider_queries`, for both initial search and follow-up. Baidu
 uses Web Search standard with rewrite off by default; Bocha uses Web Search with summary;
 Exa uses Search auto with text contents. Summaries/snippets are discovery leads. Baidu's
 72-unit query limit is checked before requests (CJK U+4E00..U+9FFF counts two, other

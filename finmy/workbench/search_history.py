@@ -7,10 +7,11 @@ LABELS = {'search': '搜索', 'read_source': '阅读来源', 'finish': '整理�
 
 def budget_policy_label(selection):
     """Describe saved policies without changing their recorded identifiers."""
-    from finmy.search.budget import BUDGET_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY
+    from finmy.search.budget import BUDGET_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, CONTEXT_POLICY
     # Persisted identifiers from older runs remain readable as descriptive labels.
     labels = {
         BUDGET_POLICY: '材料预算分配（来源配额、重点原文与共享余量）',
+        CONTEXT_POLICY: '材料预算分配（来源配额、重点原文与共享余量）',
         SOURCE_QUERY_POLICY: '材料预算分配（来源配额、重点原文与共享余量）',
         PRIORITY_POLICY: '材料预算分配（来源配额、重点原文与共享余量）',
         'balanced_source_windows_v3': '材料预算分配（来源配额与共享余量）',
