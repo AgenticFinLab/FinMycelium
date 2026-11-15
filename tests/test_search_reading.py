@@ -46,7 +46,7 @@ def test_query_reads_late_passage_and_context_without_rewriting_sources(tmp_path
     assert before == {p:p.read_bytes() for p in files}
     assert state.data['usage'] == {'search':0,'model':0} and state.data['read_sources'] == [sid]
     context = context_for(state)
-    assert 'chairperson negotiated' in context['sources'][0]['preview']
+    assert 'chairperson negotiated' in ' '.join(p['text'] for p in context['sources'][0]['read_evidence'])
     assert context['sources'][0]['read_chars'] < context['sources'][0]['saved_chars']
     assert context['reading_summary']['saved_unread'] == 0
 
@@ -72,7 +72,7 @@ def test_repeated_query_prefers_unread_matches_and_explicit_reread_still_works(t
     assert second['spans'] != first['spans']
     for _ in range(20):
         result = store.read(sid, query='negotiation')
-        if not result['spans']:
+        if result['reading']['match_status'] == 'already_read':
             break
     assert result['reading']['match_status'] == 'already_read'
     assert len(state.data['read_sources']) == 1
@@ -148,7 +148,7 @@ def test_agent_can_read_saved_lead_then_stop_without_forcing_all_candidates(tmp_
             assert context['reading_summary']['saved_unread']==2
             return dict(action='read_source',source=sid,query='negotiation')
         assert context['reading_summary']['saved_unread']==1
-        assert 'Negotiation' in context['sources'][0]['preview']
+        assert 'Negotiation' in ' '.join(p['text'] for p in context['sources'][0]['read_evidence'])
         return dict(action='finish',source_ids=[sid],gaps=['Later approval remains unconfirmed.'],
                     reason='low_gain',reason_detail='Remaining lead is redundant; later approval needs unavailable records.')
     tools=SearchTools(state,transport=lambda *a:pytest.fail('No search'),fetcher=lambda *a:pytest.fail('No fetch'))
@@ -187,7 +187,9 @@ def test_weak_matches_do_not_fill_read_budget_or_reappear_after_strong_matches(t
     assert 'Seasonal financing' not in content
     assert sum(len(s['text']) for s in first['spans']) < 12000
     second=store.read(sid,query='Aster acquisition financing negotiated')
-    assert second['spans']==[] and second['reading']['match_status']=='already_read'
+    assert second['spans'] and second['reading']['match_status']=='already_read'
+    assert second['reading']['replayed']
+    assert 'Seasonal financing' not in ''.join(p['text'] for p in second['spans'])
     assert second['reading']['matching_windows']==first['reading']['matching_windows']
     assert second['reading']['unread_matching_windows']==0
     # Filtering is navigation only: the original weak matches remain explicitly readable.

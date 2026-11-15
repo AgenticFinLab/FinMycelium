@@ -107,7 +107,7 @@ def test_finalization_recovers_earlier_read_text_and_retries_invalid_ids(tmp_pat
     def decide(c):
         calls.append(c)
         assert c['phase']=='finalize'
-        assert any('conditional' in e.get('preview','') for e in c['sources'])
+        assert any('conditional' in ' '.join(p['text'] for p in e.get('read_evidence',[])) for e in c['sources'])
         return dict(action='finish',source_ids=['bad'] if len(calls)==1 else [s['source_id'] for s in c['sources']],gaps=['Unresolved'],reason='low_gain')
     run_agent(state,SearchTools(state),decide)
     assert state.data['status']=='finished' and state.data['usage']['model']==8
@@ -122,7 +122,7 @@ def test_document_budget_omits_whole_paragraphs_and_records_gap(tmp_path):
     c=context_for(state)
     assert len(SYSTEM_PROMPT)+len(json.dumps(c,ensure_ascii=False))<=6000
     assert all('read_ranges' not in source for source in c['sources'])
-    assert all(len(source.get('preview','')) <= 1200 for source in c['sources'])
+    assert all(len(json.dumps(source.get('read_evidence',[]),ensure_ascii=False)) <= 3200 for source in c['sources'])
     run_agent(state,SearchTools(state),model)
     selection=json.loads((state.run_dir/'selection.json').read_text())
     assert any('omitted' in g for g in selection['gaps'])
@@ -157,7 +157,7 @@ def test_default_search_profile_matches_python_and_leaves_network_off():
     repo=Path(__file__).resolve().parents[1]
     saved=yaml.safe_load((repo/'configs/search.yml').read_text())
     assert saved==asdict(SearchConfig())
-    assert saved['lm_name']=='ark/doubao-seed-2-1-lite-260915'
+    assert saved['lm_name']=='ark/deepseek-v4-1-flash-261017'
     assert saved['allow_network'] is False
     assert saved['max_builder_material_chars'] == 90000
     for name in ('build_only_agent.yml','build_only_sparse.yml'):

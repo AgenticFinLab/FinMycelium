@@ -10,7 +10,8 @@ from .sources import SourceStore
 
 LEGACY_POLICY = 'balanced_source_windows_v1'
 FIXED_POLICY = 'balanced_source_windows_v2'
-BUDGET_POLICY = 'balanced_source_windows_v3'
+ADAPTIVE_POLICY = 'balanced_source_windows_v3'
+BUDGET_POLICY = 'evidence_priority_windows_v1'
 ASSEMBLY_THRESHOLDS = (0.5, 0.4, 0.3)
 MIN_RELATIVE_SCORE = 0.4
 
@@ -158,15 +159,18 @@ def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relativ
 
 
 def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
-    if policy not in {LEGACY_POLICY, FIXED_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
+    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
     focused = policy != LEGACY_POLICY
-    thresholds = ASSEMBLY_THRESHOLDS if policy == BUDGET_POLICY else (0.5,)
+    thresholds = ASSEMBLY_THRESHOLDS if policy in {ADAPTIVE_POLICY,BUDGET_POLICY} else (0.5,)
     initial_threshold = thresholds[0]
     if type(budget) is not int or budget<=0:raise ValueError('Positive integer budget required')
     if complete['material_chars']<=budget:
         payload, record = allocate_input(state,complete,budget,queries,focused=focused,min_relative_score=initial_threshold)
-        if policy == BUDGET_POLICY:
+        if policy in {ADAPTIVE_POLICY,BUDGET_POLICY}:
             record.update(thresholds=list(thresholds), threshold_stages=[], full_material_retained=True)
+        if policy == BUDGET_POLICY:
+            record['priority_decisions'] = [dict(passage=p,status='retained')
+                                            for p in complete.get('priority_passages',[])]
         return payload, record
     _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused,min_relative_score=initial_threshold)
     entries={e['source_id']:e for e in complete['selected']}
@@ -218,6 +222,26 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
                     picked[sid]=candidate;sizes[sid]=length;remaining-=cost;changed=True;break
             if not changed:break
 
+    priority_decisions=[]
+    if policy == BUDGET_POLICY:
+        for passage in complete.get('priority_passages',[]):
+            sid = passage['source_id'];anchor = passage['block']
+            if sid not in entries or passage['version']!=entries[sid]['version'] or anchor not in entries[sid]['blocks']:
+                priority_decisions.append(dict(passage=passage,status='unavailable'))
+                continue
+            # Source core coverage remains protected. Priority hints add whole
+            # original paragraphs and, where possible, their neighboring context.
+            status='material_limit'
+            for candidate,kind in ((picked[sid]|window(sid,anchor),'with_context'),
+                                   (picked[sid]|{anchor},'paragraph_only')):
+                length=len(text(sid,candidate));cost=length-sizes[sid]
+                if cost>remaining:continue
+                actions.append(dict(phase='priority_passage',source_id=sid,
+                                    added_blocks=sorted(candidate-picked[sid]),incremental_chars=cost))
+                picked[sid]=candidate;sizes[sid]=length;remaining-=cost
+                status=kind
+                break
+            priority_decisions.append(dict(passage=passage,status=status))
     stages=[]
     consume('complete_anchor_context',repairs,initial_threshold)
     for threshold in thresholds:
@@ -247,6 +271,13 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         result.update(min_relative_score=thresholds[-1],context_neighbors=1,
                       compact_source_ids=sorted(compact_sources),
                       unused_reason='Budget is a ceiling; no expansion beyond eligible original-text windows')
-    if policy == BUDGET_POLICY:
+    if policy in {ADAPTIVE_POLICY,BUDGET_POLICY}:
         result.update(thresholds=list(thresholds),threshold_stages=stages,full_material_retained=False)
+    if policy == BUDGET_POLICY:
+        # A passage that did not fit early may have been included by later passes.
+        for item in priority_decisions:
+            p=item['passage'];sid=p['source_id']
+            if item['status']=='material_limit' and p['block'] in picked.get(sid,set()):
+                item['status']='retained'
+        result['priority_decisions']=priority_decisions
     return dict(user_query=complete['user_query'],samples=samples),result

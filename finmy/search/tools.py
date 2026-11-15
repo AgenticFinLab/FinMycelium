@@ -170,6 +170,10 @@ class SearchTools:
         return result
 
     def read_source(self, source, location=None, *, query=None):
+        if location is not None and (not isinstance(location,dict) or set(location)-{'block','offset'}
+                or any(type(v) is not int or v<0 for v in location.values())):
+            raise ValueError('Copy read_location into location: {"block": integer, "offset": integer}; '
+                             'block/start/end identifies evidence, not a reading cursor')
         if query is not None and (not isinstance(query, str) or not query.strip()):
             raise ValueError('Reading query must be nonempty text')
         if query is not None and location:

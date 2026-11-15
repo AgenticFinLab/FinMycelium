@@ -232,10 +232,16 @@ class SourceStore:
                     ranges.append(record)
             saved_chars, read_chars = read_coverage(doc, ranges)
             at_end = bool(saved_chars) and read_chars == saved_chars
+            previous = entry.get('read_progress', {})
+            if ('preview_location' not in reading and previous.get('version') == doc['version']
+                    and previous.get('preview_location')):
+                reading['preview_location'] = previous['preview_location']
             # Query windows can be disjoint; they do not have a sequential next cursor.
             entry['read_progress'] = dict(version=doc['version'], next_location=None,
                                           at_end_of_saved_text=at_end, **reading)
             self.state.save()
+            for span in spans:
+                span['read_location'] = dict(block=span['block'],offset=span['start'])
             return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=spans,
                         next_location=None, at_end_of_saved_text=at_end, reading=reading)
         if block > len(blocks) or (block == len(blocks) and offset):
@@ -268,5 +274,7 @@ class SourceStore:
                                      next_location=result['next_location'],
                                      at_end_of_saved_text=result['next_location'] is None)
         result['at_end_of_saved_text'] = result['next_location'] is None
+        for span in spans:
+            span['read_location'] = dict(block=span['block'],offset=span['start'])
         self.state.save()
         return result

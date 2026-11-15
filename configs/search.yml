@@ -13,7 +13,7 @@ publication_start: null
 publication_end: null
 baidu_rewrite: false
 allow_network: false
-lm_name: ark/doubao-seed-2-1-lite-260915  # Search only; never inherited by Builder.
+lm_name: ark/deepseek-v4-1-flash-261017  # Search only; never inherited by Builder.
 generation_config:
   max_tokens: 4096  # Ark answer limit; max_completion_tokens instead caps answer + reasoning.
 timeout: 120  # Per-request timeout; saved tasks retain their own values.

@@ -1,4 +1,5 @@
 """Question-directed reading of saved text, with original offsets and one read budget."""
+import json
 import re
 
 from .budget import MIN_RELATIVE_SCORE, rank_blocks, tokens
@@ -27,7 +28,7 @@ def read_coverage(document, ranges):
     return saved, saved-unread
 
 
-def targeted_spans(document, query, limit, read_ranges):
+def targeted_spans(document, query, limit, read_ranges, *, replay=True):
     """Rank temporary text windows, then read anchors and nearby context within limit.
 
     Temporary windows never replace saved parsing or alter original evidence locations.
@@ -45,11 +46,17 @@ def targeted_spans(document, query, limit, read_ranges):
             for start, end in unread_ranges(i, 0, len(block['text']), current):
                 spans.append(dict(block=i, start=start, end=end, text=block['text'][start:end],
                                   locator={k:v for k,v in block.items() if k != 'text'}))
+        cached = not spans
+        if cached and replay:
+            spans = [dict(block=i, start=0, end=len(b['text']), text=b['text'],
+                          locator={k:v for k,v in b.items() if k != 'text'})
+                     for i,b in enumerate(document['blocks']) if b['text']]
         reading = dict(mode='full_saved_text', query=query,
-                       match_status='not_ranked' if spans else 'already_read',
+                       match_status='already_read' if cached else 'not_ranked',
+                       replayed=cached and bool(spans),
                        note='All saved text fits one read; no lexical filtering. '
                             'This is not full-page acquisition or factual verification; '
-                            'use an explicit location to reread.')
+                            'Already-read originals may be returned again for verification.')
         if spans:
             terms = set(tokens(query))
             preview = next((s for s in spans if terms.intersection(tokens(s['text']))), spans[0])
@@ -115,4 +122,76 @@ def targeted_spans(document, query, limit, read_ranges):
                    note='Relevant lexical matches only, not all word hits or a coverage verdict. Refine terms or read an explicit location when needed.')
     if preview is not None:
         reading['preview_location'] = preview
+    if not spans and ranking and replay:
+        # Revisit saved matches rather than sending an empty tool response. Only
+        # replay previously inspected intervals; do not claim unseen text was read.
+        candidates, _ = targeted_spans(document, query, limit, [], replay=False)
+        for candidate in candidates:
+            covered = []
+            for r in current:
+                if r['block'] != candidate['block']:
+                    continue
+                start, end = max(r['start'],candidate['start']), min(r['end'],candidate['end'])
+                for left,right in unread_ranges(r['block'],start,end,covered):
+                    item = dict(block=r['block'],start=left,end=right)
+                    covered.append(item)
+                    spans.append(dict(item,text=document['blocks'][r['block']]['text'][left:right],
+                                      locator=candidate['locator']))
+        reading['replayed'] = bool(spans)
+        if spans:
+            reading['preview_location'] = {k:spans[0][k] for k in ('block','start','end')}
     return spans, reading
+
+
+def located_preview(document, ranges, queries, limit, priorities=()):
+    """Bounded original excerpts, including locations, never an LLM summary.
+
+    The bound includes serialized metadata. Short inspected documents fit whole;
+    larger ones use the actual reading questions. Priority annotations only reorder
+    text already inspected in the current source version.
+    """
+    if limit < 160:
+        return []
+    current = [r for r in ranges if r['version'] == document['version']]
+    candidates, seen = [], []
+    for r in sorted(current,key=lambda x:(x['block'],x['start'])):
+        for start,end in unread_ranges(r['block'],r['start'],r['end'],seen):
+            item = dict(block=r['block'],start=start,end=end)
+            seen.append(item)
+            text = document['blocks'][r['block']]['text'][start:end]
+            # Virtual windows handle older, page-sized PDF blocks without changing
+            # their original block IDs or offsets.
+            for window in pdf_blocks(text,0):
+                if window['text'].strip():
+                    candidates.append(dict(block=r['block'],start=start+window['start'],
+                                           end=start+window['end'],text=window['text']))
+    if not candidates:
+        return []
+    ranking = rank_blocks({'blocks':list(range(len(candidates)))},
+                          {'blocks':candidates},queries)
+    scores = {}
+    for group in ranking:
+        maximum = max((s for _,s in group['ranking']),default=1)
+        for i,score in group['ranking']:
+            scores[i] = max(scores.get(i,0),score/maximum)
+    def key(i):
+        c = candidates[i]
+        marked = any(p['block']==c['block'] and p['start']<c['end'] and p['end']>c['start']
+                     for p in priorities)
+        return (not marked,-scores.get(i,0),i)
+    output = []
+    for i in sorted(range(len(candidates)),key=key):
+        c = dict(candidates[i])
+        c['read_location'] = dict(block=c['block'],offset=c['start'])
+        overhead = len(json.dumps(output+[dict(c,text='')],ensure_ascii=False))
+        room = limit-overhead
+        if room < 80:
+            continue
+        if len(c['text'])>room:
+            c['text'] = c['text'][:room]
+            c['end'] = c['start']+len(c['text'])
+        while c['text'] and len(json.dumps(output+[c],ensure_ascii=False))>limit:
+            c['text'] = c['text'][:-1];c['end']-=1
+        if c['text']:
+            output.append(c)
+    return sorted(output,key=lambda c:(c['block'],c['start']))

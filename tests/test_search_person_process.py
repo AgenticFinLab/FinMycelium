@@ -70,7 +70,9 @@ def test_short_query_read_keeps_qualifications_even_without_lexical_match(tmp_pa
     assert result['at_end_of_saved_text']
     assert all(doc['blocks'][s['block']]['text'][s['start']:s['end']] == s['text'] for s in result['spans'])
     again = tools.read_source(sid, query='authorization')
-    assert not again['spans'] and again['reading']['match_status'] == 'already_read'
+    assert again['spans'] and again['reading']['match_status'] == 'already_read'
+    assert again['reading']['replayed']
+    assert again['spans'] == result['spans']
     assert tools.read_source(sid, location={'block':0})['spans']
     assert original == {p.name:p.read_bytes() for p in (state.root/'sources'/sid/doc['version']).iterdir()}
     assert state.data['read_sources'] == [sid] and state.data['usage'] == {'model':0, 'search':0}

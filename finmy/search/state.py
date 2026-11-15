@@ -42,7 +42,7 @@ class SearchConfig:
     timeout: int = 120
     max_download_bytes: int = 20000000
     max_model_context_chars: int = 100000
-    lm_name: str | None = 'ark/doubao-seed-2-1-lite-260915'
+    lm_name: str | None = 'ark/deepseek-v4-1-flash-261017'
     generation_config: dict = field(default_factory=lambda: {'max_tokens':4096})
 
     def __post_init__(self):

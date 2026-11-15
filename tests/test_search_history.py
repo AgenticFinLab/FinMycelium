@@ -79,6 +79,9 @@ def test_saved_policy_labels_preserve_original_records():
     from finmy.workbench.search_history import budget_policy_label
     for policy, expected in (
         ('balanced_source_windows_v1', '材料预算分配（来源配额与共享余量）'),
+        ('balanced_source_windows_v2', '材料预算分配（来源配额与共享余量）'),
+        ('balanced_source_windows_v3', '材料预算分配（来源配额与共享余量）'),
+        ('evidence_priority_windows_v1', '材料预算分配（来源配额、重点原文与共享余量）'),
         ('c2_base_shared_bm25_windows_v1', '材料预算分配（来源配额与共享余量）'),
         ('source_order_complete_paragraphs', '按来源顺序保留完整段落'),
         ('fair_source_quotas_bm25_windows', '按来源配额选取原文段落'),
@@ -103,3 +106,18 @@ def test_directed_reading_and_stop_explanation_survive_trace_projection():
     assert rows[0]['query']=='negotiation' and rows[0]['reading']['mode']=='query'
     assert not rows[0]['at_end'] and rows[0]['chars']==len('Original terms.')
     assert rows[1]['reason_detail']=='Remaining leads duplicate existing announcements.'
+
+
+def test_interrupted_usage_survives_projection_without_double_counting():
+    usage={'prompt_tokens':100,'completion_tokens':20,'total_tokens':120}
+    rows=timeline([
+        {'action':'model_started','model_call':1},
+        {'action':'action_error','model_call':1,'usage':usage,'finish_reason':'length',
+         'error':{'error':'ValueError'}},
+        {'action':'model_started','model_call':2},
+        {'action':'model_response','model_call':2,'usage':usage,'response':'invalid json'},
+        {'action':'action_error','model_call':2,'usage':None,'usage_recorded_in_response':True,
+         'error':{'error':'InvalidActionOutput'}},
+    ],{'status':'limit'})
+    assert len(rows)==2 and sum(r['usage']['total_tokens'] for r in rows)==240
+    assert rows[0]['finish_reason']=='length'

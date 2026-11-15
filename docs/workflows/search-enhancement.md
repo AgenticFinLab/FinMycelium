@@ -35,7 +35,9 @@ available; filtered or unmatched text is not evidence that a fact is absent.
 | `finmy/search/state.py` | Task/config validation, saved state, cumulative usage |
 | `finmy/search/tools.py` | Common Baidu Web Search, Bocha Web Search and Exa Search adapters |
 | `finmy/search/sources.py` | HTML/PDF/TXT acquisition, original versions, hashes and read locations |
+| `finmy/search/reading.py` | Located query reads, cached rereads and bounded original excerpts |
 | `finmy/search/agent.py` | Shared decision prompt, search/read/finish actions, bounded recovery |
+| `finmy/search/evidence.py` | Validate and pin model passage-selection advice against inspected originals |
 | `finmy/search/protocol.py` | Search model output settings and single-action JSON decoding |
 | `finmy/search/handoff.py` | Complete manifest, source provenance and existing Builder contract |
 | `finmy/search/budget.py` | Deterministic paragraph allocation; no model or network calls |
@@ -59,7 +61,9 @@ credentials when updating the example. Fill the selected services' keys:
 | `EXA_API_KEY` | Exa Search and the text returned by that search call |
 
 Search `lm_name` and `builder_config.lm_name` are independent. Search defaults to
-`ark/doubao-seed-2-1-lite-260915`; the existing build-only examples select their own model.
+`ark/deepseek-v4-1-flash-261017` with low thinking and JSON output; the existing
+build-only examples select their own model. Existing saved tasks and local profiles
+retain their recorded model unless explicitly changed in settings.
 Use `tokenhub/<console-model-id>` to select TokenHub independently for either stage;
 model IDs containing `/` retain that namespace. These are model services, separate
 from the Baidu/Bocha/Exa search services. Model selection is independent of the search
@@ -81,7 +85,7 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | `max_read_chars` | 12,000 per source-read operation |
 | `max_builder_material_chars` | 90,000 across sample contents, including source labels and omission markers |
 | `max_model_context_chars` | 100,000 for the serialized decision context and system prompt |
-| `generation_config.max_tokens` | 4,096 answer tokens on the current Ark Seed model; reasoning is separate |
+| `generation_config.max_tokens` | 4,096 including reasoning on the default Ark DeepSeek model; semantics differ by model |
 | `timeout` | 120 seconds per request |
 | `allow_network` | `false`; preparation does not execute services |
 
@@ -188,7 +192,7 @@ for versioned inputs, draft review and execution boundaries.
 ## Reading relevant passages and stopping
 
 The shared `read_source` action accepts either `query` or a sequential `location`.
-When the saved body fits one read, a query returns its unread text in full, including
+When the saved body fits one read, a query returns its text in full, including
 qualifications outside lexical matches. `full_saved_text` describes the saved body;
 provider-returned partial text is still partial. Longer bodies use lexical ranking of
 temporary windows and return passages with nearby context, keeping version, page/block and
@@ -196,13 +200,19 @@ character offsets. It uses the same per-read character limit and distinct-source
 without a search API or an additional model call. An uncached source still requires the
 ordinary fetch. No fixed number of matching passages is imposed; the read budget applies.
 
-Query reads prefer matching text that has not already been read. They have no sequential
+Query reads prefer matching text that has not already been read. Once the matching
+passages have been inspected, they can replay bounded original passages with
+`match_status: already_read` and `replayed: true`. Replays do not consume a new source
+slot, fetch the website again, or inflate unique reading coverage. Empty results do not
+erase the previous useful preview. They have no sequential
 `next_location`, since the returned passages can be disjoint; use another query or an
 explicit location for further inspection. `no_match` is a vocabulary-dependent result,
 not proof that a fact is absent. Temporary windows do not rewrite stored parsing.
 
-The agent sees saved-body availability, read/unread character counts and a preview from
-a previously read passage. Compact attempted search/read questions remain available at
+The agent sees saved-body availability, read/unread character counts and bounded
+`read_evidence` excerpts with exact block/start/end and reusable `read_location` cursors.
+The excerpts contain inspected originals, including at finalization, and share the
+existing context budget. Compact attempted search/read questions remain available at
 finalization; they are not assertions that those questions were answered. `reviewed`
 only means that a nonempty passage was inspected.
 Before stopping, it should examine promising unread sources and relevant sections for
@@ -219,6 +229,15 @@ transactions and particular action categories are not required. Decisions, autho
 communication, commitments, responses and adjustments may be relevant. Corporate acts do
 not establish personal attribution by themselves. Retain useful context, independent
 corroboration and conflicting accounts even when they add no new personal action.
+Personal participation is an independent research objective. Once basic event facts
+are established, important personal questions take priority over more repetitions of
+the same event facts. Interviews, public statements and retrospective accounts can add
+useful evidence alongside official records. Do not require private correspondence,
+exact dates, a minimum number of actions or proof of personal execution of every event.
+At finish the model supplies an advisory `person_evidence` status (`supported`,
+`limited` or `unattempted`) and detail on personal evidence, attempts and remaining gaps.
+Missing/invalid assessments are recorded as `not_assessed`; no automatic semantic
+acceptance is inferred from a successful run or from the presence of annotations.
 
 After inspecting relevant seed material, direct further queries/reading toward important
 unanswered questions. Different questions may require different sections of a long source.
@@ -226,6 +245,32 @@ Distinguish gaps not attempted, attempted but unsupported, and inaccessible sour
 Forced finalization exposes its model-call or context limit and should report that limit
 and untried important questions in `gaps`/`reason_detail`. No extra reviewer call or semantic
 acceptance gate is added; factual coverage remains subject to later content review.
+
+## Priority original passages
+
+The existing decision/finish response may include `priority_passages`, for example:
+
+```json
+{"source_id":"runtime-source-id","block":3,"start":0,"end":200,
+ "reason":"Adds the person's response and its qualification"}
+```
+
+Each entry must refer to an inspected interval in a saved source; the program pins
+its version. Optional explicit versions must match. The reason is model advice,
+stored separately from source text, and is never copied into Builder evidence.
+Invalid entries receive diagnostic feedback without aborting the valid search/read
+action or remaining handoff. Final `source_ids` still determine retained sources;
+omitted or superseded annotations remain visible in the omission record.
+The generated search summary reports annotation retention and the advisory personal
+participation assessment; exact locations and allocation outcomes remain in `selection.json`.
+
+Marking happens during existing model decisions, without a separate selection agent
+or hidden model call. The prompt asks for marks after useful reads, then only missing
+marks at finish. Concise gap/detail strings avoid repeating the chronology under the
+shared reasoning/output-token limit. Legacy callers can omit the field.
+The model sees only bounded excerpts, not necessarily each
+complete source. Annotations can help preserve valuable evidence but cannot certify
+factual completeness or turn a corporate action into a personal action.
 
 ## Complete material and input budgeting
 
@@ -235,7 +280,8 @@ It removes only empty paragraphs, exact navigation labels and long exact repeate
 paragraphs, and deduplicates identical document bodies. Original files remain intact.
 
 The complete manifest pins original versions, block references, source headers and
-retrieval queries. It is independent of the input budget and reconstructs the selected
+retrieval queries, validated priority locations and advisory personal-evidence assessment.
+It is independent of the input budget and reconstructs the selected
 saved bodies without duplicating the evidence tree. “Complete” describes that saved
 selection; provider-returned text remains `partial` and is not certified full-page text.
 
@@ -269,6 +315,11 @@ Budget allocation is applied only when complete material exceeds the limit:
 - Keep a compact source whole when it fits its fair share of the final budget, before
   expanding long-document windows. This avoids discarding clauses from short notices
   while spare budget remains.
+- Prioritize validated marked paragraphs from the remaining budget, with adjacent
+  original context when it fits. Keep complete paragraphs and restore original order.
+  The source core allowance remains protected; priorities cannot increase the budget.
+  Record any priority paragraph that cannot fit. Invalid/missing suggestions fall
+  back to the ordinary allocation; unmarked relevant material remains eligible.
 - Share the remaining space, first completing anchor context, then adding ranked windows
   in stable source-ID rounds. With spare budget, lower the assembly threshold to 40%,
   then 30%, appending eligible windows without removing or reallocating any selected
@@ -276,9 +327,10 @@ Budget allocation is applied only when complete material exceeds the limit:
   not fit. Stop at the budget or when no eligible window fits at the 30% floor,
   without padding. Restore original block order and mark omitted gaps.
 - Record the policy, assembly code hash and each threshold stage. Directed reading
-  of long bodies remains fixed at 40%. New handoffs use the progressive policy; explicitly reassembling
+  of long bodies remains fixed at 40%. New handoffs use the evidence-priority policy;
+  without priority locations it follows the same progressive allocation. Explicitly reassembling
   an old handoff creates a new revision under this policy while retaining its original
-  source versions, complete-material manifest and previous handoff files. Stored v1/v2
+  source versions, complete-material manifest and previous handoff files. Stored v1/v2/v3
   manifests retain their historical allocation rules when replayed without an override.
 - Count headers and omission markers toward the budget. Keep omitted paragraphs in the
   complete material, distinguishing relevance selection from material-limit omissions.
@@ -290,6 +342,9 @@ omissions. Queries are frozen in new complete manifests; old manifests fall back
 original task and keywords, never later searches. The allocation policy is frozen in
 new manifests; existing manifests without that field retain their prior allocation
 behavior. Reassembly retains previous revisions. No extra model call is used for assembly.
+Interrupted model responses retain their available usage and finish reason in the
+error trace. Responses already logged before an action-validation error are not charged
+again in that error record; recorded usage is not an account invoice.
 
 ## Hand off to Agent or Sparse
 

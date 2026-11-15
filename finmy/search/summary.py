@@ -92,6 +92,19 @@ def render(data, task_id, selection, payload):
     for sid, source in sorted(data['sources'].items()):
         rows.append('| ' + ' | '.join(cell(v) for v in [sid, source.get('title'), source['url'], source['status'], 'yes' if sid in used else 'no']) + ' |')
     if not data['sources']: rows += ['', 'No sources recorded.']
+    if 'priority_passages' in selection:
+        decisions = selection.get('allocation', {}).get('priority_decisions', [])
+        retained = sum(d['status'] in {'retained', 'with_context', 'paragraph_only'} for d in decisions)
+        rows += ['', '## Original passage selection', '',
+                 f'- Valid priority annotations: {len(selection["priority_passages"])}; retained in input: {retained}.',
+                 f'- Annotations excluded before allocation: {len(selection.get("priority_omissions", []))}.',
+                 '- Selection reasons are model advice. Only located original text enters the Builder; detailed decisions remain in selection.json.']
+    review = selection.get('person_evidence')
+    if review:
+        rows += ['', '## Personal participation assessment', '',
+                 f'- Search Agent assessment: {cell(review["status"])}.',
+                 '- ' + cell(review['detail']),
+                 '- This assessment does not certify attribution or completeness.']
     rows += ['', '## Gaps and stop notes', '', 'Search Agent observations are advisory; acquisition does not verify facts.', '']
     gaps = selection.get('gaps', [])
     rows += ['- ' + cell(g) for g in gaps] or ['- No gap assessment recorded; this is not a claim of full coverage.']

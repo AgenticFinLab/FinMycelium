@@ -167,6 +167,10 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
                         queries.append(query)
     record['reading_queries'] = reading_queries
     record['retrieval_queries'] = list(dict.fromkeys(q for q in queries if q.strip()))
+    from .evidence import retained_passages
+    record['priority_passages'],record['priority_omissions'] = retained_passages(state,retained_versions)
+    if state.data.get('person_evidence'):
+        record['person_evidence'] = dict(state.data['person_evidence'])
     from .budget import BUDGET_POLICY
     record['budget_policy'] = BUDGET_POLICY
     record['complete_id'] = digest(record)
@@ -216,6 +220,9 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', a
         complete_source_count=len(complete['selected']), source_ids=complete['source_ids'],
         source_versions=complete['source_versions'], selected=selected, omitted=omitted,
         cleanup=complete['cleanup'], duplicates=complete['duplicates'],
+        priority_passages=complete.get('priority_passages',[]),
+        priority_omissions=complete.get('priority_omissions',[]),
+        person_evidence=complete.get('person_evidence'),
         gaps=list(dict.fromkeys(notes)), reason=complete['reason'],
         material_chars=allocation['material_chars'], max_material_chars=limit,
         unselected_sources=complete['unselected_sources'], review_required=True,

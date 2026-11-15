@@ -10,7 +10,9 @@ def budget_policy_label(selection):
     from finmy.search.budget import BUDGET_POLICY
     # Persisted identifiers from older runs remain readable as descriptive labels.
     labels = {
-        BUDGET_POLICY: '材料预算分配（来源配额与共享余量）',
+        BUDGET_POLICY: '材料预算分配（来源配额、重点原文与共享余量）',
+        'balanced_source_windows_v3': '材料预算分配（来源配额与共享余量）',
+        'balanced_source_windows_v2': '材料预算分配（来源配额与共享余量）',
         'balanced_source_windows_v1': '材料预算分配（来源配额与共享余量）',
         'c2_base_shared_bm25_windows_v1': '材料预算分配（来源配额与共享余量）',
         'source_order_complete_paragraphs': '按来源顺序保留完整段落',
@@ -126,6 +128,10 @@ def timeline(events, data):
                 current = new(event, number=event.get('model_call', model_number))
             current['status'] = 'error' if kind == 'action_error' else 'warning'
             current['errors'].append(event.get('error', {}))
+            if current['usage'] is None and isinstance(event.get('usage'), dict):
+                current['usage'] = event['usage']
+            if event.get('finish_reason') is not None:
+                current['finish_reason'] = event['finish_reason']
         elif kind == 'action_completed':
             if current is not None and current['action'] == 'finish':
                 current['status'] = 'completed'
