@@ -188,8 +188,10 @@ for versioned inputs, draft review and execution boundaries.
 ## Reading relevant passages and stopping
 
 The shared `read_source` action accepts either `query` or a sequential `location`.
-A query ranks temporary text windows in the saved body using lexical relevance and
-returns original passages with nearby context, keeping their version, page/block and
+When the saved body fits one read, a query returns its unread text in full, including
+qualifications outside lexical matches. `full_saved_text` describes the saved body;
+provider-returned partial text is still partial. Longer bodies use lexical ranking of
+temporary windows and return passages with nearby context, keeping version, page/block and
 character offsets. It uses the same per-read character limit and distinct-source quota,
 without a search API or an additional model call. An uncached source still requires the
 ordinary fetch. No fixed number of matching passages is imposed; the read budget applies.
@@ -199,8 +201,10 @@ Query reads prefer matching text that has not already been read. They have no se
 explicit location for further inspection. `no_match` is a vocabulary-dependent result,
 not proof that a fact is absent. Temporary windows do not rewrite stored parsing.
 
-The agent sees saved-body availability, actual characters read and a preview from a
-previously read passage. `reviewed` only means that a nonempty passage was inspected.
+The agent sees saved-body availability, read/unread character counts and a preview from
+a previously read passage. Compact attempted search/read questions remain available at
+finalization; they are not assertions that those questions were answered. `reviewed`
+only means that a nonempty passage was inspected.
 Before stopping, it should examine promising unread sources and relevant sections for
 core process gaps, especially personal actions versus corporate transactions. There is
 no minimum source count and no requirement to read every candidate or whole document.
@@ -208,6 +212,20 @@ no minimum source count and no requirement to read every candidate or whole docu
 older callers may omit it. These semantic decisions remain advisory, with existing
 budgets and forced finalization unchanged. Saved handoff bodies are still packaged
 independently of what the model has read.
+
+Person-event catalog tasks automatically ask for both the event process and evidenced
+actions of the focal person within the confirmed scope. Questions adapt to the storyline;
+transactions and particular action categories are not required. Decisions, authorization,
+communication, commitments, responses and adjustments may be relevant. Corporate acts do
+not establish personal attribution by themselves. Retain useful context, independent
+corroboration and conflicting accounts even when they add no new personal action.
+
+After inspecting relevant seed material, direct further queries/reading toward important
+unanswered questions. Different questions may require different sections of a long source.
+Distinguish gaps not attempted, attempted but unsupported, and inaccessible sources.
+Forced finalization exposes its model-call or context limit and should report that limit
+and untried important questions in `gaps`/`reason_detail`. No extra reviewer call or semantic
+acceptance gate is added; factual coverage remains subject to later content review.
 
 ## Complete material and input budgeting
 
@@ -236,9 +254,12 @@ an event period, URL or PDF filename. Publication metadata does not verify an ev
 Budget allocation is applied only when complete material exceeds the limit:
 
 - Allocate half the budget across sources using max-min fair quotas. For catalog tasks,
-  use the event name and included scope, keywords and attempted search queries; exclusions
-  and planning prose are not positive retrieval queries. Unstructured tasks retain their
-  original query. The full original task is still passed to the Builder.
+  use the event name and included scope, keywords and attempted search queries. Person
+  identity stays bound to that event. Successful query reads of retained source versions
+  also contribute their actual questions, with source/version provenance frozen in
+  `reading_queries`. Queries from omitted or superseded source versions and reads with no
+  passages are excluded. Exclusions and planning prose are not positive retrieval queries.
+  Unstructured tasks retain their original query; the full task still reaches the Builder.
 - Select BM25 text windows. Per document and query, consider all anchors with
   at least 50% of the highest score in the initial assembly pass, plus one neighboring
   block on each side. There is no fixed anchor-count cap; source allocation and the
@@ -255,7 +276,7 @@ Budget allocation is applied only when complete material exceeds the limit:
   not fit. Stop at the budget or when no eligible window fits at the 30% floor,
   without padding. Restore original block order and mark omitted gaps.
 - Record the policy, assembly code hash and each threshold stage. Directed reading
-  remains fixed at 40%. New handoffs use the progressive policy; explicitly reassembling
+  of long bodies remains fixed at 40%. New handoffs use the progressive policy; explicitly reassembling
   an old handoff creates a new revision under this policy while retaining its original
   source versions, complete-material manifest and previous handoff files. Stored v1/v2
   manifests retain their historical allocation rules when replayed without an override.

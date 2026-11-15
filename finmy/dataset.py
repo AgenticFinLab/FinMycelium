@@ -244,7 +244,11 @@ def search_task(selection, *, period, include, exclude):
              f"Event: {record['event_name']} ({record['event_id']})"]
     if record['kind'] == 'person_event':
         lines += [f"Person: {record['person_name']} ({record['person_id']})",
-                  f"Storyline: {record['storyline_name']} ({record['storyline_id']})"]
+                  f"Storyline: {record['storyline_name']} ({record['storyline_id']})",
+                  'Research both the event process and the focal person\'s evidenced actions within it. '
+                  'Look for decisions, authorization, communication, commitments, responses or adjustments '
+                  'where relevant; these are examples, not required categories. '
+                  'Distinguish the person\'s actions and statements from organizational or other parties\' actions.']
     lines += [f"Activity period: {scope['period'] or 'Not specified; preserve uncertainty'}",
               f"Included: {scope['include']}", f"Excluded: {scope['exclude'] or 'Not specified'}",
               'Activity dates do not limit publication dates; retrospective sources are allowed.',

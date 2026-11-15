@@ -35,6 +35,27 @@ def targeted_spans(document, query, limit, read_ranges):
     Previously read matches yield to unread matches; explicit
     location reads remain available for rereading. Lexical matches are navigation hints.
     """
+    current = [r for r in read_ranges if r['version'] == document['version']]
+    saved_chars = sum(len(b['text']) for b in document['blocks'])
+    if 0 < saved_chars <= limit:
+        # A short notice/interview should not lose qualifications just because the
+        # query used different words. Return unread saved text, still with offsets.
+        spans = []
+        for i, block in enumerate(document['blocks']):
+            for start, end in unread_ranges(i, 0, len(block['text']), current):
+                spans.append(dict(block=i, start=start, end=end, text=block['text'][start:end],
+                                  locator={k:v for k,v in block.items() if k != 'text'}))
+        reading = dict(mode='full_saved_text', query=query,
+                       match_status='not_ranked' if spans else 'already_read',
+                       note='All saved text fits one read; no lexical filtering. '
+                            'This is not full-page acquisition or factual verification; '
+                            'use an explicit location to reread.')
+        if spans:
+            terms = set(tokens(query))
+            preview = next((s for s in spans if terms.intersection(tokens(s['text']))), spans[0])
+            reading['preview_location'] = {k:preview[k] for k in ('block', 'start', 'end')}
+        return spans, reading
+
     windows = []
     for i, block in enumerate(document['blocks']):
         for part in pdf_blocks(block['text'], block.get('page', 0)):
@@ -42,7 +63,6 @@ def targeted_spans(document, query, limit, read_ranges):
                 windows.append(dict(block=i, start=part['start'], end=part['end'], text=part['text']))
     ranked = rank_blocks({'blocks': list(range(len(windows)))}, {'blocks': windows}, [query], focused=True)
     ranking = ranked[0]['ranking'] if ranked else []
-    current = [r for r in read_ranges if r['version'] == document['version']]
     chosen = []
     remaining = limit
     preview = None

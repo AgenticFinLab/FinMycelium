@@ -141,6 +141,12 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     # descriptions into positive retrieval terms. Do not ban those words in evidence.
     focus = (task.get('catalog', {}).get('event_name') or task['target_name']) + '. ' + scope.get('include', '')
     queries = [focus if scope.get('include') else task['query_text'], ' '.join(task.get('key_words', []))]
+    catalog = task.get('catalog', {})
+    if catalog.get('kind') == 'person_event' and catalog.get('person_name'):
+        # Bind the focal person's identity to this event, never their whole life.
+        queries.append(catalog['person_name'] + '. ' + focus)
+    retained_versions = {d['source_id']: d['version'] for d in documents}
+    reading_queries = []
     trace = state.run_dir / 'trace.jsonl'
     if trace.exists():
         import json
@@ -148,6 +154,18 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
             event = json.loads(line)
             if event.get('action') == 'provider_started' and event.get('query'):
                 queries.append(event['query'])
+            elif event.get('action') == 'read_source':
+                result = event.get('result', {})
+                query = result.get('reading', {}).get('query')
+                sid, version = event.get('source'), result.get('version')
+                if (isinstance(query, str) and query.strip() and version is not None
+                        and retained_versions.get(sid) == version
+                        and any(s['end'] > s['start'] for s in result.get('spans', []))):
+                    item = dict(source_id=sid, version=version, query=query)
+                    if item not in reading_queries:
+                        reading_queries.append(item)
+                        queries.append(query)
+    record['reading_queries'] = reading_queries
     record['retrieval_queries'] = list(dict.fromkeys(q for q in queries if q.strip()))
     from .budget import BUDGET_POLICY
     record['budget_policy'] = BUDGET_POLICY

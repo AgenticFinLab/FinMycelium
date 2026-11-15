@@ -101,7 +101,7 @@ def test_late_match_in_indivisible_text_is_not_hidden_by_read_limit(needle):
 
 
 def test_no_match_does_not_mark_source_reviewed_or_claim_source_is_exhausted(tmp_path):
-    state, store, sid, _ = saved(tmp_path, 'A short announcement.')
+    state, store, sid, _ = saved(tmp_path, 'An announcement about routine deliveries. ' * 100, max_read_chars=1000)
     result = store.read(sid, query='negotiation')
     assert result['reading']['match_status']=='no_match' and not result['spans']
     assert not result['at_end_of_saved_text']
@@ -180,7 +180,7 @@ def test_weak_matches_do_not_fill_read_budget_or_reappear_after_strong_matches(t
         'Routine warehouse operations. ' * 100,
         'Seasonal financing covers logistics.',
     ])
-    state, store, sid, document=saved(tmp_path,text,max_read_chars=12000)
+    state, store, sid, document=saved(tmp_path,text,max_read_chars=3000)
     first=store.read(sid,query='Aster acquisition financing negotiated')
     content='\n'.join(s['text'] for s in first['spans'])
     assert 'Aster acquisition' in content and 'conditional on approval' in content
