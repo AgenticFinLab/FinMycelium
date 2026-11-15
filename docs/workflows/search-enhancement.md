@@ -36,6 +36,16 @@ trace an original through an explicit link or a targeted `search`. These operati
 consume the existing budgets. There are no provider quotas or additional reviewer
 calls. Important unattempted, inaccessible or insufficiently supported leads belong
 in `gaps`; unused candidates do not prevent handoff.
+Narrative deliverables, gap explanations and selection reasons use English. Queries
+and reading keywords follow the source language; English output does not require
+English-only retrieval. When an English query has low yield and mainly Chinese
+results, an important gap can justify a Chinese reformulation with useful original
+names/aliases. No provider is restricted to one language and bilingual duplication
+is not mandatory. Long-body lexical matching does not translate: use source-language
+keywords or explicit reading locations. Apply the same evidence standards across
+languages, trace useful secondary accounts to accessible original records, and keep
+original titles, quotations and body text. Any translation is labeled separately.
+
 Directed reading uses a within-document relative BM25 threshold
 (40% of the best score), with neighboring context and no fixed match-count cap. Already-read
 strong matches do not promote weak matches into the next read. Explicit locations remain
@@ -116,10 +126,10 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | Search setting | Default / meaning |
 |---|---|
 | `providers` | `[bocha]`; select any combination of `baidu`, `bocha`, `exa` |
-| `max_results` | 5 per query per provider |
+| `max_results` | `{baidu: 4, bocha: 4, exa: 8}` per query; a saved integer still applies equally to all selected providers |
 | `max_search_requests` | 12 per task, shared across providers, initial search and follow-up |
-| `max_read_sources` | 20 distinct sources; rereading a source does not consume a new source slot |
-| `max_model_calls` | 40 attempted search-side model requests, including failures |
+| `max_read_sources` | 30 distinct sources; rereading a source does not consume a new source slot |
+| `max_model_calls` | 60 attempted search-side model requests, including failures |
 | `max_read_chars` | 12,000 per source-read operation |
 | `max_builder_material_chars` | 90,000 across sample contents, including source labels and omission markers |
 | `max_model_context_chars` | 100,000 for the serialized decision context and system prompt |

@@ -115,12 +115,12 @@ def test_finalization_recovers_earlier_read_text_and_retries_invalid_ids(tmp_pat
 
 
 def test_document_budget_omits_whole_paragraphs_and_records_gap(tmp_path):
-    config=SearchConfig(max_model_calls=1,max_builder_material_chars=500,max_model_context_chars=6000)
+    config=SearchConfig(max_model_calls=1,max_builder_material_chars=500,max_model_context_chars=len(SYSTEM_PROMPT)+2000)
     state=SearchState(tmp_path,'case',task=task(),config=config);store=SourceStore(state)
     for name,text in [('small',b'Not yet approved.'),('big',b'x'*2000)]:
         sid=store.register('https://example.org/'+name);store.save_raw(sid,text,'txt');store.read(sid)
     c=context_for(state)
-    assert len(SYSTEM_PROMPT)+len(json.dumps(c,ensure_ascii=False))<=6000
+    assert len(SYSTEM_PROMPT)+len(json.dumps(c,ensure_ascii=False))<=config.max_model_context_chars
     assert all('read_ranges' not in source for source in c['sources'])
     assert all(len(json.dumps(source.get('read_evidence',[]),ensure_ascii=False)) <= 3200 for source in c['sources'])
     run_agent(state,SearchTools(state),model)
@@ -168,7 +168,7 @@ def test_default_search_profile_matches_python_and_leaves_network_off():
 def test_daily_limits_and_followup_gap_guard(tmp_path):
     from finmy.search.agent import execute_action
     cfg=SearchConfig(providers=['baidu','bocha','exa'])
-    assert (cfg.max_results,cfg.max_search_requests,cfg.max_read_sources,cfg.max_model_calls)==(5,12,20,40)
+    assert (cfg.max_results,cfg.max_search_requests,cfg.max_read_sources,cfg.max_model_calls)==({'baidu':4,'bocha':4,'exa':8},12,30,60)
     state=SearchState(tmp_path,'case',task=task(),config=cfg)
     calls=[]
     def observed(provider,payload,config):

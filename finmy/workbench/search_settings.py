@@ -16,9 +16,14 @@ def search_settings(store):
     model = model_picker(defaults.get("lm_name") or "", "ui-default-search-model", purpose="search", label="默认搜索模型")
     with st.form("search-defaults"):
         providers = st.multiselect("默认搜索服务", ["baidu", "bocha", "exa"], default=defaults["providers"])
-        values = {}
+        limits = defaults['max_results']
+        counts = dict(limits) if isinstance(limits, dict) else {p: limits for p in ('baidu', 'bocha', 'exa')}
+        for provider, label in [('baidu', '百度'), ('bocha', '博查'), ('exa', 'Exa')]:
+            counts[provider] = st.number_input(label+' 每次查询结果上限', min_value=1, max_value=50,
+                value=counts.get(provider, SearchConfig().results_for(provider)))
+        values = {'max_results': counts}
         columns = st.columns(2)
-        for i, (key, label) in enumerate([("max_results", "每次查询每家结果数"), ("max_search_requests", "累计搜索请求上限"),
+        for i, (key, label) in enumerate([("max_search_requests", "累计搜索请求上限"),
                            ("max_read_sources", "读取来源上限"), ("max_model_calls", "搜索模型请求上限"),
                            ("max_builder_material_chars", "交付正文字符预算")]):
             values[key] = columns[i % 2].number_input(label, min_value=1, value=defaults[key])
@@ -31,7 +36,7 @@ def search_settings(store):
                 for key in ("providers", "count", "model", "max_search_requests", "max_read_sources", "max_model_calls", "max_builder_material_chars"):
                     st.session_state.pop("ui-search-"+key, None)
                 for key in list(st.session_state):
-                    if key.startswith("ui-search-model-"):
+                    if key.startswith(("ui-search-model-", "ui-search-count-")):
                         st.session_state.pop(key, None)
                 st.success("搜索默认配置已保存；新任务将采用这些默认值")
             except (ValueError, TypeError) as exc:

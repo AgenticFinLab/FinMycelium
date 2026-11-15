@@ -27,10 +27,10 @@ def write_json(path, value):
 @dataclass
 class SearchConfig:
     providers: list = field(default_factory=lambda: ['bocha'])
-    max_results: int = 5
+    max_results: int | dict = field(default_factory=lambda: {'baidu': 4, 'bocha': 4, 'exa': 8})
     max_search_requests: int = 12
-    max_read_sources: int = 20
-    max_model_calls: int = 40
+    max_read_sources: int = 30
+    max_model_calls: int = 60
     max_read_chars: int = 12000
     max_builder_material_chars: int = 90000
     include_domains: list = field(default_factory=list)
@@ -50,7 +50,7 @@ class SearchConfig:
             raise ValueError('Select unique providers')
         if set(self.providers) - {'baidu', 'bocha', 'exa'}:
             raise ValueError('Unknown search provider')
-        for name in ('max_results', 'max_search_requests', 'max_read_sources',
+        for name in ('max_search_requests', 'max_read_sources',
                      'max_model_calls', 'max_read_chars', 'max_builder_material_chars',
                      'timeout', 'max_download_bytes', 'max_model_context_chars'):
             value = getattr(self, name)
@@ -60,8 +60,14 @@ class SearchConfig:
             raise ValueError('Network/rewrite flags must be booleans')
         if not isinstance(self.generation_config, dict):
             raise ValueError('generation_config must be an object')
-        if self.max_results > 50:
-            raise ValueError('First-version max_results supports 1..50')
+        if isinstance(self.max_results, dict):
+            if set(self.max_results) - {'baidu', 'bocha', 'exa'} or not set(self.providers) <= set(self.max_results):
+                raise ValueError('max_results must provide a limit for each selected provider')
+            limits = self.max_results.values()
+        else:
+            limits = [self.max_results]
+        if any(type(value) is not int or not 1 <= value <= 50 for value in limits):
+            raise ValueError('max_results supports 1..50 per provider')
         for name in ('include_domains', 'exclude_domains'):
             if not isinstance(getattr(self, name), list) or any(
                 not isinstance(d, str) or not d or '/' in d for d in getattr(self, name)
@@ -72,6 +78,11 @@ class SearchConfig:
                 datetime.strptime(getattr(self, name), '%Y-%m-%d')
         if self.publication_start and self.publication_end and self.publication_start > self.publication_end:
             raise ValueError('Publication interval is reversed')
+
+
+    def results_for(self, provider):
+        # Legacy scalar configurations retain the same limit for all providers.
+        return self.max_results[provider] if isinstance(self.max_results, dict) else self.max_results
 
 
 class LimitReached(Exception):

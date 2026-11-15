@@ -334,7 +334,12 @@ def search_form(store, catalog=None):
             else:
                 query = st.text_area('研究要求',event.get('description',''),height=140,key=case_key+'query',disabled=is_batch,placeholder='描述需要查明的行动、参与者、交易和时间范围。')
             providers = st.multiselect('搜索服务',['baidu','bocha','exa'],default=defaults['providers'],format_func=lambda p:PROVIDERS[p]+' Search' if p=='exa' else PROVIDERS[p]+' Web Search',key='ui-search-providers')
-            count = st.number_input('每次查询、每家服务的结果上限',min_value=1,max_value=50,value=defaults['max_results'],key='ui-search-count')
+            limits = defaults['max_results']
+            count = dict(limits) if isinstance(limits, dict) else {p: limits for p in PROVIDERS}
+            for provider in providers:
+                count[provider] = st.number_input(PROVIDERS[provider]+' 每次查询结果上限', min_value=1, max_value=50,
+                    value=count.get(provider, SearchConfig().results_for(provider)), key='ui-search-count-'+provider)
+            st.caption('结果条数与 API 请求次数分别计数；三家均启用时，每组新查询计 3 次请求。')
             if event and not is_batch and not catalog:
                 st.caption(f"事件覆盖：{event.get('coverage_start') or '未限定'} → {event.get('coverage_end') or '未限定'} · 资料发表时间可另行设置")
         with st.expander('范围与已有来源'):

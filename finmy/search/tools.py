@@ -41,7 +41,7 @@ def request_payload(provider, query, config):
             raise SearchConfigurationError('Baidu requires both publication bounds; correct the task configuration before retrying.')
         payload = dict(messages=[{'role':'user','content':query}], edition='standard',
                        search_source='baidu_search_v2', query_policy={'enable_rewrite':config.baidu_rewrite},
-                       resource_type_filter=[{'type':'web','top_k':config.max_results}])
+                       resource_type_filter=[{'type':'web','top_k':config.results_for(provider)}])
         if config.include_domains:
             payload['search_filter'] = {'match': {'site': config.include_domains}}
         if config.exclude_domains:
@@ -54,12 +54,12 @@ def request_payload(provider, query, config):
             raise SearchConfigurationError('Bocha domain filter mapping is not yet verified; correct the task configuration before retrying.')
         if bool(start) != bool(end):
             raise SearchConfigurationError('Bocha requires both publication bounds; correct the task configuration before retrying.')
-        payload = dict(query=query, summary=True, count=config.max_results)
+        payload = dict(query=query, summary=True, count=config.results_for(provider))
         if start:
             payload['freshness'] = start + '..' + end
         return payload
     if provider == 'exa':
-        payload = dict(query=query, type='auto', numResults=config.max_results, contents={'text':True})
+        payload = dict(query=query, type='auto', numResults=config.results_for(provider), contents={'text':True})
         if start:
             payload['startPublishedDate'] = start + 'T00:00:00.000Z'
         if end:
@@ -141,7 +141,7 @@ class SearchTools:
             self.state.trace(dict(action='provider_started',provider=provider,query=query))
             try:
                 response = self.transport(provider, payload, config)
-                items = normalize(provider, response)[:config.max_results]
+                items = normalize(provider, response)[:config.results_for(provider)]
                 write_json(self.state.run_dir / 'responses' / (str(self.state.data['usage']['search']) + '.json'),
                            dict(provider=provider, request=payload, response=response))
                 ids = []
