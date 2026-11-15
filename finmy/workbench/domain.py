@@ -36,6 +36,11 @@ MODELS = {
     "DeepSeek V4.1 Flash": "deepseek-v4-1-flash-261017",
     "Doubao Seed 2.1 Lite": "doubao-seed-2-1-lite-260915",
 }
+# Preserve existing Ark choices in both roles; add new role-specific presets.
+ARK_MODELS = {
+    'build': {**MODELS, 'Doubao Seed Evolving': 'doubao-seed-evolving'},
+    'search': {**MODELS, 'GLM-5.3-Flash': 'glm-5-3-flash-260828'},
+}
 # Role-specific workbench presets. Values are exact TokenHub API model IDs.
 TOKENHUB_MODELS = {
     'build': {

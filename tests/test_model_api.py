@@ -16,7 +16,7 @@ from finmy.search.agent import LmbaseModel
 from finmy.search.state import SearchConfig
 from finmy.workbench.build_tasks import build_config
 from finmy.workbench.store import Store
-from finmy.workbench.domain import MODELS, TOKENHUB_MODELS
+from finmy.workbench.domain import ARK_MODELS, TOKENHUB_MODELS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PRESET_SAMPLING = {
     'doubao-seed-2-0-pro-260215': {'temperature': 1.0, 'top_p': 0.95},
     'doubao-seed-2-1-lite-260915': {'temperature': 1.0, 'top_p': 0.95},
+    'glm-5-3-flash-260828': {'temperature': 1.0, 'top_p': 0.95},
+    'doubao-seed-evolving': {'temperature': 1.0, 'top_p': 0.95},
     'glm-5-2-260617': {'temperature': 1.0, 'top_p': 0.95},
     'deepseek-v4-pro-ga-260813': {'temperature': 1.0, 'top_p': 0.95},
     'deepseek-v4-1-flash-261017': {'temperature': 1.0, 'top_p': 0.95},
@@ -34,7 +36,8 @@ PRESET_SAMPLING = {
     'hy4': {'temperature': 0.9, 'top_p': 1.0},
     'kimi-k3.1-pro': {},
 }
-PRESET_CASES = ([('ark', model) for model in MODELS.values()]
+ARK_MODEL_IDS = list(dict.fromkeys(model for models in ARK_MODELS.values() for model in models.values()))
+PRESET_CASES = ([('ark', model) for model in ARK_MODEL_IDS]
                + [('tokenhub', model) for models in TOKENHUB_MODELS.values() for model in models.values()])
 
 
@@ -202,7 +205,7 @@ def test_tokenhub_truncation_and_errors_are_not_silently_retried(transport, kind
 
 @pytest.mark.parametrize('kind', ['AgentEventBuilder', 'SparseRagBuilder'])
 @pytest.mark.parametrize('provider,remote_model',
-    [('ark', model) for model in MODELS.values()]
+    [('ark', model) for model in ARK_MODELS['build'].values()]
     + [('tokenhub', model) for model in ['vendor/synthetic-build', *TOKENHUB_MODELS['build'].values()]])
 def test_workbench_and_bounded_event_builders_use_model_policy(tmp_path, transport, kind, provider, remote_model):
     from finmy.runner.build_only_runner import select_builder, replay
@@ -275,7 +278,7 @@ def test_batch_api_remains_available_and_does_not_format_supplied_messages(trans
 
 
 @pytest.mark.parametrize('provider,purpose,remote_model',
-    [('ark', purpose, model) for purpose in ('search', 'build') for model in MODELS.values()]
+    [('ark', purpose, model) for purpose, models in ARK_MODELS.items() for model in models.values()]
     + [('tokenhub', purpose, model) for purpose, models in TOKENHUB_MODELS.items() for model in models.values()])
 def test_each_preset_reaches_its_role_transport_with_the_exact_model_id(transport, provider, purpose, remote_model):
     lm_name = provider + '/' + remote_model
@@ -356,7 +359,7 @@ def test_ark_flash_nonthinking_sampling_preserves_mode_and_limit(transport, opti
     assert original == before
 
 
-@pytest.mark.parametrize('remote_model', list(MODELS.values()))
+@pytest.mark.parametrize('remote_model', ARK_MODEL_IDS)
 def test_legacy_bare_ark_model_ids_use_the_same_sampling(transport, remote_model):
     from lmbase.inference.base import InferInput
     adapter = ModelAPIInference(remote_model, {'max_tokens': 1234, 'temperature': 0.2})

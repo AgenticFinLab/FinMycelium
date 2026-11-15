@@ -28,6 +28,8 @@ TOKENHUB_BASE_URL = 'https://tokenhub.tencentmaas.com/v1'
 MODEL_SAMPLING = {
     'ark/doubao-seed-2-0-pro-260215': {'temperature': 1.0, 'top_p': 0.95},
     'ark/doubao-seed-2-1-lite-260915': {'temperature': 1.0, 'top_p': 0.95},
+    'ark/glm-5-3-flash-260828': {'temperature': 1.0, 'top_p': 0.95},
+    'ark/doubao-seed-evolving': {'temperature': 1.0, 'top_p': 0.95},
     'ark/glm-5-2-260617': {'temperature': 1.0, 'top_p': 0.95},
     'ark/deepseek-v4-pro-ga-260813': {'temperature': 1.0, 'top_p': 0.95},
     'ark/deepseek-v4-1-flash-261017': {'temperature': 1.0, 'top_p': 0.95},

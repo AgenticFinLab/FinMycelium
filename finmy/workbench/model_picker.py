@@ -2,7 +2,7 @@
 import streamlit as st
 
 from finmy.model_config import MODEL_PROVIDERS, model_name
-from finmy.workbench.domain import MODELS, TOKENHUB_MODELS
+from finmy.workbench.domain import ARK_MODELS, TOKENHUB_MODELS
 
 
 def model_picker(default, key, *, purpose, label='模型'):
@@ -21,7 +21,7 @@ def model_picker(default, key, *, purpose, label='模型'):
     value = identifier if provider == current else ''
     if provider == 'tokenhub':
         st.caption('读取本地 HUNYUAN_API_KEY 与 HUNYUAN_BASE_URL；不自动查询模型或调用接口。')
-    presets = MODELS if provider == 'ark' else TOKENHUB_MODELS[purpose] if provider == 'tokenhub' else {}
+    presets = ARK_MODELS[purpose] if provider == 'ark' else TOKENHUB_MODELS[purpose] if provider == 'tokenhub' else {}
     if presets:
         names = list(presets) + ['自定义']
         selected = next((name for name, mid in presets.items() if mid == value), '自定义')
