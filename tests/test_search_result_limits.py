@@ -21,18 +21,18 @@ def test_per_provider_payload_caps_shared_requests_and_cached_replay(tmp_path):
         items=[dict(url=f'https://example.org/{provider}/{query}/{i}',title='Original title') for i in range(10)]
         return {'references':items} if provider=='baidu' else {'data':{'webPages':{'value':items}}} if provider=='bocha' else {'results':items}
     tools=SearchTools(state,transport=transport)
-    assert request_payload('baidu','query',cfg)['resource_type_filter'][0]['top_k']==4
-    assert request_payload('bocha','query',cfg)['count']==4
-    assert request_payload('exa','query',cfg)['numResults']==8
-    for n in range(4):
-        assert len(tools.search('q'+str(n))['source_ids'])==16
-    assert state.data['usage']['search']==12 and Counter(calls)=={'baidu':4,'bocha':4,'exa':4}
+    assert request_payload('baidu','query',cfg)['resource_type_filter'][0]['top_k']==3
+    assert request_payload('bocha','query',cfg)['count']==3
+    assert request_payload('exa','query',cfg)['numResults']==5
+    for n in range(8):
+        assert len(tools.search('q'+str(n))['source_ids'])==11
+    assert state.data['usage']['search']==24 and Counter(calls)=={'baidu':8,'bocha':8,'exa':8}
     counts=Counter(s['discoveries'][0]['provider'] for s in state.data['sources'].values())
-    assert counts=={'baidu':16,'bocha':16,'exa':32}
-    assert len(tools.search('q0')['source_ids'])==16 and len(calls)==12
-    assert all(p['status']=='limit' for p in tools.search('q4')['providers'])
+    assert counts=={'baidu':24,'bocha':24,'exa':40}
+    assert len(tools.search('q0')['source_ids'])==11 and len(calls)==24
+    assert all(p['status']=='limit' for p in tools.search('q8')['providers'])
     resumed=SearchState(tmp_path,'case')
-    assert asdict(resumed.config)==asdict(cfg) and resumed.data['usage']['search']==12
+    assert asdict(resumed.config)==asdict(cfg) and resumed.data['usage']['search']==24
 
 
 def test_scalar_saved_settings_keep_their_original_limits(tmp_path):

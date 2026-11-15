@@ -1,8 +1,8 @@
 # Search configuration; independent of Builder settings.
 # Opt-in search only; the existing simple runner defaults are unchanged.
 providers: [bocha]  # Select baidu, bocha, exa, or a list of them.
-max_results: {baidu: 4, bocha: 4, exa: 8}  # Per query; legacy scalar values remain supported.
-max_search_requests: 12
+max_results: {baidu: 3, bocha: 3, exa: 5}  # Per query; legacy scalar values remain supported.
+max_search_requests: 24
 max_read_sources: 30
 max_model_calls: 60
 max_read_chars: 12000

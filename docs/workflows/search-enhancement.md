@@ -173,8 +173,8 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | Search setting | Default / meaning |
 |---|---|
 | `providers` | `[bocha]`; select any combination of `baidu`, `bocha`, `exa` |
-| `max_results` | `{baidu: 4, bocha: 4, exa: 8}` per query; a saved integer still applies equally to all selected providers |
-| `max_search_requests` | 12 per task, shared across providers, initial search and follow-up |
+| `max_results` | `{baidu: 3, bocha: 3, exa: 5}` per query; a saved integer still applies equally to all selected providers |
+| `max_search_requests` | 24 per task, shared across providers, initial search and follow-up |
 | `max_read_sources` | 30 distinct sources; rereading a source does not consume a new source slot |
 | `max_model_calls` | 60 attempted search-side model requests, including failures |
 | `max_read_chars` | 12,000 per source-read operation |
@@ -206,7 +206,10 @@ citation labels are separate from runtime source IDs; planning notes are not pro
 reading in the current run. JSON mode is requested from the provider, but returned content
 still passes strict decoding and validation before execution. Reads may include an optional
 `gap` explanation. Position reads use `location: {"block": 0, "offset": 0}`; cursor
-fields at action level are rejected with a correction hint. Finish uses `reason_detail`; the explanatory alias
+fields at action level are moved into `location` when unambiguous, with a trace record.
+An empty query beside a cursor is omitted; nonempty query/cursor combinations and conflicting
+positions remain errors. Unread-source exclusions are saved as uninspected candidate notes,
+not content reviews, and do not block finish. Unknown IDs and unread-source admission remain errors. Finish uses `reason_detail`; the explanatory alias
 `finalization_reason` is also accepted, with `reason_detail` taking precedence. Explanations stay
 in the run record, never in source evidence, and cannot override the controlled stop
 reason or budgets. Unknown action fields are reported explicitly for correction.

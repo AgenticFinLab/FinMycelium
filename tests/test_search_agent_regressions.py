@@ -168,7 +168,7 @@ def test_default_search_profile_matches_python_and_leaves_network_off():
 def test_daily_limits_and_followup_gap_guard(tmp_path):
     from finmy.search.agent import execute_action
     cfg=SearchConfig(providers=['baidu','bocha','exa'])
-    assert (cfg.max_results,cfg.max_search_requests,cfg.max_read_sources,cfg.max_model_calls)==({'baidu':4,'bocha':4,'exa':8},12,30,60)
+    assert (cfg.max_results,cfg.max_search_requests,cfg.max_read_sources,cfg.max_model_calls)==({'baidu':3,'bocha':3,'exa':5},24,30,60)
     state=SearchState(tmp_path,'case',task=task(),config=cfg)
     calls=[]
     def observed(provider,payload,config):
@@ -208,7 +208,7 @@ def test_rejected_query_feedback_includes_length_and_query_without_provider_call
         contexts.append(context)
         if len(contexts)==1:return dict(action='search',query=too_long)
         if len(contexts)==2:
-            assert calls==[] and context['remaining']['search']==12
+            assert calls==[] and context['remaining']['search']==config.max_search_requests
             assert '76 units' in context['feedback']['hint']
             assert 'limit is 72' in context['feedback']['hint']
             assert too_long in context['feedback']['hint']

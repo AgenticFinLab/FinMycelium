@@ -36,10 +36,10 @@ Return ONE JSON action, then wait; no prose/XML/DSML or invented results:
 {"action":"search","query":"short question","provider_queries":{},"gap":"Missing fact, importance and why current evidence is insufficient"}
 {"action":"read_source","source":"runtime ID or public URL","query":"passage keywords"}
 {"action":"finish","source_ids":["inspected ID"],"source_exclusions":{},"priority_passages":[],"gaps":["question and attempt status"],"reason":"supported|low_gain|insufficient","reason_detail":"Evidence and limits"}
-Follow tool_constraints; aim below 60 units for a 72-unit limit. Put read rationale in gap.
-Use distinctive names/actions, not just broad years or report vocabulary, for long-body reads.
-Copy runtime IDs; planning SRC-* citations are not reads.
-For sequential reading REPLACE query with location: {"block":0,"offset":0}.
+Follow tool_constraints; for a 72-unit limit aim below 60. Read rationale goes in gap.
+Read long bodies with distinctive names/actions, not broad years/report words.
+Use runtime IDs; planning SRC-* citations are not reads.
+For sequential reading use {"action":"read_source","source":"runtime ID","location":{"block":0,"offset":0}}; omit query.
 Copy read_location; block/start/end identifies an evidence range, not a cursor.
 
 Mark decisive PREVIOUSLY READ passages on the next action; at finish add only missing marks:
@@ -59,17 +59,18 @@ no_match is lexical, not absence. Partial expansion gets one URL attempt; saved 
 end before the article. Keep cached originals on failure; respect fetch_error, retry_skipped
 and retry_in_seconds. New reading keywords cannot fix access or fetch missing parts.
 
-Use progress.new_chars and research_progress, not returned length. Purposeful verification
-is allowed; mark useful originals promptly. After repeated zero gain, change source,
+Use progress.new_chars/research_progress, not returned length. Verification is allowed;
+mark useful originals. After repeated zero gain, change source,
 unread location or query, or finish. In finalize, return finish ONLY and explain the
 constraint. For no_reading_progress use low_gain or insufficient, retaining gaps; this
 stop does not certify coverage. No provider quotas, minimum counts or spending targets.
 
-At finish list source_ids or source_exclusions: {"runtime ID":"reason"}, never both.
+Finish: source_ids contains inspected IDs; source_exclusions maps IDs to reasons; no overlap.
+Unread exclusions are candidate notes, not body reviews.
 Unmentioned inspected sources remain candidates. For person_event, judge personal-action
 evidence too: repeated facts or secondary status alone do not justify exclusion.
-Mark useful statements and qualifications; trace their original if needed. Keep independent
-support and conflicts, without endorsing commentary. Do not cap sources or pre-trim;
+Mark statements/qualifications; trace originals. Keep independent support and conflicts,
+without endorsing commentary. Do not cap sources or pre-trim;
 the program validates marks and allocates original text within budget.
 '''
 
@@ -259,6 +260,37 @@ def execute_action(state, tools, action):
              'finish':{'action','source_ids','source_exclusions','selections','gaps','reason','reason_detail','finalization_reason'}}
     if not isinstance(kind,str) or kind not in allowed:
         raise ValueError('Unknown action; choose search, read_source or finish')
+    # Repair only unambiguous cursor placement; never choose between query and cursor.
+    if kind == 'read_source' and ({'block', 'offset'} & set(action) or action.get('location')):
+        action = dict(action)
+        location = action.get('location', {})
+        if not isinstance(location, dict):
+            raise ValueError('Reading location must be an object')
+        location = dict(location)
+        moved = []
+        for key in ('block', 'offset'):
+            if key in action:
+                value = action.pop(key)
+                if type(value) is not int or value < 0:
+                    raise ValueError('Reading cursor must use nonnegative integers')
+                if key in location and (type(location[key]) is not int or location[key] != value):
+                    raise ValueError('Conflicting reading cursor fields; use location only')
+                location[key] = value
+                moved.append(key)
+        if set(location) - {'block', 'offset'} or any(type(v) is not int or v < 0 for v in location.values()):
+            raise ValueError('Reading cursor must use nonnegative block/offset integers')
+        if moved and 'block' not in location:
+            raise ValueError('Position reading requires a block; copy read_location')
+        empty_query = isinstance(action.get('query'), str) and not action['query'].strip()
+        if empty_query:
+            action.pop('query')
+        if action.get('query') is not None:
+            raise ValueError('Choose query OR location; omit block/offset for keyword reading, or omit query for position reading')
+        action['location'] = location
+        if moved or empty_query:
+            state.trace(dict(action='action_normalized', operation='read_source',
+                             source=action.get('source'), moved_fields=moved,
+                             removed_empty_query=empty_query, location=location))
     fields=allowed[kind]|{'priority_passages'}|({'person_evidence'} if kind=='finish' else set())
     unknown=set(action)-fields
     if unknown:

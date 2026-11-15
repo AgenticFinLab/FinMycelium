@@ -106,7 +106,7 @@ class SearchTests(unittest.TestCase):
         from finmy.search.errors import SearchConfigurationError
         state=self.state()
         payload=request_payload('baidu','deal',state.config)
-        self.assertEqual(payload['resource_type_filter'],[{'type':'web','top_k':4}])
+        self.assertEqual(payload['resource_type_filter'],[{'type':'web','top_k':3}])
         self.assertFalse(payload['query_policy']['enable_rewrite'])
         with self.assertRaises(SearchConfigurationError): SearchTools(state).search('deal')
 

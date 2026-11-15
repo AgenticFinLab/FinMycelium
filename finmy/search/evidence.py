@@ -14,7 +14,7 @@ def source_pool(state, proposed, exclusions=None):
     if (not isinstance(exclusions, dict)
             or any(not isinstance(sid, str) or not isinstance(reason, str)
                    or not reason.strip() or len(reason) > 300 for sid, reason in exclusions.items())):
-        raise ValueError('source_exclusions must map inspected source IDs to brief nonempty reasons (up to 300 characters)')
+        raise ValueError('source_exclusions must map known source IDs to brief nonempty reasons (up to 300 characters)')
     sources = state.data['sources']
     inspected = {sid:entry['version'] for sid,entry in sources.items()
                  if entry.get('version') and entry.get('status') in {'success','partial'}
@@ -23,16 +23,19 @@ def source_pool(state, proposed, exclusions=None):
     for sid in set(proposed) | set(exclusions):
         if sid not in sources:
             raise ValueError('Unknown source ID: ' + sid)
-        if sid not in inspected:
-            raise ValueError('Inspect this source before deciding retention: ' + sid)
+        if sid in proposed and sid not in inspected:
+            raise ValueError('Inspect this source before retaining it: ' + sid)
     if set(proposed) & set(exclusions):
         raise ValueError('A source cannot appear in both source_ids and source_exclusions')
+    uninspected = {sid: dict(reason=reason, status='uninspected', evidence_reviewed=False)
+                   for sid,reason in exclusions.items() if sid not in inspected}
+    exclusions = {sid:reason for sid,reason in exclusions.items() if sid in inspected}
     proposed = list(dict.fromkeys(proposed))
     recovered = sorted(set(inspected) - set(proposed) - set(exclusions))
     retained = proposed + recovered
     review = dict(policy='inspected_source_pool_v1', proposed_source_ids=proposed,
                   automatically_retained=recovered, exclusions=dict(exclusions),
-                  inspected_versions=inspected,
+                  inspected_versions=inspected, uninspected_exclusions=uninspected,
                   note='Inspected candidates, not factual verification; cleanup and character allocation follow')
     return retained, review
 

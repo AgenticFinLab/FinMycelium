@@ -151,11 +151,33 @@ def test_failed_lead_can_trace_an_original_with_existing_search_and_read_budgets
     assert 'conditional on community approval' in payload['samples'][0]['content']
 
 
-def test_misnested_cursor_is_rejected_before_fetch_with_precise_correction(tmp_path):
+def test_misnested_cursor_reads_exact_position_without_extra_model_call(tmp_path):
+    state = SearchState(tmp_path, 'case', task=TASK)
+    store = SourceStore(state)
+    sid = store.register('https://example.org/interview')
+    store.save_raw(sid, b'First statement. Then consent was given.', 'txt')
+    action = dict(action='read_source', source=sid, block=0, offset=17, query='')
+    before = deepcopy(action)
+    result = execute_action(state, SearchTools(state), action)
+    assert result['spans'][0]['start'] == 17
+    assert result['spans'][0]['text'].startswith('Then consent')
+    assert action == before and state.data['usage']['model'] == 0
+    events = [json.loads(line) for line in (state.run_dir/'trace.jsonl').read_text().splitlines()]
+    repair = next(e for e in events if e['action'] == 'action_normalized')
+    assert repair['location'] == {'block':0, 'offset':17} and repair['removed_empty_query']
+
+
+@pytest.mark.parametrize('fields', [
+    {'block':0, 'offset':0, 'query':'consent'},
+    {'block':0, 'location':{'block':1}},
+    {'block':True}, {'block':-1}, {'offset':10},
+    {'block':0, 'location':{'start':0}},
+])
+def test_ambiguous_or_invalid_cursor_never_fetches(tmp_path, fields):
     state = SearchState(tmp_path, 'case', task=TASK)
     sid = lead(SourceStore(state), 'interview')
     tools = SearchTools(state, fetcher=lambda *a:pytest.fail('Invalid cursor must not fetch'))
     before = deepcopy(state.data)
-    with pytest.raises(ValueError, match='put block/offset inside location'):
-        execute_action(state, tools, dict(action='read_source', source=sid, block=0, offset=0))
+    with pytest.raises(ValueError):
+        execute_action(state, tools, dict(action='read_source', source=sid, **fields))
     assert state.data == before

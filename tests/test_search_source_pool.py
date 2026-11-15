@@ -80,8 +80,10 @@ def test_unread_new_version_and_failed_acquisition_are_not_promoted(tmp_path):
     assert source_pool(state, [])[0] == []
     with pytest.raises(ValueError, match='Inspect'):
         source_pool(state, [sid])
-    with pytest.raises(ValueError, match='Inspect'):
-        source_pool(state, [], {sid:'Not relevant'})
+    retained, review = source_pool(state, [], {sid:'Not relevant', failed:'Unavailable'})
+    assert retained == [] and review['exclusions'] == {}
+    assert set(review['uninspected_exclusions']) == {sid, failed}
+    assert all(not note['evidence_reviewed'] for note in review['uninspected_exclusions'].values())
 
 
 def test_invalid_or_conflicting_decisions_do_not_silently_change_retention(tmp_path):
@@ -105,3 +107,23 @@ def test_duplicate_bodies_still_collapse_after_automatic_retention(tmp_path):
     payload = json.loads((state.run_dir/'builder_input.json').read_text())
     assert complete['source_review']['automatically_retained'] == [second]
     assert len(payload['samples']) == 1 and complete['duplicates'][0]['duplicate_of'] == first
+
+
+def test_unread_exclusion_does_not_block_finish_or_claim_inspection(tmp_path):
+    state, store = setup(tmp_path)
+    read, _ = saved(store, 'statement', 'I accepted after community consent.')
+    unread, _ = saved(store, 'candidate', 'Unread material.', read=False)
+    calls = []
+    def model(context):
+        calls.append(context)
+        return dict(action='finish', source_ids=[read], source_exclusions={unread:'Already inspected; unrelated'},
+                    gaps=[], reason='supported')
+    run_agent(state, SearchTools(state), model)
+    payload = json.loads((state.run_dir/'builder_input.json').read_text())
+    selection = json.loads((state.run_dir/'selection.json').read_text())
+    assert len(calls) == 1 and state.data['status'] == 'finished'
+    assert [s['raw_data_id'] for s in payload['samples']] == [read]
+    review = selection['source_review']
+    assert unread not in review['inspected_versions'] and unread not in review['exclusions']
+    assert review['uninspected_exclusions'][unread]['status'] == 'uninspected'
+    assert review['uninspected_exclusions'][unread]['evidence_reviewed'] is False

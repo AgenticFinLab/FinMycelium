@@ -27,8 +27,8 @@ def write_json(path, value):
 @dataclass
 class SearchConfig:
     providers: list = field(default_factory=lambda: ['bocha'])
-    max_results: int | dict = field(default_factory=lambda: {'baidu': 4, 'bocha': 4, 'exa': 8})
-    max_search_requests: int = 12
+    max_results: int | dict = field(default_factory=lambda: {'baidu': 3, 'bocha': 3, 'exa': 5})
+    max_search_requests: int = 24
     max_read_sources: int = 30
     max_model_calls: int = 60
     max_read_chars: int = 12000
