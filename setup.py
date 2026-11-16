@@ -37,7 +37,11 @@ setuptools.setup(
     install_requires=get_requirements(),
     extras_require={"tests": ["pytest"]},
     include_package_data=True,
-    package_data={"finmy.workbench": ["style.css"], "finmy.person_epg.event": ["graph.html", "graph_layout_goldman.json"]},
+    package_data={
+        "finmy.workbench": ["style.css"],
+        "finmy.person_epg": ["schema.json", "schema_model.json", "gantt.html"],
+        "finmy.person_epg.event": ["graph.html", "graph_layout_goldman.json"],
+    },
     options={"bdist_wheel": {"python_tag": "py311"}},
     classifiers=[
         "Development Status :: 3 - Alpha",

@@ -1,26 +1,76 @@
-"""Render a portable, interactive graph from a saved native person event."""
-from hashlib import sha256
+"""Render or export a portable visualization of a saved native person event."""
+import argparse
+from functools import lru_cache
 import json
 from pathlib import Path
 
+from .records import fingerprint
+from .schema import GRAPH_VERSION
+
+_ASSETS = Path(__file__).parent
+
 
 def _script_data(value):
-    # Prevent source text from closing the script data element.
+    # Prevent record text from closing a script data element.
     return json.dumps(value, ensure_ascii=False, allow_nan=False).replace('<', r'\u003c')
 
 
-def render_graph_html(graph):
-    """Embed the graph and, when available, its authored layout in one document."""
-    if graph.get('schema_version') != 'person-event-1.0':
-        raise ValueError('The EPG viewer requires a person-event-1.0 graph')
-    template = Path(__file__).with_name('graph.html').read_text(encoding='utf-8')
-    layout = None
-    if graph['event']['event_id'] == 'PERSON-0001-E0034':
-        authored = json.loads(Path(__file__).with_name('graph_layout_goldman.json').read_text(encoding='utf-8'))
-        canonical = json.dumps(graph, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
-        if sha256(canonical).hexdigest() == authored['digest']:
-            layout = authored['pages']
-    # Replace both placeholders in the template before embedding user content.
+def _read_json(path):
+    with path.open(encoding='utf-8-sig') as stream:
+        return json.load(stream)
+
+
+@lru_cache(maxsize=1)
+def _bundled_layout():
+    return _read_json(_ASSETS / 'graph_layout_goldman.json')
+
+
+def _layout_pages(graph, layout):
+    authored = _bundled_layout() if layout is None else layout
+    if not isinstance(authored, dict) or not isinstance(authored.get('digest'), str):
+        raise ValueError('An authored layout needs a graph digest')
+    if fingerprint(graph) != authored['digest']:
+        if layout is not None:
+            raise ValueError('The authored layout digest does not match the input graph')
+        return None
+
+    pages = authored.get('pages')
+    if not isinstance(pages, list) or not pages:
+        raise ValueError('An authored layout must contain at least one page')
+    required = {'title', 'phase', 'cards', 'paths', 'labels', 'evidence', 'jumps'}
+    if any(not isinstance(page, dict) or not required <= page.keys() for page in pages):
+        raise ValueError('Each layout page needs title, phase, cards, paths, labels, evidence and jumps')
+    return pages
+
+
+def render_graph_html(graph, *, layout=None):
+    """Embed the graph and a matching authored layout in one offline document."""
+    if not isinstance(graph, dict) or graph.get('schema_version') != GRAPH_VERSION:
+        raise ValueError(f'The EPG viewer requires a {GRAPH_VERSION} graph')
+    pages = _layout_pages(graph, layout)
+    template = (_ASSETS / 'graph.html').read_text(encoding='utf-8')
+    # Split both markers before embedding record text that may contain a marker.
     head, remainder = template.split('__EPG_GRAPH_JSON__', 1)
     between, tail = remainder.split('__EPG_LAYOUT_JSON__', 1)
-    return head + _script_data(graph) + between + _script_data(layout) + tail
+    return head + _script_data(graph) + between + _script_data(pages) + tail
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('graph', type=Path, help='Saved person event JSON')
+    parser.add_argument('-o', '--output', required=True, type=Path, help='Destination HTML file')
+    parser.add_argument('--layout', type=Path, help='Optional authored layout JSON for this exact graph')
+    args = parser.parse_args(argv)
+    inputs = (path for path in (args.graph, args.layout) if path is not None)
+    if any(args.output.resolve() == path.resolve() for path in inputs):
+        parser.error('The output path must differ from the input paths')
+    try:
+        html = render_graph_html(_read_json(args.graph), layout=_read_json(args.layout) if args.layout else None)
+        args.output.write_text(html, encoding='utf-8')
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    print(f'Wrote {args.output}')
+
+
+if __name__ == '__main__':
+    main()
