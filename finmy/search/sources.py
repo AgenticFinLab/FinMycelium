@@ -1,5 +1,5 @@
 """Versioned raw sources and stable paragraph/page locations."""
-from html.parser import HTMLParser
+from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime, timezone
@@ -12,6 +12,7 @@ import re
 import socket
 
 from .state import digest, now, write_json
+from .html import extract_html, navigation_hints
 
 
 def canonical_url(url):
@@ -19,45 +20,6 @@ def canonical_url(url):
     if p.scheme not in {'http', 'https'} or not p.hostname or p.username or p.password:
         raise ValueError('Expected public HTTP(S) source URL')
     return urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path or '/', p.query, ''))
-
-
-class ParagraphParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.parts, self.current, self.hidden = [], [], 0
-        self.scopes = {'article': 0, 'main': 0}
-        self.scoped_parts = {'article': [], 'main': []}
-
-    def flush(self):
-        text = ''.join(self.current).strip()
-        if text:
-            self.parts.append(text)
-            for tag, depth in self.scopes.items():
-                if depth:
-                    self.scoped_parts[tag].append(text)
-        self.current = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag in self.scopes:
-            self.flush()
-            self.scopes[tag] += 1
-        if tag in {'script', 'style', 'noscript'}:
-            self.hidden += 1
-        if not self.hidden and tag in {'p', 'div', 'br', 'li', 'tr', 'h1', 'h2', 'h3', 'section'}:
-            self.flush()
-
-    def handle_endtag(self, tag):
-        if tag in self.scopes:
-            self.flush()
-            self.scopes[tag] = max(0, self.scopes[tag] - 1)
-        if tag in {'script', 'style', 'noscript'}:
-            self.hidden = max(0, self.hidden - 1)
-        if not self.hidden and tag in {'p', 'div', 'li', 'tr', 'h1', 'h2', 'h3', 'section'}:
-            self.flush()
-
-    def handle_data(self, text):
-        if not self.hidden:
-            self.current.append(text)
 
 
 def pdf_blocks(text, page, max_chars=1600):
@@ -89,7 +51,21 @@ def pdf_blocks(text, page, max_chars=1600):
     return blocks or [dict(page=page, paragraph=1, start=0, end=0, text='')]
 
 
-def parse_document(raw, kind, encoding='utf-8'):
+@dataclass
+class FetchedDocument:
+    raw: bytes
+    kind: str
+    encoding: str | None = None
+    metadata: dict = field(default_factory=dict)
+
+    def __iter__(self):
+        # Preserve the public three-item fetcher contract used by offline callers.
+        return iter((self.raw, self.kind, self.encoding))
+
+
+def parse_source(raw, kind, encoding=None, *, url=''):
+    if kind == 'html':
+        return extract_html(raw, encoding, url=url)
     if kind == 'pdf':
         try:
             from pypdf import PdfReader
@@ -98,20 +74,21 @@ def parse_document(raw, kind, encoding='utf-8'):
         reader = PdfReader(BytesIO(raw))
         if reader.is_encrypted:
             raise ValueError('Encrypted PDF')
-        return [block for i, page in enumerate(reader.pages)
-                for block in pdf_blocks(page.extract_text() or '', i + 1)]
-    text = raw.decode(encoding)
-    if kind == 'html':
-        parser = ParagraphParser()
-        parser.feed(text)
-        parser.flush()
-        # Keep introductions/questions alongside a nested article inside <main>.
-        blocks = parser.scoped_parts['main'] or parser.scoped_parts['article'] or parser.parts
+        blocks = [block for i, page in enumerate(reader.pages)
+                  for block in pdf_blocks(page.extract_text() or '', i + 1)]
     elif kind == 'txt':
-        blocks = [x for x in text.split('\n\n') if x.strip()]
+        text = raw.decode(encoding or 'utf-8')
+        blocks = [dict(paragraph=i+1, text=p) for i, p in
+                  enumerate(x for x in text.split('\n\n') if x.strip())]
     else:
-        raise ValueError('Unsupported source format')
-    return [{'paragraph': i + 1, 'text': p} for i, p in enumerate(blocks)]
+        return dict(blocks=[], status='unsupported', parser_version='search-v3', encoding=encoding)
+    return dict(blocks=blocks, status='success' if any(b['text'].strip() for b in blocks) else 'empty',
+                parser_version='search-v3', encoding=encoding)
+
+
+def parse_document(raw, kind, encoding=None):
+    """Compatibility helper; persisted documents also retain parsing diagnostics."""
+    return parse_source(raw, kind, encoding)['blocks']
 
 
 def fetch_public(url, config, *, timeout=None):
@@ -120,7 +97,8 @@ def fetch_public(url, config, *, timeout=None):
         raise PermissionError('Network execution is disabled')
     import requests
     from urllib.parse import urljoin
-    deadline = time.monotonic() + timeout if timeout is not None else None
+    requested_url = url
+    deadline = time.monotonic() + (timeout if timeout is not None else config.timeout)
     for _ in range(6):
         url = canonical_url(url)
         p = urlsplit(url)
@@ -145,8 +123,13 @@ def fetch_public(url, config, *, timeout=None):
                 chunks.append(chunk)
             raw = b''.join(chunks)
             mime = response.headers.get('Content-Type', '').lower()
-            kind = 'pdf' if raw.startswith(b'%PDF') else 'html' if 'html' in mime else 'txt' if 'text/plain' in mime else 'unsupported'
-            return raw, kind, response.encoding or 'utf-8'
+            kind = ('pdf' if raw.startswith(b'%PDF') else 'html' if 'html' in mime or
+                    re.match(br'\s*(?:<!doctype\s+html|<html|<head|<body)\b', raw[:200], re.I)
+                    else 'txt' if 'text/plain' in mime else 'unsupported')
+            charset = re.search(r'charset\s*=\s*[\"\']?([^\s;\"\']+)', mime)
+            encoding = charset.group(1) if charset else None
+            return FetchedDocument(raw, kind, encoding, dict(requested_url=requested_url,
+                final_url=url, content_type=mime, http_status=response.status_code))
     raise ValueError('Too many redirects')
 
 
@@ -235,26 +218,30 @@ class SourceStore:
         self.save_raw(sid, raw, {'.pdf': 'pdf', '.html': 'html', '.htm': 'html', '.txt': 'txt'}.get(path.suffix.lower(), 'unsupported'))
         return sid
 
-    def save_raw(self, sid, raw, kind, encoding='utf-8', partial=False):
+    def save_raw(self, sid, raw, kind, encoding=None, partial=False, *, fetch_metadata=None, parsed=None):
         entry = self.state.data['sources'][sid]
+        if len(raw) > self.state.config.max_download_bytes:
+            raise ValueError('Document exceeds download limit')
         version = digest(raw)
         folder = self.state.root / 'sources' / sid / version
         if version in entry['versions']:
             # Reusing raw bytes must also reuse their saved parser and locations.
             document = self.document(sid, version)
-            entry.update(version=version, status=document['status'])
+            self._activate(entry, document)
             self.state.save()
             return document
         folder.mkdir(parents=True, exist_ok=True)
         (folder / 'raw').write_bytes(raw)
         try:
-            blocks = parse_document(raw, kind, encoding)
-            status = ('partial' if partial else 'success') if any(b['text'].strip() for b in blocks) else 'empty'
+            parsed = parsed or parse_source(raw, kind, encoding,
+                url=(fetch_metadata or {}).get('final_url', entry['url']))
         except Exception as exc:
-            blocks, status = [], 'parser_failed'
-            entry['error_type'] = type(exc).__name__
-        document = dict(version=version, blocks=blocks, status=status, kind=kind,
-                        retrieved_at=now(), parser_version='search-v3', encoding=encoding)
+            parsed = dict(blocks=[], status='parser_failed', error_type=type(exc).__name__,
+                          parser_version='search-html-v4' if kind == 'html' else 'search-v3', encoding=encoding)
+        if partial and parsed['status'] == 'success':
+            parsed = dict(parsed, status='partial')
+        document = dict(parsed, version=version, kind=kind, retrieved_at=now(),
+                        fetch_metadata=fetch_metadata or {})
         if not (folder / 'parsed.json').exists():
             write_json(folder / 'parsed.json', document)
         else:
@@ -262,9 +249,43 @@ class SourceStore:
         if version not in entry['versions']:
             entry['versions'].append(version)
         entry.setdefault('parsed_hashes', {})[version] = digest((folder / 'parsed.json').read_bytes())
-        entry.update(version=version, status=document['status'])
+        self._activate(entry, document)
         self.state.save()
         return document
+
+    @staticmethod
+    def _activate(entry, document):
+        entry.update(version=document['version'], status=document['status'])
+        metadata = document.get('metadata', {})
+        entry['document_metadata'] = metadata
+        if not entry.get('title') and metadata.get('title'):
+            entry['title'] = metadata['title']
+        if document.get('error_type'):
+            entry['error_type'] = document['error_type']
+        else:
+            entry.pop('error_type', None)
+
+    def register_link(self, url):
+        """Associate an explicitly followed observed link, without crawling it."""
+        url = canonical_url(url)
+        parents = []
+        for sid, entry in list(self.state.data['sources'].items()):
+            observations = [(entry.get('document_metadata', {}).get('links', []),
+                             dict(source_version=entry.get('version')))]
+            for attempt in entry.get('acquisition_attempts', {}).values():
+                if attempt.get('artifact'):
+                    observations.append((attempt.get('navigation', {}).get('observed_links', []),
+                        dict(source_version=attempt['raw_sha256'], source_artifact=attempt['artifact'])))
+            for links, origin in observations:
+                for link in links:
+                    if link['url'] == url and entry['url'] != url:
+                        parents.append(dict(provider='source_link', source_id=sid, **origin,
+                                            relation=link['relation'], text=link['text']))
+        sid = self.register(url)
+        for parent in parents:
+            if parent not in self.state.data['sources'][sid]['discoveries']:
+                self.register(url, discovery=parent)
+        return sid
 
     def document(self, sid, version=None):
         import json
@@ -300,16 +321,37 @@ class SourceStore:
         self.state.trace(dict(action='source_acquisition_started', source=sid, **attempt))
         started = time.monotonic()
         try:
-            raw, kind, encoding = self.partial_fetcher(entry['url'])
+            fetched = self.partial_fetcher(entry['url'])
+            raw, kind, encoding = fetched
+            fetch_metadata = getattr(fetched, 'metadata', {})
             if len(raw) > self.state.config.max_download_bytes:
                 raise ValueError('Document exceeds download limit')
-            blocks = parse_document(raw, kind, encoding)
-            if extends_saved_body(old['blocks'], blocks):
-                document = self.save_raw(sid, raw, kind, encoding)
+            if digest(raw) in entry['versions']:
+                # A known download keeps its original parse/status too. Do not
+                # assess new text then accidentally activate an older bad parse.
+                parsed = self.document(sid, digest(raw))
+            else:
+                try:
+                    parsed = parse_source(raw, kind, encoding, url=fetch_metadata.get('final_url', entry['url']))
+                except Exception as exc:
+                    parsed = dict(blocks=[], status='parser_failed', error_type=type(exc).__name__)
+            if parsed['status'] == 'success' and extends_saved_body(old['blocks'], parsed['blocks']):
+                document = self.save_raw(sid, raw, kind, encoding, fetch_metadata=fetch_metadata, parsed=parsed)
                 attempt.update(status='expanded', version=document['version'],
                                saved_chars=sum(len(b['text']) for b in document['blocks']))
             else:
-                attempt.update(status='kept_cached', reason='No recognizable body expansion')
+                # Preserve rejected downloads outside adopted source versions. An
+                # error/shell is never evidence, and old read locations do not move.
+                collection = 'sources' if digest(raw) in entry['versions'] else 'acquisitions'
+                folder = self.state.root / collection / sid / digest(raw)
+                folder.mkdir(parents=True, exist_ok=True)
+                if not (folder / 'raw').exists():
+                    (folder / 'raw').write_bytes(raw)
+                    write_json(folder / 'parsed.json', dict(parsed, fetch_metadata=fetch_metadata))
+                attempt.update(status='kept_cached', reason='No recognizable usable body expansion',
+                    downloaded_status=parsed['status'], raw_sha256=digest(raw),
+                    artifact=str(folder.relative_to(self.state.root)),
+                    navigation=navigation_hints(parsed.get('metadata', {})))
         except Exception as exc:
             attempt.update(status='kept_cached', **fetch_failure(exc))
         attempt['duration_seconds'] = round(time.monotonic() - started, 3)
@@ -340,8 +382,9 @@ class SourceStore:
             attempts.append(attempt)
             self.state.save()
             try:
-                raw, kind, encoding = self.fetcher(entry['url'])
-                self.save_raw(sid, raw, kind, encoding)
+                fetched = self.fetcher(entry['url'])
+                raw, kind, encoding = fetched
+                self.save_raw(sid, raw, kind, encoding, fetch_metadata=getattr(fetched, 'metadata', {}))
                 attempt['status'] = entry['status']
                 entry.pop('fetch_error', None)
                 self.state.save()
@@ -357,6 +400,12 @@ class SourceStore:
             self.complete_partial(sid)
         doc = self.document(sid)
         blocks = doc['blocks']
+        if doc['status'] not in {'success', 'partial'}:
+            return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=[],
+                acquisition_error=dict(stage='parse', category=doc['status'], retryable=False,
+                    hint='No usable body acquired. Trace the title, author, quoted lead or an observed '
+                         'link to an accessible original; changing reading keywords cannot fix this.'),
+                navigation=navigation_hints(doc.get('metadata', {})))
         if query is not None:
             from .reading import targeted_spans, read_coverage
             spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,

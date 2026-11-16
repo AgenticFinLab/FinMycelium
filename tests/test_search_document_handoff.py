@@ -77,7 +77,10 @@ def test_duplicates_and_conservative_cleanup_are_accounted_for(tmp_path):
     assert len(payload['samples'])==1
     assert payload['samples'][0]['content'].count(text.strip())==1
     assert record['duplicates']==[dict(source_id=b,version=state.data['sources'][b]['version'],duplicate_of=a)]
-    assert {r['reason'] for r in record['cleanup']}=={'navigation_label','exact_repeated_paragraph'}
+    # HTML acquisition already removes navigation; assembly still accounts for
+    # repeats without treating removed menu text as a document paragraph.
+    assert 'Home' not in SourceStore(state).document(a)['blocks'][0]['text']
+    assert {r['reason'] for r in record['cleanup']} == {'exact_repeated_paragraph'}
 
 
 def test_reassembly_recovers_saved_version_and_omissions(tmp_path):
@@ -93,10 +96,13 @@ def test_reassembly_recovers_saved_version_and_omissions(tmp_path):
 
 
 def test_context_pressure_enters_document_finalization_before_call(tmp_path):
-    state=SearchState(tmp_path,'case',task=TASK,config=SearchConfig(max_model_calls=30,max_model_context_chars=6000))
+    # Exercise the context guard independently of additions to the system prompt.
+    limit=len(SYSTEM_PROMPT)+2500
+    state=SearchState(tmp_path,'case',task=TASK,config=SearchConfig(max_model_calls=30,max_model_context_chars=limit))
     sid,_=document(state,'a','Proposal and conditional approval.')
     state.data['feedback']={'spans':[{'text':'X'*9000}]};state.save()
-    assert len(SYSTEM_PROMPT)+len(json.dumps(context_for(state),ensure_ascii=False))>6000
+    assert len(SYSTEM_PROMPT)+len(json.dumps(context_for(state),ensure_ascii=False))>limit
+    assert len(SYSTEM_PROMPT)+len(json.dumps(context_for(state,finalize=True),ensure_ascii=False))<=limit
     def model(c):
         assert c['phase']=='finalize' and 'spans' not in c['feedback']
         return dict(action='finish',source_ids=[sid],gaps=[],reason='low_gain')

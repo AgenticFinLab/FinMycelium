@@ -28,7 +28,7 @@ def setup(root, workspace, *, person=False):
         fetcher=lambda u:(b'PRIVATE_FULL_SOURCE_TEXT for an invented test.', 'txt', 'utf-8'))
     catalog = DatasetCatalog(root)
     selection = catalog.select('PERSON-EVENT-TEST', 'PERSON-TEST') if person else catalog.select('EVENT-TEST')
-    tid = create_catalog_search(store,c,selection,{},'simple',period=selection['period'],
+    tid = create_catalog_search(store,c,selection,{'providers':['bocha']},'simple',period=selection['period'],
                                include=selection['scope_include'],exclude=selection['scope_exclude'],confirmed=True,seeds=[])
     return c, tid, root / 'output/search' / selection['event_dir'] / 'search-summary.md', calls
 

@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import json
 import streamlit as st
 from .search_history import LABELS, read_trace, timeline
+from .search_defaults import finalization_label
 
 STATES = {'waiting':'进行中', 'completed':'已执行', 'warning':'需注意', 'error':'失败', 'unconfirmed':'未确认完成'}
 PROVIDERS = {'baidu':'百度', 'bocha':'博查', 'exa':'Exa'}
@@ -33,6 +34,8 @@ def render_process(controller, task_id, data, *, read_only=False):
     rows = timeline(events, data)
     sources = data['sources']
     st.subheader('运行过程')
+    if finalization_label(data):
+        st.caption('程序收尾原因：' + finalization_label(data) + '；收尾不代表证据已经完全覆盖。')
     if incomplete:
         st.caption('部分过程记录尚未写完或无法解析，当前跳过；下次刷新会重新读取。')
     if data['status'] == 'running':
@@ -66,7 +69,10 @@ def render_process(controller, task_id, data, *, read_only=False):
             missing = max(0, data['usage']['model'] - len(usage))
             st.write(f"已返回用量：输入 {sum(u.get('prompt_tokens',0) or 0 for u in usage):,} · 输出 {sum(u.get('completion_tokens',0) or 0 for u in usage):,} tokens")
             st.caption(f'{missing} 次调用尚无用量记录（可能运行中、超时或历史记录缺失）；输出已包含推理 token，不重复相加。此处不估算完整账单。')
-            st.json({k:data['config'].get(k) for k in ('providers','lm_name','max_results','max_search_requests','max_read_sources','max_model_calls','max_read_chars','max_builder_material_chars','max_model_context_chars','timeout')})
+            st.json({k:data['config'].get(k) for k in ('providers','lm_name','max_results','max_search_requests','max_read_sources','max_model_calls','max_read_chars','max_builder_material_chars','max_model_context_chars','timeout','generation_config')})
+            if data.get('last_model_request_options'):
+                st.write('最近一次模型请求的实际参数')
+                st.json(data['last_model_request_options'])
         view = st.radio('过程筛选', ['全部步骤','搜索','阅读来源','整理交接','失败与提醒'], horizontal=True, key='filter-'+key)
         filtered = [r for r in rows if view == '全部步骤' or LABELS.get(r['action']) == view or (view == '失败与提醒' and r['status'] in {'error','warning'})]
         if not filtered:

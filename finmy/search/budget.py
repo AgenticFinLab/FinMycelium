@@ -1,6 +1,6 @@
 """Material budget allocation: BM25 windows, source quotas and shared remaining space.
 
-No model calls, network, case-specific rules, or paragraph splitting.
+No model calls, network or case-specific rules. Original storage is immutable.
 """
 import math
 import re
@@ -15,6 +15,8 @@ PRIORITY_POLICY = 'evidence_priority_windows_v1'
 SOURCE_QUERY_POLICY = 'evidence_priority_windows_v2'
 CONTEXT_POLICY = 'evidence_priority_windows_v3'
 BUDGET_POLICY = 'evidence_priority_windows_v4'
+# Replay-only compatibility for saved window manifests; new handoffs use BUDGET_POLICY.
+SAVED_WINDOW_POLICY = 'evidence_priority_windows_v5'
 ASSEMBLY_THRESHOLDS = (0.5, 0.4, 0.3)
 MIN_RELATIVE_SCORE = 0.4
 
@@ -42,6 +44,9 @@ def fair_quotas(lengths, budget):
 
 def render(entry, document, blocks, markers=False):
     if not blocks:return ''
+    if document.get('temporary_windows'):
+        from .assembly_windows import render_windows
+        return render_windows(entry, document, blocks)
     parts=[entry['header']];previous=None
     for i in blocks:
         if previous is not None:
@@ -55,18 +60,19 @@ def render(entry, document, blocks, markers=False):
     return ''.join(parts)
 
 
-def allocate_input(state, complete, budget, queries=(), *, focused=False, min_relative_score=None, source_queries=None):
+def allocate_input(state, complete, budget, queries=(), *, focused=False, min_relative_score=None, source_queries=None, documents=None, preserve_intro=False):
     from .handoff import materialize_complete
-    full=materialize_complete(state,complete)
+    full=materialize_complete(state,complete) if documents is None else None
     quotas=fair_quotas({e['source_id']:e['material_chars'] for e in complete['selected']},budget)
     store=SourceStore(state);samples=[];selected=[];omitted=[];decisions={}
     for entry in complete['selected']:
-        sid=entry['source_id'];document=store.document(sid,entry['version']);quota=quotas[sid]
+        sid=entry['source_id'];quota=quotas[sid]
+        document=documents[sid] if documents is not None else store.document(sid,entry['version'])
         if entry['material_chars']<=quota:
             blocks=list(entry['blocks']);decisions[sid]={'mode':'full_document'}
         else:
             selected_queries=source_queries[sid] if source_queries is not None else queries
-            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,selected_queries,focused=focused,min_relative_score=min_relative_score)
+            blocks,decisions[sid]=retrieved_blocks(entry,document,quota,selected_queries,focused=focused,min_relative_score=min_relative_score,preserve_intro=preserve_intro)
         content=render(entry,document,blocks,markers=len(blocks)<len(entry['blocks']))
         if blocks:
             selected.append(dict(source_id=sid,version=entry['version'],blocks=blocks,material_chars=len(content),quota=quota))
@@ -74,7 +80,7 @@ def allocate_input(state, complete, budget, queries=(), *, focused=False, min_re
         excluded=[i for i in entry['blocks'] if i not in blocks]
         if excluded:omitted.append(dict(source_id=sid,blocks=excluded,omission_reason='material_limit',retained_in_complete=True))
     result=dict(user_query=complete['user_query'],samples=samples)
-    if complete['material_chars']<=budget:assert result==full
+    if complete['material_chars']<=budget and full is not None:assert result==full
     record=dict(mode='sources',budget_policy='fair_source_quotas_bm25_windows',
                 complete_id=complete['complete_id'],source_ids=complete['source_ids'],source_versions=complete['source_versions'],
                 quotas=quotas,decisions=decisions,selected=selected,omitted=omitted,material_chars=sum(len(s['content']) for s in samples),
@@ -131,7 +137,7 @@ def rank_blocks(entry,document,queries, *, focused=False, min_relative_score=Non
     return rankings
 
 
-def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relative_score=None):
+def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relative_score=None, preserve_intro=False):
     rankings=rank_blocks(entry,document,queries,focused=focused,min_relative_score=min_relative_score)
     picked=set();decisions=[];positions={i:k for k,i in enumerate(entry['blocks'])}
     def fits(candidate):
@@ -158,6 +164,11 @@ def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relativ
                     decisions.append(dict(query=r['query'],anchor=anchor,score=round(score,6),kind=kind))
                     break
         if not added:break
+    # Keep a short source introduction when it fits the same core quota.
+    # Broad scope words must not pull unrelated sections into this source.
+    intro = entry['blocks'][0] if entry['blocks'] else None
+    if preserve_intro and intro is not None and len(document['blocks'][intro]['text']) <= 600 and fits(picked|{intro}):
+        picked.add(intro)
     # Use remaining quota to recover nearby original context, without synthesizing text.
     expanded=[]
     if picked and not focused:
@@ -171,7 +182,7 @@ def retrieved_blocks(entry,document,quota,queries, *, focused=False, min_relativ
                               query_count=len(rankings),k1=1.5,b=0.75)
 
 
-def source_query_plan(state,complete):
+def source_query_plan(state,complete, *, source_core=False):
     """Bind inspected questions to their saved source/version; freeze the fallback."""
     fallback=complete.get('scope_queries')
     if fallback is None:
@@ -187,7 +198,7 @@ def source_query_plan(state,complete):
             and isinstance(q.get('query'),str) and q['query'].strip()))
         plan[sid]=dict(version=version,basis='source_reading' if own else 'research_scope',
                        queries=own or list(fallback),
-                       core_queries=list(dict.fromkeys(own+list(fallback))))
+                       core_queries=(own or list(fallback)) if source_core else list(dict.fromkeys(own+list(fallback))))
     return plan
 
 
@@ -200,20 +211,27 @@ def refers_to_previous(text):
 
 
 def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
-    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, CONTEXT_POLICY, BUDGET_POLICY}:raise ValueError('Unknown saved budget policy')
+    if policy == SAVED_WINDOW_POLICY and complete['material_chars'] > budget:
+        from .assembly_windows import allocate_windows
+        return allocate_windows(state, complete, budget, queries, policy=policy)
+    return _shared_input(state, complete, budget, queries, policy=policy)
+
+
+def _shared_input(state,complete,budget,queries, *, policy, documents=None):
+    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, CONTEXT_POLICY, BUDGET_POLICY, SAVED_WINDOW_POLICY}:raise ValueError('Unknown saved budget policy')
     focused = policy != LEGACY_POLICY
-    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY}
-    query_coverage = policy == BUDGET_POLICY
-    context_retention = policy in {CONTEXT_POLICY,BUDGET_POLICY}
+    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY,SAVED_WINDOW_POLICY}
+    query_coverage = policy in {BUDGET_POLICY,SAVED_WINDOW_POLICY}
+    context_retention = policy in {CONTEXT_POLICY,BUDGET_POLICY,SAVED_WINDOW_POLICY}
     progressive = priority or policy == ADAPTIVE_POLICY
-    plan=source_query_plan(state,complete) if policy in {SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY} else None
+    plan=source_query_plan(state,complete,source_core=policy==SAVED_WINDOW_POLICY) if policy in {SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY,SAVED_WINDOW_POLICY} else None
     core_queries={sid:p['core_queries'] for sid,p in plan.items()} if plan is not None else None
     thresholds = ASSEMBLY_THRESHOLDS if progressive else (0.5,)
     initial_threshold = thresholds[0]
     if type(budget) is not int or budget<=0:raise ValueError('Positive integer budget required')
     if complete['material_chars']<=budget:
         payload, record = allocate_input(state,complete,budget,queries,focused=focused,min_relative_score=initial_threshold,
-                                         source_queries=core_queries)
+                                         source_queries=core_queries,documents=documents,preserve_intro=policy==SAVED_WINDOW_POLICY)
         if progressive:
             record.update(thresholds=list(thresholds), threshold_stages=[], full_material_retained=True)
         if priority:
@@ -222,10 +240,10 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
         if plan is not None:record['query_plan']=plan
         return payload, record
     _,base=allocate_input(state,complete,max(1,budget//2),queries,focused=focused,min_relative_score=initial_threshold,
-                         source_queries=core_queries)
+                         source_queries=core_queries,documents=documents,preserve_intro=policy==SAVED_WINDOW_POLICY)
     entries={e['source_id']:e for e in complete['selected']}
     store=SourceStore(state)
-    docs={sid:store.document(sid,e['version']) for sid,e in entries.items()}
+    docs=documents if documents is not None else {sid:store.document(sid,e['version']) for sid,e in entries.items()}
     picked={sid:set() for sid in entries}
     for e in base['selected']:picked[e['source_id']]=set(e['blocks'])
     compact_sources=[]

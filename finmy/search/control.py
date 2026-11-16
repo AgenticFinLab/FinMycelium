@@ -99,6 +99,12 @@ class SearchController:
             state=SearchState(self.root,task_id)
             config=SearchConfig(**{**asdict(state.config),**values})
             state.data.setdefault('config_history',[]).append(dict(time=now(),config=state.data['config']))
+            trigger = state.data.get('finalization_trigger')
+            limit = {'context_limit':'max_model_context_chars', 'model_call_budget':'max_model_calls'}.get(trigger)
+            if limit and getattr(config, limit) > getattr(state.config, limit):
+                state.data.pop('finalization_trigger', None)
+                state.trace(dict(action='finalization_reopened', trigger=trigger,
+                                 reason='explicit_budget_increase', parameter=limit))
             state.data['config']=asdict(config)
             state.save()
         self._sync_records(task_id)

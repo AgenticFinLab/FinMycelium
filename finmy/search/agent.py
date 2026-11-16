@@ -7,6 +7,7 @@ from .state import LimitReached, write_json
 from .tools import search_constraints
 from .sources import SourceStore, canonical_url
 from .metadata import publication_metadata
+from .html import navigation_hints
 from .reading import read_coverage, located_preview
 from .evidence import record_passages, source_pool
 from .handoff import assemble, assemble_sources
@@ -52,15 +53,19 @@ Assess separately from chronology. Finish in about 1,000 output tokens; no repea
 or marks. Put important unattempted, inaccessible or unsupported leads in gaps;
 unknown details and unused candidates need not block handoff.
 
-Read for evidence gain, not provider/cache: body_available=false is not irrelevance;
-read_source fetches URLs. Trace titles/authors/quotes/observed links to accessible originals
-and interview parts; never invent URLs. Read seeds then gaps. already_read replays;
-no_match is lexical, not absence. Partial expansion gets one URL attempt; saved text may
-end before the article. Keep cached originals on failure; respect fetch_error, retry_skipped
-and retry_in_seconds. New reading keywords cannot fix access or fetch missing parts.
+Read for evidence gain, not cache/provider. Uncached URLs can be fetched; unread is
+not access_failed or parse_failed. Read seeds then gaps. Follow observed links or search
+titles/authors/quotes for important missing originals; never invent URLs or texts.
+navigation links are leads, not verified originals. Respect fetch_error/retry_skipped/
+retry_in_seconds. Partial expansion tries the URL once and keeps cached originals on
+failure. already_read replays; no_match is lexical, not absence. New keywords cannot
+fix access or acquire missing article parts; trace another source or retain the gap.
 
 Use progress.new_chars/research_progress, not returned length. Verification is allowed;
-mark useful originals. After repeated zero gain, change source,
+already-read ranges receive one replay, then compact replay_suppressed feedback until
+this source has new validated marks or a new version. Missing text in a compact preview
+is not unread text; trust saved reading progress. Mark useful originals.
+After repeated zero gain, change source,
 unread location or query, or finish. In finalize, return finish ONLY and explain the
 constraint. For no_reading_progress use low_gain or insufficient, retaining gaps; this
 stop does not certify coverage. No provider quotas, minimum counts or spending targets.
@@ -167,9 +172,10 @@ def research_attempts(state):
 def context_for(state, *, finalize=False):
     remaining_model = state.config.max_model_calls-state.data['usage']['model']
     stalled = state.data.get('research_progress', {}).get('consecutive_no_gain', 0) >= NO_PROGRESS_LIMIT
-    finalizing = finalize or stalled or remaining_model <= finalization_reserve(state.config)
-    finalization_reason = ('model_call_budget' if remaining_model <= finalization_reserve(state.config)
-                           else 'no_reading_progress' if stalled else 'context_limit' if finalize else None)
+    finalization_reason = state.data.get('finalization_trigger') or (
+        'model_call_budget' if remaining_model <= finalization_reserve(state.config)
+        else 'no_reading_progress' if stalled else 'context_limit' if finalize else None)
+    finalizing = bool(finalization_reason)
     searches, questions = research_attempts(state)
     sources, documents = [], {}
     store = SourceStore(state)
@@ -186,6 +192,11 @@ def context_for(state, *, finalize=False):
             source.update(published_at=publication['published_at'],
                           publication_status=publication['publication_status'])
         source['body_available'] = bool(entry.get('version')) and entry['status'] in {'success','partial'}
+        source['acquisition_state'] = ('obtained' if source['body_available'] else
+            'access_failed' if entry['status'] == 'fetch_failed' else
+            'parse_failed' if entry.get('version') else 'not_attempted')
+        if entry.get('document_metadata'):
+            source['navigation'] = navigation_hints(entry['document_metadata'], limit=3 if finalizing else 6)
         if entry.get('acquisition_attempts'):
             source['acquisition'] = list(entry['acquisition_attempts'].values())[-1]
         if reviewed or source['body_available']:
@@ -208,6 +219,21 @@ def context_for(state, *, finalize=False):
             source['fetch_error'] = entry.get('error_type', 'Acquisition failed')
             source['acquisition_error'] = entry.get('fetch_error')
             source['fetch_attempts'] = len(entry.get('fetch_attempts', []))
+        # Do not spend the decision context on empty optional fields or repeat
+        # a title already shown in the candidate. Full metadata stays on disk.
+        for key in ('last_read', 'reading_questions_attempted'):
+            if not source.get(key):
+                source.pop(key, None)
+        if finalizing:
+            # Finish cannot read again; visited ranges/counts already establish
+            # inspection. Cursor details need not displace final source choices.
+            source.pop('read_progress', None)
+            source.pop('last_read', None)
+        navigation = source.get('navigation', {})
+        if navigation.get('title') == source['title']:
+            navigation.pop('title', None)
+        if not navigation:
+            source.pop('navigation', None)
         sources.append(source)
     feedback = state.data.get('feedback')
     if finalizing and isinstance(feedback, dict):
@@ -223,7 +249,8 @@ def context_for(state, *, finalize=False):
                     saved_unread=sum(s['body_available'] and not s['reviewed'] for s in sources),
                     unfetched_candidates=sum(not s['reviewed'] and not s['body_available']
                                              and s['status']=='unread' for s in sources),
-                    fetch_failed=sum(s['status']=='fetch_failed' for s in sources)),
+                    fetch_failed=sum(s['status']=='fetch_failed' for s in sources),
+                    parse_failed=sum(s['acquisition_state']=='parse_failed' for s in sources)),
                 phase='finalize' if finalizing else 'research',
                 allowed_actions=['finish'] if finalizing else ['search','read_source','finish'],
                 tool_constraints={} if finalizing else search_constraints(state.config),
@@ -250,6 +277,7 @@ def context_for(state, *, finalize=False):
             available -= len(json.dumps(excerpts,ensure_ascii=False))+25
         remaining -= 1
     return context
+
 
 
 def execute_action(state, tools, action):
@@ -317,7 +345,8 @@ def execute_action(state, tools, action):
     if kind=='read_source':
         if not isinstance(action['source'],str):
             raise ValueError('Source must be an ID or URL')
-        return tools.read_source(action['source'],action.get('location'),query=action.get('query'))
+        return tools.read_source(action['source'],action.get('location'),
+                                 query=action.get('query'),agent_feedback=True)
     if action.get('reason') not in {'supported','low_gain','insufficient'}:
         raise ValueError('Finish requires an explicit stop reason')
     if not isinstance(action.get('gaps'),list) or any(not isinstance(g,str) for g in action['gaps']):
@@ -344,7 +373,9 @@ def execute_action(state, tools, action):
         if not isinstance(action['selections'],list):
             raise ValueError('Legacy selections must be a list')
         payload=assemble(state,action['selections'],gaps=action['gaps'],reason=action['reason'])
-    state.data.update(status='finished' if payload['samples'] and action['reason'] != 'insufficient' else 'insufficient',stop_reason=action['reason'])
+    state.data.update(status='finished' if payload['samples'] and action['reason'] != 'insufficient' else 'insufficient',
+                      stop_reason=action['reason'],
+                      termination_trigger=state.data.get('finalization_trigger') or 'model_decision')
     # Accept an older model spelling without replacing the controlled stop reason.
     detail=action.get('reason_detail') or action.get('finalization_reason')
     if detail:
@@ -382,6 +413,10 @@ def run_agent(state, tools, model=None, *, max_steps=None):
         if len(SYSTEM_PROMPT) + len(json.dumps(context,ensure_ascii=False)) > state.config.max_model_context_chars:
             state.data.update(status='paused',stop_reason='model_context_limit')
             break
+        if context['phase'] == 'finalize' and not state.data.get('finalization_trigger'):
+            state.data['finalization_trigger'] = context['finalization_reason']
+            state.trace(dict(action='finalization_started', trigger=context['finalization_reason']))
+            state.save()
         try:
             state.consume('model')
         except LimitReached:
@@ -446,6 +481,8 @@ def run_agent(state, tools, model=None, *, max_steps=None):
                              request_options=getattr(model,'last_request_options',None)))
             if configuration_error:
                 state.data.update(status='failed',stop_reason='configuration_error')
+        if getattr(model, 'last_request_options', None):
+            state.data['last_model_request_options'] = model.last_request_options
         state.save()
         if state.data['status'] in {'finished','insufficient','failed'}:
             break
@@ -453,7 +490,8 @@ def run_agent(state, tools, model=None, *, max_steps=None):
         state.data.update(status='paused',stop_reason='checkpoint')
     state.save()
     write_json(state.run_dir/'checkpoint.json', dict(status=state.data['status'],
-        stop_reason=state.data.get('stop_reason'), usage=state.data['usage'],
+        stop_reason=state.data.get('stop_reason'), termination_trigger=state.data.get('termination_trigger'),
+        finalization_trigger=state.data.get('finalization_trigger'), usage=state.data['usage'],
         read_sources=state.data['read_sources'], feedback=state.data.get('feedback'),
         handoff_created=(state.run_dir/'builder_input.json').exists(),
         review_required=True))

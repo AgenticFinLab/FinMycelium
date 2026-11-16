@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from .sources import SourceStore
 from .errors import SearchConfigurationError, api_configuration_error
 from .state import LimitReached, digest, write_json
-from .reading import unread_ranges
+from .reading import bound_replayed_text, unread_ranges
 
 ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', 'BAIDUSEARCH_API_KEY'),
              'bocha': ('https://api.bocha.cn/v1/web-search', 'BOCHA_API_KEY'),
@@ -180,7 +180,7 @@ class SearchTools:
         self.state.trace(dict(action='search',query=query,provider_queries=provider_queries,result=result))
         return result
 
-    def read_source(self, source, location=None, *, query=None):
+    def read_source(self, source, location=None, *, query=None, agent_feedback=False):
         if location is not None and (not isinstance(location,dict) or set(location)-{'block','offset'}
                 or any(type(v) is not int or v<0 for v in location.values())):
             raise ValueError('Copy read_location into location: {"block": integer, "offset": integer}; '
@@ -193,7 +193,11 @@ class SearchTools:
             if urlsplit(source).scheme not in {'http', 'https'}:
                 raise ValueError('Unknown runtime source ID; copy source_id from sources or use a public '
                                  'HTTP(S) URL. Research-plan citations are not runtime IDs; nothing was read.')
-            source = self.sources.register(source)
+            source = self.sources.register_link(source)
+        else:
+            url = self.state.data['sources'][source]['url']
+            if urlsplit(url).scheme in {'http', 'https'}:
+                self.sources.register_link(url)
         started = time.monotonic()
         previous = list(self.state.data['sources'][source].get('read_ranges', []))
         self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))
@@ -205,7 +209,13 @@ class SearchTools:
             current.append(span)
         result['progress'] = dict(new_chars=new_chars,
             returned_chars=sum(len(s['text']) for s in result.get('spans', [])))
-        if not new_chars:
+        entry = self.state.data['sources'][source]
+        priority_key = digest(sorted((p['block'], p['start'], p['end'])
+            for p in self.state.data.get('priority_passages', [])
+            if p['source_id'] == source and p['version'] == result.get('version')))
+        if agent_feedback:
+            bound_replayed_text(entry, result, priority_key=priority_key)
+        if not new_chars and 'hint' not in result['progress']:
             result['progress']['hint'] = ('No new original text. Mark useful already-read passages now; '
                 'use an unread location, another source or a targeted search, or finish with gaps. '
                 'Changing keywords on a fully read saved body does not acquire missing article parts.')

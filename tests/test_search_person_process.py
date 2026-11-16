@@ -73,7 +73,9 @@ def test_short_query_read_keeps_qualifications_even_without_lexical_match(tmp_pa
     assert again['spans'] and again['reading']['match_status'] == 'already_read'
     assert again['reading']['replayed']
     assert again['spans'] == result['spans']
-    assert tools.read_source(sid, location={'block':0})['spans']
+    repeated = tools.read_source(sid, location={'block':0})
+    assert repeated['spans']  # Explicit reads retain originals, independently of Agent feedback.
+    assert 'local consent' in '\n'.join(b['text'] for b in tools.sources.document(sid)['blocks'])
     assert original == {p.name:p.read_bytes() for p in (state.root/'sources'/sid/doc['version']).iterdir()}
     assert state.data['read_sources'] == [sid] and state.data['usage'] == {'model':0, 'search':0}
 
@@ -194,7 +196,8 @@ def test_empty_saved_body_is_not_reviewed_or_adopted(tmp_path):
     state = SearchState(tmp_path, 'case', task=task())
     sid, _ = source(state, 'empty', '')
     result = SearchTools(state).read_source(sid, query='personal decision')
-    assert not result['spans'] and result['reading']['match_status'] == 'no_match'
+    assert not result['spans'] and result['status'] == 'empty'
+    assert result['acquisition_error']['category'] == 'empty'
     assert not context_for(state)['sources'][0]['reviewed']
     with pytest.raises(ValueError, match='Inspect this source'):
         prepare_complete_sources(state, [sid])

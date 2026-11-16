@@ -28,6 +28,50 @@ def read_coverage(document, ranges):
     return saved, saved-unread
 
 
+def bound_replayed_text(entry, result, *, priority_key):
+    """Keep one verification replay per covered range and source annotation state.
+
+    Track source versions and intervals, not keywords or consecutive operations.
+    Reading another source cannot reset this guard. Newly inspected text always
+    passes; valid new annotations on this source allow another verification.
+    Saved originals, read coverage and evidence locations are never removed.
+    """
+    spans = result.get('spans', [])
+    version = result.get('version')
+    if not spans or not version:
+        return
+    guard = entry.get('replay_guard')
+    if not guard or guard['version'] != version or guard['priority_key'] != priority_key:
+        guard = dict(version=version, priority_key=priority_key, ranges=[])
+        entry['replay_guard'] = guard
+    if result['progress']['new_chars']:
+        return
+    covered = guard['ranges']
+    if any(list(unread_ranges(s['block'], s['start'], s['end'], covered)) for s in spans):
+        # Compact the ranges that actually received a verification replay.
+        combined = covered + [{k:s[k] for k in ('block','start','end')} for s in spans]
+        merged = []
+        for span in sorted(combined, key=lambda s:(s['block'],s['start'])):
+            if (merged and merged[-1]['block'] == span['block']
+                    and merged[-1]['end'] >= span['start']):
+                merged[-1]['end'] = max(merged[-1]['end'], span['end'])
+            else:
+                merged.append(dict(span))
+        guard['ranges'] = merged
+        return
+    reading = result.setdefault('reading', {})
+    reading.update(match_status='already_read', replayed=False, replay_suppressed=True,
+                   note='Repeated original text is omitted; saved evidence remains available.')
+    reading.pop('preview_location', None)
+    result['progress'].update(
+        suppressed_chars=result['progress']['returned_chars'], returned_chars=0,
+        hint='These original ranges were already read and replayed for verification in this version. '
+             'The repeated body is omitted; it is not missing or inaccessible. Use saved read_evidence '
+             'to mark passages, choose an unread range or another source, or retain the gap. '
+             'Changing keywords or returning after another source does not reset this record.')
+    result['spans'] = []
+
+
 def targeted_spans(document, query, limit, read_ranges, *, replay=True):
     """Rank temporary text windows, then read anchors and nearby context within limit.
 

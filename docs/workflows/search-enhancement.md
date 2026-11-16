@@ -73,15 +73,57 @@ and unresolved gaps. Query/cursor changes and replayed text alone do not reset t
 New original intervals or new valid marks do. This persisted operational limit does not
 certify coverage, change the handoff contract or prevent progressive reading of long files.
 
+In Agent feedback, already-inspected ranges may be replayed once for verification. Further requests covered
+by that replay return compact `replay_suppressed` feedback instead of the same body.
+The record follows source/version/ranges across other operations and restarts; changing
+keywords or cursors does not reset it. Newly inspected text always passes. New validated
+priority ranges on that source permit another verification; duplicate marks, changed
+reasons and marks on other sources do not. Annotations remain accepted independently
+of body replay. This bounds repeated payloads, not the total number of useful reads,
+and does not delete evidence, infer missing facts or introduce another stopping rule.
+Simple search and explicit source-reader calls retain original text on every read, including
+repeated pause/resume; a compact Agent response is never treated as a missing document.
+
 Before first inspection of a partial search-returned body, the reader attempts the
 original public URL once with a request timeout capped at 20 seconds, also subject
 to the configured timeout and size limit. A recognizable expanded body is
 saved as a new version; blocked, shorter or unrelated responses leave the cached text
 available. Already-inspected versions and explicit cursors remain stable. Acquisition
-attempts are logged; no additional search/model request is made. HTML parsing prefers
-the article/main body when present. This does not guarantee access to full interviews
-or paywalled content: the agent must retain the acquisition limitation and may follow
-an accessible original or transcript within the existing budget.
+attempts are logged; no additional search/model request is made. This does not guarantee
+access to full interviews or paywalled content: the agent must retain the acquisition
+limitation and may follow an accessible original or transcript within the existing budget.
+
+All three providers use the same public-body reader. HTML decoding checks the byte-order
+mark, valid UTF-8, page charset declarations and explicit HTTP charset hints, then uses
+byte-based detection if necessary. Requests' implicit Latin-1 does not override a page's
+encoding. The saved parse records the selected decoder and its basis.
+
+Beautiful Soup preserves visible text in semantic `main`/`article` containers, including
+questions outside a nested article. Clear navigation, advertisements and hidden elements
+are removed; substantive sidebars, qualifications, headings and table rows remain.
+For pages without these containers, [Trafilatura](https://trafilatura.readthedocs.io/en/latest/corefunctions.html)
+selects body text with recall favored and tables retained. Extracted wording and order
+must match the visible original; otherwise the reader falls back to visible DOM text.
+Table cells remain separated, with row/column metadata. Paragraph and row locations refer
+to the saved parse, not byte offsets in raw HTML. HTML title, author and explicitly labeled
+publication metadata are retained; publication claims remain separate from event dates,
+retrieval dates and modification dates, and conflicts with provider dates stay visible.
+
+HTTP success alone is not a usable body. Obvious challenges, error pages, script-only shells,
+invalid decoding and empty parses receive distinct statuses and cannot become read evidence
+or enter the Builder handoff. The agent sees `not_attempted`, `access_failed`, `parse_failed`
+and `obtained` separately, alongside the detailed result. Short genuine notices are allowed;
+these checks do not certify factual accuracy or complete extraction. Browser rendering and
+OCR are not part of this reader.
+
+The reader supplies bounded title/author/observed-link hints. Following a link records its
+parent source and version, even if the destination was already a search candidate. A link
+or canonical declaration does not prove independent reporting or original authorship.
+There is no automatic crawl: existing search/read operations and budgets still apply.
+Rejected partial-body expansion downloads are retained under `acquisitions/` with their
+raw hash and parse diagnostics, while the usable cached version and its locations remain
+unchanged. Previously saved source versions are reused, never silently reparsed by an
+updated extractor. Use a new search task to evaluate the new acquisition behavior.
 Acquisition errors record HTTP status, error category and retry eligibility without
 response bodies or exception strings. A source with no cached body gets at most two
 fetch attempts per saved run, with the second reserved for transient network/server
@@ -116,13 +158,15 @@ span handoffs and explicit programmatic source lists retain their existing seman
 | `finmy/search/state.py` | Task/config validation, saved state, cumulative usage |
 | `finmy/search/tools.py` | Common Baidu Web Search, Bocha Web Search and Exa Search adapters |
 | `finmy/search/sources.py` | HTML/PDF/TXT acquisition, original versions, hashes and read locations |
+| `finmy/search/html.py` | HTML decoding, body extraction, quality diagnostics and observed links |
 | `finmy/search/reading.py` | Located query reads, cached rereads and bounded original excerpts |
 | `finmy/search/progress.py` | Provider language observations and persisted research progress |
 | `finmy/search/agent.py` | Shared decision prompt, search/read/finish actions, bounded recovery |
 | `finmy/search/evidence.py` | Account for inspected sources and exclusions; validate passage priorities against saved originals |
 | `finmy/search/protocol.py` | Search model output settings and single-action JSON decoding |
 | `finmy/search/handoff.py` | Complete manifest, source provenance and existing Builder contract |
-| `finmy/search/budget.py` | Deterministic paragraph allocation; no model or network calls |
+| `finmy/search/budget.py` | Deterministic whole-block allocation with source quotas and priority passages; no model or network calls |
+| `finmy/search/assembly_windows.py` | Replay compatibility for saved window-policy manifests |
 | `finmy/search/control.py`, `pipeline.py`, `__main__.py` | Lifecycle, writer locks, Python and CLI entry points |
 | `finmy/workbench/search_*.py` | Search controls, progress, material review and local experiment history |
 | `finmy/runner/search_pipeline_runner.py` | Opt-in enhanced search alongside the original simple chain |
@@ -175,20 +219,23 @@ CLI reads process environment variables; it does not automatically load `.env`.
 
 | Search setting | Default / meaning |
 |---|---|
-| `providers` | `[bocha]`; select any combination of `baidu`, `bocha`, `exa` |
+| `providers` | `[baidu, bocha, exa]`; any subset remains selectable |
 | `max_results` | `{baidu: 3, bocha: 3, exa: 5}` per query; a saved integer still applies equally to all selected providers |
 | `max_search_requests` | 24 per task, shared across providers, initial search and follow-up |
-| `max_read_sources` | 30 distinct sources; rereading a source does not consume a new source slot |
-| `max_model_calls` | 60 attempted search-side model requests, including failures |
-| `max_read_chars` | 12,000 per source-read operation |
+| `max_read_sources` | 40 distinct sources; rereading a source does not consume a new source slot |
+| `max_model_calls` | 80 attempted search-side model requests, including failures |
+| `max_read_chars` | 16,000 per source-read operation |
 | `max_builder_material_chars` | 90,000 across sample contents, including source labels and omission markers |
-| `max_model_context_chars` | 100,000 for the serialized decision context and system prompt |
-| `generation_config.max_tokens` | 4,096 including reasoning on the default Ark DeepSeek model; semantics differ by model |
+| `max_model_context_chars` | 180,000 for the serialized decision context and system prompt |
+| `generation_config.max_tokens` | 8,192 including reasoning on the default Ark DeepSeek model; semantics differ by model |
 | `timeout` | 120 seconds per request |
 | `allow_network` | `false`; preparation does not execute services |
 
-Saved tasks and profiles retain their recorded settings; new defaults do not silently
-rewrite them. Characters, model tokens, request counts and fees are different measures.
+Default settings and new-task forms share the same configuration fields, including output
+tokens, context size and per-read size. The form can preview model policy without loading
+credentials or invoking a service; recorded request options show what was actually sent.
+Saving defaults refreshes parameter controls while preserving research drafts. Saved tasks
+and profiles retain their recorded settings; new defaults do not silently rewrite them. Characters, model tokens, request counts and fees are different measures.
 Selecting all three providers consumes three requests per uncached query round;
 24 provider requests allow at most eight full rounds.
 The 5/3/3 result limits allow up to 88 returned entries before deduplication; they do
@@ -357,9 +404,13 @@ acceptance is inferred from a successful run or from the presence of annotations
 After inspecting relevant seed material, direct further queries/reading toward important
 unanswered questions. Different questions may require different sections of a long source.
 Distinguish gaps not attempted, attempted but unsupported, and inaccessible sources.
-Forced finalization exposes its model-call or context limit and should report that limit
-and untried important questions in `gaps`/`reason_detail`. No extra reviewer call or semantic
-acceptance gate is added; factual coverage remains subject to later content review.
+Forced finalization persists its trigger across action errors and pause/resume. It does
+not switch back to research because an error response is shorter. An explicit increase
+to the triggering context/model-call budget can reopen research, with a trace record.
+`termination_trigger` records the program trigger separately from `stop_reason` and the
+model's evidence assessment; summaries and the workbench show both. A successful handoff
+at a limit is not certification of full coverage. Historical runs without a recorded trigger
+remain unspecified rather than receiving an inferred success claim.
 
 ## Priority original passages
 
@@ -470,6 +521,10 @@ omissions. Queries are frozen in new complete manifests; old manifests fall back
 original task and keywords, never later searches. The allocation policy is frozen in
 new manifests; existing manifests without that field retain their prior allocation
 behavior. Reassembly retains previous revisions. No extra model call is used for assembly.
+The default evidence-priority policy allocates whole saved blocks. Existing manifests
+that record a window policy retain their original-offset replay behavior; new tasks
+do not select that policy. Reassembly explicitly uses the current default and saves a
+new revision without rewriting the old input.
 Interrupted model responses retain their available usage and finish reason in the
 error trace. Responses already logged before an action-validation error are not charged
 again in that error record; recorded usage is not an account invoice.

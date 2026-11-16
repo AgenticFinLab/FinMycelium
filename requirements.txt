@@ -10,6 +10,7 @@ numpy==2.2.6
 requests==2.32.5
 httpx==0.28.1
 beautifulsoup4==4.14.2
+trafilatura==2.3.1
 PyPDF2==3.0.1
 spacy==3.8.11
 langgraph

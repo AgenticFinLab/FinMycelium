@@ -53,13 +53,13 @@ def test_uncached_and_cached_unread_hints_survive_without_implicit_fetch(tmp_pat
     for sid in (cached, unfetched, failed):
         assert not candidates[sid]['reviewed']
         assert candidates[sid]['title'] and candidates[sid]['url']
-        assert candidates[sid]['leads'][0]['summary'].startswith('Ada discussed')
+        assert (candidates[sid]['leads'][0].get('summary') or candidates[sid]['leads'][0]['snippet']).startswith('Ada discussed')
         assert 'read_evidence' not in candidates[sid]
     assert candidates[cached]['body_available']
     assert not candidates[unfetched]['body_available']
     assert candidates[failed]['fetch_error'] == 'OSError'
     assert context['reading_summary'] == dict(candidates=3, inspected=0,
-        unread_candidates=3, saved_unread=1, unfetched_candidates=1, fetch_failed=1)
+        unread_candidates=3, saved_unread=1, unfetched_candidates=1, fetch_failed=1, parse_failed=0)
     assert context['allowed_actions'] == (['finish'] if finalize else ['search','read_source','finish'])
     assert state.data == before
     assert files == {p:p.read_bytes() for p in state.root.rglob('*') if p.is_file()}
@@ -111,7 +111,7 @@ def test_promising_uncached_read_enters_handoff_as_original_not_discovery_summar
 
 def test_failed_lead_can_trace_an_original_with_existing_search_and_read_budgets(tmp_path):
     state = SearchState(tmp_path, 'case', task=TASK,
-                        config=SearchConfig(max_search_requests=1, max_read_sources=2, max_model_calls=8))
+                        config=SearchConfig(providers=['bocha'], max_search_requests=1, max_read_sources=2, max_model_calls=8))
     secondary_url, original_url = 'https://example.org/secondary', 'https://example.org/original'
     store = SourceStore(state)
     secondary = lead(store, 'secondary')

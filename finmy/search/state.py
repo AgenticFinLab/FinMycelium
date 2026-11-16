@@ -26,12 +26,12 @@ def write_json(path, value):
 
 @dataclass
 class SearchConfig:
-    providers: list = field(default_factory=lambda: ['bocha'])
+    providers: list = field(default_factory=lambda: ['baidu', 'bocha', 'exa'])
     max_results: int | dict = field(default_factory=lambda: {'baidu': 3, 'bocha': 3, 'exa': 5})
     max_search_requests: int = 24
-    max_read_sources: int = 30
-    max_model_calls: int = 60
-    max_read_chars: int = 12000
+    max_read_sources: int = 40
+    max_model_calls: int = 80
+    max_read_chars: int = 16000
     max_builder_material_chars: int = 90000
     include_domains: list = field(default_factory=list)
     exclude_domains: list = field(default_factory=list)
@@ -41,9 +41,9 @@ class SearchConfig:
     allow_network: bool = False
     timeout: int = 120
     max_download_bytes: int = 20000000
-    max_model_context_chars: int = 100000
+    max_model_context_chars: int = 180000
     lm_name: str | None = 'ark/deepseek-v4-1-flash-261017'
-    generation_config: dict = field(default_factory=lambda: {'max_tokens':4096})
+    generation_config: dict = field(default_factory=lambda: {'max_tokens':8192})
 
     def __post_init__(self):
         if not self.providers or len(set(self.providers)) != len(self.providers):

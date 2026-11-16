@@ -108,7 +108,11 @@ def render(data, task_id, selection, payload):
     rows += ['', '## Gaps and stop notes', '', 'Search Agent observations are advisory; acquisition does not verify facts.', '']
     gaps = selection.get('gaps', [])
     rows += ['- ' + cell(g) for g in gaps] or ['- No gap assessment recorded; this is not a claim of full coverage.']
-    rows += [f'- Stop reason: {cell(data.get("stop_reason")) or "Not recorded"}']
+    rows += [f'- Stop reason / model assessment: {cell(data.get("stop_reason")) or "Not recorded"}',
+             f'- Program finalization trigger: {cell(data.get("termination_trigger") or data.get("finalization_trigger")) or "Not recorded in this run"}.',
+             '- A budget-triggered handoff does not certify evidence coverage.']
+    if data.get('last_model_request_options'):
+        rows += ['- Last effective model request: `' + json.dumps(data['last_model_request_options'], ensure_ascii=False, sort_keys=True) + '`.']
     scope_note = f"{scope['period']} / {scope['include']} / Excluded: {scope['exclude']}"
     return '\n'.join(rows), [stamp, task_id, scope_note, data['status'], handoff]
 

@@ -10,7 +10,9 @@ def publication_metadata(source):
     silently preferred. Original values and providers remain available for review.
     """
     candidates = []
-    for discovery in [source, *source.get('discoveries', [])]:
+    html_dates = [dict(published_at=p['value'], provider='html:' + p['field'])
+                  for p in source.get('document_metadata', {}).get('publication', [])]
+    for discovery in [source, *source.get('discoveries', []), *html_dates]:
         value = discovery.get('published_at')
         if not isinstance(value, str) or not value.strip():
             continue
@@ -29,6 +31,9 @@ def publication_metadata(source):
 
 
 def source_metadata(source, document):
+    # A previous document version keeps its own metadata even if the source's
+    # current version has changed. Provider claims are retained independently.
+    source = dict(source, document_metadata=document.get('metadata', {}))
     return dict(source_url=source['url'], title=source.get('title') or None,
                 retrieved_at=document.get('retrieved_at'), content_status=document.get('status'),
                 **publication_metadata(source))

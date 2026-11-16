@@ -166,7 +166,7 @@ def test_simple_mode_bocha_access_error_can_be_retried_after_repair(tmp_path):
         return {'code':200,'data':{'webPages':{'value':[{'url':URL,'name':'Announcement'}]}}}
     controller=SearchController(tmp_path,transport=provider,
         fetcher=lambda url:(b'Fictional deal closed.','txt','utf-8'))
-    tid=controller.create(TASK,{},mode='simple')
+    tid=controller.create(TASK,{'providers':['bocha']},mode='simple')
     controller.start(tid);controller.threads[tid].join(5)
     failed=controller.inspect(tid)
     assert not controller.active(tid)

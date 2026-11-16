@@ -10,6 +10,7 @@ from finmy.search.control import SearchController
 from finmy.search.state import SearchConfig, SearchState
 from finmy.search.sources import SourceStore
 from finmy.workbench.domain import display_name
+from finmy.workbench.search_defaults import BUDGET_FIELDS, load_defaults, request_preview, finalization_label
 from finmy.workbench.workflow import navigate, SEARCH_STATUS as STATUS, search_status_label
 from finmy.workbench.search_process import render_process, PROVIDERS
 from finmy.workbench.ui import heading, status as show_status, stats, empty
@@ -94,7 +95,10 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
                      'configuration_error':'接口鉴权或配置有误，修正后可重试',
                      'repeated_invalid_action':'连续执行错误，任务已停止', 'supported':'已准备可供检查的材料',
                      'low_gain':'继续补搜收益较低', 'insufficient':'证据不足'}
-            st.caption('停止原因：' + reasons.get(data['stop_reason'], data['stop_reason']))
+            label = '模型材料判断：' if data['stop_reason'] in {'supported','low_gain','insufficient'} else '停止原因：'
+            st.caption(label + reasons.get(data['stop_reason'], data['stop_reason']))
+            if finalization_label(data):
+                st.caption('程序收尾原因：' + finalization_label(data))
             if data['stop_reason']=='configuration_error':
                 st.error((data.get('feedback') or {}).get('hint', '请检查接口配置后重试。'))
         st.markdown('**累计用量 / 上限**')
@@ -293,9 +297,7 @@ def search_form(store, catalog=None):
     root = store.root/'search'
     controller = get_controller(str(root))
     profile = root/'profile.json'
-    defaults = asdict(SearchConfig())
-    if profile.exists():
-        defaults.update(json.loads(profile.read_text()))
+    defaults = load_defaults(profile)
     events = {e['event_id']:e for e in store.events()}
     if catalog:
         chosen = []
@@ -356,13 +358,17 @@ def search_form(store, catalog=None):
             lm_name = model_picker(defaults.get('lm_name') or '', 'ui-search-model', purpose='search', label='搜索模型')
             options = {}
             cols = st.columns(2)
-            for i,(field,label) in enumerate([('max_search_requests','累计搜索请求上限'),('max_read_sources','不同阅读来源上限'),
-                                  ('max_model_calls','累计模型请求上限'),('max_read_chars','单次正文字符上限'),
-                                  ('max_builder_material_chars','交付材料字符总上限'),('max_model_context_chars','模型上下文字符上限'),
-                                  ('timeout','单次请求超时（秒）')]):
+            for i,(field,label) in enumerate(BUDGET_FIELDS):
                 options[field] = cols[i%2].number_input(label,min_value=1,value=defaults[field],key='ui-search-'+field)
-            output_tokens = st.number_input('模型答案 token 上限',min_value=1,value=defaults['generation_config'].get('max_tokens',4096),key='ui-search-tokens')
-            st.caption('模型与构建侧独立；简单搜索不调用模型。输出上限是否包含推理 token 取决于模型，TokenHub 思考模式需为推理预留额度。')
+            output_tokens = st.number_input('模型单次输出 token 上限',min_value=1,value=defaults['generation_config'].get('max_tokens',SearchConfig().generation_config['max_tokens']),key='ui-search-tokens')
+            generation = {**defaults['generation_config'], 'max_tokens':output_tokens}
+            st.caption('模型与构建侧独立；简单搜索不调用模型。默认 Ark DeepSeek 的输出上限包含思考与答案。')
+            if mode != 'simple':
+                with st.expander('模型预设请求参数'):
+                    try:
+                        st.json(request_preview(lm_name, generation))
+                    except ValueError as exc:
+                        st.caption(str(exc))
             rewrite = st.checkbox('百度 query 改写',value=defaults['baidu_rewrite'],key='ui-search-rewrite')
     with right:
         with st.container(border=True, key="search-summary"):
@@ -382,7 +388,7 @@ def search_form(store, catalog=None):
             if save or start_search:
                 try:
                     config=SearchConfig(**{**defaults,**options,'providers':providers,'max_results':count,
-                        'lm_name':lm_name or None,'generation_config':{'max_tokens':output_tokens},
+                        'lm_name':lm_name or None,'generation_config':generation,
                         'allow_network':enabled,'baidu_rewrite':rewrite,
                         'include_domains':[s.strip() for s in include.split(',') if s.strip()],
                         'exclude_domains':[s.strip() for s in exclude.split(',') if s.strip()],

@@ -425,6 +425,8 @@ def export_search(search_root, task_id):
         summary = {'task_id': task_id, 'status': data['status'],
                    'build_disposition': decision, 'confirmed_build_tasks': adopted, 'updated_at': data['updated_at'],
                    'completed_at': data.get('completed_at'), 'stop_reason': data.get('stop_reason'),
+                   'termination_trigger': data.get('termination_trigger') or data.get('finalization_trigger'),
+                   'last_model_request_options': generation(data.get('last_model_request_options')),
                    'requests': data['usage'], 'read_sources': len(data['read_sources']),
                    'source_count': len(rows), 'input_source_count': len(used),
                    'input_characters': sum(len(s['content']) for s in payload.get('samples', [])),

@@ -1,18 +1,16 @@
 """Reusable search defaults; never run services from settings."""
 from dataclasses import asdict
-import json
 
 import streamlit as st
 
 from finmy.search.state import SearchConfig, write_json
 from finmy.workbench.model_picker import model_picker
+from finmy.workbench.search_defaults import BUDGET_FIELDS, clear_search_controls, load_defaults, request_preview
 
 
 def search_settings(store):
     path = store.root / "search" / "profile.json"
-    defaults = asdict(SearchConfig())
-    if path.exists():
-        defaults.update(json.loads(path.read_text()))
+    defaults = load_defaults(path)
     model = model_picker(defaults.get("lm_name") or "", "ui-default-search-model", purpose="search", label="默认搜索模型")
     with st.form("search-defaults"):
         providers = st.multiselect("默认搜索服务", ["baidu", "bocha", "exa"], default=defaults["providers"])
@@ -23,21 +21,24 @@ def search_settings(store):
                 value=counts.get(provider, SearchConfig().results_for(provider)))
         values = {'max_results': counts}
         columns = st.columns(2)
-        for i, (key, label) in enumerate([("max_search_requests", "累计搜索请求上限"),
-                           ("max_read_sources", "读取来源上限"), ("max_model_calls", "搜索模型请求上限"),
-                           ("max_builder_material_chars", "交付正文字符预算")]):
+        for i, (key, label) in enumerate(BUDGET_FIELDS):
             values[key] = columns[i % 2].number_input(label, min_value=1, value=defaults[key])
+        output_tokens = st.number_input('模型单次输出 token 上限', min_value=1,
+            value=defaults['generation_config'].get('max_tokens', SearchConfig().generation_config['max_tokens']))
+        values['generation_config'] = {**defaults['generation_config'], 'max_tokens':output_tokens}
+        st.caption('默认 Ark DeepSeek 的输出上限包含思考与答案；各任务仍累计计数，不要求用满预算。')
+        with st.expander('模型预设请求参数'):
+            try:
+                st.json(request_preview(model, values['generation_config']))
+            except ValueError as exc:
+                st.caption(str(exc))
         st.caption("创建检索时可覆盖本次参数；已有任务保持原配置。")
         if st.form_submit_button("保存搜索默认配置", type="primary", icon=":material/save:"):
             try:
                 config = SearchConfig(**{**defaults, **values, "providers": providers, "lm_name": model or None, "allow_network": False})
                 write_json(path, asdict(config))
                 # The next new task adopts these defaults; research drafts are retained.
-                for key in ("providers", "count", "model", "max_search_requests", "max_read_sources", "max_model_calls", "max_builder_material_chars"):
-                    st.session_state.pop("ui-search-"+key, None)
-                for key in list(st.session_state):
-                    if key.startswith(("ui-search-model-", "ui-search-count-")):
-                        st.session_state.pop(key, None)
+                clear_search_controls(st.session_state)
                 st.success("搜索默认配置已保存；新任务将采用这些默认值")
             except (ValueError, TypeError) as exc:
                 st.error(str(exc))

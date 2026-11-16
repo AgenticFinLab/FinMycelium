@@ -45,9 +45,9 @@ def marker(sid,doc,block,reason='Adds the personal response and its qualificatio
 def test_repeated_reads_keep_original_facts_in_final_context(tmp_path):
     state,store,tools=setup(tmp_path)
     sid,doc=saved(store,'Completion notice','Completion notice\n\nThe program opened on April 3.\n\nContact: Office 123.')
-    first=tools.read_source(sid,query='program opened')
+    first=tools.read_source(sid,query='program opened',agent_feedback=True)
     ranges=deepcopy(state.data['sources'][sid]['read_ranges'])
-    second=tools.read_source(sid,query='program opened')
+    second=tools.read_source(sid,query='program opened',agent_feedback=True)
     assert first['spans']==second['spans'] and second['reading']['replayed']
     assert state.data['sources'][sid]['read_ranges']==ranges
     state.data['feedback']=second
@@ -56,7 +56,13 @@ def test_repeated_reads_keep_original_facts_in_final_context(tmp_path):
     evidence=final['sources'][0]['read_evidence']
     assert 'April 3' in ' '.join(p['text'] for p in evidence)
     assert all(doc['blocks'][p['block']]['text'][p['start']:p['end']]==p['text'] for p in evidence)
-    assert tools.read_source(sid,location=evidence[0]['read_location'])['spans']
+    repeated=tools.read_source(sid,location=evidence[0]['read_location'],agent_feedback=True)
+    assert repeated['spans']==[] and repeated['reading']['replay_suppressed']
+    state.data['feedback']=repeated
+    retained=context_for(state,finalize=True)['sources'][0]['read_evidence']
+    assert 'April 3' in ' '.join(p['text'] for p in retained)
+    # The original location still resolves through the deterministic source reader.
+    assert store.read(sid,**evidence[0]['read_location'])['spans']
 
 
 def test_annotations_do_not_block_a_valid_tool_action(tmp_path):
