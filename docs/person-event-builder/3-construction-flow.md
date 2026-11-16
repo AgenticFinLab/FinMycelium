@@ -137,7 +137,7 @@ Context 按最小必要内容组织；Phase 共享基准，Action 保存特有�
 
 `event_overview` 仅含 Event 的 `time / summary / support` 及可选 `gaps / conflicts`，不包含可修改的身份与范围；若本批未提供，在 3.6 的收尾任务中按同一约定完成。`split_proposals` 复用下面的 split 操作，只允许有据拆分 Action；程序先校验拆分，再应用对新 ID 的归属，联合复查边界与引用。普通组织任务不能借此重建事实集合。
 
-每项归并 decision 包含 `operation`、`input_refs: ObjectRef[]`、`outputs`、`reason`、`evidence_ids: string[]`。输入引用的 `field` 为空，指完整候选；每个 output 为 `{collection, record}`，record 使用对应事实对象的字段。操作仅涉及任务授权的 `entities / actions / contexts / relation_candidates`；依据可复用输入对象已有支持，新增或改变的事实仍需在 record 中说明 support 或 Gap。
+每项归并 decision 包含 `operation`、`input_refs: ObjectRef[]`、`outputs`、`reason`、`evidence_ids: string[]`。可选的非空字符串 `decision_id` 仅作为响应内的定位标签保留，不作为图 ID，不扩大操作权限；其他未约定字段仍拒收。输入引用的 `field` 为空，指完整候选；每个 output 为 `{collection, record}`，record 使用对应事实对象的字段。操作仅涉及任务授权的 `entities / actions / contexts / relation_candidates`；依据可复用输入对象已有支持，新增或改变的事实仍需在 record 中说明 support 或 Gap。
 
 | operation | 输入 → 输出 | 约束 |
 | --- | --- | --- |
@@ -147,7 +147,9 @@ Context 按最小必要内容组织；Phase 共享基准，Action 保存特有�
 | `exclude` | 1 → 0；Action 重分类时可输出 Context | 保留排除理由与原记录；若主体归属判定表明它是相关他人的独立行为，可输出有据的 Context 并保存旧新对应，不借排除新增无关事实 |
 | `pending` | 1 → 0 | 原候选仍可回查，不冒充已统一事实；保存尚不能处理的原因与证据 |
 
-每个指派候选在一轮 decisions 中只能被消费一次，全部指派候选须有明确去向；没有歧义的 keep 可由程序生成。merge/split 之后只重定向能确定对应的引用；不能确定关系落在哪个拆分动作上的，保留候选和 pending，不能复制成多条“已知关系”。
+若归并响应在标量 Conflict alternative 的 support 中重复使用外层冲突 target，且该路径在 alternative 内不存在、在外层事实内确实存在，接收器可将其定位到 `/value`，记录字段级修正；不改 alternative 的说法、证据或冲突 target，其余无效路径仍拒收。
+
+每个指派候选在一轮 decisions 中只能被消费一次，全部指派候选须有明确去向；没有歧义的 keep 可由程序生成。修正采用后，只解除能够对应到已解决拒收项的 pending；匹配时沿已接受的 merge 映射核对旧新 ID，仍被其他拒收项或模型明确待定项引用的 pending 保留。merge/split 之后只重定向能确定对应的引用；不能确定关系落在哪个拆分动作上的，保留候选和 pending，不能复制成多条“已知关系”。
 
 采用粒度是一个完整操作或一组互相依赖的结果：同次拆分与归属、Context 新内容与引用、同一 Action 的基准排除与差量更新必须一起校验。互不依赖的有效项可以先保存，一项失败不丢弃整批；失败项及其依赖保留未采用原因，后续有界重试只处理未完成部分。任务负责范围之外的对象不受影响，遗漏原来指派的对象不能被解释为删除。
 

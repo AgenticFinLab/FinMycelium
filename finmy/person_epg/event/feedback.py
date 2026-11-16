@@ -1,7 +1,8 @@
 """Small, deterministic scopes for repairing rejected fact operations."""
 from copy import deepcopy
 
-from .proposals import FIELDS, validate_envelope
+from .proposals import FIELDS, replace_references, validate_envelope
+from .records import fingerprint
 from .schema import COLLECTION_IDS
 
 
@@ -83,3 +84,34 @@ def unresolved_report(records, outstanding):
                 if item not in result[key]:
                     result[key].append(deepcopy(item))
     return result
+
+
+def clear_resolved_pending(package, records, outstanding):
+    """Discharge only resolved refusal records, following accepted merge lineage.
+
+    Rejections retain their original IDs for audit; the live package has already
+    redirected them. Compare both in the current ID space, and preserve any
+    pending still owned by another rejection or explicitly reported by a model.
+    Return the removed records for offline revision manifests.
+    """
+    def current(item):
+        for step in package.get('lineage', []):
+            if step['operation'] != 'merge' or len(step['output_refs']) != 1:
+                continue
+            target = step['output_refs'][0]
+            mapping = {ref['object_id']: target['object_id'] for ref in step['input_refs']
+                       if ref['collection'] == target['collection']}
+            item = replace_references(item, {target['collection']: mapping})
+        return fingerprint(item)
+
+    live = {current(p) for record in records for p in outstanding(record)['pending']}
+    discharged = set()
+    for record in records:
+        resolved = {r['issue_fingerprint'] for r in record.get('resolutions', [])}
+        for issue in record['report']['rejected']:
+            if fingerprint(issue) in resolved:
+                discharged.add(current({k: issue[k] for k in ('refs', 'reason', 'evidence_ids')}))
+    removed = [p for p in package.get('pending', []) if current(p) in discharged - live]
+    if 'pending' in package:
+        package['pending'] = [p for p in package['pending'] if p not in removed]
+    return deepcopy(removed)

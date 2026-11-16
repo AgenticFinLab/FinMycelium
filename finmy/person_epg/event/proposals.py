@@ -58,6 +58,47 @@ def replace_references(value, mappings):
     return result
 
 
+def normalize_conflict_targets(decision):
+    """Correct one unambiguous nested-pointer convention, never fact content.
+
+    A scalar alternative stores its claim under value. Some models repeat the
+    enclosing Conflict target instead. Only that exact, valid enclosing pointer
+    can be translated, and only when it is absent from the alternative itself.
+    Other pointers, evidence and payload fields remain subject to validation.
+    """
+    normalized, changes = deepcopy(decision), []
+    outputs = normalized.get('outputs') if isinstance(normalized, dict) else None
+    for n, output in enumerate(outputs if isinstance(outputs, list) else []):
+        record = output.get('record') if isinstance(output, dict) else None
+        if not isinstance(record, dict) or not isinstance(record.get('conflicts'), list):
+            continue
+        for c, conflict in enumerate(record['conflicts']):
+            target = conflict.get('target') if isinstance(conflict, dict) else None
+            if not isinstance(target, str) or not target.startswith('/'):
+                continue
+            try:
+                pointer(record, target)
+            except (KeyError, IndexError, TypeError, ValueError):
+                continue
+            alternatives = conflict.get('alternatives')
+            for a, alternative in enumerate(alternatives if isinstance(alternatives, list) else []):
+                if (not isinstance(alternative, dict) or 'value' not in alternative
+                        or isinstance(alternative['value'], (dict, list))
+                        or not isinstance(alternative.get('support'), list)):
+                    continue
+                try:
+                    pointer(alternative, target)
+                    continue  # Already a valid local pointer; do not reinterpret it.
+                except (KeyError, IndexError, TypeError, ValueError):
+                    pass
+                for i, support in enumerate(alternative['support']):
+                    if isinstance(support, dict) and support.get('target') == target:
+                        support['target'] = '/value'
+                        changes.append(dict(field=f'/outputs/{n}/record/conflicts/{c}/alternatives/{a}/support/{i}/target',
+                                            before=target, after='/value'))
+    return normalized, changes
+
+
 def _errors(package, payload):
     return {fingerprint(i): i for i in check_graph(package, payload, complete=False)['issues'] if i['severity'] == 'error'}
 
@@ -317,8 +358,15 @@ class Receiver:
 
     def decision(self, package, decision, assigned, consumed):
         required = {'operation', 'input_refs', 'outputs', 'reason', 'evidence_ids'}
-        if not isinstance(decision, dict) or set(decision) != required:
+        # Some corrections echo the issue label. It is audit metadata, not a
+        # fact ID or authority to widen the assigned scope; retain it in the raw
+        # response while all semantic fields still pass the normal checks.
+        if (not isinstance(decision, dict) or not required <= decision.keys()
+                or decision.keys() - required - {'decision_id'}):
             raise ValueError('Decision fields differ from the contract')
+        if 'decision_id' in decision and (not isinstance(decision['decision_id'], str)
+                or not decision['decision_id'].strip()):
+            raise ValueError('Optional decision_id must be a nonempty string')
         operation, refs, outputs = decision['operation'], decision['input_refs'], decision['outputs']
         if not isinstance(refs, list) or not refs or not isinstance(outputs, list) or not isinstance(decision['reason'], str) or not decision['reason'].strip():
             raise ValueError('Decision needs input refs, output list and reason')
@@ -418,12 +466,16 @@ class Receiver:
         consumed = set()
         for number, decision in enumerate(response['decisions']):
             handled = set()
+            normalized, changes = normalize_conflict_targets(decision)
 
             def change(package):
-                handled.update(self.decision(package, decision, assigned, consumed))
+                handled.update(self.decision(package, normalized, assigned, consumed))
             refs = decision.get('input_refs', []) if isinstance(decision, dict) else []
-            if self.apply('decision:' + str(number), change, refs if isinstance(refs, list) else [], proposal=decision):
+            label = 'decision:' + str(number)
+            if self.apply(label, change, refs if isinstance(refs, list) else [], proposal=decision):
                 consumed.update(handled)
+                if changes:
+                    self.report.setdefault('normalizations', []).append(dict(item=label, changes=changes))
         for collection, oid in sorted(assigned - consumed):
             self.reject('unhandled_candidate', 'Candidate lacks an accepted decision', [reference(collection, oid)])
         return self.finish()

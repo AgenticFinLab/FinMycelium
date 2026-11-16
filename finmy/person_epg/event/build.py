@@ -12,7 +12,8 @@ from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference,
 from .records import IdMap, fingerprint, index_records, seed_facts, validate_input, prompt_json
 from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now, write_json
 from .schema import COLLECTION_IDS
-from .feedback import correction_scope, correction_issues, validate_correction, unresolved_report, reserved_records
+from .feedback import (correction_scope, correction_issues, validate_correction,
+                       unresolved_report, reserved_records, clear_resolved_pending)
 from .context import navigation, sized_request
 from .validation import check_graph
 
@@ -100,14 +101,7 @@ class Construction:
             records.append(record)
             if number:
                 self.resolve_fact_corrections(records[:-1], record)
-                # A repaired refusal's generated pending is removed only if nothing
-                # else still owns it. Model-authored pending never disappears here.
-                live = [p for r in self.reports for p in self.outstanding(r)['pending']]
-                discharged = [{k: i[k] for k in ('refs', 'reason', 'evidence_ids')}
-                    for r in records for i in r['report']['rejected']
-                    if fingerprint(i) in {x['issue_fingerprint'] for x in r.get('resolutions', [])}]
-                if 'pending' in result:
-                    result['pending'] = [p for p in result['pending'] if p not in discharged or p in live]
+                clear_resolved_pending(result, self.reports, self.outstanding)
             if result.get('schema_version') == self.facts['schema_version']:
                 self.facts = result
                 self.save_facts()  # A pause/error during correction must retain valid neighbors.

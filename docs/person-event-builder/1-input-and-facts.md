@@ -129,7 +129,7 @@ Evidence：
 | 公共记录 | 字段 | 约定 |
 | --- | --- | --- |
 | `Gap` | `target: string, reason: string` | 指出需要说明的未知或缺证；无有效支持时使用，不伪造占位动作 |
-| `Conflict` | `target: string, alternatives: object[], reason: string`；可选 `related_refs: ObjectRef[]` | 每个 alternative 保存 `value`、`support`，必要时 `gaps`；跨对象冲突用 `related_refs` 列明涉及的对象/字段，保留相互冲突的具体说法 |
+| `Conflict` | `target: string, alternatives: object[], reason: string`；可选 `related_refs: ObjectRef[]` | 每个 alternative 保存 `value`、`support`，必要时 `gaps`；其中 support 的 target 相对该 alternative 定位，支持整个说法时使用 `/value`；跨对象冲突用 `related_refs` 列明涉及的对象/字段，保留相互冲突的具体说法 |
 
 单个事实字段有未解决冲突时，主字段保留未知或明确的保守表述，不能静默选择一方。来源关系主张可以各自保留完整端点、方向与依据，并通过 Conflict 标明分歧；保存主张不等于将其纳入已确定的关系视图，时间关系规则见 [2.5](2-graph-contract.md#25-action-之间的-relation)。无检索结果不等于否定事实。允许 `support: []` 并记录对应 Gap；允许基于记录表达不确定候选，但不能凭空新增行为填满图。
 
