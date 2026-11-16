@@ -226,6 +226,40 @@ class BuildController:
                 self.save(task_id, row['status'], body)
             return dict(task_id=task_id, recovery=recovery, ready_to_resume=True, model_started=False)
 
+    def prepare_person_output_recovery(self, task_id, *, max_new_tokens):
+        """Raise a confirmed output ceiling without starting or resetting the task."""
+        from finmy.person_epg.event.recovery import (OUTPUT_RECORD, compatible_output_workbench,
+                                                   prepare_output_recovery, validate_recovery)
+        from finmy.person_epg.event.records import json_bytes
+        from finmy.person_epg.build import code_identity
+        from finmy.search.summary import directory_lock
+        with task_lock(self.root, task_id):
+            row = self.inspect(task_id); body = row['body']
+            if body.get('kind') != 'person_event' or row['status'] not in {'failed', 'ready'}:
+                raise ValueError('Choose the native person Event task stopped by output truncation')
+            if body.get('read_recovery', {}).get('record') == OUTPUT_RECORD:
+                check_person_code(body)
+            elif not compatible_output_workbench(body['code']):
+                raise ValueError('Workbench changes exceed the supported output recovery')
+            directory = Path(body['artifact_directory'])
+            with directory_lock(directory):
+                state = json.loads((directory/'state.json').read_text())
+                previous = state['config']
+                if state.get('compatible_recovery', {}).get('record') == OUTPUT_RECORD:
+                    previous = validate_recovery(directory, state)['previous_config']
+                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state['input_sha256']
+                        or body['person_config'] not in (previous, state['config'])):
+                    raise ValueError('Recovery requires the exact saved input and recorded configuration')
+                recovery = prepare_output_recovery(directory, max_new_tokens=max_new_tokens)
+                state = json.loads((directory/'state.json').read_text())
+                if body.get('read_recovery') != recovery:
+                    body.setdefault('code_history', []).append(dict(code=body['code'], person_code=body['person_code'],
+                        person_config=body['person_config'], recovery=recovery))
+                body.update(code=code_version(), person_code=code_identity(), person_config=state['config'],
+                    read_recovery=recovery, resume=True, run_state=state)
+                self.save(task_id, row['status'], body)
+            return dict(task_id=task_id, recovery=recovery, ready_to_resume=True, model_started=False)
+
     def prepare_person_resume(self, task_id, *, max_calls=None):
         from finmy.person_epg.event.runtime import EventBuildConfig
         with task_lock(self.root,task_id):

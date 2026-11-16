@@ -87,6 +87,14 @@ hashes, preserve prior attempts and record the migration before ordinary resume.
 They are not a general code-mismatch bypass or a workbench control for arbitrary
 budget changes; unsupported changes still require a new task.
 
+For a run stopped by output truncation, an explicit backend `output-limit-v1`
+preparation may increase only `max_new_tokens` for the verified preceding
+implementation. It retains original state/configuration, requests, checkpoints and
+usage; an offline replay must reach the same unfinished step with identical adopted
+facts and graph before publication. It does not start a worker. After preparation,
+the ordinary resume/start controls apply. This does not change global defaults or
+permit input, model, prompt or other budget changes.
+
 While a person build is queued or running, **暂停构建** requests a stop between
 model calls. The current response, validation and checkpoint publication finish;
 no next request, format retry or local-reading follow-up is submitted after the

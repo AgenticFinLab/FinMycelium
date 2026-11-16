@@ -1,4 +1,4 @@
-"""Explicit offline migrations for verified read and relation-context repairs."""
+"""Explicit offline migrations for verified execution repairs and output headroom."""
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -17,6 +17,11 @@ RELATION_ORIGIN = '42d5788aef8f0785be56423bb022464b0409f60fd96fc4a09c2433b9b5079
 RELATION_RECORD = 'recoveries/relation-context-v1/manifest.json'
 RELATION_PREVIOUS = {'person_epg/event/build.py': '4b025b6cb62b11b7866a4c1c7962ceeda2afd428a25e35b9db39e8728386fc53', 'person_epg/event/context.py': '986a12074495a36d9509ba4b4c29eae438e589ab049f95249e5c284060b36b53', 'person_epg/event/prompts.py': 'b0bb75d42cb9854053fe3cfc82132cd79b70f85c210e2b5098688f9ef8f5db05', 'person_epg/event/runtime.py': '6f72667dd342e22b88d7a6a356f01af7efe8620b1a76e049b75fa3f65450a825', 'person_epg/event/recovery.py': 'a2fab62d1115d11400006bd2158e23e30842ab323561b741d858deb43ff18082'}
 RELATION_WORKBENCH = '412cf4537185c6b34c249818e6eca4ce8704d13c2cd428b6a236856da8797946'
+
+OUTPUT_ORIGIN = '80568a42cfa08d50e5b41990aef056b55467bebabb72f09f43ad75e6bf103aad'
+OUTPUT_RECORD = 'recoveries/output-limit-v1/manifest.json'
+OUTPUT_PREVIOUS = 'b576a336b391fc937a02649590d778bc3845c28cf1c8e0bd898ffeb9a0d219f5'
+OUTPUT_WORKBENCH = '2b85bb66b273ae12d5c08959cb07e894a1bbdad9d7fe776506238eebbf136b3f'
 
 
 def compatible_code():
@@ -43,6 +48,8 @@ def validate_recovery(directory, state):
     from finmy.dataset import within
     directory = Path(directory)
     entry = state['compatible_recovery']
+    if entry['record'] == OUTPUT_RECORD:
+        return validate_output_recovery(directory, state)
     if entry['record'] == RELATION_RECORD:
         return validate_relation_recovery(directory, state)
     path = within(directory, entry['record'])
@@ -60,6 +67,8 @@ def validate_recovery(directory, state):
 
 
 def import_checkpoint(execution, task_id, system, request, package, dependency, target, validator, *, attempt_group=None):
+    if execution.state['compatible_recovery']['record'] == OUTPUT_RECORD:
+        return import_output_checkpoint(execution, task_id, system, request, package, dependency, target, validator, attempt_group)
     if execution.state['compatible_recovery']['record'] == RELATION_RECORD:
         return import_relation_checkpoint(execution, task_id, system, request, package, dependency, target, validator, attempt_group)
     if not task_id.startswith('extract.'):
@@ -361,6 +370,172 @@ def prepare_relation_recovery(directory, *, max_context_chars, max_read_calls, m
     publish_immutable(directory, {**backups, RELATION_RECORD: json_bytes(record)})
     write_json(directory/'state.json',migrated)
     write_json(directory/'config.json',config)
+    return entry
+
+
+
+def compatible_output_code():
+    manifest = code_manifest()
+    manifest['person_epg/event/recovery.py'] = OUTPUT_PREVIOUS
+    return fingerprint(manifest) == OUTPUT_ORIGIN
+
+
+def compatible_output_workbench(old):
+    from finmy.workbench.build_tasks import ROOT
+    from finmy.workbench.domain import digest
+    files = {str(p.relative_to(ROOT)): sha256(p.read_bytes()) for p in sorted((ROOT/'finmy').rglob('*.py'))}
+    files['finmy/person_epg/event/recovery.py'] = OUTPUT_PREVIOUS
+    files['finmy/workbench/build_tasks.py'] = OUTPUT_WORKBENCH
+    return digest(files) == old['python_sources_sha256'] and compatible_output_code()
+
+
+def validate_output_recovery(directory, state):
+    from finmy.dataset import within
+    directory = Path(directory)
+    entry = state['compatible_recovery']
+    path = within(directory, entry['record'])
+    if entry['record'] != OUTPUT_RECORD or sha256(path.read_bytes()) != entry['sha256']:
+        raise ValueError('Output recovery record integrity mismatch')
+    record = json.loads(path.read_text())
+    if (record['from_code'] != OUTPUT_ORIGIN or record['to_code'] != code_identity()
+            or not compatible_output_code()):
+        raise ValueError('Unsupported output recovery implementation')
+    if (state['input_sha256'] != record['input_sha256']
+            or semantic_config(EventBuildConfig(**state['config'])) != semantic_config(EventBuildConfig(**record['config']))):
+        raise ValueError('Output recovery input or settings changed')
+    for name, digest in record['files'].items():
+        if sha256(within(directory, name).read_bytes()) != digest:
+            raise ValueError('Output recovery source changed: '+name)
+    return record
+
+
+def import_output_checkpoint(execution, task_id, system, request, package, dependency, target, validator, group):
+    record = validate_output_recovery(execution.directory, execution.state)
+    previous = json.loads((execution.directory/record['state_before']).read_text())
+    old_dependency = fingerprint(dict(system=system, request=request, package=package,
+        config=semantic_config(EventBuildConfig(**record['previous_config'])), code=record['from_code']))
+    old_key = task_id + '-' + old_dependency[:16]
+    new_key = task_id + '-' + dependency[:16]
+    # An output-cap increase does not erase delivered reads or per-task attempts.
+    if old_key in previous['tasks'] and new_key not in execution.state['tasks']:
+        execution.state['tasks'][new_key] = deepcopy(previous['tasks'][old_key])
+    group_name = (group or new_key).rsplit('-', 1)[0]
+    budget = execution.state['validation_attempts'].setdefault(group or new_key, {})
+    for name, spent in previous.get('validation_attempts', {}).items():
+        if name.rsplit('-', 1)[0] == group_name:
+            for key, value in spent.items():
+                budget.setdefault(key, deepcopy(value))
+    saved = record['upstream'].get(task_id)
+    if saved is None:
+        if task_id == record['resume_task'] and old_dependency != previous['calls'][-1]['dependency']:
+            raise ValueError('Unfinished task dependencies changed')
+        return
+    cached = json.loads((execution.directory/saved['checkpoint']).read_text())
+    original = json.loads((execution.directory/saved['request']).read_text())
+    if (system != original['system'] or request != original['user']['task']
+            or old_dependency != cached['dependency']
+            or cached['response_sha256'] != sha256(json_bytes(cached['response']))):
+        raise ValueError('Output recovery checkpoint dependencies changed: '+task_id)
+    if not any(c['call_id'] == cached['call_id'] and c['dependency'] == old_dependency and c['status'] == 'accepted'
+               for c in execution.state['calls']):
+        raise ValueError('Output recovery checkpoint lacks an accepted call')
+    validator(cached['response'])
+    write_json(target, dict(cached, dependency=dependency, imported_from=dict(path=saved['checkpoint'],
+        sha256=record['files'][saved['checkpoint']], recovery=OUTPUT_RECORD)))
+
+
+def prepare_output_recovery(directory, *, max_new_tokens):
+    """Raise only a truncated run's output cap after exact, offline upstream replay."""
+    from .build import run_event
+    directory = Path(directory)
+    state = json.loads((directory/'state.json').read_text())
+    if state.get('compatible_recovery', {}).get('record') == OUTPUT_RECORD:
+        record = validate_output_recovery(directory, state)
+        if record['config']['max_new_tokens'] != max_new_tokens:
+            raise ValueError('An existing output recovery has a different approved limit')
+        write_json(directory/'config.json', state['config'])
+        return state['compatible_recovery']
+    if state.get('compatible_recovery') or not compatible_output_code() or state['code_sha256'] != OUTPUT_ORIGIN:
+        raise ValueError('Output recovery requires the verified preceding implementation without another migration')
+    last = state['calls'][-1] if state['calls'] else {}
+    if (state['execution_status'] != 'failed' or state.get('offline_revisions')
+            or last.get('status') != 'incomplete' or last.get('transport', {}).get('finish_reason') != 'length'):
+        raise ValueError('Choose an unedited run stopped by output truncation')
+    if type(max_new_tokens) is not int or max_new_tokens <= state['config']['max_new_tokens']:
+        raise ValueError('The approved output limit must increase')
+    config = dict(state['config'], max_new_tokens=max_new_tokens)
+    EventBuildConfig(**config)
+    before = (directory/'state.json').read_bytes()
+    files = {str(f.relative_to(directory)):sha256(f.read_bytes())
+        for name in ('attempts', 'checkpoints') for f in (directory/name).rglob('*') if f.is_file()}
+    for name, key in [('input.json','input_sha256'), ('provenance.json','provenance_sha256')]:
+        if sha256((directory/name).read_bytes()) != state[key]:
+            raise ValueError('Frozen artifact changed: '+name)
+        files[name] = state[key]
+    for name, key in [('facts','facts_sha256'), ('output','graph_sha256'), ('checks','checks_sha256')]:
+        if state.get(name) and files.get(state[name]) != state.get(key):
+            raise ValueError('Saved artifact changed: '+name)
+    upstream = {}
+    for call in state['calls']:
+        if call['status'] != 'accepted':
+            continue
+        task = call['task_id']
+        checkpoint = 'checkpoints/'+task+'-'+call['dependency'][:16]+'.json'
+        requests = list((directory/'attempts').glob('*/steps/'+call['call_id']+'/request.json'))
+        if task in upstream or checkpoint not in files or len(requests) != 1:
+            raise ValueError('Missing or ambiguous accepted checkpoint: '+task)
+        original = json.loads(requests[0].read_text())
+        cached = json.loads((directory/checkpoint).read_text())
+        if (original['dependency'] != call['dependency'] or original['task_id'] != task
+                or fingerprint(dict(system=original['system'], user=original['user'])) != call['request_fingerprint']
+                or cached['task_id'] != task or cached['dependency'] != call['dependency']
+                or cached['call_id'] != call['call_id']
+                or cached['response_sha256'] != sha256(json_bytes(cached['response']))):
+            raise ValueError('Original call/checkpoint binding mismatch: '+task)
+        upstream[task] = dict(checkpoint=checkpoint, request=str(requests[0].relative_to(directory)))
+    base = Path(OUTPUT_RECORD).parent
+    backups = {str(base/'state-before.json'):before,
+               str(base/'config-before.json'):(directory/'config.json').read_bytes()}
+    if (directory/'snapshot.json').exists():
+        backups[str(base/'snapshot-before.json')] = (directory/'snapshot.json').read_bytes()
+    files.update({name:sha256(data) for name,data in backups.items()})
+    record = dict(kind='output-limit-v1', created_at=now(), from_code=OUTPUT_ORIGIN, to_code=code_identity(),
+        input_sha256=state['input_sha256'], previous_config=state['config'], config=config, files=files,
+        state_before=str(base/'state-before.json'), upstream=upstream, resume_task=last['task_id'],
+        original_calls=len(state['calls']), original_reads=len(state['reads']),
+        reason='Raise approved output ceiling; reuse complete accepted work and retain truncated attempts.')
+    if (directory/OUTPUT_RECORD).exists():
+        existing = json.loads((directory/OUTPUT_RECORD).read_text())
+        if {k:v for k,v in existing.items() if k!='created_at'} != {k:v for k,v in record.items() if k!='created_at'}:
+            raise ValueError('Existing output preparation differs')
+        record = existing
+    entry = dict(record=OUTPUT_RECORD, sha256=sha256(json_bytes(record)))
+    migrated = deepcopy(state)
+    migrated.update(config=config, code_sha256=code_identity(), compatible_recovery=entry)
+    with tempfile.TemporaryDirectory(prefix='finmy-output-replay-') as temp:
+        clone = Path(temp)/directory.name
+        for name in files:
+            path = clone/name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if name in backups:
+                path.write_bytes(backups[name])
+            else:
+                shutil.copyfile(directory/name, path)
+        write_json(clone/OUTPUT_RECORD, record)
+        write_json(clone/'state.json', migrated)
+        seen = []
+        def stop_at_unfinished(system, user, task):
+            seen.append(task)
+            raise PauseRequested('Offline output recovery verification; no model invoked')
+        checked = run_event(json.loads((clone/'input.json').read_text()), clone, config,
+                            model=stop_at_unfinished, resume=True)
+        if seen != [record['resume_task']] or checked['execution_status'] != 'paused':
+            raise ValueError('Replay did not reach the unfinished task without upstream calls: '+str(seen))
+        if any(checked.get(k) != state.get(k) for k in ('facts_sha256', 'graph_sha256')):
+            raise ValueError('Output recovery changed adopted facts or organization')
+    publish_immutable(directory, {**backups, OUTPUT_RECORD:json_bytes(record)})
+    write_json(directory/'state.json', migrated)
+    write_json(directory/'config.json', config)
     return entry
 
 
