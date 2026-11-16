@@ -131,6 +131,11 @@ def person_build_panel(store, controller, row, labels):
                 components.html(html, height=850, scrolling=True)
             except (OSError, ValueError, KeyError):
                 st.info('这份 JSON 暂无可用的配套 Gantt，可单独生成；构建草稿已保留。')
+            if current:
+                from finmy.person_epg.event.graph_html import render_graph_html
+                st.download_button('下载交互式 EPG HTML', render_graph_html(graph),
+                                   tid+'-epg.html', 'text/html', key='person-epg-html-'+tid,
+                                   type='tertiary', on_click='ignore')
             if st.button('从已保存 JSON 重新生成 Gantt', disabled=row['status'] in {'ready','queued','running'}, key='person-render-'+tid):
                 try:
                     result = controller.render_person(tid)
