@@ -63,6 +63,15 @@ Source cards show their name and date, with passages available on expansion.
 Evidence lines are faint until their source or target receives hover, keyboard
 focus, or expansion.
 
+Relationship colors follow the existing palette: purple for action links,
+blue-gray for roles, ochre for context, and green for evidence. Rounded labels
+identify the relation without covering cards. Hovering or focusing a node
+emphasizes its immediate neighbors and connecting arrows together; unrelated
+nodes and links recede. A subtle directional trace runs only while inspecting
+a directed relationship. Unknown-order and inferred links remain static, and
+the viewer respects the system's reduced-motion preference. These effects do
+not change node coordinates, Phase navigation, or the underlying records.
+
 Direct context references take precedence. Remaining context can be grouped by
 dates or by evidence it shares with a Phase. Unassigned context stays in event
 background canvas. These assignments affect presentation only. Cross-Phase

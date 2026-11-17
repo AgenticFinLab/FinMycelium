@@ -201,6 +201,9 @@ select:focus-visible {
   margin: 14px
 }
 
+.relationship-legend { display: flex; align-items: center; gap: 10px }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap }
+
 #links {
   overflow: visible;
   z-index: 1
@@ -208,6 +211,39 @@ select:focus-visible {
 
 #cards {
   z-index: 2
+}
+
+.edge-line,
+.edge-halo,
+.edge-flow {
+  stroke-linecap: round;
+  stroke-linejoin: round
+}
+
+.edge-line,
+.edge-label,
+.edge-origin,
+.edge-halo {
+  transition: opacity 140ms ease
+}
+
+.edge-flow {
+  stroke-dasharray: 6 24;
+  animation: edge-direction 1.8s linear infinite
+}
+
+@keyframes edge-direction {
+  to { stroke-dashoffset: -60 }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-flow { display: none !important; animation: none }
+  .edge-line, .edge-label, .edge-origin, .edge-halo, .card { transition: none !important }
+}
+
+#links .edge-label text {
+  font: 600 10.5px Arial, Helvetica, sans-serif;
+  stroke: none
 }
 
 .card {
@@ -273,6 +309,22 @@ select:focus-visible {
 .card:hover {
   outline: 2px solid #7093a8;
   outline-offset: 1px
+}
+
+.card { transition: opacity 140ms ease, box-shadow 140ms ease }
+.card.relation-muted { opacity: .48 }
+.card.relation-neighbor { box-shadow: 0 0 0 2px #7eac9566 }
+.card.context.relation-neighbor { box-shadow: 0 0 0 2px #d8be7680 }
+.card.relation-focus { outline: 2px solid #537f98; outline-offset: 2px }
+.card.party.relation-neighbor,
+.card.party.relation-focus { outline: none; box-shadow: none }
+.card.party.relation-neighbor .party-icon circle:first-child {
+  stroke: #6e98bc;
+  stroke-width: 2
+}
+.card.party.relation-focus .party-icon circle:first-child {
+  stroke: #3e6b92;
+  stroke-width: 2.6
 }
 
 .card .meta {
@@ -458,7 +510,26 @@ const view = JSON.parse($('epg-view').textContent);
 const evidence = new Map(graph.evidence.map(item => [item.evidence_id, item]));
 const sources = new Map(graph.sources.map(item => [item.source_id, item]));
 const cards = new Map();
-let drawnEdges = [], hovered = null, regionBoxes = [];
+let drawnEdges = [], hovered = null, focused = null, regionBoxes = [];
+let relationshipLabels = null, relationshipObstacles = [];
+const EDGE_STYLES = {
+  relation: {color: '#80589f', tint: '#f7f3fa', border: '#d8c9e3', width: 2.2, opacity: .94},
+  party: {color: '#607f9c', tint: '#f2f7fb', border: '#c0d1df', width: 1.4, opacity: .76},
+  context: {color: '#a18a51', tint: '#fff8e8', border: '#dfcea0', width: 1.45, opacity: .82},
+  evidence: {color: '#4f8270', tint: '#f2f8f5', border: '#bdd5c8', width: 1.05, opacity: .34}
+};
+
+function edgeStyle(edge) {
+  const style = EDGE_STYLES[edge.kind] || EDGE_STYLES.context;
+  return {...style, opacity: edge.type === 'about' ? .52 : style.opacity};
+}
+
+function edgePattern(edge) {
+  if (edge.type === 'order_unknown' || edge.record?.basis === 'inferred') return '5 4';
+  if (edge.kind === 'context') return '8 3';
+  if (edge.kind === 'evidence') return '2 5';
+  return '';
+}
 let current = 0,
   expanded = null,
   scale = 1;
@@ -513,15 +584,85 @@ function linkBox(item) {
 
 function highlight(key) {
   hovered = key;
-  const active = hovered || expanded;
-  for (const {edge, line, label} of drawnEdges) {
-    const selected = active && (active === edge.from_key || active === edge.to_key);
-    const evidence = edge.kind === 'evidence';
-    const normal = edge.type === 'about' ? .32 : edge.kind === 'party' ? .65 : .9;
-    line.setAttribute('opacity', selected ? 1 : evidence ? .18 : active ? .2 : normal);
-    line.setAttribute('stroke-width', selected ? 2.2 : evidence ? .7 : edge.kind === 'relation' ? 1.7 : 1);
-    if (label) label.setAttribute('opacity', selected ? 1 : edge.type === 'about' ? 0 : active ? .25 : 1);
+  const active = hovered || focused || expanded;
+  const moving = Boolean(hovered || (focused && !expanded));
+  const neighbors = new Set(active ? [active] : []);
+  for (const item of drawnEdges) {
+    const {edge, line, halo, flow, origin, emphasis} = item;
+    const selected = Boolean(active && (active === edge.from_key || active === edge.to_key));
+    const style = edgeStyle(edge);
+    if (selected) {
+      neighbors.add(edge.from_key);
+      neighbors.add(edge.to_key);
+    }
+    line.setAttribute('opacity', selected ? 1 : active ? .16 : style.opacity);
+    line.setAttribute('stroke-width', selected ? style.width + .8 : style.width);
+    halo.setAttribute('stroke-width', style.width + 4);
+    halo.setAttribute('opacity', selected ? .95 : 0);
+    emphasis.style.display = selected ? '' : 'none';
+    flow.style.display = selected && moving && edge.type !== 'order_unknown' &&
+      edge.record?.basis !== 'inferred' ? '' : 'none';
+    origin.setAttribute('opacity', selected && edge.type !== 'order_unknown' ? .9 : 0);
   }
+  for (const [nodeKey, item] of cards) {
+    item.button.classList.toggle('relation-focus', nodeKey === active);
+    item.button.classList.toggle('relation-neighbor', nodeKey !== active && neighbors.has(nodeKey));
+    item.button.classList.toggle('relation-muted', Boolean(active && !neighbors.has(nodeKey)));
+  }
+  drawRelationshipLabels(active);
+}
+
+function drawRelationshipLabels(active) {
+  if (!relationshipLabels) return;
+  relationshipLabels.replaceChildren();
+  for (const item of drawnEdges) item.label = null;
+  const obstacles = [...relationshipObstacles];
+  const priority = {relation: 0, context: 1, party: 2, evidence: 3};
+  const visible = drawnEdges.filter(({edge}) => active ?
+    edge.from_key === active || edge.to_key === active :
+    edge.kind !== 'evidence' && edge.type !== 'about');
+  visible.sort((a, b) => (priority[a.edge.kind] ?? 4) - (priority[b.edge.kind] ?? 4));
+  for (const item of visible) {
+    const {edge, points} = item;
+    const text = edge.type === 'precedes' ? 'before' : edge.type.replaceAll('_', ' ');
+    const location = labelPosition(points, text, obstacles, view.pages[current].width);
+    if (!location) continue;
+    const {box, anchor, connector} = location;
+    obstacles.push(box);
+    const style = edgeStyle(edge);
+    const label = svg('g', {'class': 'edge-label', 'data-from': edge.from_key, 'data-to': edge.to_key});
+    if (Math.abs(anchor[0] - connector[0]) + Math.abs(anchor[1] - connector[1]) > 8) {
+      label.append(svg('line', {x1: anchor[0], y1: anchor[1], x2: connector[0], y2: connector[1],
+        stroke: style.color, 'stroke-width': .8, opacity: .6}));
+    }
+    label.append(svg('rect', {x: box[0], y: box[1], width: box[2], height: box[3], rx: 5,
+      fill: style.tint, stroke: style.border, 'stroke-width': 1}));
+    const caption = svg('text', {x: box[0] + box[2] / 2, y: box[1] + 13.5,
+      fill: style.color, 'text-anchor': 'middle'});
+    caption.textContent = text;
+    label.append(caption);
+    relationshipLabels.append(label);
+    item.label = label;
+    item.labelBox = box;
+  }
+}
+
+function relationshipLegend() {
+  const legend = el('span', null, 'legend relationship-legend');
+  legend.title = 'Hover or focus a card to follow its relationships';
+  for (const [kind, title] of [['relation', 'Action links'], ['party', 'Roles'],
+                              ['context', 'Context'], ['evidence', 'Evidence']]) {
+    const item = el('span', null, 'legend-item');
+    const sample = svg('svg', {width: 28, height: 12, 'aria-hidden': 'true'});
+    const style = EDGE_STYLES[kind];
+    item.style.color = style.color;
+    sample.append(svg('path', {d: 'M1 6H23', fill: 'none', stroke: style.color,
+      'stroke-width': style.width, 'stroke-dasharray': edgePattern({kind})}));
+    sample.append(svg('path', {d: 'M22 2L28 6L22 10Z', fill: style.color}));
+    item.append(sample, el('span', title));
+    legend.append(item);
+  }
+  return legend;
 }
 
 function paintCard(card) {
@@ -552,8 +693,10 @@ function paintCard(card) {
   button.onclick = event => {
     if (!event.target.closest('a')) toggle(card.key);
   };
-  button.onmouseenter = button.onfocus = () => highlight(card.key);
-  button.onmouseleave = button.onblur = () => highlight(null);
+  button.onmouseenter = () => highlight(card.key);
+  button.onmouseleave = () => highlight(null);
+  button.onfocus = () => { focused = card.key; highlight(hovered); };
+  button.onblur = () => { if (focused === card.key) focused = null; highlight(hovered); };
   $('cards').append(button);
   cards.set(card.key, {
     card,
@@ -627,6 +770,7 @@ function showPage(index) {
   current = index;
   expanded = null;
   hovered = null;
+  focused = null;
   cards.clear();
   const page = view.pages[index];
   $('sheet').style.width = page.width + 'px';
@@ -662,8 +806,7 @@ function showPage(index) {
   for (const region of page.sections) {
     const section = el('section', null, 'section' + (region.title === 'Source evidence' ? ' evidence' : ''));
     position(section, region.box);
-    if (region.title === 'Source evidence') section.append(el('span',
-      'Hover or focus a card to highlight its evidence', 'legend'));
+    if (region.title === 'Source evidence') section.append(relationshipLegend());
     if (region.title === 'Actions and their context') section.append(el('span',
       '● People / organizations · ■ Actions · ■ Context', 'legend'));
     section.append(el('h3', region.title));
@@ -859,23 +1002,30 @@ function simplify(points) {
 }
 
 function labelPosition(points, text, obstacles, canvasWidth) {
-  const width = text.length * 5.5 + 8, height = 14;
+  const width = Math.ceil(text.length * 5.7 + 14), height = 20;
   const overlaps = ([x, y, w, h], [ox, oy, ow, oh]) =>
     x < ox + ow + 3 && x + w > ox - 3 && y < oy + oh + 3 && y + h > oy - 3;
   const candidates = [];
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1], b = points[i];
-    const x = (a[0] + b[0]) / 2, y = (a[1] + b[1]) / 2;
-    if (a[1] === b[1] && Math.abs(a[0] - b[0]) >= width) {
-      candidates.push([x - width / 2, y - height - 4, width, height],
-                      [x - width / 2, y + 4, width, height]);
-    } else if (a[0] === b[0] && Math.abs(a[1] - b[1]) > height + 8) {
-      candidates.push([x + 5, y - height / 2, width, height],
-                      [x - width - 5, y - height / 2, width, height]);
+  for (let offset = 0; offset < 4; offset++) {
+    const gap = 5 + offset * 27;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      const x = (a[0] + b[0]) / 2, y = (a[1] + b[1]) / 2;
+      if (a[1] === b[1] && Math.abs(a[0] - b[0]) >= Math.min(width, 32)) {
+        candidates.push(
+          {box: [x - width / 2, y - height - gap, width, height], anchor: [x, y], connector: [x, y - gap]},
+          {box: [x - width / 2, y + gap, width, height], anchor: [x, y], connector: [x, y + gap]});
+      } else if (a[0] === b[0] && Math.abs(a[1] - b[1]) > height + 8) {
+        candidates.push(
+          {box: [x + gap, y - height / 2, width, height], anchor: [x, y], connector: [x + gap, y]},
+          {box: [x - width - gap, y - height / 2, width, height], anchor: [x, y], connector: [x - gap, y]});
+      }
     }
   }
-  return candidates.find(box => box[0] > 8 && box[0] + box[2] < canvasWidth - 10 && box[1] > 0 &&
-    !obstacles.some(other => overlaps(box, other)));
+  return candidates.find(({box, anchor, connector}) =>
+    box[0] > 8 && box[0] + box[2] < canvasWidth - 10 && box[1] > 0 &&
+    box[1] + box[3] < parseFloat($('graph').style.height) - 5 &&
+    !obstacles.some(other => overlaps(box, other)) && !blocked(anchor, connector, obstacles));
 }
 
 function drawEdges() {
@@ -887,28 +1037,28 @@ function drawEdges() {
   canvas.setAttribute('width', page.width);
   canvas.setAttribute('height', height);
   const defs = svg('defs', {});
-  for (const [kind, color] of [
-      ['context', '#899aa6'],
-      ['party', '#899aa6'],
-      ['relation', '#80589f'],
-      ['evidence', '#5b8f7d']
-    ]) {
+  for (const [kind, style] of Object.entries(EDGE_STYLES)) {
     const marker = svg('marker', {
       id: 'arrow-' + kind,
       viewBox: '0 0 10 10',
       refX: 9,
       refY: 5,
-      markerWidth: 6,
-      markerHeight: 6,
+      markerUnits: 'userSpaceOnUse',
+      markerWidth: kind === 'relation' ? 11 : 9,
+      markerHeight: kind === 'relation' ? 11 : 9,
       orient: 'auto'
     });
     marker.append(svg('path', {
       d: 'M0 1L9 5L0 9L3 5Z',
-      fill: color
+      fill: style.color
     }));
     defs.append(marker);
   }
   canvas.append(defs);
+  const baseLayer = svg('g', {'class': 'edge-layer'});
+  const emphasisLayer = svg('g', {'class': 'edge-emphasis-layer'});
+  relationshipLabels = svg('g', {'class': 'edge-label-layer'});
+  canvas.append(baseLayer, emphasisLayer, relationshipLabels);
   const boxes = new Map([...cards].map(([key, item]) => [key, linkBox(item)]));
   const partyLabels = [...cards.values()].filter(item => item.card.kind === 'party' &&
     expanded !== item.card.key).map(item => {
@@ -924,8 +1074,8 @@ function drawEdges() {
       headings.push([645, regionBoxes[i][1] + 7, 450, 28]);
   });
   const obstacles = [...boxes.values(), ...partyLabels, ...headings];
+  relationshipObstacles = obstacles;
   const grid = routingGrid(obstacles, page.width, height);
-  const labelObstacles = [...obstacles];
   // Draw evidence first so the action sequence stays visually in front.
   for (const edge of [...page.edges].sort((a, b) =>
       (a.kind === 'evidence' ? 0 : a.kind === 'relation' ? 2 : 1) -
@@ -952,37 +1102,32 @@ function drawEdges() {
       }
     }
     if (!points) continue;
-    const color = edge.kind === 'evidence' ? '#5b8f7d' : edge.kind === 'relation' ? '#80589f' : '#899aa6';
-    const line = svg('polyline', {
+    const style = edgeStyle(edge);
+    const attributes = {
       points: points.map(p => p.join(',')).join(' '),
       fill: 'none',
-      stroke: color,
+      stroke: style.color,
       'marker-end': edge.type === 'order_unknown' ? 'none' : 'url(#arrow-' + edge.kind + ')',
+      'stroke-dasharray': edgePattern(edge) || 'none',
       'data-from': edge.from_key,
       'data-to': edge.to_key
-    });
+    };
+    const line = svg('polyline', {...attributes, 'class': 'edge-line'});
     const tooltip = svg('title', {});
     tooltip.textContent = edge.type.replaceAll('_', ' ');
     line.append(tooltip);
-    if (edge.type === 'order_unknown' || edge.record?.basis === 'inferred') line.setAttribute(
-      'stroke-dasharray', '4 3');
-    canvas.append(line);
-    let label = null;
-    if (edge.kind !== 'evidence') {
-      const text = edge.type === 'precedes' ? 'before' : edge.type.replaceAll('_', ' ');
-      const location = labelPosition(points, text, labelObstacles, page.width);
-      if (location) {
-        labelObstacles.push(location);
-        label = svg('text', {
-          x: location[0] + location[2] / 2, y: location[1] + 11,
-          fill: color, 'text-anchor': 'middle',
-          stroke: 'white', 'stroke-width': 3, 'paint-order': 'stroke'
-        });
-        label.textContent = text;
-        canvas.append(label);
-      }
-    }
-    drawnEdges.push({edge, line, label});
+    baseLayer.append(line);
+    const emphasis = svg('g', {'class': 'edge-emphasis'});
+    const halo = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'white',
+      'class': 'edge-halo'});
+    const focusLine = svg('polyline', {...attributes, 'class': 'edge-line', 'stroke-width': style.width + .8});
+    const flow = svg('polyline', {points: attributes.points, fill: 'none', stroke: style.color,
+      'stroke-width': style.width + 1.2, 'class': 'edge-flow', opacity: .8});
+    const origin = svg('circle', {cx: points[0][0], cy: points[0][1], r: 2.5,
+      fill: style.color, stroke: 'white', 'stroke-width': 1, 'class': 'edge-origin'});
+    emphasis.append(halo, focusLine, flow, origin);
+    emphasisLayer.append(emphasis);
+    drawnEdges.push({edge, line, points, halo, focusLine, flow, origin, emphasis, label: null});
   }
   highlight(hovered);
 }
