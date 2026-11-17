@@ -14,7 +14,7 @@ source_id稳定；URL和locator定位实际已读正文，reading_note说明阅�
 
 supported_fields为主表字段名数组，support_note记录支持身份、日期或边界的具体事实。verification_result为supported/conflicting/insufficient；最终有效记录不能有未解决关键冲突。无充分证据者暂缓，不能把访问失败直接判为虚构。批准、拟议协议、法院录入、责任认定、付款和实施成效分别表述；计划日期不写成已发生，公告日不自动作为过程起止。
 
-decision为retain/revise/merge/exclude/defer。历史来源与决策保持不变前缀，纠错来源追加新ID；最新决策以CSV追加顺序为准。source_ids为数组；changed_fields为字段到old/new的对象，未修改为{}。修订可按顺序重放，合并/撤回保留去向，ID不回收。已有owner、状态或成果路径变化须有实际依据。
+decision为retain/revise/merge/exclude/defer。暂存验收时冻结来源和决策前缀，修订以追加的old/new验证重放；source_ids为数组，未修改为{}。若数据目录明确采用仅当前快照策略，完成暂存验证后可按当前有效ID物化单条结论，删除正式目录旧链并刷新当前身份基线及哈希；必须说明不支持历史回放，不将物化写成新来源认证。ID不回收，已有owner、状态或成果路径变化须有实际依据。
 
 ## 重复裁决与逐行结论
 
@@ -26,7 +26,7 @@ decision为retain/revise/merge/exclude/defer。历史来源与决策保持不变
 
 ## 发布与报告
 
-正式event-epg保留唯一events.csv、来源/支撑/决策三表、research-plan.md、quality-report.md及research审计。每批保存输入/输出哈希、目标与有效数、变更及未决项、覆盖缺口和下一步。当前逐行结论、候选队列和报告指针必须对应当前主表；历史文件不覆盖。
+正式event-epg保留唯一events.csv、来源/支撑/决策三表、research-plan.md、quality-report.md及research审计。每批保存输入/输出哈希、目标与有效数、变更及未决项、覆盖缺口和下一步。当前逐行结论、候选队列和报告指针必须对应当前主表；保留策略遵循检查点；仅当前快照时不保留旧批次或历史版本。
 
 检查点沿用已有格式；新建至少记录target、active、remaining、execution_date、batches、current_semantic_review_queue、current_semantic_review_pending_pairs、final_all_row_review、final_review_scope、complete和output_sha256。先核实未知变更，再刷新哈希；清单不含检查点自身。发布中断或有关键未决时不标complete。
 

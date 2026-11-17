@@ -15,7 +15,9 @@ python -X utf8 -B "$SkillRoot/scripts/preflight.py" --finmy-root "$FinmyRoot" --
 python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" init --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir" --basis existing
 ```
 
-existing冻结当前四张CSV及保留的历史身份元数据，分别复制到baseline和stage并登记run.json。独立初建用fresh代替existing，只创建空表头；已有run续跑跳过init，先核对冻结哈希。预检退出0只表示报告生成，须另核对缺失文件、Git冲突、检查点差异和接口结果，不盲目刷新哈希。
+existing冻结当前四张CSV及当前身份基线元数据，分别复制到baseline和stage并登记run.json。独立初建用fresh代替existing，只创建空表头；已有run续跑跳过init，先核对冻结哈希。预检退出0只表示报告生成，须另核对缺失文件、Git冲突、检查点差异和接口结果，不盲目刷新哈希。
+
+大审计CSV可能以.csv.gz保存；使用curate_events.read可读取实际.gz路径或自动解析同名.csv逻辑路径。JSONL事实用gzip.open逐行读取；四张核心CSV保持普通文本。若检查点标记current_snapshot_only，仅使用当前文件，不要求旧批次、历史ZIP或存储映射。
 
 修改只在stage进行。按当前规范和[审计约定](research-and-audit.md)研究、扩充并维护四表；来源、原决策保持不变前缀，变更追加决策及old/new。记录研究截止日、实际查询/工具、已读定位、缓存和覆盖缺口，不执行依赖退役输入的prepare或validate_tables.py。
 
@@ -63,7 +65,7 @@ fresh省略--baseline；有撤回时先完成映射裁决，再用--allow-withdr
 
 分别验证三个入口：上传用domain.py的read_table；Web数据集直读用dataset.py的DatasetCatalog；Builder还需正文samples及范围/材料审核。预检检查前两个入口；上传成功不能证明目录直读兼容。sources及链接不会自动导入为正文。已有ID不能靠批量导入覆盖，changed/withdrawn审阅表不作为新增导入。本skill只交付文件和限制说明。
 
-发布前确认正式四表仍匹配冻结快照；有用户修改先协调。工具不自动发布，fresh不能擅自替换现行目录。将四张stage表、研究报告及run.json、revisions.json、validation.json、row-review.csv、pair-review.csv、recall-method.json和实际阅读记录放入正式event-epg；历史审计用唯一批次名保留。更新统计、报告/队列/逐行结论指针，最后登记输出哈希。多文件发布中断不得标完成。
+发布前确认正式四表仍匹配冻结快照；有用户修改先协调。工具不自动发布，fresh不能擅自替换现行目录。将四张stage表、研究报告及run.json、revisions.json、validation.json、row-review.csv、pair-review.csv、recall-method.json和实际阅读记录放入正式event-epg；正式目录按检查点保留策略维护；current_snapshot_only时仅发布当前结论、必要事实和检查点，不重新引入旧批次或变更链。更新统计、报告/队列/逐行结论指针，最后登记输出哈希。多文件发布中断不得标完成。
 
 交付代码版本、未提交修改、当前基线及哈希、依赖/命令和必要缓存获取方式。运行两仓库git diff --check，单独报告无关Git冲突，不为通过而修改其他文件；不提交、推送或写数据库。
 

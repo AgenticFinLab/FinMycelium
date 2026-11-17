@@ -2,6 +2,7 @@
 import argparse
 import importlib.util
 import json
+import gzip
 from pathlib import Path
 import shutil
 import tempfile
@@ -32,6 +33,11 @@ def main():
         for name in ['curate_events.py','export_event_workbench.py']:
             shutil.copy2(dataset/'scripts'/name,mock/'scripts'/name)
         c=load('smoke_catalog',mock/'scripts/curate_events.py')
+        compressed=root/'audit.csv.gz'
+        compressed.write_bytes(gzip.compress(b'event_id,note\nEVT-fixture,synthetic\n',mtime=0))
+        expected=[dict(event_id='EVT-fixture',note='synthetic')]
+        assert c.read(compressed)==expected and c.read(root/'audit.csv')==expected
+        print('PASS gzip evidence reads explicitly and through the legacy logical CSV path')
         fresh=mock/'output/fresh';helper.initialize(c,mock,fresh,'fresh');stage=fresh/'stage'
         rows=[];sources=[];links=[];decisions=[]
         for suffix in ['Alpha','Beta']:
