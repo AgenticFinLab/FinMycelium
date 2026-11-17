@@ -7,7 +7,7 @@ The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own proto
 ## Workbench flow
 
 1. Configure the local EPG-dataset path, select an event in **数据集**, confirm its scope, and run common search.
-2. Inspect retained material, actual builder input and gaps. Under **构建本条人物 event**, choose the independent build model and limits, then confirm the material. **保存人物构建任务** freezes the task without model calls.
+2. Inspect retained material, actual builder input and gaps. Under **构建本条人物 event**, choose the independent build model, output mode and limits, then confirm the material. **保存人物构建任务** freezes the task without model calls.
 3. In **任务中心**, explicitly allow calls and select **开始人物构建**.
 4. Inspect JSON, expanded Gantt, checks, source handoff and cumulative calls. Execution, completeness and rendering have separate statuses. A draft still requires content and evidence review.
 
@@ -34,6 +34,27 @@ exclude raw error messages, URLs, headers, credentials and reasoning text.
 
 The workbench exposes model, cumulative calls, per-call output tokens and context
 characters, extraction batch size, local reading limits and the optional repair round.
+Ark build presets are Seed 2.1 Pro, Seed Evolving, DeepSeek V4 Pro and Kimi K3.1 Pro.
+A workspace without saved build settings selects `ark/kimi-k3-1-pro-261024` by default;
+saved workspace preferences and existing task configurations remain authoritative.
+The native `EventBuildConfig` uses the same default model.
+Search presets and TokenHub choices are independent. Historical model IDs remain
+usable through the custom model field. Selecting a preset does not enable API JSON
+mode or change its sampling, thinking or construction limits.
+
+**模型输出模式** defaults to **普通（提示词约定 JSON）**: each role is prompted to
+return JSON, without an API `response_format` override. For Ark Kimi K3.1 Pro,
+**API JSON 模式** sets `api_json_mode=True` and sends
+`response_format={"type":"json_object"}` on every role call, including reading
+follow-ups and repairs. This is an API format constraint, not a full graph schema
+or evidence guarantee. Both modes use the same prompts, validation, budgets,
+sampling and thinking settings; a rejected request does not silently fall back.
+The choice is saved in task configuration, step requests, call records and
+checkpoint dependencies. Historical tasks without the flag use ordinary mode.
+To compare modes, create two new tasks from the same confirmed input and current
+implementation, with identical model and limits; change only this option. Switching
+mode requires a new task, not a resume of the other mode's checkpoints.
+
 Defaults live in `EventBuildConfig`: 40 model calls, 12,288 output tokens, 160,000
 context characters, 12,000-character body batches with 400-character overlap,
 24 local reads and 48,000 cumulative read characters. A local read returns at most

@@ -9,6 +9,8 @@ import re
 import time
 import uuid
 
+from finmy.model_config import person_build_json_mode_supported
+
 from .records import fingerprint, index_records, json_bytes, pointer, sha256, prompt_json
 from .schema import FACTS_VERSION, GRAPH_VERSION
 from ..building.model_transport import error_metadata
@@ -17,7 +19,7 @@ from ..building.completion_errors import IncompleteCompletionError
 
 @dataclass
 class EventBuildConfig:
-    lm_name: str = 'ark/doubao-seed-2-0-pro-260215'
+    lm_name: str = 'ark/kimi-k3-1-pro-261024'
     max_calls: int = 40
     max_json_attempts: int = 3
     max_new_tokens: int = 12288
@@ -31,12 +33,17 @@ class EventBuildConfig:
     retrieval_top_k: int = 4
     final_repair_rounds: int = 1
     graph_schema_version: str = GRAPH_VERSION
+    api_json_mode: bool = False
 
     def __post_init__(self):
         if not isinstance(self.lm_name, str) or not self.lm_name.strip():
             raise ValueError('Choose an independent build model')
+        if type(self.api_json_mode) is not bool:
+            raise ValueError('api_json_mode must be a boolean')
+        if self.api_json_mode and not person_build_json_mode_supported(self.lm_name):
+            raise ValueError('API JSON mode is currently supported for Ark Kimi K3.1 Pro only')
         for key, value in asdict(self).items():
-            if key in ('lm_name', 'graph_schema_version'):
+            if key in ('lm_name', 'graph_schema_version', 'api_json_mode'):
                 continue
             minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls') else 1
             if type(value) is not int or value < minimum:
@@ -110,7 +117,12 @@ def code_identity():
 
 
 def semantic_config(config):
-    return {k: v for k, v in asdict(config).items() if k != 'max_calls'}
+    value = {k: v for k, v in asdict(config).items() if k != 'max_calls'}
+    # Missing in historical ordinary-mode configurations. Preserve their hashes;
+    # explicit JSON mode still changes all request/checkpoint dependencies.
+    if not config.api_json_mode:
+        value.pop('api_json_mode')
+    return value
 
 
 def parse(raw):
@@ -250,7 +262,8 @@ class Execution:
                         expected=self.state.get(hash_field), actual=actual, at=now(),
                         action='Retain previous attempt; rebuild from independently validated upstream checkpoints.'))
             previous = self.state['config']
-            if any(previous[k] != v for k, v in semantic_config(config).items()) or config.max_calls < previous['max_calls']:
+            if (semantic_config(EventBuildConfig(**previous)) != semantic_config(config)
+                    or config.max_calls < previous['max_calls']):
                 raise ValueError('Resume retains semantic settings and cannot reduce the cumulative limit')
             for call in self.state['calls']:
                 if call['status'] == 'submitted':
@@ -351,9 +364,11 @@ class Execution:
             call_id = f"CALL-{len(self.state['calls']) + 1:06d}"
             call = dict(call_id=call_id, task_id=task_id, dependency=dependency,
                         request_fingerprint=fingerprint(dict(system=system, user=user)), status='submitted',
+                        api_json_mode=self.config.api_json_mode,
                         started_at=now(), usage=None, usage_status='unknown')
             step_path = self.attempt / 'steps' / call_id
-            write_json(step_path / 'request.json', dict(system=system, user=user, task_id=task_id, dependency=dependency))
+            write_json(step_path / 'request.json', dict(system=system, user=user, task_id=task_id,
+                dependency=dependency, api_json_mode=self.config.api_json_mode))
             self.state['calls'].append(call)
             self.persist()  # Durable reservation before the transport is invoked.
             started = time.monotonic()

@@ -55,8 +55,9 @@ class StreamingModel:
 
     def __call__(self, system, user, name):
         self.last_usage = None
+        api_json_mode = getattr(self.config, 'api_json_mode', False)
         started = time.monotonic()
-        info = self.last_diagnostics = dict(mode='stream', phase='initializing', chunks=0,
+        info = self.last_diagnostics = dict(mode='stream', api_json_mode=api_json_mode, phase='initializing', chunks=0,
             content_chars=0, reasoning_chars=0, first_chunk_seconds=None,
             finish_reason=None, stream_exhausted=False)
         try:
@@ -65,7 +66,10 @@ class StreamingModel:
                 adapter = ModelAPIInference(lm_name=self.config.lm_name, generation_config={})
                 adapter.client = adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
                 self.adapter = adapter
-            parameters = self.adapter.request_parameters(dict(max_tokens=self.config.max_new_tokens))
+            requested = dict(max_tokens=self.config.max_new_tokens)
+            if api_json_mode:
+                requested['response_format'] = {'type': 'json_object'}
+            parameters = self.adapter.request_parameters(requested)
             info['phase'] = 'connecting'
             stream = self.adapter.client.chat.completions.create(model=self.adapter.model_name,
                 messages=[{'role': 'system', 'content': system}, {'role': 'user', 'content': user}],

@@ -36,9 +36,14 @@ MODELS = {
     "DeepSeek V4.1 Flash": "deepseek-v4-1-flash-261017",
     "Doubao Seed 2.1 Lite": "doubao-seed-2-1-lite-260915",
 }
-# Preserve existing Ark choices in both roles; add new role-specific presets.
+# Build choices are curated independently; historical/custom model IDs remain valid.
 ARK_MODELS = {
-    'build': {**MODELS, 'Doubao Seed Evolving': 'doubao-seed-evolving'},
+    'build': {
+        'Doubao Seed 2.1 Pro': 'doubao-seed-2-1-pro-260915',
+        'Doubao Seed Evolving': 'doubao-seed-evolving',
+        'DeepSeek V4 Pro': 'deepseek-v4-pro-ga-260813',
+        'Kimi K3.1 Pro': 'kimi-k3-1-pro-261024',
+    },
     'search': {**MODELS, 'GLM-5.3-Flash': 'glm-5-3-flash-260828'},
 }
 # Role-specific workbench presets. Values are exact TokenHub API model IDs.
@@ -55,7 +60,7 @@ TOKENHUB_MODELS = {
     },
 }
 
-DEFAULT_MODEL = next(iter(MODELS.values()))
+DEFAULT_MODEL = 'ark/kimi-k3-1-pro-261024'
 MAX_UPLOAD = 20 * 1024 * 1024
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z")
 

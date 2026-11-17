@@ -41,8 +41,12 @@ PRESET_CASES = ([('ark', model) for model in ARK_MODEL_IDS]
                + [('tokenhub', model) for models in TOKENHUB_MODELS.values() for model in models.values()])
 
 
-def assert_sampling(body, remote_model):
-    assert {k: body[k] for k in ('temperature', 'top_p') if k in body} == PRESET_SAMPLING[remote_model]
+def assert_sampling(body, remote_model, inherited=None):
+    # These Ark presets retain provider defaults, or explicit caller parameters;
+    # adding them to the picker must not change their existing request semantics.
+    expected = (inherited or {}) if remote_model in {
+        'doubao-seed-2-1-pro-260915', 'kimi-k3-1-pro-261024'} else PRESET_SAMPLING[remote_model]
+    assert {k: body[k] for k in ('temperature', 'top_p') if k in body} == expected
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +178,7 @@ def test_search_and_person_build_route_independently(transport, search_name, bui
         assert str(request.url) == ('https://tokenhub.tencentmaas.com/v1/chat/completions'
             if provider == 'tokenhub' else 'https://ark.cn-beijing.volces.com/api/v3/chat/completions')
         assert 'tools' not in body and 'web_search_options' not in body
-    assert [body['max_tokens'] for _, body in transport['requests']] == [4096, 12288]
+    assert [body['max_tokens'] for _, body in transport['requests']] == [8192, 12288]
     for model in (search, build):
         assert model.adapter.client.max_retries == 0
         assert model.last_usage['completion_tokens_details']['reasoning_tokens'] == 5
@@ -285,7 +289,7 @@ def test_each_preset_reaches_its_role_transport_with_the_exact_model_id(transpor
     if purpose == 'search':
         model = LmbaseModel(SearchConfig(lm_name=lm_name, allow_network=True))
         result = model({'task': 'synthetic task'})
-        cap = 4096
+        cap = 8192
     else:
         model = Model(EventBuildConfig(lm_name=lm_name))
         result = model('Return JSON', 'Synthetic source text', 'Extract')
@@ -318,7 +322,7 @@ def test_preset_sampling_survives_inherited_and_extra_body_overrides(transport, 
     result = adapter.run(infer_input=InferInput('Return JSON', 'Synthetic source'))
     assert result.response == '{"ok":true}'
     body = transport['requests'][0][1]
-    assert_sampling(body, remote_model)
+    assert_sampling(body, remote_model, inherited={'temperature': 0.1, 'top_p': 0.7})
     limit_key = 'max_completion_tokens' if remote_model == 'kimi-k3.1-pro' else 'max_tokens'
     assert body[limit_key] == 2222
     assert body['reasoning_effort'] == 'high'
@@ -364,7 +368,7 @@ def test_legacy_bare_ark_model_ids_use_the_same_sampling(transport, remote_model
     from lmbase.inference.base import InferInput
     adapter = ModelAPIInference(remote_model, {'max_tokens': 1234, 'temperature': 0.2})
     adapter.run(infer_input=InferInput('Return JSON', 'Synthetic source'))
-    assert_sampling(transport['requests'][0][1], remote_model)
+    assert_sampling(transport['requests'][0][1], remote_model, inherited={'temperature': 0.2})
 
 
 @pytest.mark.parametrize('name', ['ark/glm-5.3', 'tokenhub/custom-model'])

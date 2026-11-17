@@ -6,6 +6,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from finmy.dataset import within
+from finmy.model_config import person_build_json_mode_supported
 from finmy.search.state import digest
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded
@@ -19,6 +20,11 @@ def create_person_build(store, controller, task_id, data):
     st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；也可先独立确认收录检索材料，再创建构建任务。')
     model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
     with st.form('person-build-create-'+task_id):
+        json_supported = person_build_json_mode_supported(model)
+        api_json_mode = st.radio('模型输出模式', [False, True] if json_supported else [False],
+            format_func=lambda enabled: 'API JSON 模式' if enabled else '普通（提示词约定 JSON）',
+            key='person-build-json-'+task_id+'-'+model, disabled=not json_supported,
+            help='API JSON 模式当前可用于 Ark Kimi K3.1 Pro。两种模式都生成 EPG JSON，并执行相同的结构与证据检查。模式保存后固定。')
         with st.expander('构建上限'):
             calls=st.number_input('累计模型调用上限',min_value=1,value=40)
             tokens=st.number_input('每次输出 token 上限',min_value=1,value=12288,
@@ -33,7 +39,7 @@ def create_person_build(store, controller, task_id, data):
         if st.form_submit_button('保存人物构建任务',type='primary'):
             try:
                 tid=BuildController(store).create_person(controller,task_id,
-                    dict(lm_name=model,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
+                    dict(lm_name=model,api_json_mode=api_json_mode,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
                          extraction_chars=batch,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
@@ -47,6 +53,8 @@ def person_build_panel(store, controller, row, labels):
     from .build_page import build_status
     status(build_status(row)[1], '人物 event 构建 · '+tid)
     st.caption(event['storyline_name']+' · '+event['event_id']+' · '+body['person_config']['lm_name'])
+    st.caption('模型输出模式：' + ('API JSON 模式' if body['person_config'].get('api_json_mode', False)
+                                 else '普通（提示词约定 JSON）'))
     st.caption('构建输出：' + body['artifact_directory'])
     if body.get('search_collection'):
         st.caption('已采用检索：' + str(Path(body['catalog']['root'])/body['search_collection']['directory']))

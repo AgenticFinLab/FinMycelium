@@ -15,6 +15,9 @@ MODEL_PROVIDERS = {
 }
 TOKENHUB_BASE_URL = 'https://tokenhub.tencentmaas.com/v1'
 
+# Opt-in person-build JSON mode; validated with the streaming transport.
+PERSON_BUILD_JSON_MODELS = frozenset({'ark/kimi-k3-1-pro-261024'})
+
 # Sampling policy for supported presets, applied after inherited Builder settings.
 # Unlisted model IDs keep their supplied configuration.
 # Ark Agent recommendations: https://docs.volcengine.com/docs/ark/agent-model-invocation-practice
@@ -64,6 +67,14 @@ def api_key_variable(provider):
     if provider not in MODEL_PROVIDERS:
         raise ValueError('Unsupported model provider')
     return 'HUNYUAN_API_KEY' if provider == 'tokenhub' else provider.upper() + '_API_KEY'
+
+
+def person_build_json_mode_supported(value):
+    """Only expose verified model/service combinations for this build option."""
+    try:
+        return model_name(value) in PERSON_BUILD_JSON_MODELS
+    except ValueError:
+        return False
 
 
 def generation_parameters(lm_name, parameters):
