@@ -147,33 +147,23 @@ history are exported with the shared search records.
 
 ### Adopted search and reviewed graphs
 
-Saving a confirmed build task collects the adopted input and its records under the catalog
-event's `search/`: `builder-input.json`, `search-summary.md`, `sources.csv`, and
-`manifest.json`. The input JSON is the exact frozen Builder payload, including query,
-identity/source metadata and original selected text. Its file hash and structured-input
-hash are recorded in the manifest. These confirmed files belong in Git; original
-downloads, unselected bodies and runtime logs remain ignored. Person
-builds use the existing actual-material confirmation; ordinary builds use the
-existing evidence review after adopting search material. This does not start a worker.
+Catalog-linked search material can be explicitly confirmed and collected before
+creating a build. The event's `search/` saves the exact `builder-input.json`,
+source index, summary and manifest. Saving a confirmed build continues to collect
+its actual input. Original source downloads and unselected bodies remain ignored;
+retries and reassembly never silently replace a collection.
 
-The source CSV contains only actual build inputs. The manifest pins the search task,
-handoff revision, source versions, input hash, configuration and known gaps, with
-relative runtime references. Source bodies remain under ignored `output/`.
-An ordinary input may also include manually added material, explicitly identified
-without a search origin. Independent tasks without a catalog association do not
-create catalog files.
+Completed person drafts can be marked **舍弃** and later restored without changing
+their execution status. After external content review, upload the version-bound
+`review.md` and confirm collection of `epg.json`, `gantt.html`, and `review.md` to
+`epg/`. The registry and the interface then recognize that accepted version.
+Search and graph collections can be withdrawn with a reason; their exact bytes
+are archived locally and lightweight receipts are retained.
 
-Search retries, reassembly and shared-record refreshes never replace an adopted
-collection. A newly confirmed build may adopt a successor; the previous build row
-retains the exact snapshot and its portable build record retains the manifest.
-Manual edits to collection files are protected. A save failure rolls back the
-collection rather than leaving a new adopted record without its build task.
-
-Reviewed graphs are collected later into the event's `epg/epg.json`, `epg/gantt.html`
-and `epg/review.md`, with accepted paths updated in `events.csv`. Graph review and
-collection remain explicit subsequent work; this step does not mark an event accepted.
-Both `person-epg/<person>/<storyline>/<event>/` and `event-epg/events/<event_id>/`
-use this `search/` and `epg/` layout.
+See [Catalog collection and withdrawal](catalog-collection.md) for the controls,
+review binding, protected files and distinction between collection and execution.
+The content review Skill remains separate work. These actions never launch a
+model and do not force partial output into draft or accepted status.
 
 ## Execution and recovery boundaries
 

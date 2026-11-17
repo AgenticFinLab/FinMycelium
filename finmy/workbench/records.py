@@ -24,6 +24,7 @@ FinMycelium maintains these lightweight records for Git review and collaboration
 - [Search records](search/README.md): task scope/configuration, execution summary and source index.
 - [Build records](build/README.md): frozen input manifest/configuration and execution summary.
 - events/<event_id>/: workbench edits/history, source and graph indexes, and review decisions.
+- `collections/`: material/graph collection and withdrawal receipts; bodies stay in output/.
 - plans/<task_id>.json: historical task plans, explicitly separate from executed tasks.
 
 These are generated records, not graph acceptance or commands to start a task.
@@ -269,7 +270,8 @@ def _build_index(root, base):
         search_ids = sorted({h['search_task_id'] for h in handoffs if h.get('search_task_id')})
         values = [stamp, task.get('catalog', {}).get('person_name'),
                   task.get('catalog', {}).get('event_name') or task.get('event_name') or task['event_id'],
-                  task.get('configuration', {}).get('lm_name'), summary.get('status')]
+                  task.get('configuration', {}).get('lm_name'),
+                  ('discarded ('+str(summary.get('status'))+')' if summary.get('disposition') == 'discarded' else summary.get('status'))]
         search_links = ', '.join(f'[{cell(tid[:12])}](../search/{quote(searches[tid])}/)'
                                  if tid in searches else cell(tid) for tid in search_ids)
         link = f"[{cell(task['task_id'])}]({quote(folder.name)}/)"
@@ -400,7 +402,7 @@ def export_search(search_root, task_id):
         payload = json.loads(payload_path.read_text()) if payload_path.exists() else {}
         adopted = matching_builds(task_id, data.get('handoff_revision'), digest(payload) if payload else None,
                                   saved_confirmations(Path(search_root).resolve().parent))
-        decision = disposition(data, adopted)
+        decision = disposition({**data, "task_id": task_id, "builder_input": payload}, adopted)
         record.update(build_disposition=decision, confirmed_build_tasks=adopted)
         used = {s['raw_data_id'] for s in payload.get('samples', [])}
         rows = []
@@ -523,7 +525,7 @@ def export_database(workspace):
                 'input_confirmation': body.get('input_confirmation'), 'scope_sha256': body.get('scope_hash'),
                 'artifact_directory': relative(artifact, owner)})
             save(folder, 'summary.json', {'task_id': tid, 'status': row['status'],
-                **pick(body, ('finished', 'error_type', 'elapsed_seconds', 'graph_id')),
+                **pick(body, ('finished', 'error_type', 'elapsed_seconds', 'graph_id', 'disposition', 'disposition_history')),
                 'usage': build_usage(body.get('usage')),
                 'run_state': pick(body.get('run_state', {}),
                     ('execution_status', 'result_status', 'render_status', 'output', 'checks', 'facts')),

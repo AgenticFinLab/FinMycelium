@@ -7,13 +7,13 @@ STEPS = ["确认范围", "检索资料", "检查材料", "构建草稿", "审核
 SEARCH_STATUS = {'ready': '待启动', 'running': '运行中', 'paused': '已暂停',
                  'finished': '待检查材料', 'insufficient': '资料不足',
                  'limit': '达到运行上限', 'failed': '运行失败', 'excluded': '不参与构建',
-                 'confirmed': '已确认用于构建'}
+                 'confirmed': '已确认用于构建', 'collected': '材料已收录'}
 
 
 def search_status_code(data, confirmed_builds=()):
     from finmy.workbench.material_status import disposition
     decision = disposition(data, confirmed_builds)
-    if decision == 'excluded' or (decision == 'confirmed' and data['status'] not in {'ready', 'running', 'paused'}):
+    if decision == 'excluded' or (decision in {'confirmed', 'collected'} and data['status'] not in {'ready', 'running', 'paused'}):
         return decision
     return data['status']
 

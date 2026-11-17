@@ -16,7 +16,7 @@ from finmy.workbench.model_picker import model_picker
 
 def create_person_build(store, controller, task_id, data):
     st.subheader('构建本条人物 event')
-    st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；采用的检索记录会自动收录到该事件的 search/。')
+    st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；也可先独立确认收录检索材料，再创建构建任务。')
     model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
     with st.form('person-build-create-'+task_id):
         with st.expander('构建上限'):
@@ -44,7 +44,8 @@ def create_person_build(store, controller, task_id, data):
 def person_build_panel(store, controller, row, labels):
     tid=row['id'];body=row['body'];event=body['input']['user_query']['extras']['person_event']
     st.subheader(event['event_name']+' — '+event['person_name'])
-    status(labels[row['status']], '人物 event 构建 · '+tid)
+    from .build_page import build_status
+    status(build_status(row)[1], '人物 event 构建 · '+tid)
     st.caption(event['storyline_name']+' · '+event['event_id']+' · '+body['person_config']['lm_name'])
     st.caption('构建输出：' + body['artifact_directory'])
     if body.get('search_collection'):
@@ -89,7 +90,10 @@ def person_build_panel(store, controller, row, labels):
                 controller.pause_person(tid);st.rerun()
             except (ValueError,OSError) as exc:st.error(str(exc))
     elif row['status']=='completed':
-        st.success('已保存本条 event 的原生人物 JSON 草稿，待内容与证据审核。')
+        if body.get('disposition') == 'discarded':
+            st.info('本次草稿已舍弃；产物与运行记录保留。')
+        elif build_status(row)[0] != 'accepted':
+            st.success('已保存本条 event 的原生人物 JSON 草稿，待内容与证据审核。')
     else:
         if row['status']=='paused':
             st.info('已暂停；检查点和累计用量已保存，可以关闭电脑，之后恢复原任务。')
@@ -105,7 +109,10 @@ def person_build_panel(store, controller, row, labels):
                 try:
                     controller.prepare_person_resume(tid,max_calls=cap);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))
-    if row['status'] in {'partial', 'completed'}:
+    from .collection_page import graph_collection_panel, disposition_panel
+    graph_collection_panel(controller, row)
+    disposition_panel(controller, row)
+    if row['status'] in {'partial', 'completed'} and body.get('disposition') != 'discarded':
         from .closure_page import closure_panel
         closure_panel(controller, row)
     if run.get('output'):
@@ -153,7 +160,7 @@ def person_build_panel(store, controller, row, labels):
                 st.json(json.loads(facts_path.read_text()),expanded=False)
                 if run.get('checks'):
                     st.json(json.loads(within(body['artifact_directory'],run['checks']).read_text()),expanded=False)
-    st.caption('JSON 和 Gantt 均为待内容审核的草稿；当前不启动审核 Skill，也不会自动收录到正式数据集。')
+    st.caption('结构完成与内容审核分别处理；按审核记录显式收录，原始运行保留。')
     with st.expander('本次范围、输入与运行记录'):
         st.json(event,expanded=False)
         st.write('运行目录：'+body['artifact_directory'])

@@ -140,27 +140,29 @@ def prepare_collection(task_id, body, adoptions, *, created_at):
     review = (body.get('input_confirmation') or
               pick(body.get('evidence_review', {}), ('id', 'reviewer', 'note', 'created', 'decision', 'target')))
     root = Path(catalog['root']).resolve()
-    manifest = dict(format_version=2, kind='adopted_search', catalog=pick(catalog, CATALOG_KEYS),
+    manifest = dict(format_version=2 if task_id else 3, kind='adopted_search', catalog=pick(catalog, CATALOG_KEYS),
         build_task_id=task_id, input_sha256=body['input_hash'], input_file='builder-input.json', confirmation=review,
         research_scope=adoptions[0]['scope'], input_characters=sum(len(s['content']) for s in samples.values()),
         input_sample_count=len(samples), build_record='workbench/build/'+build_record_name(
-            dict(task_id=task_id, created_at=created_at, catalog=catalog))+'/task.json',
-        runtime_directory=relative(body['artifact_directory'], root),
+            dict(task_id=task_id, created_at=created_at, catalog=catalog))+'/task.json' if task_id else None,
+        runtime_directory=relative(body.get('artifact_directory'), root),
         search_handoffs=[{k: deepcopy(v) for k, v in a.items() if k not in {'catalog', 'scope_hash', 'sources'}}
                          for a in adoptions],
         samples=[dict(sample_id=sid, content_sha256=digest(s['content'].encode()), characters=len(s['content']))
                  for sid, s in samples.items()], graph_acceptance='not_implied')
+    if not task_id:
+        manifest['collection_id'] = component(body['collection_id'])
     stream = io.StringIO(newline='')
     writer = csv.DictWriter(stream, fieldnames=FIELDS, lineterminator='\n'); writer.writeheader()
     for source in sources:
         writer.writerow({k: json.dumps(v, ensure_ascii=False, sort_keys=True) if isinstance(v, (dict, list)) else v
                          for k, v in source.items()})
     lines = [f"# Adopted search: {cell(catalog['event_name'])}", '',
-        f"- Event ID: {cell(catalog['event_id'])}", f'- Build task: {task_id}',
+        f"- Event ID: {cell(catalog['event_id'])}", f'- Build task: {task_id or "not created"}',
         f"- Build input SHA256: {body['input_hash']}",
         f"- Input: {len(samples)} samples; {manifest['input_characters']:,} characters.",
         '- The user confirmed this material for construction; this is not final graph acceptance.',
-        '- Generated at build-task creation. builder-input.json contains the exact confirmed Builder input.',
+        '- builder-input.json contains the exact confirmed Builder input; material confirmation can precede build creation.',
         '- Other source bodies, original downloads and logs remain in ignored output storage.',
         '- sources.csv lists only the actual build input. manifest.json pins the handoffs and input hashes.',
         '', '## Confirmed scope', '']
@@ -209,19 +211,23 @@ def publish_collection(catalog, collection, *, manifest_lookup=None):
             before = {p.name: p.read_bytes() for p in folder.iterdir()}
             if before:
                 old = json.loads(before.get('manifest.json', b'{}'))
-                expected_files = {1: set(LEGACY_FILES), 2: set(FILES)}.get(old.get('format_version'))
+                expected_files = {1: set(LEGACY_FILES), 2: set(FILES), 3: set(FILES)}.get(old.get('format_version'))
                 if (set(before) != expected_files or old.get('kind') != 'adopted_search'
                         or old.get('catalog', {}).get('event_id') != catalog['event_id']
                         or any(digest(before[name]) != old.get('file_sha256', {}).get(name)
                                for name in before if name != 'manifest.json')):
                     raise ValueError('已有收录文件被手动更改或无法识别，已保留')
             if before:
-                previous = component(old.get('build_task_id', ''))
-                expected = manifest_lookup(previous) if manifest_lookup else None
-                if expected is None:
-                    record = find_build_record(root, previous)
-                    saved = json.loads(record.read_text()).get('search_collection', {}) if record else {}
-                    expected = saved.get('manifest_sha256')
+                if old.get('format_version') == 3:
+                    receipt = root/'workbench/collections'/(component(old['collection_id'])+'.json')
+                    expected = json.loads(receipt.read_text()).get('file_sha256', {}).get('manifest.json') if receipt.is_file() else None
+                else:
+                    previous = component(old.get('build_task_id', ''))
+                    expected = manifest_lookup(previous) if manifest_lookup else None
+                    if expected is None:
+                        record = find_build_record(root, previous)
+                        saved = json.loads(record.read_text()).get('search_collection', {}) if record else {}
+                        expected = saved.get('manifest_sha256')
                 if expected != digest(before['manifest.json']):
                     raise ValueError('已有收录清单与构建快照不一致，已保留')
             pending = Path(tempfile.mkdtemp(prefix='.search-pending-', dir=parent))

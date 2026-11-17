@@ -266,6 +266,8 @@ class BuildController:
             row=self.inspect(task_id);body=row['body']
             if body.get('kind')!='person_event' or row['status'] not in {'failed','interrupted','partial','limit','paused'}:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
+            if body.get('disposition') == 'discarded':
+                raise ValueError('请先恢复已舍弃草稿')
             state_path = Path(body['artifact_directory']) / 'state.json'
             if state_path.is_file() and json.loads(state_path.read_text()).get('offline_revisions'):
                 raise ValueError('已有人工收尾修订；继续模型构建请从相同确认输入新建任务，保留当前修订')
@@ -335,6 +337,25 @@ class BuildController:
                 self.save(task_id, "failed", body)
                 raise ValueError("构建进程未能启动") from exc
 
+    def set_disposition(self, task_id, value, *, reason=''):
+        from .graph_collection import build_collection
+        if value not in {'pending', 'discarded'}:
+            raise ValueError('无效草稿处理选择')
+        with worker_lock(self.root, task_id, blocking=False):
+            row = self.inspect(task_id); body = row['body']
+            if row['status'] in {'ready', 'queued', 'running'}:
+                raise ValueError('请等待构建停止后处理草稿')
+            accepted_ordinary = (body.get('kind') != 'person_event' and body.get('graph_id')
+                and self.store.decision(row['event_id'], 'graph') == 'approved'
+                and self.store.graphs(row['event_id'])[0]['id'] == body['graph_id'])
+            if value == 'discarded' and (build_collection(row) or accepted_ordinary):
+                raise ValueError('请先撤回已收录成果，再舍弃草稿')
+            if value == 'discarded' and not reason.strip():
+                raise ValueError('请填写舍弃原因')
+            body['disposition'] = value
+            body.setdefault('disposition_history', []).append(dict(value=value, reason=reason.strip(), time=now()))
+            self.save(task_id, row['status'], body)
+
     def cancel(self, task_id):
         with task_lock(self.root, task_id):
             row = self.inspect(task_id)
@@ -369,6 +390,8 @@ class BuildController:
             if row['body'].get('kind') != 'person_event' or row['status'] not in {'partial', 'completed'}:
                 raise ValueError('只有已结束的人物图可进行离线收尾')
             body = row['body']
+            if body.get('disposition') == 'discarded':
+                raise ValueError('请先恢复已舍弃草稿')
             state = close_pending(body['artifact_directory'], decisions,
                 expected_state_sha256=expected_state_sha256, reviewer=reviewer)
             body.update(run_state=state, revised_at=state['updated_at'],

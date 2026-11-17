@@ -11,6 +11,15 @@ LABELS = {"ready":"待启动", "queued":"启动中", "running":"构建中", "pau
           "failed":"构建失败", "interrupted":"构建中断", "cancelled":"已取消", "partial":"部分完成，待处理", "limit":"达到调用上限", "insufficient":"材料不足"}
 
 
+def build_status(row):
+    from .graph_collection import build_collection
+    if build_collection(row):
+        return 'accepted', '已收录'
+    if row['body'].get('disposition') == 'discarded':
+        return 'discarded', '已舍弃'
+    return row['status'], LABELS[row['status']]
+
+
 def create_build(store, event_id):
     controller = BuildController(store)
     st.subheader("构建 draft EPG")
@@ -37,7 +46,7 @@ def build_panel(store, task_id, row=None):
         from .person_build_page import person_build_panel
         return person_build_panel(store, controller, row, LABELS)
     st.subheader(display_name(body["event"]))
-    status(LABELS[row["status"]], "构建 · " + task_id)
+    status(build_status(row)[1], "构建 · " + task_id)
     st.write(body["config"]["builder_type"] + " · " + body["config"]["lm_name"])
     st.caption('构建输出：' + str(body.get('artifact_directory') or controller.root / task_id))
     if not controller.current(row):
@@ -64,6 +73,8 @@ def build_panel(store, task_id, row=None):
         st.caption("先检查本次配置和运行记录；重新构建会创建新任务并可能产生新的模型费用。")
     if row["status"] == "completed":
         st.success("已保存 draft 图。运行完成不等于内容审核通过。")
+    from .collection_page import disposition_panel
+    disposition_panel(controller, row)
     if st.button("打开事件与审核", key="build-review-"+task_id, type="primary" if row["status"] == "completed" else "secondary", icon=":material/fact_check:"):
         navigate("数据", detail_id=row["event_id"], **{"ui-event-section-"+row["event_id"]:"图与修订"})
     if body.get("elapsed_seconds") is not None:

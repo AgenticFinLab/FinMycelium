@@ -24,7 +24,7 @@ def get_controller(root):
 
 
 def task_panel(controller, task_id, store, read_only=False, data=None):
-    data = data or controller.inspect(task_id)
+    data = {**(data or controller.inspect(task_id)), "task_id": task_id}
     active = controller.active(task_id)
     st.subheader(data['task']['target_name'])
     catalog = data['task'].get('catalog')
@@ -50,6 +50,9 @@ def task_panel(controller, task_id, store, read_only=False, data=None):
     if excluded:
         st.caption('已标记不参与构建，保留结果供查看与下载。检索运行状态：' + ('已完成检索' if data['status'] == 'finished' else STATUS.get(data['status'], data['status'])))
         read_only = True
+    if catalog:
+        from .collection_page import search_collection_panel
+        search_collection_panel(controller, task_id, data, active=active, read_only=read_only)
     providers = ' / '.join(PROVIDERS.get(p, p) for p in data['config']['providers'])
     st.caption(providers + ' · ' + ('简单搜索' if data.get('mode') == 'simple' else data['config'].get('lm_name') or '未设置模型'))
     ended = data['status'] in {'finished', 'insufficient'}

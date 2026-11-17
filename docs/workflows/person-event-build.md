@@ -203,3 +203,11 @@ Tests use the authored design example, synthetic responses and temporary directo
 They verify contracts, ownership, quote alignment, partial adoption, limits, recovery
 and artifact correspondence without real search or model calls. They do not establish
 real-case content quality, coverage or cost.
+
+## Collection decisions
+
+Search material can be confirmed and collected independently of build creation.
+Stopped drafts can be discarded or restored; reviewed person Event graphs can be
+explicitly collected and withdrawn with version-bound records. See
+[Catalog collection and withdrawal](catalog-collection.md). Runtime status and
+content acceptance remain separate.

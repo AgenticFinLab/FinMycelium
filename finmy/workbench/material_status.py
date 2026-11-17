@@ -50,4 +50,9 @@ def confirmed_builds(task_id, data, records):
 def disposition(data, builds):
     if data.get('build_disposition') == 'excluded':
         return 'excluded'
-    return 'confirmed' if builds else 'pending'
+    if builds:
+        return 'confirmed'
+    from .catalog_actions import collected_search
+    if collected_search(data):
+        return 'collected'
+    return 'pending'

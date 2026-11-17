@@ -44,7 +44,7 @@ def finish(setup, *, person=True):
     root, store, controller, _ = setup
     choice = DatasetCatalog(root).select('PERSON-EVENT-TEST' if person else 'EVENT-TEST',
                                         'PERSON-TEST' if person else None)
-    tid = create_catalog_search(store, controller, choice, {}, 'simple',
+    tid = create_catalog_search(store, controller, choice, {'providers': ['bocha']}, 'simple',
         period=choice['period'], include=choice['scope_include'], exclude=choice['scope_exclude'],
         confirmed=True, seeds=[])
     controller.start(tid); controller.threads[tid].join(10)
