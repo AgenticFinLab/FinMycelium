@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event process graph</title>
+<style>
+  :root { color-scheme: light; --navy:#0b3865; --ink:#172e43; --muted:#52677a; --border:#d4dfe7;
+    --action:#e2f1e6; --context:#fff3d6; --party:#e3effb; --green:#287457; --purple:#794897; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#f2f6fa; color:var(--ink); font:15px/1.45 Inter,system-ui,sans-serif; }
+  header { background:var(--navy); color:white; padding:18px clamp(16px,4vw,54px); }
+  h1,h2,h3,p { margin:0; }
+  h1 { font-size:clamp(22px,3vw,34px); line-height:1.2; }
+  header p { color:#d3e3f4; margin-top:5px; }
+  main { max-width:1680px; margin:auto; padding:14px clamp(12px,3vw,38px) 32px; }
+  nav { display:flex; flex-wrap:wrap; gap:8px; padding-bottom:12px; }
+  nav section { flex:1 1 240px; padding:9px 11px; background:white; border:1px solid var(--border); border-radius:8px; }
+  nav h2 { font-size:13px; margin-bottom:5px; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  nav button,.controls button { background:white; border:1px solid #afc1d2; border-radius:6px; padding:5px 9px; margin:2px; font-size:13px; }
+  nav button[aria-pressed=true] { background:#2162a1; color:white; border-color:#2162a1; }
+  button:focus-visible, a:focus-visible { outline:3px solid #267abb; outline-offset:3px; }
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:5px 18px; margin-bottom:9px; }
+  .toolbar h2 { flex:1 1 300px; font-size:18px; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 13px; font-size:12px; color:var(--muted); margin-bottom:9px; }
+  .legend span::before { content:''; display:inline-block; width:12px; height:9px; background:var(--swatch);
+    border:1px solid #a4b4c2; border-radius:2px; margin-right:5px; }
+  .legend .line::before { height:0; border:0; border-top:2px solid var(--swatch); vertical-align:middle; }
+  #layout { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+  #viewport { overflow:auto; height:clamp(400px,70vh,920px); background:#fff; border:1px solid var(--border); border-radius:9px; }
+  #viewport.dragging { cursor:grabbing; user-select:none; }
+  #graph { position:relative; min-width:800px; padding:14px; isolation:isolate; }
+  #wires { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; }
+  #regions,#sources { display:grid; gap:18px; }
+  #regions { grid-template-columns:minmax(130px,1fr) minmax(205px,1.45fr) minmax(245px,1.7fr); }
+  .column { min-width:0; padding:0 13px; }
+  .column h3,#evidence h3 { font-size:15px; margin-bottom:9px; }
+  .column h4 { margin:5px 0; font-size:12px; color:var(--muted); }
+  .node { display:block; text-align:left; width:100%; position:relative; z-index:2; border:1px solid #b4c8d9;
+    background:var(--party); padding:8px 10px; border-radius:7px; margin:0 0 9px; overflow-wrap:anywhere; }
+  .node strong,.node small { display:block; }
+  .node.source strong + small { margin:4px 0 0; }
+  .node small { color:var(--muted); font-size:11px; margin:0 0 4px; }
+  .node.action { background:var(--action); border-color:#a4bea8; }
+  .node.context { background:var(--context); border-color:#dbc58e; }
+  .node.source { background:#f7fbf9; border-color:#9cc3b0; }
+  .node:hover,.node[aria-expanded=true] { outline:2px solid var(--navy); outline-offset:2px; }
+  #evidence { margin:26px 0 0; padding:12px; border:1px solid var(--border); border-radius:8px; background:#f7fafc; }
+  #sources { grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:9px 25px; }
+  #sources .node { margin-bottom:0; }
+  .empty { font-size:13px; color:var(--muted); }
+  #graph { width:1134px; }
+  #regions { grid-template-columns:220px 370px 1fr; }
+  .node { height:104px; overflow:hidden; }
+  .node strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+  .node small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .node.source { height:120px; }
+  .node.source strong + small { white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+  #slides[hidden] { display:none; }
+  #slides { display:flex; align-items:center; gap:6px; }
+  #slides select { max-width:min(48vw,330px); padding:4px; font:inherit; }
+  body.authored header, body.authored #phases, body.authored #view-title, body.authored .legend { display:none; }
+  body.authored main { max-width:none; padding:10px 12px; }
+  body.authored #viewport { height:calc(100dvh - 62px); min-height:300px; }
+  body.authored #graph { min-width:0; width:1134px; height:992px; padding:0; background:white; }
+  body.authored #evidence { display:contents; }
+  body.authored #graph .node { position:absolute; margin:0; border-radius:6px; padding:6px 9px;
+    display:flex; flex-direction:column; justify-content:center; gap:3px; line-height:1.18; }
+  body.authored #graph .node strong { font-size:14px; }
+  body.authored #graph .node.compact strong { font-size:12px; font-weight:500; -webkit-line-clamp:2; }
+  body.authored #graph .node.context strong { font-weight:500; }
+  body.authored #graph .node.source { background:white; }
+  body.authored #graph .source strong, body.authored #graph .source .targets { color:var(--green); }
+  body.authored #graph .node small { margin:0; font-size:10px; }
+  body.authored #graph .node .parties { color:#2466aa; }
+  .badge { position:absolute; top:4px; right:4px; padding:2px 4px; background:#2d6f58; color:white;
+    border-radius:3px; font-size:8px; font-weight:bold; }
+  .node[aria-expanded=true], body.authored #graph .node[aria-expanded=true] {
+    height:auto; z-index:4; justify-content:flex-start; overflow:hidden; padding:10px 12px;
+    box-shadow:0 4px 15px #172e4330;
+  }
+  body.authored #graph .card-preview { display:flex; flex-direction:column; gap:3px; width:100%; }
+  .node .expanded-content {
+    display:block; width:100%; overflow:auto; min-height:0; overscroll-behavior:contain;
+    font-size:13px; line-height:1.4; scrollbar-width:thin;
+  }
+  .node .expanded-content strong, body.authored #graph .node .expanded-content strong {
+    display:block; overflow:visible; font-size:14px; font-weight:650;
+  }
+  .node .expanded-content .detail-text { display:block; margin-top:6px; white-space:pre-wrap; }
+  .node .expanded-content .detail-date { white-space:normal; margin-top:5px; }
+  .node .expanded-content .quote + .quote {
+    border-top:1px solid var(--border); margin-top:9px; padding-top:8px;
+  }
+  .node .expanded-content[hidden], body.authored #graph .card-preview[hidden], .node .card-preview[hidden] { display:none; }
+  .hotspot { position:absolute; z-index:3; background:transparent; border:0; padding:0; border-radius:4px; }
+  .hotspot:hover { box-shadow:inset 0 0 0 2px #4c85bb; }
+  body:not(.authored) #regions { display:contents; }
+  body:not(.authored) .column { display:contents; }
+  body:not(.authored) .column h3 { position:absolute; top:14px; margin:0; }
+  body:not(.authored) .column:nth-child(1) h3 { left:24px; }
+  body:not(.authored) .column:nth-child(2) h3 { left:300px; }
+  body:not(.authored) .column:nth-child(3) h3 { left:704px; }
+  body:not(.authored) #graph .node { position:absolute; margin:0; }
+  body:not(.authored) #evidence, body:not(.authored) #sources { display:contents; }
+  body:not(.authored) #evidence h3 { position:absolute; left:24px; }
+  .card-preview { display:block; }
+  #related-views { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+  #related-views button { max-width:360px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  body:not(.authored) .expanded-content { max-height:256px; }
+</style>
+</head>
+<body>
+<header><h1 id="title"></h1><p id="person"></p></header>
+<main>
+  <nav id="phases" aria-label="Stages and phases"></nav>
+  <div class="toolbar"><h2 id="view-title"></h2>
+    <div id="slides" hidden>
+      <button id="previous" aria-label="Previous view">←</button>
+      <select id="view-picker" aria-label="View"></select>
+      <button id="next" aria-label="Next view">→</button>
+    </div>
+    <div class="controls" aria-label="Canvas zoom">
+      <button id="out" aria-label="Zoom out">−</button><button id="reset" aria-label="Reset zoom">100%</button>
+      <button id="in" aria-label="Zoom in">+</button>
+    </div>
+  </div>
+  <div class="legend" aria-label="Graph legend">
+    <span style="--swatch:var(--party)">Related party</span>
+    <span style="--swatch:var(--action)">Action</span>
+    <span style="--swatch:var(--context)">Context</span>
+    <span class="line" style="--swatch:var(--purple)">Action relation</span>
+    <span class="line" style="--swatch:var(--green)">Source evidence</span>
+  </div>
+  <div id="related-views" class="controls"></div>
+  <div id="layout">
+    <div id="viewport" tabindex="0" aria-label="Scrollable event graph">
+      <div id="graph"><canvas id="wires" aria-hidden="true"></canvas>
+        <div id="regions"></div>
+        <section id="evidence"><h3>Source evidence</h3><div id="sources"></div></section>
+      </div>
+    </div>
+  </div>
+</main>
+<script id="epg-data" type="application/json">__EPG_GRAPH_JSON__</script>
+<script id="epg-layout" type="application/json">__EPG_LAYOUT_JSON__</script>
+<script id="epg-view" type="application/json">__EPG_VIEW_JSON__</script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const graph = JSON.parse($('epg-data').textContent);
+const authoredPages = JSON.parse($('epg-layout').textContent);
+const view = JSON.parse($('epg-view').textContent);
+let currentView = null;
+const {event, person, stages, phases, actions, contexts, entities, sources, evidence, relations} = graph;
+const index = (records, field) => new Map(records.map(record => [record[field], record]));
+const actionById = index(actions, 'action_id');
+const phaseById = index(phases, 'phase_id');
+const evidenceById = index(evidence, 'evidence_id');
+const sourceById = index(sources, 'source_id');
+const nodeInfo = new Map();
+for (const [records, key, kind] of [
+  [actions,'action_id','action'], [contexts,'context_id','context'], [entities,'entity_id','party'],
+  [phases,'phase_id','phase'], [sources,'source_id','source'], [[event],'event_id','event']
+]) {
+  for (const record of records) {
+    nodeInfo.set(record[key], {kind, record, title:record.name || record.title || record.description ||
+      record.origin || record.url || record[key]});
+  }
+}
+function directEvidence(record) {
+  return [...new Set((record.support || []).flatMap(support => support.evidence_ids || []))]
+    .map(id => evidenceById.get(id)).filter(Boolean);
+}
+function parties(record) {
+  return [...new Set([record.actor?.entity_id, ...(record.object?.entity_refs || []), ...(record.entity_refs || [])])]
+    .filter(id => nodeInfo.get(id)?.kind === 'party');
+}
+function element(tag, text, cls) {
+  const el = document.createElement(tag);
+  if (text) el.textContent = text;
+  if (cls) el.className = cls;
+  return el;
+}
+const buttons = new Map();
+const previewBoxes = new Map();
+let attachedPaths = new Map();
+const phaseButtons = new Map();
+let selected = null;
+let currentPhase = null;
+let pageIndex = 0;
+let displayedSources = new Map();
+let edges = [];
+let zoom = 1;
+let paintPending = false;
+$('title').textContent = document.title = event.name;
+$('person').textContent = [person.name, event.time?.text].filter(Boolean).join(' · ');
+
+function phaseButton(id, label) {
+  const button = element('button', label);
+  button.type = 'button';
+  button.onclick = () => showPhase(id);
+  phaseButtons.set(id, button);
+  return button;
+}
+const overview = element('section');
+overview.append(element('h2', 'Event'), phaseButton(null, 'Event overview & background'));
+$('phases').append(overview);
+const stageSections = new Map();
+for (const stage of stages) {
+  const section = element('section');
+  section.append(element('h2', stage.name));
+  stageSections.set(stage.stage_id, section);
+  $('phases').append(section);
+}
+for (const phase of phases) {
+  (stageSections.get(phase.stage_id) || overview).append(phaseButton(phase.phase_id, phase.name));
+}
+
+function card(parent, id, subtitle, title) {
+  const info = nodeInfo.get(id);
+  const button = element('button', null, 'node ' + info.kind);
+  button.type = 'button';
+  button.dataset.node = id;
+  button.title = title || info.title;
+  button.append(element('small', subtitle), element('strong', title || info.title));
+  const quote = info.kind === 'source' && displayedSources.get(id)?.quotes.values().next().value?.quote;
+  if (quote) {
+    const excerpt = quote.replace(/\s+/g, ' ').trim();
+    button.append(element('small', excerpt.length > 126 ? excerpt.slice(0, 125) + '…' : excerpt));
+  }
+  bindCard(button, id);
+  parent.append(button);
+  buttons.set(id, button);
+}
+function column(title) {
+  const section = element('section', null, 'column');
+  section.append(element('h3', title));
+  $('regions').append(section);
+  return section;
+}
+function showPhase(id) {
+  currentView = view.pages.find(page => page.phase === id) || view.pages[0];
+  currentPhase = phaseById.get(id) || null;
+  selected = null;
+  for (const [key, button] of phaseButtons) button.setAttribute('aria-pressed', key === id);
+  $('view-title').textContent = currentView.title;
+  $('regions').replaceChildren();
+  $('sources').replaceChildren();
+  buttons.clear();
+  previewBoxes.clear();
+  displayedSources = new Map();
+  const columns = ['Participants', 'Actions', 'Context'].map(column);
+  for (const [i, ids] of currentView.columns.entries()) {
+    for (const node of ids) card(columns[i], node, nodeInfo.get(node).record.time?.text || '');
+  }
+  for (const [sid, ids] of Object.entries(currentView.sources)) {
+    displayedSources.set(sid, {quotes:new Map(ids.map(eid => [eid,evidenceById.get(eid)]))});
+    card($('sources'), sid, sourceById.get(sid).published_at || '');
+  }
+  for (const [node, box] of Object.entries(currentView.boxes)) {
+    previewBoxes.set(node,box);
+    place(buttons.get(node),box);
+  }
+  $('graph').style.height = currentView.height + 'px';
+  $('evidence').querySelector('h3').style.top = currentView.evidence_top + 'px';
+  edges = currentView.edges;
+  $('related-views').replaceChildren();
+  for (const link of currentView.jumps) {
+    const button = element('button', link.type.replaceAll('_',' ') + ' · ' + nodeInfo.get(link.id).title);
+    button.onclick = () => { showPhase(link.phase); jump(link.id); };
+    $('related-views').append(button);
+  }
+  $('viewport').scrollTo(0,0);
+  schedulePaint();
+}
+
+function jump(id) {
+  const match = [...buttons].find(([,button]) => button.dataset.node === id);
+  if (!match) return;
+  const [key,button] = match;
+  setExpanded(key);
+  button.scrollIntoView({block:'nearest', inline:'nearest'});
+}
+
+function bindCard(button, key) {
+  const preview = element('span', null, 'card-preview');
+  preview.append(...button.childNodes);
+  const detail = element('span', null, 'expanded-content');
+  detail.hidden = true;
+  button.append(preview, detail);
+  button.setAttribute('aria-expanded', 'false');
+  button.onclick = () => {
+    const open = selected !== key;
+    setExpanded(open ? key : null);
+    if (open) button.scrollIntoView({block:'nearest', inline:'nearest'});
+  };
+}
+
+function fillCardDetail(detail, id) {
+  const {title, date, paragraphs} = view.details[id];
+  const kind = nodeInfo.get(id).kind;
+  detail.replaceChildren(element('strong', title));
+  if (date) detail.append(element('small', date, 'detail-date'));
+  for (const text of paragraphs) detail.append(element('span', text, 'detail-text'));
+  if (kind === 'source') {
+    const quotes = new Set([...displayedSources.get(id).quotes.values()].map(passage => passage?.quote));
+    for (const quote of quotes) {
+      if (quote) detail.append(element('span', quote, 'detail-text quote'));
+    }
+  }
+}
+
+function overlap(a, b) {
+  const width = Math.max(0, Math.min(a[0]+a[2], b[0]+b[2]) - Math.max(a[0], b[0]));
+  const height = Math.max(0, Math.min(a[1]+a[3], b[1]+b[3]) - Math.max(a[1], b[1]));
+  return width * height;
+}
+
+function expandedBox(id, preferredHeight) {
+  if (!authoredPages) {
+    const [x,y,width,height] = previewBoxes.get(id);
+    return [x,y,width,Math.max(height+20,preferredHeight)];
+  }
+  const [left, top, width, shortHeight] = previewBoxes.get(id);
+  const minimum = shortHeight + 20;
+  const peers = [...attachedPaths.values()].flatMap(([from,to,points,tip]) => {
+    if (from?.[0] === id) return [tip];
+    if (to?.[0] === id) return [points[0]];
+    return [];
+  });
+  function score(box) {
+    let penalty = Math.abs(box[1] - top) * width * .15;
+    for (const [other, bounds] of previewBoxes) {
+      if (id !== other) penalty += overlap(box, bounds);
+    }
+    return penalty;
+  }
+  function hidesPort([x,y,w,h], [px,py]) {
+    return px >= x-1 && px <= x+w+1 && py >= y-1 && py <= y+h+1;
+  }
+  for (let height = preferredHeight; ; height = Math.max(minimum,height-16)) {
+    const minTop = Math.max(124,top+shortHeight-height);
+    const maxTop = Math.min(top,$('graph').clientHeight-height-12);
+    const positions = [minTop,maxTop,(minTop+maxTop)/2];
+    for (const [other, [x,y,w,h]] of previewBoxes) {
+      if (other !== id && x < left+width && x+w > left) positions.push(y-height,y+h);
+    }
+    for (const [,y] of peers) positions.push(y-height-2,y+2);
+    const boxes = positions
+      .map(y => [left,Math.min(maxTop,Math.max(minTop,y)),width,height])
+      .sort((a,b) => score(a) - score(b));
+    const clear = boxes.find(box => !peers.some(point => hidesPort(box,point)));
+    if (clear) return clear;
+    if (height === minimum) return boxes[0];
+  }
+}
+
+function setExpanded(id) {
+  if (selected === id) return;
+  const previous = buttons.get(selected);
+  if (previous) {
+    previous.setAttribute('aria-expanded','false');
+    previous.querySelector('.card-preview').hidden = false;
+    const detail = previous.querySelector('.expanded-content');
+    detail.hidden = true;
+    detail.replaceChildren();
+    if (previewBoxes.has(selected)) place(previous, previewBoxes.get(selected));
+    else previous.style.height = '';
+  }
+  selected = id;
+  if (id !== null) {
+    const button = buttons.get(id);
+    const detail = button.querySelector('.expanded-content');
+    button.querySelector('.card-preview').hidden = true;
+    fillCardDetail(detail,button.dataset.node);
+    detail.hidden = false;
+    detail.scrollTop = 0;
+    button.style.height = 'auto';
+    button.setAttribute('aria-expanded','true');
+    const box = previewBoxes.get(id);
+    if (box) {
+      const height = Math.max(box[3]+20, Math.min(280,button.offsetHeight));
+      place(button,expandedBox(id,height));
+    }
+  }
+  if (!authoredPages) {
+    const button = buttons.get(selected);
+    const bottom = button ? button.offsetTop + button.offsetHeight + 24 : 0;
+    $('graph').style.height = Math.max(currentView.height,bottom) + 'px';
+  }
+  schedulePaint();
+}
+$('viewport').addEventListener('keydown', event => {
+  if (event.key === 'Escape' && selected !== null) setExpanded(null);
+});
+
+function schedulePaint() {
+  if (paintPending) return;
+  paintPending = true;
+  requestAnimationFrame(() => { paintPending = false; paint(); });
+}
+function paint() {
+  if (authoredPages) {
+    paintAuthoredPage();
+    return;
+  }
+  const stage = $('graph').getBoundingClientRect();
+  const canvas = $('wires');
+  // Keep backing-store size proportional to the visible viewport, even for long phases.
+  const viewport = $('viewport');
+  const left = viewport.scrollLeft / zoom;
+  const top = viewport.scrollTop / zoom;
+  const width = viewport.clientWidth / zoom;
+  const height = viewport.clientHeight / zoom;
+  const ratio = Math.min(window.devicePixelRatio * zoom, 3);
+  Object.assign(canvas.style, {left:left+'px', top:top+'px', width:width+'px', height:height+'px'});
+  canvas.width = Math.ceil(width * ratio);
+  canvas.height = Math.ceil(height * ratio);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(ratio, 0, 0, ratio, -left * ratio, -top * ratio);
+  const rects = new Map([...buttons].map(([id, button]) => {
+    const box = button.getBoundingClientRect();
+    return [id, {left:(box.left-stage.left)/zoom, right:(box.right-stage.left)/zoom,
+      top:(box.top-stage.top)/zoom, bottom:(box.bottom-stage.top)/zoom, y:(box.top+box.height/2-stage.top)/zoom,
+      center:(box.left+box.width/2-stage.left)/zoom}];
+  }));
+  function draw(edge, emphasized) {
+    const from = rects.get(edge.from);
+    const to = rects.get(edge.to);
+    if (!from || !to) return;
+    const sameColumn = Math.abs(from.center - to.center) < 10;
+    const evidence = edge.kind === 'evidence';
+    const color = evidence ? '#287457' : edge.kind === 'relation' ? '#794897' : '#576f81';
+    const direction = !sameColumn && from.center > to.center ? -1 : 1;
+    const startX = evidence || sameColumn ? from.center : direction > 0 ? from.right : from.left;
+    const startY = evidence ? from.top : sameColumn ? from.bottom : from.y;
+    const endX = sameColumn ? to.center : direction < 0 ? to.right : to.left;
+    const endY = sameColumn ? to.top : to.y;
+    const turnX = evidence || sameColumn ? endX + 12 : (startX + endX)/2;
+    ctx.strokeStyle = ctx.fillStyle = color;
+    ctx.globalAlpha = emphasized ? .92 : evidence ? .48 : .6;
+    ctx.lineWidth = emphasized ? 2.2 : 1.1;
+    ctx.setLineDash(edge.type === 'order_unknown' ? [2,4] : edge.record?.basis === 'inferred' ? [6,4] : []);
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    if (evidence) {
+      ctx.lineTo(startX, startY - 7);
+      ctx.lineTo(turnX, startY - 7);
+    } else {
+      ctx.lineTo(turnX, startY);
+    }
+    ctx.lineTo(turnX, endY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    if (edge.type === 'order_unknown' || edge.kind === 'party') return;
+    const tail = Math.sign(turnX-endX) * 7;
+    ctx.beginPath();
+    ctx.moveTo(endX, endY);
+    ctx.lineTo(endX+tail, endY-3);
+    ctx.lineTo(endX+tail, endY+3);
+    ctx.fill();
+  }
+  const active = edge => selected && (edge.from === selected || edge.to === selected);
+  for (const edge of edges) if (!active(edge)) draw(edge, false);
+  for (const edge of edges) if (active(edge)) draw(edge, true);
+}
+function setZoom(value) {
+  zoom = Math.max(.55, Math.min(1.8, value));
+  $('graph').style.zoom = zoom;
+  $('reset').textContent = Math.round(zoom*100) + '%';
+  schedulePaint();
+}
+$('out').onclick = () => setZoom(zoom-.15);
+$('in').onclick = () => setZoom(zoom+.15);
+$('reset').onclick = () => setZoom(1);
+const viewport = $('viewport');
+let drag = null;
+viewport.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.pointerType === 'touch' || e.target.closest('button')) return;
+  if (!e.target.closest('#graph')) return;
+  drag = {x:e.clientX, y:e.clientY, left:viewport.scrollLeft, top:viewport.scrollTop};
+  viewport.setPointerCapture(e.pointerId);
+  viewport.classList.add('dragging');
+});
+viewport.addEventListener('pointermove', e => {
+  if (drag) viewport.scrollTo(drag.left + drag.x-e.clientX, drag.top + drag.y-e.clientY);
+});
+viewport.addEventListener('lostpointercapture', () => {
+  drag = null;
+  viewport.classList.remove('dragging');
+});
+viewport.addEventListener('scroll', schedulePaint, {passive:true});
+new ResizeObserver(schedulePaint).observe($('graph'));
+new ResizeObserver(schedulePaint).observe(viewport);
+function startAuthoredViewer() {
+  document.body.classList.add('authored');
+  $('slides').hidden = false;
+  for (const [index, page] of authoredPages.entries()) {
+    const option = element('option', (index+1) + ' · ' + page.title);
+    option.value = index;
+    $('view-picker').append(option);
+  }
+  $('view-picker').onchange = event => showAuthoredPage(Number(event.target.value));
+  $('previous').onclick = () => showAuthoredPage(pageIndex - 1);
+  $('next').onclick = () => showAuthoredPage(pageIndex + 1);
+  showAuthoredPage(0);
+}
+function hotspot(rect, label, action) {
+  const button = element('button', null, 'hotspot');
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  place(button, rect);
+  button.onclick = action;
+  $('regions').append(button);
+}
+function place(el, [left, top, width, height]) {
+  Object.assign(el.style, {left:left+'px', top:top+'px', width:width+'px', height:height+'px'});
+}
+function pathPoints(commands) {
+  const coordinatePairs = /(-?[\d.]+)\s+(-?[\d.]+)/g;
+  return [...commands.matchAll(coordinatePairs)].map(match => [Number(match[1]), Number(match[2])]);
+}
+
+function distance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+}
+
+function nearestPort(cards, point, {id, limit = 2.2} = {}) {
+  let nearest = null;
+  for (const [i, card] of cards.entries()) {
+    if (id && card.id !== id) continue;
+    const [x, y, w, h] = card.box;
+    const u = Math.min(1, Math.max(0, (point[0] - x) / w));
+    const v = Math.min(1, Math.max(0, (point[1] - y) / h));
+    const ports = [[x, y+h*v], [x+w, y+h*v], [x+w*u, y], [x+w*u, y+h]];
+    for (const [side, port] of ports.entries()) {
+      const gap = distance(point, port);
+      if (gap >= limit) continue;
+      limit = gap;
+      nearest = ['card:' + i, side, side < 2 ? v : u];
+    }
+  }
+  return nearest;
+}
+
+function authoredAttachments(page) {
+  const attachments = new Map();
+  for (let i = 0; i < page.paths.length - 1; i++) {
+    const [commands, fill, stroke] = page.paths[i];
+    const [head, headFill, headStroke] = page.paths[i + 1];
+    // In authored pages an arrow is stored as a stroke followed by its filled tip.
+    if (fill || !stroke || headFill !== stroke || headStroke !== stroke) continue;
+    const points = pathPoints(commands);
+    const [tip] = pathPoints(head);
+    if (!tip || points.length < 2 || distance(points.at(-1), tip) > 6) continue;
+    const start = points[0];
+    let passage;
+    let gap = 5;
+    for (const evidence of page.evidence) {
+      if (!evidence.points?.length) continue;
+      const offset = distance(start, evidence.points[0]) + distance(tip, evidence.points.at(-1));
+      if (offset >= gap) continue;
+      gap = offset;
+      passage = evidence;
+    }
+    const from = nearestPort(page.cards, start, {id:passage?.source, limit:passage ? 5 : 2.2});
+    const to = nearestPort(page.cards, tip, {id:passage?.target, limit:passage ? 5 : 2.2});
+    if (from || to) attachments.set(i, [from, to, passage?.points || points, tip]);
+  }
+  return attachments;
+}
+
+function showAuthoredPage(index) {
+  if (!authoredPages[index]) return;
+  pageIndex = index;
+  const page = authoredPages[index];
+  $('view-picker').value = index;
+  $('previous').disabled = index === 0;
+  $('next').disabled = index === authoredPages.length - 1;
+  currentPhase = phases[page.phase-1] || null;
+  $('regions').replaceChildren();
+  $('sources').replaceChildren();
+  $('evidence').querySelector('h3').hidden = true;
+  buttons.clear();
+  previewBoxes.clear();
+  displayedSources = new Map();
+  attachedPaths = authoredAttachments(page);
+  for (const [cardIndex, record] of page.cards.entries()) {
+    const key = 'card:' + cardIndex;
+    const {id, kind, title, box} = record;
+    const el = element('button', null, 'node ' + kind + (record.compact ? ' compact' : ''));
+    el.title = title;
+    el.type = 'button';
+    el.dataset.node = id;
+    place(el, box);
+    previewBoxes.set(key,box);
+    if (kind === 'source') {
+      const [name, date] = title.split(' · ', 2);
+      el.append(element('strong', record.alias + ' · ' + name));
+      if (date) el.append(element('small', date));
+      el.append(element('small', record.excerpt), element('small', 'Supports ' + record.targets.join(', '), 'targets'));
+      displayedSources.set(id, {quotes:new Map(record.evidence.map(eid => [eid, evidenceById.get(eid)]))});
+    } else {
+      el.append(element('small', record.alias), element('strong', title));
+      if (record.parties.length) {
+        const names = record.parties.map(pid => nodeInfo.get(pid)?.title).filter(Boolean);
+        if (names.length) el.append(element('small', names.join(' / '), 'parties'));
+      }
+      if (record.badges.length) el.append(element('span', record.badges.join(', '), 'badge'));
+    }
+    bindCard(el, key);
+    $(kind === 'source' ? 'sources' : 'regions').append(el);
+    buttons.set(key, el);
+  }
+  const centers = [164,407,587,760,899,1037];
+  const widths = [257,168,168,127,127,127];
+  for (const [i, phase] of phases.entries()) {
+    const first = authoredPages.findIndex(view => view.phase === i+1);
+    if (first < 0) continue;
+    hotspot([centers[i]-widths[i]/2,94,widths[i],22], phase.name, () => showAuthoredPage(first));
+    if (!index) hotspot([35+i*181,165,156,65], phase.name, () => showAuthoredPage(first));
+  }
+  for (const edge of page.jumps) {
+    const label = page.labels.find(item => item[5].startsWith(edge.to+' ·') && item[5].includes('view'));
+    if (!label) continue;
+    hotspot([label[0]-3,label[1]-11,140,16], edge.to+' · view '+edge.target_page, () => {
+      showAuthoredPage(edge.target_page-1);
+      const target = authoredPages[pageIndex].cards.find(card => card.alias === edge.to);
+      if (target) jump(target.id);
+    });
+  }
+  $('viewport').scrollTo(0, 0);
+  selected = null;
+  schedulePaint();
+}
+function portOnBox([, side, fraction], [x,y,w,h], toward) {
+  // Use the original side when the retained route can still approach it from outside.
+  if (side === 0 && toward[0] <= x) return [x,y+h*fraction];
+  if (side === 1 && toward[0] >= x+w) return [x+w,y+h*fraction];
+  if (side === 2 && toward[1] <= y) return [x+w*fraction,y];
+  if (side === 3 && toward[1] >= y+h) return [x+w*fraction,y+h];
+  const centerX = x+w/2, centerY = y+h/2;
+  const dx = toward[0]-centerX, dy = toward[1]-centerY;
+  const scale = 1/Math.max(Math.abs(dx)/(w/2),Math.abs(dy)/(h/2));
+  return [centerX+dx*scale, centerY+dy*scale];
+}
+
+function reroute([from,to,original,tip], box) {
+  const [x,y,w,h] = box;
+  const outside = ([px,py]) => px < x || px > x+w || py < y || py > y+h;
+  if (from?.[0] === selected) {
+    const points = [...original.slice(1,-1),tip];
+    const first = points.findIndex(outside);
+    if (first < 0) return null;
+    const rest = points.slice(first);
+    return [portOnBox(from,box,rest[0]),...rest];
+  }
+  const points = original.slice(0,-1);
+  while (points.length && !outside(points.at(-1))) points.pop();
+  if (!points.length) return null;
+  return [...points,portOnBox(to,box,points.at(-1))];
+}
+
+function paintAttachedPath(ctx, points, color, width, pattern) {
+  ctx.strokeStyle = ctx.fillStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(pattern);
+  ctx.beginPath();
+  ctx.moveTo(...points[0]);
+  for (const point of points.slice(1)) ctx.lineTo(...point);
+  ctx.stroke();
+  const [x,y] = points.at(-1);
+  const [beforeX,beforeY] = points.at(-2);
+  const length = Math.hypot(x-beforeX,y-beforeY);
+  if (!length) return;
+  const dx = (x-beforeX)/length, dy = (y-beforeY)/length;
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x-6*dx+2.5*dy,y-6*dy-2.5*dx);
+  ctx.lineTo(x-6*dx-2.5*dy,y-6*dy+2.5*dx);
+  ctx.fill();
+}
+
+function dashPattern(dashes) {
+  const pattern = dashes?.match(/\[([^\]]*)\]/)?.[1]?.trim();
+  return pattern ? pattern.split(/\s+/).map(Number) : [];
+}
+
+function paintAuthoredPage() {
+  const canvas = $('wires');
+  const ratio = Math.min(window.devicePixelRatio * zoom, 2);
+  canvas.width = Math.ceil(1134*ratio);
+  canvas.height = Math.ceil(992*ratio);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(ratio, ratio);
+  const page = authoredPages[pageIndex];
+  const button = buttons.get(selected);
+  const box = button ? [button.offsetLeft,button.offsetTop,button.offsetWidth,button.offsetHeight] : null;
+  const moving = new Map();
+  if (box) {
+    for (const [i, link] of attachedPaths) {
+      const [from, to] = link;
+      if (from?.[0] !== selected && to?.[0] !== selected) continue;
+      const points = reroute(link, box);
+      if (points) moving.set(i, points);
+    }
+  }
+  for (const [i, [commands, fill, stroke, width, dashes]] of page.paths.entries()) {
+    if (moving.has(i - 1)) continue; // The redrawn shaft supplies its own arrowhead.
+    if (moving.has(i)) continue;
+    const shape = new Path2D(commands);
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill(shape);
+    }
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = width || 1;
+      ctx.setLineDash(dashPattern(dashes));
+      ctx.stroke(shape);
+    }
+  }
+  for (const [i, points] of moving) {
+    const [, , color, width, dashes] = page.paths[i];
+    const pattern = dashPattern(dashes);
+    paintAttachedPath(ctx, points, color, Math.max(width, 1.5), pattern);
+  }
+  for (const [x,y,size,color,bold,text] of page.labels) {
+    ctx.font = (bold ? '600 ' : '') + size + 'px Arial, sans-serif';
+    ctx.fillStyle = color;
+    ctx.fillText(text,x,y);
+  }
+}
+
+if (authoredPages) startAuthoredViewer();
+else showPhase(phases[0]?.phase_id || null);
+</script>
+</body>
+</html>

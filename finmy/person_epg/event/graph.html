@@ -2,644 +2,1016 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Event process graph</title>
 <style>
-  :root { color-scheme: light; --navy:#0b3865; --ink:#172e43; --muted:#52677a; --border:#d4dfe7;
-    --action:#e2f1e6; --context:#fff3d6; --party:#e3effb; --green:#287457; --purple:#794897; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:#f2f6fa; color:var(--ink); font:15px/1.45 Inter,system-ui,sans-serif; }
-  header { background:var(--navy); color:white; padding:18px clamp(16px,4vw,54px); }
-  h1,h2,h3,p { margin:0; }
-  h1 { font-size:clamp(22px,3vw,34px); line-height:1.2; }
-  header p { color:#d3e3f4; margin-top:5px; }
-  main { max-width:1680px; margin:auto; padding:14px clamp(12px,3vw,38px) 32px; }
-  nav { display:flex; flex-wrap:wrap; gap:8px; padding-bottom:12px; }
-  nav section { flex:1 1 240px; padding:9px 11px; background:white; border:1px solid var(--border); border-radius:8px; }
-  nav h2 { font-size:13px; margin-bottom:5px; }
-  button { font:inherit; color:inherit; cursor:pointer; }
-  nav button,.controls button { background:white; border:1px solid #afc1d2; border-radius:6px; padding:5px 9px; margin:2px; font-size:13px; }
-  nav button[aria-pressed=true] { background:#2162a1; color:white; border-color:#2162a1; }
-  button:focus-visible, a:focus-visible { outline:3px solid #267abb; outline-offset:3px; }
-  .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:5px 18px; margin-bottom:9px; }
-  .toolbar h2 { flex:1 1 300px; font-size:18px; }
-  .legend { display:flex; flex-wrap:wrap; gap:6px 13px; font-size:12px; color:var(--muted); margin-bottom:9px; }
-  .legend span::before { content:''; display:inline-block; width:12px; height:9px; background:var(--swatch);
-    border:1px solid #a4b4c2; border-radius:2px; margin-right:5px; }
-  .legend .line::before { height:0; border:0; border-top:2px solid var(--swatch); vertical-align:middle; }
-  #layout { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
-  #layout.inspecting { grid-template-columns:minmax(0,1fr) minmax(235px,290px); }
-  #viewport { overflow:auto; height:clamp(400px,70vh,920px); background:#fff; border:1px solid var(--border); border-radius:9px; }
-  #viewport.dragging { cursor:grabbing; user-select:none; }
-  #graph { position:relative; min-width:800px; padding:14px; isolation:isolate; }
-  #wires { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; }
-  #regions,#sources { display:grid; gap:18px; }
-  #regions { grid-template-columns:minmax(130px,1fr) minmax(205px,1.45fr) minmax(245px,1.7fr); }
-  .column { min-width:0; padding:0 13px; }
-  .column h3,#evidence h3 { font-size:15px; margin-bottom:9px; }
-  .column h4 { margin:5px 0; font-size:12px; color:var(--muted); }
-  .node { display:block; text-align:left; width:100%; position:relative; z-index:2; border:1px solid #b4c8d9;
-    background:var(--party); padding:8px 10px; border-radius:7px; margin:0 0 9px; overflow-wrap:anywhere; }
-  .node strong,.node small { display:block; }
-  .node.source strong + small { margin:4px 0 0; }
-  .node small { color:var(--muted); font-size:11px; margin:0 0 4px; }
-  .node.action { background:var(--action); border-color:#a4bea8; }
-  .node.context { background:var(--context); border-color:#dbc58e; }
-  .node.source { background:#f7fbf9; border-color:#9cc3b0; }
-  .node:hover,.node[aria-pressed=true] { outline:2px solid var(--navy); outline-offset:2px; }
-  .node.dim { opacity:.38; }
-  #evidence { margin:26px 0 0; padding:12px; border:1px solid var(--border); border-radius:8px; background:#f7fafc; }
-  #sources { grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:9px 25px; }
-  #sources .node { margin-bottom:0; }
-  #details { max-height:70vh; overflow:auto; background:white; border:1px solid var(--border); border-radius:8px; padding:14px; overflow-wrap:anywhere; }
-  #details h3 { font-size:17px; padding-right:25px; }
-  #details h4 { margin:12px 0 4px; }
-  #details p,#details blockquote { margin:7px 0; font-size:13px; white-space:pre-wrap; }
-  #details blockquote { padding-left:8px; border-left:2px solid #9cc3b0; }
-  #details summary { cursor:pointer; margin:12px 0 4px; font-size:13px; }
-  #details pre { white-space:pre-wrap; font-size:11px; }
-  #details .connection { display:block; background:#f3f7fa; border:1px solid var(--border); text-align:left;
-    padding:5px 7px; border-radius:5px; width:100%; margin:4px 0; font-size:12px; }
-  #close { float:right; border:0; background:transparent; font-size:19px; line-height:1; }
-  .empty { font-size:13px; color:var(--muted); }
-  #layout.inspecting { grid-template-columns:minmax(0,1fr); }
-  #graph { width:1134px; }
-  #regions { grid-template-columns:220px 370px 1fr; }
-  .node { height:104px; overflow:hidden; }
-  .node strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
-  .node small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .node.source { height:120px; }
-  .node.source strong + small { white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
-  #details { position:fixed; z-index:5; right:16px; top:16px; width:min(400px,calc(100vw - 32px)); max-height:calc(100vh - 32px);
-    box-shadow:0 8px 36px #172e4338; }
-  #slides[hidden], #details[hidden] { display:none; }
-  #slides { display:flex; align-items:center; gap:6px; }
-  #slides select { max-width:min(48vw,330px); padding:4px; font:inherit; }
-  body.authored header, body.authored #phases, body.authored #view-title, body.authored .legend { display:none; }
-  body.authored main { max-width:none; padding:10px 12px; }
-  body.authored #viewport { height:calc(100dvh - 62px); min-height:300px; }
-  body.authored #graph { min-width:0; width:1134px; height:992px; padding:0; background:white; }
-  body.authored #evidence { display:contents; }
-  body.authored #graph .node { position:absolute; margin:0; border-radius:6px; padding:6px 9px;
-    display:flex; flex-direction:column; justify-content:center; gap:3px; line-height:1.18; }
-  body.authored #graph .node strong { font-size:14px; }
-  body.authored #graph .node.compact strong { font-size:12px; font-weight:500; -webkit-line-clamp:2; }
-  body.authored #graph .node.context strong { font-weight:500; }
-  body.authored #graph .node.source { background:white; }
-  body.authored #graph .source strong, body.authored #graph .source .targets { color:var(--green); }
-  body.authored #graph .node small { margin:0; font-size:10px; }
-  body.authored #graph .node .parties { color:#2466aa; }
-  .badge { position:absolute; top:4px; right:4px; padding:2px 4px; background:#2d6f58; color:white;
-    border-radius:3px; font-size:8px; font-weight:bold; }
-  .hotspot { position:absolute; z-index:3; background:transparent; border:0; padding:0; border-radius:4px; }
-  .hotspot:hover { box-shadow:inset 0 0 0 2px #4c85bb; }
+:root {
+  --navy: #0b3865;
+  --ink: #203547;
+  --muted: #687c8b;
+  --border: #d5e0e7;
+  --green: #2c745e;
+  --purple: #80589f
+}
+
+* {
+  box-sizing: border-box
+}
+
+[hidden] {
+  display: none !important
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: #edf2f6;
+  font: 14px/1.4 Arial, Helvetica, sans-serif
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit
+}
+
+button {
+  cursor: pointer
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #398bc3;
+  outline-offset: 2px
+}
+
+#toolbar {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: white;
+  border-bottom: 1px solid var(--border)
+}
+
+#toolbar button,
+#toolbar select {
+  border: 1px solid #c6d3dd;
+  border-radius: 4px;
+  background: white;
+  padding: 4px 9px
+}
+
+#picker {
+  max-width: 650px
+}
+
+.spacer {
+  flex: 1
+}
+
+#viewport {
+  height: calc(100vh - 46px);
+  overflow: auto;
+  padding: 12px;
+  touch-action: pan-x pan-y
+}
+
+#sheet {
+  width: 1134px;
+  position: relative;
+  background: white;
+  box-shadow: 0 2px 10px #20354716
+}
+
+#heading {
+  background: var(--navy);
+  color: white;
+  padding: 14px 24px;
+  font-size: 24px;
+  line-height: 1.2
+}
+
+#subheading {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 24px;
+  color: var(--muted)
+}
+
+#navigation {
+  display: flex;
+  gap: 8px;
+  padding: 0 22px 10px;
+  align-items: stretch
+}
+
+/* Keep the existing stage controls in reach while the canvas scrolls sideways. */
+#heading,
+#subheading,
+#navigation {
+  position: sticky;
+  left: 0;
+  width: 1134px;
+  max-width: 100%
+}
+
+#subheading,
+#navigation {
+  background: white
+}
+
+.stage {
+  background: #f7fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 210px;
+  flex: 1
+}
+
+.stage small {
+  font-size: 10px;
+  color: var(--muted)
+}
+
+.stage h2 {
+  font-size: 13px;
+  margin: 3px 0 8px;
+  line-height: 1.3
+}
+
+.phase-list {
+  display: flex;
+  gap: 6px
+}
+
+.phase-list button {
+  flex: 1;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+  line-height: 1.3
+}
+
+.phase-list button.active {
+  background: #2868a8;
+  color: white;
+  border-color: #2868a8
+}
+
+#graph {
+  position: relative;
+  width: 1134px
+}
+
+#regions,
+#cards,
+#links {
+  position: absolute;
+  inset: 0;
+  pointer-events: none
+}
+
+.section {
+  position: absolute;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: white
+}
+
+.section.evidence {
+  background: #fafdfe
+}
+
+.section h3 {
+  font-size: 18px;
+  margin: 9px 12px
+}
+
+.section .legend {
+  position: absolute;
+  left: 620px;
+  max-width: 450px;
+  font-size: 11px;
+  color: var(--green);
+  margin: 14px
+}
+
+#links {
+  overflow: visible;
+  z-index: 1
+}
+
+#cards {
+  z-index: 2
+}
+
+.card {
+  pointer-events: auto;
+  position: absolute;
+  display: block;
+  text-align: left;
+  border: 1px solid #9dbeb0;
+  background: #e2f0e6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  cursor: pointer
+}
+
+.card.context,
+.card.phase {
+  background: #fff4d7;
+  border-color: #d8be76
+}
+
+.card.source {
+  background: white;
+  border-color: #8fb5a4
+}
+
+.card.party {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: center
+}
+
+.party-icon {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 4px
+}
+
+.card.party .title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  -webkit-line-clamp: 2
+}
+
+.party-caption {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px
+}
+
+.card.party[aria-expanded=true] {
+  padding: 9px;
+  text-align: left;
+  background: #e5f0fa;
+  border: 1px solid #92b2d5
+}
+
+.card:hover {
+  outline: 2px solid #7093a8;
+  outline-offset: 1px
+}
+
+.card .meta {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  font-weight: 600;
+  padding-right: 0;
+  margin-bottom: 5px;
+  color: #385164
+}
+
+.card .title {
+  font-size: 13px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden
+}
+
+.card.compact .title {
+  -webkit-line-clamp: 2
+}
+
+.card.compact .participants {
+  display: none
+}
+
+.card.action .title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  -webkit-line-clamp: 3
+}
+
+.card.context .title {
+  font-weight: 400
+}
+
+.card .participants {
+  display: block;
+  color: #2868a8;
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  margin-top: 6px
+}
+
+.badges {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  background: var(--green);
+  color: white;
+  border-radius: 3px;
+  font-size: 9px;
+  padding: 2px 4px;
+  max-width: 90px;
+  overflow: hidden;
+  white-space: nowrap
+}
+
+.card.source .title {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-line-clamp: 2
+}
+
+.card .excerpt {
+  font-size: 11px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 7px;
+  line-height: 1.35
+}
+
+.card .targets {
+  display: block;
+  color: var(--green);
+  font-size: 10px;
+  margin-top: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.card[aria-expanded=true] {
+  z-index: 8;
+  box-shadow: 0 5px 20px #233b4c35;
+  outline: 2px solid #537f98
+}
+
+.card .detail {
+  display: block;
+  height: 100%;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap
+}
+
+.card .detail strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  margin-bottom: 8px
+}
+
+.card .detail p {
+  margin: 8px 0
+}
+
+.card .detail .quote {
+  border-top: 1px solid #cddfd6;
+  padding-top: 8px
+}
+
+.card .detail a {
+  color: #2868a8;
+  word-break: break-all
+}
+
+[hidden] {
+  display: none !important
+}
+
+#jumps {
+  padding: 4px 24px 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap
+}
+
+#jumps button {
+  background: white;
+  color: var(--purple);
+  font-size: 11px;
+  border: 1px solid #d6c9df;
+  border-radius: 4px;
+  padding: 6px 10px
+}
+
+svg text {
+  font: 10px Arial, Helvetica, sans-serif;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 5px;
+  stroke-linejoin: round
+}
 </style>
 </head>
 <body>
-<header><h1 id="title"></h1><p id="person"></p></header>
-<main>
-  <nav id="phases" aria-label="Stages and phases"></nav>
-  <div class="toolbar"><h2 id="view-title"></h2>
-    <div id="slides" hidden>
-      <button id="previous" aria-label="Previous view">←</button>
-      <select id="view-picker" aria-label="View"></select>
-      <button id="next" aria-label="Next view">→</button>
-    </div>
-    <div class="controls" aria-label="Canvas zoom">
-      <button id="out" aria-label="Zoom out">−</button><button id="reset" aria-label="Reset zoom">100%</button>
-      <button id="in" aria-label="Zoom in">+</button>
-    </div>
-  </div>
-  <div class="legend" aria-label="Graph legend">
-    <span style="--swatch:var(--party)">Related party</span>
-    <span style="--swatch:var(--action)">Action</span>
-    <span style="--swatch:var(--context)">Context</span>
-    <span class="line" style="--swatch:var(--purple)">Action relation</span>
-    <span class="line" style="--swatch:var(--green)">Source evidence</span>
-  </div>
-  <div id="layout">
-    <div id="viewport" tabindex="0" aria-label="Scrollable event graph">
-      <div id="graph"><canvas id="wires" aria-hidden="true"></canvas>
-        <div id="regions"></div>
-        <section id="evidence"><h3>Source evidence</h3><div id="sources"></div></section>
-      </div>
-    </div>
-    <aside id="details" hidden aria-label="Record details"></aside>
-  </div>
-</main>
+<div id="toolbar">
+<button id="previous" aria-label="Previous phase">← Phase</button>
+<select id="picker" aria-label="Phase"></select>
+<button id="next" aria-label="Next phase">Phase →</button>
+<span class="spacer"></span>
+<button id="minus" aria-label="Zoom out">−</button>
+<button id="zoom" aria-label="Reset zoom">100%</button>
+<button id="plus" aria-label="Zoom in">+</button>
+</div>
+<div id="viewport"><div id="sheet">
+<div id="heading"></div><div id="subheading"></div>
+<nav id="navigation" aria-label="Stages and phases"></nav>
+<div id="graph"><div id="regions"></div><svg id="links" aria-label="Graph relationships"></svg><div id="cards"></div></div>
+<div id="jumps"></div>
+</div></div>
 <script id="epg-data" type="application/json">__EPG_GRAPH_JSON__</script>
 <script id="epg-layout" type="application/json">__EPG_LAYOUT_JSON__</script>
+<script id="epg-view" type="application/json">__EPG_VIEW_JSON__</script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const graph = JSON.parse($('epg-data').textContent);
-const authoredPages = JSON.parse($('epg-layout').textContent);
-const {event, person, stages, phases, actions, contexts, entities, sources, evidence, relations} = graph;
-const index = (records, field) => new Map(records.map(record => [record[field], record]));
-const actionById = index(actions, 'action_id');
-const phaseById = index(phases, 'phase_id');
-const evidenceById = index(evidence, 'evidence_id');
-const sourceById = index(sources, 'source_id');
-const nodeInfo = new Map();
-for (const [records, key, kind] of [
-  [actions,'action_id','action'], [contexts,'context_id','context'], [entities,'entity_id','party'],
-  [phases,'phase_id','phase'], [sources,'source_id','source'], [[event],'event_id','event']
-]) {
-  for (const record of records) {
-    nodeInfo.set(record[key], {kind, record, title:record.name || record.title || record.description ||
-      record.origin || record.url || record[key]});
-  }
+const view = JSON.parse($('epg-view').textContent);
+const evidence = new Map(graph.evidence.map(item => [item.evidence_id, item]));
+const sources = new Map(graph.sources.map(item => [item.source_id, item]));
+const cards = new Map();
+let drawnEdges = [], hovered = null, regionBoxes = [];
+let current = 0,
+  expanded = null,
+  scale = 1;
+
+function el(tag, text, cls) {
+  const node = document.createElement(tag);
+  if (text) node.textContent = text;
+  if (cls) node.className = cls;
+  return node;
 }
-const phaseContext = new Map(phases.map(phase => [phase.phase_id, new Set()]));
-const assigned = new Set();
-function assign(phaseId, contextId) {
-  phaseContext.get(phaseId)?.add(contextId);
-  assigned.add(contextId);
-}
-for (const phase of phases) {
-  for (const ref of phase.baseline_context_refs || []) assign(phase.phase_id, ref.context_id);
-}
-for (const action of actions) {
-  if (!phaseById.has(action.phase_id)) continue;
-  for (const ref of action.delta_context_refs || []) assign(action.phase_id, ref.context_id);
-}
-// Date placement is visual grouping only. Ambiguous or undated material belongs to the event view.
-const dateOnly = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '');
-for (const context of contexts) {
-  if (assigned.has(context.context_id)) continue;
-  const {start, end} = context.time || {};
-  if (!dateOnly(start) || !dateOnly(end)) continue;
-  const matches = phases.filter(phase => {
-    const span = phase.time || {};
-    if (!dateOnly(span.end) && !dateOnly(span.start)) return false;
-    return (!span.start || (dateOnly(span.start) && start >= span.start)) &&
-      (!span.end || (dateOnly(span.end) && end <= span.end));
+
+function position(node, box) {
+  const [x, y, w, h] = box;
+  Object.assign(node.style, {
+    left: x + 'px',
+    top: y + 'px',
+    width: w + 'px',
+    height: h + 'px'
   });
-  if (matches.length === 1) assign(matches[0].phase_id, context.context_id);
 }
-const contextEdges = [];
-function addReferences(owner, references) {
-  for (const ref of references || []) {
-    const result = ref.relation_type === 'result';
-    contextEdges.push({from:result ? owner : ref.context_id, to:result ? ref.context_id : owner,
-      type:ref.relation_type, kind:'context', record:ref});
+
+function svg(tag, attrs) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function bounds(node) {
+  return [node.offsetLeft, node.offsetTop, node.offsetWidth, node.offsetHeight];
+}
+
+function partyIcon(type) {
+  const icon = svg('svg', {'viewBox': '0 0 56 56', 'class': 'party-icon', 'aria-hidden': 'true'});
+  icon.append(svg('circle', {cx: 28, cy: 28, r: 27, fill: '#dfedfa', stroke: '#83a6c7'}));
+  if (type === 'organization') {
+    icon.append(svg('path', {d: 'M16 14H40V43H16Z', fill: '#2868a8'}));
+    for (const x of [21, 31]) for (const y of [20, 29])
+      icon.append(svg('rect', {x, y, width: 4, height: 5, fill: 'white'}));
+  } else {
+    icon.append(svg('circle', {cx: 28, cy: 19, r: 7, fill: '#2868a8'}));
+    icon.append(svg('path', {d: 'M15 42V35Q15 28 22 28H34Q41 28 41 35V42Z', fill: '#2868a8'}));
+  }
+  return icon;
+}
+
+function linkBox(item) {
+  const box = bounds(item.button);
+  if (item.card.kind === 'party' && expanded !== item.card.key)
+    return [box[0] + (box[2] - 56) / 2, box[1], 56, 56];
+  return box;
+}
+
+function highlight(key) {
+  hovered = key;
+  const active = hovered || expanded;
+  for (const {edge, line, label} of drawnEdges) {
+    const selected = active && (active === edge.from_key || active === edge.to_key);
+    const evidence = edge.kind === 'evidence';
+    const normal = edge.type === 'about' ? .32 : edge.kind === 'party' ? .65 : .9;
+    line.setAttribute('opacity', selected ? 1 : evidence ? .18 : active ? .2 : normal);
+    line.setAttribute('stroke-width', selected ? 2.2 : evidence ? .7 : edge.kind === 'relation' ? 1.7 : 1);
+    if (label) label.setAttribute('opacity', selected ? 1 : edge.type === 'about' ? 0 : active ? .25 : 1);
   }
 }
-for (const phase of phases) addReferences(phase.phase_id, phase.baseline_context_refs);
-for (const action of actions) addReferences(action.action_id, action.delta_context_refs);
-const actionEdges = relations.map(record => ({from:record.from_action_id, to:record.to_action_id,
-  type:record.type, kind:'relation', record}));
-function directEvidence(record) {
-  return [...new Set((record.support || []).flatMap(support => support.evidence_ids || []))]
-    .map(id => evidenceById.get(id)).filter(Boolean);
-}
-function parties(record) {
-  return [...new Set([record.actor?.entity_id, ...(record.object?.entity_refs || []), ...(record.entity_refs || [])])]
-    .filter(id => nodeInfo.get(id)?.kind === 'party');
-}
-function element(tag, text, cls) {
-  const el = document.createElement(tag);
-  if (text) el.textContent = text;
-  if (cls) el.className = cls;
-  return el;
-}
-const buttons = new Map();
-const phaseButtons = new Map();
-let selected = null;
-let currentPhase = null;
-let pageIndex = 0;
-let displayedSources = new Map();
-let edges = [];
-let zoom = 1;
-let paintPending = false;
-$('title').textContent = document.title = event.name;
-$('person').textContent = [person.name, event.time?.text].filter(Boolean).join(' · ');
 
-function phaseButton(id, label) {
-  const button = element('button', label);
+function paintCard(card) {
+  const button = el('button', null, 'card ' + card.kind + (card.box[3] < 100 ? ' compact' : ''));
   button.type = 'button';
-  button.onclick = () => showPhase(id);
-  phaseButtons.set(id, button);
-  return button;
-}
-const overview = element('section');
-overview.append(element('h2', 'Event'), phaseButton(null, 'Event overview & background'));
-$('phases').append(overview);
-const stageSections = new Map();
-for (const stage of stages) {
-  const section = element('section');
-  section.append(element('h2', stage.name));
-  stageSections.set(stage.stage_id, section);
-  $('phases').append(section);
-}
-for (const phase of phases) {
-  (stageSections.get(phase.stage_id) || overview).append(phaseButton(phase.phase_id, phase.name));
-}
-
-function card(parent, id, subtitle, title) {
-  const info = nodeInfo.get(id);
-  const button = element('button', null, 'node ' + info.kind);
-  button.type = 'button';
-  button.dataset.node = id;
-  button.title = title || info.title;
-  button.append(element('small', subtitle), element('strong', title || info.title));
-  const quote = info.kind === 'source' && displayedSources.get(id)?.quotes.values().next().value?.quote;
-  if (quote) {
-    const excerpt = quote.replace(/\s+/g, ' ').trim();
-    button.append(element('small', excerpt.length > 126 ? excerpt.slice(0, 125) + '…' : excerpt));
-  }
-  button.onclick = () => inspect(id);
-  parent.append(button);
-  buttons.set(id, button);
-}
-function column(title) {
-  const section = element('section', null, 'column');
-  section.append(element('h3', title));
-  $('regions').append(section);
-  return section;
-}
-function showPhase(id) {
-  currentPhase = phaseById.get(id) || null;
-  for (const [key, button] of phaseButtons) button.setAttribute('aria-pressed', key === id);
-  $('view-title').textContent = currentPhase?.name || 'Event overview & background';
-  $('regions').replaceChildren();
-  $('sources').replaceChildren();
-  buttons.clear();
-  const people = column('Related parties');
-  const activity = column('Actions');
-  const setting = column('Context');
-  const visibleActions = actions.filter(action => id === null ? !phaseById.has(action.phase_id) : action.phase_id === id);
-  const contextIds = new Set(id === null ? contexts.filter(c => !assigned.has(c.context_id)).map(c => c.context_id) :
-    phaseContext.get(id));
-  for (const action of visibleActions) for (const ref of action.delta_context_refs || []) contextIds.add(ref.context_id);
-  const primaryId = id || event.event_id;
-  card(people, primaryId, id ? 'Selected phase' : 'Event', id ? (currentPhase.time?.text || currentPhase.name) : event.name);
-  for (const action of visibleActions) card(activity, action.action_id, action.time?.text || 'Date not specified');
-  if (!visibleActions.length) activity.append(element('p', id ? 'No recorded actions in this phase.' :
-    'Select a phase to view its actions.', 'empty'));
-  const baseline = new Set(currentPhase?.baseline_context_refs?.map(ref => ref.context_id) || []);
-  const attached = new Set(visibleActions.flatMap(action => (action.delta_context_refs || []).map(ref => ref.context_id)));
-  for (const [label, filter] of [
-    ['Shared phase context', cid => baseline.has(cid)],
-    ['Action context', cid => !baseline.has(cid) && attached.has(cid)],
-    [id ? 'Background grouped by recorded dates' : 'Event background and cross-phase accounts',
-      cid => !baseline.has(cid) && !attached.has(cid)]
-  ]) {
-    const group = contexts.filter(c => contextIds.has(c.context_id) && filter(c.context_id));
-    if (!group.length) continue;
-    setting.append(element('h4', label));
-    for (const context of group) card(setting, context.context_id, context.time?.text || context.category || 'Context');
-  }
-  if (!contextIds.size) setting.append(element('p', 'No context for this view.', 'empty'));
-
-  const partyEdges = [];
-  const shownParties = new Set();
-  for (const [nid] of buttons) {
-    const record = nodeInfo.get(nid).record;
-    for (const party of parties(record)) {
-      shownParties.add(party);
-      partyEdges.push({from:party, to:nid, type:party === record.actor?.entity_id ? 'actor' : 'related party', kind:'party'});
+  button.dataset.key = card.key;
+  button.dataset.id = card.id;
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-label', card.alias + ' ' + card.title);
+  button.title = view.details[card.id].title;
+  position(button, card.box);
+  const preview = el('span', null, 'preview');
+  if (card.kind === 'party') {
+    preview.append(partyIcon(card.entity_type), el('span', card.title, 'title'),
+      el('span', card.caption, 'party-caption'));
+  } else {
+    const meta = el('span', [card.alias, card.date].filter(Boolean).join(' · '), 'meta');
+    preview.append(meta, el('span', card.title, 'title'));
+    if (card.kind !== 'source' && card.badges.length) {
+      const badges = card.badges.join(', ');
+      meta.style.paddingRight = Math.min(94, badges.length * 6 + 12) + 'px';
+      preview.append(el('span', badges, 'badges'));
     }
   }
-  for (const party of shownParties) card(people, party, nodeInfo.get(party).record.type);
-  const nativeEdges = [...contextEdges, ...actionEdges].filter(edge => buttons.has(edge.from) || buttons.has(edge.to));
-  displayedSources = new Map();
-  const addEvidence = (target, records) => {
-    for (const ev of records) {
-      if (!sourceById.has(ev.source_id)) continue;
-      if (!displayedSources.has(ev.source_id)) displayedSources.set(ev.source_id, {targets:new Set(), quotes:new Map()});
-      const info = displayedSources.get(ev.source_id);
-      if (target) info.targets.add(target);
-      info.quotes.set(ev.evidence_id, ev);
-    }
+  const detail = el('span', null, 'detail');
+  detail.hidden = true;
+  button.append(preview, detail);
+  button.onclick = event => {
+    if (!event.target.closest('a')) toggle(card.key);
   };
-  for (const [nid] of buttons) addEvidence(nid, directEvidence(nodeInfo.get(nid).record));
-  for (const edge of nativeEdges) addEvidence(null, directEvidence(edge.record));
-  if (!id) for (const source of sources) {
-    if (!displayedSources.has(source.source_id)) displayedSources.set(source.source_id, {targets:new Set(), quotes:new Map()});
-  }
-  if (!id) addEvidence(null, evidence);
-  const supportEdges = [];
-  for (const [sid, info] of displayedSources) {
-    const source = sourceById.get(sid);
-    const count = info.quotes.size;
-    card($('sources'), sid, [source.published_at, count + (count === 1 ? ' passage' : ' passages')].filter(Boolean).join(' · '));
-    for (const target of info.targets) supportEdges.push({from:sid, to:target, type:'supports', kind:'evidence'});
-  }
-  if (!displayedSources.size) $('sources').append(element('p', 'No source evidence for this view.', 'empty'));
-  edges = [...partyEdges, ...nativeEdges, ...supportEdges];
-  $('viewport').scrollTo(0, 0);
-  inspect(null);
+  button.onmouseenter = button.onfocus = () => highlight(card.key);
+  button.onmouseleave = button.onblur = () => highlight(null);
+  $('cards').append(button);
+  cards.set(card.key, {
+    card,
+    button,
+    preview,
+    detail
+  });
 }
 
-function jump(id) {
-  if (authoredPages && !buttons.has(id)) {
-    const destination = authoredPages.findIndex(page => page.cards.some(card => card.id === id));
-    if (destination >= 0) showAuthoredPage(destination);
-    if (!buttons.has(id)) return;
+function layoutCards(item = null, height = 0) {
+  const page = view.pages[current];
+  const boundary = item ? item.card.box[1] + item.card.box[3] : Infinity;
+  const extra = item ? Math.max(0, height - item.card.box[3]) : 0;
+  for (const value of cards.values()) {
+    const box = [...value.card.box];
+    if (value === item) box[3] += extra;
+    else if (box[1] >= boundary) box[1] += extra;
+    position(value.button, box);
   }
-  if (!buttons.has(id)) {
-    const destination = actionById.get(id)?.phase_id ||
-      [...phaseContext].find(([, ids]) => ids.has(id))?.[0];
-    showPhase(phaseById.has(destination) ? destination : null);
-  }
-  if (!buttons.has(id)) return;
-  buttons.get(id).scrollIntoView({block:'nearest', inline:'nearest'});
-  inspect(id);
+  regionBoxes = page.sections.map(section => {
+    const box = [...section.box];
+    if (box[1] >= boundary) box[1] += extra;
+    else if (box[1] + box[3] >= boundary) box[3] += extra;
+    return box;
+  });
+  [...$('regions').children].forEach((node, i) => position(node, regionBoxes[i]));
+  $('graph').style.height = page.height + extra + 'px';
 }
-function quoteList(parent, passages) {
-  for (const passage of passages) {
-    const source = nodeInfo.get(passage.source_id);
-    if (source) parent.append(element('p', source.title));
-    parent.append(element('blockquote', passage.quote));
+
+function toggle(key) {
+  const previous = cards.get(expanded);
+  if (previous) {
+    previous.preview.hidden = false;
+    previous.detail.hidden = true;
+    previous.detail.replaceChildren();
+    previous.button.setAttribute('aria-expanded', 'false');
+    position(previous.button, previous.card.box);
   }
-}
-function inspect(id) {
-  selected = id;
-  const panel = $('details');
-  $('layout').classList.toggle('inspecting', id !== null);
-  panel.hidden = id === null;
-  panel.replaceChildren();
-  const connected = id ? edges.filter(edge => edge.from === id || edge.to === id) : [];
-  const neighbors = new Set(connected.flatMap(edge => [edge.from, edge.to]));
-  for (const [nid, button] of buttons) {
-    button.classList.toggle('dim', id !== null && nid !== id && !neighbors.has(nid));
-    button.setAttribute('aria-pressed', nid === id);
-  }
-  if (id !== null) {
-    const {record, title, kind} = nodeInfo.get(id);
-    const close = element('button', '×');
-    close.id = 'close';
-    close.setAttribute('aria-label', 'Close record details');
-    close.onclick = () => { inspect(null); buttons.get(id)?.focus({preventScroll:true}); };
-    panel.append(close, element('h3', title));
-    if (record.description && record.description !== title) panel.append(element('p', record.description));
-    if (record.time?.text) panel.append(element('p', record.time.text));
-    if (record.summary) panel.append(element('p', record.summary));
-    if (kind === 'source' && /^https?:\/\//i.test(record.url || '')) {
-      const link = element('a', 'Open source');
-      link.href = record.url;
+  const open = expanded !== key && key !== null;
+  expanded = open ? key : null;
+  hovered = null;
+  if (open) {
+    const item = cards.get(key),
+      data = view.details[item.card.id];
+    item.detail.append(el('strong', data.title));
+    if (data.date) item.detail.append(el('p', data.date));
+    for (const paragraph of data.paragraphs) item.detail.append(el('p', paragraph));
+    for (const eid of item.card.quotes || []) item.detail.append(el('p', evidence.get(eid)?.quote, 'quote'));
+    const source = sources.get(item.card.id);
+    if (source && /^https?:\/\//.test(source.url || '')) {
+      const link = el('a', 'Open source');
+      link.href = source.url;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      panel.append(link);
+      item.detail.append(link);
     }
-    if (connected.length) panel.append(element('h4', 'Connections'));
-    for (const edge of connected) {
-      const other = edge.from === id ? edge.to : edge.from;
-      if (!nodeInfo.has(other)) continue;
-      const label = [edge.type.replaceAll('_', ' '), edge.record?.basis, nodeInfo.get(other).title].filter(Boolean).join(' · ');
-      const connection = element('button', label, 'connection');
-      connection.onclick = () => jump(other);
-      panel.append(connection);
-      if (edge.record) {
-        const detail = element('details');
-        detail.append(element('summary', 'Relation details'));
-        const description = edge.record.description || edge.record.qualification;
-        if (description) detail.append(element('p', description));
-        quoteList(detail, directEvidence(edge.record));
-        detail.append(element('pre', JSON.stringify(edge.record, null, 2)));
-        panel.append(detail);
-      }
-    }
-    const passages = kind === 'source' ? [...displayedSources.get(id).quotes.values()] : directEvidence(record);
-    if (passages.length) {
-      panel.append(element('h4', 'Source evidence'));
-      quoteList(panel, passages);
-    }
-    const native = element('details');
-    native.append(element('summary', 'Original record'), element('pre', JSON.stringify(record, null, 2)));
-    panel.append(native);
-    panel.scrollTop = 0;
+    item.preview.hidden = true;
+    item.detail.hidden = false;
+    item.button.setAttribute('aria-expanded', 'true');
+    const [x, y, w, h] = item.card.box;
+    const height = Math.max(h + 30, Math.min(300, item.detail.scrollHeight + 24));
+    layoutCards(item, height);
+    item.detail.scrollTop = 0;
   }
-  schedulePaint();
+  if (!open) layoutCards();
+  drawEdges();
 }
-function schedulePaint() {
-  if (paintPending) return;
-  paintPending = true;
-  requestAnimationFrame(() => { paintPending = false; paint(); });
-}
-function paint() {
-  if (authoredPages) {
-    paintAuthoredPage();
-    return;
-  }
-  const stage = $('graph').getBoundingClientRect();
-  const canvas = $('wires');
-  // Keep backing-store size proportional to the visible viewport, even for long phases.
-  const viewport = $('viewport');
-  const left = viewport.scrollLeft / zoom;
-  const top = viewport.scrollTop / zoom;
-  const width = viewport.clientWidth / zoom;
-  const height = viewport.clientHeight / zoom;
-  const ratio = Math.min(window.devicePixelRatio * zoom, 3);
-  Object.assign(canvas.style, {left:left+'px', top:top+'px', width:width+'px', height:height+'px'});
-  canvas.width = Math.ceil(width * ratio);
-  canvas.height = Math.ceil(height * ratio);
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(ratio, 0, 0, ratio, -left * ratio, -top * ratio);
-  const rects = new Map([...buttons].map(([id, button]) => {
-    const box = button.getBoundingClientRect();
-    return [id, {left:(box.left-stage.left)/zoom, right:(box.right-stage.left)/zoom,
-      top:(box.top-stage.top)/zoom, y:(box.top+box.height/2-stage.top)/zoom,
-      center:(box.left+box.width/2-stage.left)/zoom}];
-  }));
-  function draw(edge, emphasized) {
-    const from = rects.get(edge.from);
-    const to = rects.get(edge.to);
-    if (!from || !to) return;
-    const sameColumn = Math.abs(from.center - to.center) < 10;
-    const evidence = edge.kind === 'evidence';
-    const color = evidence ? '#287457' : edge.kind === 'relation' ? '#794897' : '#576f81';
-    const direction = !sameColumn && from.center > to.center ? -1 : 1;
-    const startX = evidence ? from.center : direction > 0 ? from.right : from.left;
-    const startY = evidence ? from.top : from.y;
-    const endX = evidence || sameColumn || direction < 0 ? to.right : to.left;
-    const endY = to.y;
-    const turnX = evidence || sameColumn ? endX + 12 : (startX + endX)/2;
-    ctx.strokeStyle = ctx.fillStyle = color;
-    ctx.globalAlpha = emphasized ? .92 : selected ? .085 : evidence ? .38 : .48;
-    ctx.lineWidth = emphasized ? 2.2 : 1.1;
-    ctx.setLineDash(edge.type === 'order_unknown' ? [2,4] : edge.record?.basis === 'inferred' ? [6,4] : []);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    if (evidence) {
-      ctx.lineTo(startX, startY - 7);
-      ctx.lineTo(turnX, startY - 7);
-    } else {
-      ctx.lineTo(turnX, startY);
-    }
-    ctx.lineTo(turnX, endY);
-    ctx.lineTo(endX, endY);
-    ctx.stroke();
-    if (edge.type === 'order_unknown' || edge.kind === 'party') return;
-    const tail = Math.sign(turnX-endX) * 7;
-    ctx.beginPath();
-    ctx.moveTo(endX, endY);
-    ctx.lineTo(endX+tail, endY-3);
-    ctx.lineTo(endX+tail, endY+3);
-    ctx.fill();
-  }
-  const active = edge => selected && (edge.from === selected || edge.to === selected);
-  for (const edge of edges) if (!active(edge)) draw(edge, false);
-  for (const edge of edges) if (active(edge)) draw(edge, true);
-}
-function setZoom(value) {
-  zoom = Math.max(.55, Math.min(1.8, value));
-  $('graph').style.zoom = zoom;
-  $('reset').textContent = Math.round(zoom*100) + '%';
-  schedulePaint();
-}
-$('out').onclick = () => setZoom(zoom-.15);
-$('in').onclick = () => setZoom(zoom+.15);
-$('reset').onclick = () => setZoom(1);
-const viewport = $('viewport');
-let drag = null;
-viewport.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || e.pointerType === 'touch' || e.target.closest('button')) return;
-  if (!e.target.closest('#graph')) return;
-  drag = {x:e.clientX, y:e.clientY, left:viewport.scrollLeft, top:viewport.scrollTop};
-  viewport.setPointerCapture(e.pointerId);
-  viewport.classList.add('dragging');
-});
-viewport.addEventListener('pointermove', e => {
-  if (drag) viewport.scrollTo(drag.left + drag.x-e.clientX, drag.top + drag.y-e.clientY);
-});
-viewport.addEventListener('lostpointercapture', () => {
-  drag = null;
-  viewport.classList.remove('dragging');
-});
-viewport.addEventListener('scroll', schedulePaint, {passive:true});
-new ResizeObserver(schedulePaint).observe($('graph'));
-new ResizeObserver(schedulePaint).observe(viewport);
-function startAuthoredViewer() {
-  document.body.classList.add('authored');
-  $('slides').hidden = false;
-  for (const [index, page] of authoredPages.entries()) {
-    const option = element('option', (index+1) + ' · ' + page.title);
-    option.value = index;
-    $('view-picker').append(option);
-  }
-  $('view-picker').onchange = event => showAuthoredPage(Number(event.target.value));
-  $('previous').onclick = () => showAuthoredPage(pageIndex - 1);
-  $('next').onclick = () => showAuthoredPage(pageIndex + 1);
-  showAuthoredPage(0);
-}
-function hotspot(rect, label, action) {
-  const button = element('button', null, 'hotspot');
-  button.setAttribute('aria-label', label);
-  button.title = label;
-  place(button, rect);
-  button.onclick = action;
-  $('regions').append(button);
-}
-function place(el, [left, top, width, height]) {
-  Object.assign(el.style, {left:left+'px', top:top+'px', width:width+'px', height:height+'px'});
-}
-function showAuthoredPage(index) {
-  if (!authoredPages[index]) return;
-  pageIndex = index;
-  const page = authoredPages[index];
-  $('view-picker').value = index;
+
+function showPage(index) {
+  if (!view.pages[index]) return;
+  current = index;
+  expanded = null;
+  hovered = null;
+  cards.clear();
+  const page = view.pages[index];
+  $('sheet').style.width = page.width + 'px';
+  $('graph').style.width = page.width + 'px';
+  $('picker').value = String(index);
   $('previous').disabled = index === 0;
-  $('next').disabled = index === authoredPages.length - 1;
-  currentPhase = phases[page.phase-1] || null;
-  $('regions').replaceChildren();
-  $('sources').replaceChildren();
-  $('evidence').querySelector('h3').hidden = true;
-  buttons.clear();
-  displayedSources = new Map();
-  const present = new Set(page.cards.map(card => card.id));
-  for (const record of page.cards) {
-    const {id, kind, title, box} = record;
-    const el = element('button', null, 'node ' + kind + (record.compact ? ' compact' : ''));
-    el.title = title;
-    el.type = 'button';
-    el.dataset.node = id;
-    place(el, box);
-    el.onclick = () => inspect(id);
-    if (kind === 'source') {
-      const [name, date] = title.split(' · ', 2);
-      el.append(element('strong', record.alias + ' · ' + name));
-      if (date) el.append(element('small', date));
-      el.append(element('small', record.excerpt), element('small', 'Supports ' + record.targets.join(', '), 'targets'));
-      displayedSources.set(id, {quotes:new Map(record.evidence.map(eid => [eid, evidenceById.get(eid)]))});
-    } else {
-      el.append(element('small', record.alias), element('strong', title));
-      if (record.parties.length) {
-        const names = record.parties.map(pid => nodeInfo.get(pid)?.title).filter(Boolean);
-        if (names.length) el.append(element('small', names.join(' / '), 'parties'));
-      }
-      if (record.badges.length) el.append(element('span', record.badges.join(', '), 'badge'));
+  $('next').disabled = index === view.pages.length - 1;
+  $('heading').textContent = page.title;
+  $('subheading').replaceChildren(el('span', graph.person.name + ' · ' + graph.event.name),
+    el('span', phaseLabel(page)));
+  $('navigation').replaceChildren();
+  const stages = graph.stages.length ? graph.stages : [{
+    stage_id: null,
+    name: graph.event.name
+  }];
+  for (const [i, stage] of stages.entries()) {
+    const section = el('section', null, 'stage');
+    section.append(el('small', 'STAGE ' + (i + 1)), el('h2', stage.name));
+    const phaseList = el('div', null, 'phase-list');
+    for (const phase of graph.phases.filter(p => p.stage_id === stage.stage_id || !graph.stages.length)) {
+      const button = el('button', phase.name);
+      button.classList.toggle('active', page.phase === phase.phase_id);
+      button.onclick = () => showPage(view.pages.findIndex(p => p.phase === phase.phase_id));
+      phaseList.append(button);
     }
-    $(kind === 'source' ? 'sources' : 'regions').append(el);
-    buttons.set(id, el);
+    section.append(phaseList);
+    $('navigation').append(section);
   }
-  edges = [...contextEdges, ...actionEdges].filter(edge => present.has(edge.from) || present.has(edge.to));
-  for (const link of page.evidence) {
-    edges.push({from:link.source,to:link.target,type:'supports',kind:'evidence'});
+  $('regions').replaceChildren();
+  $('cards').replaceChildren();
+  $('jumps').replaceChildren();
+  $('graph').style.height = page.height + 'px';
+  for (const region of page.sections) {
+    const section = el('section', null, 'section' + (region.title === 'Source evidence' ? ' evidence' : ''));
+    position(section, region.box);
+    if (region.title === 'Source evidence') section.append(el('span',
+      'Hover or focus a card to highlight its evidence', 'legend'));
+    if (region.title === 'Actions and their context') section.append(el('span',
+      '● People / organizations · ■ Actions · ■ Context', 'legend'));
+    section.append(el('h3', region.title));
+    $('regions').append(section);
   }
-  const centers = [164,407,587,760,899,1037];
-  const widths = [257,168,168,127,127,127];
-  for (const [i, phase] of phases.entries()) {
-    const first = authoredPages.findIndex(view => view.phase === i+1);
-    if (first < 0) continue;
-    hotspot([centers[i]-widths[i]/2,94,widths[i],22], phase.name, () => showAuthoredPage(first));
-    if (!index) hotspot([35+i*181,165,156,65], phase.name, () => showAuthoredPage(first));
-  }
-  for (const edge of page.jumps) {
-    const label = page.labels.find(item => item[5].startsWith(edge.to+' ·') && item[5].includes('view'));
-    if (!label) continue;
-    hotspot([label[0]-3,label[1]-11,140,16], edge.to+' · view '+edge.target_page, () => {
-      showAuthoredPage(edge.target_page-1);
-      const target = authoredPages[pageIndex].cards.find(card => card.alias === edge.to);
-      if (target) jump(target.id);
-    });
+  for (const card of page.cards) paintCard(card);
+  layoutCards();
+  for (const jump of page.jumps) {
+    const button = el('button', jump.from + ' → ' + jump.to + ' · ' + jump.type.replaceAll('_', ' ') +
+      ' · ' + phaseLabel(view.pages[jump.page]));
+    button.onclick = () => {
+      showPage(jump.page);
+      const target = [...cards.values()].find(item => item.card.id === jump.id);
+      if (target) {
+        toggle(target.card.key);
+        target.button.scrollIntoView({
+          block: 'nearest', inline: 'center'
+        });
+      }
+    };
+    $('jumps').append(button);
   }
   $('viewport').scrollTo(0, 0);
-  inspect(null);
+  drawEdges();
 }
-function paintAuthoredPage() {
-  const canvas = $('wires');
-  const ratio = Math.min(window.devicePixelRatio * zoom, 2);
-  canvas.width = Math.ceil(1134*ratio);
-  canvas.height = Math.ceil(992*ratio);
-  const ctx = canvas.getContext('2d');
-  ctx.scale(ratio, ratio);
-  const page = authoredPages[pageIndex];
-  for (const [commands, fill, stroke, width, dashes] of page.paths) {
-    const shape = new Path2D(commands);
-    if (fill) {
-      ctx.fillStyle = fill;
-      ctx.fill(shape);
-    }
-    if (stroke) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = width || 1;
-      const pattern = dashes.match(/\[([^\]]*)\]/)?.[1]?.trim();
-      ctx.setLineDash(pattern ? pattern.split(/\s+/).map(Number) : []);
-      ctx.stroke(shape);
-    }
+
+function port(box, side) {
+  const [x, y, w, h] = box;
+  return [
+    [x, y + h / 2],
+    [x + w, y + h / 2],
+    [x + w / 2, y],
+    [x + w / 2, y + h]
+  ][side];
+}
+
+function outward(point, side) {
+  const shifts = [
+    [-12, 0],
+    [12, 0],
+    [0, -12],
+    [0, 12]
+  ];
+  return point.map((v, i) => v + shifts[side][i]);
+}
+
+function ports(a, b, kind) {
+  const dx = b[0] + b[2] / 2 - a[0] - a[2] / 2;
+  const dy = b[1] + b[3] / 2 - a[1] - a[3] / 2;
+  if (kind === 'evidence') return [2, Math.abs(dx) > b[2] ? dx > 0 ? 0 : 1 : 3];
+  if (Math.abs(dy) > Math.max(a[3], b[3])) return dy > 0 ? [3, 2] : [2, 3];
+  return dx > 0 ? [1, 0] : [0, 1];
+}
+
+function blocked(a, b, boxes) {
+  return boxes.some(([x, y, w, h]) => {
+    if (a[0] === b[0]) return a[0] > x - 3 && a[0] < x + w + 3 && Math.max(a[1], b[1]) > y - 3 && Math
+      .min(a[1], b[1]) < y + h + 3;
+    return a[1] > y - 3 && a[1] < y + h + 3 && Math.max(a[0], b[0]) > x - 3 && Math.min(a[0], b[0]) < x +
+      w + 3;
+  });
+}
+
+function routingGrid(boxes, canvasWidth, height) {
+  const xs = new Set([10, canvasWidth - 10]),
+    ys = new Set([8, height - 10]);
+  for (const [x, y, w, h] of boxes) {
+    [x - 12, x + w + 12, x + w / 2].forEach(v => xs.add(v));
+    [y - 12, y + h + 12, y + h / 2].forEach(v => ys.add(v));
   }
-  for (const [x,y,size,color,bold,text] of page.labels) {
-    ctx.font = (bold ? '600 ' : '') + size + 'px Arial, sans-serif';
-    ctx.fillStyle = color;
-    ctx.fillText(text,x,y);
+  const x = [...xs].sort((a, b) => a - b),
+    y = [...ys].sort((a, b) => a - b),
+    width = x.length;
+  const neighbors = Array.from({
+    length: width * y.length
+  }, () => []);
+  for (let j = 0; j < y.length; j++)
+    for (let i = 0; i < x.length; i++) {
+      const id = j * width + i,
+        p = [x[i], y[j]];
+      for (const [ni, nj] of [
+          [i + 1, j],
+          [i, j + 1]
+        ]) {
+        if (ni >= x.length || nj >= y.length) continue;
+        const q = [x[ni], y[nj]],
+          other = nj * width + ni;
+        if (blocked(p, q, boxes)) continue;
+        const cost = Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]);
+        neighbors[id].push([other, cost]);
+        neighbors[other].push([id, cost]);
+      }
+    }
+  return {
+    x,
+    y,
+    width,
+    neighbors
+  };
+}
+class Heap {
+  constructor() {
+    this.items = [];
   }
-  if (!selected) return;
-  ctx.setLineDash([]);
-  ctx.strokeStyle = '#287457';
-  ctx.lineWidth = 2;
-  for (const link of page.evidence) {
-    if (link.source !== selected && link.target !== selected) continue;
-    ctx.beginPath();
-    ctx.moveTo(...link.points[0]);
-    for (const point of link.points.slice(1)) ctx.lineTo(...point);
-    ctx.stroke();
+  push(item) {
+    const a = this.items;
+    a.push(item);
+    let i = a.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (a[p][0] <= item[0]) break;
+      a[i] = a[p];
+      i = p;
+    }
+    a[i] = item;
+  }
+  pop() {
+    const a = this.items,
+      result = a[0],
+      last = a.pop();
+    if (a.length) {
+      let i = 0;
+      while (i * 2 + 1 < a.length) {
+        let c = i * 2 + 1;
+        if (c + 1 < a.length && a[c + 1][0] < a[c][0]) c++;
+        if (a[c][0] >= last[0]) break;
+        a[i] = a[c];
+        i = c;
+      }
+      a[i] = last;
+    }
+    return result;
   }
 }
 
-if (authoredPages) startAuthoredViewer();
-else showPhase(phases[0]?.phase_id || null);
+function route(start, end, grid) {
+  const {
+    x,
+    y,
+    width,
+    neighbors
+  } = grid;
+  const first = y.indexOf(start[1]) * width + x.indexOf(start[0]),
+    last = y.indexOf(end[1]) * width + x.indexOf(end[0]);
+  const distance = new Map([
+      [first, 0]
+    ]),
+    previous = new Map(),
+    heap = new Heap();
+  const point = id => [x[id % width], y[Math.floor(id / width)]];
+  const heuristic = id => {
+    const p = point(id);
+    return Math.abs(p[0] - end[0]) + Math.abs(p[1] - end[1]);
+  };
+  heap.push([heuristic(first), first]);
+  while (heap.items.length) {
+    const [estimate, id] = heap.pop();
+    if (id === last) {
+      const path = [point(id)];
+      let cursor = id;
+      while (previous.has(cursor)) {
+        cursor = previous.get(cursor);
+        path.push(point(cursor));
+      }
+      return path.reverse();
+    }
+    if (estimate > distance.get(id) + heuristic(id)) continue;
+    for (const [next, length] of neighbors[id] || []) {
+      const cost = distance.get(id) + length + 1;
+      if (cost >= (distance.get(next) ?? Infinity)) continue;
+      distance.set(next, cost);
+      previous.set(next, id);
+      heap.push([cost + heuristic(next), next]);
+    }
+  }
+  return null;
+}
+
+function simplify(points) {
+  const result = [];
+  for (const point of points) {
+    const last = result[result.length - 1];
+    if (last && point[0] === last[0] && point[1] === last[1]) continue;
+    while (result.length > 1) {
+      const a = result[result.length - 2], b = result[result.length - 1];
+      if (!((a[0] === b[0] && b[0] === point[0]) ||
+            (a[1] === b[1] && b[1] === point[1]))) break;
+      result.pop();
+    }
+    result.push(point);
+  }
+  return result;
+}
+
+function labelPosition(points, text, obstacles, canvasWidth) {
+  const width = text.length * 5.5 + 8, height = 14;
+  const overlaps = ([x, y, w, h], [ox, oy, ow, oh]) =>
+    x < ox + ow + 3 && x + w > ox - 3 && y < oy + oh + 3 && y + h > oy - 3;
+  const candidates = [];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const x = (a[0] + b[0]) / 2, y = (a[1] + b[1]) / 2;
+    if (a[1] === b[1] && Math.abs(a[0] - b[0]) >= width) {
+      candidates.push([x - width / 2, y - height - 4, width, height],
+                      [x - width / 2, y + 4, width, height]);
+    } else if (a[0] === b[0] && Math.abs(a[1] - b[1]) > height + 8) {
+      candidates.push([x + 5, y - height / 2, width, height],
+                      [x - width - 5, y - height / 2, width, height]);
+    }
+  }
+  return candidates.find(box => box[0] > 8 && box[0] + box[2] < canvasWidth - 10 && box[1] > 0 &&
+    !obstacles.some(other => overlaps(box, other)));
+}
+
+function drawEdges() {
+  const page = view.pages[current],
+    canvas = $('links'),
+    height = parseFloat($('graph').style.height);
+  canvas.replaceChildren();
+  drawnEdges = [];
+  canvas.setAttribute('width', page.width);
+  canvas.setAttribute('height', height);
+  const defs = svg('defs', {});
+  for (const [kind, color] of [
+      ['context', '#899aa6'],
+      ['party', '#899aa6'],
+      ['relation', '#80589f'],
+      ['evidence', '#5b8f7d']
+    ]) {
+    const marker = svg('marker', {
+      id: 'arrow-' + kind,
+      viewBox: '0 0 10 10',
+      refX: 9,
+      refY: 5,
+      markerWidth: 6,
+      markerHeight: 6,
+      orient: 'auto'
+    });
+    marker.append(svg('path', {
+      d: 'M0 1L9 5L0 9L3 5Z',
+      fill: color
+    }));
+    defs.append(marker);
+  }
+  canvas.append(defs);
+  const boxes = new Map([...cards].map(([key, item]) => [key, linkBox(item)]));
+  const partyLabels = [...cards.values()].filter(item => item.card.kind === 'party' &&
+    expanded !== item.card.key).map(item => {
+      const [x, y, w] = bounds(item.button);
+      return [x, y + 60, w, 48];
+    });
+  const headings = page.sections.map((section, i) => [
+    regionBoxes[i][0] + 10, regionBoxes[i][1] + 5,
+    Math.min(400, section.title.length * 10), 30
+  ]);
+  page.sections.forEach((section, i) => {
+    if (section.title === 'Actions and their context' || section.title === 'Source evidence')
+      headings.push([645, regionBoxes[i][1] + 7, 450, 28]);
+  });
+  const obstacles = [...boxes.values(), ...partyLabels, ...headings];
+  const grid = routingGrid(obstacles, page.width, height);
+  const labelObstacles = [...obstacles];
+  // Draw evidence first so the action sequence stays visually in front.
+  for (const edge of [...page.edges].sort((a, b) =>
+      (a.kind === 'evidence' ? 0 : a.kind === 'relation' ? 2 : 1) -
+      (b.kind === 'evidence' ? 0 : b.kind === 'relation' ? 2 : 1))) {
+    const a = boxes.get(edge.from_key),
+      b = boxes.get(edge.to_key);
+    if (!a || !b) continue;
+    const preferred = ports(a, b, edge.kind);
+    let points = null;
+    const alternatives = [
+      [...preferred]
+    ];
+    for (const as of [preferred[0], 0, 1, 2, 3])
+      for (const bs of [preferred[1], 0, 1, 2, 3]) {
+        if (as !== preferred[0] || bs !== preferred[1]) alternatives.push([as, bs]);
+      }
+    for (const [as, bs] of alternatives) {
+      const start = port(a, as),
+        end = port(b, bs);
+      const path = route(outward(start, as), outward(end, bs), grid);
+      if (path) {
+        points = simplify([start, ...path, end]);
+        break;
+      }
+    }
+    if (!points) continue;
+    const color = edge.kind === 'evidence' ? '#5b8f7d' : edge.kind === 'relation' ? '#80589f' : '#899aa6';
+    const line = svg('polyline', {
+      points: points.map(p => p.join(',')).join(' '),
+      fill: 'none',
+      stroke: color,
+      'marker-end': edge.type === 'order_unknown' ? 'none' : 'url(#arrow-' + edge.kind + ')',
+      'data-from': edge.from_key,
+      'data-to': edge.to_key
+    });
+    const tooltip = svg('title', {});
+    tooltip.textContent = edge.type.replaceAll('_', ' ');
+    line.append(tooltip);
+    if (edge.type === 'order_unknown' || edge.record?.basis === 'inferred') line.setAttribute(
+      'stroke-dasharray', '4 3');
+    canvas.append(line);
+    let label = null;
+    if (edge.kind !== 'evidence') {
+      const text = edge.type === 'precedes' ? 'before' : edge.type.replaceAll('_', ' ');
+      const location = labelPosition(points, text, labelObstacles, page.width);
+      if (location) {
+        labelObstacles.push(location);
+        label = svg('text', {
+          x: location[0] + location[2] / 2, y: location[1] + 11,
+          fill: color, 'text-anchor': 'middle',
+          stroke: 'white', 'stroke-width': 3, 'paint-order': 'stroke'
+        });
+        label.textContent = text;
+        canvas.append(label);
+      }
+    }
+    drawnEdges.push({edge, line, label});
+  }
+  highlight(hovered);
+}
+
+function zoom(value) {
+  scale = Math.max(.5, Math.min(1.8, value));
+  $('sheet').style.zoom = scale;
+  $('zoom').textContent = Math.round(scale * 100) + '%';
+}
+
+function phaseLabel(page) {
+  const index = graph.phases.findIndex(phase => phase.phase_id === page.phase);
+  return index >= 0 ? 'Phase ' + (index + 1) : 'Event background';
+}
+$('minus').onclick = () => zoom(scale - .1);
+$('plus').onclick = () => zoom(scale + .1);
+$('zoom').onclick = () => zoom(1);
+$('previous').onclick = () => showPage(current - 1);
+$('next').onclick = () => showPage(current + 1);
+$('picker').onchange = e => showPage(Number(e.target.value));
+$('viewport').addEventListener('keydown', e => {
+  if (e.key === 'Escape') toggle(null);
+});
+for (const [i, page] of view.pages.entries()) {
+  const option = el('option', phaseLabel(page) + (page.phase ? ' · ' + page.title : ''));
+  option.value = i;
+  $('picker').append(option);
+}
+showPage(Math.max(0, view.pages.findIndex(page => page.cards.some(card => card.kind === 'action'))));
 </script>
 </body>
 </html>

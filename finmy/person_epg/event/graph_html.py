@@ -1,9 +1,10 @@
 """Render or export a portable visualization of a saved native person event."""
 import argparse
-from functools import lru_cache
 import json
 from pathlib import Path
 
+from .graph_view import build_views
+from .graph_layout import arrange_graph
 from .records import fingerprint
 from .schema import GRAPH_VERSION
 
@@ -20,19 +21,14 @@ def _read_json(path):
         return json.load(stream)
 
 
-@lru_cache(maxsize=1)
-def _bundled_layout():
-    return _read_json(_ASSETS / 'graph_layout_goldman.json')
-
-
 def _layout_pages(graph, layout):
-    authored = _bundled_layout() if layout is None else layout
+    if layout is None:
+        return None
+    authored = layout
     if not isinstance(authored, dict) or not isinstance(authored.get('digest'), str):
         raise ValueError('An authored layout needs a graph digest')
     if fingerprint(graph) != authored['digest']:
-        if layout is not None:
-            raise ValueError('The authored layout digest does not match the input graph')
-        return None
+        raise ValueError('The authored layout digest does not match the input graph')
 
     pages = authored.get('pages')
     if not isinstance(pages, list) or not pages:
@@ -44,15 +40,21 @@ def _layout_pages(graph, layout):
 
 
 def render_graph_html(graph, *, layout=None):
-    """Embed the graph and a matching authored layout in one offline document."""
+    """Generate an offline graph view, or use an explicitly supplied authored layout."""
     if not isinstance(graph, dict) or graph.get('schema_version') != GRAPH_VERSION:
         raise ValueError(f'The EPG viewer requires a {GRAPH_VERSION} graph')
     pages = _layout_pages(graph, layout)
-    template = (_ASSETS / 'graph.html').read_text(encoding='utf-8')
-    # Split both markers before embedding record text that may contain a marker.
+    view = build_views(graph)
+    if pages is None:
+        view = arrange_graph(graph, view)
+    template_name = 'graph_authored.html' if pages is not None else 'graph.html'
+    template = (_ASSETS / template_name).read_text(encoding='utf-8')
+    # Split the template before embedding untrusted record text.
     head, remainder = template.split('__EPG_GRAPH_JSON__', 1)
-    between, tail = remainder.split('__EPG_LAYOUT_JSON__', 1)
-    return head + _script_data(graph) + between + _script_data(pages) + tail
+    between, remainder = remainder.split('__EPG_LAYOUT_JSON__', 1)
+    middle, tail = remainder.split('__EPG_VIEW_JSON__', 1)
+    return ''.join((head, _script_data(graph), between, _script_data(pages),
+                    middle, _script_data(view), tail))
 
 
 def main(argv=None):
