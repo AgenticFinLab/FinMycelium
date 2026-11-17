@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Event process graph</title>
+<style>
+:root {
+  --navy: #0b3865;
+  --ink: #203547;
+  --muted: #687c8b;
+  --border: #d5e0e7;
+  --green: #2c745e;
+  --purple: #80589f
+}
+
+* {
+  box-sizing: border-box
+}
+
+[hidden] {
+  display: none !important
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: #edf2f6;
+  font: 14px/1.4 Arial, Helvetica, sans-serif
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit
+}
+
+button {
+  cursor: pointer
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #398bc3;
+  outline-offset: 2px
+}
+
+#toolbar {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: white;
+  border-bottom: 1px solid var(--border)
+}
+
+#toolbar button,
+#toolbar select {
+  border: 1px solid #c6d3dd;
+  border-radius: 4px;
+  background: white;
+  padding: 4px 9px
+}
+
+#picker {
+  max-width: 650px
+}
+
+.spacer {
+  flex: 1
+}
+
+#viewport {
+  height: calc(100vh - 46px);
+  overflow: auto;
+  padding: 12px;
+  touch-action: pan-x pan-y
+}
+
+#sheet {
+  width: 1134px;
+  position: relative;
+  background: white;
+  box-shadow: 0 2px 10px #20354716
+}
+
+#heading {
+  background: var(--navy);
+  color: white;
+  padding: 14px 24px;
+  font-size: 24px;
+  line-height: 1.2
+}
+
+#subheading {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 24px;
+  color: var(--muted)
+}
+
+#navigation {
+  display: flex;
+  gap: 8px;
+  padding: 0 22px 10px;
+  align-items: stretch
+}
+
+/* Keep the existing stage controls in reach while the canvas scrolls sideways. */
+#heading,
+#subheading,
+#navigation {
+  position: sticky;
+  left: 0;
+  width: 1134px;
+  max-width: 100%
+}
+
+#subheading,
+#navigation {
+  background: white
+}
+
+.stage {
+  background: #f7fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 210px;
+  flex: 1
+}
+
+.stage small {
+  font-size: 10px;
+  color: var(--muted)
+}
+
+.stage h2 {
+  font-size: 13px;
+  margin: 3px 0 8px;
+  line-height: 1.3
+}
+
+.phase-list {
+  display: flex;
+  gap: 6px
+}
+
+.phase-list button {
+  flex: 1;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+  line-height: 1.3
+}
+
+.phase-list button.active {
+  background: #2868a8;
+  color: white;
+  border-color: #2868a8
+}
+
+#graph {
+  position: relative;
+  width: 1134px
+}
+
+#regions,
+#cards,
+#links {
+  position: absolute;
+  inset: 0;
+  pointer-events: none
+}
+
+.section {
+  position: absolute;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: white
+}
+
+.section.evidence {
+  background: #fafdfe
+}
+
+.section h3 {
+  font-size: 18px;
+  margin: 9px 12px
+}
+
+.section .legend {
+  position: absolute;
+  left: 620px;
+  max-width: 450px;
+  font-size: 11px;
+  color: var(--green);
+  margin: 14px
+}
+
+.relationship-legend { display: flex; align-items: center; gap: 10px }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap }
+
+#links {
+  overflow: visible;
+  z-index: 1
+}
+
+#cards {
+  z-index: 2
+}
+
+.edge-line,
+.edge-halo,
+.edge-flow {
+  stroke-linecap: round;
+  stroke-linejoin: round
+}
+
+.edge-line,
+.edge-label,
+.edge-origin,
+.edge-halo {
+  transition: opacity 140ms ease
+}
+
+.edge-flow {
+  stroke-dasharray: 6 24;
+  animation: edge-direction 1.8s linear infinite
+}
+
+@keyframes edge-direction {
+  to { stroke-dashoffset: -60 }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-flow { display: none !important; animation: none }
+  .edge-line, .edge-label, .edge-origin, .edge-halo, .card { transition: none !important }
+}
+
+#links .edge-label text {
+  font: 600 10.5px Arial, Helvetica, sans-serif;
+  stroke: none
+}
+
+.card {
+  pointer-events: auto;
+  position: absolute;
+  display: block;
+  text-align: left;
+  border: 1px solid #9dbeb0;
+  background: #e2f0e6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  cursor: pointer
+}
+
+.card.context,
+.card.phase {
+  background: #fff4d7;
+  border-color: #d8be76
+}
+
+.card.source {
+  background: white;
+  border-color: #8fb5a4
+}
+
+.card.party {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: center
+}
+
+.party-icon {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 4px
+}
+
+.card.party .title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  -webkit-line-clamp: 2
+}
+
+.party-caption {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px
+}
+
+.card.party[aria-expanded=true] {
+  padding: 9px;
+  text-align: left;
+  background: #e5f0fa;
+  border: 1px solid #92b2d5
+}
+
+.card:hover {
+  outline: 2px solid #7093a8;
+  outline-offset: 1px
+}
+
+.card { transition: opacity 140ms ease, box-shadow 140ms ease }
+.card.relation-muted { opacity: .48 }
+.card.relation-neighbor { box-shadow: 0 0 0 2px #7eac9566 }
+.card.context.relation-neighbor { box-shadow: 0 0 0 2px #d8be7680 }
+.card.relation-focus { outline: 2px solid #537f98; outline-offset: 2px }
+.card.party.relation-neighbor,
+.card.party.relation-focus { outline: none; box-shadow: none }
+.card.party.relation-neighbor .party-icon circle:first-child {
+  stroke: #6e98bc;
+  stroke-width: 2
+}
+.card.party.relation-focus .party-icon circle:first-child {
+  stroke: #3e6b92;
+  stroke-width: 2.6
+}
+
+.card .meta {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  font-weight: 600;
+  padding-right: 0;
+  margin-bottom: 5px;
+  color: #385164
+}
+
+.card .title {
+  font-size: 13px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden
+}
+
+.card.compact .title {
+  -webkit-line-clamp: 2
+}
+
+.card.compact .participants {
+  display: none
+}
+
+.card.action .title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  -webkit-line-clamp: 3
+}
+
+.card.context .title {
+  font-weight: 400
+}
+
+.card .participants {
+  display: block;
+  color: #2868a8;
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  margin-top: 6px
+}
+
+.badges {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  background: var(--green);
+  color: white;
+  border-radius: 3px;
+  font-size: 9px;
+  padding: 2px 4px;
+  max-width: 90px;
+  overflow: hidden;
+  white-space: nowrap
+}
+
+.card.source .title {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-line-clamp: 2
+}
+
+.card .excerpt {
+  font-size: 11px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 7px;
+  line-height: 1.35
+}
+
+.card .targets {
+  display: block;
+  color: var(--green);
+  font-size: 10px;
+  margin-top: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.card[aria-expanded=true] {
+  z-index: 8;
+  box-shadow: 0 5px 20px #233b4c35;
+  outline: 2px solid #537f98
+}
+
+.card .detail {
+  display: block;
+  height: 100%;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap
+}
+
+.card .detail strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  margin-bottom: 8px
+}
+
+.card .detail p {
+  margin: 8px 0
+}
+
+.card .detail .quote {
+  border-top: 1px solid #cddfd6;
+  padding-top: 8px
+}
+
+.card .detail a {
+  color: #2868a8;
+  word-break: break-all
+}
+
+[hidden] {
+  display: none !important
+}
+
+#jumps {
+  padding: 4px 24px 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap
+}
+
+#jumps button {
+  background: white;
+  color: var(--purple);
+  font-size: 11px;
+  border: 1px solid #d6c9df;
+  border-radius: 4px;
+  padding: 6px 10px
+}
+
+svg text {
+  font: 10px Arial, Helvetica, sans-serif;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 5px;
+  stroke-linejoin: round
+}
+</style>
+</head>
+<body>
+<div id="toolbar">
+<button id="previous" aria-label="Previous phase">← Phase</button>
+<select id="picker" aria-label="Phase"></select>
+<button id="next" aria-label="Next phase">Phase →</button>
+<span class="spacer"></span>
+<button id="minus" aria-label="Zoom out">−</button>
+<button id="zoom" aria-label="Reset zoom">100%</button>
+<button id="plus" aria-label="Zoom in">+</button>
+</div>
+<div id="viewport"><div id="sheet">
+<div id="heading"></div><div id="subheading"></div>
+<nav id="navigation" aria-label="Stages and phases"></nav>
+<div id="graph"><div id="regions"></div><svg id="links" aria-label="Graph relationships"></svg><div id="cards"></div></div>
+<div id="jumps"></div>
+</div></div>
+<script id="epg-data" type="application/json">__EPG_GRAPH_JSON__</script>
+<script id="epg-layout" type="application/json">__EPG_LAYOUT_JSON__</script>
+<script id="epg-view" type="application/json">__EPG_VIEW_JSON__</script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const graph = JSON.parse($('epg-data').textContent);
+const view = JSON.parse($('epg-view').textContent);
+const evidence = new Map(graph.evidence.map(item => [item.evidence_id, item]));
+const sources = new Map(graph.sources.map(item => [item.source_id, item]));
+const cards = new Map();
+let drawnEdges = [], hovered = null, focused = null, regionBoxes = [];
+let relationshipLabels = null, relationshipObstacles = [];
+const EDGE_STYLES = {
+  relation: {color: '#80589f', tint: '#f7f3fa', border: '#d8c9e3', width: 2.2, opacity: .94},
+  party: {color: '#607f9c', tint: '#f2f7fb', border: '#c0d1df', width: 1.4, opacity: .76},
+  context: {color: '#a18a51', tint: '#fff8e8', border: '#dfcea0', width: 1.45, opacity: .82},
+  evidence: {color: '#4f8270', tint: '#f2f8f5', border: '#bdd5c8', width: 1.05, opacity: .34}
+};
+
+function edgeStyle(edge) {
+  const style = EDGE_STYLES[edge.kind] || EDGE_STYLES.context;
+  return {...style, opacity: edge.type === 'about' ? .52 : style.opacity};
+}
+
+function edgePattern(edge) {
+  if (edge.type === 'order_unknown' || edge.record?.basis === 'inferred') return '5 4';
+  if (edge.kind === 'context') return '8 3';
+  if (edge.kind === 'evidence') return '2 5';
+  return '';
+}
+let current = 0,
+  expanded = null,
+  scale = 1;
+
+function el(tag, text, cls) {
+  const node = document.createElement(tag);
+  if (text) node.textContent = text;
+  if (cls) node.className = cls;
+  return node;
+}
+
+function position(node, box) {
+  const [x, y, w, h] = box;
+  Object.assign(node.style, {
+    left: x + 'px',
+    top: y + 'px',
+    width: w + 'px',
+    height: h + 'px'
+  });
+}
+
+function svg(tag, attrs) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function bounds(node) {
+  return [node.offsetLeft, node.offsetTop, node.offsetWidth, node.offsetHeight];
+}
+
+function partyIcon(type) {
+  const icon = svg('svg', {'viewBox': '0 0 56 56', 'class': 'party-icon', 'aria-hidden': 'true'});
+  icon.append(svg('circle', {cx: 28, cy: 28, r: 27, fill: '#dfedfa', stroke: '#83a6c7'}));
+  if (type === 'organization') {
+    icon.append(svg('path', {d: 'M16 14H40V43H16Z', fill: '#2868a8'}));
+    for (const x of [21, 31]) for (const y of [20, 29])
+      icon.append(svg('rect', {x, y, width: 4, height: 5, fill: 'white'}));
+  } else {
+    icon.append(svg('circle', {cx: 28, cy: 19, r: 7, fill: '#2868a8'}));
+    icon.append(svg('path', {d: 'M15 42V35Q15 28 22 28H34Q41 28 41 35V42Z', fill: '#2868a8'}));
+  }
+  return icon;
+}
+
+function linkBox(item) {
+  const box = bounds(item.button);
+  if (item.card.kind === 'party' && expanded !== item.card.key)
+    return [box[0] + (box[2] - 56) / 2, box[1], 56, 56];
+  return box;
+}
+
+function highlight(key) {
+  hovered = key;
+  const active = hovered || focused || expanded;
+  const moving = Boolean(hovered || (focused && !expanded));
+  const neighbors = new Set(active ? [active] : []);
+  for (const item of drawnEdges) {
+    const {edge, line, halo, flow, origin, emphasis} = item;
+    const selected = Boolean(active && (active === edge.from_key || active === edge.to_key));
+    const style = edgeStyle(edge);
+    if (selected) {
+      neighbors.add(edge.from_key);
+      neighbors.add(edge.to_key);
+    }
+    line.setAttribute('opacity', selected ? 1 : active ? .16 : style.opacity);
+    line.setAttribute('stroke-width', selected ? style.width + .8 : style.width);
+    halo.setAttribute('stroke-width', style.width + 4);
+    halo.setAttribute('opacity', selected ? .95 : 0);
+    emphasis.style.display = selected ? '' : 'none';
+    flow.style.display = selected && moving && edge.type !== 'order_unknown' &&
+      edge.record?.basis !== 'inferred' ? '' : 'none';
+    origin.setAttribute('opacity', selected && edge.type !== 'order_unknown' ? .9 : 0);
+  }
+  for (const [nodeKey, item] of cards) {
+    item.button.classList.toggle('relation-focus', nodeKey === active);
+    item.button.classList.toggle('relation-neighbor', nodeKey !== active && neighbors.has(nodeKey));
+    item.button.classList.toggle('relation-muted', Boolean(active && !neighbors.has(nodeKey)));
+  }
+  drawRelationshipLabels(active);
+}
+
+function drawRelationshipLabels(active) {
+  if (!relationshipLabels) return;
+  relationshipLabels.replaceChildren();
+  for (const item of drawnEdges) item.label = null;
+  const obstacles = [...relationshipObstacles];
+  const priority = {relation: 0, context: 1, party: 2, evidence: 3};
+  const visible = drawnEdges.filter(({edge}) => active ?
+    edge.from_key === active || edge.to_key === active :
+    edge.kind !== 'evidence' && edge.type !== 'about');
+  visible.sort((a, b) => (priority[a.edge.kind] ?? 4) - (priority[b.edge.kind] ?? 4));
+  for (const item of visible) {
+    const {edge, points} = item;
+    const text = edge.type === 'precedes' ? 'before' : edge.type.replaceAll('_', ' ');
+    const location = labelPosition(points, text, obstacles, view.pages[current].width);
+    if (!location) continue;
+    const {box, anchor, connector} = location;
+    obstacles.push(box);
+    const style = edgeStyle(edge);
+    const label = svg('g', {'class': 'edge-label', 'data-from': edge.from_key, 'data-to': edge.to_key});
+    if (Math.abs(anchor[0] - connector[0]) + Math.abs(anchor[1] - connector[1]) > 8) {
+      label.append(svg('line', {x1: anchor[0], y1: anchor[1], x2: connector[0], y2: connector[1],
+        stroke: style.color, 'stroke-width': .8, opacity: .6}));
+    }
+    label.append(svg('rect', {x: box[0], y: box[1], width: box[2], height: box[3], rx: 5,
+      fill: style.tint, stroke: style.border, 'stroke-width': 1}));
+    const caption = svg('text', {x: box[0] + box[2] / 2, y: box[1] + 13.5,
+      fill: style.color, 'text-anchor': 'middle'});
+    caption.textContent = text;
+    label.append(caption);
+    relationshipLabels.append(label);
+    item.label = label;
+    item.labelBox = box;
+  }
+}
+
+function relationshipLegend() {
+  const legend = el('span', null, 'legend relationship-legend');
+  legend.title = 'Hover or focus a card to follow its relationships';
+  for (const [kind, title] of [['relation', 'Action links'], ['party', 'Roles'],
+                              ['context', 'Context'], ['evidence', 'Evidence']]) {
+    const item = el('span', null, 'legend-item');
+    const sample = svg('svg', {width: 28, height: 12, 'aria-hidden': 'true'});
+    const style = EDGE_STYLES[kind];
+    item.style.color = style.color;
+    sample.append(svg('path', {d: 'M1 6H23', fill: 'none', stroke: style.color,
+      'stroke-width': style.width, 'stroke-dasharray': edgePattern({kind})}));
+    sample.append(svg('path', {d: 'M22 2L28 6L22 10Z', fill: style.color}));
+    item.append(sample, el('span', title));
+    legend.append(item);
+  }
+  return legend;
+}
+
+function paintCard(card) {
+  const button = el('button', null, 'card ' + card.kind + (card.box[3] < 100 ? ' compact' : ''));
+  button.type = 'button';
+  button.dataset.key = card.key;
+  button.dataset.id = card.id;
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-label', card.alias + ' ' + card.title);
+  button.title = view.details[card.id].title;
+  position(button, card.box);
+  const preview = el('span', null, 'preview');
+  if (card.kind === 'party') {
+    preview.append(partyIcon(card.entity_type), el('span', card.title, 'title'),
+      el('span', card.caption, 'party-caption'));
+  } else {
+    const meta = el('span', [card.alias, card.date].filter(Boolean).join(' · '), 'meta');
+    preview.append(meta, el('span', card.title, 'title'));
+    if (card.kind !== 'source' && card.badges.length) {
+      const badges = card.badges.join(', ');
+      meta.style.paddingRight = Math.min(94, badges.length * 6 + 12) + 'px';
+      preview.append(el('span', badges, 'badges'));
+    }
+  }
+  const detail = el('span', null, 'detail');
+  detail.hidden = true;
+  button.append(preview, detail);
+  button.onclick = event => {
+    if (!event.target.closest('a')) toggle(card.key);
+  };
+  button.onmouseenter = () => highlight(card.key);
+  button.onmouseleave = () => highlight(null);
+  button.onfocus = () => { focused = card.key; highlight(hovered); };
+  button.onblur = () => { if (focused === card.key) focused = null; highlight(hovered); };
+  $('cards').append(button);
+  cards.set(card.key, {
+    card,
+    button,
+    preview,
+    detail
+  });
+}
+
+function layoutCards(item = null, height = 0) {
+  const page = view.pages[current];
+  const boundary = item ? item.card.box[1] + item.card.box[3] : Infinity;
+  const extra = item ? Math.max(0, height - item.card.box[3]) : 0;
+  for (const value of cards.values()) {
+    const box = [...value.card.box];
+    if (value === item) box[3] += extra;
+    else if (box[1] >= boundary) box[1] += extra;
+    position(value.button, box);
+  }
+  regionBoxes = page.sections.map(section => {
+    const box = [...section.box];
+    if (box[1] >= boundary) box[1] += extra;
+    else if (box[1] + box[3] >= boundary) box[3] += extra;
+    return box;
+  });
+  [...$('regions').children].forEach((node, i) => position(node, regionBoxes[i]));
+  $('graph').style.height = page.height + extra + 'px';
+}
+
+function toggle(key) {
+  const previous = cards.get(expanded);
+  if (previous) {
+    previous.preview.hidden = false;
+    previous.detail.hidden = true;
+    previous.detail.replaceChildren();
+    previous.button.setAttribute('aria-expanded', 'false');
+    position(previous.button, previous.card.box);
+  }
+  const open = expanded !== key && key !== null;
+  expanded = open ? key : null;
+  hovered = null;
+  if (open) {
+    const item = cards.get(key),
+      data = view.details[item.card.id];
+    item.detail.append(el('strong', data.title));
+    if (data.date) item.detail.append(el('p', data.date));
+    for (const paragraph of data.paragraphs) item.detail.append(el('p', paragraph));
+    for (const eid of item.card.quotes || []) item.detail.append(el('p', evidence.get(eid)?.quote, 'quote'));
+    const source = sources.get(item.card.id);
+    if (source && /^https?:\/\//.test(source.url || '')) {
+      const link = el('a', 'Open source');
+      link.href = source.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      item.detail.append(link);
+    }
+    item.preview.hidden = true;
+    item.detail.hidden = false;
+    item.button.setAttribute('aria-expanded', 'true');
+    const [x, y, w, h] = item.card.box;
+    const height = Math.max(h + 30, Math.min(300, item.detail.scrollHeight + 24));
+    layoutCards(item, height);
+    item.detail.scrollTop = 0;
+  }
+  if (!open) layoutCards();
+  drawEdges();
+}
+
+function showPage(index) {
+  if (!view.pages[index]) return;
+  current = index;
+  expanded = null;
+  hovered = null;
+  focused = null;
+  cards.clear();
+  const page = view.pages[index];
+  $('sheet').style.width = page.width + 'px';
+  $('graph').style.width = page.width + 'px';
+  $('picker').value = String(index);
+  $('previous').disabled = index === 0;
+  $('next').disabled = index === view.pages.length - 1;
+  $('heading').textContent = page.title;
+  $('subheading').replaceChildren(el('span', graph.person.name + ' · ' + graph.event.name),
+    el('span', phaseLabel(page)));
+  $('navigation').replaceChildren();
+  const stages = graph.stages.length ? graph.stages : [{
+    stage_id: null,
+    name: graph.event.name
+  }];
+  for (const [i, stage] of stages.entries()) {
+    const section = el('section', null, 'stage');
+    section.append(el('small', 'STAGE ' + (i + 1)), el('h2', stage.name));
+    const phaseList = el('div', null, 'phase-list');
+    for (const phase of graph.phases.filter(p => p.stage_id === stage.stage_id || !graph.stages.length)) {
+      const button = el('button', phase.name);
+      button.classList.toggle('active', page.phase === phase.phase_id);
+      button.onclick = () => showPage(view.pages.findIndex(p => p.phase === phase.phase_id));
+      phaseList.append(button);
+    }
+    section.append(phaseList);
+    $('navigation').append(section);
+  }
+  $('regions').replaceChildren();
+  $('cards').replaceChildren();
+  $('jumps').replaceChildren();
+  $('graph').style.height = page.height + 'px';
+  for (const region of page.sections) {
+    const section = el('section', null, 'section' + (region.title === 'Source evidence' ? ' evidence' : ''));
+    position(section, region.box);
+    if (region.title === 'Source evidence') section.append(relationshipLegend());
+    if (region.title === 'Actions and their context') section.append(el('span',
+      '● People / organizations · ■ Actions · ■ Context', 'legend'));
+    section.append(el('h3', region.title));
+    $('regions').append(section);
+  }
+  for (const card of page.cards) paintCard(card);
+  layoutCards();
+  for (const jump of page.jumps) {
+    const button = el('button', jump.from + ' → ' + jump.to + ' · ' + jump.type.replaceAll('_', ' ') +
+      ' · ' + phaseLabel(view.pages[jump.page]));
+    button.onclick = () => {
+      showPage(jump.page);
+      const target = [...cards.values()].find(item => item.card.id === jump.id);
+      if (target) {
+        toggle(target.card.key);
+        target.button.scrollIntoView({
+          block: 'nearest', inline: 'center'
+        });
+      }
+    };
+    $('jumps').append(button);
+  }
+  $('viewport').scrollTo(0, 0);
+  drawEdges();
+}
+
+function port(box, side) {
+  const [x, y, w, h] = box;
+  return [
+    [x, y + h / 2],
+    [x + w, y + h / 2],
+    [x + w / 2, y],
+    [x + w / 2, y + h]
+  ][side];
+}
+
+function outward(point, side) {
+  const shifts = [
+    [-12, 0],
+    [12, 0],
+    [0, -12],
+    [0, 12]
+  ];
+  return point.map((v, i) => v + shifts[side][i]);
+}
+
+function ports(a, b, kind) {
+  const dx = b[0] + b[2] / 2 - a[0] - a[2] / 2;
+  const dy = b[1] + b[3] / 2 - a[1] - a[3] / 2;
+  if (kind === 'evidence') return [2, Math.abs(dx) > b[2] ? dx > 0 ? 0 : 1 : 3];
+  if (Math.abs(dy) > Math.max(a[3], b[3])) return dy > 0 ? [3, 2] : [2, 3];
+  return dx > 0 ? [1, 0] : [0, 1];
+}
+
+function blocked(a, b, boxes) {
+  return boxes.some(([x, y, w, h]) => {
+    if (a[0] === b[0]) return a[0] > x - 3 && a[0] < x + w + 3 && Math.max(a[1], b[1]) > y - 3 && Math
+      .min(a[1], b[1]) < y + h + 3;
+    return a[1] > y - 3 && a[1] < y + h + 3 && Math.max(a[0], b[0]) > x - 3 && Math.min(a[0], b[0]) < x +
+      w + 3;
+  });
+}
+
+function routingGrid(boxes, canvasWidth, height) {
+  const xs = new Set([10, canvasWidth - 10]),
+    ys = new Set([8, height - 10]);
+  for (const [x, y, w, h] of boxes) {
+    [x - 12, x + w + 12, x + w / 2].forEach(v => xs.add(v));
+    [y - 12, y + h + 12, y + h / 2].forEach(v => ys.add(v));
+  }
+  const x = [...xs].sort((a, b) => a - b),
+    y = [...ys].sort((a, b) => a - b),
+    width = x.length;
+  const neighbors = Array.from({
+    length: width * y.length
+  }, () => []);
+  for (let j = 0; j < y.length; j++)
+    for (let i = 0; i < x.length; i++) {
+      const id = j * width + i,
+        p = [x[i], y[j]];
+      for (const [ni, nj] of [
+          [i + 1, j],
+          [i, j + 1]
+        ]) {
+        if (ni >= x.length || nj >= y.length) continue;
+        const q = [x[ni], y[nj]],
+          other = nj * width + ni;
+        if (blocked(p, q, boxes)) continue;
+        const cost = Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]);
+        neighbors[id].push([other, cost]);
+        neighbors[other].push([id, cost]);
+      }
+    }
+  return {
+    x,
+    y,
+    width,
+    neighbors
+  };
+}
+class Heap {
+  constructor() {
+    this.items = [];
+  }
+  push(item) {
+    const a = this.items;
+    a.push(item);
+    let i = a.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (a[p][0] <= item[0]) break;
+      a[i] = a[p];
+      i = p;
+    }
+    a[i] = item;
+  }
+  pop() {
+    const a = this.items,
+      result = a[0],
+      last = a.pop();
+    if (a.length) {
+      let i = 0;
+      while (i * 2 + 1 < a.length) {
+        let c = i * 2 + 1;
+        if (c + 1 < a.length && a[c + 1][0] < a[c][0]) c++;
+        if (a[c][0] >= last[0]) break;
+        a[i] = a[c];
+        i = c;
+      }
+      a[i] = last;
+    }
+    return result;
+  }
+}
+
+function route(start, end, grid) {
+  const {
+    x,
+    y,
+    width,
+    neighbors
+  } = grid;
+  const first = y.indexOf(start[1]) * width + x.indexOf(start[0]),
+    last = y.indexOf(end[1]) * width + x.indexOf(end[0]);
+  const distance = new Map([
+      [first, 0]
+    ]),
+    previous = new Map(),
+    heap = new Heap();
+  const point = id => [x[id % width], y[Math.floor(id / width)]];
+  const heuristic = id => {
+    const p = point(id);
+    return Math.abs(p[0] - end[0]) + Math.abs(p[1] - end[1]);
+  };
+  heap.push([heuristic(first), first]);
+  while (heap.items.length) {
+    const [estimate, id] = heap.pop();
+    if (id === last) {
+      const path = [point(id)];
+      let cursor = id;
+      while (previous.has(cursor)) {
+        cursor = previous.get(cursor);
+        path.push(point(cursor));
+      }
+      return path.reverse();
+    }
+    if (estimate > distance.get(id) + heuristic(id)) continue;
+    for (const [next, length] of neighbors[id] || []) {
+      const cost = distance.get(id) + length + 1;
+      if (cost >= (distance.get(next) ?? Infinity)) continue;
+      distance.set(next, cost);
+      previous.set(next, id);
+      heap.push([cost + heuristic(next), next]);
+    }
+  }
+  return null;
+}
+
+function simplify(points) {
+  const result = [];
+  for (const point of points) {
+    const last = result[result.length - 1];
+    if (last && point[0] === last[0] && point[1] === last[1]) continue;
+    while (result.length > 1) {
+      const a = result[result.length - 2], b = result[result.length - 1];
+      if (!((a[0] === b[0] && b[0] === point[0]) ||
+            (a[1] === b[1] && b[1] === point[1]))) break;
+      result.pop();
+    }
+    result.push(point);
+  }
+  return result;
+}
+
+function labelPosition(points, text, obstacles, canvasWidth) {
+  const width = Math.ceil(text.length * 5.7 + 14), height = 20;
+  const overlaps = ([x, y, w, h], [ox, oy, ow, oh]) =>
+    x < ox + ow + 3 && x + w > ox - 3 && y < oy + oh + 3 && y + h > oy - 3;
+  const candidates = [];
+  for (let offset = 0; offset < 4; offset++) {
+    const gap = 5 + offset * 27;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      const x = (a[0] + b[0]) / 2, y = (a[1] + b[1]) / 2;
+      if (a[1] === b[1] && Math.abs(a[0] - b[0]) >= Math.min(width, 32)) {
+        candidates.push(
+          {box: [x - width / 2, y - height - gap, width, height], anchor: [x, y], connector: [x, y - gap]},
+          {box: [x - width / 2, y + gap, width, height], anchor: [x, y], connector: [x, y + gap]});
+      } else if (a[0] === b[0] && Math.abs(a[1] - b[1]) > height + 8) {
+        candidates.push(
+          {box: [x + gap, y - height / 2, width, height], anchor: [x, y], connector: [x + gap, y]},
+          {box: [x - width - gap, y - height / 2, width, height], anchor: [x, y], connector: [x - gap, y]});
+      }
+    }
+  }
+  return candidates.find(({box, anchor, connector}) =>
+    box[0] > 8 && box[0] + box[2] < canvasWidth - 10 && box[1] > 0 &&
+    box[1] + box[3] < parseFloat($('graph').style.height) - 5 &&
+    !obstacles.some(other => overlaps(box, other)) && !blocked(anchor, connector, obstacles));
+}
+
+function drawEdges() {
+  const page = view.pages[current],
+    canvas = $('links'),
+    height = parseFloat($('graph').style.height);
+  canvas.replaceChildren();
+  drawnEdges = [];
+  canvas.setAttribute('width', page.width);
+  canvas.setAttribute('height', height);
+  const defs = svg('defs', {});
+  for (const [kind, style] of Object.entries(EDGE_STYLES)) {
+    const marker = svg('marker', {
+      id: 'arrow-' + kind,
+      viewBox: '0 0 10 10',
+      refX: 9,
+      refY: 5,
+      markerUnits: 'userSpaceOnUse',
+      markerWidth: kind === 'relation' ? 11 : 9,
+      markerHeight: kind === 'relation' ? 11 : 9,
+      orient: 'auto'
+    });
+    marker.append(svg('path', {
+      d: 'M0 1L9 5L0 9L3 5Z',
+      fill: style.color
+    }));
+    defs.append(marker);
+  }
+  canvas.append(defs);
+  const baseLayer = svg('g', {'class': 'edge-layer'});
+  const emphasisLayer = svg('g', {'class': 'edge-emphasis-layer'});
+  relationshipLabels = svg('g', {'class': 'edge-label-layer'});
+  canvas.append(baseLayer, emphasisLayer, relationshipLabels);
+  const boxes = new Map([...cards].map(([key, item]) => [key, linkBox(item)]));
+  const partyLabels = [...cards.values()].filter(item => item.card.kind === 'party' &&
+    expanded !== item.card.key).map(item => {
+      const [x, y, w] = bounds(item.button);
+      return [x, y + 60, w, 48];
+    });
+  const headings = page.sections.map((section, i) => [
+    regionBoxes[i][0] + 10, regionBoxes[i][1] + 5,
+    Math.min(400, section.title.length * 10), 30
+  ]);
+  page.sections.forEach((section, i) => {
+    if (section.title === 'Actions and their context' || section.title === 'Source evidence')
+      headings.push([645, regionBoxes[i][1] + 7, 450, 28]);
+  });
+  const obstacles = [...boxes.values(), ...partyLabels, ...headings];
+  relationshipObstacles = obstacles;
+  const grid = routingGrid(obstacles, page.width, height);
+  // Draw evidence first so the action sequence stays visually in front.
+  for (const edge of [...page.edges].sort((a, b) =>
+      (a.kind === 'evidence' ? 0 : a.kind === 'relation' ? 2 : 1) -
+      (b.kind === 'evidence' ? 0 : b.kind === 'relation' ? 2 : 1))) {
+    const a = boxes.get(edge.from_key),
+      b = boxes.get(edge.to_key);
+    if (!a || !b) continue;
+    const preferred = ports(a, b, edge.kind);
+    let points = null;
+    const alternatives = [
+      [...preferred]
+    ];
+    for (const as of [preferred[0], 0, 1, 2, 3])
+      for (const bs of [preferred[1], 0, 1, 2, 3]) {
+        if (as !== preferred[0] || bs !== preferred[1]) alternatives.push([as, bs]);
+      }
+    for (const [as, bs] of alternatives) {
+      const start = port(a, as),
+        end = port(b, bs);
+      const path = route(outward(start, as), outward(end, bs), grid);
+      if (path) {
+        points = simplify([start, ...path, end]);
+        break;
+      }
+    }
+    if (!points) continue;
+    const style = edgeStyle(edge);
+    const attributes = {
+      points: points.map(p => p.join(',')).join(' '),
+      fill: 'none',
+      stroke: style.color,
+      'marker-end': edge.type === 'order_unknown' ? 'none' : 'url(#arrow-' + edge.kind + ')',
+      'stroke-dasharray': edgePattern(edge) || 'none',
+      'data-from': edge.from_key,
+      'data-to': edge.to_key
+    };
+    const line = svg('polyline', {...attributes, 'class': 'edge-line'});
+    const tooltip = svg('title', {});
+    tooltip.textContent = edge.type.replaceAll('_', ' ');
+    line.append(tooltip);
+    baseLayer.append(line);
+    const emphasis = svg('g', {'class': 'edge-emphasis'});
+    const halo = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'white',
+      'class': 'edge-halo'});
+    const focusLine = svg('polyline', {...attributes, 'class': 'edge-line', 'stroke-width': style.width + .8});
+    const flow = svg('polyline', {points: attributes.points, fill: 'none', stroke: style.color,
+      'stroke-width': style.width + 1.2, 'class': 'edge-flow', opacity: .8});
+    const origin = svg('circle', {cx: points[0][0], cy: points[0][1], r: 2.5,
+      fill: style.color, stroke: 'white', 'stroke-width': 1, 'class': 'edge-origin'});
+    emphasis.append(halo, focusLine, flow, origin);
+    emphasisLayer.append(emphasis);
+    drawnEdges.push({edge, line, points, halo, focusLine, flow, origin, emphasis, label: null});
+  }
+  highlight(hovered);
+}
+
+function zoom(value) {
+  scale = Math.max(.5, Math.min(1.8, value));
+  $('sheet').style.zoom = scale;
+  $('zoom').textContent = Math.round(scale * 100) + '%';
+}
+
+function phaseLabel(page) {
+  const index = graph.phases.findIndex(phase => phase.phase_id === page.phase);
+  return index >= 0 ? 'Phase ' + (index + 1) : 'Event background';
+}
+$('minus').onclick = () => zoom(scale - .1);
+$('plus').onclick = () => zoom(scale + .1);
+$('zoom').onclick = () => zoom(1);
+$('previous').onclick = () => showPage(current - 1);
+$('next').onclick = () => showPage(current + 1);
+$('picker').onchange = e => showPage(Number(e.target.value));
+$('viewport').addEventListener('keydown', e => {
+  if (e.key === 'Escape') toggle(null);
+});
+for (const [i, page] of view.pages.entries()) {
+  const option = el('option', phaseLabel(page) + (page.phase ? ' · ' + page.title : ''));
+  option.value = i;
+  $('picker').append(option);
+}
+showPage(Math.max(0, view.pages.findIndex(page => page.cards.some(card => card.kind === 'action'))));
+</script>
+</body>
+</html>

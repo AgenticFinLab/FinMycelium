@@ -233,3 +233,6 @@ EXPERIMENT/
 *.duckdb
 *.duckdb.wal
 *.duckdb-*
+*.patch
+.vscode/*
+.vscode*

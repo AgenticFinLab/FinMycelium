@@ -187,6 +187,11 @@ renderer. They are not silently converted. Their checkpoints cannot resume in th
 new protocol; rebuilding creates a new task from confirmed original input. The
 separately named legacy builder entry supports offline regression of historical assets.
 
+## Interactive EPG visualization
+
+Use the [standalone EPG guide](person-event-visualization.md) to export a saved event,
+inspect evidence, or verify the fixed slide layout locally.
+
 ## Offline verification
 
 Using the project environment from the repository root:
