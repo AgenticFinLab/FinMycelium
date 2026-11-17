@@ -133,30 +133,75 @@ class IdMap:
         return self.mapping[key]
 
 
-def ground_quote(proposal, samples, evidence_id, allowed_ranges=None):
-    """Locate verbatim text. Repeated quotes without a verified hint stay ambiguous."""
+def _whitespace_view(text):
+    """Collapse whitespace runs while retaining each output character's raw span."""
+    chars, spans = [], []
+    for match in re.finditer(r"\s+|[^\s]+", text):
+        if match.group().isspace():
+            chars.append(' ')
+            spans.append((match.start(), match.end()))
+        else:
+            chars.extend(match.group())
+            spans.extend((i, i + 1) for i in range(match.start(), match.end()))
+    return ''.join(chars), spans
+
+
+def ground_quote(proposal, samples, evidence_id, allowed_ranges=None, *, audit=None):
+    """Exact first; uniquely located whitespace-equivalent text keeps raw bytes.
+
+    No punctuation, case, word-boundary or semantic substitutions are performed.
+    Bad hints cannot override a unique permitted match or select among repetitions.
+    """
     sample = samples[proposal['sample_id']]
     text, quote = sample['content'], proposal['quote']
     if not isinstance(quote, str) or not quote.strip():
         raise ValueError('Evidence requires a nonempty original quote')
-    positions = [match.start() for match in re.finditer('(?=' + re.escape(quote) + ')', text)]
-    if allowed_ranges is not None:
-        positions = [p for p in positions if any(lo <= p and p + len(quote) <= hi for lo, hi in allowed_ranges)]
+    for key in ('context_before', 'context_after'):
+        if proposal.get(key) is not None and not isinstance(proposal[key], str):
+            raise ValueError('Quote context must be original text')
+
+    def permitted(start, end):
+        return allowed_ranges is None or any(lo <= start and end <= hi for lo, hi in allowed_ranges)
+
+    positions = [(m.start(), m.start() + len(quote)) for m in re.finditer('(?=' + re.escape(quote) + ')', text)
+                 if permitted(m.start(), m.start() + len(quote))]
+    if not positions:
+        view, spans = _whitespace_view(text)
+        normalized, _ = _whitespace_view(quote)
+        normalized = normalized.strip()
+        for match in re.finditer('(?=' + re.escape(normalized) + ')', view):
+            start, end = spans[match.start()][0], spans[match.start() + len(normalized) - 1][1]
+            if permitted(start, end):
+                positions.append((start, end))
+    candidates = positions
     for key, before in (('context_before', True), ('context_after', False)):
         hint = proposal.get(key)
         if hint:
-            if not isinstance(hint, str):
-                raise ValueError('Quote context must be original text')
-            positions = [p for p in positions if (text[:p].endswith(hint) if before else text[p + len(quote):].startswith(hint))]
-    start = proposal.get('start')
-    end = proposal.get('end')
-    if type(start) is int and type(end) is int and start in positions and end == start + len(quote):
-        positions = [start]
-    matched = len(positions) == 1
+            candidates = [(lo, hi) for lo, hi in candidates
+                          if (text[:lo].endswith(hint) if before else text[hi:].startswith(hint))]
+    offsets = (proposal.get('start'), proposal.get('end'))
+    if all(type(x) is int for x in offsets) and offsets in candidates:
+        candidates = [offsets]
+    # A unique permitted raw span is authoritative. Conflicting hints on repeated
+    # text are not enough to choose a location and remain ambiguous.
+    if not candidates:
+        candidates = positions
+    matched = len(candidates) == 1
+    start, end = candidates[0] if matched else (None, None)
+    raw_quote = text[start:end] if matched else quote
+    if matched and audit is not None:
+        if raw_quote != quote:
+            audit.append(dict(field='/quote', rule='unique_whitespace_equivalent', before=quote, after=raw_quote))
+        if offsets != (None, None) and offsets != (start, end):
+            audit.append(dict(field='/start,/end', rule='unique_permitted_span',
+                              before=list(offsets), after=[start, end]))
+        for key, before in (('context_before', True), ('context_after', False)):
+            hint = proposal.get(key)
+            if hint and not (text[:start].endswith(hint) if before else text[end:].startswith(hint)):
+                audit.append(dict(field='/' + key, rule='ignored_conflicting_hint_for_unique_span'))
     return dict(evidence_id=evidence_id, sample_id=sample['sample_id'], source_id=sample['raw_data_id'],
-                quote=quote, start=positions[0] if matched else None,
-                end=positions[0] + len(quote) if matched else None,
-                location_status='matched' if matched else 'ambiguous' if positions else 'unmatched',
+                quote=raw_quote, start=start, end=end,
+                location_status='matched' if matched else 'ambiguous' if candidates else 'unmatched',
                 sample_sha256=sha256(text.encode('utf-8')))
 
 

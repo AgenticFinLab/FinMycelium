@@ -15,6 +15,7 @@ from .schema import COLLECTION_IDS
 from .feedback import (correction_scope, correction_issues, validate_correction,
                        unresolved_report, reserved_records, clear_resolved_pending)
 from .context import navigation, sized_request
+from .grouping import ambiguity_groups
 from .validation import check_graph
 
 
@@ -33,29 +34,6 @@ def body_ranges(payload, config):
 def brief(package):
     """Global navigation index. Exact records remain available through read_records."""
     return navigation(package)
-
-
-def ambiguity_groups(facts):
-    """Cheap grouping asks the model only about possible duplicates, not every pair."""
-    buckets = defaultdict(set)
-    for collection in ('entities', 'actions', 'contexts', 'relation_candidates'):
-        for record in facts[collection]:
-            oid = record[COLLECTION_IDS[collection]]
-            name = re.sub(r'\W+', ' ', record.get('name', record.get('description', '')).casefold()).strip()
-            if name:
-                buckets[(collection, 'name', name)].add((collection, oid))
-            if collection == 'actions' and record['time']['start']:
-                buckets[(collection, 'actor_time', record['actor']['entity_id'], record['time']['start'])].add((collection, oid))
-    groups = []
-    for group in buckets.values():
-        if len(group) < 2:
-            continue
-        overlaps = [g for g in groups if g & group]
-        for old in overlaps:
-            group |= old
-            groups.remove(old)
-        groups.append(set(group))
-    return [sorted(g) for g in groups]
 
 
 class Construction:
@@ -209,7 +187,7 @@ class Construction:
                 ref = reference(collection, record[COLLECTION_IDS[collection]])
                 if (collection, ref['object_id']) not in assigned_all:
                     self.facts['lineage'].append(dict(operation='keep', input_refs=[ref], output_refs=[ref],
-                        reason='No deterministic duplicate or ambiguous candidate group.', step_id='consolidate.keep'))
+                        reason='Retained without semantic merge: no bounded ambiguity group selected.', step_id='consolidate.keep'))
         for number, group in enumerate(groups):
             assigned = {(c, oid) for c, oid in group if oid in index_records(self.facts)[c]}
             if len(assigned) < 2:
@@ -252,7 +230,8 @@ class Construction:
     def relation_request(self, actions, phases):
         return self.request('relations', self.graph, assigned_action_ids=actions,
             assigned_phase_ids=phases, relation_candidates=[c for c in self.facts['relation_candidates']
-                if c.get('from_action_id') in actions or c.get('to_action_id') in actions],
+                if c.get('from_action_id') in actions or c.get('to_action_id') in actions
+                or (actions and c.get('from_action_id') is None and c.get('to_action_id') is None)],
             assigned_records=dict(actions=[a for a in self.graph['actions'] if a['action_id'] in actions],
                                  phases=[p for p in self.graph['phases'] if p['phase_id'] in phases]))
 

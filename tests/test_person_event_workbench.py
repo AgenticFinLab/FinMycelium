@@ -64,6 +64,7 @@ def queue(builds,tid):
 def test_prepare_freezes_actual_input_and_sources(setup,tmp_path):
     store,search,tid,requests=setup
     before=deepcopy(search.inspect(tid));builds=BuildController(store)
+    previous_requests = list(requests)
     with pytest.raises(ValueError,match='确认'):builds.create_person(search,tid)
     bid=builds.create_person(search,tid,confirmed=True,artifact_root=tmp_path/'runs')
     row=builds.inspect(bid);body=row['body']
@@ -71,7 +72,7 @@ def test_prepare_freezes_actual_input_and_sources(setup,tmp_path):
     assert body['input']['samples']==before['builder_input']['samples']
     assert body['provenance']['handoff_revision']==before['handoff_revision']
     assert all(r['source_url']=='https://example.org/notice' for r in body['input']['user_query']['extras']['source_registry'].values())
-    assert search.inspect(tid)==before and requests==['search'] and store.events()==[]
+    assert search.inspect(tid)==before and requests==previous_requests and store.events()==[]
     with pytest.raises(ValueError,match='明确允许'):builds.start(bid)
     search.reassemble(tid,1)
     assert builds.current(row)  # Explicitly confirmed old input is an immutable independent task.
@@ -80,6 +81,7 @@ def test_prepare_freezes_actual_input_and_sources(setup,tmp_path):
 
 def test_worker_outputs_native_draft_in_dataset_output_only(setup,tmp_path):
     store,search,tid,requests=setup;builds=BuildController(store)
+    previous_requests = list(requests)
     bid=builds.create_person(search,tid,confirmed=True)
     assert not (tmp_path/'dataset/output/builds'/bid).exists()
     queue(builds,bid);builds.run(bid,executor=execute(SyntheticModel()))
@@ -94,7 +96,7 @@ def test_worker_outputs_native_draft_in_dataset_output_only(setup,tmp_path):
     provenance=json.loads((Path(row['body']['artifact_directory'])/'provenance.json').read_text())
     assert provenance['search_handoff']==row['body']['provenance']
     with store.connection() as db:assert db.execute('SELECT COUNT(*) FROM graphs').fetchone()[0]==0
-    assert requests==['search']
+    assert requests==previous_requests
 
 
 def test_native_task_resume_keeps_usage(setup,tmp_path):
@@ -137,6 +139,7 @@ def test_workbench_confirm_save_and_view_without_model(setup,tmp_path,monkeypatc
 def test_saved_native_gantt_regeneration_preserves_task_and_usage(setup, tmp_path):
     from finmy.workbench.build_tasks import worker_lock
     store, search, tid, requests = setup
+    previous_requests = list(requests)
     builds = BuildController(store); model = SyntheticModel()
     bid = builds.create_person(search, tid, confirmed=True, artifact_root=tmp_path/'runs')
     queue(builds, bid); builds.run(bid, executor=execute(model))
@@ -150,7 +153,7 @@ def test_saved_native_gantt_regeneration_preserves_task_and_usage(setup, tmp_pat
     after = builds.inspect(bid)
     assert path.exists() and after['status'] == before['status'] == 'completed'
     assert after['body']['usage'] == before['body']['usage']
-    assert len(model.calls) == len(before['body']['usage']) and requests == ['search']
+    assert len(model.calls) == len(before['body']['usage']) and requests == previous_requests
     assert not list((tmp_path/'dataset').rglob('gantt.html'))
 
 

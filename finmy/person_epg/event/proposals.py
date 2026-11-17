@@ -136,6 +136,9 @@ def preserve_known_fields(originals, target, decision, package):
                     paths.append('/object/entity_refs')
         if old.get('entity_refs'):
             paths.append('/entity_refs')
+        for side in ('start', 'end'):
+            if old.get('time', {}).get(side) is not None:
+                paths.extend(['/time/' + side, '/time/' + side + '_precision'])
         for field in paths:
             before = pointer(old, field)
             try:
@@ -146,9 +149,17 @@ def preserve_known_fields(originals, target, decision, package):
                 continue
             new_support = [s for s in target.get('support', []) if s not in old.get('support', [])
                            and covers(s['target'], field) and support_index.valid(s)]
-            retained_alternative = any(covers(c['target'], field) and any(
-                a['value'] == before and a['support'] and all(support_index.valid(s) for s in a['support'])
-                for a in c['alternatives']) for c in target.get('conflicts', []))
+            retained_alternative = False
+            for conflict in target.get('conflicts', []):
+                if not covers(conflict['target'], field):
+                    continue
+                for alternative in conflict['alternatives']:
+                    try:
+                        value = pointer(alternative['value'], field[len(conflict['target']):])
+                    except (KeyError, IndexError, TypeError, ValueError):
+                        continue
+                    if value == before and alternative['support'] and all(support_index.valid(s) for s in alternative['support']):
+                        retained_alternative = True
             explicit_gap = any(covers(g['target'], field) for g in target.get('gaps', []))
             corrected = bool(decision['evidence_ids'] and ((after is not None and new_support)
                              or (retained_alternative and (after is not None or explicit_gap))))
@@ -259,7 +270,8 @@ class Receiver:
                 temporary = proposal['evidence_id']
                 eid = self.ids.assign('evidence', temporary, self.namespace)
                 ranges = None if self.read_ranges is None else self.read_ranges.get(proposal['sample_id'], [])
-                grounded = ground_quote(proposal, samples, eid, ranges)
+                changes = []
+                grounded = ground_quote(proposal, samples, eid, ranges, audit=changes)
                 duplicate = next((e for e in self.package['evidence'] if all(e[k] == grounded[k]
                     for k in ('sample_id', 'quote', 'start', 'end', 'location_status', 'sample_sha256'))), None)
                 if duplicate:
@@ -269,6 +281,8 @@ class Receiver:
                 else:
                     self.package['evidence'].append(grounded)
                 mappings['evidence'][temporary] = eid
+                if changes:
+                    self.report.setdefault('normalizations', []).append(dict(item='evidence:' + eid, changes=changes))
             except (ValueError, KeyError, TypeError) as exc:
                 self.reject('evidence', exc)
         response = replace_references(response, mappings)

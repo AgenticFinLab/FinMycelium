@@ -29,14 +29,22 @@ def navigation(package, preview=160, role=None, supplied=None):
             if 'time' in record:
                 item['time'] = {k: v for k, v in record['time'].items()
                                 if k in ('start', 'end', 'kind') or (not compact_context and k != 'text')}
+                if preview and record['time'].get('text') and collection in ('actions', 'stages', 'phases'):
+                    item['time']['text_preview'] = record['time']['text'][:preview]
+                    item['time']['text_truncated'] = len(record['time']['text']) > preview
+            if collection in ('actions', 'relation_candidates'):
+                item['evidence_ids'] = sorted({eid for s in record.get('support', []) for eid in s['evidence_ids']})
             if preview and 'description' in record:
                 width = min(preview, 80) if compact_context else preview
                 item['description_preview'] = record['description'][:width]
                 item['description_truncated'] = len(record['description']) > width
             result[collection].append(item)
     # Provenance hashes, parser metadata and copied locator bodies are not navigation.
-    result['evidence_index'] = [{k: e[k] for k in ('evidence_id', 'sample_id', 'start', 'end')}
+    result['evidence_index'] = [{k: e[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end')}
                                for e in package.get('evidence', [])]
+    if role in ('consolidation', 'organization', 'relations'):
+        result['sources'] = [{k: s.get(k) for k in ('source_id', 'title', 'published_at')}
+                             for s in package.get('sources', [])]
     return result
 
 
@@ -98,6 +106,12 @@ def task_records(role, package, fields):
         if collection == 'evidence':
             view = {k: record[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end', 'quote')}
         records.append(dict(collection=collection, record=view))
+    # Deliver the evidence for the candidate links and assigned acts before bulky
+    # Context dependencies can exhaust the optional allocation. Keep the entire
+    # navigation index and local tools for independent cross-source discovery.
+    if role in ('organization', 'relations'):
+        records.sort(key=lambda item: {'actions': 0, 'evidence': 1, 'stages': 2,
+                                      'phases': 2, 'contexts': 3}.get(item['collection'], 2))
     return records
 
 
