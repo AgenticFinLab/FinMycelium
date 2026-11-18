@@ -461,7 +461,7 @@ class Construction:
         return deepcopy(self.run.state)
 
 
-def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None):
+def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None, stop_after_organization=False):
     config = EventBuildConfig(**config) if isinstance(config, dict) else config or EventBuildConfig()
     validate_input(payload)
     if model is None and not allow_network:
@@ -482,6 +482,10 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
             if not construction.facts['actions']:
                 return construction.finish('finished', 'No usable focal Actions; inspect the facts and pending items')
             construction.organize()
+            from .relation_experiment import capture
+            capture(construction)
+            if stop_after_organization:
+                return construction.finish('paused', 'Organization snapshot saved; relations not started')
             construction.relate()
             construction.repair()
             return construction.finish('finished')
