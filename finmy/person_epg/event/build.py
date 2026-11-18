@@ -441,7 +441,8 @@ class Construction:
 
 
 def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None):
-    config = EventBuildConfig(**config) if isinstance(config, dict) else config or EventBuildConfig()
+    if not resume and not isinstance(config, EventBuildConfig):
+        config = EventBuildConfig(**(config or {}))
     validate_input(payload)
     if model is None and not allow_network:
         raise PermissionError('Model execution requires explicit permission')
@@ -449,10 +450,16 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
         directory = Path(__file__).resolve().parents[3] / 'output' / 'builds' / uuid.uuid4().hex
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    if model is None:
-        from ..build import Model
-        model = Model(config)
     with directory_lock(directory):
+        if resume and not isinstance(config, EventBuildConfig):
+            state_path = directory / 'state.json'
+            if not state_path.is_file():
+                raise ValueError('No run exists to resume')
+            saved = json.loads(state_path.read_text())['config']
+            config = EventBuildConfig.from_saved({**saved, **(config or {})})
+        if model is None:
+            from ..build import Model
+            model = Model(config)
         execution = Execution(directory, payload, config, model, resume=resume, provenance=provenance)
         construction = Construction(execution)
         try:

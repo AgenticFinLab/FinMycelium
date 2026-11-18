@@ -252,10 +252,11 @@ See the [GLM guide](https://cloud.tencent.com/document/product/1823/132061),
 [platform parameter defaults](https://cloud.tencent.com/document/product/1823/135872).
 Unlisted model IDs retain their supplied sampling configuration, or service
 defaults when no sampling parameters are supplied.
-The preset policy does not change call budgets, thinking depth or output limits;
-the direct adapter's fallback remains 8192 output tokens.
+The direct adapter falls back to 8192 output tokens. For new Kimi person Event
+tasks, the builder selects low effort for extraction and high effort for the
+remaining stages. See the [person Event build settings](person-event-build.md).
 
-For Kimi K3.1 Pro, the adapter sends the configured output limit as
+For TokenHub Kimi K3.1 Pro, the adapter sends the configured output limit as
 `max_completion_tokens`. It uses `reasoning_effort` for optional thinking-depth
 control; Kimi's older `thinking` controls are rejected before a request.
 

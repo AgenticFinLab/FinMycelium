@@ -17,6 +17,7 @@ TOKENHUB_BASE_URL = 'https://tokenhub.tencentmaas.com/v1'
 
 # Opt-in person-build JSON mode; validated with the streaming transport.
 PERSON_BUILD_JSON_MODELS = frozenset({'ark/kimi-k3-1-pro-261024'})
+PERSON_BUILD_STAGED_EFFORT = 'by_stage'
 
 # Sampling policy for supported presets, applied after inherited Builder settings.
 # Unlisted model IDs keep their supplied configuration.
@@ -75,6 +76,22 @@ def person_build_json_mode_supported(value):
         return model_name(value) in PERSON_BUILD_JSON_MODELS
     except ValueError:
         return False
+
+
+def person_build_effort_options(value):
+    """The first option is the new-task default. None delegates to the provider."""
+    try:
+        kimi = model_name(value) in {'ark/kimi-k3-1-pro-261024', 'tokenhub/kimi-k3.1-pro'}
+    except ValueError:
+        kimi = False
+    return (PERSON_BUILD_STAGED_EFFORT, None, 'low', 'high', 'max') if kimi else (None,)
+
+
+def person_build_request_effort(policy, role):
+    if policy == PERSON_BUILD_STAGED_EFFORT:
+        # Direct transport callers may supply a task ID such as extract.0.correct.1.
+        return 'low' if role.partition('.')[0].lower() in {'extract', 'extraction'} else 'high'
+    return policy
 
 
 def generation_parameters(lm_name, parameters):

@@ -2,6 +2,7 @@
 import re
 import time
 
+from finmy.model_config import person_build_request_effort
 from .completion_errors import IncompleteCompletionError
 
 
@@ -54,10 +55,15 @@ class StreamingModel:
         self.last_diagnostics = None
 
     def __call__(self, system, user, name):
+        effort = person_build_request_effort(getattr(self.config, 'reasoning_effort', None), name)
+        return self.call_with_effort(system, user, name, reasoning_effort=effort)
+
+    def call_with_effort(self, system, user, name, *, reasoning_effort):
         self.last_usage = None
         api_json_mode = getattr(self.config, 'api_json_mode', False)
         started = time.monotonic()
-        info = self.last_diagnostics = dict(mode='stream', api_json_mode=api_json_mode, phase='initializing', chunks=0,
+        info = self.last_diagnostics = dict(mode='stream', api_json_mode=api_json_mode, reasoning_effort=reasoning_effort,
+            phase='initializing', chunks=0,
             content_chars=0, reasoning_chars=0, first_chunk_seconds=None,
             finish_reason=None, stream_exhausted=False)
         try:
@@ -67,6 +73,8 @@ class StreamingModel:
                 adapter.client = adapter.client.with_options(max_retries=0, timeout=self.config.timeout)
                 self.adapter = adapter
             requested = dict(max_tokens=self.config.max_new_tokens)
+            if reasoning_effort is not None:
+                requested['reasoning_effort'] = reasoning_effort
             if api_json_mode:
                 requested['response_format'] = {'type': 'json_object'}
             parameters = self.adapter.request_parameters(requested)

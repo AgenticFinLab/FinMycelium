@@ -62,7 +62,8 @@ def test_role_requests_differ_only_in_response_format(transport, role):
     assert ordinary == constrained
     assert ordinary['max_tokens'] == 65536 and ordinary['stream'] is True
     assert ordinary['stream_options'] == {'include_usage': True}
-    assert not {'temperature', 'top_p', 'thinking', 'reasoning_effort'} & ordinary.keys()
+    assert ordinary['reasoning_effort'] == ('low' if role == 'extraction' else 'high')
+    assert not {'temperature', 'top_p', 'thinking'} & ordinary.keys()
 
 
 @pytest.mark.parametrize('failure', ['unsupported_format', 'truncation'])
@@ -88,6 +89,7 @@ def test_json_mode_keeps_local_reading_and_result_validation(tmp_path, payload, 
     assert run.infer('relations', 'Return JSON', {}, seed_facts(payload), valid) == {'ok': True}
     assert [call['status'] for call in run.state['calls']] == ['read_requested', 'invalid_output', 'accepted']
     assert all(call['api_json_mode'] is True for call in run.state['calls'])
+    assert all(call['reasoning_effort'] == 'high' for call in run.state['calls'])
     assert len(run.state['reads']) == 1
     assert all(body['response_format'] == {'type': 'json_object'} for _, body in transport['requests'])
     requests = list((tmp_path/'attempts/0001/steps').glob('*/request.json'))
@@ -155,5 +157,6 @@ def test_prepare_two_workbench_tasks_changes_only_mode(search_setup, tmp_path):
     assert ordinary.pop('api_json_mode') is False
     assert constrained.pop('api_json_mode') is True
     assert ordinary == constrained
+    assert ordinary['reasoning_effort'] == 'by_stage'
     assert all(not Path(body['artifact_directory']).exists() for body in (a, b))
     assert search.inspect(tid) == before and requests == previous_requests

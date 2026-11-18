@@ -6,7 +6,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from finmy.dataset import within
-from finmy.model_config import person_build_json_mode_supported
+from finmy.model_config import (PERSON_BUILD_STAGED_EFFORT, person_build_effort_options,
+                                person_build_json_mode_supported)
+from finmy.person_epg.event.runtime import EventBuildConfig
 from finmy.search.state import digest
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded
@@ -15,31 +17,42 @@ from finmy.workbench.ui import stats, status
 from finmy.workbench.model_picker import model_picker
 
 
+def effort_label(value):
+    if value == PERSON_BUILD_STAGED_EFFORT:
+        return '按阶段（正文抽取 low，后续 high）'
+    return '服务端默认' if value is None else '全程 ' + value
+
+
 def create_person_build(store, controller, task_id, data):
     st.subheader('构建本条人物 event')
     st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；也可先独立确认收录检索材料，再创建构建任务。')
     model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
+    defaults = EventBuildConfig()
     with st.form('person-build-create-'+task_id):
         json_supported = person_build_json_mode_supported(model)
         api_json_mode = st.radio('模型输出模式', [False, True] if json_supported else [False],
             format_func=lambda enabled: 'API JSON 模式' if enabled else '普通（提示词约定 JSON）',
             key='person-build-json-'+task_id+'-'+model, disabled=not json_supported,
             help='API JSON 模式当前可用于 Ark Kimi K3.1 Pro。两种模式都生成 EPG JSON，并执行相同的结构与证据检查。模式保存后固定。')
+        efforts = person_build_effort_options(model)
+        effort = st.selectbox('构建思考档位', efforts, format_func=effort_label, disabled=len(efforts) == 1,
+            key='person-build-effort-'+task_id+'-'+model,
+            help='Kimi 默认在正文抽取时用 low，在行动归并、阶段组织、关系和最终定向修正时用 high。保存后档位固定。')
         with st.expander('构建上限'):
-            calls=st.number_input('累计模型调用上限',min_value=1,value=40)
-            tokens=st.number_input('每次输出 token 上限',min_value=1,value=12288,
+            calls=st.number_input('累计模型调用上限',min_value=1,value=defaults.max_calls)
+            tokens=st.number_input('每次输出 token 上限',min_value=1,value=defaults.max_new_tokens,
                 help='是否包含推理 token 取决于所选模型；TokenHub 思考模式需要为推理和最终答案留出额度。')
-            context=st.number_input('单次模型上下文字符上限',min_value=1,value=160000)
-            batch=st.number_input('连续正文抽取批次字符数',min_value=401,value=12000)
-            local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=24)
-            local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=48000)
-            repair=st.checkbox('允许最多一轮最终定向修正',value=True)
+            context=st.number_input('单次模型上下文字符上限',min_value=1,value=defaults.max_context_chars)
+            batch=st.number_input('连续正文抽取批次字符数',min_value=defaults.extraction_overlap+1,value=defaults.extraction_chars)
+            local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
+            local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
+            repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
             st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
         confirmed=st.checkbox('我已检查本次实际材料与缺口，确认用于这条 event 的构建')
         if st.form_submit_button('保存人物构建任务',type='primary'):
             try:
                 tid=BuildController(store).create_person(controller,task_id,
-                    dict(lm_name=model,api_json_mode=api_json_mode,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
+                    dict(lm_name=model,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
                          extraction_chars=batch,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
@@ -58,6 +71,7 @@ def person_build_panel(store, controller, row, labels):
     st.caption('构建输出：' + body['artifact_directory'])
     if body.get('search_collection'):
         st.caption('已采用检索：' + str(Path(body['catalog']['root'])/body['search_collection']['directory']))
+    st.caption('构建思考档位：' + effort_label(body['person_config'].get('reasoning_effort')))
     run=body.get('run_state',{})
     runtime=Path(body['artifact_directory'])/'state.json'
     if runtime.is_file():
@@ -70,7 +84,10 @@ def person_build_panel(store, controller, row, labels):
            ('尝试次数',run.get('attempts',0),'恢复复用有效检查点')])
     if run.get('calls'):
         last=run['calls'][-1]
-        st.caption('最近阶段：'+last.get('task_id',last.get('phase','unknown'))+' · '+last['status'])
+        progress = last.get('task_id', last.get('phase', 'unknown')) + ' · ' + last['status']
+        if last.get('reasoning_effort'):
+            progress += ' · 思考 ' + last['reasoning_effort']
+        st.caption('最近阶段：' + progress)
     if run.get('execution_status'):
         st.caption('执行：'+run['execution_status']+' · 结果：'+run['result_status']+' · 绘图：'+run['render_status'])
         coverage=run.get('coverage',[])

@@ -9,7 +9,8 @@ import re
 import time
 import uuid
 
-from finmy.model_config import person_build_json_mode_supported
+from finmy.model_config import (person_build_effort_options, person_build_json_mode_supported,
+                                person_build_request_effort)
 
 from .records import fingerprint, index_records, json_bytes, pointer, sha256, prompt_json
 from .schema import FACTS_VERSION, GRAPH_VERSION
@@ -34,6 +35,12 @@ class EventBuildConfig:
     final_repair_rounds: int = 1
     graph_schema_version: str = GRAPH_VERSION
     api_json_mode: bool = False
+    reasoning_effort: str | None = 'auto'
+
+    @classmethod
+    def from_saved(cls, values):
+        """A historical task with no effort field delegated to the provider."""
+        return cls(**{'reasoning_effort': None, **values})
 
     def __post_init__(self):
         if not isinstance(self.lm_name, str) or not self.lm_name.strip():
@@ -42,8 +49,13 @@ class EventBuildConfig:
             raise ValueError('api_json_mode must be a boolean')
         if self.api_json_mode and not person_build_json_mode_supported(self.lm_name):
             raise ValueError('API JSON mode is currently supported for Ark Kimi K3.1 Pro only')
+        effort_options = person_build_effort_options(self.lm_name)
+        if self.reasoning_effort == 'auto':
+            self.reasoning_effort = effort_options[0]
+        elif self.reasoning_effort not in effort_options:
+            raise ValueError('reasoning_effort accepts by_stage, low, high or max for Kimi K3.1 Pro, or None for the service default')
         for key, value in asdict(self).items():
-            if key in ('lm_name', 'graph_schema_version', 'api_json_mode'):
+            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'reasoning_effort'):
                 continue
             minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls') else 1
             if type(value) is not int or value < minimum:
@@ -122,6 +134,8 @@ def semantic_config(config):
     # explicit JSON mode still changes all request/checkpoint dependencies.
     if not config.api_json_mode:
         value.pop('api_json_mode')
+    if config.reasoning_effort is None:
+        value.pop('reasoning_effort')
     return value
 
 
@@ -262,7 +276,7 @@ class Execution:
                         expected=self.state.get(hash_field), actual=actual, at=now(),
                         action='Retain previous attempt; rebuild from independently validated upstream checkpoints.'))
             previous = self.state['config']
-            if (semantic_config(EventBuildConfig(**previous)) != semantic_config(config)
+            if (semantic_config(EventBuildConfig.from_saved(previous)) != semantic_config(config)
                     or config.max_calls < previous['max_calls']):
                 raise ValueError('Resume retains semantic settings and cannot reduce the cumulative limit')
             for call in self.state['calls']:
@@ -351,6 +365,7 @@ class Execution:
                 self.persist()
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
         corpus = Corpus(self.payload, package, self.config)
+        effort = person_build_request_effort(self.config.reasoning_effort, request.get('role') or task_id)
         while len(budget) < self.config.max_json_attempts:
             self.check_pause()
             user = dict(task=request, read_results=task['read_results'])
@@ -364,17 +379,21 @@ class Execution:
             call_id = f"CALL-{len(self.state['calls']) + 1:06d}"
             call = dict(call_id=call_id, task_id=task_id, dependency=dependency,
                         request_fingerprint=fingerprint(dict(system=system, user=user)), status='submitted',
-                        api_json_mode=self.config.api_json_mode,
+                        api_json_mode=self.config.api_json_mode, reasoning_effort=effort,
                         started_at=now(), usage=None, usage_status='unknown')
             step_path = self.attempt / 'steps' / call_id
             write_json(step_path / 'request.json', dict(system=system, user=user, task_id=task_id,
-                dependency=dependency, api_json_mode=self.config.api_json_mode))
+                dependency=dependency, api_json_mode=self.config.api_json_mode, reasoning_effort=effort))
             self.state['calls'].append(call)
             self.persist()  # Durable reservation before the transport is invoked.
             started = time.monotonic()
             received = False
             try:
-                raw = self.model(system, user_text, task_id)
+                send = getattr(self.model, 'call_with_effort', None)
+                if send is None:
+                    raw = self.model(system, user_text, task_id)
+                else:
+                    raw = send(system, user_text, task_id, reasoning_effort=effort)
                 received = True
                 write_json(step_path / 'response.json', dict(raw=raw))
                 value = parse(raw)

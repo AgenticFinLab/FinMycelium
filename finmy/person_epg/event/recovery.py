@@ -58,7 +58,7 @@ def validate_recovery(directory, state):
     record = json.loads(path.read_text())
     if record['from_code'] != ORIGIN or record['to_code'] != code_identity() or not compatible_code():
         raise ValueError('Unsupported recovery implementation')
-    if state['input_sha256'] != record['input_sha256'] or semantic_config(EventBuildConfig(**state['config'])) != record['semantic_config']:
+    if state['input_sha256'] != record['input_sha256'] or semantic_config(EventBuildConfig.from_saved(state['config'])) != record['semantic_config']:
         raise ValueError('Recovery input or settings changed')
     for name, digest in record['files'].items():
         if sha256(within(directory, name).read_bytes()) != digest:
@@ -124,7 +124,7 @@ def prepare_record_recovery(directory):
     backup = 'recoveries/record-read-v1/state-before.json'
     files[backup] = sha256(before)
     record = dict(kind='record-read-v1', created_at=now(), from_code=ORIGIN, to_code=code_identity(),
-        input_sha256=state['input_sha256'], semantic_config=semantic_config(EventBuildConfig(**state['config'])),
+        input_sha256=state['input_sha256'], semantic_config=semantic_config(EventBuildConfig.from_saved(state['config'])),
         files=files, stage='organize', original_calls=len(state['calls']), original_reads=len(state['reads']),
         extraction_checkpoints=len(checkpoints), reason='Batch whole record refs within unchanged read quotas.')
     # Reuse a fully published preparation after interruption before the state switch.
@@ -202,7 +202,7 @@ def validate_relation_recovery(directory, state):
     if (record['from_code'] != RELATION_ORIGIN or record['to_code'] != code_identity()
             or not compatible_relation_code()):
         raise ValueError('Unsupported relation recovery implementation')
-    if state['input_sha256'] != record['input_sha256'] or semantic_config(EventBuildConfig(**state['config'])) != semantic_config(EventBuildConfig(**record['config'])):
+    if state['input_sha256'] != record['input_sha256'] or semantic_config(EventBuildConfig.from_saved(state['config'])) != semantic_config(EventBuildConfig.from_saved(record['config'])):
         raise ValueError('Relation recovery input or settings changed')
     for name, digest in record['files'].items():
         if sha256(within(directory, name).read_bytes()) != digest:
@@ -225,7 +225,7 @@ def upstream_request(execution, task_id, system, request, package):
     if system != original['system'] or core(request) != core(original['user']['task']):
         raise ValueError('Upstream task semantics changed: '+task_id)
     old_dependency = fingerprint(dict(system=system, request=original['user']['task'], package=package,
-        config=semantic_config(EventBuildConfig(**record['previous_config'])), code=previous['code']))
+        config=semantic_config(EventBuildConfig.from_saved(record['previous_config'])), code=previous['code']))
     if old_dependency != cached['dependency']:
         raise ValueError('Upstream package changed: '+task_id)
     return deepcopy(original['user']['task'])
@@ -255,7 +255,7 @@ def import_relation_checkpoint(execution, task_id, system, request, package, dep
     if system != original['system'] or core(request) != core(original['user']['task']):
         raise ValueError('Upstream task semantics changed: '+task_id)
     old_dependency = fingerprint(dict(system=system, request=original['user']['task'], package=package,
-        config=semantic_config(EventBuildConfig(**record['previous_config'])), code=previous['code']))
+        config=semantic_config(EventBuildConfig.from_saved(record['previous_config'])), code=previous['code']))
     if old_dependency != cached['dependency'] or cached['response_sha256'] != sha256(json_bytes(cached['response'])):
         raise ValueError('Upstream checkpoint dependency mismatch: '+task_id)
     if not any(c['call_id'] == cached['call_id'] and c['dependency'] == old_dependency and c['status'] == 'accepted'
@@ -290,7 +290,7 @@ def prepare_relation_recovery(directory, *, max_context_chars, max_read_calls, m
         raise ValueError('Organization checkpoint is required')
     if any(type(v) is not int or v < state['config'][k] for k,v in requested.items()):
         raise ValueError('Recovery limits must not decrease')
-    config = dict(state['config'], **requested); EventBuildConfig(**config)
+    config = dict(state['config'], **requested); EventBuildConfig.from_saved(config)
     before = (directory/'state.json').read_bytes()
     files = {str(f.relative_to(directory)):sha256(f.read_bytes())
         for name in ('attempts', 'checkpoints', 'recoveries') for f in (directory/name).rglob('*')
@@ -310,7 +310,7 @@ def prepare_relation_recovery(directory, *, max_context_chars, max_read_calls, m
         parent=json.loads((directory/RECORD).read_text())
         if (parent['from_code'] != ORIGIN or parent['to_code'] != RELATION_ORIGIN
                 or parent['input_sha256'] != state['input_sha256']
-                or parent['semantic_config'] != semantic_config(EventBuildConfig(**state['config']))
+                or parent['semantic_config'] != semantic_config(EventBuildConfig.from_saved(state['config']))
                 or any(files.get(n) != h for n,h in parent['files'].items())):
             raise ValueError('Previous recovery chain mismatch')
         codes.append(ORIGIN)
@@ -401,7 +401,7 @@ def validate_output_recovery(directory, state):
             or not compatible_output_code()):
         raise ValueError('Unsupported output recovery implementation')
     if (state['input_sha256'] != record['input_sha256']
-            or semantic_config(EventBuildConfig(**state['config'])) != semantic_config(EventBuildConfig(**record['config']))):
+            or semantic_config(EventBuildConfig.from_saved(state['config'])) != semantic_config(EventBuildConfig.from_saved(record['config']))):
         raise ValueError('Output recovery input or settings changed')
     for name, digest in record['files'].items():
         if sha256(within(directory, name).read_bytes()) != digest:
@@ -413,7 +413,7 @@ def import_output_checkpoint(execution, task_id, system, request, package, depen
     record = validate_output_recovery(execution.directory, execution.state)
     previous = json.loads((execution.directory/record['state_before']).read_text())
     old_dependency = fingerprint(dict(system=system, request=request, package=package,
-        config=semantic_config(EventBuildConfig(**record['previous_config'])), code=record['from_code']))
+        config=semantic_config(EventBuildConfig.from_saved(record['previous_config'])), code=record['from_code']))
     old_key = task_id + '-' + old_dependency[:16]
     new_key = task_id + '-' + dependency[:16]
     # An output-cap increase does not erase delivered reads or per-task attempts.
@@ -464,7 +464,7 @@ def prepare_output_recovery(directory, *, max_new_tokens):
     if type(max_new_tokens) is not int or max_new_tokens <= state['config']['max_new_tokens']:
         raise ValueError('The approved output limit must increase')
     config = dict(state['config'], max_new_tokens=max_new_tokens)
-    EventBuildConfig(**config)
+    EventBuildConfig.from_saved(config)
     before = (directory/'state.json').read_bytes()
     files = {str(f.relative_to(directory)):sha256(f.read_bytes())
         for name in ('attempts', 'checkpoints') for f in (directory/name).rglob('*') if f.is_file()}

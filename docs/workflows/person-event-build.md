@@ -39,8 +39,8 @@ A workspace without saved build settings selects `ark/kimi-k3-1-pro-261024` by d
 saved workspace preferences and existing task configurations remain authoritative.
 The native `EventBuildConfig` uses the same default model.
 Search presets and TokenHub choices are independent. Historical model IDs remain
-usable through the custom model field. Selecting a preset does not enable API JSON
-mode or change its sampling, thinking or construction limits.
+usable through the custom model field. The output mode, reasoning policy and
+construction limits are saved when the task is created.
 
 **模型输出模式** defaults to **普通（提示词约定 JSON）**: each role is prompted to
 return JSON, without an API `response_format` override. For Ark Kimi K3.1 Pro,
@@ -54,6 +54,26 @@ checkpoint dependencies. Historical tasks without the flag use ordinary mode.
 To compare modes, create two new tasks from the same confirmed input and current
 implementation, with identical model and limits; change only this option. Switching
 mode requires a new task, not a resume of the other mode's checkpoints.
+
+For new Ark and TokenHub Kimi K3.1 Pro tasks, **构建思考档位** defaults to
+**按阶段（正文抽取 low，后续 high）** in the workbench and the Python entry point.
+
+| Build stage | API `reasoning_effort` |
+|---|---|
+| Extract facts from each body range | `low` |
+| Consolidate actions and organize Stages and Phases | `high` |
+| Discover relations, assign Context and perform the final targeted repair | `high` |
+
+Read follow-ups and corrections use the effort of their owning stage. For a
+comparison run, select a fixed `low`, `high` or `max`, or select **服务端默认**
+to let the provider choose. Other models use the service default.
+
+The task configuration stores the policy (`reasoning_effort="by_stage"` for
+the Kimi default). Each step request and call record stores the actual effort.
+The policy is part of the checkpoint identity. Resume uses the saved policy,
+including the provider default for historical tasks with a missing or null
+effort. Choose a new task to change the policy. The output mode and call limits
+are configured separately.
 
 Defaults live in `EventBuildConfig`: 40 model calls, 12,288 output tokens, 160,000
 context characters, 12,000-character body batches with 400-character overlap,

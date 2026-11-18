@@ -279,7 +279,7 @@ class BuildController:
                 if max_calls < config['max_calls']:
                     raise ValueError('恢复不得降低累计调用上限')
                 config['max_calls']=max_calls
-            EventBuildConfig(**config)
+            EventBuildConfig.from_saved(config)
             (Path(body['artifact_directory'])/'pause_requested').unlink(missing_ok=True)
             body.update(person_config=config,resume=(Path(body['artifact_directory'])/'state.json').is_file())
             self.save(task_id,'ready',body)
@@ -498,11 +498,14 @@ def execute_build(body, directory):
 def execute_person_build(body, directory):
     from dotenv import load_dotenv
     from finmy.person_epg.build import run_event
+    from finmy.person_epg.event.runtime import EventBuildConfig
     from finmy.dataset import within
     load_dotenv(ROOT / '.env', override=False)
     if body.get('graph_schema_version') != 'person-event-1.0':
         raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
-    state = run_event(body['input'], directory, body['person_config'], allow_network=True, resume=body.get('resume',False), provenance=body['provenance'])
+    config = EventBuildConfig.from_saved(body['person_config'])
+    state = run_event(body['input'], directory, config, allow_network=True,
+                      resume=body.get('resume', False), provenance=body['provenance'])
     graph = json.loads(within(directory,state['output']).read_text()) if state.get('output') else None
     if graph is not None and hashlib.sha256(within(directory,state['output']).read_bytes()).hexdigest() != state['graph_sha256']:
         raise ValueError('Saved person draft integrity mismatch')
