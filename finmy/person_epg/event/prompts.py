@@ -184,14 +184,16 @@ one-sided boundaries, preserve uncertainty, and keep all existing distinct Actio
     'relations': """Deliver BOTH supported Action-to-Action relations and the assigned
 Action/Phase Context associations in this one task.
 
-First review relation_candidates and independently inspect the global Action index for
-supported links within the same process, across sources and across Phases/Stages.
-Candidates are leads, not a whitelist or a ceiling. An empty candidate list does not
-remove this discovery responsibility. Focus on meaningful action sequences, responses,
-conditions enabling later acts and evidenced continuation, not all N^2 pairs.
-Use endpoint descriptions, original time wording/precision and supporting passages;
-read only the missing premises. Cite evidence for the relationship itself, or give
-an explicit inference (basis inferred, support mode I, premises and reason).
+Review the supplied candidates. Independently follow the same matter through the global
+Action index, including across sources and Phases/Stages. Which acts have a meaningful
+documented order, even if a stronger link is uncertain? What earlier act did a later
+action answer, carry out, revise or continue? What act made it possible? Follow up
+promising links even when no candidate names them. For each, match the two actual acts,
+their direction and any time wording to the original passages. Read missing premises
+locally. Distinguish the commitment, its later restatement and its fulfilment: an act
+can implement an existing policy without responding to its later public restatement.
+When a condition or another actor's conduct explains the action, use an evidenced
+Context association. Cite support for the link or explain the inference from its premises.
 Two existing acts, a shared object or chronological proximity alone do not prove
 causation/response. Likewise, same-day reports or uncertain occurrence windows do not
 prove overlap. Suspected duplicates are not made distinct by adding an edge.
@@ -201,6 +203,14 @@ interrupted_by goes from interrupted to interrupting act. Unknown dates do not b
 source-supported order or process links. Use derived only for eligible interval rules,
 not as a label for general reasoning. No edge quota, connectivity requirement or
 automatic edges for every ordered pair; existing precedence paths may suffice.
+
+This inferred Relation illustrates field-level support. Use the actual IDs and evidence in your response.
+{"relation_id":"r1","from_action_id":"a2","to_action_id":"a1","type":"responds_to","basis":"inferred","support":[{"target":"/from_action_id","mode":"A","evidence_ids":["e2"]},{"target":"/to_action_id","mode":"A","evidence_ids":["e1"]},{"target":"/type","mode":"I","evidence_ids":["e1","e2"],"reason":"The reply accepts the specific invitation described in the earlier account."}]}
+Check support for both endpoints and the relation type before returning each edge.
+One passage may support several fields. Compare with facts_index.relations when present.
+Keep distinct supported claims or conflicts. During repair, retain accepted relations.
+Return only a new link needed for the assigned repair or a correction to a rejected
+proposal. A Context-only recheck can return an empty relations array.
 
 Then complete the assigned Context fields, reusing shared content and preserving gaps.
 Read assigned_records and related_records before requesting them again. The index
@@ -225,7 +235,9 @@ text never performs replacement. Replacement is one exclusion+delta update. Dist
 world, belief, post_hoc and unknown perspectives. Later information cannot be an earlier
 decision input. Distinguish event time, the person's knowledge time, and publication
 time: a later publication can document an earlier action or belief without being later
-knowledge. Keep retrospective outcomes separate from prior decision conditions.
+knowledge. Check each linked Context's perspective, including in a shared Phase baseline.
+A post_hoc Context cannot serve as condition, trigger or knowledge-source. Its original
+passage can still be evidence for an earlier fact. Use a result link only for an evidenced outcome.
 Participation needs entity and role; knowledge-source needs a knower.
 Interpersonal interactions belong in Context, not Action edges. Temporal derived
 precedes/overlaps require complete conflict-free intervals and both /time premise refs;
