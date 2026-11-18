@@ -32,6 +32,17 @@ def load_review(directory):
             or checks['graph_sha256'] != state['graph_sha256']
             or checks['artifact_hashes']['facts'] != state['facts_sha256']):
         raise ValueError('检查记录与当前图、事实或输入不一致')
+    if 'relation_discovery' in state:
+        path = within(directory, state['relation_discovery'])
+        raw_receipt = path.read_bytes()
+        if sha256(raw_receipt) != state['relation_discovery_sha256']:
+            raise ValueError('关系审查记录校验失败')
+        objects['discovery'] = json.loads(raw_receipt)
+    if 'review' in state or 'relation_review' in checks['artifact_hashes']:
+        raw_review = within(directory, state['review']).read_bytes()
+        if sha256(raw_review) != state['review_sha256'] or state['review_sha256'] != checks['artifact_hashes'].get('relation_review'):
+            raise ValueError('独立关系复核记录与检查记录不一致')
+        objects['semantic_review'] = json.loads(raw_review)
     return dict(state=state, state_sha256=sha256(raw), payload=payload, **objects)
 
 
@@ -135,9 +146,14 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
         graph_check['summary']['errors'] += len(errors)
         graph_check['summary']['checked'].append('fact_contract')
         body_done = bool(coverage) and all(c['body_status'] == 'processed' for c in coverage)
+        discovery = review.get('discovery')
+        discovery_done = discovery is None or (
+            not discovery['incomplete_action_ids'] and
+            set(discovery['completed_action_ids']) == {a['action_id'] for a in graph['actions']})
         done = (body_done and all(c['proposal_status'] == 'resolved' for c in coverage)
                 and graph_check['valid'] and fact_check['valid'] and not checks['unresolved_tasks']
-                and not facts['pending'] and bool(graph['actions']))
+                and not facts['pending'] and bool(graph['actions']) and discovery_done
+                and review.get('semantic_review', {}).get('complete', True))
         result = 'draft' if done else 'partial'
         for code, active in [('BODY_PROCESSING_INCOMPLETE', not body_done),
                              ('PROPOSALS_UNRESOLVED', bool(checks['unresolved_tasks'] or facts['pending'])
@@ -152,7 +168,7 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
         (target / 'parent-state.json').write_bytes((directory / 'state.json').read_bytes())
         graph_hash = write_json(target / 'epg.json', graph)
         facts_hash = write_json(target / 'facts.json', facts)
-        checks.update(graph_sha256=graph_hash, artifact_hashes=dict(facts=facts_hash),
+        checks.update(graph_sha256=graph_hash, artifact_hashes=dict(checks['artifact_hashes'], facts=facts_hash),
             summary=graph_check['summary'], issues=graph_check['issues'], coverage=coverage,
             result_status=result, review_required=True, offline_disposition=str(relative/'revision.json'))
         checks_hash = write_json(target / 'checks.json', checks)

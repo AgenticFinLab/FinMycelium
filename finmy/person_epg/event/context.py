@@ -72,7 +72,7 @@ def _relation_passages(indexes, fields):
     evidence = indexes['evidence']
 
     def cited(record, targets):
-        return [eid for support in record.get('support', []) if support['target'] in targets
+        return [eid for support in record.get('support', []) if support.get('target') in targets
                 for eid in support['evidence_ids'] if evidence.get(eid, {}).get('location_status') == 'matched']
 
     candidates = fields.get('relation_candidates', [])
@@ -158,35 +158,27 @@ def sized_request(base, package, max_chars, reserve):
                 for collection, records in base.get('assigned_records', {}).items() for record in records}
     indexes = index_records(package)
     records = task_records(base['role'], package, base, indexes=indexes)
-    priority = _relation_passages(indexes, base) if base['role'] == 'relations' else {}
-    if priority:
-        rank = {eid: n for n, eid in enumerate(priority)}
-        records.sort(key=lambda item: rank.get(item['record'].get('evidence_id'), len(rank)))
     allowance = max_chars // 4
-    # Reserve the priority passages that fit the optional budget before sizing index previews.
-    priority_records = []
-    used = 0
-    for record in records[:len(priority)]:
-        size = len(prompt_json(record))
-        if used + size <= allowance:
-            priority_records.append(record)
-            used += size
-    selection = dict(navigation_preview_chars=160, related_available=len(records),
-                     related_included=len(priority_records),
-                     complete_records='read_records; exact source ranges through read_sample')
-    if priority_records:
-        request.update(related_records=priority_records, context_selection=selection)
     relation_actions = set(base.get('assigned_action_ids', []))
-    previews = (160, 80, 40, 0) if priority_records else (160, 80, 0)
-    for preview in previews:
-        selection['navigation_preview_chars'] = preview
+    best = None
+    for preview in (160, 80, 40, 0):
         request['facts_index'] = navigation(package, preview, base['role'], supplied, relation_actions)
-        if len(prompt_json(dict(task=request, read_results=[]))) <= limit:
+        request['related_records'] = []
+        request['context_selection'] = dict(navigation_preview_chars=preview, related_available=len(records),
+            related_included=0, complete_records='read_records; exact source ranges through read_sample')
+        if base['role'] == 'relations':
+            result = balanced_relation_request(request, indexes, records, limit, allowance)
+            selection = result['context_selection']
+            omitted = (len(selection['uncovered_action_ids']), len(selection['omitted_relation_evidence_ids']))
+            if len(prompt_json(dict(task=result, read_results=[]))) <= limit:
+                if omitted == (0, 0):
+                    return result
+                if best is None or omitted < best[0]:
+                    best = (omitted, deepcopy(result))
+            if preview == 0:
+                return best[1] if best is not None else result
+        elif len(prompt_json(dict(task=request, read_results=[]))) <= limit:
             break
-    request.update(related_records=[], context_selection=selection)
-    selection['related_included'] = 0
-    # Related context is optional. Required input gets priority and the local tools
-    # remain available for any records that do not fit this proactive allocation.
     used = 0
     for record in records:
         size = len(prompt_json(record))
@@ -199,4 +191,101 @@ def sized_request(base, package, max_chars, reserve):
             request['context_selection']['related_included'] -= 1
         else:
             used += size
+    return request
+
+
+def balanced_relation_request(request, indexes, records, limit, allowance):
+    """Give every owned Action a quote before optional dependencies use the budget.
+
+    Full quotes and offsets remain immutable. A minimum quote per Action may use
+    more than the optional quarter-budget; the caller shrinks the owned scope if
+    that minimum cannot fit. A single oversized quote stays explicitly omitted
+    and available through local reads. Extra Action and Phase evidence rotates
+    after the passages supporting candidate links.
+    """
+    views = {(item['collection'], item['record'][COLLECTION_IDS[item['collection']]]): item
+             for item in records}
+    owners = []
+    for collection, field in (('actions', 'assigned_action_ids'), ('phases', 'assigned_phase_ids')):
+        for oid in request.get(field, []):
+            record = indexes[collection][oid]
+            # Direct evidence includes qualifications/conflicts, but does not walk
+            # through linked Contexts or the pre-existing relation candidates.
+            evidence = sorted({eid for c, eid in references([
+                record.get('support', []), record.get('conflicts', [])]) if c == 'evidence'})
+            for eid in evidence:
+                if eid in indexes['evidence'] and ('evidence', eid) not in views:
+                    e = indexes['evidence'][eid]
+                    views['evidence', eid] = dict(collection='evidence', record={
+                        k: e[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end', 'quote')})
+            # Prefer evidence for the action itself, then the smallest complete record.
+            preferred = {eid for support in record.get('support', [])
+                         if support.get('target') in ('', '/description') for eid in support['evidence_ids']}
+            sizes = {eid: len(prompt_json(views['evidence', eid])) for eid in evidence if ('evidence', eid) in views}
+            evidence.sort(key=lambda eid: (eid not in preferred, sizes.get(eid, float('inf')), eid))
+            owners.append((collection, oid, evidence))
+    selected, used = set(), 0
+    selection = request['context_selection']
+    selection['policy'] = 'action-and-relation-evidence-v1'
+    selection['related_available'] = len(views)
+    link_quotes = {eid for c in request.get('relation_candidates', []) for s in c.get('support', [])
+                   if s.get('target') in ('', '/type', '/description') for eid in s['evidence_ids']
+                   if indexes['evidence'].get(eid, {}).get('location_status') == 'matched'}
+    selection['relation_evidence_available'] = len(link_quotes)
+
+    def refresh():
+        delivered = {oid for c, oid in selected if c == 'evidence'}
+        selection['omitted_relation_evidence_ids'] = sorted(link_quotes - delivered)
+        selection['related_included'] = len(selected)
+        selection['evidence_by_owner'] = [dict(collection=c, object_id=oid,
+            available=len(eids), included=len(delivered.intersection(eids)),
+            omitted_evidence_ids=[eid for eid in eids if eid not in delivered])
+            for c, oid, eids in owners]
+        selection['uncovered_action_ids'] = [oid for c, oid, eids in owners
+            if c == 'actions' and eids and not delivered.intersection(eids)]
+        selection['actions_without_evidence'] = [oid for c, oid, eids in owners
+            if c == 'actions' and not eids]
+
+    def add(ref, *, minimum=False):
+        nonlocal used
+        if ref in selected or ref not in views:
+            return False
+        item = views[ref]
+        size = len(prompt_json(item))
+        if not minimum and used + size > allowance:
+            return False
+        selected.add(ref)
+        request['related_records'].append(item)
+        refresh()
+        if len(prompt_json(dict(task=request, read_results=[]))) > limit:
+            selected.remove(ref)
+            request['related_records'].pop()
+            refresh()
+            return False
+        used += size
+        return True
+
+    refresh()
+    # Minimum coverage is independent of candidate membership and graph order.
+    for collection, oid, evidence in owners:
+        if collection != 'actions' or any(('evidence', eid) in selected for eid in evidence):
+            continue
+        for eid in evidence:
+            if add(('evidence', eid), minimum=True):
+                break
+    # Keep passages supporting the link itself even when both endpoints already have quotes.
+    for eid in _relation_passages(indexes, request):
+        add(('evidence', eid))
+    # Equal turns stop an evidence-rich early Action from consuming every slot.
+    for collection in ('actions', 'phases'):
+        queues = [deque(eids) for c, _, eids in owners if c == collection]
+        while any(queues):
+            for queue in queues:
+                while queue:
+                    if add(('evidence', queue.popleft())):
+                        break
+    for item in records:
+        collection = item['collection']
+        add((collection, item['record'][COLLECTION_IDS[collection]]))
+    refresh()
     return request

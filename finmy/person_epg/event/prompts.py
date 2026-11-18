@@ -204,13 +204,45 @@ source-supported order or process links. Use derived only for eligible interval 
 not as a label for general reasoning. No edge quota, connectivity requirement or
 automatic edges for every ordered pair; existing precedence paths may suffice.
 
-This inferred Relation illustrates field-level support. Use the actual IDs and evidence in your response.
-{"relation_id":"r1","from_action_id":"a2","to_action_id":"a1","type":"responds_to","basis":"inferred","support":[{"target":"/from_action_id","mode":"A","evidence_ids":["e2"]},{"target":"/to_action_id","mode":"A","evidence_ids":["e1"]},{"target":"/type","mode":"I","evidence_ids":["e1","e2"],"reason":"The reply accepts the specific invitation described in the earlier account."}]}
+For an inferred Relation, cite the passages identifying each actual endpoint under
+/from_action_id and /to_action_id. Under /type use I, the cited premises and a reason
+explaining how those passages establish this particular link and direction. Use the
+assigned source Action ID and an actual target Action ID from the index. When no
+outgoing link is supported, return an empty relations array and complete the review.
 Check support for both endpoints and the relation type before returning each edge.
 One passage may support several fields. Compare with facts_index.relations when present.
 Keep distinct supported claims or conflicts. During repair, retain accepted relations.
 Return only a new link needed for the assigned repair or a correction to a rejected
 proposal. A Context-only recheck can return an empty relations array.
+
+When task.relation_discovery is present, also return relation_review (an object,
+not a graph record). Discovery is a separate deliverable from Context associations:
+{
+  "actions": [{"action_id":"assigned ID", "status":"complete|pending",
+    "within_phase":"what was checked and concluded, or why not applicable",
+    "cross_phase":"what was checked across Phases/Stages and concluded, or why not applicable"}],
+  "candidates": [{"candidate_id":"assigned ID", "status":"linked|unsupported|pending",
+    "relation_ids":[], "reason":"disposition and supporting premises or missing evidence"}],
+  "pairs": [{"from_action_id":"assigned source", "to_action_id":"any existing target",
+    "status":"linked|unsupported|pending", "relation_ids":[], "evidence_ids":[],
+    "reason":"relationship evidence/inference, or the specific missing premise"}]
+}
+Cover each discovery.action_ids and discovery.candidate_ids entry exactly once.
+Inspect the global Action index independently of candidates, within and across phases.
+Record meaningful pairs actually investigated, including evidence-insufficient leads;
+do not enumerate all pairs. One pair entry may name multiple relation types via IDs.
+Every accepted outgoing relation from a discovery-owned Action needs a linked pair
+entry with the same direction. linked requires nonempty accepted relation_ids;
+unsupported/pending require empty relation_ids. New relation/evidence temporary IDs
+are allowed and will be remapped. Pair evidence IDs refer to evidence actually read.
+Use pending for work not completed, unsupported for a checked lead lacking support.
+Zero relations is valid after an honest review; there is no minimum edge count.
+Do not describe undispatched work as complete. This receipt declares work performed;
+it is not evidence of semantic correctness. Keep explanations brief and specific.
+In a local correction, return only the failed Context operations and/or requested
+review. Do not regenerate accepted edges or accepted associations. Review-only
+corrections use empty Context/relations/update arrays. The discovery scope stays
+the original scope even when assigned Context owner lists are narrowed.
 
 Then complete the assigned Context fields, reusing shared content and preserving gaps.
 Read assigned_records and related_records before requesting them again. The index

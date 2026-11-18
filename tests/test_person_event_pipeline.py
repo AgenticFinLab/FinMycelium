@@ -77,12 +77,36 @@ class SyntheticEventModel:
             return dict(stages=graph['stages'], phases=graph['phases'], assignments=assignments, split_proposals=[],
                         event_overview={k: graph['event'][k] for k in ('time', 'summary', 'support')}, evidence=[], pending=[])
         if role == 'relations':
-            return dict(contexts=graph['contexts'], relations=graph['relations'],
+            result = dict(contexts=graph['contexts'], relations=graph['relations'],
                 phase_context_updates=[dict(phase_id=p['phase_id'], baseline_context_refs=p['baseline_context_refs'])
                                        for p in graph['phases'] if p['phase_id'] in request['assigned_phase_ids']],
                 action_context_updates=[dict(action_id=a['action_id'], delta_context_refs=a.get('delta_context_refs', []),
                                              baseline_context_exclusions=a.get('baseline_context_exclusions', []))
                                         for a in graph['actions'] if a['action_id'] in request['assigned_action_ids']], evidence=[], pending=[])
+            if 'correction' in request:
+                result.update(contexts=[], relations=[],
+                    phase_context_updates=[dict(phase_id=p['phase_id'], baseline_context_refs=p.get('baseline_context_refs', []))
+                                           for p in request['assigned_records']['phases']],
+                    action_context_updates=[dict(action_id=a['action_id'], delta_context_refs=a.get('delta_context_refs', []),
+                                                 baseline_context_exclusions=a.get('baseline_context_exclusions', []))
+                                            for a in request['assigned_records']['actions']])
+            if 'relation_discovery' in request:
+                scope = request['relation_discovery']
+                pairs = {}
+                for r in request.get('accepted_relations', result['relations']):
+                    if r['from_action_id'] not in scope['action_ids']:
+                        continue
+                    pair = pairs.setdefault((r['from_action_id'], r['to_action_id']), dict(
+                        from_action_id=r['from_action_id'], to_action_id=r['to_action_id'], status='linked',
+                        relation_ids=[], evidence_ids=[], reason='Authored fixture relationship.'))
+                    pair['relation_ids'].append(r['relation_id'])
+                result['relation_review'] = dict(
+                    actions=[dict(action_id=aid, status='complete', within_phase='Checked authored fixture actions.',
+                                  cross_phase='Checked both fixture phases.') for aid in scope['action_ids']],
+                    candidates=[dict(candidate_id=cid, status='unsupported', relation_ids=[],
+                                     reason='No additional authored candidate relation.') for cid in scope['candidate_ids']],
+                    pairs=list(pairs.values()))
+            return result
         raise AssertionError(role)
 
 

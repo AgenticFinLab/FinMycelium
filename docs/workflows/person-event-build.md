@@ -94,6 +94,33 @@ sources or increase the confirmed input budget.
 
 ## Construction and recovery
 
+New runs save `organization-snapshot.json` before the first joint relation and
+Context task. Its fingerprint binds the input, facts, hierarchy and source run.
+For a comparison, run the same snapshot into separate fresh directories. Each
+run records its delivered evidence and per-action review in the step requests
+and `relation-discovery.json`. Unresolved upstream proposals must be dealt with
+before using the isolated replay command.
+
+```bash
+python -m finmy.person_epg.event.relation_experiment run "$SNAPSHOT" \
+  --output output/joint --config relation-settings.json --allow-model
+python -m finmy.person_epg.event.relation_experiment review output/joint \
+  --output output/joint-reviewed --allow-model
+```
+
+The optional review spends at most two model calls. The first call sees the
+actions and located quotations without candidate or accepted edges. The second
+receives the same evidence, the independent findings, the named edge endpoints
+and their Context associations. The review records proposed additions,
+corrections, withdrawals and uncertainties, then applies validated changes to
+a separate graph. The successor includes the frozen facts, coverage, outstanding
+dispositions, graph checks and a Gantt bound to its graph hash. Follow
+`state.json` to the graph and `review.json` for the parent hashes and decisions.
+A partial parent can yield a comparison but requires its own outstanding work
+to be resolved. A draft
+still goes through the event content review. Kimi uses `high` for this
+independent assessment unless the review configuration specifies an override.
+
 ```text
 Freeze identity, scope, source metadata and actual input
   -> extract candidates across every handed body range
