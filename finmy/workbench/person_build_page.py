@@ -46,6 +46,8 @@ def create_person_build(store, controller, task_id, data):
             batch=st.number_input('连续正文抽取批次字符数',min_value=defaults.extraction_overlap+1,value=defaults.extraction_chars)
             local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
             local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
+            supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
+                help='实验选项。计入总调用上限；分阶段档使用 high。完整请求超出模型上下文时会跳过并记录原因。')
             repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
             st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
         confirmed=st.checkbox('我已检查本次实际材料与缺口，确认用于这条 event 的构建')
@@ -53,7 +55,7 @@ def create_person_build(store, controller, task_id, data):
             try:
                 tid=BuildController(store).create_person(controller,task_id,
                     dict(lm_name=model,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
-                         extraction_chars=batch,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
+                         extraction_chars=batch,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
             except (ValueError,OSError) as exc:
@@ -88,6 +90,14 @@ def person_build_panel(store, controller, row, labels):
         if last.get('reasoning_effort'):
             progress += ' · 思考 ' + last['reasoning_effort']
         st.caption('最近阶段：' + progress)
+    supplement = run.get('corpus_supplement')
+    if supplement:
+        if supplement['status'] == 'processed':
+            st.caption(f"全包补读 · {supplement['samples']} 份材料 · 采用 {supplement['accepted']} 项，拒收 {supplement['rejected']} 项")
+        elif supplement['status'] == 'skipped':
+            st.caption('全包补读已跳过，完整请求超出本次上下文上限。')
+        else:
+            st.caption('全包补读的响应未通过协议检查，详细记录保存在本次任务中。')
     if run.get('execution_status'):
         st.caption('执行：'+run['execution_status']+' · 结果：'+run['result_status']+' · 绘图：'+run['render_status'])
         coverage=run.get('coverage',[])

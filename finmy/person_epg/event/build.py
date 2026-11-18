@@ -537,6 +537,9 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
         construction = Construction(execution)
         try:
             construction.extract()
+            if config.full_corpus_supplement:
+                from .corpus_supplement import supplement
+                supplement(construction)
             construction.consolidate()
             if not construction.facts['actions']:
                 return construction.finish('finished', 'No usable focal Actions; inspect the facts and pending items')

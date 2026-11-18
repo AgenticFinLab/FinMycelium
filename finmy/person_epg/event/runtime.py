@@ -35,6 +35,7 @@ class EventBuildConfig:
     final_repair_rounds: int = 1
     graph_schema_version: str = GRAPH_VERSION
     api_json_mode: bool = False
+    full_corpus_supplement: bool = False
     reasoning_effort: str | None = 'auto'
 
     @classmethod
@@ -45,6 +46,8 @@ class EventBuildConfig:
     def __post_init__(self):
         if not isinstance(self.lm_name, str) or not self.lm_name.strip():
             raise ValueError('Choose an independent build model')
+        if type(self.full_corpus_supplement) is not bool:
+            raise ValueError('full_corpus_supplement must be a boolean')
         if type(self.api_json_mode) is not bool:
             raise ValueError('api_json_mode must be a boolean')
         if self.api_json_mode and not person_build_json_mode_supported(self.lm_name):
@@ -55,7 +58,7 @@ class EventBuildConfig:
         elif self.reasoning_effort not in effort_options:
             raise ValueError('reasoning_effort accepts by_stage, low, high or max for Kimi K3.1 Pro, or None for the service default')
         for key, value in asdict(self).items():
-            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'reasoning_effort'):
+            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'reasoning_effort'):
                 continue
             minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls') else 1
             if type(value) is not int or value < minimum:
@@ -132,6 +135,8 @@ def semantic_config(config):
     value = {k: v for k, v in asdict(config).items() if k != 'max_calls'}
     # Missing in historical ordinary-mode configurations. Preserve their hashes;
     # explicit JSON mode still changes all request/checkpoint dependencies.
+    if not config.full_corpus_supplement:
+        value.pop('full_corpus_supplement')
     if not config.api_json_mode:
         value.pop('api_json_mode')
     if config.reasoning_effort is None:
@@ -340,7 +345,7 @@ class Execution:
         budget.setdefault('adoption:' + response_key, dict(kind='adoption', issues=deepcopy(issues)))
         self.persist()
 
-    def infer(self, task_id, system, request, package, validator, *, attempt_group=None):
+    def infer(self, task_id, system, request, package, validator, *, attempt_group=None, single_response=False):
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', task_id):
             raise ValueError('Invalid task ID')
         dependency = fingerprint(dict(system=system, request=request, package=package,
@@ -363,6 +368,8 @@ class Execution:
             except (ValueError, KeyError, TypeError) as exc:
                 self.state['invalid_checkpoints'].append(dict(task_id=task_id, reason=type(exc).__name__, at=now()))
                 self.persist()
+        if single_response and any(call['task_id'] == task_id for call in self.state['calls']):
+            raise InvalidResponse('The one-call supplement has already been attempted without a valid checkpoint')
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
         corpus = Corpus(self.payload, package, self.config)
         effort = person_build_request_effort(self.config.reasoning_effort, request.get('role') or task_id)
@@ -398,6 +405,8 @@ class Execution:
                 write_json(step_path / 'response.json', dict(raw=raw))
                 value = parse(raw)
                 if 'read_requests' in value:
+                    if single_response:
+                        raise InvalidResponse('The complete handoff is already present; this pass has no local reads')
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:
                         raise InvalidResponse('Return either read_requests or the role result, never both')
                     pages = []
@@ -449,7 +458,7 @@ class Execution:
                 task['invalid_attempts'] += 1
                 task['validation_error'] = str(exc)[:1600]
                 budget['format:' + call_id] = dict(kind='protocol', message=task['validation_error'])
-                if len(budget) >= self.config.max_json_attempts:
+                if single_response or len(budget) >= self.config.max_json_attempts:
                     raise InvalidResponse(task['validation_error']) from exc
             except BaseException as exc:
                 call.update(status='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'transport_error',

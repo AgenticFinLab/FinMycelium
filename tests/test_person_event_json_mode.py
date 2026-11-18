@@ -40,6 +40,7 @@ def test_bare_ark_id_and_missing_mode_are_compatible():
     assert EventBuildConfig(lm_name='kimi-k3-1-pro-261024', api_json_mode=True).api_json_mode
     old = asdict(EventBuildConfig())
     old.pop('api_json_mode')
+    old.pop('full_corpus_supplement')
     assert not EventBuildConfig(**old).api_json_mode
     old.pop('max_calls')
     assert semantic_config(EventBuildConfig()) == old

@@ -124,11 +124,18 @@ independent assessment unless the review configuration specifies an override.
 ```text
 Freeze identity, scope, source metadata and actual input
   -> extract candidates across every handed body range
+  -> optional single full-handoff supplement
   -> exact deduplication and scoped semantic consolidation where needed
   -> jointly organize Stage / Phase and assign each Action
   -> complete typed relations and baseline / delta Context
   -> assemble, check, optionally repair once -> JSON and Gantt
 ```
+
+The optional `full_corpus_supplement` runs after the fresh continuous reads and
+before consolidation. It sends all handed documents with an index of existing
+facts in one request, within the common call and context limits. With Kimi's
+staged effort it runs at high. Its receipt records the character count, accepted
+or rejected proposals, or the reason it was skipped. It is off by default.
 
 Four semantic roles propose scoped records or operations. The program assigns IDs,
 locates quotes, checks references and applies independent valid groups. Rejected
