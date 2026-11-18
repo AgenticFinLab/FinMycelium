@@ -105,8 +105,8 @@ search creates another task; it does not erase earlier originals or approvals.
    separate from their catalog IDs and can use the existing material-review path.
    Person tasks retain their person/storyline/event identity and can prepare a
    separate [native single-event build](person-event-build.md) after material
-   confirmation. Each saved native draft has an expanded single-event Gantt;
-   it can be regenerated from the JSON without model calls. Content review remains
+   confirmation. Each saved native draft has a [scrollable event graph](person-event-visualization.md)
+   that can be regenerated from the JSON without model calls. Content review remains
    pending; no review Skill or automatic final acceptance is introduced.
 
 Saving task-specific edits never modifies the source CSV or research plan. Later

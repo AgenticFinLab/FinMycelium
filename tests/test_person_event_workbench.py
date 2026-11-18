@@ -169,7 +169,11 @@ def test_completed_person_panel_displays_and_rerenders_offline(setup, tmp_path, 
     app.session_state['task-selected'] = bid
     app.run(timeout=30)
     assert not app.exception
-    button = next(b for b in app.button if b.label=='从已保存 JSON 重新生成 Gantt')
+    run = builds.inspect(bid)['body']['run_state']
+    saved = (tmp_path/'runs'/bid/run['visualization']['output']).read_text()
+    assert any(frame.proto.srcdoc == saved for frame in app.get('iframe'))
+    assert [d.proto.label for d in app.get('download_button')].count('下载交互式事件图 HTML') == 1
+    button = next(b for b in app.button if b.label=='从已保存 JSON 重新绘图')
     calls = len(model.calls)
     button.click().run(timeout=30)
     assert not app.exception and len(model.calls) == calls

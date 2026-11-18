@@ -3,16 +3,22 @@
 A saved `person-event-1.0` draft can be exported as a standalone HTML file.
 The viewer shows stages, phases, actions, context and source evidence. Cards
 show a summary and expand in place to reveal their own text. The connecting
-lines follow the expanded card. The Gantt view remains the timeline.
+lines follow the expanded card. The workbench uses this scrollable view as the
+primary artifact and saves it as `gantt.html` for review and collection.
 
 ## Export from the workbench
 
 1. Start the [event workbench](event-workbench.md) in the project environment.
 2. Open an existing person event build task with a saved JSON draft.
-3. Under the event's Gantt, select **下载交互式 EPG HTML**.
+3. Inspect the graph under **交互式人物事件图** or select **下载交互式事件图 HTML**.
 4. Open the downloaded file in a browser and click an action or source card.
    The card expands and its lines follow its border. A source card opens its
    own excerpts. Click again or press Escape to collapse the card.
+
+For an older native run with a valid saved timeline, the workbench displays the
+scrollable view from its verified JSON. **从已保存 JSON 重新绘图** writes this
+version to that run and refreshes its HTML receipt. A collected graph keeps its
+reviewed copy. Draft and partial downloads carry their review status.
 
 ## Export from a saved JSON file
 

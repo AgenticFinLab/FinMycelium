@@ -1,6 +1,8 @@
 """Render or export a portable visualization of a saved native person event."""
 import argparse
 import json
+import re
+from hashlib import sha256
 from pathlib import Path
 
 from .graph_view import build_views
@@ -39,7 +41,7 @@ def _layout_pages(graph, layout):
     return pages
 
 
-def render_graph_html(graph, *, layout=None):
+def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=None):
     """Generate an offline graph view, or use an explicitly supplied authored layout."""
     if not isinstance(graph, dict) or graph.get('schema_version') != GRAPH_VERSION:
         raise ValueError(f'The EPG viewer requires a {GRAPH_VERSION} graph')
@@ -51,6 +53,14 @@ def render_graph_html(graph, *, layout=None):
     template = (_ASSETS / template_name).read_text(encoding='utf-8')
     # Split the template before embedding untrusted record text.
     head, remainder = template.split('__EPG_GRAPH_JSON__', 1)
+    if graph_sha256 is not None:
+        if not re.fullmatch(r'[0-9a-f]{64}', graph_sha256):
+            raise ValueError('Expected the SHA-256 of the saved graph file')
+        head = head.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n'
+                            f'<meta name="finmy-graph-sha256" content="{graph_sha256}">', 1)
+    status_label = {'draft': 'Draft · content review pending',
+                    'partial': 'Partial · content review pending'}.get(result_status, '')
+    head = head.replace('<!--__BUILD_STATUS__-->', f'<span>{status_label}</span>' if status_label else '', 1)
     between, remainder = remainder.split('__EPG_LAYOUT_JSON__', 1)
     middle, tail = remainder.split('__EPG_VIEW_JSON__', 1)
     return ''.join((head, _script_data(graph), between, _script_data(pages),
@@ -67,7 +77,10 @@ def main(argv=None):
     if any(args.output.resolve() == path.resolve() for path in inputs):
         parser.error('The output path must differ from the input paths')
     try:
-        html = render_graph_html(_read_json(args.graph), layout=_read_json(args.layout) if args.layout else None)
+        source = args.graph.read_bytes()
+        html = render_graph_html(json.loads(source.decode('utf-8-sig')),
+                                 layout=_read_json(args.layout) if args.layout else None,
+                                 graph_sha256=sha256(source).hexdigest())
         args.output.write_text(html, encoding='utf-8')
     except (OSError, ValueError) as error:
         parser.error(str(error))

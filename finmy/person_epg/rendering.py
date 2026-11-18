@@ -9,23 +9,33 @@ from finmy.search.state import digest, now, write_json
 from finmy.search.summary import directory_lock
 
 
+SCROLLABLE_VIEW = 'person-event-scrollable-v1'
+
+
 def save_gantt(graph, directory, graph_path, *, result_status=None):
     """Return a render record; a plotting failure never invalidates saved JSON."""
     record = {'status': 'failed', 'graph_sha256': digest(graph), 'rendered_at': now()}
     temporary = None
     try:
         if graph.get('schema_version') == 'person-event-1.0':
-            from .event.rendering import render_event
-            record['graph_sha256'] = digest(Path(graph_path).read_bytes())
-            html = render_event(graph, record['graph_sha256'], result_status=result_status).encode('utf-8')
+            from .event.graph_html import render_graph_html
+            source = Path(graph_path).read_bytes()
+            if json.loads(source) != graph:
+                raise ValueError('Saved graph differs from rendering input')
+            record['graph_sha256'] = digest(source)
+            html = render_graph_html(graph, graph_sha256=record['graph_sha256'], result_status=result_status).encode('utf-8')
+            record['renderer'] = SCROLLABLE_VIEW
+            dependencies = ('rendering.py', 'event/graph_html.py', 'event/graph.html',
+                            'event/graph_layout.py', 'event/graph_view.py', 'event/graph_labels.py')
         elif graph.get('schema_version') == 'person-epg-3.0':
             from .visualizer_gantt import render_event
             html = render_event(graph).encode('utf-8')
+            dependencies = ('visualizer_gantt.py', 'gantt.html', 'rendering.py', 'event/rendering.py')
         else:
             raise ValueError('Unsupported graph protocol')
         module = Path(__file__).parent
         record['renderer_sha256'] = digest({name: digest((module/name).read_bytes())
-                                           for name in ('visualizer_gantt.py','gantt.html','rendering.py','event/rendering.py')})
+                                           for name in dependencies})
         target = Path(graph_path).with_name('gantt.html')
         with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.gantt-', delete=False) as f:
             temporary = Path(f.name)
@@ -72,7 +82,7 @@ def render_saved_event(directory):
         return state
 
 
-def read_gantt(directory, state):
+def read_gantt(directory, state, *, current_view=False):
     """Only display HTML that belongs to this exact saved draft."""
     graph_path = within(directory, state['output'])
     graph = json.loads(graph_path.read_text())
@@ -86,4 +96,7 @@ def read_gantt(directory, state):
     content = path.read_bytes()
     if digest(content) != record['html_sha256']:
         raise ValueError('Saved Gantt integrity mismatch; regenerate it from the saved JSON')
+    if current_view and current and record.get('renderer') != SCROLLABLE_VIEW:
+        from .event.graph_html import render_graph_html
+        return render_graph_html(graph, graph_sha256=state['graph_sha256'], result_status=state.get('result_status'))
     return content.decode('utf-8')

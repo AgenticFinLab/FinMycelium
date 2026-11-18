@@ -9,7 +9,7 @@ The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own proto
 1. Configure the local EPG-dataset path, select an event in **数据集**, confirm its scope, and run common search.
 2. Inspect retained material, actual builder input and gaps. Under **构建本条人物 event**, choose the independent build model, output mode and limits, then confirm the material. **保存人物构建任务** freezes the task without model calls.
 3. In **任务中心**, explicitly allow calls and select **开始人物构建**.
-4. Inspect JSON, expanded Gantt, checks, source handoff and cumulative calls. Execution, completeness and rendering have separate statuses. A draft still requires content and evidence review.
+4. Inspect JSON, the interactive event graph, checks, source handoff and cumulative calls. Execution, completeness and rendering have separate statuses. A draft still requires content and evidence review.
 
 Choose the model service and its console model ID separately. TokenHub uses
 `lm_name="tokenhub/<console-model-id>"`, with local `HUNYUAN_API_KEY` and
@@ -243,19 +243,15 @@ whole-person aggregation remain separate work.
 
 ## Gantt and historical graphs
 
-Standalone HTML includes Plotly and opens offline. It expands
-**Event → Stage → Phase → Action**. Each interval comes from that record's supported
-time. Occurrence windows and durations use distinct marks. Unknown times remain in
-a separate visible group; partial results are labeled.
+Native builds save a standalone scrollable event graph in `gantt.html`.
+Stage and Phase navigation opens action, context and evidence cards. Readers
+can follow a relation across Phases and expand a source to inspect its quoted
+text. The workbench preview and download show the same HTML. See the
+[interactive viewer](person-event-visualization.md) for layout and navigation.
 
-The record selector exposes Context, effective baseline/exclusion/delta associations,
-support modes, gaps, conflicts, relations, original quotes, source links and sample
-offsets. Conflicting precedence claims remain inspectable but do not define the
-consistent order view. Display omissions do not delete graph records.
-
-JSON, checks and HTML bind to the same exact graph-file bytes. Rendering failure
-preserves graph and build status. **从已保存 JSON 重新生成 Gantt** only redraws the
-saved graph, without model calls or changes to usage.
+JSON, checks and HTML bind to the same exact graph-file bytes. **从已保存 JSON
+重新绘图** regenerates the saved view locally and preserves the graph, calls
+and build status. A drawing failure is recorded independently of construction.
 
 Historical `person-epg-3.0` graphs retain their validator, hash interpretation and
 renderer. They are not silently converted. Their checkpoints cannot resume in the

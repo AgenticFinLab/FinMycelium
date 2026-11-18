@@ -164,26 +164,19 @@ def person_build_panel(store, controller, row, labels):
                 stats([('Event',len(graph['event']),'固定当前事项'),('活动',len(graph['activity']),'保留原始事实与证据'),
                        ('阶段',len(graph['stage']),'按已支持的过程组织')])
             st.download_button('下载人物 event JSON',encoded(graph),tid+'-epg.json',key='person-json-'+tid)
-            st.subheader('本条 event 的 Gantt')
-            st.caption('直接读取这份人物 JSON；全部展开。可点击图元查看原记录与证据。')
+            st.subheader('交互式人物事件图' if current else '本条 event 的 Gantt')
+            if current:
+                st.caption('按阶段浏览，点击行动、背景或来源卡片查看原文和关联。')
             from finmy.person_epg.rendering import read_gantt
             try:
-                html = read_gantt(body['artifact_directory'], run)
-                st.download_button('下载独立 Gantt HTML', html, tid+'-gantt.html', 'text/html', key='person-gantt-'+tid)
+                html = read_gantt(body['artifact_directory'], run, current_view=current)
+                label = '下载交互式事件图 HTML' if current else '下载独立 Gantt HTML'
+                st.download_button(label, html, tid+'-gantt.html', 'text/html',
+                                   key='person-gantt-'+tid, on_click='ignore')
                 components.html(html, height=850, scrolling=True)
             except (OSError, ValueError, KeyError):
-                st.info('这份 JSON 暂无可用的配套 Gantt，可单独生成；构建草稿已保留。')
-            if current:
-                from finmy.person_epg.event.graph_html import render_graph_html
-                try:
-                    graph_html = render_graph_html(graph)
-                except (OSError, ValueError):
-                    st.warning('暂时无法导出交互式 EPG HTML。')
-                else:
-                    st.download_button('下载交互式 EPG HTML', graph_html,
-                                       tid+'-epg.html', 'text/html', key='person-epg-html-'+tid,
-                                       type='tertiary', on_click='ignore')
-            if st.button('从已保存 JSON 重新生成 Gantt', disabled=row['status'] in {'ready','queued','running'}, key='person-render-'+tid):
+                st.info('这份 JSON 暂无可用的配套图，可从已保存的 JSON 重新绘制。')
+            if st.button('从已保存 JSON 重新绘图', disabled=row['status'] in {'ready','queued','running'}, key='person-render-'+tid):
                 try:
                     result = controller.render_person(tid)
                     if result['status'] == 'completed':
