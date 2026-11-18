@@ -1,5 +1,5 @@
 ---
-name: explain-person-epg-visualization
+name: person-epg-visualization
 description: 讲解 PersonBuilder 优化版事件关系图的数据组织、卡片布局、SVG 布线、点击高亮等交互及其阅读优势，供设计其他可滚动流程图或依赖图时参考。
 ---
 
