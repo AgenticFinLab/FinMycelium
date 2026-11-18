@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="830" viewBox="0 0 1600 830">
+<title>Goldman Sachs crisis investment: selected phase, actions, context, and evidence</title>
+<desc>Illustrative reconstruction, not an accepted dataset record. Green nodes are Buffett actions. Only proposal, commitment, and notification have temporal arrows. Context and evidence are supporting views.</desc>
+<rect width="1600" height="830" fill="white"/>
+<text x="32" y="37.88" font-family="Arial, sans-serif" font-size="32" font-weight="700" font-style="normal" fill="#172B41" text-anchor="start">Goldman Sachs: Crisis Investment</text>
+<text x="1565" y="34.82" font-family="Arial, sans-serif" font-size="23" font-weight="400" font-style="normal" fill="#536779" text-anchor="end">Warren Buffett  |  September 2008</text>
+<text x="40" y="112.5" font-family="Arial, sans-serif" font-size="25" font-weight="700" font-style="normal" fill="#172B41" text-anchor="start">Stage / phase</text>
+<text x="40" y="138.5" font-family="Arial, sans-serif" font-size="25" font-weight="700" font-style="normal" fill="#172B41" text-anchor="start">overview</text>
+<rect x="245" y="63" width="875" height="117" rx="10" fill="#F8FBFE" stroke="#2062B0" stroke-width="2"/>
+<text x="682.5" y="96.34" font-family="Arial, sans-serif" font-size="26" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Selected stage: Crisis-era capital raising</text>
+<text x="355.0" y="151.56" font-family="Arial, sans-serif" font-size="34" font-weight="400" font-style="normal" fill="#536779" text-anchor="middle">…</text>
+<rect x="430" y="114" width="500" height="50" rx="24" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<text x="680.0" y="147.16" font-family="Arial, sans-serif" font-size="24" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">Phase: Arranging the initial investment</text>
+<text x="1025.0" y="151.56" font-family="Arial, sans-serif" font-size="34" font-weight="400" font-style="normal" fill="#536779" text-anchor="middle">…</text>
+<polyline points="1120,125 1237,125" fill="none" stroke="#172B41" stroke-width="2.3" stroke-linejoin="round"/>
+<polygon points="1237,125 1227.34,121.205 1227.34,128.795" fill="#172B41"/>
+<rect x="1240" y="83" width="320" height="83" rx="8" fill="#FFFFFF" stroke="#536779" stroke-width="1.8"/>
+<text x="1400.0" y="118.67999999999999" font-family="Arial, sans-serif" font-size="24" font-weight="400" font-style="normal" fill="#536779" text-anchor="middle">Other stages</text>
+<text x="1400.0" y="143.64" font-family="Arial, sans-serif" font-size="24" font-weight="400" font-style="normal" fill="#536779" text-anchor="middle">(not expanded)</text>
+<polyline points="535,165 300,215" fill="none" stroke="#2062B0" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polyline points="825,165 1350,215" fill="none" stroke="#2062B0" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<text x="1560" y="203.8" font-family="Arial, sans-serif" font-size="20" font-weight="400" font-style="normal" fill="#536779" text-anchor="end">Shared context: financial crisis</text>
+<rect x="20" y="215" width="1560" height="422" rx="16" fill="#FFFFFF" stroke="#CDDBE8" stroke-width="1.7"/>
+<text x="42" y="255.34" font-family="Arial, sans-serif" font-size="26" font-weight="700" font-style="normal" fill="#172B41" text-anchor="start">Selected phase: actions and context</text>
+<rect x="695" y="240" width="26" height="16" rx="3" fill="#DFEFDF" stroke="#266B50" stroke-width="1.4"/>
+<text x="731" y="253.64" font-family="Arial, sans-serif" font-size="21" font-weight="400" font-style="normal" fill="#172B41" text-anchor="start">Buffett’s action</text>
+<circle cx="968" cy="248" r="12" fill="#DCEBFA" stroke="#2062B0" stroke-width="1.5"/>
+<text x="990" y="253.64" font-family="Arial, sans-serif" font-size="21" font-weight="400" font-style="normal" fill="#172B41" text-anchor="start">Related party</text>
+<rect x="1220" y="239" width="26" height="18" rx="3" fill="#FFF4D6" stroke="#B68C3C" stroke-width="1.4"/>
+<text x="1256" y="253.64" font-family="Arial, sans-serif" font-size="21" font-weight="400" font-style="normal" fill="#172B41" text-anchor="start">Context / terms</text>
+<polyline points="174,407 240,407 240,328 300,328" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="300,328 292.44,325.03 292.44,330.97" fill="#536779"/>
+<polyline points="174,407 240,407 240,442 570,442" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="570,442 562.44,439.03 562.44,444.97" fill="#536779"/>
+<polyline points="174,407 240,407 240,568 300,568" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="300,568 292.44,565.03 292.44,570.97" fill="#536779"/>
+<polyline points="550,328 650,328" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="650,328 642.44,325.03 642.44,330.97" fill="#536779"/>
+<polyline points="795,404 865,379 950,362" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="950,362 942.0043451704163,360.5703133748426 943.169275013137,366.3949625884467" fill="#536779"/>
+<polyline points="1175,420 1365,329" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1365,329 1356.8987690599813,329.58698999691956 1359.4646074307955,334.9442349469715" fill="#536779"/>
+<polyline points="550,568 698,568" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="698,568 690.44,565.03 690.44,570.97" fill="#536779"/>
+<polyline points="1395,480 1395,512 1415,525" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1415,525 1410.2799816620357,518.3897105290857 1407.0427508594987,523.3700656099115" fill="#536779"/>
+<polyline points="1125,539 1060,480" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polyline points="820,442 925,442" fill="none" stroke="#7650A9" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="925,442 912.4,437.05 912.4,446.95" fill="#7650A9"/>
+<polyline points="1175,442 1270,442" fill="none" stroke="#7650A9" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="1270,442 1257.4,437.05 1257.4,446.95" fill="#7650A9"/>
+<text x="873.5" y="429.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="italic" fill="#7650A9" text-anchor="middle">before</text>
+<text x="1222.5" y="429.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="italic" fill="#7650A9" text-anchor="middle">before</text>
+<circle cx="135" cy="407" r="39" fill="#DCEBFA" stroke="#2062B0" stroke-width="2"/>
+<circle cx="135" cy="396" r="9" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<rect x="118" y="408" width="34" height="21" rx="8" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<text x="135.0" y="478.0" font-family="Arial, sans-serif" font-size="25" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Warren</text>
+<text x="135.0" y="504.0" font-family="Arial, sans-serif" font-size="25" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Buffett</text>
+<text x="135.0" y="536.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="middle">Focal person</text>
+<rect x="300" y="290" width="250" height="76" rx="10" fill="#DFEFDF" stroke="#266B50" stroke-width="2"/>
+<text x="425.0" y="323.14" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Discuss asset</text>
+<text x="425.0" y="351.21999999999997" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">valuations</text>
+<rect x="515" y="281" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="531.0" y="297.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S1</text>
+<rect x="570" y="404" width="250" height="76" rx="10" fill="#DFEFDF" stroke="#266B50" stroke-width="2"/>
+<text x="695.0" y="437.14" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Propose</text>
+<text x="695.0" y="465.21999999999997" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">investment terms</text>
+<rect x="785" y="395" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="801.0" y="411.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S1</text>
+<rect x="300" y="530" width="250" height="76" rx="10" fill="#DFEFDF" stroke="#266B50" stroke-width="2"/>
+<text x="425.0" y="563.14" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Require executive</text>
+<text x="425.0" y="591.22" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">share retention</text>
+<rect x="515" y="521" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="531.0" y="537.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S4</text>
+<rect x="925" y="404" width="250" height="76" rx="10" fill="#DFEFDF" stroke="#266B50" stroke-width="2"/>
+<text x="1050.0" y="437.14" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Commit $5B</text>
+<text x="1050.0" y="465.21999999999997" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">through Berkshire</text>
+<rect x="1140" y="395" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="1156.0" y="411.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S2</text>
+<rect x="1270" y="404" width="250" height="76" rx="10" fill="#DFEFDF" stroke="#266B50" stroke-width="2"/>
+<text x="1395.0" y="437.14" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Inform</text>
+<text x="1395.0" y="465.21999999999997" font-family="Arial, sans-serif" font-size="27" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Charlie Munger</text>
+<rect x="1485" y="395" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="1501.0" y="411.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S1</text>
+<rect x="650" y="291" width="205" height="74" rx="8" fill="#FFF4D6" stroke="#B68C3C" stroke-width="1.6"/>
+<text x="752.5" y="323.86" font-family="Arial, sans-serif" font-size="23" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Goldman’s</text>
+<text x="752.5" y="347.78000000000003" font-family="Arial, sans-serif" font-size="23" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">asset values</text>
+<text x="599.0" y="318.62" font-family="Arial, sans-serif" font-size="18" font-weight="400" font-style="italic" fill="#536779" text-anchor="middle">about</text>
+<rect x="875" y="281" width="350" height="81" rx="8" fill="#FFF4D6" stroke="#B68C3C" stroke-width="1.6"/>
+<text x="1050.0" y="306.8" font-family="Arial, sans-serif" font-size="21" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Preferred shares: $5B</text>
+<text x="1050.0" y="328.64" font-family="Arial, sans-serif" font-size="21" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Dividend: 10% annually</text>
+<text x="1050.0" y="350.48" font-family="Arial, sans-serif" font-size="21" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Warrants: $115/share</text>
+<rect x="1188" y="272" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="1204.0" y="288.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S2</text>
+<text x="894.0" y="399.62" font-family="Arial, sans-serif" font-size="18" font-weight="400" font-style="italic" fill="#536779" text-anchor="middle">terms</text>
+<circle cx="1395" cy="314" r="31" fill="#DCEBFA" stroke="#2062B0" stroke-width="2"/>
+<rect x="1380" y="298" width="30" height="32" rx="0" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<rect x="1387" y="304" width="6" height="6" rx="0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.8"/>
+<rect x="1387" y="315" width="6" height="6" rx="0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.8"/>
+<rect x="1397" y="304" width="6" height="6" rx="0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.8"/>
+<rect x="1397" y="315" width="6" height="6" rx="0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.8"/>
+<text x="1395.5" y="375.16" font-family="Arial, sans-serif" font-size="24" font-weight="700" font-style="normal" fill="#172B41" text-anchor="middle">Goldman Sachs</text>
+<rect x="1202" y="382" width="165" height="20" rx="0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.8"/>
+<text x="1284.5" y="398.62" font-family="Arial, sans-serif" font-size="18" font-weight="400" font-style="italic" fill="#536779" text-anchor="middle">counterparty</text>
+<circle cx="732" cy="566" r="32" fill="#DCEBFA" stroke="#2062B0" stroke-width="2"/>
+<circle cx="732" cy="555" r="9" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<rect x="715" y="567" width="34" height="21" rx="8" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<text x="732.5" y="623.82" font-family="Arial, sans-serif" font-size="23" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Goldman executives</text>
+<text x="631.0" y="554.62" font-family="Arial, sans-serif" font-size="18" font-weight="400" font-style="italic" fill="#536779" text-anchor="middle">applies to</text>
+<circle cx="1415" cy="557" r="32" fill="#DCEBFA" stroke="#2062B0" stroke-width="2"/>
+<circle cx="1415" cy="546" r="9" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<rect x="1398" y="558" width="34" height="21" rx="8" fill="#2062B0" stroke="#2062B0" stroke-width="1.8"/>
+<text x="1415.0" y="619.16" font-family="Arial, sans-serif" font-size="24" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Charlie Munger</text>
+<text x="1498.5" y="517.62" font-family="Arial, sans-serif" font-size="18" font-weight="400" font-style="italic" fill="#536779" text-anchor="middle">recipient</text>
+<rect x="970" y="539" width="320" height="68" rx="8" fill="#FFF4D6" stroke="#B68C3C" stroke-width="1.6"/>
+<text x="1130.0" y="569.04" font-family="Arial, sans-serif" font-size="22" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">Reported expectation:</text>
+<text x="1130.0" y="591.92" font-family="Arial, sans-serif" font-size="22" font-weight="400" font-style="normal" fill="#172B41" text-anchor="middle">government intervention</text>
+<rect x="1253" y="530" width="32" height="22" rx="4" fill="#266B50" stroke="#266B50" stroke-width="1.8"/>
+<text x="1269.0" y="546.1" font-family="Arial, sans-serif" font-size="15" font-weight="700" font-style="normal" fill="#FFFFFF" text-anchor="middle">S3</text>
+<text x="1207.0" y="514.12" font-family="Arial, sans-serif" font-size="18" font-weight="400" font-style="italic" fill="#536779" text-anchor="middle">reported context</text>
+<rect x="20" y="666" width="1560" height="126" rx="14" fill="#FCFDFE" stroke="#CDDBE8" stroke-width="1.7"/>
+<text x="42" y="701.0" font-family="Arial, sans-serif" font-size="25" font-weight="700" font-style="normal" fill="#172B41" text-anchor="start">Source evidence</text>
+<polyline points="460,692 510,692" fill="none" stroke="#536779" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="510,692 502.44,689.03 502.44,694.97" fill="#536779"/>
+<text x="520" y="698.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="start">Role / object / context</text>
+<polyline points="846,692 897,692" fill="none" stroke="#7650A9" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="897,692 886.5,687.875 886.5,696.125" fill="#7650A9"/>
+<text x="909" y="698.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#7650A9" text-anchor="start">Reported order</text>
+<polyline points="1195,692 1245,692" fill="none" stroke="#266B50" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="1245,692 1236.18,688.535 1236.18,695.465" fill="#266B50"/>
+<text x="1257" y="698.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#266B50" text-anchor="start">Evidence support</text>
+<rect x="40" y="719" width="365" height="60" rx="7" fill="#FFFFFF" stroke="#8EBDAB" stroke-width="1.5"/>
+<rect x="53" y="732" width="22" height="30" rx="1" fill="#F1F7F3" stroke="#266B50" stroke-width="1.2"/>
+<polyline points="58,740 70,740" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="58,747 70,747" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="58,754 70,754" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<text x="86" y="744.48" font-family="Arial, sans-serif" font-size="22" font-weight="700" font-style="normal" fill="#266B50" text-anchor="start">S4 · Company history</text>
+<text x="86" y="767.96" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="start">Share-retention requirement</text>
+<rect x="425" y="719" width="365" height="60" rx="7" fill="#FFFFFF" stroke="#8EBDAB" stroke-width="1.5"/>
+<rect x="438" y="732" width="22" height="30" rx="1" fill="#F1F7F3" stroke="#266B50" stroke-width="1.2"/>
+<polyline points="443,740 455,740" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="443,747 455,747" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="443,754 455,754" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<text x="471" y="744.48" font-family="Arial, sans-serif" font-size="22" font-weight="700" font-style="normal" fill="#266B50" text-anchor="start">S2 · Investment release</text>
+<text x="471" y="767.96" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="start">23 Sep 2008</text>
+<rect x="810" y="719" width="365" height="60" rx="7" fill="#FFFFFF" stroke="#8EBDAB" stroke-width="1.5"/>
+<rect x="823" y="732" width="22" height="30" rx="1" fill="#F1F7F3" stroke="#266B50" stroke-width="1.2"/>
+<polyline points="828,740 840,740" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="828,747 840,747" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="828,754 840,754" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<text x="856" y="744.48" font-family="Arial, sans-serif" font-size="22" font-weight="700" font-style="normal" fill="#266B50" text-anchor="start">S3 · Buffett testimony</text>
+<text x="856" y="767.96" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="start">2 Jun 2010 · retrospective</text>
+<rect x="1195" y="719" width="365" height="60" rx="7" fill="#FFFFFF" stroke="#8EBDAB" stroke-width="1.5"/>
+<rect x="1208" y="732" width="22" height="30" rx="1" fill="#F1F7F3" stroke="#266B50" stroke-width="1.2"/>
+<polyline points="1213,740 1225,740" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="1213,747 1225,747" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<polyline points="1213,754 1225,754" fill="none" stroke="#266B50" stroke-width="1" stroke-linejoin="round"/>
+<text x="1241" y="744.48" font-family="Arial, sans-serif" font-size="22" font-weight="700" font-style="normal" fill="#266B50" text-anchor="start">S1 · Buffett interview</text>
+<text x="1241" y="767.96" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="start">24 Sep 2008</text>
+<polyline points="385,719 385,609" fill="none" stroke="#266B50" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="385,609 381.535,617.82 388.465,617.82" fill="#266B50"/>
+<polyline points="780,719 890,651 890,510 1010,480" fill="none" stroke="#266B50" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="1010,480 1000.6029572079673,478.7776204498169 1002.2837290894691,485.500707975824" fill="#266B50"/>
+<polyline points="1105,719 1105,610" fill="none" stroke="#266B50" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="1105,610 1101.535,618.82 1108.465,618.82" fill="#266B50"/>
+<polyline points="1515,719 1550,652 1550,493 1508,480" fill="none" stroke="#266B50" stroke-width="2.1" stroke-linejoin="round" stroke-dasharray="8 6"/>
+<polygon points="1508,480 1515.401077438131,485.91799609283294 1517.450165673664,479.29786487034187" fill="#266B50"/>
+<text x="32" y="818.8" font-family="Arial, sans-serif" font-size="20" font-weight="400" font-style="italic" fill="#536779" text-anchor="start">Illustrative reconstruction from public sources</text>
+<text x="1563" y="818.46" font-family="Arial, sans-serif" font-size="19" font-weight="400" font-style="normal" fill="#536779" text-anchor="end">Only reported action order is linked.</text>
+</svg>
