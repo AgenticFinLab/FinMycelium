@@ -3,8 +3,12 @@ import json
 
 import pytest
 
+from finmy.person_epg.event.closure import load_review
 from finmy.person_epg.event.relation_experiment import run_relations
 from finmy.person_epg.event.semantic_review import apply_review, review_relations
+from finmy.person_epg.rendering import read_gantt
+from finmy.search.state import digest
+from finmy.workbench.graph_collection import reviewed_artifacts
 from test_person_event_contract import graph, payload
 from test_person_event_pipeline import SyntheticEventModel
 from test_person_event_relation_experiment import baseline, files
@@ -84,11 +88,24 @@ def test_blind_discovery_and_named_comparison_share_original_without_rebuilding(
     assert called == ['review.discover', 'review.compare']
     assert reviewed['result_status'] == 'draft' and all(c['reasoning_effort']=='high' for c in reviewed['calls'])
     assert json.loads((output/reviewed['output']).read_text()) == graph
-    assert json.loads((output/reviewed['review']).read_text())['parent']['parent_graph_sha256'] == state['graph_sha256']
+    active = load_review(output)
+    assert active['semantic_review']['parent']['parent_graph_sha256'] == state['graph_sha256']
+    assert active['state']['facts_sha256'] == state['facts_sha256']
+    assert active['state']['coverage'] == state['coverage']
+    assert active['discovery'] == load_review(parent)['discovery']
+    assert 'Draft' in read_gantt(output, reviewed)
+    catalog = active['payload']['user_query']['extras']['person_event']
+    row = dict(id=reviewed['run_id'], event_id=catalog['event_id'], status='completed',
+               body=dict(kind='person_event', artifact_directory=str(output), catalog=catalog,
+                         input_hash=digest(active['payload'])))
+    assert reviewed_artifacts(row)['binding']['graph_sha256'] == reviewed['graph_sha256']
     resumed = review_relations(parent, output, model=model, resume=True)
     assert len(called) == 2 and resumed['calls'] == reviewed['calls'] and files(parent) == before
     with pytest.raises(ValueError, match='separate'):
         review_relations(parent, parent/'revision', model=model)
+    (output / resumed['review']).write_text('{}')
+    with pytest.raises(ValueError, match='独立关系复核'):
+        load_review(output)
 
 
 def test_failed_independent_call_retains_original_and_reports_partial(tmp_path, baseline):

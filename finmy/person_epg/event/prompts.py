@@ -204,8 +204,11 @@ source-supported order or process links. Use derived only for eligible interval 
 not as a label for general reasoning. No edge quota, connectivity requirement or
 automatic edges for every ordered pair; existing precedence paths may suffice.
 
-This inferred Relation illustrates field-level support. Use the actual IDs and evidence in your response.
-{"relation_id":"r1","from_action_id":"a2","to_action_id":"a1","type":"responds_to","basis":"inferred","support":[{"target":"/from_action_id","mode":"A","evidence_ids":["e2"]},{"target":"/to_action_id","mode":"A","evidence_ids":["e1"]},{"target":"/type","mode":"I","evidence_ids":["e1","e2"],"reason":"The reply accepts the specific invitation described in the earlier account."}]}
+For an inferred Relation, cite the passages identifying each actual endpoint under
+/from_action_id and /to_action_id. Under /type use I, the cited premises and a reason
+explaining how those passages establish this particular link and direction. Use the
+assigned source Action ID and an actual target Action ID from the index. When no
+outgoing link is supported, return an empty relations array and complete the review.
 Check support for both endpoints and the relation type before returning each edge.
 One passage may support several fields. Compare with facts_index.relations when present.
 Keep distinct supported claims or conflicts. During repair, retain accepted relations.

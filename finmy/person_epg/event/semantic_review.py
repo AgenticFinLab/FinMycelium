@@ -6,9 +6,10 @@ from pathlib import Path
 
 from finmy.model_config import person_build_effort_options
 from finmy.search.summary import directory_lock
+from ..rendering import save_gantt
 from .closure import load_review
 from .records import fingerprint, index_records
-from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, write_json
+from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now
 from .schema import RELATION_TYPES
 from .validation import check_graph
 
@@ -259,12 +260,31 @@ def review_relations(parent, output, *, model=None, allow_network=False, resume=
             status, failure = 'failed', type(exc).__name__
         checks = check_graph(result, payload)
         graph_path, graph_hash = run.save('epg.json', result)
+        facts_path, facts_hash = run.save('facts.json', checked['facts'])
+        coverage = checked['state']['coverage']
+        # Facts and their unresolved dispositions belong to the frozen upstream work.
+        for issue in checked['checks']['issues']:
+            if issue['artifact'] == 'facts':
+                checks['issues'].append(issue)
+                checks['summary'][issue['severity'] + 's'] += 1
+        if 'fact_contract' in checked['checks']['summary']['checked']:
+            checks['summary']['checked'].append('fact_contract')
         result_status = ('draft' if checked['state']['result_status'] == 'draft' and status == 'finished'
-                         and report['complete'] and checks['valid'] else 'partial')
-        checks_path, checks_hash = run.save('checks.json', dict(**checks, parent=provenance, graph_sha256=graph_hash))
+                         and report['complete'] and not checks['summary']['errors'] else 'partial')
         report_path, report_hash = run.save('review.json', dict(**report, parent=provenance, graph_sha256=graph_hash,
             result_status=result_status, content_review_required=True, additional_model_calls=len(run.state['calls'])))
+        if 'discovery' in checked:
+            path, digest = run.save('relation-discovery.json', checked['discovery'])
+            run.state.update(relation_discovery=path, relation_discovery_sha256=digest)
+        checks_path, checks_hash = run.save('checks.json', dict(run_id=run.state['run_id'],
+            input_sha256=run.state['input_sha256'], graph_sha256=graph_hash, parent=provenance,
+            artifact_hashes=dict(facts=facts_hash, relation_review=report_hash), summary=checks['summary'],
+            issues=checks['issues'], unresolved_tasks=checked['checks']['unresolved_tasks'], coverage=coverage,
+            result_status=result_status, execution_status=status, review_required=True))
+        visualization = save_gantt(result, output, output / graph_path, result_status=result_status)
         run.state.update(output=graph_path, graph_sha256=graph_hash, checks=checks_path, checks_sha256=checks_hash,
-            review=report_path, review_sha256=report_hash, result_status=result_status, execution_status=status, reason=failure)
+            facts=facts_path, facts_sha256=facts_hash, coverage=coverage, review=report_path, review_sha256=report_hash,
+            result_status=result_status, execution_status=status, reason=failure, finished_at=now(),
+            review_required=True, visualization=visualization, render_status=visualization['status'])
         run.persist()
         return deepcopy(run.state)

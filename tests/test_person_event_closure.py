@@ -71,6 +71,31 @@ def test_offline_successor_preserves_history_and_evidence(partial):
         close_pending(partial,[decision(review)],expected_state_sha256=review['state_sha256'],reviewer='Reviewer')
 
 
+def test_disposing_upstream_pending_preserves_independent_uncertainty(partial, tmp_path):
+    from finmy.person_epg.event.semantic_review import review_relations
+
+    original = load_review(partial)
+    graph = original['graph']
+    def review_model(system, user, task):
+        if task == 'review.discover':
+            return {'pairs': []}
+        return dict(existing=[dict(relation_id=r['relation_id'], decision='uncertain',
+            evidence_ids=[graph['evidence'][0]['evidence_id']], reason='The link needs content review.')
+            for r in graph['relations']], additions=[], context_findings=[])
+
+    output = tmp_path / 'review'
+    review_relations(partial, output, model=review_model)
+    reviewed = load_review(output)
+    assert reviewed['facts']['pending'] == original['facts']['pending']
+    assert not reviewed['semantic_review']['complete']
+    state = close_pending(output, [decision(reviewed)], expected_state_sha256=reviewed['state_sha256'],
+                          reviewer='Reviewer')
+    assert state['result_status'] == 'partial'
+    after = load_review(output)
+    assert not after['facts']['pending'] and not after['checks']['unresolved_tasks']
+    assert after['semantic_review'] == reviewed['semantic_review']
+
+
 @pytest.mark.parametrize('kind',['rejected','unprocessed','action_assignment','no_evidence','wrong_context'])
 def test_cannot_clear_unfinished_or_unrelated_work(partial,kind):
     review=load_review(partial);chosen=decision(review);state=review['state'];checks=review['checks']

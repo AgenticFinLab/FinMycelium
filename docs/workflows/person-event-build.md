@@ -113,9 +113,11 @@ actions and located quotations without candidate or accepted edges. The second
 receives the same evidence, the independent findings, the named edge endpoints
 and their Context associations. The review records proposed additions,
 corrections, withdrawals and uncertainties, then applies validated changes to
-a separate graph. Check `state.json` for the graph and `review.json` paths,
-the bound parent hashes and the dispositions. A partial parent can yield a
-comparison but requires its own outstanding work to be resolved. A draft
+a separate graph. The successor includes the frozen facts, coverage, outstanding
+dispositions, graph checks and a Gantt bound to its graph hash. Follow
+`state.json` to the graph and `review.json` for the parent hashes and decisions.
+A partial parent can yield a comparison but requires its own outstanding work
+to be resolved. A draft
 still goes through the event content review. Kimi uses `high` for this
 independent assessment unless the review configuration specifies an override.
 
