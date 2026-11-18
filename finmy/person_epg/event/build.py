@@ -16,6 +16,7 @@ from .feedback import (correction_scope, correction_issues, validate_correction,
                        unresolved_report, reserved_records, clear_resolved_pending)
 from .context import navigation, sized_request
 from .validation import check_graph
+from .relation_review import discovery_scope
 
 
 def body_ranges(payload, config):
@@ -100,8 +101,13 @@ class Construction:
             result, record = self.adopt(step_id, role, result, request, raw, reserved=allowed or reserved, **scope)
             records.append(record)
             if number:
-                self.resolve_fact_corrections(records[:-1], record)
+                if role == 'relations':
+                    self.resolve_relation_corrections(records[:-1], record, result)
+                else:
+                    self.resolve_fact_corrections(records[:-1], record)
                 clear_resolved_pending(result, self.reports, self.outstanding)
+            if role == 'relations':
+                self.graph = result  # Preserve adopted edges if a local correction pauses/fails.
             if result.get('schema_version') == self.facts['schema_version']:
                 self.facts = result
                 self.save_facts()  # A pause/error during correction must retain valid neighbors.
@@ -120,8 +126,43 @@ class Construction:
                 fields['assigned'] = [reference(c, oid) for c, oid in sorted(scope['assigned'])]
                 fields['candidates'] = [dict(collection=c, record=index_records(result)[c][oid])
                                          for c, oid in sorted(scope['assigned'])]
+            elif role == 'relations':
+                scope = dict(action_ids=allowed.get('actions', []), phase_ids=allowed.get('phases', []),
+                             review_scope=scope.get('review_scope') if 'relation_review' in allowed else None)
+                fields['assigned_action_ids'] = scope['action_ids']
+                fields['assigned_phase_ids'] = scope['phase_ids']
+                fields['assigned_records'] = {
+                    c: [r for r in result[c] if r[COLLECTION_IDS[c]] in allowed.get(c, [])]
+                    for c in ('actions', 'phases')}
+                if scope['review_scope'] is None:
+                    fields.pop('relation_discovery', None)
+                else:
+                    fields['accepted_relations'] = [{k: r[k] for k in (
+                        'relation_id', 'from_action_id', 'to_action_id', 'type')}
+                        for r in result['relations'] if r['from_action_id'] in scope['review_scope']['action_ids']]
             request = self.request(role, result, **fields)
         return result, unresolved_report(records, self.outstanding)
+
+    def resolve_relation_corrections(self, previous, correction, package):
+        updated = {(r['collection'], r['object_id'])
+                   for record in [*previous[1:], correction]
+                   for item in record['report']['accepted_items'] if item['item'].startswith('context_updates:')
+                   for r in item['refs']}
+        linked = {ref['context_id'] for c, field in (
+            ('actions', 'delta_context_refs'), ('phases', 'baseline_context_refs'))
+            for record in package[c] for ref in record.get(field, [])}
+        for record in previous:
+            for issue in self.outstanding(record)['rejected']:
+                refs = {(r['collection'], r['object_id']) for r in issue['refs']}
+                done = issue['item'] == 'relation_review' and 'relation_review' in correction['report']['accepted']
+                if issue['item'] == 'missing_context_update' or issue['item'].startswith('context_updates:'):
+                    done = bool(refs) and refs <= updated
+                if issue['item'].startswith('context:'):
+                    ids = {oid for c, oid in refs if c == 'contexts'}
+                    done = bool(ids) and ids <= linked
+                if done:
+                    record.setdefault('resolutions', []).append(dict(issue_fingerprint=fingerprint(issue),
+                                                                     resolved_by=correction['task_id']))
 
     def resolve_fact_corrections(self, previous, correction):
         accepted = {(r['collection'], r['object_id']) for record in [*previous[1:], correction]
@@ -155,6 +196,8 @@ class Construction:
                   'organization': receiver.organize, 'relations': receiver.relate}[role]
         result, report = method(raw, **scope)
         record = dict(task_id=task_id, role=role, report=report)
+        if scope.get('review_scope') is not None:
+            record['relation_discovery_scope'] = deepcopy(scope['review_scope'])
         if role == 'extraction' and 'body' in request:
             record['body_processed'] = True
         self.reports.append(record)
@@ -250,9 +293,14 @@ class Construction:
         self.save_facts()
 
     def relation_request(self, actions, phases):
+        candidates = [c for c in self.facts['relation_candidates']
+            if c.get('from_action_id') in actions
+            or (c.get('from_action_id') is None and c.get('to_action_id') in actions)
+            or (c.get('from_action_id') is None and c.get('to_action_id') is None
+                and self.graph['actions'] and self.graph['actions'][0]['action_id'] in actions)]
         return self.request('relations', self.graph, assigned_action_ids=actions,
-            assigned_phase_ids=phases, relation_candidates=[c for c in self.facts['relation_candidates']
-                if c.get('from_action_id') in actions or c.get('to_action_id') in actions],
+            assigned_phase_ids=phases, relation_candidates=candidates,
+            relation_discovery=discovery_scope(actions, candidates),
             assigned_records=dict(actions=[a for a in self.graph['actions'] if a['action_id'] in actions],
                                  phases=[p for p in self.graph['phases'] if p['phase_id'] in phases]))
 
@@ -271,7 +319,8 @@ class Construction:
                 pid = action_phases[aid]
                 candidate_phases = owned_phases + ([pid] if pid in phases and pid not in owned_phases else [])
                 candidate = self.relation_request(owned_actions + [aid], candidate_phases)
-                if len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit:
+                if ((owned_actions and candidate['context_selection'].get('uncovered_action_ids')) or
+                        len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit):
                     break
                 owned_actions.append(aid); owned_phases = candidate_phases; request = candidate
             # Empty Phases still need a baseline. An oversized Action+Phase pair
@@ -287,7 +336,8 @@ class Construction:
             if (actions or phases) and not (owned_actions or owned_phases):
                 raise LimitReached('model_context_chars')  # Never truncate required records to fit.
             self.graph, _ = self.receive('relate.' + str(number), 'relations', self.graph, request,
-                                         action_ids=owned_actions, phase_ids=owned_phases)
+                                         action_ids=owned_actions, phase_ids=owned_phases,
+                                         review_scope=request['relation_discovery'])
             actions = [aid for aid in actions if aid not in owned_actions]
             phases = [pid for pid in phases if pid not in owned_phases]
             number += 1
@@ -347,8 +397,14 @@ class Construction:
     def repair(self):
         checks = check_graph(self.graph, self.run.payload)
         # One round handles concrete failed organization/association work, not legal uncertainty.
-        unresolved = [dict(r, report=self.outstanding(r)) for r in self.reports
-                      if r['role'] in ('organization', 'relations') and self.outstanding(r)['rejected']]
+        unresolved = []
+        for record in self.reports:
+            report = self.outstanding(record)
+            # Discovery receipts already use their bounded local retry allowance.
+            # A legacy final Context repair cannot discharge a missing review.
+            report['rejected'] = [i for i in report['rejected'] if i['item'] != 'relation_review']
+            if record['role'] in ('organization', 'relations') and report['rejected']:
+                unresolved.append(dict(record, report=report))
         if not unresolved and checks['valid']:
             return
         if not self.run.config.final_repair_rounds:
@@ -408,6 +464,16 @@ class Construction:
 
     def finish(self, execution_status, reason=None):
         self.save_facts()
+        reviews = [dict(task_id=r['task_id'], scope=r['relation_discovery_scope'],
+                        review=r['report'].get('relation_review'),
+                        accepted='relation_review' in r['report']['accepted'])
+                   for r in self.reports if 'relation_discovery_scope' in r]
+        completed = {aid for r in reviews if r['accepted'] for aid in r['scope']['action_ids']}
+        expected = {a['action_id'] for a in (self.graph or self.facts)['actions']}
+        path, digest = self.run.save('relation-discovery.json', dict(reviews=reviews,
+            completed_action_ids=sorted(completed), incomplete_action_ids=sorted(expected - completed),
+            semantic_review_required=True))
+        self.run.state.update(relation_discovery=path, relation_discovery_sha256=digest)
         if self.graph is None and self.facts['actions']:
             self.graph = graph_from_facts(self.facts)
         unresolved = [dict(r, report=self.outstanding(r)) for r in self.reports
@@ -426,7 +492,8 @@ class Construction:
         graph_path, graph_hash = None, None
         if self.graph and self.graph['actions']:
             graph_path, graph_hash = self.run.save('epg.json', self.graph)
-            result = 'draft' if execution_status == 'finished' and report['valid'] and coverage_done and not unresolved and not self.facts['pending'] else 'partial'
+            result = 'draft' if (execution_status == 'finished' and report['valid'] and coverage_done
+                and not unresolved and not self.facts['pending'] and expected <= completed) else 'partial'
         elif self.facts['contexts'] or self.facts['evidence']:
             result = 'partial'
         checks = dict(run_id=self.run.state['run_id'], input_sha256=self.run.state['input_sha256'],

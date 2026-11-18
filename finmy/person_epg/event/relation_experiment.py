@@ -132,7 +132,7 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
             invocation_elapsed_seconds=time.monotonic() - started,
             execution_status=status, result_status=state['result_status'],
             relation_count=len(builder.graph['relations']), graph_path=state['output'],
-            checks_path=state['checks'], semantic_review_required=True)
+            checks_path=state['checks'], discovery_path=state['relation_discovery'], semantic_review_required=True)
         write_json(directory / 'relation-summary.json', summary)
         return state
 

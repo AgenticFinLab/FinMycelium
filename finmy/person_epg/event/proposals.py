@@ -6,6 +6,7 @@ from jsonschema import Draft202012Validator
 from .records import fingerprint, ground_quote, index_records, pointer
 from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_VERSION, schema_for
 from .validation import check_graph, covers, record_temporal_conflicts, SupportIndex
+from .relation_review import validate_review
 
 FIELDS = {
     'extraction': ('entities', 'actions', 'contexts', 'relation_candidates'),
@@ -15,12 +16,14 @@ FIELDS = {
 }
 ID_FIELDS = {v: k for k, v in COLLECTION_IDS.items()}
 ID_FIELDS.update(from_action_id='actions', to_action_id='actions', on_behalf_of='entities')
-LIST_REFS = {'entity_refs': 'entities', 'evidence_ids': 'evidence'}
+LIST_REFS = {'entity_refs': 'entities', 'evidence_ids': 'evidence', 'relation_ids': 'relations'}
 
 
 def validate_envelope(role, value):
     required = set(FIELDS[role]) | {'evidence', 'pending'}
     optional = {'note', 'event_overview'} if role == 'organization' else {'note'}
+    if role == 'relations':
+        optional.add('relation_review')
     if not isinstance(value, dict) or not required <= value.keys() or value.keys() - required - optional:
         raise ValueError('Expected only role fields: ' + ', '.join(sorted(required | optional)))
     if any(not isinstance(value[k], list) for k in required):
@@ -602,7 +605,7 @@ class Receiver:
             self.apply('event_overview', overview)
         return self.finish()
 
-    def relate(self, response, *, action_ids=None, phase_ids=None):
+    def relate(self, response, *, action_ids=None, phase_ids=None, review_scope=None):
         response = self.prepare('relations', response)
         indexes = index_records(self.package)
         allowed_actions = set(indexes['actions']) if action_ids is None else set(action_ids)
@@ -705,6 +708,11 @@ class Receiver:
             for oid in allowed:
                 if (collection, oid) not in handled:
                     self.reject('missing_context_update', 'Assigned Context fields were not completed', [reference(collection, oid)])
+        if review_scope is not None:
+            review = response.get('relation_review')
+            self.report['relation_review'] = deepcopy(review)
+            self.apply('relation_review', lambda package: validate_review(review, review_scope, package),
+                       proposal=review)
         return self.finish()
 
     def finish(self):

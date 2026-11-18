@@ -98,7 +98,57 @@ split_proposals:[] and event_overview:{time,summary,support,gaps?,conflicts?}. D
 rewrite Actions. Only a supported Action split may use the consolidation split
 contract and must include all new assignments in this same response. The overview
 describes observed actions, not a template filled from the research scope.""",
-    'relations': """Complete only the assigned Action and Phase Context fields.
+    'relations': """Deliver BOTH supported Action-to-Action relations and the assigned
+Action/Phase Context associations in this one task.
+
+First review relation_candidates and independently inspect the global Action index for
+supported links within the same process, across sources and across Phases/Stages.
+Candidates are leads, not a whitelist or a ceiling. An empty candidate list does not
+remove this discovery responsibility. Focus on meaningful action sequences, responses,
+conditions enabling later acts and evidenced continuation, not all N^2 pairs.
+Use endpoint descriptions, original time wording/precision and supporting passages;
+read only the missing premises. Cite evidence for the relationship itself, or give
+an explicit inference (basis inferred, support mode I, premises and reason).
+Two existing acts, a shared object or chronological proximity alone do not prove
+causation/response. Likewise, same-day reports or uncertain occurrence windows do not
+prove overlap. Suspected duplicates are not made distinct by adding an edge.
+Direction: precedes/enables/triggers/prevents go from antecedent to affected action;
+responds_to/continues/resumes go from responding/continuing act to its antecedent;
+interrupted_by goes from interrupted to interrupting act. Unknown dates do not bar
+source-supported order or process links. Use derived only for eligible interval rules,
+not as a label for general reasoning. No edge quota, connectivity requirement or
+automatic edges for every ordered pair; existing precedence paths may suffice.
+
+When task.relation_discovery is present, also return relation_review (an object,
+not a graph record). Discovery is a separate deliverable from Context associations:
+{
+  "actions": [{"action_id":"assigned ID", "status":"complete|pending",
+    "within_phase":"what was checked and concluded, or why not applicable",
+    "cross_phase":"what was checked across Phases/Stages and concluded, or why not applicable"}],
+  "candidates": [{"candidate_id":"assigned ID", "status":"linked|unsupported|pending",
+    "relation_ids":[], "reason":"disposition and supporting premises or missing evidence"}],
+  "pairs": [{"from_action_id":"assigned source", "to_action_id":"any existing target",
+    "status":"linked|unsupported|pending", "relation_ids":[], "evidence_ids":[],
+    "reason":"relationship evidence/inference, or the specific missing premise"}]
+}
+Cover each discovery.action_ids and discovery.candidate_ids entry exactly once.
+Inspect the global Action index independently of candidates, within and across phases.
+Record meaningful pairs actually investigated, including evidence-insufficient leads;
+do not enumerate all pairs. One pair entry may name multiple relation types via IDs.
+Every accepted outgoing relation from a discovery-owned Action needs a linked pair
+entry with the same direction. linked requires nonempty accepted relation_ids;
+unsupported/pending require empty relation_ids. New relation/evidence temporary IDs
+are allowed and will be remapped. Pair evidence IDs refer to evidence actually read.
+Use pending for work not completed, unsupported for a checked lead lacking support.
+Zero relations is valid after an honest review; there is no minimum edge count.
+Do not describe undispatched work as complete. This receipt declares work performed;
+it is not evidence of semantic correctness. Keep explanations brief and specific.
+In a local correction, return only the failed Context operations and/or requested
+review. Do not regenerate accepted edges or accepted associations. Review-only
+corrections use empty Context/relations/update arrays. The discovery scope stays
+the original scope even when assigned Context owner lists are narrowed.
+
+Then complete the assigned Context fields, reusing shared content and preserving gaps.
 Read assigned_records and related_records before requesting them again. The index
 contains compact identity entries for records already supplied in full. Use the global index
 to locate other endpoints; cross-batch target Actions remain valid. Prefer precise
@@ -126,6 +176,12 @@ Participation needs entity and role; knowledge-source needs a knower.
 Interpersonal interactions belong in Context, not Action edges. Temporal derived
 precedes/overlaps require complete conflict-free intervals and both /time premise refs;
 derived overlaps requires two durations. Keep raw conflicting claims for program checks.
+Support.target is local to the object containing that Support. A ContextRef has
+context_id and relation_type (and optional role/entity/qualification fields), but no
+phase_id or action_id. Never copy an Action's /phase_id assignment support into a
+ContextRef. Supply support for /context_id and /relation_type (or the association
+root when the evidence supports the whole association); cite association evidence
+and explain any inference. Changing a target alone does not repair unsupported content.
 Unknown order is not generated for every unlinked pair. New Context and its associations
 must have separate support and appear together. Empty Context lists do not prove absence.""",
 }

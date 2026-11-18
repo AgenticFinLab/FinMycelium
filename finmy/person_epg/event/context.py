@@ -116,6 +116,15 @@ def sized_request(base, package, max_chars, reserve):
     request['context_selection'] = dict(navigation_preview_chars=preview,
         related_available=len(records), related_included=0,
         complete_records='read_records; exact source ranges through read_sample')
+    if base['role'] == 'relations':
+        for width in (p for p in (160, 80, 0) if p <= preview):
+            request['facts_index'] = navigation(package, width, base['role'], supplied)
+            request['context_selection']['navigation_preview_chars'] = width
+            result = balanced_relation_request(deepcopy(request), package, records, limit, max_chars // 4)
+            if (not result['context_selection']['uncovered_action_ids'] and
+                    len(prompt_json(dict(task=result, read_results=[]))) <= limit):
+                return result
+        return result  # Caller reduces ownership; never truncate an assigned record.
     # Related context is optional. Required input gets priority and the local tools
     # remain available for any records that do not fit this proactive allocation.
     allowance, used = max_chars // 4, 0
@@ -130,4 +139,92 @@ def sized_request(base, package, max_chars, reserve):
             request['context_selection']['related_included'] -= 1
         else:
             used += size
+    return request
+
+
+def balanced_relation_request(request, package, records, limit, allowance):
+    """Give every owned Action a quote before optional dependencies use the budget.
+
+    Full quotes and offsets remain immutable. A minimum quote per Action may use
+    more than the optional quarter-budget; the caller shrinks the owned scope if
+    that minimum cannot fit. A single oversized quote stays explicitly omitted
+    and available through local reads. Remaining quotes rotate across Actions, then Phases,
+    before candidate-only evidence or bulky Context dependencies are considered.
+    """
+    indexes = index_records(package)
+    views = {(item['collection'], item['record'][COLLECTION_IDS[item['collection']]]): item
+             for item in records}
+    owners = []
+    for collection, field in (('actions', 'assigned_action_ids'), ('phases', 'assigned_phase_ids')):
+        for oid in request.get(field, []):
+            record = indexes[collection][oid]
+            # Direct evidence includes qualifications/conflicts, but does not walk
+            # through linked Contexts or the pre-existing relation candidates.
+            evidence = sorted({eid for c, eid in references([
+                record.get('support', []), record.get('conflicts', [])]) if c == 'evidence'})
+            for eid in evidence:
+                if eid in indexes['evidence'] and ('evidence', eid) not in views:
+                    e = indexes['evidence'][eid]
+                    views['evidence', eid] = dict(collection='evidence', record={
+                        k: e[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end', 'quote')})
+            # The shortest full quote is the cheapest minimum coverage guarantee.
+            evidence.sort(key=lambda eid: (len(prompt_json(views['evidence', eid]))
+                if ('evidence', eid) in views else float('inf'), eid))
+            owners.append((collection, oid, evidence))
+    selected, used = set(), 0
+    selection = request['context_selection']
+    selection['policy'] = 'action-evidence-round-robin-v1'
+    selection['related_available'] = len(views)
+
+    def refresh():
+        delivered = {oid for c, oid in selected if c == 'evidence'}
+        selection['related_included'] = len(selected)
+        selection['evidence_by_owner'] = [dict(collection=c, object_id=oid,
+            available=len(eids), included=len(delivered.intersection(eids)),
+            omitted_evidence_ids=[eid for eid in eids if eid not in delivered])
+            for c, oid, eids in owners]
+        selection['uncovered_action_ids'] = [oid for c, oid, eids in owners
+            if c == 'actions' and eids and not delivered.intersection(eids)]
+        selection['actions_without_evidence'] = [oid for c, oid, eids in owners
+            if c == 'actions' and not eids]
+
+    def add(ref, *, minimum=False):
+        nonlocal used
+        if ref in selected or ref not in views:
+            return False
+        item = views[ref]
+        size = len(prompt_json(item))
+        if not minimum and used + size > allowance:
+            return False
+        selected.add(ref)
+        request['related_records'].append(item)
+        refresh()
+        if len(prompt_json(dict(task=request, read_results=[]))) > limit:
+            selected.remove(ref)
+            request['related_records'].pop()
+            refresh()
+            return False
+        used += size
+        return True
+
+    refresh()
+    # Minimum coverage is independent of candidate membership and graph order.
+    for collection, oid, evidence in owners:
+        if collection != 'actions' or any(('evidence', eid) in selected for eid in evidence):
+            continue
+        for eid in evidence:
+            if add(('evidence', eid), minimum=True):
+                break
+    # Equal turns stop an evidence-rich early Action from consuming every slot.
+    for collection in ('actions', 'phases'):
+        queues = [deque(eids) for c, _, eids in owners if c == collection]
+        while any(queues):
+            for queue in queues:
+                while queue:
+                    if add(('evidence', queue.popleft())):
+                        break
+    for item in records:
+        collection = item['collection']
+        add((collection, item['record'][COLLECTION_IDS[collection]]))
+    refresh()
     return request
