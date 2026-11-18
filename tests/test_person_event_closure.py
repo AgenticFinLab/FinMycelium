@@ -88,11 +88,15 @@ def test_cannot_clear_unfinished_or_unrelated_work(partial,kind):
     assert not (partial/'revisions').exists()
 
 
-@pytest.mark.parametrize('kind',['unread_body','another_pending','invalid_graph'])
+@pytest.mark.parametrize('kind',['unread_body','another_pending','invalid_graph','incomplete_relation_review'])
 def test_remaining_problems_keep_partial(partial,kind):
     r=load_review(partial);s=r['state'];checks=r['checks'];facts=r['facts']
     if kind=='unread_body': s['coverage'][-1]['body_status']='failed'
     if kind=='another_pending': facts['pending'].append(dict(refs=[],reason='Unprocessed independent work',evidence_ids=[]))
+    if kind=='incomplete_relation_review':
+        discovery=r['discovery']
+        discovery['incomplete_action_ids'].append(discovery['completed_action_ids'].pop())
+        s['relation_discovery_sha256']=write_json(partial/s['relation_discovery'],discovery)
     if kind=='invalid_graph':
         r['graph']['actions'][0]['phase_id']='MISSING'
         s['graph_sha256']=write_json(partial/s['output'],r['graph'])

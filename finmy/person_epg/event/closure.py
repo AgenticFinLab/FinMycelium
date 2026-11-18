@@ -32,6 +32,12 @@ def load_review(directory):
             or checks['graph_sha256'] != state['graph_sha256']
             or checks['artifact_hashes']['facts'] != state['facts_sha256']):
         raise ValueError('检查记录与当前图、事实或输入不一致')
+    if 'relation_discovery' in state:
+        path = within(directory, state['relation_discovery'])
+        raw_receipt = path.read_bytes()
+        if sha256(raw_receipt) != state['relation_discovery_sha256']:
+            raise ValueError('关系审查记录校验失败')
+        objects['discovery'] = json.loads(raw_receipt)
     return dict(state=state, state_sha256=sha256(raw), payload=payload, **objects)
 
 
@@ -135,9 +141,13 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
         graph_check['summary']['errors'] += len(errors)
         graph_check['summary']['checked'].append('fact_contract')
         body_done = bool(coverage) and all(c['body_status'] == 'processed' for c in coverage)
+        discovery = review.get('discovery')
+        discovery_done = discovery is None or (
+            not discovery['incomplete_action_ids'] and
+            set(discovery['completed_action_ids']) == {a['action_id'] for a in graph['actions']})
         done = (body_done and all(c['proposal_status'] == 'resolved' for c in coverage)
                 and graph_check['valid'] and fact_check['valid'] and not checks['unresolved_tasks']
-                and not facts['pending'] and bool(graph['actions']))
+                and not facts['pending'] and bool(graph['actions']) and discovery_done)
         result = 'draft' if done else 'partial'
         for code, active in [('BODY_PROCESSING_INCOMPLETE', not body_done),
                              ('PROPOSALS_UNRESOLVED', bool(checks['unresolved_tasks'] or facts['pending'])

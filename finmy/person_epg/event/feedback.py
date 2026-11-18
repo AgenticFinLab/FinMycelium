@@ -25,7 +25,7 @@ def reserved_records(issues):
 
 
 def correction_scope(role, report, package, handled=frozenset()):
-    """Later hierarchy/association work retains its existing final repair round."""
+    """Correct rejected facts or Context associations without reopening valid neighbors."""
     allowed = {}
     if role == 'extraction':
         for issue in report['rejected']:
@@ -45,6 +45,18 @@ def correction_scope(role, report, package, handled=frozenset()):
                     collection, oid = ref['collection'], ref.get('object_id')
                     if (collection, oid) not in handled and any(r[COLLECTION_IDS[collection]] == oid for r in package[collection]):
                         allowed.setdefault(collection, set()).add(oid)
+    elif role == 'relations':
+        for issue in report['rejected']:
+            if issue['item'] == 'relation_review':
+                allowed['relation_review'] = {'required'}
+            if issue['item'] == 'missing_context_update' or issue['item'].startswith('context_updates:'):
+                for ref in issue['refs']:
+                    if ref['collection'] in ('actions', 'phases'):
+                        allowed.setdefault(ref['collection'], set()).add(ref['object_id'])
+                # Keep rejected Context and ContextRef IDs stable across local retries.
+                for collection, ids in reserved_records([issue]).items():
+                    if collection in ('contexts', 'context_refs'):
+                        allowed.setdefault(collection, set()).update(ids)
     return {c: sorted(ids) for c, ids in allowed.items()}
 
 
@@ -73,6 +85,17 @@ def validate_correction(role, value, allowed):
             for ref in decision['input_refs']:
                 if not isinstance(ref, dict) or ref.get('object_id') not in allowed.get(ref.get('collection'), []):
                     raise ValueError('Correction cannot reconsider an already adopted decision')
+    elif role == 'relations':
+        if value['relations']:
+            raise ValueError('Local Context/review correction cannot add or rewrite relations')
+        for field, collection in (('action_context_updates', 'actions'), ('phase_context_updates', 'phases'),
+                                  ('contexts', 'contexts')):
+            key = COLLECTION_IDS[collection]
+            for record in value[field]:
+                if not isinstance(record, dict) or record.get(key) not in allowed.get(collection, []):
+                    raise ValueError('Correction may only return rejected Context operations: ' + field)
+        if 'relation_review' in value and 'relation_review' not in allowed:
+            raise ValueError('An already accepted discovery review is read-only')
 
 
 def unresolved_report(records, outstanding):
