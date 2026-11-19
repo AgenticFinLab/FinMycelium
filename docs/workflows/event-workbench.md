@@ -55,7 +55,9 @@ The launcher applies a workbench-only light theme. Shared presentation lives in
    Retry preserves the saved task and cumulative usage. Runtime records and results
    are visible there. Search completion means material is ready for inspection,
    not that evidence is exhaustive or approved. Detailed traces are expandable.
-4. Inspect sources and the current budgeted handoff. Advanced source selection is
+4. Inspect sources and the current budgeted handoff. New enhanced searches use
+   the v3 evidence-priority policy with a default limit of 90,000 characters. The
+   material panel shows the policy used for the selected revision. Advanced source selection is
    a preview until explicitly saved as the current handoff. Historical experiment
    viewing remains a separate read-only auxiliary tool.
 5. Adopt material into the linked event and review the actual input under Data →

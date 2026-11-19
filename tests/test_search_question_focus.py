@@ -34,7 +34,7 @@ def test_broad_report_words_do_not_override_specific_question(focus, noise, quer
                                  min_relative_score=.3, query_coverage=True)[0]['ranking']
     assert current[0][0] == 0
     assert len(current) == 1
-    # Reading and historical assembly still use the unchanged default scorer.
+    # Directed reading and v3 handoff assembly use ordinary BM25.
     assert budget.rank_blocks(entry, document, [query]) == budget.rank_blocks(
         entry, document, [query], query_coverage=False)
 
@@ -80,12 +80,14 @@ def test_marked_response_and_context_survive_report_filtering_and_replay(tmp_pat
     assert [s['threshold'] for s in stages] == [.5, .4, .3]
     for before, after in zip(stages, stages[1:]):
         assert set(before['selected_blocks'][sid]) <= set(after['selected_blocks'][sid])
-    old = deepcopy(complete); old['budget_policy'] = budget.CONTEXT_POLICY
+    assert record['budget_policy'] == 'evidence_priority_windows_v3'
+    assert 'ranking_policy' not in record['allocation']
+    old = deepcopy(complete); old['budget_policy'] = 'evidence_priority_windows_v4'
     old.pop('complete_id'); old['complete_id'] = digest(old)
     replay = derive_input(state, old, max_chars=2000)
-    assert 'ranking_policy' not in replay[1]['allocation']
+    assert replay[1]['allocation']['ranking_policy'] == 'bm25_idf_query_coverage_shared'
     explicit = derive_input(state, complete, max_chars=2000,
-                            allocation_policy=budget.CONTEXT_POLICY)
+                            allocation_policy=budget.QUERY_COVERAGE_POLICY)
     assert replay[0] == explicit[0]
     assert replay[1]['selected'] == explicit[1]['selected']
     assert replay[1]['complete_id'] == old['complete_id']

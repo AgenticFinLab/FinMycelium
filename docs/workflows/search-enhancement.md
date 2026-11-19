@@ -172,19 +172,13 @@ span handoffs and explicit programmatic source lists retain their existing seman
 | `finmy/runner/search_pipeline_runner.py` | Opt-in enhanced search alongside the original simple chain |
 | `configs/search.yml` | Search-only defaults, independent of Builder configuration |
 
-For additional long-document windows competing for the shared handoff remainder, BM25
-scores are weighted by the squared fraction
-of query-term IDF weight covered by the paragraph (using terms found in that document).
-This reduces anchors matching only broad dates or report vocabulary; it is a lexical
-navigation heuristic, not semantic verification. Use distinctive names and actions for
-reading questions. Validated priority originals and their context, source core coverage,
-compact documents and the 50% → 40% → 30% expansion remain protected within budget.
-No named-company rules, financial vocabulary blacklist or model assembly call is added.
-The weighting affects shared-remainder assembly only, not the initial source-core
-allocation, directed reading or explicit priority marks. Saved manifests keep
-their allocation policy for reproducible replay; new runs use the current policy. A source
-can remain long when relevant tables or necessary neighboring paragraphs are themselves
-long. The budget is a ceiling, not a target to fill with unrelated sections.
+New enhanced-search handoffs use `evidence_priority_windows_v3` with a default
+budget of 90,000 characters. To preserve evidence across varied wording, v3 ranks
+additional passages by BM25 for each source and reading question. It keeps marked
+passages and their context, then expands eligible whole blocks at 50%, 40% and 30%
+of the best score for that question in that source, while space permits.
+Saved v4 manifests replay their original scoring, which additionally weights each
+paragraph by the squared fraction of query-term IDF weight it covers.
 
 ## Credentials and configuration
 

@@ -120,7 +120,7 @@ def test_identified_table_row_is_indivisible_even_when_it_contains_sentences(tmp
 def test_new_handoff_uses_whole_blocks_and_scope_with_source_questions(tmp_path):
     state,sid,document,_=materials(tmp_path)
     _,complete=prepare_complete_sources(state,[sid])
-    assert BUDGET_POLICY=='evidence_priority_windows_v4'
+    assert BUDGET_POLICY=='evidence_priority_windows_v3'
     assert complete['budget_policy']==BUDGET_POLICY
     payload,record=derive_input(state,complete,max_chars=6500)
     assert 'windowing' not in record['allocation']

@@ -14,7 +14,8 @@ ADAPTIVE_POLICY = 'balanced_source_windows_v3'
 PRIORITY_POLICY = 'evidence_priority_windows_v1'
 SOURCE_QUERY_POLICY = 'evidence_priority_windows_v2'
 CONTEXT_POLICY = 'evidence_priority_windows_v3'
-BUDGET_POLICY = 'evidence_priority_windows_v4'
+QUERY_COVERAGE_POLICY = 'evidence_priority_windows_v4'
+BUDGET_POLICY = CONTEXT_POLICY
 # Replay-only compatibility for saved window manifests; new handoffs use BUDGET_POLICY.
 SAVED_WINDOW_POLICY = 'evidence_priority_windows_v5'
 ASSEMBLY_THRESHOLDS = (0.5, 0.4, 0.3)
@@ -218,13 +219,13 @@ def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
 
 
 def _shared_input(state,complete,budget,queries, *, policy, documents=None):
-    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, CONTEXT_POLICY, BUDGET_POLICY, SAVED_WINDOW_POLICY}:raise ValueError('Unknown saved budget policy')
+    if policy not in {LEGACY_POLICY, FIXED_POLICY, ADAPTIVE_POLICY, PRIORITY_POLICY, SOURCE_QUERY_POLICY, CONTEXT_POLICY, QUERY_COVERAGE_POLICY, SAVED_WINDOW_POLICY}:raise ValueError('Unknown saved budget policy')
     focused = policy != LEGACY_POLICY
-    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY,SAVED_WINDOW_POLICY}
-    query_coverage = policy in {BUDGET_POLICY,SAVED_WINDOW_POLICY}
-    context_retention = policy in {CONTEXT_POLICY,BUDGET_POLICY,SAVED_WINDOW_POLICY}
+    priority = policy in {PRIORITY_POLICY,SOURCE_QUERY_POLICY,CONTEXT_POLICY,QUERY_COVERAGE_POLICY,SAVED_WINDOW_POLICY}
+    query_coverage = policy in {QUERY_COVERAGE_POLICY,SAVED_WINDOW_POLICY}
+    context_retention = policy in {CONTEXT_POLICY,QUERY_COVERAGE_POLICY,SAVED_WINDOW_POLICY}
     progressive = priority or policy == ADAPTIVE_POLICY
-    plan=source_query_plan(state,complete,source_core=policy==SAVED_WINDOW_POLICY) if policy in {SOURCE_QUERY_POLICY,CONTEXT_POLICY,BUDGET_POLICY,SAVED_WINDOW_POLICY} else None
+    plan=source_query_plan(state,complete,source_core=policy==SAVED_WINDOW_POLICY) if policy in {SOURCE_QUERY_POLICY,CONTEXT_POLICY,QUERY_COVERAGE_POLICY,SAVED_WINDOW_POLICY} else None
     core_queries={sid:p['core_queries'] for sid,p in plan.items()} if plan is not None else None
     thresholds = ASSEMBLY_THRESHOLDS if progressive else (0.5,)
     initial_threshold = thresholds[0]
