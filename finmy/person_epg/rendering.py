@@ -7,6 +7,7 @@ import tempfile
 from finmy.dataset import within
 from finmy.search.state import digest, now, write_json
 from finmy.search.summary import directory_lock
+from .event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 
 
 SCROLLABLE_VIEW = 'person-event-scrollable-v1'
@@ -17,7 +18,7 @@ def save_gantt(graph, directory, graph_path, *, result_status=None):
     record = {'status': 'failed', 'graph_sha256': digest(graph), 'rendered_at': now()}
     temporary = None
     try:
-        if graph.get('schema_version') == 'person-event-1.0':
+        if graph.get('schema_version') in (GRAPH_VERSION, LEGACY_GRAPH_VERSION):
             from .event.graph_html import render_graph_html
             source = Path(graph_path).read_bytes()
             if json.loads(source) != graph:
@@ -26,7 +27,8 @@ def save_gantt(graph, directory, graph_path, *, result_status=None):
             html = render_graph_html(graph, graph_sha256=record['graph_sha256'], result_status=result_status).encode('utf-8')
             record['renderer'] = SCROLLABLE_VIEW
             dependencies = ('rendering.py', 'event/graph_html.py', 'event/graph.html',
-                            'event/graph_layout.py', 'event/graph_view.py', 'event/graph_labels.py')
+                            'event/graph_layout.py', 'event/graph_view.py', 'event/graph_labels.py',
+                            'event/evidence_support.py')
         elif graph.get('schema_version') == 'person-epg-3.0':
             from .visualizer_gantt import render_event
             html = render_event(graph).encode('utf-8')
@@ -61,7 +63,7 @@ def render_saved_event(directory):
             raise ValueError('There is no saved draft to render')
         graph_path = within(directory, state['output'])
         graph = json.loads(graph_path.read_text())
-        current = graph.get('schema_version') == 'person-event-1.0'
+        current = graph.get('schema_version') in (GRAPH_VERSION, LEGACY_GRAPH_VERSION)
         if (digest(graph_path.read_bytes()) if current else digest(graph)) != state['graph_sha256']:
             raise ValueError('Saved draft integrity mismatch')
         from .build import check_identity
@@ -86,7 +88,7 @@ def read_gantt(directory, state, *, current_view=False):
     """Only display HTML that belongs to this exact saved draft."""
     graph_path = within(directory, state['output'])
     graph = json.loads(graph_path.read_text())
-    current = graph.get('schema_version') == 'person-event-1.0'
+    current = graph.get('schema_version') in (GRAPH_VERSION, LEGACY_GRAPH_VERSION)
     if (digest(graph_path.read_bytes()) if current else digest(graph)) != state['graph_sha256']:
         raise ValueError('Saved draft integrity mismatch')
     record = state.get('visualization', {})

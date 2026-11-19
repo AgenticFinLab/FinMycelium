@@ -126,7 +126,7 @@ def test_workbench_relation_recovery_prepares_without_starting(tmp_path,payload,
     store=Store(tmp_path/'workspace');controller=BuildController(store)
     body=dict(kind='person_event',artifact_directory=str(directory),code={'commit':'old','python_sources_sha256':'old'},
         person_code='old',input=payload,input_hash=digest(payload),scope_hash=digest(payload['user_query']['extras']['person_event']['scope']),
-        person_config=original['config'],graph_schema_version='person-event-1.0')
+            person_config=original['config'],graph_schema_version='person-event-2.0')
     with store.connection() as db:db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',('PBUILD-test','event',encoded(body),'limit','now'))
     first=controller.prepare_person_relation_recovery('PBUILD-test',**LIMITS)
     assert first['model_started'] is False

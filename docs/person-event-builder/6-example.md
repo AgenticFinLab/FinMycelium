@@ -83,7 +83,7 @@
 
 抽取首先形成三个候选动作，未组织前的 `phase_id` 为 null。限制的存在进入环境 Context；机构是 Entity，机构发布限制的独立行为作为上下文依据，不额外扩充焦点人物的动作集合。
 
-| 事实 | 原文 | 组织后的去向 |
+| 事实 | Evidence | 组织后的去向 |
 | --- | --- | --- |
 | 接收并确认限制 | EV-3 | ACTION-1 → PHASE-1 |
 | 召开内部说明会 | EV-4 | ACTION-2 → PHASE-1 |
@@ -94,9 +94,9 @@
 
 资料还明确给出两种行为模式的时期，因此在一个 Stage 内组织两个 Phase；不是因为有三份材料就生成三个阶段。组织只写入动作归属，不重新提取动作。
 
-以下偏移按三个输入 sample 的 Unicode 码点计算；引文必须逐字匹配。所有来源仅为本例的本地合成记录。
+每条 Evidence 保存一项事实陈述，其 `citations` 保存来源原话。下表列出各 Evidence 的单条 citation；偏移按三个输入 sample 的 Unicode 码点计算，引文必须逐字匹配。所有来源仅为本例的本地合成记录。
 
-| Evidence | sample | 起止偏移 | quote |
+| 所属 Evidence | citation.sample_id | 起止偏移 | citation.quote |
 | --- | --- | --- | --- |
 | `EV-1` | `SAMPLE-1` | `[0, 78)` | On 1 February 2020, the Harbor Project Office issued a disclosure restriction. |
 | `EV-2` | `SAMPLE-1` | `[79, 182)` | The restriction applied to Mina Lee's public statements and remained in effect through 7 February 2020. |
@@ -109,11 +109,11 @@
 
 ## 6.3 最终图示例
 
-以下完整 JSON 展示各对象的引用；字段规则仍以第 1、2 章为准。两个 Phase 的基准均明确保留缺口，不能因为有一项约束就宣称所有主体状态已知。
+以下完整 JSON 使用 `person-event-2.0`，展示事实陈述、来源引文及各对象的引用；字段规则仍以第 1、2 章为准。两个 Phase 的基准均明确保留缺口，不能因为有一项约束就宣称所有主体状态已知。
 
 ```json
 {
-  "schema_version": "person-event-1.0",
+  "schema_version": "person-event-2.0",
   "person": {"person_id": "DEMO-PERSON-0001", "name": "Mina Lee", "aliases": [], "event_ids": ["DEMO-EVENT-01"]},
   "storyline": {"storyline_id": "DEMO-STORYLINE-01", "person_id": "DEMO-PERSON-0001", "name": "Public communication"},
   "event": {
@@ -488,83 +488,123 @@
   "evidence": [
     {
       "evidence_id": "EV-1",
-      "sample_id": "SAMPLE-1",
-      "source_id": "SRC-1",
-      "quote": "On 1 February 2020, the Harbor Project Office issued a disclosure restriction.",
-      "start": 0,
-      "end": 78,
-      "location_status": "matched",
-      "sample_sha256": "94a22a0ec711ff250f98d5875eb211b89d4ad16ed632276359f882e5f513b236"
+      "statement": "The Harbor Project Office issued a disclosure restriction on 1 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-1",
+          "source_id": "SRC-1",
+          "quote": "On 1 February 2020, the Harbor Project Office issued a disclosure restriction.",
+          "start": 0,
+          "end": 78,
+          "location_status": "matched",
+          "sample_sha256": "94a22a0ec711ff250f98d5875eb211b89d4ad16ed632276359f882e5f513b236"
+        }
+      ]
     },
     {
       "evidence_id": "EV-2",
-      "sample_id": "SAMPLE-1",
-      "source_id": "SRC-1",
-      "quote": "The restriction applied to Mina Lee's public statements and remained in effect through 7 February 2020.",
-      "start": 79,
-      "end": 182,
-      "location_status": "matched",
-      "sample_sha256": "94a22a0ec711ff250f98d5875eb211b89d4ad16ed632276359f882e5f513b236"
+      "statement": "The disclosure restriction covered Mina Lee's public statements through 7 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-1",
+          "source_id": "SRC-1",
+          "quote": "The restriction applied to Mina Lee's public statements and remained in effect through 7 February 2020.",
+          "start": 79,
+          "end": 182,
+          "location_status": "matched",
+          "sample_sha256": "94a22a0ec711ff250f98d5875eb211b89d4ad16ed632276359f882e5f513b236"
+        }
+      ]
     },
     {
       "evidence_id": "EV-3",
-      "sample_id": "SAMPLE-1",
-      "source_id": "SRC-1",
-      "quote": "On 1 February 2020, Mina Lee, acting in her personal capacity, received and acknowledged the restriction.",
-      "start": 183,
-      "end": 288,
-      "location_status": "matched",
-      "sample_sha256": "94a22a0ec711ff250f98d5875eb211b89d4ad16ed632276359f882e5f513b236"
+      "statement": "Mina Lee received and acknowledged the disclosure restriction in her personal capacity on 1 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-1",
+          "source_id": "SRC-1",
+          "quote": "On 1 February 2020, Mina Lee, acting in her personal capacity, received and acknowledged the restriction.",
+          "start": 183,
+          "end": 288,
+          "location_status": "matched",
+          "sample_sha256": "94a22a0ec711ff250f98d5875eb211b89d4ad16ed632276359f882e5f513b236"
+        }
+      ]
     },
     {
       "evidence_id": "EV-4",
-      "sample_id": "SAMPLE-2",
-      "source_id": "SRC-2",
-      "quote": "On 3 February 2020, Mina Lee, acting in her personal capacity, held an internal briefing about the disclosure restriction.",
-      "start": 0,
-      "end": 122,
-      "location_status": "matched",
-      "sample_sha256": "f60fbf786a311e1835ab40326ba3aee89bca00981b922dffb6868625e45b00ee"
+      "statement": "Mina Lee held an internal briefing about the disclosure restriction in her personal capacity on 3 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-2",
+          "source_id": "SRC-2",
+          "quote": "On 3 February 2020, Mina Lee, acting in her personal capacity, held an internal briefing about the disclosure restriction.",
+          "start": 0,
+          "end": 122,
+          "location_status": "matched",
+          "sample_sha256": "f60fbf786a311e1835ab40326ba3aee89bca00981b922dffb6868625e45b00ee"
+        }
+      ]
     },
     {
       "evidence_id": "EV-5",
-      "sample_id": "SAMPLE-2",
-      "source_id": "SRC-2",
-      "quote": "From 1 through 4 February 2020, Lee focused on internal preparation.",
-      "start": 123,
-      "end": 191,
-      "location_status": "matched",
-      "sample_sha256": "f60fbf786a311e1835ab40326ba3aee89bca00981b922dffb6868625e45b00ee"
+      "statement": "Mina Lee focused on internal preparation from 1 through 4 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-2",
+          "source_id": "SRC-2",
+          "quote": "From 1 through 4 February 2020, Lee focused on internal preparation.",
+          "start": 123,
+          "end": 191,
+          "location_status": "matched",
+          "sample_sha256": "f60fbf786a311e1835ab40326ba3aee89bca00981b922dffb6868625e45b00ee"
+        }
+      ]
     },
     {
       "evidence_id": "EV-6",
-      "sample_id": "SAMPLE-3",
-      "source_id": "SRC-3",
-      "quote": "On 5 February 2020, Mina Lee, acting in her personal capacity, published a response.",
-      "start": 0,
-      "end": 84,
-      "location_status": "matched",
-      "sample_sha256": "fff4bf89dd92083e2f227b0da2ec2b0302d887ebf6a4b87aadca35d1bb7da42c"
+      "statement": "Mina Lee published a response in her personal capacity on 5 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-3",
+          "source_id": "SRC-3",
+          "quote": "On 5 February 2020, Mina Lee, acting in her personal capacity, published a response.",
+          "start": 0,
+          "end": 84,
+          "location_status": "matched",
+          "sample_sha256": "fff4bf89dd92083e2f227b0da2ec2b0302d887ebf6a4b87aadca35d1bb7da42c"
+        }
+      ]
     },
     {
       "evidence_id": "EV-7",
-      "sample_id": "SAMPLE-3",
-      "source_id": "SRC-3",
-      "quote": "The response addressed questions raised in the internal briefing on 3 February.",
-      "start": 85,
-      "end": 164,
-      "location_status": "matched",
-      "sample_sha256": "fff4bf89dd92083e2f227b0da2ec2b0302d887ebf6a4b87aadca35d1bb7da42c"
+      "statement": "Mina Lee's response addressed questions raised in the internal briefing on 3 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-3",
+          "source_id": "SRC-3",
+          "quote": "The response addressed questions raised in the internal briefing on 3 February.",
+          "start": 85,
+          "end": 164,
+          "location_status": "matched",
+          "sample_sha256": "fff4bf89dd92083e2f227b0da2ec2b0302d887ebf6a4b87aadca35d1bb7da42c"
+        }
+      ]
     },
     {
       "evidence_id": "EV-8",
-      "sample_id": "SAMPLE-3",
-      "source_id": "SRC-3",
-      "quote": "From 5 through 7 February 2020, Lee focused on public communication.",
-      "start": 165,
-      "end": 233,
-      "location_status": "matched",
-      "sample_sha256": "fff4bf89dd92083e2f227b0da2ec2b0302d887ebf6a4b87aadca35d1bb7da42c"
+      "statement": "Mina Lee focused on public communication from 5 through 7 February 2020.",
+      "citations": [
+        {
+          "sample_id": "SAMPLE-3",
+          "source_id": "SRC-3",
+          "quote": "From 5 through 7 February 2020, Lee focused on public communication.",
+          "start": 165,
+          "end": 233,
+          "location_status": "matched",
+          "sample_sha256": "fff4bf89dd92083e2f227b0da2ec2b0302d887ebf6a4b87aadca35d1bb7da42c"
+        }
+      ]
     }
   ]
 }
@@ -587,7 +627,7 @@
 {
   "run_id": "DEMO-RUN-01",
   "input_sha256": "cdc9903c1f5ac503909a83b46e27b27d5decb6613e04c536ad1b026312ad0f26",
-  "graph_sha256": "a05625f641635a5ba97baa1173e3d21c9bcfaef93f5441d455febfd2668d0859",
+  "graph_sha256": "f5975e4f1ede4743d232be14ef5499d22eee6f04dbb01b67c792b3321fc71faf",
   "artifact_hashes": {},
   "summary": {
     "checked": [

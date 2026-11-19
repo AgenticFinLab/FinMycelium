@@ -11,6 +11,7 @@ import re
 from jsonschema import Draft202012Validator
 
 from .schema import JSON_SCHEMA, MODEL
+from .event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 
 
 def _pointer(parts):
@@ -171,7 +172,7 @@ def validate_person_epg(package, *, require_normalized_times=False):
     Shape errors are returned before relational checks, so malformed JSON values
     cannot leak Python indexing/type errors through the public interface.
     """
-    if isinstance(package, dict) and package.get('schema_version') == 'person-event-1.0':
+    if isinstance(package, dict) and package.get('schema_version') in {GRAPH_VERSION, LEGACY_GRAPH_VERSION}:
         from .event.validation import check_graph
         return check_graph(package)
     errors = [

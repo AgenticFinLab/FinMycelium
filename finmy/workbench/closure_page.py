@@ -2,11 +2,13 @@
 import json
 import streamlit as st
 from finmy.person_epg.event.closure import load_review, pending_items
+from finmy.person_epg.event.evidence_support import iter_citations, evidence_statement
+from finmy.person_epg.event.schema import GRAPH_VERSION
 
 
 def closure_panel(controller, row):
     body = row['body']
-    if body.get('graph_schema_version') != 'person-event-1.0':
+    if body.get('graph_schema_version') != GRAPH_VERSION:
         return
     try:
         review = load_review(body['artifact_directory'])
@@ -22,6 +24,7 @@ def closure_panel(controller, row):
             return
         contexts = {c['context_id']: c for c in review['graph']['contexts']}
         evidence = {e['evidence_id']: e for e in review['graph']['evidence']}
+        sources = {s['source_id']: s for s in review['graph']['sources']}
         token = review['state_sha256'][:16]
         decisions = []
         with st.form('close-' + row['id'] + '-' + token):
@@ -33,8 +36,16 @@ def closure_panel(controller, row):
                 for eid in pending['evidence_ids']:
                     ev = evidence.get(eid)
                     if ev:
-                        st.caption(eid + ' · ' + ev.get('source_id', ''))
-                        st.write(ev['quote'])
+                        st.caption(eid)
+                        st.write(evidence_statement(ev))
+                        for citation in iter_citations(ev):
+                            sid = citation['source_id']
+                            source = sources.get(sid, {})
+                            st.caption(sid + ' · ' + (source.get('title') or source.get('origin') or ''))
+                            st.write(citation['quote'])
+                            st.caption(citation['sample_id'] + ' · ' + citation['location_status']
+                                       + (' · [' + str(citation['start']) + ', ' + str(citation['end']) + ')'
+                                          if citation.get('start') is not None else ''))
                 if not item['eligible']:
                     st.caption('继续保留待处理：此项没有符合条件的已采用 Context，或涉及实际未完成工作。')
                     continue

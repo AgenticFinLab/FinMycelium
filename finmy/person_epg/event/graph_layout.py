@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlparse
 
 from .graph_labels import card_label, shorten
+from .evidence_support import iter_citations
 
 
 def _short(text, limit=175):
@@ -70,7 +71,8 @@ def arrange_graph(graph, view):
                 if eid in evidence}
 
     def source_ids(record):
-        return {evidence[eid]['source_id'] for eid in passages(record)}
+        return {citation['source_id'] for eid in passages(record)
+                for citation in iter_citations(evidence[eid])}
 
     details = view['details']
     person = graph.get('person', {})
@@ -231,20 +233,23 @@ def arrange_graph(graph, view):
         quotes = {sid: set() for sid in extra_sources}
         for card in cards:
             for eid in sorted(passages(records[card['id']]), key=evidence_order.get):
-                sid = evidence[eid]['source_id']
-                if sid not in records:
-                    continue
-                quotes.setdefault(sid, set()).add(eid)
-                edges.append({'from': sid, 'to': card['id'], 'type': 'supports', 'kind': 'evidence'})
+                for citation in iter_citations(evidence[eid]):
+                    sid = citation['source_id']
+                    if sid not in records:
+                        continue
+                    quotes.setdefault(sid, set()).add(eid)
+                    edges.append({'from': sid, 'to': card['id'], 'type': 'supports', 'kind': 'evidence'})
         for edge in edges[:]:
             for eid in sorted(passages(edge.get('record', {})), key=evidence_order.get):
-                sid = evidence[eid]['source_id']
+                for citation in iter_citations(evidence[eid]):
+                    sid = citation['source_id']
+                    if sid in records:
+                        quotes.setdefault(sid, set()).add(eid)
+        for eid in extra_evidence:
+            for citation in iter_citations(evidence[eid]):
+                sid = citation['source_id']
                 if sid in records:
                     quotes.setdefault(sid, set()).add(eid)
-        for eid in extra_evidence:
-            sid = evidence[eid]['source_id']
-            if sid in records:
-                quotes.setdefault(sid, set()).add(eid)
         top = body_end + 30
         source_list = sorted(quotes, key=lambda sid: aliases[sid])
         source_columns = max(1, (canvas_width - 38) // 274)
@@ -337,7 +342,8 @@ def arrange_graph(graph, view):
     used_evidence = {eid for page in output for card in page['cards'] for eid in card.get('quotes', [])}
     unused = [eid for eid in evidence if eid not in used_evidence]
     displayed_sources = {card['id'] for page in output for card in page['cards'] if card['kind'] == 'source'}
-    unused_sources = list(dict.fromkeys([evidence[eid]['source_id'] for eid in unused] +
+    unused_sources = list(dict.fromkeys([citation['source_id'] for eid in unused
+                                        for citation in iter_citations(evidence[eid])] +
                                       [source['source_id'] for source in graph.get('sources', [])
                                        if source['source_id'] not in displayed_sources]))
     if unused or unused_sources:

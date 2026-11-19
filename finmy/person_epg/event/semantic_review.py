@@ -12,6 +12,8 @@ from .records import fingerprint, index_records
 from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now
 from .schema import RELATION_TYPES
 from .validation import check_graph
+from .evidence_support import evidence_is_located
+from .context import evidence_view
 
 EVIDENCE_RULES = """Use the supplied focal actions, their times, source passages and context.
 Trace both actors; distinguish personal decisions and reported speech from other entities' execution
@@ -53,11 +55,10 @@ def evidence_packet(graph):
         relation_types=list(RELATION_TYPES), actions=actions,
         phases=[item(p, ('phase_id', 'name', 'stage_id')) for p in graph['phases']],
         entities=[item(e, ('entity_id', 'name')) for e in graph['entities']],
-        sources=[item(s, ('source_id', 'title', 'published_at')) for s in graph['sources']],
+        sources=[item(s, ('source_id', 'title', 'published_at', 'publisher', 'upstream_source_ids')) for s in graph['sources']],
         contexts=[dict(**item(c, ('context_id', 'description', 'perspective', 'time')), evidence_ids=supports(c))
                   for c in graph['contexts']],
-        evidence=[item(e, ('evidence_id', 'source_id', 'sample_id', 'start', 'end', 'quote'))
-                  for e in graph['evidence'] if e['location_status'] == 'matched'])
+        evidence=[evidence_view(e) for e in graph['evidence'] if evidence_is_located(e)])
 
 
 def comparison_view(graph):
@@ -96,7 +97,7 @@ def apply_review(graph, payload, response):
     """Apply each traceable proposal on a copy; partial decisions never erase neighbors."""
     current = deepcopy(graph)
     index = index_records(graph)
-    evidence = {eid for eid, e in index['evidence'].items() if e['location_status'] == 'matched'}
+    evidence = {eid for eid, e in index['evidence'].items() if evidence_is_located(e)}
     actions, edges = index['actions'], index['relations']
     ledger, seen, touched = [], set(), set()
 

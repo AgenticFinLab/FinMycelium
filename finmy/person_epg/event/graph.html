@@ -745,7 +745,16 @@ function toggle(key) {
     item.detail.append(el('strong', data.title));
     if (data.date) item.detail.append(el('p', data.date));
     for (const paragraph of data.paragraphs) item.detail.append(el('p', paragraph));
-    for (const eid of item.card.quotes || []) item.detail.append(el('p', evidence.get(eid)?.quote, 'quote'));
+    for (const eid of item.card.quotes || []) {
+      const fact = evidence.get(eid);
+      const citations = sourceCitations(fact, item.card.id);
+      if (!citations.length) continue;
+      if (fact.statement) item.detail.append(el('strong', fact.statement));
+      for (const citation of citations) {
+        item.detail.append(el('p', citation.quote, 'quote'));
+        item.detail.append(el('small', citationLocation(citation)));
+      }
+    }
     const source = sources.get(item.card.id);
     if (source && /^https?:\/\//.test(source.url || '')) {
       const link = el('a', 'Open source');
@@ -764,6 +773,15 @@ function toggle(key) {
   }
   if (!open) layoutCards();
   drawEdges();
+}
+
+function sourceCitations(fact, sourceId) {
+  return (fact?.citations || (fact ? [fact] : [])).filter(citation => citation.source_id === sourceId);
+}
+
+function citationLocation(citation) {
+  const offset = citation.location_status === 'matched' ? `${citation.start}–${citation.end}` : citation.location_status;
+  return [citation.sample_id, offset, citation.locator ? JSON.stringify(citation.locator) : ''].filter(Boolean).join(' · ');
 }
 
 function showPage(index) {

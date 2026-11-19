@@ -9,6 +9,7 @@ from finmy.dataset import within
 from finmy.model_config import (PERSON_BUILD_STAGED_EFFORT, person_build_effort_options,
                                 person_build_json_mode_supported)
 from finmy.person_epg.event.runtime import EventBuildConfig
+from finmy.person_epg.event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 from finmy.search.state import digest
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded
@@ -135,12 +136,12 @@ def person_build_panel(store, controller, row, labels):
         else:
             st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
         if row['status'] in {'partial','failed','interrupted','limit','paused'}:
-            if body.get('graph_schema_version') != 'person-event-1.0':
+            if body.get('graph_schema_version') != GRAPH_VERSION:
                 st.info('这是历史协议任务，可查看保存的产物或重新绘图；重新构建请建立新任务。')
             cap=st.number_input('恢复后的累计调用上限',min_value=body['person_config']['max_calls'],
                                 value=body['person_config']['max_calls'],key='person-resume-cap-'+tid)
             st.caption('计数保留；准备恢复不会调用模型，仍需明确启动。')
-            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=body.get('graph_schema_version')!='person-event-1.0'):
+            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=body.get('graph_schema_version')!=GRAPH_VERSION):
                 try:
                     controller.prepare_person_resume(tid,max_calls=cap);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))
@@ -154,7 +155,7 @@ def person_build_panel(store, controller, row, labels):
         try:
             graph_path=within(body['artifact_directory'],run['output'])
             graph=json.loads(graph_path.read_text())
-            current=graph.get('schema_version')=='person-event-1.0'
+            current=graph.get('schema_version') in {GRAPH_VERSION, LEGACY_GRAPH_VERSION}
             if (digest(graph_path.read_bytes()) if current else digest(graph))!=run['graph_sha256']:raise ValueError('Saved graph integrity mismatch')
             st.caption('已保存的草稿：'+str(graph_path))
             if current:

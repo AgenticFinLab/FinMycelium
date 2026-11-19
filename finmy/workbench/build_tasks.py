@@ -14,6 +14,7 @@ import yaml
 
 from finmy.dataset import dataset_root, output_directory
 from finmy.model_config import model_name
+from finmy.person_epg.event.schema import GRAPH_VERSION
 from finmy.search.control import task_lock, task_path
 from finmy.search.state import write_json
 from finmy.workbench.domain import digest, encoded, graph_from_bytes, validate_graph
@@ -172,6 +173,8 @@ class BuildController:
             row = self.inspect(task_id); body = row['body']
             if body.get('kind') != 'person_event' or row['status'] != 'failed':
                 raise ValueError('Choose the failed native person Event task')
+            if body.get('graph_schema_version') != GRAPH_VERSION:
+                raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
             if body.get('read_recovery'):
                 check_person_code(body)
                 return dict(task_id=task_id, recovery=body['read_recovery'], ready_to_resume=True, model_started=False)
@@ -201,6 +204,8 @@ class BuildController:
             row = self.inspect(task_id); body = row['body']
             if body.get('kind') != 'person_event' or row['status'] not in {'limit', 'ready'}:
                 raise ValueError('Choose the stopped native person Event task')
+            if body.get('graph_schema_version') != GRAPH_VERSION:
+                raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
             if body.get('read_recovery', {}).get('record') == RELATION_RECORD:
                 check_person_code(body)
             elif not compatible_relation_workbench(body['code']):
@@ -237,6 +242,8 @@ class BuildController:
             row = self.inspect(task_id); body = row['body']
             if body.get('kind') != 'person_event' or row['status'] not in {'failed', 'ready'}:
                 raise ValueError('Choose the native person Event task stopped by output truncation')
+            if body.get('graph_schema_version') != GRAPH_VERSION:
+                raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
             if body.get('read_recovery', {}).get('record') == OUTPUT_RECORD:
                 check_person_code(body)
             elif not compatible_output_workbench(body['code']):
@@ -268,13 +275,13 @@ class BuildController:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
             if body.get('disposition') == 'discarded':
                 raise ValueError('请先恢复已舍弃草稿')
+            if body.get('graph_schema_version') != GRAPH_VERSION:
+                raise ValueError('旧协议任务可查看或重绘；请用确认过的原始输入建立新构建任务')
             state_path = Path(body['artifact_directory']) / 'state.json'
             if state_path.is_file() and json.loads(state_path.read_text()).get('offline_revisions'):
                 raise ValueError('已有人工收尾修订；继续模型构建请从相同确认输入新建任务，保留当前修订')
             check_person_code(body)
             config=dict(body['person_config'])
-            if body.get('graph_schema_version') != 'person-event-1.0':
-                raise ValueError('旧协议任务可查看或重绘；请用确认过的原始输入建立新构建任务')
             if max_calls is not None:
                 if max_calls < config['max_calls']:
                     raise ValueError('恢复不得降低累计调用上限')
@@ -501,7 +508,7 @@ def execute_person_build(body, directory):
     from finmy.person_epg.event.runtime import EventBuildConfig
     from finmy.dataset import within
     load_dotenv(ROOT / '.env', override=False)
-    if body.get('graph_schema_version') != 'person-event-1.0':
+    if body.get('graph_schema_version') != GRAPH_VERSION:
         raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
     config = EventBuildConfig.from_saved(body['person_config'])
     state = run_event(body['input'], directory, config, allow_network=True,

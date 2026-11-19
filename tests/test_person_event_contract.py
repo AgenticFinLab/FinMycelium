@@ -10,6 +10,7 @@ from finmy.person_epg.event.records import (
 )
 from finmy.person_epg.event.validation import check_graph, order_view
 from finmy.person_epg.validation import validate_person_epg
+from finmy.person_epg.event.evidence_support import upgrade_evidence
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'person_event'
 
@@ -244,6 +245,7 @@ def facts_from_graph(graph, payload):
     facts = seed_facts(payload)
     for key in ('entities', 'actions', 'contexts', 'evidence'):
         facts[key] = deepcopy(graph[key])
+    facts['evidence'] = [upgrade_evidence(e) for e in facts['evidence']]
     for action in facts['actions']:
         action['phase_id'] = None
         action['support'] = [s for s in action['support'] if s['target'] != '/phase_id']

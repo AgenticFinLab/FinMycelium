@@ -5,6 +5,7 @@ import pytest
 from test_person_event_contract import facts_from_graph, graph, payload
 from finmy.person_epg.event.proposals import Receiver, reference, replace_references
 from finmy.person_epg.event.records import IdMap, seed_facts
+from finmy.person_epg.event.evidence_support import upgrade_evidence, upgrade_package_evidence
 
 
 def test_relation_context_addition_and_action_update_are_atomic(graph, payload):
@@ -54,7 +55,9 @@ def test_malformed_context_neighbor_is_pending_not_a_pipeline_crash(graph, paylo
     response = dict(contexts=[None], relations=[], phase_context_updates=[], action_context_updates=[
         dict(action_id=action['action_id'], delta_context_refs=None, baseline_context_exclusions=[])], evidence=[], pending=[])
     result, report = Receiver(graph, payload, IdMap(), 'malformed').relate(response, action_ids=[action['action_id']], phase_ids=[])
-    assert report['rejected'] and result == graph
+    assert report['rejected']
+    assert result['evidence'] == upgrade_package_evidence(graph)['evidence']
+    assert result['actions'] == graph['actions'] and result['contexts'] == graph['contexts']
 
 
 def test_supported_split_and_forward_hierarchy_are_adopted_together(graph, payload):
@@ -62,7 +65,7 @@ def test_supported_split_and_forward_hierarchy_are_adopted_together(graph, paylo
     from finmy.person_epg.event.records import seed_facts
     from finmy.person_epg.event.validation import check_graph
     facts = seed_facts(payload)
-    facts['evidence'] = deepcopy(graph['evidence'])
+    facts['evidence'] = [upgrade_evidence(e) for e in graph['evidence']]
     facts['entities'] = deepcopy(graph['entities'])
     facts['actions'] = deepcopy(graph['actions'])
     for action in facts['actions']:

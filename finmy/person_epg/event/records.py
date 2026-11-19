@@ -5,6 +5,7 @@ import json
 import re
 
 from .schema import COLLECTION_IDS, FACTS_VERSION
+from .evidence_support import evidence_is_located, evidence_statement, merge_citations
 
 
 def sha256(data):
@@ -55,14 +56,17 @@ def validate_input(payload):
 def source_records(payload):
     registry = payload['user_query']['extras']['source_registry']
     sources = []
-    for source_id in dict.fromkeys(s['raw_data_id'] for s in payload['samples']):
+    source_ids = list(dict.fromkeys(s['raw_data_id'] for s in payload['samples']))
+    for source_id in source_ids:
+        if source_id not in registry:
+            raise ValueError('Unknown source in source_registry: ' + str(source_id))
         record = registry[source_id]
         source = dict(source_id=source_id, title=record.get('title'),
                       url=record.get('source_url') or record.get('url'), origin=record.get('origin'),
                       published_at=record.get('published_at'), retrieved_at=record.get('retrieved_at'))
-        for key in ('source_type', 'content_status'):
+        for key in ('source_type', 'content_status', 'publisher', 'upstream_source_ids'):
             if record.get(key) is not None:
-                source[key] = record[key]
+                source[key] = deepcopy(record[key])
         if not source['url'] and not source['origin']:
             raise ValueError('Each frozen source needs a URL or origin: ' + source_id)
         from jsonschema import Draft202012Validator
@@ -70,6 +74,13 @@ def source_records(payload):
         problems = list(Draft202012Validator(schema_for('Source')).iter_errors(source))
         if problems:
             raise ValueError('Invalid source metadata: ' + source_id + ': ' + problems[0].message)
+        for upstream_id in source.get('upstream_source_ids', []):
+            if upstream_id == source_id:
+                raise ValueError('A source cannot cite itself as its upstream origin: ' + source_id)
+            if upstream_id not in registry:
+                raise ValueError('Unknown upstream source: ' + upstream_id)
+            if upstream_id not in source_ids:
+                source_ids.append(upstream_id)
         sources.append(source)
     return sources
 
@@ -205,6 +216,51 @@ def ground_quote(proposal, samples, evidence_id, allowed_ranges=None, *, audit=N
                 sample_sha256=sha256(text.encode('utf-8')))
 
 
+def ground_evidence(proposal, samples, evidence_id, allowed_ranges=None, *, audit=None):
+    """Ground every quotation before an Evidence or citation append is adopted.
+
+    ``allowed_ranges`` maps sample IDs to ranges read by this task. The v1
+    proposal adapter retains a source-attributed quotation as its statement;
+    it does not infer a new factual paraphrase from historical output.
+    """
+    if not isinstance(proposal, dict):
+        raise ValueError('Evidence proposals must be objects')
+    citation_fields = {'sample_id', 'quote', 'start', 'end', 'context_before', 'context_after'}
+    legacy = 'statement' not in proposal and 'citations' not in proposal
+    if legacy:
+        if (not {'evidence_id', 'sample_id', 'quote'} <= proposal.keys()
+                or proposal.keys() - citation_fields - {'evidence_id'}):
+            raise ValueError('Legacy Evidence needs only its ID, sample, quote and location hints')
+        citations = [{key: value for key, value in proposal.items() if key != 'evidence_id'}]
+    else:
+        if set(proposal) != {'evidence_id', 'statement', 'citations'}:
+            raise ValueError('Evidence proposals require only evidence_id, statement and citations')
+        if not isinstance(proposal['statement'], str) or not proposal['statement'].strip():
+            raise ValueError('Evidence requires a nonempty factual statement')
+        citations = proposal['citations']
+    if not isinstance(citations, list) or not citations:
+        raise ValueError('Evidence requires at least one source quotation')
+    grounded = []
+    for index, citation in enumerate(citations):
+        if (not isinstance(citation, dict) or not {'sample_id', 'quote'} <= citation.keys()
+                or citation.keys() - citation_fields):
+            raise ValueError('Citations contain only sample, exact quote and location hints')
+        if not isinstance(citation['sample_id'], str) or citation['sample_id'] not in samples:
+            raise ValueError('Citation sample is unknown')
+        ranges = None if allowed_ranges is None else allowed_ranges.get(citation['sample_id'], [])
+        changes = []
+        item = ground_quote(citation, samples, evidence_id, ranges, audit=changes)
+        item.pop('evidence_id')
+        grounded.append(item)
+        if audit is not None:
+            for change in changes:
+                audit.append({**change, 'field': f'/citations/{index}' + change['field']})
+    statement = evidence_statement(grounded[0]) if legacy else proposal['statement']
+    if legacy and audit is not None:
+        audit.append(dict(field='/statement', rule='legacy_quote_as_source_statement', after=statement))
+    return dict(evidence_id=evidence_id, statement=statement, citations=merge_citations([], grounded))
+
+
 def support_located(supports, package):
     """Structural traceability only; this does not establish semantic entailment."""
     evidence = index_records(package)['evidence']
@@ -212,7 +268,7 @@ def support_located(supports, package):
         return False
     for support in supports:
         ids = support.get('evidence_ids', [])
-        if any(eid not in evidence or evidence[eid]['location_status'] != 'matched' for eid in ids):
+        if any(eid not in evidence or not evidence_is_located(evidence[eid]) for eid in ids):
             return False
         if support.get('mode') in ('O', 'A'):
             if not ids:

@@ -238,10 +238,14 @@ C(p) = (Env(p), Rel(p), State(p))
 ## 8.6 证据模型
 
 ```
-Ev = (Sources, Claims, Conflicts, Gaps)
-Prov: Claims → 2^{Sources}
-Sup:  Claims → 2^{O, A, I}
+Ev = (Sources, Evidence, Claims, Conflicts, Gaps)
+Basis: Claims → 2^{Evidence}
+Origin: Evidence → 2^{Sources}
+Prov(x) = ⋃ {Origin(v) : v ∈ Basis(x)}
+Sup: Claims → 2^{O, A, I}
 ```
+
+Evidence 中的一项表示一条可核查事实陈述。`Origin` 允许一项事实关联多个来源，同一来源也可出现在多项事实的出处集合中；每个事实与来源的对应保留一段或多段原文及定位。引文是关联信息，不新增图层。`Claims` 仍表示结构对象中的描述，`Basis` 对应这些描述引用的事实证据。
 
 - `O`（record）：claim 是**来源/记录本身的内容**（例如“该公告写道 X”）；
 - `A`（asserted）：claim 是关于世界的来源断言（包括官方声明）；不是直接可核验的记录内容；
@@ -265,7 +269,7 @@ flowchart LR
     SUP --> G["Sup=∅ + Gap"]
 ```
 
-**读法**：先有来源，再有证据引用；一条 claim 可以有多个支持模式（集合），不是单值；`Sup=∅` 不是第四种模式，而是“没有支持 + 记录缺口”。`O`/`A` 按 claim 内容区分，不按来源类型区分。
+**读法**：对象描述引用事实证据，事实证据通过各自引文回到来源；一条 claim 可以有多个支持模式（集合），不是单值；`Sup=∅` 不是第四种模式，而是“没有支持 + 记录缺口”。`O`/`A` 按 claim 内容区分，不按来源类型区分。
 
 **为什么这样建模**：描述结构要回答“这句话是怎么来的”。把“记录内容/世界断言/推断/未知”分开，才能让读者判断哪些可直接复核、哪些需追溯、哪些只是分析判断；它也能防止把推断伪装成事实。
 

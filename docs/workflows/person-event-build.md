@@ -1,7 +1,7 @@
 # Build one person event
 
 A task reconstructs one confirmed `person / storyline / event`, using
-`person-event-1.0` and the [engineering contract](../person-event-builder/0-overview.md).
+`person-event-2.0` and the [engineering contract](../person-event-builder/0-overview.md).
 The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own protocols.
 
 ## Workbench flow
@@ -268,6 +268,22 @@ inspect evidence, or verify the fixed slide layout locally.
 Using the project environment from the repository root:
 
 ```bash
+7z x '/path/to/PBUILD-dee74d7e4a1d(1).7z' -o'/tmp/person-event-real'
+PERSON_EVENT_REAL_RUN_DIR=/tmp/person-event-real/PBUILD-dee74d7e4a1d \
+  PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
+  tests/test_person_event_real_run.py tests/test_person_event_evidence_sources.py
+```
+
+The real-run test reads the original `input.json`,
+`attempts/0004/epg.json` and `attempts/0004/facts.json` in that extracted
+directory. Keep these three files exactly as extracted. It checks the frozen
+input's SHA-256, validates the original and in-memory upgraded graphs, then
+grounds two multi-source Evidence records using exact quotations from the
+historical run. It makes no model calls and writes nothing to the run directory.
+
+For the broader offline unit suite:
+
+```bash
 PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
   tests/test_person_event_contract.py tests/test_person_event_runtime.py \
   tests/test_person_event_adoption.py tests/test_person_event_pipeline.py \
@@ -275,10 +291,11 @@ PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
   tests/test_person_event_gantt.py tests/test_search_build_contract.py
 ```
 
-Tests use the authored design example, synthetic responses and temporary directories.
-They verify contracts, ownership, quote alignment, partial adoption, limits, recovery
-and artifact correspondence without real search or model calls. They do not establish
-real-case content quality, coverage or cost.
+The broader unit suite uses the authored design example, synthetic responses and
+temporary directories to verify contracts, ownership, quote alignment, partial
+adoption, limits, recovery and artifact correspondence. The real-run regression
+checks provenance and structural compatibility, not historical content quality,
+coverage or cost.
 
 ## Collection decisions
 

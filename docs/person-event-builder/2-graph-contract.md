@@ -10,7 +10,7 @@
 
 | 字段 | 类型 | 约定 |
 | --- | --- | --- |
-| `schema_version` | string | `person-event-1.0`，程序管理的协议标识 |
+| `schema_version` | string | `person-event-2.0`，程序管理的协议标识 |
 | `person` | object | 本次焦点人物身份与本图 Event 索引 |
 | `storyline` | object | 上层目录分组信息 |
 | `event` | object | 唯一目标事项、范围与完整摘要 |
@@ -18,7 +18,7 @@
 | `stages / phases` | Stage[] / Phase[] | 局面阶段与行为阶段 |
 | `actions / relations` | Action[] / Relation[] | Event 动作图的节点与边 |
 | `contexts` | Context[] | Phase 基准和 Action 差量共同引用的上下文 |
-| `sources / evidence` | Source[] / Evidence[] | 支撑描述的来源与原文引证 |
+| `sources / evidence` | Source[] / Evidence[] | 来源文档与事实证据；Evidence 内的 citations 保存逐来源原文及定位 |
 
 `schema_version` 是读写兼容标识，不是人物研究计划中的人工版本号。身份与目录层的定义如下：
 

@@ -12,6 +12,7 @@ from finmy.person_epg.event.proposals import Receiver, graph_from_facts, referen
 from finmy.person_epg.event.records import IdMap, seed_facts, sha256
 from finmy.person_epg.event.runtime import EventBuildConfig
 from finmy.person_epg.event.validation import check_graph
+from finmy.person_epg.event.schema import GRAPH_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +118,7 @@ def test_complete_new_protocol_pipeline(tmp_path, payload):
     assert state['result_status'] == 'draft', json.loads((tmp_path / state['checks']).read_text())
     graph_path = tmp_path / state['output']
     graph = json.loads(graph_path.read_text())
-    assert graph['schema_version'] == 'person-event-1.0'
+    assert graph['schema_version'] == GRAPH_VERSION
     assert check_graph(graph, payload)['valid']
     assert sha256(graph_path.read_bytes()) == state['graph_sha256']
     assert len(graph['actions']) == 3 and len(graph['phases']) == 2

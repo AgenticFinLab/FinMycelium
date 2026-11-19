@@ -3,7 +3,9 @@ from copy import deepcopy
 
 from jsonschema import Draft202012Validator
 
-from .records import fingerprint, ground_quote, index_records, pointer
+from .records import fingerprint, ground_evidence, index_records, pointer
+from .evidence_support import (citation_is_located, evidence_is_located, merge_citations,
+                               upgrade_package_evidence)
 from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_VERSION, schema_for
 from .validation import check_graph, covers, record_temporal_conflicts, SupportIndex
 from .relation_review import validate_review
@@ -193,7 +195,7 @@ def preserve_context_refs(previous, proposed):
 
 class Receiver:
     def __init__(self, package, payload, id_map, namespace, read_ranges=None, reserved=None):
-        self.package, self.payload = deepcopy(package), payload
+        self.package, self.payload = upgrade_package_evidence(package), payload
         self.ids, self.namespace = id_map, namespace
         self.read_ranges = read_ranges
         self.reserved = reserved or {}
@@ -267,27 +269,44 @@ class Receiver:
         samples = {s['sample_id']: s for s in self.payload['samples']}
         for proposal in response['evidence']:
             try:
-                if (not isinstance(proposal, dict) or not {'evidence_id', 'sample_id', 'quote'} <= proposal.keys()
-                        or proposal.keys() - {'evidence_id', 'sample_id', 'quote', 'start', 'end', 'context_before', 'context_after'}):
-                    raise ValueError('Evidence proposals contain only temporary ID, sample, exact quote and location hints')
+                if not isinstance(proposal, dict):
+                    raise ValueError('Evidence proposals must be objects')
                 temporary = proposal['evidence_id']
-                eid = self.ids.assign('evidence', temporary, self.namespace)
-                ranges = None if self.read_ranges is None else self.read_ranges.get(proposal['sample_id'], [])
+                if not isinstance(temporary, str) or not temporary.strip():
+                    raise ValueError('Evidence requires a nonempty ID')
+                by_id = index_records(self.package)['evidence']
+                eid = temporary if temporary in by_id else self.ids.assign('evidence', temporary, self.namespace)
                 changes = []
-                grounded = ground_quote(proposal, samples, eid, ranges, audit=changes)
-                duplicate = next((e for e in self.package['evidence'] if all(e[k] == grounded[k]
-                    for k in ('sample_id', 'quote', 'start', 'end', 'location_status', 'sample_sha256'))), None)
-                if duplicate:
-                    eid = duplicate['evidence_id']
-                elif temporary in indexes['evidence']:
-                    raise ValueError('Existing Evidence cannot be overwritten')
+                grounded = ground_evidence(proposal, samples, eid, self.read_ranges, audit=changes)
+                unlocated = [number for number, citation in enumerate(grounded['citations'])
+                             if not citation_is_located(citation)]
+                current = by_id.get(eid)
+                if current is not None and current['statement'] != grounded['statement']:
+                    raise ValueError('Existing Evidence statement cannot change when appending citations')
+                if current is None:
+                    current = next((e for e in self.package['evidence']
+                                    if e['statement'] == grounded['statement']), None)
+                if current is not None:
+                    if unlocated:
+                        raise ValueError('Citation append rejected: every added quotation must be uniquely located')
+                    # The entire proposal has been grounded before touching the
+                    # adopted record. Failed appends cannot leave partial edits.
+                    eid = current['evidence_id']
+                    citations = merge_citations(current['citations'], grounded['citations'])
+                    current['citations'] = citations
                 else:
                     self.package['evidence'].append(grounded)
+                    if unlocated:
+                        self.report['pending'].append(dict(refs=[], evidence_ids=[eid],
+                            reason='Evidence retains unlocated citation candidates at indices '
+                                   + ', '.join(map(str, unlocated)) + '; they do not count as located support.'))
                 mappings['evidence'][temporary] = eid
                 if changes:
                     self.report.setdefault('normalizations', []).append(dict(item='evidence:' + eid, changes=changes))
             except (ValueError, KeyError, TypeError) as exc:
                 self.reject('evidence', exc)
+                self.report['rejected'][-1]['proposal'] = deepcopy(proposal)
+        self.evidence_mappings = deepcopy(mappings['evidence'])
         response = replace_references(response, mappings)
         for item in response['pending']:
             errors = list(Draft202012Validator(schema_for('Pending')).iter_errors(item))
@@ -397,7 +416,7 @@ class Receiver:
             raise ValueError('Decision consumes unassigned, duplicate or previously handled candidates')
         indexes = index_records(package)
         originals = [indexes[c][oid] for c, oid in inputs]
-        if any(e not in indexes['evidence'] or indexes['evidence'][e]['location_status'] != 'matched' for e in decision['evidence_ids']):
+        if any(e not in indexes['evidence'] or not evidence_is_located(indexes['evidence'][e]) for e in decision['evidence_ids']):
             raise ValueError('Decision evidence is not located')
         if any(not isinstance(o, dict) or set(o) != {'collection', 'record'}
                or not isinstance(o['collection'], str)

@@ -68,6 +68,9 @@ function showRecord(key){
  for(const ev of row.evidence){
   const card=element('div',undefined,'evidence');
   card.append(element('div',ev.references.map(r=>r.field_path+' · '+r.evidence_set_id).join('; '),'metadata'));
+  if(ev.statement)card.append(element('p',ev.statement));
+  if(ev.publisher)card.append(element('div','Publisher: '+ev.publisher,'metadata'));
+  if(ev.upstream_sources?.length)card.append(element('div','Reports information from: '+ev.upstream_sources.join('; '),'metadata'));
   card.append(element('blockquote',ev.quote));
   const name=ev.title||ev.document_id||'Unresolved source';let url;
   try{url=new URL(ev.url);if(!['https:','http:'].includes(url.protocol))url=null;}catch{url=null;}

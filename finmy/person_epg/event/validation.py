@@ -5,7 +5,10 @@ from datetime import date
 from jsonschema import Draft202012Validator, FormatChecker
 
 from .records import compose_context, index_records, pointer, sha256, source_records
-from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_SCHEMA, PARTIAL_SCHEMA
+from .evidence_support import citation_is_located, iter_citations
+from .schema import (COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_SCHEMA, PARTIAL_SCHEMA,
+                     LEGACY_FACTS_SCHEMA, LEGACY_FACTS_VERSION, LEGACY_GRAPH_SCHEMA,
+                     LEGACY_GRAPH_VERSION, LEGACY_PARTIAL_SCHEMA)
 
 
 def interval(record):
@@ -42,19 +45,22 @@ def field_conflicted(package, collection, oid, field):
     return False
 
 
-def located_evidence(evidence, indexes, samples=None):
-    if (not evidence or evidence.get('location_status') != 'matched'
-            or evidence.get('source_id') not in indexes['sources']):
+def located_citation(citation, indexes, samples=None):
+    if (not citation_is_located(citation)
+            or citation.get('source_id') not in indexes['sources']):
         return False
-    start, end = evidence.get('start'), evidence.get('end')
-    if type(start) is not int or type(end) is not int or not 0 <= start < end or end - start != len(evidence['quote']):
-        return False
+    start, end, quote = citation['start'], citation['end'], citation['quote']
     if samples is not None:
-        sample = samples.get(evidence['sample_id'])
-        return bool(sample and sample['raw_data_id'] == evidence['source_id']
-                    and end <= len(sample['content']) and sample['content'][start:end] == evidence['quote']
-                    and evidence['sample_sha256'] == sha256(sample['content'].encode('utf-8')))
+        sample = samples.get(citation.get('sample_id'))
+        return bool(sample and sample['raw_data_id'] == citation['source_id']
+                    and end <= len(sample['content']) and sample['content'][start:end] == quote
+                    and citation.get('sample_sha256') == sha256(sample['content'].encode('utf-8')))
     return True
+
+
+def located_evidence(evidence, indexes, samples=None):
+    """A fact has located support when at least one of its citations is valid."""
+    return any(located_citation(citation, indexes, samples) for citation in iter_citations(evidence))
 
 
 class SupportIndex:
@@ -240,7 +246,9 @@ def record_temporal_conflicts(package):
 def check_graph(package, payload=None, *, complete=True):
     """Return protocol errors separately from review warnings and unperformed checks."""
     issues = []
-    facts = isinstance(package, dict) and package.get('schema_version') == FACTS_VERSION
+    version = package.get('schema_version') if isinstance(package, dict) else None
+    facts = version in (FACTS_VERSION, LEGACY_FACTS_VERSION)
+    legacy = version in (LEGACY_GRAPH_VERSION, LEGACY_FACTS_VERSION)
     artifact = 'facts' if facts else 'graph'
 
     def issue(code, message, collection='event', object_id=None, field='', severity='error', evidence_ids=None):
@@ -262,7 +270,8 @@ def check_graph(package, payload=None, *, complete=True):
                                  not_checked=['semantic_support', 'real_world_completeness']
                                  + ([] if payload else ['quote_locations'])))
 
-    schema = FACTS_SCHEMA if facts else GRAPH_SCHEMA if complete else PARTIAL_SCHEMA
+    schema = (LEGACY_FACTS_SCHEMA if facts else LEGACY_GRAPH_SCHEMA if complete else LEGACY_PARTIAL_SCHEMA) if legacy else (
+        FACTS_SCHEMA if facts else GRAPH_SCHEMA if complete else PARTIAL_SCHEMA)
     shape_errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(package))
     if shape_errors:
         for error in shape_errors:
@@ -305,28 +314,36 @@ def check_graph(package, payload=None, *, complete=True):
 
     samples = {s['sample_id']: s for s in payload['samples']} if payload else {}
     support_index = SupportIndex(package, payload)
+    for sid, source in indexes['sources'].items():
+        for upstream in source.get('upstream_source_ids', []):
+            foreign('sources', upstream, 'sources', sid, '/upstream_source_ids')
+            if upstream == sid:
+                issue('SOURCE_SELF_REFERENCE', 'A source cannot name itself as its upstream source.',
+                      'sources', sid, '/upstream_source_ids')
     for eid, evidence in indexes['evidence'].items():
-        foreign('sources', evidence['source_id'], 'evidence', eid, '/source_id')
-        if evidence['location_status'] == 'matched' and (
-                type(evidence['start']) is not int or type(evidence['end']) is not int
-                or not 0 <= evidence['start'] < evidence['end']
-                or evidence['end'] - evidence['start'] != len(evidence['quote'])):
-            issue('QUOTE_LOCATION_INVALID', 'Matched Unicode offsets must span exactly the nonempty quote.', 'evidence', eid)
-            if type(evidence['start']) is not int or type(evidence['end']) is not int:
-                continue
-        if payload:
-            sample = samples.get(evidence['sample_id'])
-            if not sample or sample['raw_data_id'] != evidence['source_id']:
-                issue('QUOTE_SOURCE_INVALID', 'Evidence does not belong to a frozen sample/source.', 'evidence', eid)
-                continue
-            if evidence['sample_sha256'] != sha256(sample['content'].encode('utf-8')):
-                issue('SAMPLE_HASH_MISMATCH', 'Evidence hash does not match the exact frozen text.', 'evidence', eid)
-            if evidence['location_status'] == 'matched' and evidence['end'] > len(sample['content']):
-                issue('QUOTE_LOCATION_INVALID', 'Quote offsets exceed the frozen sample.', 'evidence', eid)
-            if evidence['location_status'] == 'matched' and sample['content'][evidence['start']:evidence['end']] != evidence['quote']:
-                issue('QUOTE_MISMATCH', 'Quote is not the exact original text at the retained offsets.', 'evidence', eid)
-        if evidence['location_status'] != 'matched':
-            issue('QUOTE_UNLOCATED', 'This candidate quote is not valid located support.', 'evidence', eid, severity='warning')
+        for number, citation in enumerate(iter_citations(evidence)):
+            field = '' if legacy else f'/citations/{number}'
+            foreign('sources', citation['source_id'], 'evidence', eid, field + '/source_id')
+            if citation['location_status'] == 'matched' and (
+                    type(citation['start']) is not int or type(citation['end']) is not int
+                    or not 0 <= citation['start'] < citation['end']
+                    or citation['end'] - citation['start'] != len(citation['quote'])):
+                issue('QUOTE_LOCATION_INVALID', 'Matched Unicode offsets must span exactly the nonempty quote.', 'evidence', eid, field)
+                if type(citation['start']) is not int or type(citation['end']) is not int:
+                    continue
+            if payload:
+                sample = samples.get(citation['sample_id'])
+                if not sample or sample['raw_data_id'] != citation['source_id']:
+                    issue('QUOTE_SOURCE_INVALID', 'Citation does not belong to a frozen sample/source.', 'evidence', eid, field)
+                    continue
+                if citation['sample_sha256'] != sha256(sample['content'].encode('utf-8')):
+                    issue('SAMPLE_HASH_MISMATCH', 'Citation hash does not match the exact frozen text.', 'evidence', eid, field)
+                if citation['location_status'] == 'matched' and citation['end'] > len(sample['content']):
+                    issue('QUOTE_LOCATION_INVALID', 'Quote offsets exceed the frozen sample.', 'evidence', eid, field)
+                if citation['location_status'] == 'matched' and sample['content'][citation['start']:citation['end']] != citation['quote']:
+                    issue('QUOTE_MISMATCH', 'Quote is not the exact original text at the retained offsets.', 'evidence', eid, field)
+            if citation['location_status'] != 'matched':
+                issue('QUOTE_UNLOCATED', 'This candidate quote is not valid located support.', 'evidence', eid, field, severity='warning')
 
     dependencies = defaultdict(set)
 
@@ -345,8 +362,9 @@ def check_graph(package, payload=None, *, complete=True):
                         issue('SUPPORT_TARGET_INVALID', 'Support target is absent from its owner.', collection, oid, target)
                     modes[support['target']].add(support['mode'])
                     for eid in support['evidence_ids']:
-                        if foreign('evidence', eid, collection, oid, target) and indexes['evidence'][eid]['location_status'] != 'matched':
-                            issue('SUPPORT_UNLOCATED', 'Unlocated quotes cannot count as valid support.', collection, oid, target, evidence_ids=[eid])
+                        if foreign('evidence', eid, collection, oid, target) and not located_evidence(
+                                indexes['evidence'][eid], indexes, samples if payload else None):
+                            issue('SUPPORT_UNLOCATED', 'Evidence needs at least one valid located citation.', collection, oid, target, evidence_ids=[eid])
                     for reference in support.get('premise_refs', []):
                         if foreign(reference['collection'], reference['object_id'], collection, oid, target):
                             try:

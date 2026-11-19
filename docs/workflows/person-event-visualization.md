@@ -1,6 +1,7 @@
 # Interactive person event visualization
 
-A saved `person-event-1.0` draft can be exported as a standalone HTML file.
+A saved `person-event-2.0` draft can be exported as a standalone HTML file.
+Existing `person-event-1.0` graphs remain readable using their original quote format.
 The viewer shows stages, phases, actions, context and source evidence. Cards
 show a summary and expand in place to reveal their own text. The connecting
 lines follow the expanded card. The workbench uses this scrollable view as the
@@ -13,7 +14,9 @@ primary artifact and saves it as `gantt.html` for review and collection.
 3. Inspect the graph under **交互式人物事件图** or select **下载交互式事件图 HTML**.
 4. Open the downloaded file in a browser and click an action or source card.
    The card expands and its lines follow its border. A source card opens its
-   own excerpts. Click again or press Escape to collapse the card.
+   supported fact statements and only the excerpts attributed to that source,
+   with their locations. A fact can have several sources; one source can
+   support several facts. Click again or press Escape to collapse the card.
 
 For an older native run with a valid saved timeline, the workbench displays the
 scrollable view from its verified JSON. **从已保存 JSON 重新绘图** writes this

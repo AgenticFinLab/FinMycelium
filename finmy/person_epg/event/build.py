@@ -18,6 +18,7 @@ from .context import navigation, sized_request
 from .grouping import ambiguity_groups
 from .validation import check_graph
 from .relation_review import discovery_scope
+from .evidence_support import iter_citations, citation_is_located
 
 
 def body_ranges(payload, config):
@@ -167,8 +168,9 @@ class Construction:
                 if isinstance(value, dict) and {'sample_id', 'start', 'end', 'text'} <= value.keys():
                     ranges[value['sample_id']].append((value['start'], value['end']))
         for evidence in package['evidence']:
-            if evidence['location_status'] == 'matched':
-                ranges[evidence['sample_id']].append((evidence['start'], evidence['end']))
+            for citation in iter_citations(evidence):
+                if citation_is_located(citation):
+                    ranges[citation['sample_id']].append((citation['start'], citation['end']))
         receiver = Receiver(package, self.run.payload, self.ids, namespace, ranges, reserved=reserved)
         method = {'extraction': receiver.extract, 'consolidation': receiver.consolidate,
                   'organization': receiver.organize, 'relations': receiver.relate}[role]

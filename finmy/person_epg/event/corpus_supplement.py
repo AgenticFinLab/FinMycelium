@@ -6,6 +6,7 @@ from .proposals import Receiver, exact_deduplicate, reference, validate_envelope
 from .records import fingerprint, ground_quote, index_records, pointer, prompt_json
 from .runtime import InvalidResponse
 from .schema import COLLECTION_IDS
+from .evidence_support import iter_citations, evidence_is_located, upgrade_evidence
 
 
 TASK_ID = 'whole-corpus.supplement'
@@ -19,8 +20,9 @@ def make_request(facts, payload):
         for record in facts[collection]:
             summary = {k: v for k, v in record.items() if k not in ('support', 'gaps', 'conflicts')}
             if 'support' in record:
-                summary['support_samples'] = sorted({evidence[eid]['sample_id'] for s in record['support']
-                                                     for eid in s.get('evidence_ids', []) if eid in evidence})
+                summary['support_samples'] = sorted({c['sample_id'] for s in record['support']
+                    for eid in s.get('evidence_ids', []) if eid in evidence for c in iter_citations(evidence[eid])})
+                summary['evidence_ids'] = sorted({eid for s in record['support'] for eid in s.get('evidence_ids', [])})
             if record.get('gaps'):
                 summary['existing_gaps'] = [g.get('target') for g in record['gaps']]
             summaries.append(summary)
@@ -29,7 +31,10 @@ def make_request(facts, payload):
     documents = [dict(sample_id=s['sample_id'], source_id=s['raw_data_id'],
                       title=source_by_id[s['raw_data_id']].get('title'), text=s['content']) for s in payload['samples']]
     return dict(role='corpus_supplement', identity=payload['user_query']['extras']['person_event'],
-                query_text=payload['user_query']['query_text'], existing=existing, documents=documents)
+                query_text=payload['user_query']['query_text'], existing=existing, documents=documents,
+                evidence=[dict(evidence_id=e['evidence_id'], statement=e.get('statement'),
+                    citations=[dict(source_id=c['source_id'], sample_id=c['sample_id'], quote=c['quote'])
+                               for c in iter_citations(e)]) for e in facts['evidence']])
 
 
 def validate_delta(value):
@@ -52,9 +57,12 @@ def adopt_delta(build, raw, request):
     native['evidence'] = []
     for number, proposal in enumerate(original_evidence):
         try:
-            entry = ground_quote(proposal, samples, 'preview', ranges[proposal['sample_id']])
-            if entry['location_status'] != 'matched':
-                raise ValueError('Supporting quote is ' + entry['location_status'])
+            citations = proposal.get('citations', [proposal])
+            if not isinstance(citations, list) or not citations:
+                raise ValueError('Evidence needs at least one citation')
+            entries = [ground_quote(c, samples, 'preview', ranges[c['sample_id']]) for c in citations]
+            if not any(e['location_status'] == 'matched' for e in entries):
+                raise ValueError('Supporting evidence has no located citation')
             native['evidence'].append(proposal)
         except (TypeError, KeyError, ValueError) as exc:
             receiver.reject('new_evidence.' + str(number), exc)
@@ -63,9 +71,13 @@ def adopt_delta(build, raw, request):
     for number, item in enumerate(raw['support_additions']):
         label = 'additional_support.' + str(number)
         def attach(package):
-            fields = {'collection', 'object_id', 'target', 'mode', 'reason', 'sample_id', 'quote'}
-            if not isinstance(item, dict) or fields - item.keys() or item.keys() - fields - {'context_before', 'context_after'}:
+            fields = {'collection', 'object_id', 'target', 'mode', 'reason'}
+            if not isinstance(item, dict) or fields - item.keys():
                 raise ValueError('Invalid support addition fields')
+            legacy = 'evidence_id' not in item
+            extras = {'sample_id', 'quote', 'context_before', 'context_after'} if legacy else {'evidence_id'}
+            if item.keys() - fields - extras or (legacy and not {'sample_id', 'quote'} <= item.keys()):
+                raise ValueError('Support additions cite an Evidence ID')
             collection, oid, target = item['collection'], item['object_id'], item['target']
             if collection not in ('actions', 'contexts', 'relation_candidates') or oid not in before[collection]:
                 raise ValueError('Append support only to an existing indexed fact')
@@ -74,14 +86,25 @@ def adopt_delta(build, raw, request):
             record = index_records(package)[collection][oid]
             if pointer(record, target) is None or item['mode'] not in ('O', 'A', 'I') or not isinstance(item['reason'], str) or not item['reason'].strip():
                 raise ValueError('An occupied field, support mode and reason are required')
-            evidence = ground_quote(item, samples, build.ids.assign('evidence', label, namespace), ranges[item['sample_id']])
-            if evidence['location_status'] != 'matched':
-                raise ValueError('Additional support quote is ' + evidence['location_status'])
-            same = next((e for e in package['evidence'] if e['location_status'] == 'matched' and all(
-                e[k] == evidence[k] for k in ('sample_id', 'sample_sha256', 'start', 'end'))), None)
-            if same is None:
-                package['evidence'].append(evidence)
-            eid = (same or evidence)['evidence_id']
+            if legacy:
+                citation = ground_quote(item, samples, build.ids.assign('evidence', label, namespace), ranges[item['sample_id']])
+                if citation['location_status'] != 'matched':
+                    raise ValueError('Additional support quote is ' + citation['location_status'])
+                evidence = upgrade_evidence(citation)
+                # Legacy additions retain the source-attributed claim. A shared quote
+                # alone does not establish that two factual statements are identical.
+                same = next((e for e in package['evidence'] if e.get('statement') == evidence['statement']), None)
+                if same is None:
+                    package['evidence'].append(evidence)
+                else:
+                    for c in evidence['citations']:
+                        if c not in same['citations']:
+                            same['citations'].append(c)
+                eid = (same or evidence)['evidence_id']
+            else:
+                eid = receiver.evidence_mappings.get(item['evidence_id'], item['evidence_id'])
+                if not evidence_is_located(index_records(package)['evidence'].get(eid, {})):
+                    raise ValueError('Additional support must cite located evidence')
             if any(s['target'] == target and s['mode'] == item['mode'] and eid in s.get('evidence_ids', []) for s in record['support']):
                 return
             record['support'].append(dict(target=target, mode=item['mode'], evidence_ids=[eid], reason=item['reason']))

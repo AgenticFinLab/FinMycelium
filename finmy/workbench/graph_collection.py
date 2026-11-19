@@ -8,6 +8,7 @@ import re
 import yaml
 
 from finmy.dataset import DatasetCatalog, accepted_artifact_paths, catalog_event_directory, within
+from finmy.person_epg.event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 from finmy.search.state import digest
 from finmy.search.summary import atomic_text, directory_lock
 from .catalog_actions import folder_files, replace_folder, action_record, save_action
@@ -67,7 +68,7 @@ def _registry_text(fields, rows):
 
 
 def _identity(catalog, graph):
-    if (graph.get('schema_version') != 'person-event-1.0'
+    if (graph.get('schema_version') not in {GRAPH_VERSION, LEGACY_GRAPH_VERSION}
             or graph.get('event', {}).get('event_id') != catalog['event_id']
             or graph.get('person', {}).get('person_id') != catalog.get('person_id')
             or graph.get('storyline', {}).get('storyline_id') != catalog.get('storyline_id')):

@@ -126,7 +126,7 @@ def test_workbench_prepares_recovery_once_without_starting_worker(tmp_path, payl
     body = dict(kind='person_event', artifact_directory=str(directory),
                 code={'commit':'old', 'python_sources_sha256':'old'}, person_code=recovery.ORIGIN,
                 input=payload, input_hash=digest(payload), scope_hash=digest(payload['user_query']['extras']['person_event']['scope']),
-                person_config=old['config'], graph_schema_version='person-event-1.0')
+                person_config=old['config'], graph_schema_version='person-event-2.0')
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)', ('PBUILD-test','event',encoded(body),'failed','now'))
     first = controller.prepare_person_read_recovery('PBUILD-test')

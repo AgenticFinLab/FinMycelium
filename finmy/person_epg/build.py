@@ -243,6 +243,6 @@ def run_legacy_event(payload, directory, config=None, *, allow_network=False, mo
 
 
 def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None):
-    """Build new tasks with person-event-1.0; historical readers remain versioned."""
+    """Build new tasks with person-event-2.0; historical readers remain versioned."""
     from .event.build import run_event as build_person_event
     return build_person_event(payload, directory, config, allow_network=allow_network, model=model, resume=resume, provenance=provenance)

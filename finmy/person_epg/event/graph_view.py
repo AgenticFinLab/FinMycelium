@@ -1,6 +1,8 @@
 """Build fixed graph views from native event records, without event-specific assets."""
 import re
 
+from .evidence_support import iter_citations
+
 
 def build_views(graph):
     groups = (
@@ -84,6 +86,13 @@ def build_views(graph):
                       if isinstance(record.get(key), str) and record[key]), node_id)
         paragraphs = dict.fromkeys(record[key] for key in ('description', 'summary')
                                   if isinstance(record.get(key), str) and record[key] and record[key] != title)
+        if node_id in source_ids:
+            if record.get('publisher'):
+                paragraphs['Publisher: ' + record['publisher']] = None
+            upstream = [records.get(sid, {}).get('title') or sid
+                        for sid in record.get('upstream_source_ids', [])]
+            if upstream:
+                paragraphs['Reports information from: ' + '; '.join(upstream)] = None
         details[node_id] = {
             'title': title, 'paragraphs': list(paragraphs),
             'date': record.get('published_at') or (record.get('time') or {}).get('text'),
@@ -127,26 +136,27 @@ def build_views(graph):
                 continue
             for support in records[node].get('support', []):
                 for eid in support.get('evidence_ids', []):
-                    passage = evidence.get(eid, {})
-                    sid = passage.get('source_id')
-                    if sid not in source_ids:
-                        continue
-                    sources.setdefault(sid, set()).add(eid)
-                    local_edges.append({'from': sid, 'to': node, 'type': 'supports', 'kind': 'evidence'})
+                    for citation in iter_citations(evidence.get(eid)):
+                        sid = citation.get('source_id')
+                        if sid not in source_ids:
+                            continue
+                        sources.setdefault(sid, set()).add(eid)
+                        local_edges.append({'from': sid, 'to': node, 'type': 'supports', 'kind': 'evidence'})
         # Retain passages cited by relations, even when neither endpoint has its own support.
         for edge in edges:
             if edge['from'] not in visible and edge['to'] not in visible:
                 continue
             for support in edge.get('record', {}).get('support', []):
                 for eid in support.get('evidence_ids', []):
-                    passage = evidence.get(eid, {})
-                    if passage.get('source_id') in source_ids:
-                        sources.setdefault(passage['source_id'], set()).add(eid)
+                    for citation in iter_citations(evidence.get(eid)):
+                        if citation.get('source_id') in source_ids:
+                            sources.setdefault(citation['source_id'], set()).add(eid)
         if not phase:
             sources.update((sid, sources.get(sid, set())) for sid in source_ids)
             for eid, passage in evidence.items():
-                if passage.get('source_id') in source_ids:
-                    sources[passage['source_id']].add(eid)
+                for citation in iter_citations(passage):
+                    if citation.get('source_id') in source_ids:
+                        sources[citation['source_id']].add(eid)
 
         boxes = {}
         columns = [(people, 24, 230), (activity, 300, 350), (context, 704, 380)]

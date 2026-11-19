@@ -8,7 +8,7 @@
 
 | 文档 | 定义内容 |
 | --- | --- |
-| [1 · 输入与统一事实](1-input-and-facts.md) | 任务输入、身份、时间、来源、引文、支持记录和事实检查点 |
+| [1 · 输入与统一事实](1-input-and-facts.md) | 任务输入、身份、时间、事实证据、逐来源引文、支持记录和事实检查点 |
 | [2 · 图数据协议](2-graph-contract.md) | Event、Stage、Phase、Action、Context、关系及引用约束 |
 | [3 · 构建流程](3-construction-flow.md) | 六步顺序、多角色协作、上下文分配、局部检索和有限修正 |
 | [4 · 执行与恢复](4-execution-and-recovery.md) | 配置、预算、调用记录、检查点和恢复失效条件 |

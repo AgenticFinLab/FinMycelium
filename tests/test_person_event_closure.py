@@ -139,7 +139,8 @@ def test_controller_persists_result_without_changing_usage(partial,tmp_path):
     store=Store(tmp_path/'workspace');controller=BuildController(store);tid='PBUILD-test'
     (controller.root/tid).mkdir(parents=True)
     r=load_review(partial)
-    body=dict(kind='person_event',artifact_directory=str(partial),run_state=r['state'],usage=['keep'],finished='keep')
+    body=dict(kind='person_event',artifact_directory=str(partial),run_state=r['state'],usage=['keep'],finished='keep',
+              graph_schema_version=r['state']['graph_schema_version'])
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',(tid,'event',json.dumps(body),'partial','now'))
     controller.close_person_pending(tid,[decision(r)],expected_state_sha256=r['state_sha256'],reviewer='Reviewer')

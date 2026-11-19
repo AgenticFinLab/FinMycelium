@@ -8,7 +8,7 @@ from pathlib import Path
 from .graph_view import build_views
 from .graph_layout import arrange_graph
 from .records import fingerprint
-from .schema import GRAPH_VERSION
+from .schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 
 _ASSETS = Path(__file__).parent
 
@@ -43,8 +43,8 @@ def _layout_pages(graph, layout):
 
 def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=None):
     """Generate an offline graph view, or use an explicitly supplied authored layout."""
-    if not isinstance(graph, dict) or graph.get('schema_version') != GRAPH_VERSION:
-        raise ValueError(f'The EPG viewer requires a {GRAPH_VERSION} graph')
+    if not isinstance(graph, dict) or graph.get('schema_version') not in (GRAPH_VERSION, LEGACY_GRAPH_VERSION):
+        raise ValueError(f'The EPG viewer requires a {GRAPH_VERSION} or {LEGACY_GRAPH_VERSION} graph')
     pages = _layout_pages(graph, layout)
     view = build_views(graph)
     if pages is None:
