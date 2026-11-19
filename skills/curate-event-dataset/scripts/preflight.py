@@ -51,8 +51,9 @@ def inspect(finmy, dataset, mode):
              "event-epg/events.template.csv", "event-epg/events.csv", "event-epg/sources.csv",
              "event-epg/event-sources.csv", "event-epg/curation-decisions.csv",
              "event-epg/research/checkpoint.json", "event-epg/README.md",
-             "event-epg/research-plan.md", "event-epg/quality-report.md", "scripts/curate_events.py",
-             "scripts/export_event_workbench.py"]
+             "event-epg/research-plan.md", "event-epg/quality-report.md",
+             "event-epg/research/row-review.csv.gz", "event-epg/research/duplicate-review.csv.gz",
+             "event-epg/research/evidence.jsonl.gz"]
     code = ["finmy/workbench/domain.py", "finmy/workbench/store.py", "finmy/dataset.py",
             "finmy/workbench/dataset_page.py", "finmy/workbench/search_bridge.py"]
     result = {"executed_at_utc": datetime.now(timezone.utc).isoformat(), "mode": mode,
@@ -60,11 +61,12 @@ def inspect(finmy, dataset, mode):
               "versions": {"finmy": version(finmy), "dataset": version(dataset)},
               "dataset_files": {n: file_info(dataset / n) for n in files},
               "interface_code": {n: file_info(finmy / n) for n in code},
+              "skill_tools": {p.name: file_info(p) for p in sorted(Path(__file__).resolve().parent.glob("*.py"))},
               "limitation": "Inventory and executable parsing probes only. No web research, semantic truth review, deduplication verdict, formal-file change or Workbench database write."}
     result["original_inputs"] = {
-        "status": "retired_by_user",
+        "status": "outside_current_workflow",
         "required": False,
-        "note": "Original working table, legacy registry and graph manifest were deleted intentionally. Do not restore, read or rehash them; use the current catalog and retained audit records."}
+        "note": "Use the current catalog and retained audit records. The historical working table, registry and graph manifest are not required."}
     checkpoint = dataset / "event-epg/research/checkpoint.json"
     if checkpoint.is_file():
         q = json.loads(checkpoint.read_text(encoding="utf-8-sig"))
