@@ -11,7 +11,7 @@ from .prompts import system_prompt
 from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference, validate_envelope
 from .records import IdMap, fingerprint, index_records, seed_facts, validate_input, prompt_json
 from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now, write_json
-from .schema import COLLECTION_IDS
+from .schema import COLLECTION_IDS, GRAPH_VERSION, LEGACY_GRAPH_VERSION
 from .feedback import (correction_scope, correction_issues, validate_correction,
                        unresolved_report, reserved_records, clear_resolved_pending)
 from .context import navigation, sized_request
@@ -19,6 +19,7 @@ from .grouping import ambiguity_groups
 from .validation import check_graph
 from .relation_review import discovery_scope
 from .evidence_support import iter_citations, citation_is_located
+from .scheduling import Task, ModelCallFailed, emit
 
 
 def body_ranges(payload, config):
@@ -50,8 +51,12 @@ class Construction:
     def request(self, role, package, **fields):
         base = dict(role=role, identity=self.run.payload['user_query']['extras']['person_event'],
                     query_text=self.run.payload['user_query']['query_text'],
-                    read_limits=dict(read_chars=self.run.config.read_chars, retrieval_top_k=self.run.config.retrieval_top_k),
+                    read_limits=dict(read_chars=self.run.config.read_chars, retrieval_top_k=self.run.config.retrieval_top_k,
+                                     max_read_rounds=self.run.config.max_read_rounds),
                     **fields)
+        base['readable_samples'] = [dict(source_id=sample['raw_data_id'],
+            sample_id=sample['sample_id'], length=len(sample['content']))
+            for sample in self.run.payload['samples']]
         reserve = self.run.config.read_chars + 1024
         if role == 'relations':
             reserve = max(reserve, self.run.config.max_context_chars // 4)
@@ -59,10 +64,14 @@ class Construction:
         return sized_request(base, package, self.run.config.max_context_chars - len(system_prompt(role)),
                              reserve=reserve)
 
-    def receive(self, task_id, role, package, request, *, reserved=None, **scope):
+    def receive(self, task_id, role, package, request, **kwargs):
+        return self.run.drive(task_id, self.receive_steps(task_id, role, package, request, **kwargs), stage='repair' if task_id.startswith('repair.') else role)
+
+    def receive_steps(self, task_id, role, package, request, *, reserved=None, initial_package=None, live=False, **scope):
         system = system_prompt(role)
-        request = self.run.task_request(task_id, system, request, package)
-        group = self.run.attempt_group(task_id, system, request, package)
+        frozen = package if initial_package is None else initial_package
+        request = self.run.task_request(task_id, system, request, frozen)
+        group = self.run.attempt_group(task_id, system, request, frozen)
         records, allowed = [], None
         result = package
         for number in range(self.run.config.max_json_attempts):
@@ -72,11 +81,14 @@ class Construction:
             validator = (lambda v: validate_envelope(role, v)) if allowed is None else \
                 (lambda v: validate_correction(role, v, allowed))
             try:
-                raw = self.run.infer(step_id, system, request, result, validator, attempt_group=group)
+                infer_package = frozen if number == 0 else result
+                raw = yield from self.run.infer_steps(step_id, system, request, infer_package, validator, attempt_group=group)
             except InvalidResponse:
                 if not records:
                     raise
                 break  # Preserve adopted facts and the outstanding rejection evidence.
+            if live:
+                result = self.graph if role in ('organization', 'relations') else self.facts
             result, record = self.adopt(step_id, role, result, request, raw, reserved=allowed or reserved, **scope)
             records.append(record)
             if number:
@@ -85,7 +97,7 @@ class Construction:
                 else:
                     self.resolve_fact_corrections(records[:-1], record)
                 clear_resolved_pending(result, self.reports, self.outstanding)
-            if role == 'relations':
+            if role in ('organization', 'relations'):
                 self.graph = result  # Preserve adopted edges if a local correction pauses/fails.
             if result.get('schema_version') == self.facts['schema_version']:
                 self.facts = result
@@ -96,6 +108,7 @@ class Construction:
             allowed = correction_scope(role, combined, result, handled)
             if not allowed:
                 break
+            self.run.task_event('RetryRequested', reason='adoption_rejected')
             self.run.reject_proposals(group, fingerprint(dict(task_id=step_id, response=raw)), combined['rejected'])
             fields = {k: deepcopy(v) for k, v in request.items() if k not in (
                 'role', 'identity', 'query_text', 'facts_index', 'read_limits', 'related_records', 'context_selection')}
@@ -206,22 +219,84 @@ class Construction:
                 block['body_status'] = 'failed' if block['status'] == 'failed' else 'not_processed'
                 block['proposal_status'] = 'not_processed'
 
+    def fail_task(self, task_id, role, reason, *, refs=None, number=None):
+        item = dict(refs=refs or [], reason=task_id + ': ' + reason, evidence_ids=[])
+        self.facts['pending'].append(item)
+        if number is not None:
+            self.coverage[number]['status'] = 'failed'
+        self.reports.append(dict(task_id=task_id, role=role,
+            report=dict(accepted=[], rejected=[], pending=[item])))
+        self.save_facts()
+
+    def blocked(self, stage, reason):
+        emit(self.run, stage, stage, 'TaskQueued')
+        emit(self.run, stage, stage, 'TaskBlocked', reason=reason)
+        self.run.state.setdefault('stages', {})[stage] = dict(status='blocked', reason=reason)
+        self.run.persist()
+
+    def stage(self, name, operation):
+        """Reuse a completed stage snapshot, or rebuild it from per-call checkpoints."""
+        for key in list(self.run.state.get('task_states', {})):
+            if key.startswith(name + ':'):
+                del self.run.state['task_states'][key]
+        self.run.state.setdefault('stages', {})[name] = dict(status='running')
+        before = fingerprint(dict(input=self.run.state['input_sha256'], facts=self.facts,
+            graph=self.graph, coverage=self.coverage, reports=self.reports))
+        path = self.run.directory / 'checkpoints' / ('stage-' + name + '.json')
+        if path.is_file():
+            saved = json.loads(path.read_text())
+            if saved['before'] == before:
+                data = saved['result']
+                if fingerprint(data) != saved['result_sha256']:
+                    raise ValueError('Stage checkpoint changed')
+                self.facts, self.graph = data['facts'], data['graph']
+                self.coverage, self.reports = data['coverage'], data['reports']
+                self.ids.mapping.update(data['id_map'])
+                self.run.state['id_map'] = self.ids.mapping
+                self.run.state.setdefault('stages', {})[name] = dict(status='completed', reused=True)
+                self.save_facts()
+                return True
+        try:
+            operation()
+        except (ModelCallFailed, InvalidResponse, LimitReached) as exc:
+            reason = str(exc) if isinstance(exc, LimitReached) else type(
+                exc.original if isinstance(exc, ModelCallFailed) else exc).__name__
+            if not any(t['stage'] == name and t['status'] in ('failed', 'limited')
+                       for t in self.run.state.get('task_states', {}).values()):
+                emit(self.run, name, name, 'TaskQueued')
+                emit(self.run, name, name, 'TaskLimited' if isinstance(exc, LimitReached) else 'TaskFailed', reason=reason)
+            self.fail_task(name, name, reason)
+            self.run.state.setdefault('stages', {})[name] = dict(status='partial', reason=reason)
+            self.run.persist()
+            return False
+        status = self.run.state.get('stages', {}).get(name, {}).get('status', 'completed')
+        if status == 'running':
+            status = 'completed'
+            self.run.state['stages'][name]['status'] = status
+        if status == 'completed':
+            data = dict(facts=self.facts, graph=self.graph, coverage=self.coverage,
+                        reports=self.reports, id_map=self.ids.mapping)
+            write_json(path, dict(before=before, result=data, result_sha256=fingerprint(data)))
+        return status == 'completed'
+
     def extract(self):
         ranges = list(body_ranges(self.run.payload, self.run.config))
         self.coverage = [{k: v for k, v in block.items() if k != 'text'} | {'status': 'not_processed'} for block in ranges]
         self.save_facts()
-        for number, block in enumerate(ranges):
+        frozen = deepcopy(self.facts)
+
+        def process(number, block):
             task_id = 'extract.' + str(number)
-            request = self.request('extraction', self.facts, body=block, sources=self.facts['sources'])
-            try:
-                self.facts, report = self.receive(task_id, 'extraction', self.facts, request)
-                self.coverage[number]['status'] = 'partial' if report['rejected'] or report['pending'] else 'processed'
-            except InvalidResponse as exc:
-                self.coverage[number]['status'] = 'failed'
-                pending = dict(refs=[], reason=f"Unprocessed body {block['sample_id']} [{block['start']},{block['end']}): {exc}", evidence_ids=[])
-                self.facts['pending'].append(pending)
-                self.reports.append(dict(task_id=task_id, role='extraction', report=dict(accepted=[], rejected=[], pending=[pending])))
+            request = self.request('extraction', frozen, body=block, sources=frozen['sources'])
+            self.facts, report = yield from self.receive_steps(task_id, 'extraction', self.facts, request,
+                initial_package=frozen, live=True)
+            self.coverage[number]['status'] = 'partial' if report['rejected'] or report['pending'] else 'processed'
             self.save_facts()
+
+        tasks = [Task('extract.' + str(n), process(n, block),
+            lambda task_id, reason, n=n: self.fail_task(task_id, 'extraction', reason, number=n))
+            for n, block in enumerate(ranges)]
+        self.run.execute_tasks('extraction', tasks)
 
     def consolidate(self):
         self.facts = exact_deduplicate(self.facts, self.run.payload)
@@ -233,14 +308,25 @@ class Construction:
                 if (collection, ref['object_id']) not in assigned_all:
                     self.facts['lineage'].append(dict(operation='keep', input_refs=[ref], output_refs=[ref],
                         reason='Retained without semantic merge: no bounded ambiguity group selected.', step_id='consolidate.keep'))
+        frozen = deepcopy(self.facts)
+        tasks = []
+
+        def process(task_id, assigned, request):
+            self.facts, _ = yield from self.receive_steps(task_id, 'consolidation', self.facts, request,
+                assigned=assigned, initial_package=frozen, live=True)
+            self.save_facts()
+
         for number, group in enumerate(groups):
-            assigned = {(c, oid) for c, oid in group if oid in index_records(self.facts)[c]}
+            assigned = {(c, oid) for c, oid in group if oid in index_records(frozen)[c]}
             if len(assigned) < 2:
                 continue
-            request = self.request('consolidation', self.facts, assigned=[reference(c, oid) for c, oid in sorted(assigned)],
-                candidates=[dict(collection=c, record=index_records(self.facts)[c][oid]) for c, oid in sorted(assigned)])
-            self.facts, _ = self.receive('consolidate.' + str(number), 'consolidation', self.facts, request, assigned=assigned)
-            self.save_facts()
+            refs = [reference(c, oid) for c, oid in sorted(assigned)]
+            request = self.request('consolidation', frozen, assigned=refs,
+                candidates=[dict(collection=c, record=index_records(frozen)[c][oid]) for c, oid in sorted(assigned)])
+            task_id = 'consolidate.' + str(number)
+            tasks.append(Task(task_id, process(task_id, assigned, request),
+                lambda task_id, reason, refs=refs: self.fail_task(task_id, 'consolidation', reason, refs=refs)))
+        self.run.execute_tasks('consolidation', tasks)
         self.save_facts()
 
     def organize(self):
@@ -286,48 +372,80 @@ class Construction:
 
     def relate(self):
         # Own each Action/Phase once, while all other endpoints remain navigable.
-        actions = [a['action_id'] for a in self.graph['actions']]
+        actions = [a['action_id'] for a in self.graph['actions'] if a.get('phase_id') in
+                   {p['phase_id'] for p in self.graph['phases']}]
         phases = [p['phase_id'] for p in self.graph['phases']]
         action_phases = {a['action_id']: a.get('phase_id') for a in self.graph['actions']}
         reserve = max(self.run.config.read_chars + 1024, self.run.config.max_context_chars // 4)
         initial_limit = self.run.config.max_context_chars - reserve
+        workers = self.run.config.extraction_workers
         number = 0
         while actions or phases or number == 0:
-            owned_actions, owned_phases = [], []
-            request = self.relation_request([], [])
-            for aid in actions:
-                pid = action_phases[aid]
-                candidate_phases = owned_phases + ([pid] if pid in phases and pid not in owned_phases else [])
-                candidate = self.relation_request(owned_actions + [aid], candidate_phases)
-                selection = candidate['context_selection']
-                missing_evidence = selection['uncovered_action_ids'] or selection['omitted_relation_evidence_ids']
-                if ((owned_actions and missing_evidence) or
-                        len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit):
+            frozen = deepcopy(self.graph)
+            jobs = []
+            remaining_actions, remaining_phases = list(actions), list(phases)
+            for slot in range(len(actions) + len(phases) + 1 if frozen is not None else 1):
+                if not (remaining_actions or remaining_phases) and (number or jobs):
                     break
-                owned_actions.append(aid); owned_phases = candidate_phases; request = candidate
-            # Empty Phases still need a baseline. An oversized Action+Phase pair
-            # may first process the Phase, then retry the Action independently.
-            if not owned_actions or len(owned_actions) == len(actions):
-                for pid in phases:
-                    if pid in owned_phases:
-                        continue
-                    candidate = self.relation_request(owned_actions, owned_phases + [pid])
-                    if len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit:
+                cap = None
+                if frozen is not None and remaining_actions:
+                    cap = max(1, (len(actions) + workers-1) // workers)
+                owned_actions, owned_phases = [], []
+                request = self.relation_request([], [])
+                for aid in remaining_actions:
+                    if cap is not None and len(owned_actions) >= cap:
                         break
-                    current = request['context_selection']
+                    pid = action_phases[aid]
+                    candidate_phases = owned_phases + ([pid] if pid in remaining_phases and pid not in owned_phases else [])
+                    candidate = self.relation_request(owned_actions + [aid], candidate_phases)
                     selection = candidate['context_selection']
-                    if any(set(selection[field]) - set(current[field]) for field in
-                           ('uncovered_action_ids', 'omitted_relation_evidence_ids')):
+                    missing_evidence = selection['uncovered_action_ids'] or selection['omitted_relation_evidence_ids']
+                    if ((owned_actions and missing_evidence) or
+                            len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit):
                         break
-                    owned_phases.append(pid); request = candidate
-            if (actions or phases) and not (owned_actions or owned_phases):
-                raise LimitReached('model_context_chars')  # Never truncate required records to fit.
-            self.graph, _ = self.receive('relate.' + str(number), 'relations', self.graph, request,
-                                         action_ids=owned_actions, phase_ids=owned_phases,
-                                         review_scope=request['relation_discovery'])
-            actions = [aid for aid in actions if aid not in owned_actions]
-            phases = [pid for pid in phases if pid not in owned_phases]
-            number += 1
+                    owned_actions.append(aid); owned_phases = candidate_phases; request = candidate
+                # Empty Phases still need a baseline. An oversized Action+Phase pair
+                # may first process the Phase, then retry the Action independently.
+                if not owned_actions or len(owned_actions) == len(remaining_actions):
+                    for pid in remaining_phases:
+                        if pid in owned_phases:
+                            continue
+                        candidate = self.relation_request(owned_actions, owned_phases + [pid])
+                        if len(system_prompt('relations')) + len(prompt_json(dict(task=candidate, read_results=[]))) > initial_limit:
+                            break
+                        current = request['context_selection']
+                        selection = candidate['context_selection']
+                        if any(set(selection[field]) - set(current[field]) for field in
+                               ('uncovered_action_ids', 'omitted_relation_evidence_ids')):
+                            break
+                        owned_phases.append(pid); request = candidate
+                if (remaining_actions or remaining_phases) and not (owned_actions or owned_phases):
+                    # Isolate an oversized item instead of discarding already planned work.
+                    owned_actions = remaining_actions[:1]
+                    owned_phases = [] if owned_actions else remaining_phases[:1]
+                    request = None
+                jobs.append((number, owned_actions, owned_phases, request))
+                remaining_actions = [aid for aid in remaining_actions if aid not in owned_actions]
+                remaining_phases = [pid for pid in remaining_phases if pid not in owned_phases]
+                number += 1
+            by_id = {'relate.' + str(n): (n, owned_actions, owned_phases, request)
+                     for n, owned_actions, owned_phases, request in jobs}
+
+            def process(task_id):
+                n, owned_actions, owned_phases, request = by_id[task_id]
+                if request is None:
+                    raise LimitReached('model_context_chars')
+                self.graph, _ = yield from self.receive_steps(task_id, 'relations', self.graph, request,
+                    initial_package=frozen, live=True, action_ids=owned_actions, phase_ids=owned_phases,
+                    review_scope=request['relation_discovery'])
+            tasks = []
+            for task_id, (_, owned_actions, owned_phases, _) in by_id.items():
+                refs = [reference('actions', aid) for aid in owned_actions]
+                refs += [reference('phases', pid) for pid in owned_phases]
+                tasks.append(Task(task_id, process(task_id),
+                    lambda task_id, reason, refs=refs: self.fail_task(task_id, 'relations', reason, refs=refs)))
+            self.run.execute_tasks('relations', tasks)
+            actions, phases = remaining_actions, remaining_phases
 
     @staticmethod
     def outstanding(record):
@@ -381,7 +499,7 @@ class Construction:
                     record.setdefault('resolutions', []).append(dict(
                         issue_fingerprint=fingerprint(issue), resolved_by='repair.' + role))
 
-    def repair(self):
+    def repair(self, *, organization_only=False):
         checks = check_graph(self.graph, self.run.payload)
         # One round handles concrete failed organization/association work, not legal uncertainty.
         unresolved = []
@@ -396,8 +514,9 @@ class Construction:
             return
         if not self.run.config.final_repair_rounds:
             return
-        plan_path = self.run.directory / 'checkpoints' / 'final-repair-plan.json'
-        if self.run.state['final_repair_used']:
+        flag = 'hierarchy_repair_used' if organization_only else 'final_repair_used'
+        plan_path = self.run.directory / 'checkpoints' / ('hierarchy-repair-plan.json' if organization_only else 'final-repair-plan.json')
+        if self.run.state.get(flag):
             if not plan_path.is_file():
                 return
             plan = json.loads(plan_path.read_text())
@@ -419,11 +538,15 @@ class Construction:
                     tasks.append(dict(role='relations', issues=[], recheck_after_organization=True))
                 else:
                     relation_task['recheck_after_organization'] = True
+            if organization_only:
+                tasks = [task for task in tasks if task['role'] == 'organization']
+            elif self.run.state.get('hierarchy_repair_used'):
+                tasks = [task for task in tasks if task['role'] != 'organization']
             if not tasks:
                 return
             plan = dict(base_fingerprint=fingerprint(self.graph), tasks=tasks)
             write_json(plan_path, plan)
-            self.run.state['final_repair_used'] = True
+            self.run.state[flag] = True
             self.run.persist()
         for task in plan['tasks']:
             role = task['role']
@@ -450,6 +573,11 @@ class Construction:
             self.record_resolutions(role, report)
 
     def finish(self, execution_status, reason=None):
+        if execution_status == 'finished' and any(
+                t['status'] == 'limited' and t.get('reason') in ('model_calls', 'read_calls', 'read_chars')
+                for t in self.run.state.get('task_states', {}).values()):
+            execution_status = 'limit'
+            reason = reason or 'Run budget exhausted; completed results retained'
         self.save_facts()
         reviews = [dict(task_id=r['task_id'], scope=r['relation_discovery_scope'],
                         review=r['report'].get('relation_review'),
@@ -475,18 +603,20 @@ class Construction:
             report['summary']['errors'] += len(fact_errors)
             report['summary']['checked'].append('fact_contract')
             report['valid'] = report['valid'] and facts_check['valid']
-        result = 'none'
+        task_failures = [v for v in self.run.state.get('task_states', {}).values()
+                         if v['status'] in ('failed', 'limited', 'blocked')]
+        result = 'partial' if task_failures else 'none'
         graph_path, graph_hash = None, None
         if self.graph and self.graph['actions']:
             graph_path, graph_hash = self.run.save('epg.json', self.graph)
             result = 'draft' if (execution_status == 'finished' and report['valid'] and coverage_done
-                and not unresolved and not self.facts['pending'] and expected <= completed) else 'partial'
+                and not task_failures and not unresolved and not self.facts['pending'] and expected <= completed) else 'partial'
         elif self.facts['contexts'] or self.facts['evidence']:
             result = 'partial'
         checks = dict(run_id=self.run.state['run_id'], input_sha256=self.run.state['input_sha256'],
             graph_sha256=graph_hash, artifact_hashes=dict(facts=self.run.state['facts_sha256']),
             summary=report['summary'], issues=report['issues'], review_required=True,
-            coverage=self.coverage, unresolved_tasks=unresolved,
+            coverage=self.coverage, unresolved_tasks=unresolved, task_failures=task_failures,
             result_status=result, execution_status=execution_status)
         if not body_done:
             checks['issues'].append(dict(code='BODY_PROCESSING_INCOMPLETE', severity='warning', artifact='facts',
@@ -497,6 +627,11 @@ class Construction:
             checks['issues'].append(dict(code='PROPOSALS_UNRESOLVED', severity='warning', artifact='facts',
                 object_type='event', object_id=self.facts['event']['event_id'], field='',
                 message='Body processing returned candidate work that remains rejected or pending.'))
+            checks['summary']['warnings'] += 1
+        if task_failures:
+            checks['issues'].append(dict(code='TASKS_INCOMPLETE', severity='warning', artifact='facts',
+                object_type='event', object_id=self.facts['event']['event_id'], field='',
+                message='Some tasks failed, reached a limit, or lacked required upstream results.'))
             checks['summary']['warnings'] += 1
         checks_path, checks_hash = self.run.save('checks.json', checks)
         self.run.save('adoption.json', self.reports)
@@ -517,7 +652,11 @@ class Construction:
 
 def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None, stop_after_organization=False):
     if not resume and not isinstance(config, EventBuildConfig):
-        config = EventBuildConfig(**(config or {}))
+        settings = dict(config or {})
+        # A v1 config is a source of run limits, not a request to write v1 artifacts.
+        if settings.get('graph_schema_version') == LEGACY_GRAPH_VERSION:
+            settings['graph_schema_version'] = GRAPH_VERSION
+        config = EventBuildConfig(**settings)
     validate_input(payload)
     if model is None and not allow_network:
         raise PermissionError('Model execution requires explicit permission')
@@ -532,26 +671,42 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
                 raise ValueError('No run exists to resume')
             saved = json.loads(state_path.read_text())['config']
             config = EventBuildConfig.from_saved({**saved, **(config or {})})
+        model_factory = None
         if model is None:
             from ..build import Model
             model = Model(config)
-        execution = Execution(directory, payload, config, model, resume=resume, provenance=provenance)
+            model_factory = lambda: Model(config)
+        execution = Execution(directory, payload, config, model, resume=resume, provenance=provenance,
+                              model_factory=model_factory)
         construction = Construction(execution)
         try:
-            construction.extract()
+            construction.stage('extraction', construction.extract)
             if config.full_corpus_supplement:
                 from .corpus_supplement import supplement
-                supplement(construction)
-            construction.consolidate()
+                construction.stage('corpus_supplement', lambda: supplement(construction))
+            construction.stage('consolidation', construction.consolidate)
             if not construction.facts['actions']:
-                return construction.finish('finished', 'No usable focal Actions; inspect the facts and pending items')
-            construction.organize()
+                construction.blocked('organization', 'No usable focal Actions')
+                construction.blocked('relations', 'Organization has no usable Actions')
+                return construction.finish('finished', 'No usable focal Actions; inspect task failures and facts')
+            organized = construction.stage('organization', construction.organize)
+            if organized and (not construction.graph.get('stages') or not construction.graph.get('phases')):
+                construction.stage('hierarchy_repair', lambda: construction.repair(organization_only=True))
+            if not organized or not construction.graph.get('stages') or not construction.graph.get('phases'):
+                construction.blocked('relations', 'Organization did not produce a usable hierarchy')
+                construction.blocked('repair', 'Organization did not produce a usable hierarchy')
+                return construction.finish('finished', 'Organization incomplete; available facts retained')
             from .relation_experiment import capture
-            capture(construction)
+            # Only complete upstream construction can be exported as an isolated experiment.
+            if (all(row['status'] == 'processed' for row in construction.coverage)
+                    and not construction.facts['pending']
+                    and not any(construction.outstanding(r)['rejected'] or construction.outstanding(r)['pending']
+                                for r in construction.reports)):
+                capture(construction)
             if stop_after_organization:
-                return construction.finish('paused', 'Organization snapshot saved; relations not started')
-            construction.relate()
-            construction.repair()
+                return construction.finish('paused', 'Organization finished; relations not started')
+            construction.stage('relations', construction.relate)
+            construction.stage('repair', construction.repair)
             return construction.finish('finished')
         except PauseRequested as exc:
             result = construction.finish('paused', str(exc))
@@ -564,4 +719,4 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
             raise
         except Exception as exc:
             # Raw transport messages can contain request credentials; retain only the class.
-            return construction.finish('failed', type(exc).__name__)
+            return construction.finish('failed', type(exc.original if isinstance(exc, ModelCallFailed) else exc).__name__)

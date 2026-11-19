@@ -20,7 +20,7 @@ from finmy.workbench.model_picker import model_picker
 
 def effort_label(value):
     if value == PERSON_BUILD_STAGED_EFFORT:
-        return '按阶段（正文抽取 low，后续 high）'
+        return '按阶段（当前全部 low）'
     return '服务端默认' if value is None else '全程 ' + value
 
 
@@ -38,17 +38,19 @@ def create_person_build(store, controller, task_id, data):
         efforts = person_build_effort_options(model)
         effort = st.selectbox('构建思考档位', efforts, format_func=effort_label, disabled=len(efforts) == 1,
             key='person-build-effort-'+task_id+'-'+model,
-            help='Kimi 默认在正文抽取时用 low，在行动归并、阶段组织、关系和最终定向修正时用 high。保存后档位固定。')
+            help='Kimi 分阶段档当前所有步骤均使用 low。保存后档位固定。')
         with st.expander('构建上限'):
             calls=st.number_input('累计模型调用上限',min_value=1,value=defaults.max_calls)
             tokens=st.number_input('每次输出 token 上限',min_value=1,value=defaults.max_new_tokens,
                 help='是否包含推理 token 取决于所选模型；TokenHub 思考模式需要为推理和最终答案留出额度。')
             context=st.number_input('单次模型上下文字符上限',min_value=1,value=defaults.max_context_chars)
             batch=st.number_input('连续正文抽取批次字符数',min_value=defaults.extraction_overlap+1,value=defaults.extraction_chars)
+            workers=st.number_input('阶段内并发数',min_value=1,max_value=10,value=defaults.extraction_workers,
+                help='正文抽取、独立归并组和关系范围最多同时执行此数量的模型请求；每个阶段完成后再进入下一阶段。')
             local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
             local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
             supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
-                help='实验选项。计入总调用上限；分阶段档使用 high。完整请求超出模型上下文时会跳过并记录原因。')
+                help='实验选项。计入总调用上限；分阶段档当前使用 low。完整请求超出模型上下文时会跳过并记录原因。')
             repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
             st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
         confirmed=st.checkbox('我已检查本次实际材料与缺口，确认用于这条 event 的构建')
@@ -56,7 +58,7 @@ def create_person_build(store, controller, task_id, data):
             try:
                 tid=BuildController(store).create_person(controller,task_id,
                     dict(lm_name=model,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
-                         extraction_chars=batch,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
+                          extraction_chars=batch,extraction_workers=workers,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
             except (ValueError,OSError) as exc:

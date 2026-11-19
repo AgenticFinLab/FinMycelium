@@ -39,7 +39,10 @@ class TruncateOrganization(SyntheticEventModel):
 def stopped_run(directory, payload, monkeypatch):
     current = runtime.code_identity
     monkeypatch.setattr(runtime, 'code_identity', lambda: recovery.OUTPUT_ORIGIN)
-    state = run_event(payload, directory, {'max_new_tokens': 32768}, model=TruncateOrganization())
+    from finmy.person_epg.event.build import Construction
+    with monkeypatch.context() as legacy:
+        legacy.setattr(Construction, 'stage', lambda self, name, operation: (operation(), True)[1])
+        state = run_event(payload, directory, {'max_new_tokens': 32768}, model=TruncateOrganization())
     assert state['execution_status'] == 'failed' and state['reason'] == 'IncompleteCompletionError'
     monkeypatch.setattr(runtime, 'code_identity', current)
     monkeypatch.setattr(recovery, 'compatible_output_code', lambda: True)

@@ -46,7 +46,18 @@ def test_relation_batches_use_characters_and_keep_cross_batch_targets(payload, g
         assert {a['action_id'] for a in request['facts_index']['actions']} == {a['action_id'] for a in graph['actions']}
         seen.append((request,scope))
         return package, []
-    builder.receive=receive
+    def receive_steps(*args, **kwargs):
+        if False:
+            yield
+        return receive(*args, **kwargs)
+    builder.receive_steps=receive_steps
+    def execute_tasks(stage, tasks):
+        for task in tasks:
+            try:
+                next(task.steps)
+            except StopIteration:
+                pass
+    execution.execute_tasks=execute_tasks
     before=deepcopy(graph)
     builder.relate()
     assert len(seen)>1
@@ -74,7 +85,20 @@ class LimitRelations(SyntheticEventModel):
 def stopped_run(path,payload,monkeypatch):
     current=runtime.code_identity
     monkeypatch.setattr(runtime,'code_identity',lambda:recovery.RELATION_ORIGIN)
-    state=run_event(payload,path,model=LimitRelations())
+    with monkeypatch.context() as legacy:
+        legacy.setattr(Construction, 'stage', lambda self, name, operation: (operation(), True)[1])
+        execute = runtime.Execution.execute_tasks
+        def legacy_execute(run, stage, tasks):
+            tasks = list(tasks)
+            for task in tasks:
+                task.on_failure = None
+            outcomes = execute(run, stage, tasks)
+            for outcome in outcomes.values():
+                if outcome.error:
+                    raise outcome.error
+            return outcomes
+        legacy.setattr(runtime.Execution, 'execute_tasks', legacy_execute)
+        state=run_event(payload,path,model=LimitRelations())
     assert state['execution_status']=='limit' and state['reason']=='model_context_chars'
     monkeypatch.setattr(runtime,'code_identity',current)
     monkeypatch.setattr(recovery,'compatible_relation_code',lambda:True)

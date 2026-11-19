@@ -3,16 +3,17 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import socket
+import threading
 
 import pytest
 
 from test_person_event_contract import FIXTURES, graph, payload
-from finmy.person_epg.event.build import body_ranges, run_event
+from finmy.person_epg.event.build import Construction, body_ranges, run_event
 from finmy.person_epg.event.proposals import Receiver, graph_from_facts, reference, replace_references
 from finmy.person_epg.event.records import IdMap, seed_facts, sha256
-from finmy.person_epg.event.runtime import EventBuildConfig
+from finmy.person_epg.event.runtime import EventBuildConfig, Execution
 from finmy.person_epg.event.validation import check_graph
-from finmy.person_epg.event.schema import GRAPH_VERSION
+from finmy.person_epg.event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -84,6 +85,13 @@ class SyntheticEventModel:
                 action_context_updates=[dict(action_id=a['action_id'], delta_context_refs=a.get('delta_context_refs', []),
                                              baseline_context_exclusions=a.get('baseline_context_exclusions', []))
                                         for a in graph['actions'] if a['action_id'] in request['assigned_action_ids']], evidence=[], pending=[])
+            result['relations'] = [r for r in result['relations']
+                                   if r['from_action_id'] in request['assigned_action_ids']]
+            linked = {ref['context_id'] for update in result['phase_context_updates']
+                      for ref in update['baseline_context_refs']}
+            linked.update(ref['context_id'] for update in result['action_context_updates']
+                          for ref in update['delta_context_refs'])
+            result['contexts'] = [c for c in result['contexts'] if c['context_id'] in linked]
             if 'correction' in request:
                 result.update(contexts=[], relations=[],
                     phase_context_updates=[dict(phase_id=p['phase_id'], baseline_context_refs=p.get('baseline_context_refs', []))
@@ -127,6 +135,18 @@ def test_complete_new_protocol_pipeline(tmp_path, payload):
     assert json.loads((tmp_path / state['checks']).read_text())['review_required']
 
 
+def test_new_run_upgrades_v1_config_to_v2_artifacts(tmp_path, payload):
+    state = run_event(payload, tmp_path, {'graph_schema_version': LEGACY_GRAPH_VERSION},
+                      model=SyntheticEventModel())
+    graph = json.loads((tmp_path / state['output']).read_text())
+    assert state['execution_status'] == 'finished'
+    assert state['config']['graph_schema_version'] == GRAPH_VERSION
+    assert graph['schema_version'] == GRAPH_VERSION
+    assert graph['evidence']
+    assert all('citations' in evidence and 'source_id' not in evidence
+               for evidence in graph['evidence'])
+
+
 def test_budget_resume_does_not_repeat_body_or_change_ids(tmp_path, payload):
     model = SyntheticEventModel()
     first = run_event(payload, tmp_path, {'max_calls': 1}, model=model)
@@ -138,6 +158,125 @@ def test_budget_resume_does_not_repeat_body_or_change_ids(tmp_path, payload):
     graph = json.loads((tmp_path / second['output']).read_text())
     assert old_actions[0]['action_id'] in {a['action_id'] for a in graph['actions']}
     assert len(second['calls']) == 5
+
+
+def test_parallel_extraction_submits_in_input_order_and_resumes(tmp_path, payload):
+    class ConcurrentModel(SyntheticEventModel):
+        def __init__(self):
+            super().__init__()
+            self.barrier = threading.Barrier(3, timeout=5)
+
+        def __call__(self, system, user, name):
+            if name.startswith('extract.'):
+                self.barrier.wait()
+            return super().__call__(system, user, name)
+
+    model = ConcurrentModel()
+    state = run_event(payload, tmp_path, {'extraction_workers': 3}, model=model)
+    assert state['execution_status'] == 'finished', state.get('reason')
+    assert state['result_status'] == 'draft', json.loads((tmp_path / state['checks']).read_text())
+    assert [c['task_id'] for c in state['calls'][:3]] == ['extract.0', 'extract.1', 'extract.2']
+    assert all(c['status'] == 'accepted' for c in state['calls'][:3])
+    assert all(row['status'] == 'processed' for row in state['coverage'])
+    assert check_graph(json.loads((tmp_path / state['output']).read_text()), payload)['valid']
+    replay = SyntheticEventModel()
+    resumed = run_event(payload, tmp_path, model=replay, resume=True)
+    assert resumed['result_status'] == 'draft'
+    assert not [name for name in replay.calls if name.startswith('extract.')]
+    assert resumed['graph_sha256'] == state['graph_sha256']
+
+
+def test_parallel_extraction_keeps_reserved_calls_on_budget_resume(tmp_path, payload):
+    model = SyntheticEventModel()
+    first = run_event(payload, tmp_path, {'extraction_workers': 3, 'max_calls': 2}, model=model)
+    assert first['execution_status'] == 'limit'
+    assert [c['task_id'] for c in first['calls']] == ['extract.0', 'extract.1']
+    assert all(c['status'] == 'accepted' for c in first['calls'])
+    resumed = run_event(payload, tmp_path, {'max_calls': 10}, model=model, resume=True)
+    assert resumed['result_status'] == 'draft', json.loads((tmp_path / resumed['checks']).read_text())
+    assert model.calls.count('extract.0') == model.calls.count('extract.1') == 1
+    assert model.calls.count('extract.2') == 1
+
+
+def test_parallel_extraction_reuses_other_responses_after_one_failure(tmp_path, payload):
+    class OneFailure(SyntheticEventModel):
+        def __init__(self):
+            super().__init__()
+            self.failed = False
+
+        def __call__(self, system, user, name):
+            if name == 'extract.0' and not self.failed:
+                self.failed = True
+                self.calls.append(name)
+                raise TimeoutError('Synthetic transport timeout')
+            return super().__call__(system, user, name)
+
+    model = OneFailure()
+    first = run_event(payload, tmp_path, {'extraction_workers': 3}, model=model)
+    assert first['execution_status'] == 'finished'
+    assert first['result_status'] == 'partial'
+    assert first['calls'][0]['status'] == 'transport_error'
+    assert all(c['status'] == 'accepted' for c in first['calls'][1:3])
+    resumed = run_event(payload, tmp_path, model=model, resume=True)
+    assert resumed['result_status'] == 'draft', json.loads((tmp_path / resumed['checks']).read_text())
+    assert model.calls.count('extract.0') == 2
+    assert model.calls.count('extract.1') == model.calls.count('extract.2') == 1
+
+
+def test_relation_scopes_run_concurrently_after_organization(tmp_path, payload):
+    class ConcurrentRelations(SyntheticEventModel):
+        def __init__(self):
+            super().__init__()
+            self.barrier = threading.Barrier(3, timeout=5)
+
+        def __call__(self, system, user, name):
+            if name.startswith('relate.'):
+                self.barrier.wait()
+            return super().__call__(system, user, name)
+
+    model = ConcurrentRelations()
+    state = run_event(payload, tmp_path, {'extraction_workers': 3}, model=model)
+    assert state['result_status'] == 'draft', json.loads((tmp_path / state['checks']).read_text())
+    names = [c['task_id'] for c in state['calls']]
+    assert names.index('organize') < names.index('relate.0')
+    assert names.count('relate.0') == names.count('relate.1') == names.count('relate.2') == 1
+    assert all(c['status'] == 'accepted' for c in state['calls'])
+
+
+def test_disjoint_consolidation_groups_run_concurrently(tmp_path, payload, monkeypatch):
+    groups = [[('entities', 'ENT-0'), ('entities', 'ENT-1')],
+              [('entities', 'ENT-2'), ('entities', 'ENT-3')]]
+    monkeypatch.setattr('finmy.person_epg.event.build.ambiguity_groups', lambda facts: groups)
+
+    class ConcurrentKeep:
+        def __init__(self):
+            self.barrier = threading.Barrier(2, timeout=5)
+
+        def __call__(self, system, user, name):
+            self.barrier.wait()
+            refs = json.loads(user)['task']['assigned']
+            return dict(decisions=[dict(operation='keep', input_refs=[r], outputs=[],
+                                        reason='Distinct named entity.', evidence_ids=[])
+                                   for r in refs], evidence=[], pending=[])
+
+    run = Execution(tmp_path, payload, EventBuildConfig(extraction_workers=2), ConcurrentKeep())
+    build = Construction(run)
+    build.facts['entities'].extend(dict(entity_id='ENT-'+str(i), name='Distinct '+str(i),
+                                       type='organization', aliases=[]) for i in range(4))
+    build.consolidate()
+    assert [c['task_id'] for c in run.state['calls']] == ['consolidate.0', 'consolidate.1']
+    assert all(c['status'] == 'accepted' for c in run.state['calls'])
+
+
+def test_parallel_relation_budget_resume_reuses_completed_scopes(tmp_path, payload):
+    model = SyntheticEventModel()
+    first = run_event(payload, tmp_path, {'extraction_workers': 3, 'max_calls': 6}, model=model)
+    assert first['execution_status'] == 'limit'
+    assert [c['task_id'] for c in first['calls'][-2:]] == ['relate.0', 'relate.1']
+    resumed = run_event(payload, tmp_path, {'max_calls': 20}, model=model, resume=True)
+    assert resumed['result_status'] == 'draft', json.loads((tmp_path / resumed['checks']).read_text())
+    assert model.calls.count('relate.0') == model.calls.count('relate.1') == 1
+    assert model.calls.count('relate.2') == 1
 
 
 def test_body_ranges_cover_all_text_without_hidden_truncation(payload):

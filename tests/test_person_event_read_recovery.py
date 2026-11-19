@@ -63,7 +63,11 @@ class FailOrganization(SyntheticEventModel):
 def old_run(tmp_path,payload,monkeypatch):
     actual=runtime.code_identity
     monkeypatch.setattr(runtime,'code_identity',lambda:recovery.ORIGIN)
-    state=run_event(payload,tmp_path,model=FailOrganization())
+    from finmy.person_epg.event.build import Construction
+    with monkeypatch.context() as legacy:
+        # Reproduce the legacy global-failure boundary, without new stage snapshots.
+        legacy.setattr(Construction, 'stage', lambda self, name, operation: (operation(), True)[1])
+        state=run_event(payload,tmp_path,model=FailOrganization())
     assert state['execution_status']=='failed'
     monkeypatch.setattr(runtime,'code_identity',actual)
     monkeypatch.setattr(recovery,'compatible_code',lambda:True)

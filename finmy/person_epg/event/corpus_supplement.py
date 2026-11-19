@@ -122,6 +122,10 @@ def adopt_delta(build, raw, request):
 
 
 def supplement(build):
+    return build.run.drive(TASK_ID, supplement_steps(build), stage='corpus_supplement')
+
+
+def supplement_steps(build):
     """Read every handed document once together, within the original call and context budgets."""
     run = build.run
     build.facts = exact_deduplicate(build.facts, run.payload)
@@ -139,7 +143,7 @@ def supplement(build):
         run.persist()
         return
     try:
-        raw = run.infer(TASK_ID, system, request, build.facts, validate_delta, single_response=True)
+        raw = yield from run.infer_steps(TASK_ID, system, request, build.facts, validate_delta, single_response=True)
     except InvalidResponse as exc:
         # This optional pass must use at most one model call, including across resumes.
         run.state['corpus_supplement'] = dict(status='invalid_response', reason=str(exc), **receipt)

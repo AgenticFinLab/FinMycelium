@@ -88,15 +88,17 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
         raise ValueError('No experiment exists to resume')
     provenance = dict(experiment='relations', snapshot_fingerprint=envelope['fingerprint'])
     with directory_lock(directory):
+        model_factory = None
         if model is None:
             from ..building.model_transport import StreamingModel
             model = StreamingModel(config)
+            model_factory = lambda: StreamingModel(config)
         if resume:
             retained = load_snapshot(directory / 'organization-snapshot.json')
             if retained != envelope:
                 raise ValueError('Experiment snapshot changed')
         execution = Execution(directory, body['input'], config, model,
-                              resume=resume, provenance=provenance)
+                              resume=resume, provenance=provenance, model_factory=model_factory)
         if not resume:
             write_json(directory / 'organization-snapshot.json', envelope)
             execution.state['id_map'] = deepcopy(body['id_map'])
@@ -107,7 +109,7 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
         started = time.monotonic()
         status, reason = 'finished', None
         try:
-            builder.relate()
+            builder.stage('relations', builder.relate)
         except PauseRequested as exc:
             status, reason = 'paused', str(exc)
             (directory / 'pause_requested').unlink(missing_ok=True)
@@ -130,7 +132,7 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
             stage_model_seconds=sum(c.get('duration_seconds', 0) for c in calls), usage=[c.get('usage') for c in calls],
             calls_without_usage=sum(c.get('usage') is None for c in calls),
             invocation_elapsed_seconds=time.monotonic() - started,
-            execution_status=status, result_status=state['result_status'],
+            execution_status=state['execution_status'], result_status=state['result_status'],
             relation_count=len(builder.graph['relations']), graph_path=state['output'],
             checks_path=state['checks'], discovery_path=state['relation_discovery'], semantic_review_required=True)
         write_json(directory / 'relation-summary.json', summary)

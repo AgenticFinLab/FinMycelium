@@ -103,6 +103,14 @@ LOCAL_READ_GUIDANCE = """Optional read-only tool round: return ONLY {"read_reque
 object_id,field}]} or {tool:"search",query}. Fields are JSON Pointers; refs address
 only this task's upstream package. Initial extraction cannot use search. Other
 roles may search the frozen handed corpus only. Read limits are in the request.
+readable_samples maps each source_id to its readable sample_id(s) and character length.
+For read_sample, copy an exact sample_id from that list; never substitute a source_id
+or construct an ID from a naming pattern. One source may have multiple samples.
+A source absent from this list has no readable sample. Use character offsets with
+0 <= start < end <= length and end - start <= read_limits.read_chars.
+At most read_limits.max_read_rounds reading rounds are allowed per semantic task,
+shared with corrections. Batch needed reads together; after the last round return
+the role result using available evidence and report remaining gaps.
 Keep requests narrow; read results and every further model call consume budget.
 Never request web access, files, code execution or changes to runtime state.
 facts_index is navigation, not a replacement for evidence. related_records contains

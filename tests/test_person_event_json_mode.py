@@ -63,7 +63,7 @@ def test_role_requests_differ_only_in_response_format(transport, role):
     assert ordinary == constrained
     assert ordinary['max_tokens'] == 65536 and ordinary['stream'] is True
     assert ordinary['stream_options'] == {'include_usage': True}
-    assert ordinary['reasoning_effort'] == ('low' if role == 'extraction' else 'high')
+    assert ordinary['reasoning_effort'] == 'low'
     assert not {'temperature', 'top_p', 'thinking'} & ordinary.keys()
 
 
@@ -90,7 +90,7 @@ def test_json_mode_keeps_local_reading_and_result_validation(tmp_path, payload, 
     assert run.infer('relations', 'Return JSON', {}, seed_facts(payload), valid) == {'ok': True}
     assert [call['status'] for call in run.state['calls']] == ['read_requested', 'invalid_output', 'accepted']
     assert all(call['api_json_mode'] is True for call in run.state['calls'])
-    assert all(call['reasoning_effort'] == 'high' for call in run.state['calls'])
+    assert all(call['reasoning_effort'] == 'low' for call in run.state['calls'])
     assert len(run.state['reads']) == 1
     assert all(body['response_format'] == {'type': 'json_object'} for _, body in transport['requests'])
     requests = list((tmp_path/'attempts/0001/steps').glob('*/request.json'))
