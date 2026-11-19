@@ -35,13 +35,13 @@ class EventBuildConfig:
     final_repair_rounds: int = 1
     graph_schema_version: str = GRAPH_VERSION
     api_json_mode: bool = False
-    full_corpus_supplement: bool = False
+    full_corpus_supplement: bool = True
     reasoning_effort: str | None = 'auto'
 
     @classmethod
     def from_saved(cls, values):
-        """A historical task with no effort field delegated to the provider."""
-        return cls(**{'reasoning_effort': None, **values})
+        """Restore the defaults in effect before each setting was recorded."""
+        return cls(**{'reasoning_effort': None, 'full_corpus_supplement': False, **values})
 
     def __post_init__(self):
         if not isinstance(self.lm_name, str) or not self.lm_name.strip():

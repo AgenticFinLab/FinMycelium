@@ -63,7 +63,7 @@ class FailOrganization(SyntheticEventModel):
 def old_run(tmp_path,payload,monkeypatch):
     actual=runtime.code_identity
     monkeypatch.setattr(runtime,'code_identity',lambda:recovery.ORIGIN)
-    state=run_event(payload,tmp_path,model=FailOrganization())
+    state=run_event(payload,tmp_path,{'full_corpus_supplement': False},model=FailOrganization())
     assert state['execution_status']=='failed'
     monkeypatch.setattr(runtime,'code_identity',actual)
     monkeypatch.setattr(recovery,'compatible_code',lambda:True)

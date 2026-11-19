@@ -135,7 +135,9 @@ The optional `full_corpus_supplement` runs after the fresh continuous reads and
 before consolidation. It sends all handed documents with an index of existing
 facts in one request, within the common call and context limits. With Kimi's
 staged effort it runs at high. Its receipt records the character count, accepted
-or rejected proposals, or the reason it was skipped. It is off by default.
+or rejected proposals, or the reason it was skipped. New person Event builds enable this pass by default. Clear the checkbox in the
+workbench or set `full_corpus_supplement=False` in Python to skip it. Saved tasks
+use their recorded setting. Tasks predating the option keep it disabled.
 
 Four semantic roles propose scoped records or operations. The program assigns IDs,
 locates quotes, checks references and applies independent valid groups. Rejected

@@ -59,7 +59,7 @@ def test_saved_default_preserves_legacy_semantic_config():
     for key in ('reasoning_effort', 'api_json_mode', 'full_corpus_supplement', 'max_calls'):
         old.pop(key)
     assert semantic_config(EventBuildConfig.from_saved(old)) == old
-    assert semantic_config(EventBuildConfig()) == {**old, 'reasoning_effort': 'by_stage'}
+    assert semantic_config(EventBuildConfig()) == {**old, 'reasoning_effort': 'by_stage', 'full_corpus_supplement': True}
 
 
 @pytest.mark.parametrize('policy', [None, 'low', 'high', 'by_stage'])

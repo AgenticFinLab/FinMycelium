@@ -133,8 +133,8 @@ def test_time_policy_reaches_native_flow_without_an_extra_call(tmp_path, payload
 
     state = run_event(payload, tmp_path, model=capture)
     assert state['result_status'] == 'draft'
-    assert set(systems) == {'extraction', 'organization', 'relations'}
-    assert len(model.calls) == 5  # Existing fixture flow; no calendar-agent phase was added.
+    assert set(systems) == {'extraction', 'corpus_supplement', 'organization', 'relations'}
+    assert len(model.calls) == 6  # Existing fixture flow; no calendar-agent phase was added.
     for system in systems.values():
         assert_time_policy(system)
     result = json.loads((tmp_path / state['output']).read_text())

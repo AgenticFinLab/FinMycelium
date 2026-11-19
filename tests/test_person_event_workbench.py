@@ -127,11 +127,15 @@ def test_workbench_confirm_save_and_view_without_model(setup,tmp_path,monkeypatc
     def find(items,label):return next(x for x in items if x.label==label)
     find(app.sidebar.button,'任务中心').click().run()
     assert not app.exception
+    supplement = find(app.checkbox, '逐份抽取后，用完整交接正文补读一次')
+    assert supplement.value is True
+    supplement.uncheck()
     find(app.checkbox,'我已检查本次实际材料与缺口，确认用于这条 event 的构建').check()
     find(app.button,'保存人物构建任务').click().run(timeout=30)
     assert not app.exception
     row=BuildController(store).tasks()[0]
     assert row['status']=='ready' and not Path(row['body']['artifact_directory']).exists()
+    assert row['body']['person_config']['full_corpus_supplement'] is False
     assert find(app.button,'开始人物构建').disabled
     assert not store.events()
 

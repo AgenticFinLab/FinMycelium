@@ -47,7 +47,7 @@ def create_person_build(store, controller, task_id, data):
             local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
             local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
             supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
-                help='实验选项。计入总调用上限；分阶段档使用 high。完整请求超出模型上下文时会跳过并记录原因。')
+                help='新任务默认开启，可取消。补读最多调用一次模型，计入总调用上限。Kimi 分阶段模式使用 high；完整请求超出上下文上限时跳过并记录原因。')
             repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
             st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
         confirmed=st.checkbox('我已检查本次实际材料与缺口，确认用于这条 event 的构建')
