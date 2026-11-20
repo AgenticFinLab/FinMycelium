@@ -36,7 +36,7 @@ def main(argv=None):
     max_calls = max(before['config'].get('max_calls', 0), len(before['calls']) + args.extra_calls)
     print(f"恢复 {directory} | 已记录 {len(before['calls'])} 次调用 | 总调用上限 {max_calls} | 复用已完成检查点", flush=True)
     state = run_event(json.loads((directory / 'input.json').read_text()), directory=directory,
-        config=dict(timeout=900, stall_timeout=60, max_transport_retries=2, max_calls=max_calls),
+        config=dict(timeout=900, stall_timeout=60, max_transport_retries=5, max_calls=max_calls),
         allow_network=True, resume=True, resume_transport_upgrade=True,
         stop_after_organization=False)
     print(json.dumps({key: state.get(key) for key in

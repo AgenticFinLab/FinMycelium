@@ -27,7 +27,7 @@ class EventBuildConfig:
     max_context_chars: int = 160000
     timeout: int = 900
     stall_timeout: int = 60
-    max_transport_retries: int = 2
+    max_transport_retries: int = 5
     extraction_chars: int = 12000
     extraction_overlap: int = 400
     max_read_calls: int = 24

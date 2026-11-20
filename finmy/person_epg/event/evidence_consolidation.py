@@ -300,7 +300,7 @@ def main(argv=None):
         graph = artifact('output', 'graph_sha256')
         facts = artifact('facts', 'facts_sha256')
         config = EventBuildConfig.from_saved({**state['config'],
-            'stall_timeout': 60, 'max_transport_retries': 2,
+            'stall_timeout': 60, 'max_transport_retries': 5,
             'max_calls': max(state['config']['max_calls'], len(state['calls']) + args.extra_calls)})
         # Replay the same unmerged input after a partial attempt, using cached pair decisions.
         prior = state.get('evidence_postprocess')
