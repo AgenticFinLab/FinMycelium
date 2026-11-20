@@ -6,10 +6,130 @@ from dataclasses import dataclass
 from queue import Queue, Empty
 from threading import Lock
 import sys
+import shutil
+import unicodedata
 import time
 
 
 PROGRESS_INTERVAL_SECONDS = 60
+
+TTY_INTERVAL_SECONDS = 1
+DISPLAY_STAGES = (('extraction', '抽取'), ('corpus_supplement', '补充'),
+                  ('consolidation', '整理'), ('organization', '组织'),
+                  ('relations', '关系'), ('validation', '校验'))
+
+
+def terminal_text(text, width):
+    """Clip by terminal cells, including Chinese labels; never emit control text."""
+    result, used = '', 0
+    for char in str(text):
+        if unicodedata.category(char).startswith('C'):
+            continue
+        cells = 0 if unicodedata.combining(char) else 2 if unicodedata.east_asian_width(char) in 'WF' else 1
+        if used + cells > width:
+            break
+        result += char
+        used += cells
+    return result + ' ' * (width - used)
+
+
+class TerminalProgress:
+    """Ephemeral terminal view; does not change execution state or call budgets."""
+    def __init__(self, run):
+        self.run, self.stream = run, sys.stderr
+        self.enabled = bool(getattr(self.stream, 'isatty', lambda: False)())
+        self.lines, self.frame, self.current = 0, 0, None
+        self.stages, self.requests, self.outer = {}, [], None
+        if not run.config.full_corpus_supplement:
+            self.stages['corpus_supplement'] = 'skipped'
+
+    @staticmethod
+    def key(stage):
+        return {'hierarchy_repair': 'organization', 'repair': 'validation'}.get(stage, stage)
+
+    def update(self, stage, status):
+        stage = self.key(stage)
+        self.current = stage
+        self.stages[stage] = status
+        self.requests = []
+        self.draw()
+
+    def clear(self):
+        if self.enabled and self.lines:
+            try:
+                self.stream.write(f'\x1b[{self.lines}A' + '\r\x1b[2K\n' * self.lines + f'\x1b[{self.lines}A')
+                self.stream.flush()
+            except (OSError, ValueError):
+                self.enabled = False
+            self.lines = 0
+
+    def draw(self, requests=None):
+        if not self.enabled:
+            return
+        if requests is not None:
+            self.requests = requests
+        size = shutil.get_terminal_size((110, 24))
+        width = max(1, size.columns - 1)
+        cell = min(18, width)
+        columns = next(n for n in (6, 3, 2, 1) if n * (cell + 1) - 1 <= width)
+        spin = '◐◓◑◒'[self.frame % 4]
+        self.frame += 1
+        boxes, summaries = [], []
+        for stage, label in DISPLAY_STAGES:
+            status = self.stages.get(stage, 'pending')
+            tasks = [t for t in self.run.state.get('task_states', {}).values()
+                     if t.get('attempt') == self.run.state['attempts'] and self.key(t['stage']) == stage]
+            total = len(tasks)
+            done = sum(t['status'] in ('succeeded', 'failed', 'limited') for t in tasks)
+            failed = sum(t['status'] in ('failed', 'limited') for t in tasks)
+            count = f' {done}/{total}' if total else ''
+            tag = {'completed': '完成', 'partial': '有异常', 'failed': '失败', 'blocked': '受阻',
+                   'paused': '暂停', 'interrupted': '中断', 'skipped': '跳过', 'pending': '待开始'}.get(status, spin)
+            if self.current == stage and status == 'running':
+                running = sum(t['status'] in ('running', 'processing') for t in tasks)
+                queued = sum(t['status'] in ('queued', 'retrying', 'waiting_read') for t in tasks)
+                summaries.append(f'{label}{count} 已结束 · {running} 运行 · {queued} 排队 · {failed} 失败/限额')
+            elif failed:
+                summaries.append(f'{label}：{failed} 失败/限额')
+            inner = max(0, cell - 2)
+            fill = inner if status in ('completed', 'partial') else (
+                min(max(0, inner - 1), int(inner * done / total)) if total and status == 'running' else 0)
+            border = '━' if self.current == stage and status == 'running' else '─'
+            boxes.append(['┌' + border * inner + '┐',
+                          '│' + terminal_text(label + count + ' ' + tag, inner) + '│',
+                          '│' + '█' * fill + '░' * (inner - fill) + '│',
+                          '└' + border * inner + '┘'])
+        lines = []
+        for start in range(0, len(boxes), columns):
+            lines.extend(' '.join(box[row] for box in boxes[start:start + columns]) for row in range(4))
+        lines += summaries
+        slots = max(0, size.lines - len(lines) - 3)
+        shown = self.requests[:slots]
+        if len(self.requests) > slots and slots:
+            shown = self.requests[:slots - 1] + [f'另有 {len(self.requests) - slots + 1} 个运行请求（终端高度不足）']
+        lines += [spin + ' ' + line.strip() for line in shown]
+        lines = [terminal_text(line, width).rstrip() for line in lines]
+        self.clear()
+        try:
+            self.stream.write('\n'.join(lines) + '\n')
+            self.stream.flush()
+            self.lines = len(lines)
+        except (OSError, ValueError):
+            self.enabled = False
+
+    def finish(self, status):
+        for stage, value in list(self.stages.items()):
+            if value == 'running':
+                self.stages[stage] = status
+        self.requests = []
+        self.draw()
+        self.lines = 0  # Leave the final frame above subsequent command output.
+
+
+def terminal_progress(run):
+    if not hasattr(run, '_terminal_progress'):
+        run._terminal_progress = TerminalProgress(run)
+    return run._terminal_progress
 
 
 class ModelCallFailed(Exception):
@@ -79,19 +199,24 @@ def execute(run, stage, tasks):
     tasks = list(tasks)
     ready, events, active = deque(tasks), Queue(), {}
     live_models, live_lock = {}, Lock()
+    display = terminal_progress(run)
     next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
+    next_frame = time.monotonic()
     results = {t.task_id: t for t in tasks}
     stop = None
     stage_record = dict(status='running', task_ids=[t.task_id for t in tasks], started_at=now())
     run.state.setdefault('stages', {})[stage] = stage_record
     for task in tasks:
         emit(run, stage, task.task_id, 'TaskQueued')
+    if display.outer is None:
+        display.update(stage, 'running')
 
-    def report_progress():
-        """One batch per minute, even if every request is waiting on the SDK."""
-        nonlocal next_progress
+    def report_progress(persist=True):
+        """Refresh TTY locally; persist and append non-TTY logs only once a minute."""
+        nonlocal next_progress, next_frame
         stamp = now()
         lines = [f'[{stamp}] {stage} | running={len(active)} queued={len(ready)}']
+        request_lines = []
         with live_lock:
             live = dict(live_models)
         for task_id, task in active.items():
@@ -117,18 +242,32 @@ def execute(run, stage, tasks):
             response = f'{first:.1f}s' if first is not None else '尚无'
             stalled = progress.get('no_output_seconds')
             output_idle = f' | 无输出增量 {stalled:.0f}s' if stalled is not None else ''
-            task.request.call['progress'] = progress
+            call = task.request.call
+            retry, prior = 0, call.get('retry_of')
+            calls = {c['call_id']: c for c in run.state['calls']}
+            while prior in calls:
+                retry += 1
+                prior = calls[prior].get('retry_of')
+            retry_label = f' · 重试 {retry}/{run.config.max_transport_retries}' if retry else ''
+            request_lines.append(f"{call['task_id']} · {label}{retry_label} · {progress['elapsed_seconds']:.0f}s · "
+                                 f"正文 {progress.get('content_chars', 0):,} 字符{output_idle}")
+            if persist:
+                task.request.call['progress'] = progress
             lines.append(f"  {call_id} {task.request.call['task_id']} | {label} | "
                          f"耗时 {progress['elapsed_seconds']:.0f}s | 首响应 {response} | "
                          f"正文 {progress.get('content_chars', 0)} 字符 | "
                          f"推理 {progress.get('reasoning_chars', 0)} 字符 | 最近数据块 {idle}{output_idle}")
-        run.state['progress_updated_at'] = stamp
-        run.persist()
-        try:
-            print('\n'.join(lines), file=sys.stderr, flush=True)
-        except OSError:
-            pass  # A closed log pipe must not interrupt model work.
-        next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
+        if persist:
+            run.state['progress_updated_at'] = stamp
+            run.persist()
+            if not display.enabled:
+                try:
+                    print('\n'.join(lines), file=sys.stderr, flush=True)
+                except OSError:
+                    pass
+            next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
+        display.draw(request_lines)
+        next_frame = time.monotonic() + TTY_INTERVAL_SECONDS
 
     def advance(task, reply=None, error=None):
         nonlocal stop
@@ -204,10 +343,12 @@ def execute(run, stage, tasks):
                 break
             if time.monotonic() >= next_progress:
                 report_progress()
+            elif display.enabled and time.monotonic() >= next_frame:
+                report_progress(persist=False)
+            deadline = min(next_progress, next_frame) if display.enabled else next_progress
             try:
-                kind, task_id, value = events.get(timeout=max(0, next_progress - time.monotonic()))
+                kind, task_id, value = events.get(timeout=max(0, deadline - time.monotonic()))
             except Empty:
-                report_progress()
                 continue
             except BaseException as exc:
                 stop = exc
@@ -237,6 +378,7 @@ def execute(run, stage, tasks):
                 call.update(status='incomplete' if type(error).__name__ == 'IncompleteCompletionError'
                             else 'transport_error', **error_metadata(error))
                 details = record_failure(run, error, call=call, transport=transport)
+                display.clear()
                 try:
                     print(details['summary'] + ' | retryable=' + str(details['retryable']), file=sys.stderr, flush=True)
                 except OSError:
@@ -266,6 +408,9 @@ def execute(run, stage, tasks):
                         'partial' if counts['failed'] or counts['limited'] else 'completed',
                         counts=counts, finished_at=now())
     run.persist()
+    if display.outer is None:
+        display.update(stage, stage_record['status'])
+        display.finish(stage_record['status'])
     if stop is not None:
         raise stop
     return results

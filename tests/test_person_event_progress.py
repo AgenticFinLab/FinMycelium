@@ -90,3 +90,80 @@ def test_fast_completion_has_no_heartbeat(tmp_path, payload, capsys):
     assert run.infer('fast', 'system', {}, seed_facts(payload), lambda v: None) == {'ok': True}
     assert capsys.readouterr().err == ''
     assert 'progress_updated_at' not in run.state
+
+
+class TerminalBuffer:
+    """Keep frames separately so cursor-control output can be inspected offline."""
+    def __init__(self):
+        self.frames = []
+    def isatty(self):
+        return True
+    def write(self, text):
+        self.frames.append(text)
+    def flush(self):
+        pass
+
+
+def test_stage_boxes_count_tasks_not_calls_and_fit_terminal(monkeypatch):
+    from copy import deepcopy
+    import os
+    stream = TerminalBuffer()
+    monkeypatch.setattr(scheduling.sys, 'stderr', stream)
+    monkeypatch.setattr(scheduling.shutil, 'get_terminal_size', lambda fallback: os.terminal_size((80, 24)))
+    state = dict(attempts=2, calls=[{}] * 30, task_states={
+        str(i): dict(stage='extraction', attempt=2, status=status)
+        for i, status in enumerate(['succeeded', 'failed', 'running', 'queued'])})
+    state['old'] = dict(stage='extraction', attempt=1, status='succeeded')
+    before = deepcopy(state)
+    display = scheduling.TerminalProgress(SimpleNamespace(state=state, config=EventBuildConfig(full_corpus_supplement=False)))
+    display.update('extraction', 'running')
+    frame = stream.frames[-1]
+    assert '抽取 2/4' in frame and '1 运行 · 1 排队 · 1 失败/限额' in frame
+    assert '补充 跳过' in frame and '████████░░░░░░░░' in frame
+    assert all(scheduling.terminal_text(line, 79).rstrip() == line for line in frame.splitlines())
+    display.update('organization', 'blocked')
+    assert '组织 受阻' in stream.frames[-1]
+    assert any('\x1b[' in text for text in stream.frames)
+    assert state == before
+
+
+def test_tty_parallel_refresh_does_not_add_calls_or_persist_heartbeat(tmp_path, payload, monkeypatch):
+    import os
+    stream = TerminalBuffer()
+    release = Event()
+    monkeypatch.setattr(scheduling.sys, 'stderr', stream)
+    monkeypatch.setattr(scheduling.shutil, 'get_terminal_size', lambda fallback: os.terminal_size((120, 24)))
+    monkeypatch.setattr(scheduling, 'TTY_INTERVAL_SECONDS', 0.01)
+    write = stream.write
+    def capture(text):
+        write(text)
+        if 'extract.0 ·' in text and 'extract.1 ·' in text:
+            release.set()
+    stream.write = capture
+    def model(*args):
+        assert release.wait(3), 'Both active requests must be displayed while blocked'
+        return {'ok': True}
+    run = Execution(tmp_path, payload, EventBuildConfig(extraction_workers=2), model)
+    facts = seed_facts(payload)
+    result = run.execute_tasks('extraction', [Task(name, run.infer_steps(name, 'system', {}, facts, lambda v: None))
+                                            for name in ('extract.0', 'extract.1')])
+    assert all(t.result == {'ok': True} for t in result.values())
+    assert len(run.state['calls']) == 2 and 'progress_updated_at' not in run.state
+    assert '抽取 2/2 完成' in stream.frames[-1]
+    assert run._terminal_progress.lines == 0
+
+
+def test_tty_pipeline_finishes_all_boxes_and_resumes_without_model_calls(tmp_path, payload, monkeypatch):
+    from finmy.person_epg.event.build import run_event
+    from test_person_event_pipeline import SyntheticEventModel
+    stream = TerminalBuffer()
+    monkeypatch.setattr(scheduling.sys, 'stderr', stream)
+    model = SyntheticEventModel()
+    first = run_event(payload, tmp_path, model=model)
+    assert first['result_status'] == 'draft'
+    assert '校验' in stream.frames[-1] and '待开始' not in stream.frames[-1]
+    assert '░' not in stream.frames[-1]
+    calls = len(model.calls)
+    second = run_event(payload, tmp_path, model=model, resume=True)
+    assert second['result_status'] == 'draft' and len(model.calls) == calls
+    assert '░' not in stream.frames[-1]

@@ -18,7 +18,7 @@ from .context import navigation, sized_request
 from .grouping import ambiguity_groups
 from .validation import check_graph
 from .relation_review import discovery_scope
-from .scheduling import Task, ModelCallFailed, emit
+from .scheduling import Task, ModelCallFailed, emit, terminal_progress
 
 
 def body_ranges(payload, config):
@@ -231,8 +231,24 @@ class Construction:
         emit(self.run, stage, stage, 'TaskBlocked', reason=reason)
         self.run.state.setdefault('stages', {})[stage] = dict(status='blocked', reason=reason)
         self.run.persist()
+        terminal_progress(self.run).update(stage, 'blocked')
 
     def stage(self, name, operation):
+        display = terminal_progress(self.run)
+        display.outer = name
+        display.update(name, 'running')
+        status = 'interrupted'
+        try:
+            result = self._stage(name, operation)
+            status = self.run.state['stages'][name]['status']
+            if name == 'corpus_supplement' and self.run.state.get(name, {}).get('status') == 'skipped':
+                status = 'skipped'
+            return result
+        finally:
+            display.outer = None
+            display.update(name, 'running' if name == 'repair' and status == 'completed' else status)
+
+    def _stage(self, name, operation):
         """Reuse a completed stage snapshot, or rebuild it from per-call checkpoints."""
         for key in list(self.run.state.get('task_states', {})):
             if key.startswith(name + ':'):
@@ -571,6 +587,22 @@ class Construction:
             self.record_resolutions(role, report)
 
     def finish(self, execution_status, reason=None):
+        display = terminal_progress(self.run)
+        # Close any interrupted phase before showing the final local checks.
+        for name, status in list(display.stages.items()):
+            if status == 'running':
+                display.stages[name] = execution_status
+        display.update('validation', 'running')
+        status = 'failed'
+        try:
+            result = self._finish(execution_status, reason)
+            status = 'completed' if result['result_status'] == 'draft' else 'partial'
+            return result
+        finally:
+            display.update('validation', status)
+            display.finish(status)
+
+    def _finish(self, execution_status, reason=None):
         if execution_status == 'finished' and any(
                 t['status'] == 'limited' and t.get('reason') in ('model_calls', 'read_calls', 'read_chars', 'read_rounds')
                 for t in self.run.state.get('task_states', {}).values()):
