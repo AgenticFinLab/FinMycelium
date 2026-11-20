@@ -117,13 +117,13 @@ def test_different_and_uncertain_claims_are_not_merged(case):
     assert ec.merge_plan(graph, pairs, decisions)[0] == {}
 
 
-def test_transitive_merge_cannot_override_explicit_disagreement():
+def test_transitive_merge_records_disagreement_without_blocking():
     graph = dict(evidence=[{'evidence_id': x} for x in 'ABC'])
     pairs = [dict(pair_id=x+y, evidence_ids=[x,y]) for x,y in [('A','B'),('A','C'),('B','C')]]
     decisions = [dict(pair_id=p['pair_id'], verdict='different_fact' if p['pair_id']=='AC' else 'same_fact')
                  for p in pairs]
     mapping, conflicts = ec.merge_plan(graph, pairs, decisions)
-    assert mapping == {'B':'A'} and conflicts
+    assert mapping == {'B':'A', 'C':'A'} and conflicts
 
 
 def test_reject_unknown_duplicate_and_missing_decisions(case):
@@ -148,14 +148,18 @@ def test_read_requests_cannot_start_continuation_loop(case, tmp_path):
     assert not (tmp_path / 'checkpoints/stage-evidence_consolidation.json').exists()
 
 
-def test_corrupted_quote_is_rejected_without_mutating_inputs(case):
+def test_unverified_quote_is_preserved_without_blocking_merge(case):
     payload, graph, facts, pair = case
     original = deepcopy(graph)
     bad = deepcopy(graph)
     next(e for e in bad['evidence'] if e['evidence_id'] == pair[1])['citations'][0]['quote'] = 'invented'
-    with pytest.raises(ValueError, match='unverified'):
-        ec.apply_mapping(bad, facts, {pair[1]:pair[0]}, payload)
-    assert graph == original
+    before = deepcopy(bad)
+    merged, _ = ec.apply_mapping(bad, facts, {pair[1]:pair[0]}, payload)
+    survivor = next(e for e in merged['evidence'] if e['evidence_id'] == pair[0])
+    assert any(c['quote'] == 'invented' for c in survivor['citations'])
+    assert any(i['severity'] == 'error' for i in check_graph(merged, payload)['issues'])
+    assert render_graph_html(merged)
+    assert bad == before and graph == original
 
 
 def test_cli_postprocess_and_resume_make_no_upstream_calls(case, tmp_path, monkeypatch, capsys):

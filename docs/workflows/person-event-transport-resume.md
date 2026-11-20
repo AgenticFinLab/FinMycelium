@@ -1,14 +1,17 @@
-# Bounded requests and resume after this transport upgrade
+# Bounded requests and resume
+
+See [the current operations guide](person-event-operations.md) for consolidated
+commands and status reporting. No historical patch files are needed after checkout.
 
 Each event-builder request runs in an isolated, terminable subprocess. It is
 terminated when answer and reasoning character counts both stop increasing for
-180 seconds, or when the entire invocation reaches `timeout` (900 seconds in the
+60 seconds, or when the entire invocation reaches `timeout` (900 seconds in the
 resume command below). Empty stream chunks and keepalive traffic do not extend
 the output-stall deadline. A short termination/kill cleanup can follow the deadline.
 The existing SDK I/O timeout remains set as well.
 
 Timeouts, transient connection/stream errors, HTTP 429 and server errors receive
-at most one automatic retry, queued behind other ready work. Authentication,
+at most five automatic retries, queued behind other ready work. Authentication,
 configuration errors and output-length truncation are not automatically retried.
 Every retry has a new call ID with `retry_of`; it consumes the existing global
 model-call budget. Its budget is retained across resume. A fresh explicit resume
@@ -51,6 +54,6 @@ silently rewrite fingerprints for runs with different semantic settings.
 
 Offline tests launch real child processes that remain silent or emit empty chunks
 or continuously growing output. They check termination, the 900-second-deadline
-mechanism using shortened test values, result/usage delivery, one-retry behavior,
+mechanism using shortened test values, result/usage delivery, bounded retry behavior,
 and resume from organization with zero repeated extraction/consolidation calls.
 No live provider request is required for these checks.

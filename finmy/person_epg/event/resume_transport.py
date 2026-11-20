@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 
 from .build import run_event
+from .config import resume_settings, budget_summary
+from .artifacts import print_artifact_summary
 
 
 def main(argv=None):
@@ -41,22 +43,18 @@ def main(argv=None):
         os.close(fd)
     (directory / 'pause_requested').unlink(missing_ok=True)
     before = json.loads((directory / 'state.json').read_text())
-    max_calls = max(before['config'].get('max_calls', 0), len(before['calls']) + args.extra_calls)
-    previous = before['config']
-    read_extensions = dict(
-        read_call_extension=max(previous.get('read_call_extension', 0),
-            len(before['reads']) + args.extra_read_calls - previous['max_read_calls']),
-        read_round_extension=max(previous.get('read_round_extension', 0),
-            (args.max_read_rounds or previous['max_read_rounds']) - previous['max_read_rounds']),
-        read_char_extension=previous.get('read_char_extension', 0) + args.extra_read_chars)
-    print(f"恢复 {directory} | 已记录 {len(before['calls'])} 次调用 | 总调用上限 {max_calls} | 复用已完成检查点", flush=True)
+    settings = resume_settings(before, extra_calls=args.extra_calls, extra_read_calls=args.extra_read_calls,
+        max_read_rounds=args.max_read_rounds, extra_read_chars=args.extra_read_chars)
+    effective = budget_summary({**before, 'config': {**before['config'], **settings}})
+    print(f"恢复 {directory} | 复用已完成检查点 | 有效预算 " + json.dumps(effective, ensure_ascii=False), flush=True)
     state = run_event(json.loads((directory / 'input.json').read_text()), directory=directory,
-        config=dict(timeout=900, stall_timeout=60, max_transport_retries=5, max_calls=max_calls, **read_extensions),
+        config=settings,
         allow_network=True, resume=True, resume_transport_upgrade=True,
         stop_after_organization=False)
     print(json.dumps({key: state.get(key) for key in
         ('execution_status', 'result_status', 'output', 'checks', 'reason')}, ensure_ascii=False))
     print('复用阶段：', ', '.join(name for name, info in state.get('stages', {}).items() if info.get('reused')))
+    print_artifact_summary(state, directory)
 
 
 if __name__ == '__main__':

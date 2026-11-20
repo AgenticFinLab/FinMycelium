@@ -46,8 +46,24 @@ def code_version():
             "python_sources_sha256": digest(files)}
 
 
+def person_execution_version():
+    """Event execution plus its workbench entry point; exclude independent views."""
+    from finmy.person_epg.event.runtime import code_identity
+    return digest(dict(execution=code_identity(), entry_point=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()))
+
+
 def check_person_code(body):
     if body.get('kind') == 'person_event':
+        if body.get('person_execution_code'):
+            if body['person_execution_code'] != person_execution_version():
+                raise ValueError('构建代码已变化，请从已确认的检索材料创建新任务；旧任务与用量保留')
+            return
+        if (body.get('graph_schema_version') == GRAPH_VERSION
+                and body.get('code', {}).get('python_sources_sha256') == '285f244ef31a1db5a48b3c3f29d35ee06789961fb5d6c4b5b18eefdf7d3fba60'
+                and body.get('person_code') == '0d8478631aa2735c0d0e0f3f5e113030dc9c9c6e926c75c2984e4d6ddf212e51'):
+            # Known engineering-only upgrade from PR #25; callers persist body.
+            body['person_execution_code'] = person_execution_version()
+            return
         from finmy.person_epg.build import code_identity
         current = code_version()
         same_code = body['code'] == current
@@ -137,6 +153,7 @@ class BuildController:
                 'catalog':provenance['catalog'], 'provenance':provenance, 'scope_hash':digest(event['scope']),
                 'input_confirmation':{'time':now(), 'basis':'User confirmed the actual material and known gaps'},
                 'person_config':asdict(config), 'code':code_version(), 'person_code':code_identity(),
+                'person_execution_code':person_execution_version(),
                 'config':{'builder_type':'PersonEvent', 'lm_name':config.lm_name},
                 'artifact_directory':str((artifacts/task_id).resolve()), 'resume':False}
         with task_lock(search_controller.root, search_task_id):

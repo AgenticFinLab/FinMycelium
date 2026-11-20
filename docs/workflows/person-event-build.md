@@ -1,5 +1,8 @@
 # Build one person event
 
+For current CLI commands, effective budgets, errors and saved artifacts, see
+[run, resume, inspect and render](person-event-operations.md).
+
 A task reconstructs one confirmed `person / storyline / event`, using
 `person-event-2.0` and the [engineering contract](../person-event-builder/0-overview.md).
 The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own protocols.

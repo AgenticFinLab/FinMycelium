@@ -1,9 +1,8 @@
 # Cross-source evidence consolidation
 
-Apply `person-event-v2-evidence-semantic-merge-incremental.patch` **after**
-`person-event-v2-transport-guard-resume-incremental.patch`. The stall120/partial-output
-patch is not part of this baseline or this patch. Existing timeout, stall timeout,
-reasoning effort, concurrency, read-round and minute-progress settings are retained.
+This feature is included in the current branch. See the
+[operations guide](person-event-operations.md) for current configuration, resume,
+and offline replay commands. Historical patch files do not need to be reapplied.
 
 ## Run on an existing result
 
@@ -11,9 +10,6 @@ Stop the old process. Keep `RUN` pointing at its output directory, which already
 contains `state.json` and the original `input.json`. No replacement input is needed.
 
 ```bash
-git apply --check person-event-v2-evidence-semantic-merge-incremental.patch
-git apply person-event-v2-evidence-semantic-merge-incremental.patch
-
 # Stage 1: inspect the candidate plan; no API calls or file mutations.
 python -m finmy.person_epg.event.evidence_consolidation "$RUN" --plan
 

@@ -1,6 +1,6 @@
 """Durable, bounded execution over one immutable, local evidence corpus."""
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
@@ -9,8 +9,7 @@ import re
 import time
 import uuid
 
-from finmy.model_config import (person_build_effort_options, person_build_json_mode_supported,
-                                person_build_request_effort)
+from finmy.model_config import person_build_request_effort
 
 from .records import fingerprint, index_records, json_bytes, pointer, sha256, prompt_json
 from .schema import FACTS_VERSION, GRAPH_VERSION
@@ -19,67 +18,7 @@ from ..building.model_transport import error_metadata
 from ..building.completion_errors import IncompleteCompletionError
 
 
-@dataclass
-class EventBuildConfig:
-    lm_name: str = 'ark/kimi-k3-1-pro-261024'
-    max_calls: int = 40
-    max_json_attempts: int = 3
-    max_new_tokens: int = 12288
-    max_context_chars: int = 160000
-    timeout: int = 900
-    stall_timeout: int = 60
-    max_transport_retries: int = 5
-    extraction_chars: int = 12000
-    extraction_overlap: int = 400
-    max_read_calls: int = 24
-    max_read_rounds: int = 2
-    read_call_extension: int = 0
-    read_round_extension: int = 0
-    read_char_extension: int = 0
-    max_read_chars: int = 48000
-    read_chars: int = 4000
-    retrieval_top_k: int = 4
-    final_repair_rounds: int = 1
-    graph_schema_version: str = GRAPH_VERSION
-    api_json_mode: bool = False
-    full_corpus_supplement: bool = False
-    reasoning_effort: str | None = 'auto'
-    extraction_workers: int = 1
-
-    @classmethod
-    def from_saved(cls, values):
-        """A historical task with no effort field delegated to the provider."""
-        return cls(**{'reasoning_effort': None, **values})
-
-    def __post_init__(self):
-        if not isinstance(self.lm_name, str) or not self.lm_name.strip():
-            raise ValueError('Choose an independent build model')
-        if type(self.full_corpus_supplement) is not bool:
-            raise ValueError('full_corpus_supplement must be a boolean')
-        if type(self.api_json_mode) is not bool:
-            raise ValueError('api_json_mode must be a boolean')
-        if self.api_json_mode and not person_build_json_mode_supported(self.lm_name):
-            raise ValueError('API JSON mode is currently supported for Ark Kimi K3.1 Pro only')
-        effort_options = person_build_effort_options(self.lm_name)
-        if self.reasoning_effort == 'auto':
-            self.reasoning_effort = effort_options[0]
-        elif self.reasoning_effort not in effort_options:
-            raise ValueError('reasoning_effort accepts by_stage, low, high or max for Kimi K3.1 Pro, or None for the service default')
-        for key, value in asdict(self).items():
-            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'reasoning_effort'):
-                continue
-            minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls', 'max_read_rounds', 'max_transport_retries',
-                                  'read_call_extension', 'read_round_extension', 'read_char_extension') else 1
-            if type(value) is not int or value < minimum:
-                raise ValueError(key + ' is outside its supported range')
-        if self.graph_schema_version != GRAPH_VERSION:
-            raise ValueError('This executor only writes ' + GRAPH_VERSION)
-        if self.extraction_overlap >= self.extraction_chars:
-            raise ValueError('Extraction overlap must be smaller than the batch')
-        if self.final_repair_rounds > 1:
-            raise ValueError('At most one final targeted repair round is supported')
-        if not 1 <= self.extraction_workers <= 10:
-            raise ValueError('extraction_workers must be between 1 and 10')
+from .config import EventBuildConfig, effective_read_limits
 
 
 class LimitReached(Exception):
@@ -128,7 +67,9 @@ def code_manifest():
     """
     event = Path(__file__).resolve().parent
     root = event.parents[1]
-    files = {p for p in event.glob('*.py') if p.name != 'rendering.py'}
+    files = {p for p in event.glob('*.py') if p.name not in {
+        'rendering.py', 'graph_html.py', 'graph_layout.py', 'graph_view.py', 'graph_labels.py',
+        'state_machine_smoke.py', 'status.py'}}
     files.update(root / name for name in (
         'person_epg/build.py',                    # Model entry point.
         'person_epg/building/model_transport.py', # Streaming transport and diagnostics.
@@ -276,6 +217,7 @@ class Execution:
                 raise ValueError('Existing run requires explicit resume or a new directory')
             self.state = json.loads(state_path.read_text())
             original_state = deepcopy(self.state)
+            self.state.pop('last_error', None)
             if self.state.get('graph_schema_version') != GRAPH_VERSION:
                 raise ValueError('Cannot resume a different graph protocol')
             if (self.state['input_sha256'] != input_hash
@@ -286,7 +228,9 @@ class Execution:
                 validate_recovery(self.directory, self.state)
             previous_code = self.state.get('execution_code_sha256', self.state['code_sha256'])
             changed_code = previous_code != code_identity()
-            if changed_code and not resume_transport_upgrade:
+            # Exact PR #25 baseline only: preserve historical paid-response keys.
+            engineering_upgrade = previous_code == 'e284e5595c61cbf9a90087e85ceabba2384b6b434ac52b3d6435ca35760b854a'
+            if changed_code and not (resume_transport_upgrade or engineering_upgrade):
                 raise ValueError('Implementation changed; create a new run')
             retained = self.directory / 'provenance.json'
             if sha256(retained.read_bytes()) != self.state['provenance_sha256']:
@@ -313,7 +257,7 @@ class Execution:
                 backup = 'recoveries/transport-guard-' + uuid.uuid4().hex + '/state-before.json'
                 backup_hash = write_json(self.directory / backup, original_state)
                 self.state.setdefault('execution_upgrades', []).append(dict(
-                    kind='transport-guard', at=now(), from_code=previous_code,
+                    kind='engineering-maintenance' if engineering_upgrade else 'transport-guard', at=now(), from_code=previous_code,
                     to_code=code_identity(), backup=backup, backup_sha256=backup_hash))
                 self.state['execution_code_sha256'] = code_identity()
             for call in self.state['calls']:
@@ -468,9 +412,8 @@ class Execution:
             raise InvalidResponse('The one-call supplement has already been attempted without a valid checkpoint')
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
         read_rounds = self.state.setdefault('read_rounds', {}).setdefault(group, [])
-        round_limit = self.config.max_read_rounds + self.config.read_round_extension
-        call_limit = self.config.max_read_calls + self.config.read_call_extension
-        char_limit = self.config.max_read_chars + self.config.read_char_extension
+        limits = effective_read_limits(self.config)
+        round_limit, call_limit, char_limit = limits['read_rounds'], limits['read_calls'], limits['read_chars']
         if task.get('read_round_limit_reached') and len(read_rounds) >= round_limit:
             raise LimitReached('read_rounds')
         # Older versions saved the response but not an explicit pending delivery.

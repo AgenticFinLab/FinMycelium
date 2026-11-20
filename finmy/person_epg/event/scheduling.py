@@ -75,6 +75,7 @@ def execute(run, stage, tasks):
     from .runtime import (InvalidResponse, LimitReached, PauseRequested, now,
                           write_json, sha256, json_bytes)
     from ..building.model_transport import error_metadata
+    from .diagnostics import record_failure
     tasks = list(tasks)
     ready, events, active = deque(tasks), Queue(), {}
     live_models, live_lock = {}, Lock()
@@ -148,6 +149,10 @@ def execute(run, stage, tasks):
                 exc.original if isinstance(exc, ModelCallFailed) else exc).__name__
             emit(run, stage, task.task_id,
                  'TaskLimited' if isinstance(exc, LimitReached) else 'TaskFailed', reason=reason)
+            if isinstance(exc, ModelCallFailed):
+                call = next((c for c in reversed(run.state['calls']) if c['task_id'] == task.task_id), None)
+                if call and call.get('failure'):
+                    run.state['task_states'][stage + ':' + task.task_id]['failure'] = call['failure']
             if task.on_failure:
                 task.on_failure(task.task_id, reason)
         except BaseException as exc:
@@ -231,6 +236,11 @@ def execute(run, stage, tasks):
             else:
                 call.update(status='incomplete' if type(error).__name__ == 'IncompleteCompletionError'
                             else 'transport_error', **error_metadata(error))
+                details = record_failure(run, error, call=call, transport=transport)
+                try:
+                    print(details['summary'] + ' | retryable=' + str(details['retryable']), file=sys.stderr, flush=True)
+                except OSError:
+                    pass
                 emit(run, stage, task_id, 'ModelFailed', call_id=call['call_id'], reason=type(error).__name__)
             task.request = None
             if stop is None:

@@ -655,6 +655,8 @@ class Construction:
             self.run.state['reason'] = reason
         else:
             self.run.state.pop('reason', None)
+        from .artifacts import update_artifact_summary
+        update_artifact_summary(self.run)
         self.run.persist()
         return deepcopy(self.run.state)
 
@@ -730,5 +732,6 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
             construction.finish('interrupted', 'Execution interrupted; cumulative usage is retained')
             raise
         except Exception as exc:
-            # Raw transport messages can contain request credentials; retain only the class.
-            return construction.finish('failed', type(exc.original if isinstance(exc, ModelCallFailed) else exc).__name__)
+            from .diagnostics import record_failure
+            details = record_failure(execution, exc)
+            return construction.finish('failed', details['summary'])

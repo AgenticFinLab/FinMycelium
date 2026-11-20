@@ -22,9 +22,10 @@ class StreamStalled(TimeoutError):
 
 
 class ModelTransportError(RuntimeError):
-    def __init__(self, error_type, *, retryable=False):
+    def __init__(self, error_type, *, retryable=False, diagnostics=None):
         self.remote_error_type = error_type
         self.retryable = retryable
+        self.diagnostics = dict(diagnostics or {})
         super().__init__(error_type)
 
 
@@ -130,7 +131,7 @@ class GuardedModel:
                         self.last_usage = item.get('usage')
                         info = info or {}
                         raise ModelTransportError(info.get('error_type', 'WorkerError'),
-                                                  retryable=retryable_failure(info))
+                                                  retryable=retryable_failure(info), diagnostics=info)
                     if item['kind'] in ('eof', 'reader_error'):
                         raise ModelTransportError('WorkerExited', retryable=True)
         except BaseException as exc:
@@ -182,14 +183,15 @@ def worker():
                 if stamp - self.last_report >= 0.25 or info['phase'] != self.last_phase:
                     send('progress', diagnostics=dict(info))
                     self.last_report, self.last_phase = stamp, info['phase']
-        model = ReportingModel(SimpleNamespace(**request['config']))
+        model = None
         try:
+            model = ReportingModel(SimpleNamespace(**request['config']))
             raw = model.call_with_effort(request['system'], request['user'], request['name'],
                                         reasoning_effort=request['reasoning_effort'])
             send('completed', raw=raw, diagnostics=model.last_diagnostics, usage=model.last_usage)
         except Exception as exc:
-            send('failed', diagnostics=dict(model.last_diagnostics or {}, **error_metadata(exc)),
-                 usage=model.last_usage)
+            send('failed', diagnostics=dict(getattr(model, 'last_diagnostics', None) or {}, **error_metadata(exc)),
+                 usage=getattr(model, 'last_usage', None))
 
 
 if __name__ == '__main__':

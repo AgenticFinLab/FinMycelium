@@ -1,4 +1,4 @@
-"""Sixty-second output-stall recovery with a shared two-retry ceiling."""
+"""Sixty-second output-stall recovery with a persisted retry ceiling."""
 import json
 import sys
 from types import SimpleNamespace
@@ -21,7 +21,7 @@ def test_defaults_and_semantic_checkpoint_compatibility():
     from finmy.person_epg.event.runtime import semantic_config
     new = EventBuildConfig()
     old = EventBuildConfig(stall_timeout=180, max_transport_retries=1)
-    assert (new.stall_timeout, new.max_transport_retries, new.timeout) == (60, 2, 900)
+    assert (new.stall_timeout, new.max_transport_retries, new.timeout) == (60, 5, 900)
     assert new.max_read_rounds == 2 and PROGRESS_INTERVAL_SECONDS == 60
     assert semantic_config(new) == semantic_config(old)
 
@@ -80,7 +80,7 @@ def test_two_incomplete_retries_then_success(tmp_path, payload):
 
 def test_exhausted_incomplete_budget_cannot_fall_through_to_format_retries(tmp_path, payload):
     model = Interrupted(['{"ok":'])
-    run = Execution(tmp_path, payload, EventBuildConfig(max_json_attempts=8), model)
+    run = Execution(tmp_path, payload, EventBuildConfig(max_json_attempts=8, max_transport_retries=2), model)
     with pytest.raises(IncompleteStreamResponse):
         run.infer('organize', 'system', {}, seed_facts(payload), validate)
     assert len(model.calls) == 3
@@ -97,7 +97,7 @@ def test_exhausted_incomplete_budget_cannot_fall_through_to_format_retries(tmp_p
 
 def test_empty_timeouts_and_partial_json_share_one_retry_budget(tmp_path, payload):
     model = Interrupted([StreamStalled(), '{"ok":', StreamStalled()])
-    run = Execution(tmp_path, payload, EventBuildConfig(), model)
+    run = Execution(tmp_path, payload, EventBuildConfig(max_transport_retries=2), model)
     with pytest.raises(StreamStalled):
         run.infer('organize', 'system', {}, seed_facts(payload), validate)
     assert len(model.calls) == 3
@@ -158,5 +158,6 @@ def test_pipeline_resume_command_overrides_old_transport_settings(tmp_path, monk
         return {'execution_status':'finished', 'stages':{}}
     monkeypatch.setattr(resume_transport, 'run_event', run)
     resume_transport.main([str(tmp_path), '--allow-model'])
-    assert invoked[0]['config'] == {'timeout':900, 'stall_timeout':60, 'max_transport_retries':2, 'max_calls':60}
+    assert invoked[0]['config'] == {'timeout':900, 'stall_timeout':60, 'max_transport_retries':5, 'max_calls':60,
+                                   'read_call_extension':0, 'read_round_extension':0, 'read_char_extension':0}
     assert invoked[0]['resume'] and invoked[0]['resume_transport_upgrade']

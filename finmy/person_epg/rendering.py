@@ -73,8 +73,8 @@ def render_saved_event(directory):
         if current:
             from .event.validation import check_graph
             checked = check_graph(graph, payload, complete=False)
-            if any(i['code'] in {'SCHEMA_INVALID','INPUT_IDENTITY_CHANGED','SOURCE_METADATA_CHANGED','QUOTE_MISMATCH','SAMPLE_HASH_MISMATCH'} for i in checked['issues']):
-                raise ValueError('Saved input and graph do not match')
+            # Delivery keeps validation findings visible without blocking HTML.
+            state['render_checks'] = checked
         else:
             check_identity(graph, payload['user_query']['extras']['person_event'])
         state['visualization'] = save_gantt(graph, directory, graph_path, result_status=state.get('result_status'))

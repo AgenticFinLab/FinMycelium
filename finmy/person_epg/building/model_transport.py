@@ -1,6 +1,7 @@
 """Bounded streaming transport shared by person builders; never retry implicitly."""
 import re
 import time
+import traceback
 from datetime import datetime, timezone
 from threading import Lock
 
@@ -42,10 +43,19 @@ def error_metadata(exc):
         chain.append(type(current).__name__)
         current = current.__cause__ or (None if current.__suppress_context__ else current.__context__)
     result = {'error_type': type(exc).__name__, 'error_chain': chain}
+    result['traceback'] = [dict(file=f.filename, line=f.lineno, function=f.name)
+                           for f in traceback.extract_tb(exc.__traceback__)]
     result.update(response_metadata(getattr(exc, 'response', None)))
     request_id = identifier(getattr(exc, 'request_id', None))
     if request_id:
         result['request_id'] = request_id
+    body = getattr(exc, 'body', None)
+    if isinstance(body, dict):
+        body = body.get('error', body)
+        if isinstance(body, dict):
+            code = identifier(body.get('code'))
+            if code:
+                result['error_code'] = code
     return result
 
 
