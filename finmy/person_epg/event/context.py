@@ -163,6 +163,15 @@ def sized_request(base, package, max_chars, reserve):
     best = None
     for preview in (160, 80, 40, 0):
         request['facts_index'] = navigation(package, preview, base['role'], supplied, relation_actions)
+        if (base['role'] == 'relations' and base.get('correction')
+                and not base.get('relation_discovery')):
+            # Relation discovery is already accepted: this request only repairs
+            # assigned Context associations. Keep every Action addressable,
+            # without resending unrelated previews and evidence lists.
+            owners = set(base.get('assigned_action_ids', []))
+            request['facts_index']['actions'] = [a if a['action_id'] in owners else
+                {key: a[key] for key in ('action_id', 'name', 'phase_id') if key in a}
+                for a in request['facts_index']['actions']]
         request['related_records'] = []
         request['context_selection'] = dict(navigation_preview_chars=preview, related_available=len(records),
             related_included=0, complete_records='read_records; exact source ranges through read_sample')

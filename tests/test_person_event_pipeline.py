@@ -228,23 +228,13 @@ def test_parallel_extraction_reuses_other_responses_after_one_failure(tmp_path, 
     assert model.calls.count('extract.1') == model.calls.count('extract.2') == 1
 
 
-def test_relation_scopes_run_concurrently_after_organization(tmp_path, payload):
-    class ConcurrentRelations(SyntheticEventModel):
-        def __init__(self):
-            super().__init__()
-            self.barrier = threading.Barrier(3, timeout=5)
-
-        def __call__(self, system, user, name):
-            if name.startswith('relate.'):
-                self.barrier.wait()
-            return super().__call__(system, user, name)
-
-    model = ConcurrentRelations()
+def test_small_relation_scope_does_not_split_to_fill_workers(tmp_path, payload):
+    model = SyntheticEventModel()
     state = run_event(payload, tmp_path, {'extraction_workers': 3}, model=model)
     assert state['result_status'] == 'draft', json.loads((tmp_path / state['checks']).read_text())
     names = [c['task_id'] for c in state['calls']]
     assert names.index('organize') < names.index('relate.0')
-    assert names.count('relate.0') == names.count('relate.1') == names.count('relate.2') == 1
+    assert [name for name in names if name.startswith('relate.')] == ['relate.0']
     assert all(c['status'] == 'accepted' for c in state['calls'])
 
 
@@ -275,13 +265,14 @@ def test_disjoint_consolidation_groups_run_concurrently(tmp_path, payload, monke
 
 def test_parallel_relation_budget_resume_reuses_completed_scopes(tmp_path, payload):
     model = SyntheticEventModel()
-    first = run_event(payload, tmp_path, {'extraction_workers': 3, 'max_calls': 7}, model=model)
+    first = run_event(payload, tmp_path, {'extraction_workers': 3, 'max_calls': 5}, model=model)
     assert first['execution_status'] == 'limit'
-    assert [c['task_id'] for c in first['calls'][-2:]] == ['relate.0', 'relate.1']
+    prior = [c['task_id'] for c in first['calls']]
+    assert not any(name.startswith('relate.') for name in prior)
     resumed = run_event(payload, tmp_path, {'max_calls': 20}, model=model, resume=True)
     assert resumed['result_status'] == 'draft', json.loads((tmp_path / resumed['checks']).read_text())
-    assert model.calls.count('relate.0') == model.calls.count('relate.1') == 1
-    assert model.calls.count('relate.2') == 1
+    assert [c['task_id'] for c in resumed['calls'][:len(prior)]] == prior
+    assert model.calls.count('relate.0') == 1
 
 
 def test_body_ranges_cover_all_text_without_hidden_truncation(payload):

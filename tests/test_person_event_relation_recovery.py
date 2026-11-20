@@ -30,6 +30,53 @@ def test_relation_index_does_not_repeat_full_assigned_records(graph):
     assert len(prompt_json(owned)) < len(prompt_json(assigned['actions'][0]))
 
 
+def test_relation_batch_boundaries_do_not_depend_on_worker_count(payload, graph):
+    graph = deepcopy(graph)
+    original = graph['actions'][0]
+    graph['actions'] = []
+    for number in range(12):
+        action = deepcopy(original)
+        action.update(action_id=f'ACT-batch-{number}', name=f'Action {number}')
+        graph['actions'].append(action)
+    plans = []
+    for workers in (1, 10):
+        execution = SimpleNamespace(payload=payload,
+            config=EventBuildConfig(extraction_workers=workers), state={'id_map': {}})
+        builder = Construction(execution)
+        builder.graph = deepcopy(graph)
+        planned = []
+        def receive_steps(task_id, role, package, request, **scope):
+            planned.append((request['assigned_action_ids'], request['assigned_phase_ids']))
+            if False:
+                yield
+            return package, []
+        builder.receive_steps = receive_steps
+        def execute_tasks(stage, tasks):
+            for task in tasks:
+                try:
+                    next(task.steps)
+                except StopIteration:
+                    pass
+        execution.execute_tasks = execute_tasks
+        builder.relate()
+        plans.append(planned)
+    assert plans[0] == plans[1]
+    assert 1 < len(plans[0]) < 6  # Parallel scopes without a worker-driven 6-way split.
+    assert sum(len(actions) for actions, _ in plans[0]) == len(graph['actions'])
+
+
+def test_context_only_correction_compacts_unrelated_action_navigation(graph):
+    base = dict(role='relations', assigned_action_ids=[], assigned_phase_ids=[graph['phases'][0]['phase_id']],
+                correction=dict(issues=[], allowed_records={'phases': [graph['phases'][0]['phase_id']]},),
+                assigned_records=dict(actions=[], phases=graph['phases'][:1]))
+    request = sized_request(base, graph, 100000, 25000)
+    assert {a['action_id'] for a in request['facts_index']['actions']} == \
+           {a['action_id'] for a in graph['actions']}
+    assert all(set(a) <= {'action_id', 'name', 'phase_id'} for a in request['facts_index']['actions'])
+    assert request['facts_index']['evidence_index']
+    assert request['assigned_records']['phases'] == graph['phases'][:1]
+
+
 def test_relation_batches_use_characters_and_keep_cross_batch_targets(payload, graph):
     graph=deepcopy(graph)
     original=graph['actions'][0]

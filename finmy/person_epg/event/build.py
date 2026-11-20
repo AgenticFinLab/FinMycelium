@@ -73,6 +73,7 @@ class Construction:
         group = self.run.attempt_group(task_id, system, request, frozen)
         records, allowed = [], None
         result = package
+        last_correction = None
         for number in range(self.run.config.max_json_attempts):
             step_id = task_id if number == 0 else task_id + '.correct.' + str(number)
             if number:
@@ -107,11 +108,18 @@ class Construction:
             allowed = correction_scope(role, combined, result, handled)
             if not allowed:
                 break
+            issues = correction_issues(combined['rejected'], allowed)
+            signature = fingerprint(dict(allowed=allowed, issues=issues))
+            # A correction that returns the same refusal without changing any
+            # adopted facts has no new premise for a further paid request.
+            if number and last_correction == (signature, fingerprint(result)):
+                break
+            last_correction = (signature, fingerprint(result))
             self.run.task_event('RetryRequested', reason='adoption_rejected')
             self.run.reject_proposals(group, fingerprint(dict(task_id=step_id, response=raw)), combined['rejected'])
             fields = {k: deepcopy(v) for k, v in request.items() if k not in (
                 'role', 'identity', 'query_text', 'facts_index', 'read_limits', 'related_records', 'context_selection')}
-            fields['correction'] = dict(issues=correction_issues(combined['rejected'], allowed), allowed_records=allowed)
+            fields['correction'] = dict(issues=issues, allowed_records=allowed)
             if role == 'consolidation':
                 scope = dict(assigned={(c, oid) for c, ids in allowed.items() for oid in ids})
                 fields['assigned'] = [reference(c, oid) for c, oid in sorted(scope['assigned'])]
@@ -395,7 +403,8 @@ class Construction:
         action_phases = {a['action_id']: a.get('phase_id') for a in self.graph['actions']}
         reserve = max(self.run.config.read_chars + 1024, self.run.config.max_context_chars // 4)
         initial_limit = self.run.config.max_context_chars - reserve
-        workers = self.run.config.extraction_workers
+        # Fixed semantic batch target; workers only control simultaneous calls.
+        cap = max(4, (len(actions) + 3) // 4)
         number = 0
         while actions or phases or number == 0:
             frozen = deepcopy(self.graph)
@@ -404,13 +413,10 @@ class Construction:
             for slot in range(len(actions) + len(phases) + 1 if frozen is not None else 1):
                 if not (remaining_actions or remaining_phases) and (number or jobs):
                     break
-                cap = None
-                if frozen is not None and remaining_actions:
-                    cap = max(1, (len(actions) + workers-1) // workers)
                 owned_actions, owned_phases = [], []
                 request = self.relation_request([], [])
                 for aid in remaining_actions:
-                    if cap is not None and len(owned_actions) >= cap:
+                    if len(owned_actions) >= cap:
                         break
                     pid = action_phases[aid]
                     candidate_phases = owned_phases + ([pid] if pid in remaining_phases and pid not in owned_phases else [])

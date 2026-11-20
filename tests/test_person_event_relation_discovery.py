@@ -73,12 +73,12 @@ def test_missing_review_is_partial_and_retry_budget_survives_resume(tmp_path, ba
     root = tmp_path / 'missing'
     state = run_relations(snapshot, root, config={'max_json_attempts': 3}, model=model)
     assert state['execution_status'] == 'finished' and state['result_status'] == 'partial'
-    assert len(base.calls) == 3
+    assert len(base.calls) == 2  # Repeating the same refusal cannot make progress.
     report = json.loads((root / state['relation_discovery']).read_text())
     assert report['incomplete_action_ids'] and not report['completed_action_ids']
     before = deepcopy(state['calls'])
     resumed = run_relations(snapshot, root, model=model, resume=True)
-    assert resumed['calls'] == before and len(base.calls) == 3
+    assert resumed['calls'] == before and len(base.calls) == 2
     assert resumed['result_status'] == 'partial'
 
 
@@ -188,10 +188,10 @@ def test_unfixed_context_remains_partial_after_bounded_attempts(tmp_path, baseli
     model = context_model(SyntheticEventModel(), requests, fix=False)
     root = tmp_path / 'uncorrected'
     state = run_relations(snapshot, root, model=model)
-    assert state['result_status'] == 'partial' and len(requests) == 3
+    assert state['result_status'] == 'partial' and len(requests) == 2
     assert json.loads((root / state['output']).read_text())['relations']
     resumed = run_relations(snapshot, root, model=model, resume=True)
-    assert resumed['result_status'] == 'partial' and len(requests) == 3
+    assert resumed['result_status'] == 'partial' and len(requests) == 2
 
 
 def test_local_correction_cannot_rewrite_valid_neighbors():
