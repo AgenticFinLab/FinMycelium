@@ -120,7 +120,7 @@ def test_relation_recovery_replays_upstream_and_preserves_attempts(tmp_path,payl
     model=SyntheticEventModel()
     resumed=run_event(payload,tmp_path,state['config'],model=model,resume=True)
     assert resumed['result_status']=='draft'
-    assert model.calls==['relate.0']
+    assert model.calls==['relate.0', 'evidence_merge.0']
     assert resumed['calls'][:len(original['calls'])]==original['calls']
     new_key=next(k for k in resumed['tasks'] if k.startswith('relate.') and k not in original['tasks'])
     assert any(k.startswith('format:') for k in resumed['validation_attempts'][new_key])
@@ -167,4 +167,4 @@ def test_workbench_relation_recovery_prepares_without_starting(tmp_path,payload,
         return dict(state=state,graph=json.loads((path/state['output']).read_text()))
     controller.run('PBUILD-test',executor=executor)
     assert controller.inspect('PBUILD-test')['status']=='completed'
-    assert model.calls==['relate.0']
+    assert model.calls==['relate.0', 'evidence_merge.0']

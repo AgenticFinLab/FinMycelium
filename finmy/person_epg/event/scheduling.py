@@ -3,8 +3,13 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass
-from queue import Queue
+from queue import Queue, Empty
+from threading import Lock
+import sys
 import time
+
+
+PROGRESS_INTERVAL_SECONDS = 60
 
 
 class ModelCallFailed(Exception):
@@ -72,12 +77,57 @@ def execute(run, stage, tasks):
     from ..building.model_transport import error_metadata
     tasks = list(tasks)
     ready, events, active = deque(tasks), Queue(), {}
+    live_models, live_lock = {}, Lock()
+    next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
     results = {t.task_id: t for t in tasks}
     stop = None
     stage_record = dict(status='running', task_ids=[t.task_id for t in tasks], started_at=now())
     run.state.setdefault('stages', {})[stage] = stage_record
     for task in tasks:
         emit(run, stage, task.task_id, 'TaskQueued')
+
+    def report_progress():
+        """One batch per minute, even if every request is waiting on the SDK."""
+        nonlocal next_progress
+        stamp = now()
+        lines = [f'[{stamp}] {stage} | running={len(active)} queued={len(ready)}']
+        with live_lock:
+            live = dict(live_models)
+        for task_id, task in active.items():
+            entry = live.get(task_id)
+            if entry is None:
+                continue
+            model, started, call_id = entry
+            if call_id != task.request.call['call_id']:
+                continue
+            snapshot = getattr(model, 'progress_snapshot', None)
+            progress = snapshot() if callable(snapshot) else None
+            progress = dict(progress or {}, updated_at=stamp)
+            progress.setdefault('elapsed_seconds', round(time.monotonic() - started, 3))
+            phase = progress.get('phase', 'initializing')
+            label = {'initializing': '初始化', 'connecting': '等待响应',
+                     'receiving': '接收中', 'completed': '响应已完成',
+                     'incomplete': '响应不完整'}.get(phase, phase)
+            if phase == 'receiving' and not progress.get('chunks'):
+                label = '已响应，等待首块'
+            last = progress.get('idle_seconds')
+            idle = f'{last:.0f}s前' if last is not None else '尚无数据块'
+            first = progress.get('first_response_seconds')
+            response = f'{first:.1f}s' if first is not None else '尚无'
+            stalled = progress.get('no_output_seconds')
+            output_idle = f' | 无输出增量 {stalled:.0f}s' if stalled is not None else ''
+            task.request.call['progress'] = progress
+            lines.append(f"  {call_id} {task.request.call['task_id']} | {label} | "
+                         f"耗时 {progress['elapsed_seconds']:.0f}s | 首响应 {response} | "
+                         f"正文 {progress.get('content_chars', 0)} 字符 | "
+                         f"推理 {progress.get('reasoning_chars', 0)} 字符 | 最近数据块 {idle}{output_idle}")
+        run.state['progress_updated_at'] = stamp
+        run.persist()
+        try:
+            print('\n'.join(lines), file=sys.stderr, flush=True)
+        except OSError:
+            pass  # A closed log pipe must not interrupt model work.
+        next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
 
     def advance(task, reply=None, error=None):
         nonlocal stop
@@ -114,8 +164,12 @@ def execute(run, stage, tasks):
         started = time.monotonic()
         events.put(('started', task_id, now()))
         model = None
+        with live_lock:
+            live_models[task_id] = (None, started, request.call['call_id'])
         try:
             model = run.model_factory() if run.model_factory is not None else run.model
+            with live_lock:
+                live_models[task_id] = (model, started, request.call['call_id'])
             method = getattr(model, 'call_with_effort', None)
             raw = (method(request.system, request.user, request.call['task_id'],
                           reasoning_effort=request.call['reasoning_effort'])
@@ -143,8 +197,13 @@ def execute(run, stage, tasks):
                 pool.submit(worker, task.task_id, task.request)
             if not active:
                 break
+            if time.monotonic() >= next_progress:
+                report_progress()
             try:
-                kind, task_id, value = events.get()
+                kind, task_id, value = events.get(timeout=max(0, next_progress - time.monotonic()))
+            except Empty:
+                report_progress()
+                continue
             except BaseException as exc:
                 stop = exc
                 continue
@@ -155,6 +214,9 @@ def execute(run, stage, tasks):
                 emit(run, stage, task_id, 'ModelStarted', call_id=call['call_id'])
                 continue
             del active[task_id]
+            with live_lock:
+                live_models.pop(task_id, None)
+            call.pop('progress', None)  # Completed calls have final transport diagnostics.
             raw, error, transport, usage, duration = value
             call.update(duration_seconds=duration, usage=usage,
                         usage_status='reported' if usage is not None else 'unknown')

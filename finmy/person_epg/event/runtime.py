@@ -26,6 +26,8 @@ class EventBuildConfig:
     max_new_tokens: int = 12288
     max_context_chars: int = 160000
     timeout: int = 900
+    stall_timeout: int = 60
+    max_transport_retries: int = 2
     extraction_chars: int = 12000
     extraction_overlap: int = 400
     max_read_calls: int = 24
@@ -62,7 +64,7 @@ class EventBuildConfig:
         for key, value in asdict(self).items():
             if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'reasoning_effort'):
                 continue
-            minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls', 'max_read_rounds') else 1
+            minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls', 'max_read_rounds', 'max_transport_retries') else 1
             if type(value) is not int or value < minimum:
                 raise ValueError(key + ' is outside its supported range')
         if self.graph_schema_version != GRAPH_VERSION:
@@ -84,6 +86,11 @@ class PauseRequested(Exception):
 
 
 class InvalidResponse(ValueError):
+    pass
+
+
+class IncompleteStreamResponse(InvalidResponse):
+    """A truncated stream spent its retry budget; do not start format retries."""
     pass
 
 
@@ -136,7 +143,8 @@ def code_identity():
 
 
 def semantic_config(config):
-    value = {k: v for k, v in asdict(config).items() if k != 'max_calls'}
+    value = {k: v for k, v in asdict(config).items()
+             if k not in ('max_calls', 'stall_timeout', 'max_transport_retries')}
     # Missing in historical ordinary-mode configurations. Preserve their hashes;
     # explicit JSON mode still changes all request/checkpoint dependencies.
     if not config.full_corpus_supplement:
@@ -250,7 +258,8 @@ class Execution:
     checkpoint publication can be replayed without another paid request. Adoption is
     deterministic and uses the same task-scoped ID map on every replay.
     """
-    def __init__(self, directory, payload, config, model, *, resume=False, provenance=None, model_factory=None):
+    def __init__(self, directory, payload, config, model, *, resume=False, provenance=None, model_factory=None,
+                 resume_transport_upgrade=False):
         self.directory, self.payload, self.config, self.model = Path(directory), payload, config, model
         self.model_factory = model_factory
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -260,6 +269,7 @@ class Execution:
             if not resume:
                 raise ValueError('Existing run requires explicit resume or a new directory')
             self.state = json.loads(state_path.read_text())
+            original_state = deepcopy(self.state)
             if self.state.get('graph_schema_version') != GRAPH_VERSION:
                 raise ValueError('Cannot resume a different graph protocol')
             if (self.state['input_sha256'] != input_hash
@@ -268,7 +278,9 @@ class Execution:
             if self.state.get('compatible_recovery'):
                 from .recovery import validate_recovery
                 validate_recovery(self.directory, self.state)
-            if self.state['code_sha256'] != code_identity():
+            previous_code = self.state.get('execution_code_sha256', self.state['code_sha256'])
+            changed_code = previous_code != code_identity()
+            if changed_code and not resume_transport_upgrade:
                 raise ValueError('Implementation changed; create a new run')
             retained = self.directory / 'provenance.json'
             if sha256(retained.read_bytes()) != self.state['provenance_sha256']:
@@ -289,6 +301,15 @@ class Execution:
             if (semantic_config(EventBuildConfig.from_saved(previous)) != semantic_config(config)
                     or config.max_calls < previous['max_calls']):
                 raise ValueError('Resume retains semantic settings and cannot reduce the cumulative limit')
+            if changed_code:
+                # Explicit transport-only upgrade: retain semantic IDs/dependencies so
+                # completed stages and responses replay without new paid calls.
+                backup = 'recoveries/transport-guard-' + uuid.uuid4().hex + '/state-before.json'
+                backup_hash = write_json(self.directory / backup, original_state)
+                self.state.setdefault('execution_upgrades', []).append(dict(
+                    kind='transport-guard', at=now(), from_code=previous_code,
+                    to_code=code_identity(), backup=backup, backup_sha256=backup_hash))
+                self.state['execution_code_sha256'] = code_identity()
             for call in self.state['calls']:
                 if call['status'] in ('submitted', 'queued'):
                     call.update(status='interrupted', usage_status='unknown')
@@ -412,7 +433,8 @@ class Execution:
         return self.drive(task_id, self.infer_steps(task_id, system, request, package, validator,
             attempt_group=attempt_group, single_response=single_response), unwrap=True)
 
-    def infer_steps(self, task_id, system, request, package, validator, *, attempt_group=None, single_response=False):
+    def infer_steps(self, task_id, system, request, package, validator, *, attempt_group=None, single_response=False,
+                    allow_reads=True):
         from .scheduling import ModelRequest, ModelCallFailed
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', task_id):
             raise ValueError('Invalid task ID')
@@ -467,17 +489,51 @@ class Execution:
             started = time.monotonic()
             received = False
             try:
-                if prefetched is not None:
-                    from finmy.dataset import within
-                    saved = json.loads(within(self.directory, call['prefetched_response']).read_text())['raw']
-                    if sha256(json_bytes(saved)) != call['prefetched_sha256']:
-                        raise RuntimeError('Prefetched response changed')
-                    raw = saved
-                else:
-                    raw = yield ModelRequest(call, system, user_text)
-                received = True
-                value = parse(raw)
+                retry_key = fingerprint(dict(task_id=task_id, dependency=dependency, user=user))
+                retries = self.state.setdefault('transport_retries', {})
+                while True:
+                    try:
+                        if prefetched is not None:
+                            from finmy.dataset import within
+                            raw = json.loads(within(self.directory, call['prefetched_response']).read_text())['raw']
+                            if sha256(json_bytes(raw)) != call['prefetched_sha256']:
+                                raise RuntimeError('Prefetched response changed')
+                        else:
+                            raw = yield ModelRequest(call, system, user_text)
+                    except ModelCallFailed as exc:
+                        if (single_response or not getattr(exc.original, 'retryable', False)
+                                or retries.get(retry_key, 0) >= self.config.max_transport_retries):
+                            raise
+                        retry_reason = type(exc.original).__name__
+                    else:
+                        received = True
+                        try:
+                            value = parse(raw)
+                        except json.JSONDecodeError as exc:
+                            if not call.get('transport', {}).get('output_recovered'):
+                                raise  # Ordinary completed-but-invalid output uses its format budget.
+                            call.update(status='incomplete', recovery_status='invalid_json')
+                            if single_response or retries.get(retry_key, 0) >= self.config.max_transport_retries:
+                                raise IncompleteStreamResponse(
+                                    'Interrupted JSON is incomplete; automatic retry budget exhausted') from exc
+                            retry_reason = 'incomplete_json'
+                        else:
+                            break
+                    self.check_pause()
+                    prior_call_id = call_id
+                    call = self.reserve_call(task_id, system, user, dependency, effort)
+                    call_id = call['call_id']
+                    call['retry_of'] = prior_call_id
+                    step_path = self.attempt / 'steps' / call_id
+                    retries[retry_key] = retries.get(retry_key, 0) + 1
+                    prefetched = None
+                    received = False
+                    self.task_event('RetryRequested', call_id=call_id, retry_of=prior_call_id,
+                                    reason=retry_reason)
+                    self.persist()
                 if 'read_requests' in value:
+                    if not allow_reads:
+                        raise InvalidResponse('All evidence is supplied; return pair decisions without read_requests')
                     if single_response:
                         raise InvalidResponse('The complete handoff is already present; this pass has no local reads')
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:
@@ -519,9 +575,13 @@ class Execution:
                             delivered_pages=number+1, remaining_requests=[p[1] for p in pages[number+1:]])
                         self.persist()
                     call['status'] = 'read_requested'
+                    if call.get('transport', {}).get('output_recovered'):
+                        call['recovery_status'] = 'validated_read_requests'
                     task.pop('validation_error', None)
                     continue
                 validator(value)
+                if call.get('transport', {}).get('output_recovered'):
+                    call['recovery_status'] = 'validated_complete'
                 call['status'] = 'accepted'
                 write_json(checkpoint, dict(task_id=task_id, dependency=dependency, call_id=call_id,
                     response=value, response_sha256=sha256(json_bytes(value)), reads=task['read_requests']))
@@ -534,6 +594,8 @@ class Execution:
                 raise
             except IncompleteCompletionError as exc:
                 call.update(status='incomplete', **error_metadata(exc))
+                raise
+            except IncompleteStreamResponse:
                 raise
             except (ValueError, KeyError, TypeError, IndexError) as exc:
                 if not received:

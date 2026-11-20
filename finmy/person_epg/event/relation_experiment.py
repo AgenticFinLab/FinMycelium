@@ -90,7 +90,7 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
     with directory_lock(directory):
         model_factory = None
         if model is None:
-            from ..building.model_transport import StreamingModel
+            from .guarded_transport import GuardedModel as StreamingModel
             model = StreamingModel(config)
             model_factory = lambda: StreamingModel(config)
         if resume:
@@ -110,6 +110,8 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
         status, reason = 'finished', None
         try:
             builder.stage('relations', builder.relate)
+            from .evidence_consolidation import consolidate as consolidate_evidence
+            builder.stage('evidence_consolidation', lambda: consolidate_evidence(builder))
         except PauseRequested as exc:
             status, reason = 'paused', str(exc)
             (directory / 'pause_requested').unlink(missing_ok=True)

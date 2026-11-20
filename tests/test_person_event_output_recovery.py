@@ -66,7 +66,7 @@ def test_recovery_reuses_upstream_reads_attempts_and_preserves_originals(tmp_pat
         return model(system, user, name)
     resumed = run_event(payload, tmp_path, state['config'], model=resume, resume=True)
     assert resumed['result_status'] == 'draft'
-    assert model.calls == ['organize', 'relate.0']
+    assert model.calls == ['organize', 'relate.0', 'evidence_merge.0']
     assert resumed['calls'][:len(old['calls'])] == old['calls']
     assert resumed['reads'] == old['reads']
     groups = [v for k,v in resumed['validation_attempts'].items() if k.startswith('organize-')]

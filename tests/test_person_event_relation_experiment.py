@@ -31,7 +31,7 @@ def files(root):
     return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.is_file()}
 
 
-def test_stage_replay_preserves_source_and_only_calls_relations(tmp_path, baseline):
+def test_stage_replay_preserves_source_and_calls_relations_then_evidence(tmp_path, baseline):
     source, snapshot = baseline
     before = files(source)
     envelope = load_snapshot(snapshot)
@@ -39,13 +39,13 @@ def test_stage_replay_preserves_source_and_only_calls_relations(tmp_path, baseli
     output = tmp_path / 'experiment'
     state = run_relations(snapshot, output, model=model)
     assert state['execution_status'] == 'finished' and state['result_status'] == 'draft'
-    assert model.calls == ['relate.0']
+    assert model.calls == ['relate.0', 'evidence_merge.0']
     graph = json.loads((output / state['output']).read_text())
     assert len(graph['relations']) > 0
     assert [a['action_id'] for a in graph['actions']] == [a['action_id'] for a in envelope['snapshot']['graph']['actions']]
     assert files(source) == before
     report = json.loads((output / 'relation-summary.json').read_text())
-    assert report['stage_calls'] == 1 and report['upstream_calls'] > 1
+    assert report['stage_calls'] == 2 and report['upstream_calls'] > 1
     assert report['usage'][0]['total_tokens'] == 20
     assert report['config']['api_json_mode'] is False
     assert report['semantic_review_required']
@@ -100,7 +100,7 @@ def test_permission_and_failure_are_not_zero_relation_success(tmp_path, baseline
     report = json.loads((output / 'relation-summary.json').read_text())
     assert state['execution_status'] == 'finished' and state['result_status'] == 'partial'
     assert state['task_states']['relations:relate.0']['status'] == 'failed'
-    assert report['calls_without_usage'] == 1
+    assert report['calls_without_usage'] == 2
     assert report['execution_status'] == 'finished'
 
 
@@ -109,6 +109,8 @@ def test_read_budget_limit_resumes_without_repeating_paid_read(tmp_path, baselin
     class Reading(SyntheticEventModel):
         def __call__(self, system, user, name):
             request = json.loads(user)
+            if request['task']['role'] == 'evidence_consolidation':
+                return super().__call__(system, user, name)
             if not request['read_results']:
                 self.calls.append(name)
                 return {'read_requests': [{'tool': 'read_records', 'refs': [{
@@ -122,5 +124,5 @@ def test_read_budget_limit_resumes_without_repeating_paid_read(tmp_path, baselin
     assert len(first['calls']) == 1 and len(first['reads']) == 1
     second = run_relations(snapshot, root, config={'max_calls': 3}, model=model, resume=True)
     assert second['execution_status'] == 'finished'
-    assert len(second['calls']) == 2 and len(second['reads']) == 1
+    assert len(second['calls']) == 3 and len(second['reads']) == 1
     assert second['calls'][0] == first['calls'][0]
