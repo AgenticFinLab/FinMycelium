@@ -1,6 +1,6 @@
 # 主表规范与分类
 
-本说明和 [24 列空模板](../assets/events.template.csv)、[合成示例](../assets/events.example.csv)整理自 EPG-dataset 的 `event-epg/master-table-spec.md`、`events.template.csv`、`examples/events.example.csv`、`domain-category-review.md`。引用真实项目规范时，核对目标 checkout 与本模板的差异。示例行仅演示格式。
+本说明和 [24 列空模板](../assets/events.template.csv)、[合成示例](../assets/events.example.csv)整理自 EPG-dataset 的 `event-epg/master-table-spec.md`、`events.template.csv`、`examples/events.example.csv`、`research/domain-category-review.md`。引用真实项目规范时，核对目标 checkout 与本模板的差异。示例行仅演示格式。
 
 ## 字段契约
 

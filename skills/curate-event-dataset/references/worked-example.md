@@ -28,7 +28,7 @@ python -X utf8 -B "$Skill/scripts/snapshot_review.py" check --catalog "$Demo/sna
 | 5 | `validation.json`、`snapshot/research/checkpoint.json` | 先完成严格验证，再物化当前可核的文件和哈希。 |
 | 6 | `workbench/manifest.json` | 原文材料和审计字段仍在快照中，导入分片投影工作台字段。 |
 
-## 手工复练
+## 换成自己的材料
 
 从[运行手册](runbook.md)的新建模式开始，运行 `init`。参考生成的四表填入两条合成输入，使用 `compose` 绑定两侧哈希。用 `recall` 查看候选，读两份示例材料及其适用范围并填写判定。把表内重叠写入当前逐对账后运行 `sync-marks`，再按最终主表刷新 `ledger` 和 `recall`。复用原裁决时保留依据和阅读时间。
 

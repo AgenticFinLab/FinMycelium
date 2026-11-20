@@ -6,6 +6,8 @@ Python 3.10+ 运行随附工具。词法召回需要 scikit-learn，安装到个
 
 首次使用可先执行[完整教学案例](worked-example.md)。调用各命令时使用同一个 Python 环境，必要时把示例中的 `python` 替换为虚拟环境中的解释器路径。`python -m pip show scikit-learn` 可记录实际召回版本。
 
+填写[启动提示词](launch-template.md)确定本轮输入。整理正式目录首页与计划时，可使用[首页模板](../assets/event-catalog-readme-template.md)和[研究计划模板](../assets/event-research-plan-template.md)。保留目标目录已使用的文件路径，检查导航只链接实际交付的文件。
+
 在 FinMycelium 根目录运行下列 PowerShell。替换数据目录和目标数量。`$Run` 的目录应尚未存在。
 
 ```powershell
