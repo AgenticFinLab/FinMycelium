@@ -45,6 +45,10 @@ exceptions include stack locations without locals or raw SDK messages. The
 existing `transport` fields and task reason codes remain available to consumers.
 For 401/403, inspect credentials, provider permissions or account balance before
 resuming. Increasing budgets cannot resolve authentication failures.
+Authentication failures and explicit billing errors such as `AccountOverdueError`
+pause dispatch for the run. In-flight responses are saved for resume; queued work
+and later stages do not issue new requests. A resource-specific 403 remains a
+local task failure. Repair the account or credentials, then explicitly resume.
 
 ## Resume
 
@@ -64,8 +68,17 @@ Repeatedly specifying it adds another N characters.
 
 The current transport defaults are 900 seconds total per request, 60 seconds
 without output growth, and five transport retries. These defaults are defined
-once in `event/config.py`; resume uses its shared resolver. Progress
-prints once per minute. The CLI shows effective limits, including extensions;
+once in `event/config.py`; resume uses its shared resolver. Transport retries wait
+in a separate timer queue, using jittered exponential backoff (1–2, 2–4, 4–8,
+8–16, then 15–30 seconds) plus any server `Retry-After`. Waiting consumes no worker;
+when due, the retry joins the FIFO tail. Stage barriers and fixed concurrency remain.
+
+TTY progress refreshes in place; redirected logs print once per minute. Progress
+and `status` include successful tasks, successes per minute averaged over the
+current stage execution, retry requests / dispatched requests, and mean ready-queue
+wait. Read follow-ups do not count as retries; backoff is separate from queue wait.
+Stage metrics and individual call wait times are saved in `state.json`.
+The CLI shows effective limits, including extensions;
 historical semantic request bodies remain unchanged for checkpoint reuse.
 
 Resume retains the original response dependency identity and records the running

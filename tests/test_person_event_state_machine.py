@@ -105,6 +105,9 @@ def test_slow_continuation_does_not_block_other_task(tmp_path, payload, continua
     results = run.execute_tasks('test', [Task(name, steps(name)) for name in ('a', 'b')])
     assert all(t.error is None and t.result == {'ok': True} for t in results.values())
     assert peak <= 2 and counts == {'a': 2, 'b': 1}
+    metrics = run.state['stages']['test']['metrics']
+    assert metrics['requests'] == 3 and metrics['succeeded'] == 2
+    assert metrics['retry_requests'] == (1 if continuation == 'retry' else 0)
     assert any(e['type'] == ('ReadRequested' if continuation == 'read' else 'RetryRequested')
                for e in run.state['events'])
 
@@ -137,3 +140,81 @@ def test_pause_drains_inflight_and_resume_uses_saved_response(tmp_path, payload)
     resumed = Execution(tmp_path, payload, config, lambda *args: pytest.fail('Repeat request'), resume=True)
     for name in ('a', 'b'):
         assert resumed.infer(name, 'system', {}, facts, lambda value: None) == {'ok': True}
+
+
+@pytest.mark.parametrize('info', [
+    dict(error_type='AuthenticationError', http_status=401),
+    dict(error_type='PermissionDeniedError', http_status=403, error_code='AccountOverdueError'),
+])
+def test_account_failure_pauses_dispatch_and_resume_reuses_inflight(tmp_path, payload, info):
+    from finmy.person_epg.event.guarded_transport import ModelTransportError
+    from finmy.person_epg.event.runtime import PauseRequested
+    released = threading.Event()
+    calls = []
+    def model(system, user, name):
+        calls.append(name)
+        if name == 'bad':
+            raise ModelTransportError(info['error_type'], diagnostics=info)
+        assert released.wait(3), 'Coordinator did not pause service while collecting in-flight work'
+        return {'ok': True}
+    config = EventBuildConfig(extraction_workers=2)
+    run = Execution(tmp_path, payload, config, model)
+    persist = run.persist
+    def capture():
+        persist()
+        if run.state.get('service_pause'):
+            released.set()
+    run.persist = capture
+    facts = seed_facts(payload)
+    with pytest.raises(PauseRequested):
+        run.execute_tasks('test', [Task(name, run.infer_steps(name, 'system', {}, facts, lambda v: None))
+                                   for name in ('bad', 'inflight', 'queued')])
+    assert set(calls) == {'bad', 'inflight'}
+    assert run.state['stages']['test']['status'] == 'paused'
+    assert all(t['status'] == 'paused' for t in run.state['task_states'].values())
+    kept = next(c for c in run.state['calls'] if c['task_id'] == 'inflight')
+    assert kept['status'] == 'prefetched' and (tmp_path / kept['response_path']).is_file()
+    recovered_calls = []
+    def recovered(system, user, name):
+        recovered_calls.append(name)
+        return {'ok': True}
+    resumed = Execution(tmp_path, payload, config, recovered, resume=True)
+    result = resumed.execute_tasks('test', [Task(name, resumed.infer_steps(name, 'system', {}, facts, lambda v: None))
+                                          for name in ('bad', 'inflight', 'queued')])
+    assert all(t.result == {'ok': True} for t in result.values())
+    assert set(recovered_calls) == {'bad', 'queued'} and 'service_pause' not in resumed.state
+
+
+def test_account_pause_stops_later_stages_and_preserves_finished_extraction(tmp_path, payload):
+    from finmy.person_epg.event.guarded_transport import ModelTransportError
+    class Overdue(SyntheticEventModel):
+        def __call__(self, system, user, name):
+            if name == 'extract.1':
+                self.calls.append(name)
+                raise ModelTransportError('PermissionDeniedError', diagnostics=dict(
+                    http_status=403, error_code='AccountOverdueError'))
+            return super().__call__(system, user, name)
+    model = Overdue()
+    state = run_event(payload, tmp_path, {'extraction_workers': 1}, model=model)
+    assert state['execution_status'] == 'paused' and model.calls == ['extract.0', 'extract.1']
+    assert state['coverage'][0]['body_status'] == 'processed'
+    assert 'AccountOverdueError' in state['reason']
+    good = SyntheticEventModel()
+    resumed = run_event(payload, tmp_path, model=good, resume=True)
+    assert resumed['execution_status'] == 'finished' and resumed['result_status'] == 'draft'
+    assert 'extract.0' not in good.calls
+
+
+def test_resource_specific_403_remains_local(tmp_path, payload):
+    from finmy.person_epg.event.guarded_transport import ModelTransportError
+    def model(system, user, name):
+        if name == 'bad':
+            raise ModelTransportError('PermissionDeniedError', diagnostics=dict(
+                http_status=403, error_code='ContentPolicyViolation'))
+        return {'ok': True}
+    run = Execution(tmp_path, payload, EventBuildConfig(), model)
+    facts = seed_facts(payload)
+    tasks = run.execute_tasks('test', [Task(name, run.infer_steps(name, 'system', {}, facts, lambda v: None))
+                                     for name in ('bad', 'good')])
+    assert tasks['bad'].error and tasks['good'].result == {'ok': True}
+    assert 'service_pause' not in run.state

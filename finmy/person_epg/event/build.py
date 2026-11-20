@@ -244,6 +244,9 @@ class Construction:
             if name == 'corpus_supplement' and self.run.state.get(name, {}).get('status') == 'skipped':
                 status = 'skipped'
             return result
+        except PauseRequested:
+            status = 'paused'
+            raise
         finally:
             display.outer = None
             display.update(name, 'running' if name == 'repair' and status == 'completed' else status)

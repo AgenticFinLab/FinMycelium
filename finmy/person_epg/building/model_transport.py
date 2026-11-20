@@ -2,7 +2,9 @@
 import re
 import time
 import traceback
+import math
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from threading import Lock
 
 from finmy.model_config import person_build_request_effort
@@ -31,6 +33,17 @@ def response_metadata(response):
         if request_id:
             result['request_id'] = request_id
             break
+    retry_after = headers.get('retry-after')
+    if retry_after is not None:
+        try:
+            seconds = float(retry_after)
+        except (TypeError, ValueError):
+            try:
+                seconds = (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                seconds = None
+        if seconds is not None and math.isfinite(seconds) and seconds >= 0:
+            result['retry_after_seconds'] = seconds
     return result
 
 

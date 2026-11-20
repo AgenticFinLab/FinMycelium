@@ -271,6 +271,7 @@ class Execution:
                 attempts=0, final_repair_used=False, id_map={}, invalid_checkpoints=[],
                 execution_status='ready', result_status='none', render_status='not_started')
         self.state.update(config=asdict(config), attempts=self.state['attempts'] + 1, execution_status='running')
+        self.state.pop('service_pause', None)  # An explicit resume retries the repaired account.
         self.attempt = self.directory / 'attempts' / f"{self.state['attempts']:04d}"
         self.attempt.mkdir(parents=True, exist_ok=False)
         self.persist()
@@ -452,6 +453,8 @@ class Execution:
                 step_path = (self.directory / call['response_path']).parent
             elif prefetched is None:
                 call = self.reserve_call(task_id, system, user, dependency, effort)
+                if task.get('validation_error'):
+                    call['retry_kind'] = 'format'
                 call_id = call['call_id']
                 step_path = self.attempt / 'steps' / call_id
             else:
@@ -500,6 +503,7 @@ class Execution:
                     call = self.reserve_call(task_id, system, user, dependency, effort)
                     call_id = call['call_id']
                     call['retry_of'] = prior_call_id
+                    call['retry_kind'] = 'transport'
                     step_path = self.attempt / 'steps' / call_id
                     retries[retry_key] = retries.get(retry_key, 0) + 1
                     prefetched = None

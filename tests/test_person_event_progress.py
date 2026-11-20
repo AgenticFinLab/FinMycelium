@@ -60,6 +60,8 @@ def test_waiting_headers_chunks_and_stalled_stream_are_reported(tmp_path, payloa
         info = next(c['progress'] for c in saved['calls'] if c['task_id'] == 'slow')
         snapshots.append(info)
         assert saved['task_states']['test:fast']['status'] == 'succeeded'
+        assert saved['stages']['test']['metrics']['succeeded'] == 1
+        assert saved['stages']['test']['metrics']['requests'] == 2
         if info['phase'] == 'connecting':
             assert info['first_response_seconds'] is None and info['idle_seconds'] is None
             headers.set()
@@ -80,6 +82,7 @@ def test_waiting_headers_chunks_and_stalled_stream_are_reported(tmp_path, payloa
     output = capsys.readouterr()
     assert output.out == ''
     assert '等待响应' in output.err and '已响应，等待首块' in output.err and '接收中' in output.err
+    assert '有效完成' in output.err and '平均就绪排队' in output.err
     assert 'PRIVATE REASONING' not in output.err + json.dumps(run.state)
     assert len(run.state['calls']) == 2  # Heartbeats never submit model requests.
     assert config.timeout == 900 and config.max_read_rounds == 2
@@ -150,6 +153,7 @@ def test_tty_parallel_refresh_does_not_add_calls_or_persist_heartbeat(tmp_path, 
     assert all(t.result == {'ok': True} for t in result.values())
     assert len(run.state['calls']) == 2 and 'progress_updated_at' not in run.state
     assert '抽取 2/2 完成' in stream.frames[-1]
+    assert '成功 2' in stream.frames[-1] and '重试 0/2' in stream.frames[-1]
     assert run._terminal_progress.lines == 0
 
 

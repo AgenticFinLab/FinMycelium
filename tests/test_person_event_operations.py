@@ -22,13 +22,15 @@ def test_http_failure_reaches_state_and_cli_without_sdk_message(tmp_path, payloa
                 error_code='AccountOverdueError')
     error = ModelTransportError('PermissionDeniedError', diagnostics=info)
     run = runtime.Execution(tmp_path, payload, EventBuildConfig(), Model([error]))
-    run.execute_tasks('extraction', [Task('extract.0', run.infer_steps(
-        'extract.0', 'system', {}, seed_facts(payload), valid))])
+    with pytest.raises(runtime.PauseRequested, match='AccountOverdueError'):
+        run.execute_tasks('extraction', [Task('extract.0', run.infer_steps(
+            'extract.0', 'system', {}, seed_facts(payload), valid))])
     failure = run.state['calls'][0]['failure']
     assert failure['error_type'] == 'PermissionDeniedError'
     assert failure['http_status'] == 403 and not failure['retryable']
     assert 'AccountOverdueError' in failure['summary']
     assert run.state['task_states']['extraction:extract.0']['failure'] == failure
+    assert run.state['task_states']['extraction:extract.0']['status'] == 'paused'
     summary = inspect_run(tmp_path)
     assert summary['errors'][0]['request_id'] == 'request-123'
     assert (tmp_path / failure['path']).is_file()

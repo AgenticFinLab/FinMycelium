@@ -3,8 +3,11 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from heapq import heappop, heappush
 from queue import Queue, Empty
 from threading import Lock
+import random
 import sys
 import shutil
 import unicodedata
@@ -17,6 +20,26 @@ TTY_INTERVAL_SECONDS = 1
 DISPLAY_STAGES = (('extraction', '抽取'), ('corpus_supplement', '补充'),
                   ('consolidation', '整理'), ('organization', '组织'),
                   ('relations', '关系'), ('validation', '校验'))
+
+
+def retry_delay(call, calls):
+    """Bounded exponential backoff with jitter; honor the provider's minimum wait."""
+    previous = calls.get(call.get('retry_of'))
+    if previous is None:
+        return 0
+    attempt, ancestor = 1, previous
+    while ancestor.get('retry_of') in calls:
+        attempt += 1
+        ancestor = calls[ancestor['retry_of']]
+    ceiling = min(30, 2 ** min(attempt, 5))
+    minimum = (previous.get('failure') or previous.get('transport') or {}).get('retry_after_seconds', 0)
+    return minimum + random.uniform(ceiling / 2, ceiling)
+
+
+def metrics_text(metrics):
+    return (f"成功 {metrics['succeeded']} · 有效完成 {metrics['tasks_per_minute']:.1f}/分钟 · "
+            f"重试 {metrics['retry_requests']}/{metrics['requests']} ({metrics['retry_fraction']:.0%})\n"
+            f"平均就绪排队 {metrics['mean_queue_seconds']:.1f}s · 退避等待 {metrics['backoff_tasks']}")
 
 
 def terminal_text(text, width):
@@ -40,6 +63,7 @@ class TerminalProgress:
         self.enabled = bool(getattr(self.stream, 'isatty', lambda: False)())
         self.lines, self.frame, self.current = 0, 0, None
         self.stages, self.requests, self.outer = {}, [], None
+        self.metrics = None
         if not run.config.full_corpus_supplement:
             self.stages['corpus_supplement'] = 'skipped'
 
@@ -52,6 +76,8 @@ class TerminalProgress:
         self.current = stage
         self.stages[stage] = status
         self.requests = []
+        if status == 'running':
+            self.metrics = None
         self.draw()
 
     def clear(self):
@@ -103,10 +129,12 @@ class TerminalProgress:
         for start in range(0, len(boxes), columns):
             lines.extend(' '.join(box[row] for box in boxes[start:start + columns]) for row in range(4))
         lines += summaries
+        if self.metrics is not None:
+            lines.extend(metrics_text(self.metrics).splitlines())
         slots = max(0, size.lines - len(lines) - 3)
         shown = self.requests[:slots]
         if len(self.requests) > slots and slots:
-            shown = self.requests[:slots - 1] + [f'另有 {len(self.requests) - slots + 1} 个运行请求（终端高度不足）']
+            shown = self.requests[:slots - 1] + [f'另有 {len(self.requests) - slots + 1} 个任务（终端高度不足）']
         lines += [spin + ' ' + line.strip() for line in shown]
         lines = [terminal_text(line, width).rstrip() for line in lines]
         self.clear()
@@ -195,9 +223,13 @@ def execute(run, stage, tasks):
     from .runtime import (InvalidResponse, LimitReached, PauseRequested, now,
                           write_json, sha256, json_bytes)
     from ..building.model_transport import error_metadata
-    from .diagnostics import record_failure
+    from .diagnostics import account_unavailable, record_failure
     tasks = list(tasks)
     ready, events, active = deque(tasks), Queue(), {}
+    delayed, submitted = [], []
+    sequence = 0
+    started = time.monotonic()
+    ready_since = {task.task_id: started for task in tasks}
     live_models, live_lock = {}, Lock()
     display = terminal_progress(run)
     next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
@@ -211,11 +243,40 @@ def execute(run, stage, tasks):
     if display.outer is None:
         display.update(stage, 'running')
 
+    def metrics_snapshot():
+        elapsed = max(0, time.monotonic() - started)
+        succeeded = sum(run.state['task_states'][stage + ':' + t.task_id]['status'] == 'succeeded'
+                        for t in tasks)
+        retries = sum(bool(call.get('retry_of') or call.get('retry_kind')) for call in submitted)
+        waits = [call['queue_wait_seconds'] for call in submitted]
+        return dict(elapsed_seconds=round(elapsed, 3), succeeded=succeeded, requests=len(submitted),
+            retry_requests=retries, retry_fraction=retries / len(submitted) if submitted else 0,
+            tasks_per_minute=round(succeeded * 60 / elapsed, 2) if elapsed else 0,
+            mean_queue_seconds=round(sum(waits) / len(waits), 3) if waits else 0,
+            backoff_tasks=len(delayed), ready_tasks=len(ready), running_tasks=len(active))
+
+    def enqueue(task):
+        nonlocal sequence
+        call = task.request.call
+        delay = retry_delay(call, {c['call_id']: c for c in run.state['calls']})
+        if delay:
+            sequence += 1
+            call.update(retry_delay_seconds=round(delay, 3),
+                        retry_not_before=(datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat())
+            heappush(delayed, (time.monotonic() + delay, sequence, task))
+            emit(run, stage, task.task_id, 'RetryRequested', call_id=call['call_id'],
+                 retry_not_before=call['retry_not_before'], delay_seconds=call['retry_delay_seconds'])
+        else:
+            ready_since[task.task_id] = time.monotonic()
+            ready.append(task)
+
     def report_progress(persist=True):
         """Refresh TTY locally; persist and append non-TTY logs only once a minute."""
         nonlocal next_progress, next_frame
         stamp = now()
-        lines = [f'[{stamp}] {stage} | running={len(active)} queued={len(ready)}']
+        display.metrics = metrics_snapshot()
+        lines = [f'[{stamp}] {stage} | running={len(active)} queued={len(ready)} backoff={len(delayed)}',
+                 '  ' + metrics_text(display.metrics)]
         request_lines = []
         with live_lock:
             live = dict(live_models)
@@ -258,6 +319,7 @@ def execute(run, stage, tasks):
                          f"正文 {progress.get('content_chars', 0)} 字符 | "
                          f"推理 {progress.get('reasoning_chars', 0)} 字符 | 最近数据块 {idle}{output_idle}")
         if persist:
+            stage_record['metrics'] = display.metrics
             run.state['progress_updated_at'] = stamp
             run.persist()
             if not display.enabled:
@@ -266,6 +328,11 @@ def execute(run, stage, tasks):
                 except OSError:
                     pass
             next_progress = time.monotonic() + PROGRESS_INTERVAL_SECONDS
+        stamp_mono = time.monotonic()
+        request_lines.extend(f'{task.task_id} · 等待重试 {max(0, due - stamp_mono):.0f}s'
+                             for due, _, task in sorted(delayed))
+        request_lines.extend(f'{task.task_id} · 排队 {stamp_mono - ready_since[task.task_id]:.0f}s'
+                             for task in ready)
         display.draw(request_lines)
         next_frame = time.monotonic() + TTY_INTERVAL_SECONDS
 
@@ -326,11 +393,24 @@ def execute(run, stage, tasks):
             deepcopy(getattr(model, 'last_usage', None)), round(time.monotonic() - started, 3))))
 
     with ThreadPoolExecutor(max_workers=run.config.extraction_workers) as pool:
-        while ready or active:
+        while ready or active or delayed:
+            if stop is None:
+                try:
+                    run.check_pause()
+                except BaseException as exc:
+                    stop = exc
+            while delayed and delayed[0][0] <= time.monotonic() and stop is None:
+                _, _, task = heappop(delayed)
+                ready_since[task.task_id] = time.monotonic()
+                ready.append(task)
             while ready and len(active) < run.config.extraction_workers and stop is None:
                 task = ready.popleft()
-                if task.request is None and not advance(task):
-                    continue
+                if task.request is None:
+                    if not advance(task):
+                        continue
+                    if task.request.call.get('retry_of'):
+                        enqueue(task)  # A resumed partial response can itself request a retry.
+                        continue
                 try:
                     run.check_pause()
                 except BaseException as exc:
@@ -338,14 +418,19 @@ def execute(run, stage, tasks):
                     ready.appendleft(task)
                     break
                 active[task.task_id] = task
+                task.request.call['queue_wait_seconds'] = round(time.monotonic() - ready_since.pop(task.task_id), 3)
+                submitted.append(task.request.call)
                 pool.submit(worker, task.task_id, task.request)
-            if not active:
+            if not active and (stop is not None or not delayed):
                 break
             if time.monotonic() >= next_progress:
                 report_progress()
             elif display.enabled and time.monotonic() >= next_frame:
                 report_progress(persist=False)
             deadline = min(next_progress, next_frame) if display.enabled else next_progress
+            if delayed and stop is None:
+                # Waiting retries consume neither workers nor the coordinator; check pause at least once a second.
+                deadline = min(deadline, delayed[0][0], time.monotonic() + 1)
             try:
                 kind, task_id, value = events.get(timeout=max(0, deadline - time.monotonic()))
             except Empty:
@@ -384,19 +469,31 @@ def execute(run, stage, tasks):
                 except OSError:
                     pass
                 emit(run, stage, task_id, 'ModelFailed', call_id=call['call_id'], reason=type(error).__name__)
+                if stop is None and account_unavailable(details):
+                    run.state['service_pause'] = dict(model=run.config.lm_name, attempt=run.state['attempts'],
+                        at=now(), failure=details)
+                    stop = PauseRequested('Model service unavailable: ' + details['summary'] +
+                                          '; fix the account or credentials, then resume this run')
+                    run.state['task_states'][stage + ':' + task_id]['failure'] = details
+                    emit(run, stage, task_id, 'ModelServicePaused', call_id=call['call_id'])
+                    try:
+                        print('已暂停新请求；正在收存已在途的响应。修复账户或凭据后可 resume。',
+                              file=sys.stderr, flush=True)
+                    except OSError:
+                        pass
             task.request = None
             if stop is None:
                 if isinstance(error, (KeyboardInterrupt, SystemExit)):
                     stop = error
                 elif advance(task, raw, error if isinstance(error, (LimitReached, PauseRequested))
                              else ModelCallFailed(error) if error else None):
-                    ready.append(task)
+                    enqueue(task)
             if stop is not None:
                 state = run.state['task_states'][stage + ':' + task_id]
                 if state['status'] not in TERMINAL:
                     emit(run, stage, task_id, 'TaskPaused' if isinstance(stop, PauseRequested)
                          else 'TaskInterrupted', reason=type(stop).__name__)
-        for task in ready:
+        for task in list(ready) + [entry[2] for entry in delayed]:
             emit(run, stage, task.task_id, 'TaskPaused' if isinstance(stop, PauseRequested)
                  else 'TaskInterrupted', reason=type(stop).__name__)
         if stop is not None:
@@ -407,6 +504,10 @@ def execute(run, stage, tasks):
     stage_record.update(status='paused' if isinstance(stop, PauseRequested) else 'failed' if stop else
                         'partial' if counts['failed'] or counts['limited'] else 'completed',
                         counts=counts, finished_at=now())
+    # Final counters exclude paused queues; each per-call wait remains available in state.json.
+    ready.clear()
+    delayed.clear()
+    stage_record['metrics'] = display.metrics = metrics_snapshot()
     run.persist()
     if display.outer is None:
         display.update(stage, stage_record['status'])

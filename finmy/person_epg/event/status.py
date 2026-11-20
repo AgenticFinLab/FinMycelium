@@ -47,6 +47,10 @@ def main(argv=None):
         print(f"{key}: {used} / {budget[key]['limit']}")
     print(f"read_rounds: 单任务最多已用 {budget['read_rounds']['max_used']} / {budget['read_rounds']['limit_per_task']}")
     print(f"timeout={budget['timeout']}s | stall={budget['stall_timeout']}s | retries={budget['retries']} | workers={budget['workers']}")
+    from .scheduling import metrics_text
+    for stage, record in summary['stages'].items():
+        if record.get('metrics'):
+            print(stage + ' | ' + metrics_text(record['metrics']).replace('\n', ' | '))
     for task in summary['limited_tasks']:
         print('受限：' + task['task_id'] + ' | ' + str(task['reason']))
     for error in summary['errors']:

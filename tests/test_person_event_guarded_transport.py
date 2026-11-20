@@ -92,11 +92,38 @@ def test_nontransient_error_has_no_retry(tmp_path, payload):
         calls.append(1)
         raise ModelTransportError('AuthenticationError')
     run = Execution(tmp_path, payload, EventBuildConfig(), model)
-    with pytest.raises(ModelTransportError):
+    with pytest.raises(runtime.PauseRequested, match='AuthenticationError'):
         run.infer('organize', 'system', {}, seed_facts(payload), lambda value: None)
     assert len(calls) == 1
     assert not retryable_failure({'error_type': 'AuthenticationError', 'http_status': 401})
     assert retryable_failure({'error_chain': ['APITimeoutError', 'ReadTimeout']})
+
+
+@pytest.mark.parametrize('header,expected', [('45', 45), ('1.5', 1.5), ('-1', None),
+                                          ('nan', None), ('inf', None), ('broken', None)])
+def test_retry_after_diagnostic_is_numeric_and_safe(header, expected):
+    from finmy.person_epg.building.model_transport import error_metadata
+    from finmy.person_epg.event.diagnostics import failure_details
+    error = RuntimeError('private credentials')
+    error.response = SimpleNamespace(status_code=429, headers={'retry-after': header,
+                                                               'authorization': 'private credentials'})
+    info = error_metadata(error)
+    wrapped = ModelTransportError('RateLimitError', retryable=True, diagnostics=info)
+    assert failure_details(wrapped).get('retry_after_seconds') == expected
+    assert 'private credentials' not in json.dumps(info)
+
+
+def test_retry_after_http_date(monkeypatch):
+    import finmy.person_epg.building.model_transport as transport
+    from datetime import datetime, timezone
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 20, 0, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(transport, 'datetime', Clock)
+    info = transport.response_metadata(SimpleNamespace(status_code=429,
+        headers={'retry-after': 'Fri, 20 Nov 2026 00:00:45 GMT'}))
+    assert info['retry_after_seconds'] == 45
 
 
 def test_upgrade_resumes_organization_without_reextracting(tmp_path, payload, monkeypatch):

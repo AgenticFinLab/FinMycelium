@@ -5,11 +5,18 @@ import re
 from ..building.model_transport import error_metadata
 
 
+def account_unavailable(info):
+    """Only explicit credential/billing failures pause the whole model service."""
+    return (info.get('http_status') == 401 or info.get('error_type') == 'AuthenticationError'
+            or info.get('error_code') in {'AccountOverdueError', 'InsufficientBalance',
+                'InsufficientQuota', 'insufficient_quota', 'invalid_api_key'})
+
+
 def failure_details(error=None, transport=None, *, task_id=None, call_id=None):
     original = getattr(error, 'original', error)
     info = dict(error_metadata(original)) if original is not None else {}
     supplied = transport or getattr(original, 'diagnostics', {}) or {}
-    for key in ('error_type', 'error_chain', 'http_status', 'request_id', 'error_code', 'traceback'):
+    for key in ('error_type', 'error_chain', 'http_status', 'request_id', 'error_code', 'retry_after_seconds', 'traceback'):
         if supplied.get(key) is not None:
             info[key] = supplied[key]
     remote = getattr(original, 'remote_error_type', None)
