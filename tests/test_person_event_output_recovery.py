@@ -127,7 +127,7 @@ def test_controller_prepares_but_does_not_start(tmp_path, payload, monkeypatch):
         code={'commit':'old', 'python_sources_sha256':'old'}, person_code='old',
         input=deepcopy(payload), input_hash=digest(payload),
         scope_hash=digest(payload['user_query']['extras']['person_event']['scope']),
-        person_config=old['config'], graph_schema_version='person-event-1.0')
+        person_config=old['config'])
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)', ('PBUILD-test','event',encoded(body),'failed','now'))
     first = controller.prepare_person_output_recovery('PBUILD-test', max_new_tokens=65536)

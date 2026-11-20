@@ -94,8 +94,7 @@ def test_sdk_messages_and_secrets_are_not_in_error_summary():
 
 def test_workbench_resume_uses_execution_identity_instead_of_renderer_digest(monkeypatch):
     from finmy.workbench import build_tasks
-    from finmy.person_epg.event.schema import GRAPH_VERSION
-    body = dict(kind='person_event', graph_schema_version=GRAPH_VERSION,
+    body = dict(kind='person_event',
         person_execution_code=build_tasks.person_execution_version())
     monkeypatch.setattr(build_tasks, 'code_version', lambda: {'commit':'renderer-only-commit'})
     build_tasks.check_person_code(body)

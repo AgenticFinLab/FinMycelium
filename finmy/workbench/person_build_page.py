@@ -12,7 +12,7 @@ from finmy.model_config import (PERSON_BUILD_STAGED_EFFORT, person_build_effort_
 from finmy.person_epg.event.runtime import EventBuildConfig
 from finmy.person_epg.event.schema import GRAPH_VERSION
 from finmy.search.state import digest
-from finmy.workbench.build_tasks import BuildController
+from finmy.workbench.build_tasks import BuildController, person_graph_version
 from finmy.workbench.domain import encoded
 from finmy.workbench.workflow import navigate
 from finmy.workbench.ui import stats, status
@@ -158,17 +158,17 @@ def person_build_panel(store, controller, row, labels):
     else:
         if row['status']=='paused':
             st.info('已暂停；检查点和累计用量已保存，可以关闭电脑，之后恢复原任务。')
-        elif row['status'] == 'partial' and run.get('execution_status') == 'finished' and body.get('graph_schema_version') == 'person-event-1.0':
+        elif row['status'] == 'partial' and run.get('execution_status') == 'finished' and person_graph_version(body) == GRAPH_VERSION:
             st.info('构建已结束，仍有事项待处理。请在下方「检查与收尾」核对。')
         else:
             st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
         if row['status'] in {'partial','failed','interrupted','limit','paused'}:
-            if body.get('graph_schema_version') != GRAPH_VERSION:
+            if person_graph_version(body) != GRAPH_VERSION:
                 st.info('这是历史协议任务，可查看保存的产物或重新绘图；重新构建请建立新任务。')
             cap=st.number_input('恢复后的累计调用上限',min_value=body['person_config']['max_calls'],
                                 value=body['person_config']['max_calls'],key='person-resume-cap-'+tid)
             st.caption('计数保留；准备恢复不会调用模型，仍需明确启动。')
-            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=body.get('graph_schema_version')!=GRAPH_VERSION):
+            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=person_graph_version(body)!=GRAPH_VERSION):
                 try:
                     controller.prepare_person_resume(tid,max_calls=cap);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))

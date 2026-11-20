@@ -52,6 +52,12 @@ def person_execution_version():
     return digest(dict(execution=code_identity(), entry_point=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()))
 
 
+def person_graph_version(body):
+    """Use the saved run version, or the build configuration before execution."""
+    return body.get('run_state', {}).get('graph_schema_version',
+        body.get('person_config', {}).get('graph_schema_version', GRAPH_VERSION))
+
+
 def check_person_code(body):
     if body.get('kind') == 'person_event':
         if body.get('person_execution_code'):
@@ -204,7 +210,7 @@ class BuildController:
         task_id = identifier('PBUILD-')
         artifacts = (Path(artifact_root) if artifact_root is not None
                      else output_directory(provenance['catalog']['root'], 'builds'))
-        body = {'kind':'person_event', 'graph_schema_version':config.graph_schema_version, 'input':bundle, 'input_hash':digest(bundle),
+        body = {'kind':'person_event', 'input':bundle, 'input_hash':digest(bundle),
                 'event':{'event_id':event['event_id'], 'event_name_en':event['event_name'] + ' — ' + event['person_name']},
                 'catalog':provenance['catalog'], 'provenance':provenance, 'scope_hash':digest(event['scope']),
                 'input_confirmation':{'time':now(), 'basis':'User confirmed the actual material and known gaps'},
@@ -238,7 +244,7 @@ class BuildController:
             row = self.inspect(task_id); body = row['body']
             if body.get('kind') != 'person_event' or row['status'] != 'failed':
                 raise ValueError('Choose the failed native person Event task')
-            if body.get('graph_schema_version') != GRAPH_VERSION:
+            if person_graph_version(body) != GRAPH_VERSION:
                 raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
             if body.get('read_recovery'):
                 check_person_code(body)
@@ -269,7 +275,7 @@ class BuildController:
             row = self.inspect(task_id); body = row['body']
             if body.get('kind') != 'person_event' or row['status'] not in {'limit', 'ready'}:
                 raise ValueError('Choose the stopped native person Event task')
-            if body.get('graph_schema_version') != GRAPH_VERSION:
+            if person_graph_version(body) != GRAPH_VERSION:
                 raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
             if body.get('read_recovery', {}).get('record') == RELATION_RECORD:
                 check_person_code(body)
@@ -307,7 +313,7 @@ class BuildController:
             row = self.inspect(task_id); body = row['body']
             if body.get('kind') != 'person_event' or row['status'] not in {'failed', 'ready'}:
                 raise ValueError('Choose the native person Event task stopped by output truncation')
-            if body.get('graph_schema_version') != GRAPH_VERSION:
+            if person_graph_version(body) != GRAPH_VERSION:
                 raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
             if body.get('read_recovery', {}).get('record') == OUTPUT_RECORD:
                 check_person_code(body)
@@ -340,7 +346,7 @@ class BuildController:
                 raise ValueError('只有未完成的人物构建任务可准备恢复')
             if body.get('disposition') == 'discarded':
                 raise ValueError('请先恢复已舍弃草稿')
-            if body.get('graph_schema_version') != GRAPH_VERSION:
+            if person_graph_version(body) != GRAPH_VERSION:
                 raise ValueError('旧协议任务可查看或重绘；请用确认过的原始输入建立新构建任务')
             state_path = Path(body['artifact_directory']) / 'state.json'
             if state_path.is_file() and json.loads(state_path.read_text()).get('offline_revisions'):
@@ -525,7 +531,7 @@ class BuildController:
                     result = (executor or execute_person_build)(body, directory)
                     if result.get('graph') is not None:
                         graph = result['graph']
-                        if graph.get('schema_version') != body.get('graph_schema_version'):
+                        if graph.get('schema_version') != person_graph_version(body):
                             raise ValueError('Build output protocol does not match the frozen task')
                         from finmy.person_epg.event.validation import check_graph
                         checks = check_graph(graph, body['input'], complete=False)
@@ -582,7 +588,7 @@ def execute_person_build(body, directory):
     from finmy.person_epg.event.runtime import EventBuildConfig
     from finmy.dataset import within
     load_dotenv(ROOT / '.env', override=False)
-    if body.get('graph_schema_version') != GRAPH_VERSION:
+    if person_graph_version(body) != GRAPH_VERSION:
         raise ValueError('Historical checkpoints cannot resume in the new person Event builder')
     config = EventBuildConfig.from_saved(body['person_config'])
     state = run_event(body['input'], directory, config, allow_network=True,
