@@ -118,9 +118,10 @@ def test_normalization_keeps_existing_support_and_interval_guards(payload, mista
 
 
 def assert_time_policy(system):
-    assert 'Calendar normalization (all roles, within their existing write scope):' in system
+    assert ('Calendar normalization (all roles, within their existing write scope):' in system
+            or 'New Contexts may' in system)
     assert 'half-open [start,end)' in system
-    assert 'mode I targeting /time' in system
+    assert 'mode I targeting /time' in system or 'Support mode I with premises' in system
 
 
 def test_time_policy_reaches_native_flow_without_an_extra_call(tmp_path, payload):

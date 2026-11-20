@@ -33,6 +33,28 @@ def duplicate(graph, payload):
     return facts, decision
 
 
+def test_compact_merge_keeps_original_citations_and_rejects_unsupported_changes(graph, payload):
+    facts, decision = duplicate(graph, payload)
+    original = deepcopy(facts)
+    survivor = decision['outputs'][0]['record']['action_id']
+    decision['outputs'][0]['record'] = {'action_id': survivor}
+    decision['record_patch'] = {}
+    assigned = {('actions', r['object_id']) for r in decision['input_refs']}
+    merged, report = Receiver(facts, payload, IdMap(), 'compact').consolidate(
+        dict(decisions=[decision], evidence=[], pending=[]), assigned)
+    assert not report['rejected']
+    assert len(merged['actions']) == len(facts['actions']) - 1
+    adopted = next(a for a in merged['actions'] if a['action_id'] == survivor)
+    assert all(s in adopted['support'] for a in original['actions']
+               if a['action_id'] in {r['object_id'] for r in decision['input_refs']}
+               for s in a['support'])
+    assert facts == original
+    decision['record_patch'] = {'actor': {'entity_id': 'ENT-unverified'}}
+    unchanged, report = Receiver(facts, payload, IdMap(), 'invalid').consolidate(
+        dict(decisions=[decision], evidence=[], pending=[]), assigned)
+    assert report['rejected'] and unchanged['actions'] == facts['actions']
+
+
 def test_corrected_merge_clears_only_the_resolved_pending_after_id_remap(tmp_path, graph, payload):
     facts, decision = duplicate(graph, payload)
     original = deepcopy(decision)

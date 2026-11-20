@@ -8,6 +8,41 @@ from .config import budget_summary
 from .diagnostics import failure_details
 
 
+def usage_by_stage(calls):
+    """Provider-reported tokens only; unknown usage is never estimated as zero."""
+    names = {'extract': 'extraction', 'consolidate': 'consolidation',
+             'organize': 'organization', 'relate': 'relations',
+             'supplement': 'corpus_supplement', 'repair': 'validation'}
+    stages = {}
+    for call in calls:
+        if not call.get('started_at') and call.get('usage_status') != 'reported':
+            continue
+        task = call.get('task_id', '')
+        stage = names.get(task.split('.')[0], task.split('.')[0])
+        row = stages.setdefault(stage, dict(requests=0, reported=0, unknown=0,
+            input_tokens=0, output_tokens=0, cached_input_tokens=0,
+            transport_retries=0, format_retries=0, adoption_corrections=0))
+        row['requests'] += 1
+        if call.get('retry_of'):
+            row['transport_retries'] += 1
+        if call.get('retry_kind') == 'format':
+            row['format_retries'] += 1
+        if call.get('retry_kind') == 'adoption':
+            row['adoption_corrections'] += 1
+        usage = call.get('usage')
+        if not isinstance(usage, dict) or not all(isinstance(usage.get(k), int)
+                for k in ('prompt_tokens', 'completion_tokens')):
+            row['unknown'] += 1
+            continue
+        row['reported'] += 1
+        row['input_tokens'] += usage['prompt_tokens']
+        row['output_tokens'] += usage['completion_tokens']
+        cache = (usage.get('prompt_tokens_details') or {}).get('cached_tokens')
+        if isinstance(cache, int):
+            row['cached_input_tokens'] += cache
+    return stages
+
+
 def inspect_run(directory):
     directory = Path(directory)
     state = json.loads((directory / 'state.json').read_text())
@@ -23,6 +58,7 @@ def inspect_run(directory):
         execution_status=state.get('execution_status'), result_status=state.get('result_status'),
         reason=state.get('reason'), output=state.get('output')),
         budgets=budget_summary(state), stages=state.get('stages', {}),
+        usage_by_stage=usage_by_stage(state.get('calls', [])),
         limited_tasks=[dict(task_id=key, reason=value.get('reason'))
                        for key, value in state.get('task_states', {}).items() if value.get('status') == 'limited'],
         errors=errors, **artifact_summary(directory))
@@ -51,6 +87,11 @@ def main(argv=None):
     for stage, record in summary['stages'].items():
         if record.get('metrics'):
             print(stage + ' | ' + metrics_text(record['metrics']).replace('\n', ' | '))
+    for stage, usage in summary['usage_by_stage'].items():
+        print(f"{stage} tokens: 输入 {usage['input_tokens']}（缓存 {usage['cached_input_tokens']}）"
+              f" | 输出 {usage['output_tokens']} | 调用 {usage['requests']}"
+              f" | usage未知 {usage['unknown']} | 传输重试 {usage['transport_retries']}"
+              f" | 格式重试 {usage['format_retries']} | 语义纠错 {usage['adoption_corrections']}")
     for task in summary['limited_tasks']:
         print('受限：' + task['task_id'] + ' | ' + str(task['reason']))
     for error in summary['errors']:

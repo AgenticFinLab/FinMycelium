@@ -131,6 +131,21 @@ Do not paste an enclosing object's path into a nested support record.
 
 COMMON = COMMON_START + LOCAL_READ_GUIDANCE + OUTPUT_GUIDANCE
 
+# Relations only write Contexts, associations and links. The extraction calendar
+# examples and Action attribution instructions do not apply to existing records.
+RELATION_COMMON = COMMON_START.split('Action is an attributable action', 1)[0] + """Existing
+Actions, their Phase assignments and source passages are read-only. New Contexts may
+carry sourced time: preserve the original wording and quote; normalize to Gregorian
+half-open [start,end) dates with supported year/month/day/unknown precision. A named
+day ends the following day; an inclusive last day becomes an exclusive next-day bound.
+Use a supported calendar and locale, never the run date or publication metadata as an
+event date. An occurrence window is not a chosen day or a duration. Unknown bounds
+remain null with a scoped Gap. Rule-derived bounds use Support mode I with premises
+and an explicit rule; never infer order or overlap from incomplete intervals. Keep
+event time, knowledge time, publication time and post_hoc perspective distinct.
+
+""" + LOCAL_READ_GUIDANCE + OUTPUT_GUIDANCE
+
 CANDIDATE_DIRECTION = """Candidate direction follows the eventual Relation: precedes/enables/triggers/prevents
 go from earlier/enabling act to affected act; responds_to/continues/resumes go from
 the responding/continuing/resumed act to its antecedent; interrupted_by goes from the
@@ -185,7 +200,13 @@ Every assigned candidate appears exactly once. keep 1->0 or 1 same ID; merge >=2
 same collection ->1 surviving input ID; split 1->>=2 new same-collection IDs with
 individual support; exclude 1->0 (or Action->supported Context); pending 1->0 keeps
 the unresolved candidate. Preserve all previous support and competing claims in
-keep/merge. No source or scope changes. Do not copy every old quote indiscriminately
+keep/merge. Prefer keep with outputs:[]; it retains the record unchanged. Prefer
+compact merge: outputs:[{collection,record:{the_id_field:surviving_input_id}}] and
+record_patch:{} for unchanged fields, or only necessary changed fields. The program
+starts from the survivor and unions prior support, conflicts and gaps from every
+input. record_patch may add new support/conflicts/gaps; explicit corrections to known
+fields still need evidence. Full merge outputs remain valid. No source or scope changes.
+Do not copy every old quote indiscriminately
 to each split child. Report ambiguous remappings instead of inventing multiple edges.
 The assigned group is a review shortlist, not a claim that its members are identical.
 Compare actor/executor, concrete object, behavior, time compatibility and source accounts.
@@ -221,36 +242,25 @@ one-sided boundaries, preserve uncertainty, and keep all existing distinct Actio
     'relations': """Deliver BOTH supported Action-to-Action relations and the assigned
 Action/Phase Context associations in this one task.
 
-Review the supplied candidates. Independently follow the same matter through the global
-Action index, including across sources and Phases/Stages. Which acts have a meaningful
-documented order, even if a stronger link is uncertain? What earlier act did a later
-action answer, carry out, revise or continue? What act made it possible? Follow up
-promising links even when no candidate names them. For each, match the two actual acts,
-their direction and any time wording to the original passages. Read missing premises
-locally. Distinguish the commitment, its later restatement and its fulfilment: an act
-can implement an existing policy without responding to its later public restatement.
-When a condition or another actor's conduct explains the action, use an evidenced
-Context association. Cite support for the link or explain the inference from its premises.
-Two existing acts, a shared object or chronological proximity alone do not prove
-causation/response. Likewise, same-day reports or uncertain occurrence windows do not
-prove overlap. Suspected duplicates are not made distinct by adding an edge.
+Review candidates and independently trace the same matter in the global Action index
+within and across sources, Phases and Stages. Find supported order, response,
+continuation, enabling and interruption, even without a candidate. Match both acts
+and direction to original passages; read missing premises locally. Separate a
+commitment, its restatement and fulfilment. Cite link evidence or inferred premises.
+Use evidenced Context associations for conditions and independent actors' conduct.
+Shared objects, chronology and uncertain windows alone prove neither causation nor
+overlap; an edge cannot distinguish duplicate acts.
 Direction: precedes/enables/triggers/prevents go from antecedent to affected action;
 responds_to/continues/resumes go from responding/continuing act to its antecedent;
 interrupted_by goes from interrupted to interrupting act. Unknown dates do not bar
-source-supported order or process links. Use derived only for eligible interval rules,
-not as a label for general reasoning. No edge quota, connectivity requirement or
-automatic edges for every ordered pair; existing precedence paths may suffice.
+source-supported links. derived applies only to eligible interval rules; no edge
+quota or automatic links for every ordered pair.
 
-For an inferred Relation, cite the passages identifying each actual endpoint under
-/from_action_id and /to_action_id. Under /type use I, the cited premises and a reason
-explaining how those passages establish this particular link and direction. Use the
-assigned source Action ID and an actual target Action ID from the index. When no
-outgoing link is supported, return an empty relations array and complete the review.
-Check support for both endpoints and the relation type before returning each edge.
-One passage may support several fields. Compare with facts_index.relations when present.
-Keep distinct supported claims or conflicts. During repair, retain accepted relations.
-Return only a new link needed for the assigned repair or a correction to a rejected
-proposal. A Context-only recheck can return an empty relations array.
+For inferred Relations support both endpoint fields with passages identifying the
+actual acts, and /type with mode I, cited premises and a reason for this link and
+direction. Sources must be assigned Actions; targets may be any indexed Action.
+Compare existing relations, preserve conflicts and accepted links. Return an empty
+relations array if none is supported; repairs return only rejected or missing links.
 
 When task.relation_discovery is present, also return relation_review (an object,
 not a graph record). Discovery is a separate deliverable from Context associations:
@@ -264,37 +274,23 @@ not a graph record). Discovery is a separate deliverable from Context associatio
     "status":"linked|unsupported|pending", "relation_ids":[], "evidence_ids":[],
     "reason":"relationship evidence/inference, or the specific missing premise"}]
 }
-Cover each discovery.action_ids and discovery.candidate_ids entry exactly once.
-Inspect the global Action index independently of candidates, within and across phases.
-Record meaningful pairs actually investigated, including evidence-insufficient leads;
-do not enumerate all pairs. One pair entry may name multiple relation types via IDs.
-Every accepted outgoing relation from a discovery-owned Action needs a linked pair
-entry with the same direction. linked requires nonempty accepted relation_ids;
-unsupported/pending require empty relation_ids. New relation/evidence temporary IDs
-are allowed and will be remapped. Pair evidence IDs refer to evidence actually read.
-Use pending for work not completed, unsupported for a checked lead lacking support.
-Zero relations is valid after an honest review; there is no minimum edge count.
-Do not describe undispatched work as complete. This receipt declares work performed;
-it is not evidence of semantic correctness. Keep explanations brief and specific.
-In a local correction, return only the failed Context operations and/or requested
-review. Do not regenerate accepted edges or accepted associations. Review-only
-corrections use empty Context/relations/update arrays. The discovery scope stays
-the original scope even when assigned Context owner lists are narrowed.
+Cover every discovery action and candidate once. Record investigated meaningful pairs,
+including unsupported leads; do not enumerate all pairs. Every accepted outgoing link
+from an owned Action requires a linked pair with matching direction and relation_ids.
+unsupported/pending pairs have empty relation_ids; evidence_ids must have been read.
+pending means unfinished, unsupported means checked without support. Report only work
+performed. Corrections change only rejected operations or requested review, with empty
+arrays otherwise; discovery scope remains the original scope.
 
 Then complete the assigned Context fields, reusing shared content and preserving gaps.
-Read assigned_records and related_records before requesting them again. The index
-contains compact identity entries for records already supplied in full. Use the global index
-to locate other endpoints; cross-batch target Actions remain valid. Prefer precise
-fields for unresolved associations instead of bulk-reading entire collections.
-Each read_records request accepts at most 20 refs; the program pages whole refs
-within read_chars. For an oversized record, request the needed child fields.
+Use supplied records first; read precise fields for missing premises. Global index
+targets remain valid across batches; read_records accepts at most 20 refs and pages
+within read_chars. Request child fields of an oversized record.
 Return
 contexts, relations, phase_context_updates:[{phase_id,baseline_context_refs}],
 action_context_updates:[{action_id,delta_context_refs,baseline_context_exclusions}].
-These are complete lists for the assigned fields, including empty lists when no
-association is supported. Other record fields cannot be edited. Missing focal actions
-go to pending; do not generate new Actions. Relation sources must be assigned actions;
-targets may be any existing action. Consider meaningful candidates, not all N^2 pairs.
+Lists cover every assigned field, including empty associations. Other fields are
+read-only; missing focal Actions go to pending. Consider meaningful pairs only.
 Phase baseline covers environment, relations and person_state where evidenced; retain
 unknowns as gaps. Action Context is baseline minus supported exclusions plus delta.
 Reuse shared baseline Context and add only relevant Action-specific changes. A retained
@@ -367,7 +363,7 @@ If correction feedback is present, return only the rejected operations with thei
 IDs and necessary evidence. Already accepted records are read-only. Empty arrays or
 silence do not resolve rejected work. All correction calls share the task attempt limit.
 '''
-    common = COMMON_START + OUTPUT_GUIDANCE if is_supplement else COMMON
+    common = COMMON_START + OUTPUT_GUIDANCE if is_supplement else RELATION_COMMON if role == 'relations' else COMMON
     instruction = SUPPLEMENT_ROLE + '\n' + CANDIDATE_DIRECTION if is_supplement else ROLES[role]
     arrays = (*FIELDS[role], 'support_additions') if is_supplement else FIELDS[role]
     return common + '\nROLE\n' + instruction + support_rules + json.dumps(dict(

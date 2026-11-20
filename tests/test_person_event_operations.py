@@ -14,7 +14,21 @@ from finmy.person_epg.event.diagnostics import failure_details
 from finmy.person_epg.event.guarded_transport import ModelTransportError
 from finmy.person_epg.event.scheduling import Task
 from finmy.person_epg.event.artifacts import artifact_summary
-from finmy.person_epg.event.status import inspect_run
+from finmy.person_epg.event.status import inspect_run, usage_by_stage
+
+
+def test_usage_by_stage_keeps_unknown_separate_from_reported_tokens():
+    calls = [dict(task_id='consolidate.0', started_at='now', status='accepted',
+                  usage=dict(prompt_tokens=120, completion_tokens=20,
+                             prompt_tokens_details=dict(cached_tokens=50))),
+             dict(task_id='consolidate.0', started_at='now', status='transport_error',
+                  retry_of='CALL-000001', usage=None),
+             dict(task_id='extract.0', status='queued', usage=None)]
+    rows = usage_by_stage(calls)
+    assert rows['consolidation'] == dict(requests=2, reported=1, unknown=1,
+        input_tokens=120, output_tokens=20, cached_input_tokens=50,
+        transport_retries=1, format_retries=0, adoption_corrections=0)
+    assert 'extraction' not in rows
 
 
 def test_http_failure_reaches_state_and_cli_without_sdk_message(tmp_path, payload):

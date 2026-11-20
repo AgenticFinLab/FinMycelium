@@ -379,7 +379,7 @@ class Receiver:
         # fact ID or authority to widen the assigned scope; retain it in the raw
         # response while all semantic fields still pass the normal checks.
         if (not isinstance(decision, dict) or not required <= decision.keys()
-                or decision.keys() - required - {'decision_id'}):
+                or decision.keys() - required - {'decision_id', 'record_patch'}):
             raise ValueError('Decision fields differ from the contract')
         if 'decision_id' in decision and (not isinstance(decision['decision_id'], str)
                 or not decision['decision_id'].strip()):
@@ -397,6 +397,38 @@ class Receiver:
             raise ValueError('Decision consumes unassigned, duplicate or previously handled candidates')
         indexes = index_records(package)
         originals = [indexes[c][oid] for c, oid in inputs]
+        if 'record_patch' in decision:
+            if operation != 'merge' or not isinstance(decision['record_patch'], dict) or len(outputs) != 1:
+                raise ValueError('record_patch is only available for one merge output')
+            output = outputs[0]
+            if not isinstance(output, dict) or output.get('collection') != inputs[0][0] or not isinstance(output.get('record'), dict):
+                raise ValueError('Merge output must name the surviving collection and ID')
+            key = COLLECTION_IDS[inputs[0][0]]
+            if set(output['record']) != {key} or output['record'][key] not in [oid for _, oid in inputs]:
+                raise ValueError('Compact merge output must contain only a surviving input ID')
+            patch = decision['record_patch']
+            if key in patch:
+                raise ValueError('record_patch cannot replace identity')
+            survivor = indexes[inputs[0][0]][output['record'][key]]
+            target = deepcopy(survivor)
+            for field, value in patch.items():
+                if field in ('support', 'conflicts', 'gaps'):
+                    if not isinstance(value, list):
+                        raise ValueError('New support, conflicts and gaps must be lists')
+                    continue
+                target[field] = deepcopy(value)
+            for field in ('support', 'conflicts', 'gaps'):
+                combined = []
+                for old in originals:
+                    for item in old.get(field, []):
+                        if item not in combined:
+                            combined.append(deepcopy(item))
+                for item in patch.get(field, []):
+                    if item not in combined:
+                        combined.append(deepcopy(item))
+                if combined or field in target:
+                    target[field] = combined
+            output['record'] = target
         if any(e not in indexes['evidence'] or indexes['evidence'][e]['location_status'] != 'matched' for e in decision['evidence_ids']):
             raise ValueError('Decision evidence is not located')
         if any(not isinstance(o, dict) or set(o) != {'collection', 'record'}

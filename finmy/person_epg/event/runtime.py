@@ -455,6 +455,8 @@ class Execution:
                 call = self.reserve_call(task_id, system, user, dependency, effort)
                 if task.get('validation_error'):
                     call['retry_kind'] = 'format'
+                elif request.get('correction'):
+                    call['retry_kind'] = 'adoption'
                 call_id = call['call_id']
                 step_path = self.attempt / 'steps' / call_id
             else:
