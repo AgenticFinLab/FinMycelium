@@ -23,8 +23,8 @@ def test_staged_effort_reaches_transport_and_records(tmp_path, payload, transpor
     config = EventBuildConfig(lm_name=provider)
     run = Execution(tmp_path, payload, config, Model(config))
     stages = [('batch.0', 'extraction', 'low'), ('batch.1.correct.1', 'extraction', 'low'),
-              ('consolidate.0', 'consolidation', 'high'), ('organize', 'organization', 'high'),
-              ('relate.0', 'relations', 'high'), ('repair.relations', 'relations', 'high')]
+              ('consolidate.0', 'consolidation', 'low'), ('organize', 'organization', 'low'),
+              ('relate.0', 'relations', 'low'), ('repair.relations', 'relations', 'low')]
     for task_id, role, expected in stages:
         run.infer(task_id, 'Return JSON', {'role': role}, seed_facts(payload), valid)
         call = run.state['calls'][-1]
@@ -79,7 +79,7 @@ def test_resume_uses_frozen_effort_when_only_budget_is_supplied(tmp_path, payloa
     for call in resumed['calls']:
         expected = policy
         if policy == 'by_stage':
-            expected = 'low' if call['task_id'].startswith('extract.') else 'high'
+            expected = 'low'
         assert call['reasoning_effort'] == expected
 
 

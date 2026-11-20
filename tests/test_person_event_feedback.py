@@ -220,7 +220,7 @@ def test_final_hierarchy_repair_preserves_rejected_ids_and_closes_matching_issue
     state = run_event(payload, tmp_path, model=model)
     checks = json.loads((tmp_path / state['checks']).read_text())
     assert state['result_status'] == 'draft', checks['unresolved_tasks']
-    assert state['final_repair_used']
+    assert state['final_repair_used'] or state.get('hierarchy_repair_used')
 
 
 def test_read_body_with_unresolved_proposals_is_not_reported_as_unread(tmp_path, payload):

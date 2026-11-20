@@ -277,7 +277,7 @@ def test_review_form_saves_successive_decisions(support_run, tmp_path):
     tid = 'PBUILD-ui'
     controller = BuildController(store)
     (controller.root/tid).mkdir(parents=True)
-    body = dict(kind='person_event', artifact_directory=str(support_run), graph_schema_version='person-event-1.0',
+    body = dict(kind='person_event', artifact_directory=str(support_run),
                 run_state=load_review(support_run)['state'])
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)', (tid, 'test', json.dumps(body), 'partial', 'now'))

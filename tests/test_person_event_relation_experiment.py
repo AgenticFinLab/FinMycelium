@@ -98,9 +98,10 @@ def test_permission_and_failure_are_not_zero_relation_success(tmp_path, baseline
     output = tmp_path / 'failed'
     state = run_relations(snapshot, output, model=Broken())
     report = json.loads((output / 'relation-summary.json').read_text())
-    assert state['execution_status'] == 'failed' and state['result_status'] == 'partial'
+    assert state['execution_status'] == 'finished' and state['result_status'] == 'partial'
+    assert state['task_states']['relations:relate.0']['status'] == 'failed'
     assert report['calls_without_usage'] == 1
-    assert report['execution_status'] == 'failed'
+    assert report['execution_status'] == 'finished'
 
 
 def test_read_budget_limit_resumes_without_repeating_paid_read(tmp_path, baseline):

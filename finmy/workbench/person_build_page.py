@@ -10,8 +10,9 @@ from finmy.dataset import within
 from finmy.model_config import (PERSON_BUILD_STAGED_EFFORT, person_build_effort_options,
                                 person_build_json_mode_supported)
 from finmy.person_epg.event.runtime import EventBuildConfig
+from finmy.person_epg.event.schema import GRAPH_VERSION
 from finmy.search.state import digest
-from finmy.workbench.build_tasks import BuildController
+from finmy.workbench.build_tasks import BuildController, person_graph_version
 from finmy.workbench.domain import encoded
 from finmy.workbench.workflow import navigate
 from finmy.workbench.ui import stats, status
@@ -20,7 +21,7 @@ from finmy.workbench.model_picker import model_picker
 
 def effort_label(value):
     if value == PERSON_BUILD_STAGED_EFFORT:
-        return '按阶段（正文抽取 low，后续 high）'
+        return '按阶段（当前全部 low）'
     return '服务端默认' if value is None else '全程 ' + value
 
 
@@ -48,16 +49,18 @@ def person_build_form(store, task_id, save_task):
         efforts = person_build_effort_options(model)
         effort = st.selectbox('构建思考档位', efforts, format_func=effort_label, disabled=len(efforts) == 1,
             key='person-build-effort-'+task_id+'-'+model,
-            help='Kimi 默认在正文抽取时用 low，在行动归并、阶段组织、关系和最终定向修正时用 high。保存后档位固定。')
+            help='Kimi 分阶段档当前所有步骤均使用 low。保存后档位固定。')
         calls=st.number_input('累计模型调用上限',min_value=1,value=defaults.max_calls)
         tokens=st.number_input('每次输出 token 上限',min_value=1,value=defaults.max_new_tokens,
             help='是否包含推理 token 取决于所选模型；TokenHub 思考模式需要为推理和最终答案留出额度。')
         context=st.number_input('单次模型上下文字符上限',min_value=1,value=defaults.max_context_chars)
         batch=st.number_input('连续正文抽取批次字符数',min_value=defaults.extraction_overlap+1,value=defaults.extraction_chars)
+        workers=st.number_input('阶段内并发数',min_value=1,max_value=10,value=defaults.extraction_workers,
+            help='正文抽取、独立归并组和关系范围最多同时执行此数量的模型请求；每个阶段完成后再进入下一阶段。')
         local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
         local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
         supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
-            help='新任务默认开启，可取消。补读最多调用一次模型，计入总调用上限。Kimi 分阶段模式使用 high；完整请求超出上下文上限时跳过并记录原因。')
+            help='新任务默认开启，可取消。计入总调用上限；分阶段档当前使用 low。完整请求超出模型上下文时会跳过并记录原因。')
         repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
         st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
     if model:
@@ -70,7 +73,7 @@ def person_build_form(store, task_id, save_task):
             try:
                 tid=save_task(
                     dict(lm_name=model,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
-                         extraction_chars=batch,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
+                          extraction_chars=batch,extraction_workers=workers,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
             except (ValueError,OSError) as exc:
@@ -155,17 +158,17 @@ def person_build_panel(store, controller, row, labels):
     else:
         if row['status']=='paused':
             st.info('已暂停；检查点和累计用量已保存，可以关闭电脑，之后恢复原任务。')
-        elif row['status'] == 'partial' and run.get('execution_status') == 'finished' and body.get('graph_schema_version') == 'person-event-1.0':
+        elif row['status'] == 'partial' and run.get('execution_status') == 'finished' and person_graph_version(body) == GRAPH_VERSION:
             st.info('构建已结束，仍有事项待处理。请在下方「检查与收尾」核对。')
         else:
             st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
         if row['status'] in {'partial','failed','interrupted','limit','paused'}:
-            if body.get('graph_schema_version') != 'person-event-1.0':
+            if person_graph_version(body) != GRAPH_VERSION:
                 st.info('这是历史协议任务，可查看保存的产物或重新绘图；重新构建请建立新任务。')
             cap=st.number_input('恢复后的累计调用上限',min_value=body['person_config']['max_calls'],
                                 value=body['person_config']['max_calls'],key='person-resume-cap-'+tid)
             st.caption('计数保留；准备恢复不会调用模型，仍需明确启动。')
-            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=body.get('graph_schema_version')!='person-event-1.0'):
+            if st.button('准备恢复构建',key='person-resume-'+tid,disabled=person_graph_version(body)!=GRAPH_VERSION):
                 try:
                     controller.prepare_person_resume(tid,max_calls=cap);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))
@@ -179,7 +182,7 @@ def person_build_panel(store, controller, row, labels):
         try:
             graph_path=within(body['artifact_directory'],run['output'])
             graph=json.loads(graph_path.read_text())
-            current=graph.get('schema_version')=='person-event-1.0'
+            current=graph.get('schema_version') in {GRAPH_VERSION}
             if (digest(graph_path.read_bytes()) if current else digest(graph))!=run['graph_sha256']:raise ValueError('Saved graph integrity mismatch')
             st.caption('已保存的草稿：'+str(graph_path))
             if current:

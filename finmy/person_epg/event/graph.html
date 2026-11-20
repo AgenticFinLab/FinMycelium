@@ -267,6 +267,11 @@ select:focus-visible {
 }
 
 .card.source {
+  background: #fafafa;
+  border-color: #cbd0d4
+}
+
+.card.evidence {
   background: white;
   border-color: #8fb5a4
 }
@@ -392,7 +397,7 @@ select:focus-visible {
 }
 
 .card.source .title {
-  color: var(--green);
+  color: #505861;
   font-size: 13px;
   font-weight: 600;
   -webkit-line-clamp: 2
@@ -517,7 +522,8 @@ const EDGE_STYLES = {
   relation: {color: '#80589f', tint: '#f7f3fa', border: '#d8c9e3', width: 2.2, opacity: .94},
   party: {color: '#607f9c', tint: '#f2f7fb', border: '#c0d1df', width: 1.4, opacity: .76},
   context: {color: '#a18a51', tint: '#fff8e8', border: '#dfcea0', width: 1.45, opacity: .82},
-  evidence: {color: '#4f8270', tint: '#f2f8f5', border: '#bdd5c8', width: 1.05, opacity: .34}
+  evidence: {color: '#4f8270', tint: '#f2f8f5', border: '#bdd5c8', width: 1.05, opacity: .34},
+  citation: {color: '#7d858c', tint: '#f6f7f8', border: '#d2d6da', width: 1.05, opacity: .4}
 };
 
 function edgeStyle(edge) {
@@ -528,7 +534,7 @@ function edgeStyle(edge) {
 function edgePattern(edge) {
   if (edge.type === 'order_unknown' || edge.record?.basis === 'inferred') return '5 4';
   if (edge.kind === 'context') return '8 3';
-  if (edge.kind === 'evidence') return '2 5';
+  if (edge.kind === 'evidence' || edge.kind === 'citation') return '2 5';
   return '';
 }
 let current = 0,
@@ -618,10 +624,10 @@ function drawRelationshipLabels(active) {
   relationshipLabels.replaceChildren();
   for (const item of drawnEdges) item.label = null;
   const obstacles = [...relationshipObstacles];
-  const priority = {relation: 0, context: 1, party: 2, evidence: 3};
+  const priority = {relation: 0, context: 1, party: 2, evidence: 3, citation: 4};
   const visible = drawnEdges.filter(({edge}) => active ?
     edge.from_key === active || edge.to_key === active :
-    edge.kind !== 'evidence' && edge.type !== 'about');
+    !['evidence', 'citation'].includes(edge.kind) && edge.type !== 'about');
   visible.sort((a, b) => (priority[a.edge.kind] ?? 4) - (priority[b.edge.kind] ?? 4));
   for (const item of visible) {
     const {edge, points} = item;
@@ -652,7 +658,7 @@ function relationshipLegend() {
   const legend = el('span', null, 'legend relationship-legend');
   legend.title = 'Hover or focus a card to follow its relationships';
   for (const [kind, title] of [['relation', 'Action links'], ['party', 'Roles'],
-                              ['context', 'Context'], ['evidence', 'Evidence']]) {
+                              ['context', 'Context'], ['evidence', 'Evidence'], ['citation', 'Source links']]) {
     const item = el('span', null, 'legend-item');
     const sample = svg('svg', {width: 28, height: 12, 'aria-hidden': 'true'});
     const style = EDGE_STYLES[kind];
@@ -745,8 +751,16 @@ function toggle(key) {
     item.detail.append(el('strong', data.title));
     if (data.date) item.detail.append(el('p', data.date));
     for (const paragraph of data.paragraphs) item.detail.append(el('p', paragraph));
-    for (const eid of item.card.quotes || []) item.detail.append(el('p', evidence.get(eid)?.quote, 'quote'));
+    for (const eid of item.card.quotes || []) {
+      const fact = evidence.get(eid);
+      if (!fact) continue;
+      const label = view.details[fact.source_id]?.title || fact.source_id;
+      item.detail.append(el('p', label, 'citation-source'));
+      item.detail.append(el('p', fact.quote, 'quote'));
+      item.detail.append(el('small', citationLocation(fact)));
+    }
     const source = sources.get(item.card.id);
+    if (source) item.detail.append(el('p', `${(item.card.evidence_ids || []).length} linked evidence records`));
     if (source && /^https?:\/\//.test(source.url || '')) {
       const link = el('a', 'Open source');
       link.href = source.url;
@@ -764,6 +778,11 @@ function toggle(key) {
   }
   if (!open) layoutCards();
   drawEdges();
+}
+
+function citationLocation(citation) {
+  const offset = citation.location_status === 'matched' ? `${citation.start}–${citation.end}` : citation.location_status;
+  return [citation.sample_id, offset, citation.locator ? JSON.stringify(citation.locator) : ''].filter(Boolean).join(' · ');
 }
 
 function showPage(index) {
@@ -805,9 +824,9 @@ function showPage(index) {
   $('jumps').replaceChildren();
   $('graph').style.height = page.height + 'px';
   for (const region of page.sections) {
-    const section = el('section', null, 'section' + (region.title === 'Source evidence' ? ' evidence' : ''));
+    const section = el('section', null, 'section' + (region.title === 'Evidence' ? ' evidence' : ''));
     position(section, region.box);
-    if (region.title === 'Source evidence') section.append(relationshipLegend());
+    if (region.title === 'Evidence') section.append(relationshipLegend());
     if (region.title === 'Actions and their context') section.append(el('span',
       '● People / organizations · ■ Actions · ■ Context', 'legend'));
     section.append(el('h3', region.title));
@@ -857,7 +876,7 @@ function outward(point, side) {
 function ports(a, b, kind) {
   const dx = b[0] + b[2] / 2 - a[0] - a[2] / 2;
   const dy = b[1] + b[3] / 2 - a[1] - a[3] / 2;
-  if (kind === 'evidence') return [2, Math.abs(dx) > b[2] ? dx > 0 ? 0 : 1 : 3];
+  if (kind === 'evidence' || kind === 'citation') return [2, Math.abs(dx) > b[2] ? dx > 0 ? 0 : 1 : 3];
   if (Math.abs(dy) > Math.max(a[3], b[3])) return dy > 0 ? [3, 2] : [2, 3];
   return dx > 0 ? [1, 0] : [0, 1];
 }
@@ -1071,7 +1090,7 @@ function drawEdges() {
     Math.min(400, section.title.length * 10), 30
   ]);
   page.sections.forEach((section, i) => {
-    if (section.title === 'Actions and their context' || section.title === 'Source evidence')
+    if (section.title === 'Actions and their context' || section.title === 'Evidence')
       headings.push([645, regionBoxes[i][1] + 7, 450, 28]);
   });
   const obstacles = [...boxes.values(), ...partyLabels, ...headings];

@@ -71,7 +71,9 @@ def _checklist(review, items, groups):
 
 def closure_panel(controller, row):
     body = row['body']
-    if body.get('graph_schema_version') != 'person-event-1.0':
+    from .build_tasks import person_graph_version
+    from finmy.person_epg.event.schema import GRAPH_VERSION
+    if person_graph_version(body) != GRAPH_VERSION:
         return
     with st.expander('检查与收尾', expanded=row['status'] == 'partial'):
         try:

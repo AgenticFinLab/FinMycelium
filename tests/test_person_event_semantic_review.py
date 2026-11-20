@@ -86,7 +86,7 @@ def test_blind_discovery_and_named_comparison_share_original_without_rebuilding(
     output = tmp_path / 'review'
     reviewed = review_relations(parent, output, model=model)
     assert called == ['review.discover', 'review.compare']
-    assert reviewed['result_status'] == 'draft' and all(c['reasoning_effort']=='high' for c in reviewed['calls'])
+    assert reviewed['result_status'] == 'draft' and all(c['reasoning_effort']=='low' for c in reviewed['calls'])
     assert json.loads((output/reviewed['output']).read_text()) == graph
     active = load_review(output)
     assert active['semantic_review']['parent']['parent_graph_sha256'] == state['graph_sha256']

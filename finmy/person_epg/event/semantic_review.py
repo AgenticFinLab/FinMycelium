@@ -213,8 +213,8 @@ def review_relations(parent, output, *, model=None, allow_network=False, resume=
         parent_state_sha256=checked['state_sha256'], parent_graph_sha256=checked['state']['graph_sha256'],
         parent_input_sha256=checked['state']['input_sha256'])
     settings = dict(checked['state']['config'])
-    if 'high' in person_build_effort_options(settings['lm_name']):
-        settings['reasoning_effort'] = 'high'
+    if 'low' in person_build_effort_options(settings['lm_name']):
+        settings['reasoning_effort'] = 'low'
     if resume:
         settings = json.loads((output/'config.json').read_text())
     settings.update(config or {})

@@ -89,8 +89,8 @@ def person_build_effort_options(value):
 
 def person_build_request_effort(policy, role):
     if policy == PERSON_BUILD_STAGED_EFFORT:
-        # Direct transport callers may supply a task ID such as extract.0.correct.1.
-        return 'low' if role.partition('.')[0].lower() in {'extract', 'extraction'} else 'high'
+        # Temporarily use low for every person-event stage, including corrections.
+        return 'low'
     return policy
 
 

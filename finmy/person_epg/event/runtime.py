@@ -1,6 +1,6 @@
 """Durable, bounded execution over one immutable, local evidence corpus."""
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
@@ -9,66 +9,16 @@ import re
 import time
 import uuid
 
-from finmy.model_config import (person_build_effort_options, person_build_json_mode_supported,
-                                person_build_request_effort)
+from finmy.model_config import person_build_request_effort
 
 from .records import fingerprint, index_records, json_bytes, pointer, sha256, prompt_json
 from .schema import FACTS_VERSION, GRAPH_VERSION
+from .read_dedup import compact_read_results, next_read_charge
 from ..building.model_transport import error_metadata
 from ..building.completion_errors import IncompleteCompletionError
 
 
-@dataclass
-class EventBuildConfig:
-    lm_name: str = 'ark/kimi-k3-1-pro-261024'
-    max_calls: int = 40
-    max_json_attempts: int = 3
-    max_new_tokens: int = 12288
-    max_context_chars: int = 160000
-    timeout: int = 900
-    extraction_chars: int = 12000
-    extraction_overlap: int = 400
-    max_read_calls: int = 24
-    max_read_chars: int = 48000
-    read_chars: int = 4000
-    retrieval_top_k: int = 4
-    final_repair_rounds: int = 1
-    graph_schema_version: str = GRAPH_VERSION
-    api_json_mode: bool = False
-    full_corpus_supplement: bool = True
-    reasoning_effort: str | None = 'auto'
-
-    @classmethod
-    def from_saved(cls, values):
-        """Restore the defaults in effect before each setting was recorded."""
-        return cls(**{'reasoning_effort': None, 'full_corpus_supplement': False, **values})
-
-    def __post_init__(self):
-        if not isinstance(self.lm_name, str) or not self.lm_name.strip():
-            raise ValueError('Choose an independent build model')
-        if type(self.full_corpus_supplement) is not bool:
-            raise ValueError('full_corpus_supplement must be a boolean')
-        if type(self.api_json_mode) is not bool:
-            raise ValueError('api_json_mode must be a boolean')
-        if self.api_json_mode and not person_build_json_mode_supported(self.lm_name):
-            raise ValueError('API JSON mode is currently supported for Ark Kimi K3.1 Pro only')
-        effort_options = person_build_effort_options(self.lm_name)
-        if self.reasoning_effort == 'auto':
-            self.reasoning_effort = effort_options[0]
-        elif self.reasoning_effort not in effort_options:
-            raise ValueError('reasoning_effort accepts by_stage, low, high or max for Kimi K3.1 Pro, or None for the service default')
-        for key, value in asdict(self).items():
-            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'reasoning_effort'):
-                continue
-            minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls') else 1
-            if type(value) is not int or value < minimum:
-                raise ValueError(key + ' is outside its supported range')
-        if self.graph_schema_version != GRAPH_VERSION:
-            raise ValueError('This executor only writes ' + GRAPH_VERSION)
-        if self.extraction_overlap >= self.extraction_chars:
-            raise ValueError('Extraction overlap must be smaller than the batch')
-        if self.final_repair_rounds > 1:
-            raise ValueError('At most one final targeted repair round is supported')
+from .config import EventBuildConfig, effective_read_limits
 
 
 class LimitReached(Exception):
@@ -80,6 +30,11 @@ class PauseRequested(Exception):
 
 
 class InvalidResponse(ValueError):
+    pass
+
+
+class IncompleteStreamResponse(InvalidResponse):
+    """A truncated stream spent its retry budget; do not start format retries."""
     pass
 
 
@@ -112,7 +67,9 @@ def code_manifest():
     """
     event = Path(__file__).resolve().parent
     root = event.parents[1]
-    files = {p for p in event.glob('*.py') if p.name != 'rendering.py'}
+    files = {p for p in event.glob('*.py') if p.name not in {
+        'rendering.py', 'graph_html.py', 'graph_layout.py', 'graph_view.py', 'graph_labels.py',
+        'state_machine_smoke.py', 'status.py'}}
     files.update(root / name for name in (
         'person_epg/build.py',                    # Model entry point.
         'person_epg/building/model_transport.py', # Streaming transport and diagnostics.
@@ -132,7 +89,9 @@ def code_identity():
 
 
 def semantic_config(config):
-    value = {k: v for k, v in asdict(config).items() if k != 'max_calls'}
+    value = {k: v for k, v in asdict(config).items()
+             if k not in ('max_calls', 'stall_timeout', 'max_transport_retries',
+                          'read_call_extension', 'read_round_extension', 'read_char_extension')}
     # Missing in historical ordinary-mode configurations. Preserve their hashes;
     # explicit JSON mode still changes all request/checkpoint dependencies.
     if not config.full_corpus_supplement:
@@ -246,8 +205,10 @@ class Execution:
     checkpoint publication can be replayed without another paid request. Adoption is
     deterministic and uses the same task-scoped ID map on every replay.
     """
-    def __init__(self, directory, payload, config, model, *, resume=False, provenance=None):
+    def __init__(self, directory, payload, config, model, *, resume=False, provenance=None, model_factory=None,
+                 resume_transport_upgrade=False):
         self.directory, self.payload, self.config, self.model = Path(directory), payload, config, model
+        self.model_factory = model_factory
         self.directory.mkdir(parents=True, exist_ok=True)
         state_path = self.directory / 'state.json'
         input_hash = sha256(json_bytes(payload))
@@ -255,6 +216,8 @@ class Execution:
             if not resume:
                 raise ValueError('Existing run requires explicit resume or a new directory')
             self.state = json.loads(state_path.read_text())
+            original_state = deepcopy(self.state)
+            self.state.pop('last_error', None)
             if self.state.get('graph_schema_version') != GRAPH_VERSION:
                 raise ValueError('Cannot resume a different graph protocol')
             if (self.state['input_sha256'] != input_hash
@@ -263,7 +226,9 @@ class Execution:
             if self.state.get('compatible_recovery'):
                 from .recovery import validate_recovery
                 validate_recovery(self.directory, self.state)
-            if self.state['code_sha256'] != code_identity():
+            previous_code = self.state.get('execution_code_sha256', self.state['code_sha256'])
+            changed_code = previous_code != code_identity()
+            if changed_code and not resume_transport_upgrade:
                 raise ValueError('Implementation changed; create a new run')
             retained = self.directory / 'provenance.json'
             if sha256(retained.read_bytes()) != self.state['provenance_sha256']:
@@ -284,8 +249,17 @@ class Execution:
             if (semantic_config(EventBuildConfig.from_saved(previous)) != semantic_config(config)
                     or config.max_calls < previous['max_calls']):
                 raise ValueError('Resume retains semantic settings and cannot reduce the cumulative limit')
+            if changed_code:
+                # Explicit transport-only upgrade: retain semantic IDs/dependencies so
+                # completed stages and responses replay without new paid calls.
+                backup = 'recoveries/transport-guard-' + uuid.uuid4().hex + '/state-before.json'
+                backup_hash = write_json(self.directory / backup, original_state)
+                self.state.setdefault('execution_upgrades', []).append(dict(
+                    kind='transport-guard', at=now(), from_code=previous_code,
+                    to_code=code_identity(), backup=backup, backup_sha256=backup_hash))
+                self.state['execution_code_sha256'] = code_identity()
             for call in self.state['calls']:
-                if call['status'] == 'submitted':
+                if call['status'] in ('submitted', 'queued'):
                     call.update(status='interrupted', usage_status='unknown')
         else:
             if resume:
@@ -297,6 +271,7 @@ class Execution:
                 attempts=0, final_repair_used=False, id_map={}, invalid_checkpoints=[],
                 execution_status='ready', result_status='none', render_status='not_started')
         self.state.update(config=asdict(config), attempts=self.state['attempts'] + 1, execution_status='running')
+        self.state.pop('service_pause', None)  # An explicit resume retries the repaired account.
         self.attempt = self.directory / 'attempts' / f"{self.state['attempts']:04d}"
         self.attempt.mkdir(parents=True, exist_ok=False)
         self.persist()
@@ -345,7 +320,71 @@ class Execution:
         budget.setdefault('adoption:' + response_key, dict(kind='adoption', issues=deepcopy(issues)))
         self.persist()
 
+    def task_event(self, kind, **details):
+        from .scheduling import emit
+        if getattr(self, 'current_task', None):
+            emit(self, *self.current_task, kind, **details)
+
+    def execute_tasks(self, stage, tasks):
+        from .scheduling import execute
+        return execute(self, stage, tasks)
+
+    def drive(self, task_id, steps, *, stage=None, unwrap=False):
+        from .scheduling import Task, ModelCallFailed
+        task = self.execute_tasks(stage or task_id.split('.')[0], [Task(task_id, steps)])[task_id]
+        if task.error:
+            if unwrap and isinstance(task.error, ModelCallFailed):
+                raise task.error.original
+            raise task.error
+        return task.result
+
+    def reserve_call(self, task_id, system, user, dependency, effort):
+        if len(self.state['calls']) >= self.config.max_calls:
+            raise LimitReached('model_calls')
+        call_id = f"CALL-{len(self.state['calls']) + 1:06d}"
+        path = self.attempt / 'steps' / call_id
+        call = dict(call_id=call_id, task_id=task_id, dependency=dependency,
+                    request_fingerprint=fingerprint(dict(system=system, user=user)), status='queued',
+                    api_json_mode=self.config.api_json_mode, reasoning_effort=effort,
+                    queued_at=now(), usage=None, usage_status='unknown',
+                    response_path=str((path / 'response.json').relative_to(self.directory)))
+        write_json(path / 'request.json', dict(system=system, user=user, task_id=task_id,
+                   dependency=dependency, api_json_mode=self.config.api_json_mode, reasoning_effort=effort))
+        self.state['calls'].append(call)
+        self.persist()
+        return call
+
+    def prefetch_tasks(self, jobs, on_ready=None):
+        """Compatibility entry point; production stages schedule full continuations."""
+        from .scheduling import Task, ModelRequest
+        def steps(task_id, system, request, package):
+            dependency = fingerprint(dict(system=system, request=request, package=package,
+                config=semantic_config(self.config), code=self.state['code_sha256']))
+            key = task_id + '-' + dependency[:16]
+            if not (self.directory / 'checkpoints' / (key + '.json')).is_file() and not any(
+                    c['task_id'] == task_id and c['dependency'] == dependency and c['status'] == 'prefetched'
+                    for c in self.state['calls']):
+                user = dict(task=request, read_results=[])
+                text = prompt_json(user)
+                if len(system) + len(text) > self.config.max_context_chars:
+                    raise LimitReached('model_context_chars')
+                call = self.reserve_call(task_id, system, user, dependency,
+                    person_build_request_effort(self.config.reasoning_effort, request.get('role') or task_id))
+                yield ModelRequest(call, system, text)
+            if on_ready:
+                on_ready(task_id)
+        results = self.execute_tasks('prefetch', [Task(job[0], steps(*job)) for job in jobs])
+        for task in results.values():
+            if task.error:
+                raise task.error
+
     def infer(self, task_id, system, request, package, validator, *, attempt_group=None, single_response=False):
+        return self.drive(task_id, self.infer_steps(task_id, system, request, package, validator,
+            attempt_group=attempt_group, single_response=single_response), unwrap=True)
+
+    def infer_steps(self, task_id, system, request, package, validator, *, attempt_group=None, single_response=False,
+                    allow_reads=True):
+        from .scheduling import ModelRequest, ModelCallFailed
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', task_id):
             raise ValueError('Invalid task ID')
         dependency = fingerprint(dict(system=system, request=request, package=package,
@@ -371,56 +410,141 @@ class Execution:
         if single_response and any(call['task_id'] == task_id for call in self.state['calls']):
             raise InvalidResponse('The one-call supplement has already been attempted without a valid checkpoint')
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
+        read_rounds = self.state.setdefault('read_rounds', {}).setdefault(group, [])
+        limits = effective_read_limits(self.config)
+        round_limit, call_limit, char_limit = limits['read_rounds'], limits['read_calls'], limits['read_chars']
+        if task.get('read_round_limit_reached') and len(read_rounds) >= round_limit:
+            raise LimitReached('read_rounds')
+        # Older versions saved the response but not an explicit pending delivery.
+        if not task.get('pending_read_response') and (task.get('read_round_limit_reached')
+                or task.get('read_delivery', {}).get('status') == 'limited'):
+            blocked = next((c for c in reversed(self.state['calls']) if c['task_id'] == task_id
+                and c['dependency'] == dependency and c['status'] == 'limit'), None)
+            if blocked:
+                from finmy.dataset import within
+                saved = json.loads(within(self.directory, blocked['response_path']).read_text())
+                value = parse(saved['raw'])
+                if set(value) == {'read_requests'}:
+                    task['pending_read_response'] = dict(call_id=blocked['call_id'], value=value,
+                        next_page=0 if task.get('read_round_limit_reached') else
+                        task.get('read_delivery', {}).get('delivered_pages', 0))
+        task.pop('read_round_limit_reached', None)
         corpus = Corpus(self.payload, package, self.config)
         effort = person_build_request_effort(self.config.reasoning_effort, request.get('role') or task_id)
         while len(budget) < self.config.max_json_attempts:
             self.check_pause()
-            user = dict(task=request, read_results=task['read_results'])
+            user = dict(task=request, read_results=compact_read_results(request, task['read_results'], corpus.samples))
             if task.get('validation_error'):
                 user['validation_error'] = task['validation_error']
+            prefetched = next((c for c in self.state['calls'] if c['task_id'] == task_id
+                               and c['dependency'] == dependency and c['status'] == 'prefetched'), None)
+            if prefetched and prefetched['request_fingerprint'] != fingerprint(dict(system=system, user=user)):
+                # Reuse paid responses saved before this prompt-only compaction upgrade.
+                legacy = dict(user, read_results=task['read_results'])
+                if prefetched['request_fingerprint'] == fingerprint(dict(system=system, user=legacy)):
+                    user = legacy
             user_text = prompt_json(user)
             if len(system) + len(user_text) > self.config.max_context_chars:
                 raise LimitReached('model_context_chars')
-            if len(self.state['calls']) >= self.config.max_calls:
-                raise LimitReached('model_calls')
-            call_id = f"CALL-{len(self.state['calls']) + 1:06d}"
-            call = dict(call_id=call_id, task_id=task_id, dependency=dependency,
-                        request_fingerprint=fingerprint(dict(system=system, user=user)), status='submitted',
-                        api_json_mode=self.config.api_json_mode, reasoning_effort=effort,
-                        started_at=now(), usage=None, usage_status='unknown')
-            step_path = self.attempt / 'steps' / call_id
-            write_json(step_path / 'request.json', dict(system=system, user=user, task_id=task_id,
-                dependency=dependency, api_json_mode=self.config.api_json_mode, reasoning_effort=effort))
-            self.state['calls'].append(call)
-            self.persist()  # Durable reservation before the transport is invoked.
+            pending = task.get('pending_read_response')
+            if pending:
+                call = next(c for c in self.state['calls'] if c['call_id'] == pending['call_id'])
+                call_id = call['call_id']
+                step_path = (self.directory / call['response_path']).parent
+            elif prefetched is None:
+                call = self.reserve_call(task_id, system, user, dependency, effort)
+                if task.get('validation_error'):
+                    call['retry_kind'] = 'format'
+                call_id = call['call_id']
+                step_path = self.attempt / 'steps' / call_id
+            else:
+                call = prefetched
+                call_id = call['call_id']
+                step_path = self.directory / call['prefetched_response']
+                if call['request_fingerprint'] != fingerprint(dict(system=system, user=user)):
+                    raise RuntimeError('Prefetched request changed')
             started = time.monotonic()
             received = False
             try:
-                send = getattr(self.model, 'call_with_effort', None)
-                if send is None:
-                    raw = self.model(system, user_text, task_id)
-                else:
-                    raw = send(system, user_text, task_id, reasoning_effort=effort)
-                received = True
-                write_json(step_path / 'response.json', dict(raw=raw))
-                value = parse(raw)
+                retry_key = fingerprint(dict(task_id=task_id, dependency=dependency, user=user))
+                retries = self.state.setdefault('transport_retries', {})
+                while True:
+                    try:
+                        if pending:
+                            raw = pending['value']
+                        elif prefetched is not None:
+                            from finmy.dataset import within
+                            raw = json.loads(within(self.directory, call['prefetched_response']).read_text())['raw']
+                            if sha256(json_bytes(raw)) != call['prefetched_sha256']:
+                                raise RuntimeError('Prefetched response changed')
+                        else:
+                            raw = yield ModelRequest(call, system, user_text)
+                    except ModelCallFailed as exc:
+                        if (single_response or not getattr(exc.original, 'retryable', False)
+                                or retries.get(retry_key, 0) >= self.config.max_transport_retries):
+                            raise
+                        retry_reason = type(exc.original).__name__
+                    else:
+                        received = True
+                        try:
+                            value = parse(raw)
+                        except json.JSONDecodeError as exc:
+                            if not call.get('transport', {}).get('output_recovered'):
+                                raise  # Ordinary completed-but-invalid output uses its format budget.
+                            call.update(status='incomplete', recovery_status='invalid_json')
+                            if single_response or retries.get(retry_key, 0) >= self.config.max_transport_retries:
+                                raise IncompleteStreamResponse(
+                                    'Interrupted JSON is incomplete; automatic retry budget exhausted') from exc
+                            retry_reason = 'incomplete_json'
+                        else:
+                            break
+                    self.check_pause()
+                    prior_call_id = call_id
+                    call = self.reserve_call(task_id, system, user, dependency, effort)
+                    call_id = call['call_id']
+                    call['retry_of'] = prior_call_id
+                    call['retry_kind'] = 'transport'
+                    step_path = self.attempt / 'steps' / call_id
+                    retries[retry_key] = retries.get(retry_key, 0) + 1
+                    prefetched = None
+                    received = False
+                    self.task_event('RetryRequested', call_id=call_id, retry_of=prior_call_id,
+                                    reason=retry_reason)
+                    self.persist()
                 if 'read_requests' in value:
+                    if not allow_reads:
+                        raise InvalidResponse('This task does not allow reads; return the requested role result')
                     if single_response:
                         raise InvalidResponse('The complete handoff is already present; this pass has no local reads')
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:
                         raise InvalidResponse('Return either read_requests or the role result, never both')
+                    task.setdefault('pending_read_response', dict(call_id=call_id, value=value, next_page=0))
+                    if call_id not in read_rounds and len(read_rounds) >= round_limit:
+                        task['read_round_limit_reached'] = True
+                        raise LimitReached('read_rounds')
+                    self.task_event('ReadRequested', call_id=call_id)
                     pages = []
                     for read in value['read_requests']:
                         if request.get('role') == 'extraction' and read.get('tool') == 'search':
                             raise InvalidResponse('Initial extraction reads its continuous body ranges; local search is for later roles')
                         pages.extend((read, part, result) for part, result in corpus.pages(read))
-                    # Each delivered page spends existing read quotas. Save progress before stopping.
+                    # One response can request many pages; count it as one round.
+                    # The semantic group shares this budget with corrections and resume.
+                    if call_id not in read_rounds:
+                        read_rounds.append(call_id)
+                        self.persist()
+                    # Keep every delivery, but charge source characters only once across tasks.
                     for number, (original, read, result) in enumerate(pages):
+                        if number < task['pending_read_response']['next_page']:
+                            continue
                         chars = len(json_bytes(result).decode('utf-8'))
-                        reason = ('read_calls' if len(self.state['reads']) >= self.config.max_read_calls else
-                                  'read_chars' if sum(r['chars'] for r in self.state['reads']) + chars > self.config.max_read_chars else None)
+                        spent, budget_chars = next_read_charge(corpus.samples, self.state['reads'], read, result)
+                        reason = ('read_calls' if len(self.state['reads']) >= call_limit else
+                                  'read_chars' if spent + budget_chars > char_limit else None)
                         next_results = task['read_results'] + [dict(request=read, result=result)]
-                        next_user = dict(task=request, read_results=next_results)
+                        next_user = dict(task=request, read_results=compact_read_results(request, next_results, corpus.samples))
+                        if task.get('validation_error'):
+                            next_user['validation_error'] = task['validation_error']
                         if not reason and len(system) + len(prompt_json(next_user)) > self.config.max_context_chars:
                             reason = 'model_context_chars'
                         if reason:
@@ -429,17 +553,30 @@ class Execution:
                             self.persist()
                             raise LimitReached(reason)
                         record = dict(call_id=call_id, task_id=task_id, request=read, original_request=original,
-                                      result=result, chars=chars, result_fingerprint=fingerprint(result))
+                                      result=result, chars=chars, budget_chars=budget_chars,
+                                      result_fingerprint=fingerprint(result))
+                        if read.get('tool') in ('read_sample', 'search'):
+                            items = result if isinstance(result, list) else [result]
+                            record['sample_versions'] = {item['sample_id']:
+                                sha256(corpus.samples[item['sample_id']]['content'].encode('utf-8')) for item in items}
                         self.state['reads'].append(record)
+                        self.state['read_budget'] = dict(accounting='unique-source-ranges-v1',
+                            charged_chars=spent + budget_chars, max_chars=char_limit)
                         task['read_results'].append(dict(request=read, result=result))
                         task['read_requests'].append(read)
                         task['read_delivery'] = dict(status='completed' if number == len(pages)-1 else 'delivering',
                             delivered_pages=number+1, remaining_requests=[p[1] for p in pages[number+1:]])
+                        task['pending_read_response']['next_page'] = number + 1
                         self.persist()
+                    task.pop('pending_read_response', None)
                     call['status'] = 'read_requested'
+                    if call.get('transport', {}).get('output_recovered'):
+                        call['recovery_status'] = 'validated_read_requests'
                     task.pop('validation_error', None)
                     continue
                 validator(value)
+                if call.get('transport', {}).get('output_recovered'):
+                    call['recovery_status'] = 'validated_complete'
                 call['status'] = 'accepted'
                 write_json(checkpoint, dict(task_id=task_id, dependency=dependency, call_id=call_id,
                     response=value, response_sha256=sha256(json_bytes(value)), reads=task['read_requests']))
@@ -447,8 +584,13 @@ class Execution:
             except LimitReached:
                 call['status'] = 'limit'
                 raise
+            except ModelCallFailed:
+                # The coordinator has persisted transport diagnostics and response status.
+                raise
             except IncompleteCompletionError as exc:
                 call.update(status='incomplete', **error_metadata(exc))
+                raise
+            except IncompleteStreamResponse:
                 raise
             except (ValueError, KeyError, TypeError, IndexError) as exc:
                 if not received:
@@ -458,18 +600,15 @@ class Execution:
                 task['invalid_attempts'] += 1
                 task['validation_error'] = str(exc)[:1600]
                 budget['format:' + call_id] = dict(kind='protocol', message=task['validation_error'])
+                self.task_event('RetryRequested', call_id=call_id, reason='invalid_output')
                 if single_response or len(budget) >= self.config.max_json_attempts:
                     raise InvalidResponse(task['validation_error']) from exc
+            except GeneratorExit:
+                raise  # Keep drained prefetched responses reusable after pause.
             except BaseException as exc:
                 call.update(status='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'transport_error',
                             **error_metadata(exc))
                 raise
             finally:
-                transport = deepcopy(getattr(self.model, 'last_diagnostics', None))
-                if transport is not None:
-                    call['transport'] = transport
-                usage = deepcopy(getattr(self.model, 'last_usage', None))
-                call.update(duration_seconds=round(time.monotonic() - started, 3), usage=usage,
-                            usage_status='reported' if usage is not None else 'unknown')
                 self.persist()
         raise InvalidResponse('JSON attempts exhausted for this semantic task; inspect the saved responses')

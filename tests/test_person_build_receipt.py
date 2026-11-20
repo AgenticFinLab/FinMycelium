@@ -38,7 +38,7 @@ def saved_run(tmp_path, graph, payload, monkeypatch):
     }
     event = payload["user_query"]["extras"]["person_event"]
     body = {
-        "kind": "person_event", "graph_schema_version": "person-event-1.0",
+        "kind": "person_event",
         "input": payload, "input_hash": digest(payload), "scope_hash": digest(event["scope"]),
         "artifact_directory": str(directory), "person_config": {}, "provenance": {},
         "code": code_version(), "person_code": code_identity(),
@@ -93,3 +93,13 @@ def test_production_person_receipt_preserves_no_graph_result(saved_run):
     received = execute_person_build(body, directory)
     assert received == {"state": state, "graph": None}
     assert len(invocations) == 1
+
+
+def test_task_version_comes_from_run_or_config():
+    from finmy.workbench.build_tasks import person_graph_version
+    from finmy.person_epg.event.schema import GRAPH_VERSION
+    assert person_graph_version({}) == GRAPH_VERSION
+    body = {"person_config": {"graph_schema_version": "saved-config"}}
+    assert person_graph_version(body) == "saved-config"
+    body["run_state"] = {"graph_schema_version": "saved-run"}
+    assert person_graph_version(body) == "saved-run"

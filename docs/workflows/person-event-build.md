@@ -1,5 +1,8 @@
 # Build one person event
 
+For current CLI commands, effective budgets, errors and saved artifacts, see
+[run, resume, inspect and render](person-event-operations.md).
+
 A task reconstructs one confirmed `person / storyline / event`, using
 `person-event-1.0` and the [engineering contract](../person-event-builder/0-overview.md).
 The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own protocols.
@@ -56,13 +59,13 @@ implementation, with identical model and limits; change only this option. Switch
 mode requires a new task, not a resume of the other mode's checkpoints.
 
 For new Ark and TokenHub Kimi K3.1 Pro tasks, **构建思考档位** defaults to
-**按阶段（正文抽取 low，后续 high）** in the workbench and the Python entry point.
+**按阶段（当前全部 low）** in the workbench and the Python entry point.
 
 | Build stage | API `reasoning_effort` |
 |---|---|
 | Extract facts from each body range | `low` |
-| Consolidate actions and organize Stages and Phases | `high` |
-| Discover relations, assign Context and perform the final targeted repair | `high` |
+| Consolidate actions and organize Stages and Phases | `low` |
+| Discover relations, assign Context and perform the final targeted repair | `low` |
 
 Read follow-ups and corrections use the effort of their owning stage. For a
 comparison run, select a fixed `low`, `high` or `max`, or select **服务端默认**
@@ -70,6 +73,65 @@ to let the provider choose. Other models use the service default.
 
 The task configuration stores the policy (`reasoning_effort="by_stage"` for
 the Kimi default). Each step request and call record stores the actual effort.
+
+Set `extraction_workers=6` for up to six in-flight requests (default one, maximum
+10). A coordinator owns the task states, a FIFO queue, and persisted events;
+workers only perform model transport. Extraction ranges, disjoint consolidation
+groups and relation scopes run within their stage. Reading follow-ups, JSON
+corrections and semantic corrections re-enter the same queue and share its limit.
+A slow request does not block adoption of other responses. The next stage starts
+when the current stage's tasks have reached terminal states.
+
+A timeout, incomplete completion, or exhausted response correction allowance marks
+that task failed. Other tasks continue. Transport failures are not automatically
+retried in the same invocation; resume retries them while reusing accepted work.
+A transport failure in organization blocks relations. Rejected hierarchy proposals
+may first use the existing targeted organization repair; relations wait for a
+usable hierarchy. A failed relation scope leaves
+other scopes available. Local context limits affect their own tasks; exhausted
+run budgets produce `execution_status=limit`. Otherwise a completed run with
+failures has `execution_status=finished`, `result_status=partial`.
+
+`state.json` includes `events`, `task_states`, and `stages`. Task states include
+`queued`, `running`, `waiting_read`, `retrying`, `processing`, `succeeded`,
+`failed`, `limited`, `blocked`, `paused`, and `interrupted`. Call records separate
+`queued_at` from `started_at`. `checks.json.task_failures` lists failed, limited,
+and blocked tasks. Completed stages have hashed snapshots under `checkpoints/`;
+partially completed stages reuse per-call checkpoints and saved responses.
+Storage/integrity/program errors still stop the run. Pause stops dispatch and
+retains in-flight replies for resume.
+
+Apply this incremental patch after the FIFO and readable-sample patches, and use
+a new run directory. Existing runs have a different code fingerprint. The input
+file remains the original frozen builder `input.json`.
+
+Offline state-machine smoke check (no model calls, no pytest):
+
+```bash
+python -m finmy.person_epg.event.state_machine_smoke "$OLD/input.json" \
+  --output "output/state-smoke-$(date +%Y%m%d-%H%M%S)"
+```
+
+Expected: one failed timeout task, two succeeded tasks, one local read, and
+`passed: true`. This checks scheduling and failure isolation, not graph semantics.
+For a real end-to-end run, reuse the previous input and configuration in a new
+output directory:
+
+```bash
+PREV="$RUN"
+RUN="output/e2e-events-$(date +%Y%m%d-%H%M%S)"
+python -m dotenv -f .env run -- python - "$PREV/input.json" "$PREV/config.json" "$RUN" <<'PYRUN'
+import json, sys
+from pathlib import Path
+from finmy.person_epg.event.build import run_event
+state = run_event(json.loads(Path(sys.argv[1]).read_text()),
+    directory=sys.argv[3], config=json.loads(Path(sys.argv[2]).read_text()),
+    allow_network=True, resume=False, stop_after_organization=False)
+print({k: state.get(k) for k in
+       ('execution_status', 'result_status', 'output', 'checks', 'reason')})
+PYRUN
+```
+
 The policy is part of the checkpoint identity. Resume uses the saved policy,
 including the provider default for historical tasks with a missing or null
 effort. Choose a new task to change the policy. The output mode and call limits
@@ -81,6 +143,16 @@ context characters, 12,000-character body batches with 400-character overlap,
 4,000 text characters; local search returns at most four snippets. Metadata also
 counts toward the cumulative read-character budget. JSON attempts are capped at
 three per semantic task, transport I/O timeout at 900 seconds, and final repair at one round.
+
+`max_read_rounds=2` allows at most two reading follow-ups per semantic task.
+Each response containing a batch of valid `read_requests` spends one round,
+regardless of its number of pages. Corrections and resume share the same durable
+round budget. A third request for reading marks only that task `limited` with
+reason `read_rounds`; other tasks continue and adopted records remain available.
+Format/correction budgets are unchanged. Set `max_read_rounds=0` to disable follow-ups.
+When copying an older run configuration, explicitly override `timeout` to `900`
+and `max_read_rounds` to `2`; an explicit saved timeout overrides the default.
+The timeout remains the existing transport I/O timeout, not a new task deadline.
 
 These are limits, not quality targets. Character counts are not token counts.
 The context cap includes instructions, task metadata and serialized records, not just
@@ -118,7 +190,7 @@ dispositions, graph checks and a Gantt bound to its graph hash. Follow
 `state.json` to the graph and `review.json` for the parent hashes and decisions.
 A partial parent can yield a comparison but requires its own outstanding work
 to be resolved. A draft
-still goes through the event content review. Kimi uses `high` for this
+still goes through the event content review. Kimi uses `low` for this
 independent assessment unless the review configuration specifies an override.
 
 ```text
@@ -134,7 +206,7 @@ Freeze identity, scope, source metadata and actual input
 The optional `full_corpus_supplement` runs after the fresh continuous reads and
 before consolidation. It sends all handed documents with an index of existing
 facts in one request, within the common call and context limits. With Kimi's
-staged effort it runs at high. Its receipt records the character count, accepted
+staged effort it runs at low. Its receipt records the character count, accepted
 or rejected proposals, or the reason it was skipped. New person Event builds enable this pass by default. Clear the checkbox in the
 workbench or set `full_corpus_supplement=False` in Python to skip it. Saved tasks
 use their recorded setting. Tasks predating the option keep it disabled.
@@ -270,6 +342,20 @@ inspect evidence, or verify the fixed slide layout locally.
 Using the project environment from the repository root:
 
 ```bash
+7z x '/path/to/PBUILD-dee74d7e4a1d(1).7z' -o'/tmp/person-event-real'
+PERSON_EVENT_REAL_RUN_DIR=/tmp/person-event-real/PBUILD-dee74d7e4a1d \
+  PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
+  tests/test_person_event_real_run.py
+```
+
+The real-run test reads the original `input.json`,
+`attempts/0004/epg.json` and `attempts/0004/facts.json` in that extracted
+directory. Keep these three files exactly as extracted. It checks the frozen
+input's SHA-256 and validates the original single-source Evidence records. It makes no model calls and writes nothing to the run directory.
+
+For the broader offline unit suite:
+
+```bash
 PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
   tests/test_person_event_contract.py tests/test_person_event_runtime.py \
   tests/test_person_event_adoption.py tests/test_person_event_pipeline.py \
@@ -277,10 +363,11 @@ PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
   tests/test_person_event_gantt.py tests/test_search_build_contract.py
 ```
 
-Tests use the authored design example, synthetic responses and temporary directories.
-They verify contracts, ownership, quote alignment, partial adoption, limits, recovery
-and artifact correspondence without real search or model calls. They do not establish
-real-case content quality, coverage or cost.
+The broader unit suite uses the authored design example, synthetic responses and
+temporary directories to verify contracts, ownership, quote alignment, partial
+adoption, limits, recovery and artifact correspondence. The real-run regression
+checks provenance and structural compatibility, not historical content quality,
+coverage or cost.
 
 ## Collection decisions
 

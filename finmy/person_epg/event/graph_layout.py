@@ -55,6 +55,7 @@ def arrange_graph(graph, view):
         ('contexts', 'context_id', 'context', 'C'),
         ('entities', 'entity_id', 'party', 'E'),
         ('sources', 'source_id', 'source', 'S'),
+        ('evidence', 'evidence_id', 'evidence', 'EV'),
         ('phases', 'phase_id', 'phase', 'P'),
     ):
         for index, record in enumerate(graph.get(field, []), 1):
@@ -73,6 +74,9 @@ def arrange_graph(graph, view):
         return {evidence[eid]['source_id'] for eid in passages(record)}
 
     details = view['details']
+    for eid, record in evidence.items():
+        details[eid] = {'title': record.get('quote') or eid,
+                        'paragraphs': [], 'date': ''}
     person = graph.get('person', {})
     person_id = person.get('person_id')
     if person_id and person_id not in records:
@@ -151,13 +155,14 @@ def arrange_graph(graph, view):
         kind = kinds.get(nid, 'context')
         parties = [(record.get('actor') or {}).get('entity_id')]
         parties += (record.get('object') or {}).get('entity_refs', []) + record.get('entity_refs', [])
-        badges = sorted(source_ids(record), key=lambda key: aliases.get(key, key))
+        badges = sorted([record['source_id']] if kind == 'evidence'
+                        else source_ids(record), key=lambda key: aliases.get(key, key))
         return {
             'key': nid, 'id': nid, 'kind': kind, 'alias': aliases.get(nid, ''),
             'title': card_label(record, kind, details[nid]['title'], records.get(parties[0])),
             'date': _short(details[nid]['date'], 36), 'parties': '',
             'entity_type': record.get('type', 'person') if kind == 'party' else '',
-            'badges': [aliases.get(sid, '') for sid in badges], 'box': box,
+            'badges': list(dict.fromkeys(aliases.get(sid, '') for sid in badges)), 'box': box,
         }
 
     def add_parties(cards, body_top, body_end, canvas_width):
@@ -229,15 +234,18 @@ def arrange_graph(graph, view):
         present = {card['id'] for card in cards}
         edges = [dict(edge) for edge in all_edges if edge['from'] in present and edge['to'] in present]
         quotes = {sid: set() for sid in extra_sources}
+        shown_evidence = set(extra_evidence)
         for card in cards:
             for eid in sorted(passages(records[card['id']]), key=evidence_order.get):
+                shown_evidence.add(eid)
+                edges.append({'from': eid, 'to': card['id'], 'type': 'supports', 'kind': 'evidence'})
                 sid = evidence[eid]['source_id']
                 if sid not in records:
                     continue
                 quotes.setdefault(sid, set()).add(eid)
-                edges.append({'from': sid, 'to': card['id'], 'type': 'supports', 'kind': 'evidence'})
         for edge in edges[:]:
             for eid in sorted(passages(edge.get('record', {})), key=evidence_order.get):
+                shown_evidence.add(eid)
                 sid = evidence[eid]['source_id']
                 if sid in records:
                     quotes.setdefault(sid, set()).add(eid)
@@ -246,18 +254,28 @@ def arrange_graph(graph, view):
             if sid in records:
                 quotes.setdefault(sid, set()).add(eid)
         top = body_end + 30
+        evidence_list = sorted(shown_evidence, key=evidence_order.get)
+        evidence_columns = max(1, (canvas_width - 38) // 354)
+        for i, eid in enumerate(evidence_list):
+            card = make_card(eid, [38 + i % evidence_columns * 354,
+                top + 48 + i // evidence_columns * 126, 328, 102])
+            card['title'] = _short(details[eid]['title'], 175)
+            card['quotes'] = [eid]
+            cards.append(card)
+        evidence_end = top + 72 + max(1, math.ceil(len(evidence_list) / evidence_columns)) * 126
+        sections.append({'title': 'Evidence', 'box': [22, top, canvas_width - 44, evidence_end - top - 20]})
+        top = evidence_end + 10
         source_list = sorted(quotes, key=lambda sid: aliases[sid])
         source_columns = max(1, (canvas_width - 38) // 274)
         for i, sid in enumerate(source_list):
             card = make_card(sid, [38 + i % source_columns * 274, top + 48 + i // source_columns * 104, 248, 82])
             ids = sorted(quotes[sid], key=evidence_order.get)
-            card['quotes'] = ids
-            card['targets'] = [aliases.get(edge['to'], '') for edge in edges
-                               if edge['kind'] == 'evidence' and edge['from'] == sid]
-            card['targets'] = list(dict.fromkeys(card['targets']))
+            card['evidence_ids'] = ids
+            for eid in ids:
+                edges.append({'from': sid, 'to': eid, 'type': 'cites', 'kind': 'citation'})
             cards.append(card)
         height = top + 72 + max(1, math.ceil(len(source_list) / source_columns)) * 104
-        sections.append({'title': 'Source evidence', 'box': [22, top, canvas_width - 44, height - top - 20]})
+        sections.append({'title': 'Sources', 'box': [22, top, canvas_width - 44, height - top - 20]})
         edges = list({(edge['from'], edge['to'], edge['type']): edge for edge in edges}.values())
         return {
             'phase': pid, 'title': title, 'cards': cards, 'sections': sections,

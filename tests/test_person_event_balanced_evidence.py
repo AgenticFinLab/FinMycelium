@@ -123,7 +123,18 @@ def test_batching_preserves_global_navigation_and_delivers_minimum_evidence(grap
         assert len(system_prompt(role)) + len(prompt_json(dict(task=request, read_results=[]))) <= 45000
         seen.append(request['assigned_action_ids'])
         return package, {}
-    builder.receive = receive
+    def receive_steps(*args, **kwargs):
+        if False:
+            yield
+        return receive(*args, **kwargs)
+    builder.receive_steps = receive_steps
+    def execute_tasks(stage, tasks):
+        for task in tasks:
+            try:
+                next(task.steps)
+            except StopIteration:
+                pass
+    builder.run.execute_tasks = execute_tasks
     builder.relate()
     assert [aid for batch in seen for aid in batch] == ['A0', 'A1', 'A2']
     assert sum(bool(batch) for batch in seen) > 1
@@ -144,6 +155,17 @@ def test_single_oversized_quote_keeps_read_fallback_instead_of_blocking(graph, p
             assert any(e['evidence_id'] == 'E0-00' for e in request['facts_index']['evidence_index'])
             seen.extend(request['assigned_action_ids'])
         return package, {}
-    builder.receive = receive
+    def receive_steps(*args, **kwargs):
+        if False:
+            yield
+        return receive(*args, **kwargs)
+    builder.receive_steps = receive_steps
+    def execute_tasks(stage, tasks):
+        for task in tasks:
+            try:
+                next(task.steps)
+            except StopIteration:
+                pass
+    builder.run.execute_tasks = execute_tasks
     builder.relate()
     assert seen == ['A0']

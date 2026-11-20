@@ -1,0 +1,111 @@
+# Person Event: run, resume, inspect and render
+
+This is the current operations guide. Older patch-named documents describe the
+history of individual changes; a checkout containing these changes does not need
+those patch files. Evidence uses the original single-source quotation contract
+(`person-event-1.0` / `person-event-facts-1.0`); cross-source evidence merging has
+been removed. Existing v2 artifacts remain on disk unchanged. To build with this
+contract, start a new directory using the original input.json; do not relabel v2
+artifacts or try to resume their checkpoints.
+
+## Run once
+
+From the repository root, place the original corpus in `input.json`. Install the
+project and lmbase as described in the main README; keep provider credentials in
+`.env`.
+
+```bash
+RUN="output/event-$(date +%Y%m%d-%H%M%S)"
+python -m dotenv -f .env run -- python - "$RUN" <<'PY'
+import json, sys
+from pathlib import Path
+from finmy.person_epg.event.build import run_event
+state = run_event(json.loads(Path('input.json').read_text()), directory=sys.argv[1],
+                  allow_network=True, stop_after_organization=False)
+print({k: state.get(k) for k in ('execution_status', 'result_status', 'output', 'reason')})
+PY
+```
+
+## Inspect without spending API credits
+
+```bash
+python -m finmy.person_epg.event.status "$RUN"
+python -m finmy.person_epg.event.status "$RUN" --json
+```
+
+The report separates the latest attempt, its failures, effective budgets and
+historical artifacts. `latest_hierarchy_artifact` is the most recent rendered
+graph containing both Stage and Phase records; this is a display property, not
+a claim of semantic completeness. A later failed attempt does not replace that
+reference. `latest_rendered_artifact` can contain an incomplete hierarchy.
+
+Errors include the provider exception type, HTTP status, request ID and retry
+eligibility. Each failed call has a separate `CALL-xxxxxx-error.json`; local
+exceptions include stack locations without locals or raw SDK messages. The
+existing `transport` fields and task reason codes remain available to consumers.
+For 401/403, inspect credentials, provider permissions or account balance before
+resuming. Increasing budgets cannot resolve authentication failures.
+Authentication failures and explicit billing errors such as `AccountOverdueError`
+pause dispatch for the run. In-flight responses are saved for resume; queued work
+and later stages do not issue new requests. A resource-specific 403 remains a
+local task failure. Repair the account or credentials, then explicitly resume.
+
+## Resume
+
+Stop an existing worker before running:
+
+```bash
+python -m dotenv -f .env run -- \
+  python -m finmy.person_epg.event.resume_transport "$RUN" --allow-model \
+  --extra-calls 60 --extra-read-calls 40 --max-read-rounds 4
+```
+
+`--extra-calls` ensures at least that many model requests remain. Similarly,
+`--extra-read-calls` ensures additional read deliveries remain. `--max-read-rounds`
+raises the total per-task allowance; already spent rounds are retained.
+`--extra-read-chars N` increases the existing unique-character budget by N.
+Repeatedly specifying it adds another N characters.
+
+The current transport defaults are 900 seconds total per request, 60 seconds
+without output growth, and five transport retries. These defaults are defined
+once in `event/config.py`; resume uses its shared resolver. Transport retries wait
+in a separate timer queue, using jittered exponential backoff (1–2, 2–4, 4–8,
+8–16, then 15–30 seconds) plus any server `Retry-After`. Waiting consumes no worker;
+when due, the retry joins the FIFO tail. Stage barriers and fixed concurrency remain.
+
+TTY progress refreshes in place; redirected logs print once per minute. Progress
+and `status` include successful tasks, successes per minute averaged over the
+current stage execution, retry requests / dispatched requests, and mean ready-queue
+wait. Read follow-ups do not count as retries; backoff is separate from queue wait.
+Stage metrics and individual call wait times are saved in `state.json`.
+The CLI shows effective limits, including extensions;
+historical semantic request bodies remain unchanged for checkpoint reuse.
+
+Resume retains the original response dependency identity and records the running
+implementation separately. Ordinary resume rejects unrelated implementation
+changes. Pure graph renderer and status-command edits are excluded from the
+execution fingerprint; rendering records its own dependency digest.
+
+## Offline HTML
+
+```bash
+python -m finmy.person_epg.event.graph_html \
+  "$RUN/attempts/0001/epg.json" -o "$RUN/attempts/0001/graph.html"
+```
+
+Use the attempt path reported by `status`, rather than assuming the latest
+attempt is the one to present. Rendering does not make model calls.
+
+## Offline regression checks
+
+```bash
+python -m pip install -r requirements-event-tests.txt
+python scripts/check_person_event.py
+```
+
+The CI job runs the same existing Event suite plus operational regression cases.
+The two lmbase SDK integration modules (`test_person_event_effort.py` and
+`test_person_event_json_mode.py`) are excluded from this lightweight job; run them
+in a full project environment with lmbase installed. No API credentials are
+required for the offline job. All domain checks continue to use saved fixtures
+or injected models.
