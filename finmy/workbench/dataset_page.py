@@ -5,9 +5,11 @@ from pathlib import Path
 import streamlit as st
 
 from finmy.dataset import DatasetCatalog, dataset_root, save_dataset_root, output_directory, summary_directory
-from finmy.workbench.ui import heading, empty
+from finmy.workbench.ui import empty, local_timestamp, status
 from finmy.workbench.workflow import navigate
-from finmy.workbench.material_status import confirmed_builds, saved_confirmations
+from finmy.workbench.material_status import confirmations, confirmed_builds
+from finmy.workbench.build_tasks import BuildController
+from finmy.workbench.build_page import build_status
 
 
 def dataset_settings(store=None):
@@ -51,64 +53,92 @@ def dataset_settings(store=None):
             st.warning(str(exc))
 
 
-def dataset_page(store):
+def _catalog_identity(record):
+    return tuple(record.get(k) for k in ('root', 'kind', 'person_id', 'event_id'))
+
+
+@st.cache_data(max_entries=2048, show_spinner=False)
+def _search_identity(run_path, modified_ns):
+    """Cache only routing metadata. Atomic run-file updates invalidate the entry."""
+    run = json.loads(run_path.read_text(encoding='utf-8'))
+    task = run['task']
+    state = 'excluded' if run.get('build_disposition') == 'excluded' else run['status']
+    return _catalog_identity(task.get('catalog', {})), task.get('event_id'), run['created_at'], state
+
+
+def catalog_searches(controller):
+    for tid in controller.tasks():
+        path = controller.root / tid / 'runs/initial/run.json'
+        yield tid, *_search_identity(path, path.stat().st_mtime_ns)
+
+
+def event_tasks(store, controller, selection):
+    identity = _catalog_identity(selection)
+    records = []
+    local_ids = set()
+    for tid, ref, local_id, created, _ in catalog_searches(controller):
+        if ref == identity:
+            records.append((created, tid, '检索'))
+            if local_id:
+                local_ids.add(local_id)
+    builds = BuildController(store)
+    related = []
+    for eid in {selection['event_id']} | local_ids:
+        for row in builds.tasks(eid):
+            ref = row['body'].get('catalog')
+            if (ref and _catalog_identity(ref) == identity) or (not ref and eid in local_ids):
+                related.append(row)
+                records.append((row['created'], row['id'], '构建'))
+    return sorted(records, reverse=True), related
+
+
+def _open_task(task_id):
+    navigate('任务', **{'task-selected': task_id, 'task_event_filter': ''})
+
+
+def ordinary_catalog(store):
     from finmy.workbench.search_page import search_form, get_controller
     from finmy.workbench.workflow import search_status_label
-    heading('数据集', '选择一个 event，确认本次范围后使用公共搜索。')
     try:
         catalog = DatasetCatalog(dataset_root(store.root))
-        kind = st.radio('目录类型', ['普通事件', '人物事件'], horizontal=True, key='ui-dataset-kind')
-        st.caption(str(catalog.root))
-        person_id = None
-        if kind == '人物事件':
-            people = {r['person_id']: r for r in catalog.people()}
-            if not people:
-                empty('人物目录为空', '请先在 person-epg/people.csv 登记研究计划。')
-                return
-            if st.session_state.get('ui-dataset-person') not in people:
-                st.session_state.pop('ui-dataset-person', None)
-            person_id = st.selectbox('选择人物', list(people), format_func=lambda p: people[p]['name'], key='ui-dataset-person')
-        rows = catalog.events(person_id)
+        rows = catalog.events()
         if not rows:
-            empty('事件目录为空', '当前主表只有模板或没有记录；不会自动读取旧 data/ 目录。')
+            empty('事件目录为空', '可在 event-epg/events.csv 登记普通事件，或打开本机事件记录。')
             return
-        if person_id:
-            stories = {r['storyline_id']: r['storyline_name'] for r in rows}
-            key = 'ui-dataset-story-' + person_id
-            if st.session_state.get(key, '') not in ['', *stories]: st.session_state.pop(key, None)
-            story = st.selectbox('按 storyline 筛选（可选）', ['', *stories],
-                                 format_func=lambda s: stories[s] if s else '全部 storyline', key=key)
-            rows = [r for r in rows if not story or r['storyline_id'] == story]
         events = {r['event_id']: r for r in rows}
-        key = 'ui-dataset-event-' + (person_id or 'ordinary')
+        key = 'ui-dataset-event-ordinary'
         if st.session_state.get(key) not in events: st.session_state.pop(key, None)
-        event_id = st.selectbox('选择 event', list(events),
+        event_id = st.selectbox('选择普通事件', list(events),
             format_func=lambda e: f"{events[e]['event_name']} · {events[e]['period']} · {events[e].get('status', '')}", key=key)
-        selection = catalog.select(event_id, person_id)
-        st.caption(f"目录 ID：{event_id} · 检索汇总：{summary_directory(selection) / 'search-summary.md'}")
-        if person_id:
-            st.info('每次任务处理一条 event：先检索，确认材料后再创建人物构建任务。')
+        selection = catalog.select(event_id)
         with st.expander('研究说明与来源线索'):
+            st.caption(f"目录 ID：{event_id} · 检索汇总：{summary_directory(selection) / 'search-summary.md'}")
             st.markdown(selection.get('research_description') or selection['description'])
             if selection.get('source_leads'):
                 for lead in selection['source_leads']:
                     st.write(lead['record'] if isinstance(lead, dict) else lead)
         controller = get_controller(str(store.root / 'search'))
-        history = []
-        for tid in controller.tasks():
-            run = controller.inspect(tid)
-            ref = run['task'].get('catalog', {})
-            if all(ref.get(k) == selection.get(k) for k in ('root', 'kind', 'event_id', 'person_id')):
-                history.append((tid, run))
+        history, builds = event_tasks(store, controller, selection)
         if history:
-            adopted = saved_confirmations(store.root)
-            with st.expander(f'历史检索（{len(history)}）'):
-                for tid, run in sorted(history, key=lambda r:r[1]['created_at'], reverse=True):
-                    left, right = st.columns([4, 1])
-                    left.write(f"{run['created_at'][:19]} · {search_status_label(run, confirmed_builds(tid, run, adopted))} · {tid[:12]}")
-                    if right.button('查看任务', key='catalog-history-'+tid):
-                        navigate('任务', **{'task-selected':tid, 'task_event_filter':''})
-        search_form(store, catalog=selection)
+            created, tid, kind = history[0]
+            if kind == '构建':
+                row = BuildController(store).reconcile(tid)
+                label = build_status(row)[1]
+            else:
+                data = {**controller.inspect(tid), 'task_id': tid}
+                label = search_status_label(data, confirmed_builds(tid, data, confirmations(builds)))
+            st.subheader('继续工作')
+            status(label, f'{kind} · {local_timestamp(created)} · {tid[:12]}')
+            if st.button(f'打开{kind}任务', type='primary', key='catalog-open-'+tid):
+                _open_task(tid)
+            if len(history) > 1:
+                with st.expander(f'其他任务（{len(history) - 1}）'):
+                    for date, other, category in history[1:]:
+                        if st.button(f'{category} · {local_timestamp(date)} · {other[:12]}', key='catalog-history-'+other):
+                            _open_task(other)
+            if not st.toggle('新建另一项检索', key='catalog-new-'+tid):
+                return
+        search_form(store, catalog=selection, previous_task=history[0][1] if history else '')
     except (ValueError, OSError) as exc:
         st.error(str(exc))
         st.caption('请检查数据集路径、主表 ID 和研究计划对应章节。')

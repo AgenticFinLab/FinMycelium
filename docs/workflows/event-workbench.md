@@ -23,17 +23,18 @@ requires a separate start action and permission to use external interfaces.
 
 | Page | Responsibility |
 | --- | --- |
-| 数据集 (Dataset) | Read the configured EPG-dataset catalog, select one ordinary or person event, confirm scope and prepare a search. |
-| 事件数据 (Data) | Maintain the master table, confirm an event's scope, inspect its current step and initiate the next action. |
-| 新建检索 (Search) | Create an individual or batch of search tasks with reusable defaults and per-run overrides. |
-| 任务中心 (Tasks) | One list of actual search and build runs; select one to inspect progress, inputs and results. |
-| 待审 (Review) | Review material and graph versions, record decisions and preserve revisions. |
-| 设置 (Settings) | Configure the local dataset root, separate search defaults from Builder defaults, and inspect credential presence. |
+| 数据集 (Dataset) | Choose **普通事件** or **人物事件**. Select a catalog event to inspect its scope, prepare a search or continue work on its materials and drafts. |
+| 任务中心 (Tasks) | **运行记录** lists search and build tasks with their progress and results. **待处理** opens the next scope, material or graph review for local ordinary events and the specific person drafts selected for content review. |
+| 设置 (Settings) | Select the local dataset, set reusable search and build defaults, and check which credentials are configured. |
 
-The event list opens a separate detail view when you select a row. **返回事件列表**
+For a standalone question or a batch of local ordinary events, open **任务中心 → 独立与批量检索**.
+Selecting several events with confirmed scopes saves one task per event. Per-task overrides are available under **调整配置**.
+
+For a person event, open the confirmed search handoff and review its material before saving a build task. The default Ark Kimi K3.1 Pro configuration uses low reasoning for per-source extraction, one full-handoff supplement and high reasoning for subsequent stages. It uses ordinary prompt-based JSON, up to 60 calls, 65,536 output tokens per call and 240,000 context characters. Extraction batches are 12,000 characters and local reading is capped at 60 reads and 160,000 characters total. Open **调整构建配置** to change this task. Saving freezes the selected handoff and settings. Start the build separately from its task detail.
+
+Under **数据集 → 普通事件 → 本机事件记录**, the local event list opens a detail view when you select a row. **返回事件列表**
 returns to the same filters. Use **显示 → 批量选择** for multi-event actions; additional
-filters and column controls stay in the toolbar. The task list selects its detail
-view directly and refreshes the list and detail from the same state snapshot.
+filters and column controls stay in the toolbar. The task list opens the selected run in a separate detail view.
 
 Event details open the section appropriate to their current stage. Material and graph
 review controls sit beside the content. Search creation shows the effective input
@@ -45,7 +46,7 @@ record show that absence explicitly. A document may contribute multiple input en
 The launcher applies a workbench-only light theme. Shared presentation lives in
 `finmy/workbench/ui.py` and `style.css`; it does not change other UIs or graph renderers.
 
-1. Import a CSV/XLSX master table or create an event. Confirm its research scope.
+1. Open **数据集 → 普通事件 → 本机事件记录** to import a CSV/XLSX master table or create an ordinary event. Confirm its research scope.
    The [event master](event-master.md) defines supported fields and relationships.
 2. Start a search from the event, or select several events and choose batch search.
    Batch creation shares configuration, while each event retains its own scope,
@@ -60,8 +61,7 @@ The launcher applies a workbench-only light theme. Shared presentation lives in
    material panel shows the policy used for the selected revision. Advanced source selection is
    a preview until explicitly saved as the current handoff. Historical experiment
    viewing remains a separate read-only auxiliary tool.
-5. Adopt material into the linked event and review the actual input under Data →
-   Material/input. Re-adopting a revised handoff deselects superseded passages from
+5. Adopt material into the linked event and review the actual input under **资料与输入** in the local event record. Re-adopting a revised handoff deselects superseded passages from
    that task, retaining all original rows and reviews. Materials from other manual
    uploads remain available. Scope changes require a new search before adoption.
 6. Approving evidence saves an immutable input snapshot with its hash and review ID.
@@ -89,21 +89,18 @@ search creates another task; it does not erase earlier originals or approvals.
 
 1. In **设置 → 接口与工作区**, save the local EPG-dataset root. This is a path on
    the machine running the workbench, shared by ordinary and person events.
-2. Open **数据集**. Ordinary events come from `event-epg/events.csv`; person events
+2. The workbench opens on **数据集**. Ordinary events come from `event-epg/events.csv`. The workbench reads bilingual names and coverage dates or the compact template’s event name and period. Person events
    come from `person-epg/people.csv`, the person's `events.csv`, and the matching
-   event description in `research-plan.md`. An empty catalog stays empty: there is
-   no fallback to `data/events/`. Existing upload/manual-entry workflows remain available.
-3. Select an event, optionally filtering a person's events by storyline. Preview
-   the planning description, cited source leads, and summary destination. The
+   event description in `research-plan.md`. Local imports and manual entries appear under **本机事件记录**.
+3. Select an ordinary event from the catalog, or choose **人物事件**, select a person, and open an event in the storyline table. Preview its research description and source leads. For a person event, click **准备检索** or **重新检索** to open the form for that event. The
    activity period and included/excluded scope come from the catalog and research
    plan by default; edit only for an intentional scope change. Activity periods
    do not automatically filter publication dates.
-4. Confirm the scope and destination. **保存检索任务** freezes the selected catalog
+4. For a new search, the scope and source leads are prefilled. The summary shows the effective model, providers and limits. Open **调整配置** for per-task overrides. Confirm the scope and destination. **保存检索任务** freezes the selected catalog
    identity, relevant plan text, source-file hashes, scope, and search configuration
    without execution. **确认并开始搜索** saves and explicitly starts the task when
    external calls are enabled. Both use the existing common search form and controller.
-5. Follow the task in **任务中心**. The dataset page also lists earlier searches
-   for the selected event. Ordinary event tasks have local workbench scope records
+5. An ordinary catalog event shows its latest task under **继续工作** and offers **新建另一项检索**. A person event shows its collected material, graph status and run history together. Open a task for details, or use **重新检索** to prepare another search. Ordinary event tasks have local workbench scope records
    separate from their catalog IDs and can use the existing material-review path.
    Person tasks retain their person/storyline/event identity and can prepare a
    separate [native single-event build](person-event-build.md) after material
@@ -152,7 +149,10 @@ history are exported with the shared search records.
 Catalog-linked search material can be explicitly confirmed and collected before
 creating a build. The event's `search/` saves the exact `builder-input.json`,
 source index, summary and manifest. Saving a confirmed build continues to collect
-its actual input. Original source downloads and unselected bodies remain ignored;
+its actual input. From **数据集 → 人物事件**, **用已收录材料创建构建** freezes the catalog copy
+and its confirmation receipt for a new task. This also works on a checkout
+without the producing search run. Starting that task is a separate action.
+Original source downloads and unselected bodies remain ignored;
 retries and reassembly never silently replace a collection.
 
 Completed person drafts can be marked **舍弃** and later restored without changing
@@ -363,20 +363,29 @@ EPG content quality.
 
 ## Offline person-event completion
 
-In a finished person build, open **检查与收尾**. Inspect each pending item,
-its evidence and the retained Context. Leave actual unfinished work pending.
-For an already processed item, select the corresponding Context and explain
-what is supported, what remains unknown, and why the construction disposition
-is complete. **保存处置并重新检查** saves a successor under the run's
-`revisions/`, retains the original artifacts and state, and refreshes checks,
-Gantt and workbench records without search or model calls.
+Open the finished person build from **任务中心 → 运行记录** and expand **检查与收尾**.
+The panel shows how much of the input was read, the structural error count and
+the outstanding records. Repeated extraction attempts for the same retained fact
+appear together. Select an item to inspect its sources and original passages.
 
-This first version supports explicit extraction pending items backed by an
-already adopted Context and matching evidence. It does not clear rejected
-proposals, unread material or unresolved Action assignments. Unresolved items
-and structural errors keep the result partial; only satisfied completion
-requirements produce draft. Unknowns remain in the graph as Gap. This is not
-content acceptance, and does not collect the result into the formal catalog.
+- **Retain a Context with a gap.** Select the supported Context and describe
+  what the sources establish and which part remains unknown.
+- **Decline a proposed change to supporting evidence.** Compare the existing
+  fact, evidence and gaps with the proposed citations. You can keep the fact
+  and its current support when the proposal only resubmits that fact or tries
+  to mix quoted record contents with a claim about what happened. Read and
+  acknowledge any associated correction notes individually.
+- **Keep a matter open.** If a citation deserves incorporation, the record is
+  ambiguous or other work is outstanding, leave it pending. **下载本次收尾清单**
+  exports the version, artifact references, check results and pending proposals
+  for offline review.
+
+Enter a reason and reviewer name, then choose **保存处置并重新检查**. Each save
+creates a successor under the run's `revisions/`, records the decision and
+preserves the parent artifacts. The workbench rechecks the graph, remaining
+material and pending work without search or model calls. Only a run that meets
+all completion checks becomes a draft. Content review and catalog collection
+follow separately.
 
 After an offline revision, further model construction uses a new task from the
 confirmed input. Resuming old model checkpoints must not overwrite a human

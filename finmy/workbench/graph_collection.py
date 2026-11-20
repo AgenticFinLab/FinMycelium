@@ -131,13 +131,16 @@ def reviewed_artifacts(row):
             or report.get('summary', {}).get('errors') != 0):
         raise ValueError('图、输入、检查或 Gantt 的版本不一致或存在结构错误')
     _identity(body['catalog'], json.loads(graph))
-    return dict(epg=graph, gantt=html, binding=dict(event_id=row['event_id'], build_task_id=row['id'],
+    return dict(epg=graph, gantt=html, input=payload, binding=dict(event_id=row['event_id'], build_task_id=row['id'],
                 graph_sha256=digest(graph), input_sha256=digest(payload), gantt_sha256=digest(html)))
 
 
 def review_template(row):
-    item = reviewed_artifacts(row)
-    meta = dict(item['binding'], decision='pending', reviewer='', reviewed_at='')
+    return template_for_binding(reviewed_artifacts(row)['binding'])
+
+
+def template_for_binding(binding):
+    meta = dict(binding, decision='pending', reviewer='', reviewed_at='')
     return '---\n'+yaml.safe_dump(meta, sort_keys=False)+'---\n\n# Content and evidence review\n\n'+\
         'Review subject attribution, actions, time and phases, relationships, and supporting evidence.\n'+\
         'Record findings, remaining uncertainties and the acceptance conclusion here.\n'
@@ -145,6 +148,7 @@ def review_template(row):
 
 def collect_graph(controller, task_id, review_bytes, *, confirmed=False):
     from .build_tasks import worker_lock
+    from .review_selection import retire_selection, selected_review
     if not confirmed: raise ValueError('请确认审核结论后收录')
     meta = parse_review(review_bytes)
     if meta['decision'] != 'accepted': raise ValueError('审核结论尚未通过')
@@ -166,6 +170,9 @@ def collect_graph(controller, task_id, review_bytes, *, confirmed=False):
                     existing = graph_collection(catalog)
                     if existing['files'] == files: return existing['review']
                     raise ValueError('事件已收录其他版本；请明确撤回后再收录')
+                nominated = selected_review(catalog)
+                if nominated and nominated['binding'] != items['binding']:
+                    raise ValueError('当前送审的是另一版本，请在「数据集 → 人物事件」更换或撤回送审')
                 path, original, fields, rows, entry = registry(catalog)
                 # Re-resolve identity and destination; catalog edits cannot redirect a saved task.
                 selected = DatasetCatalog(catalog['root']).select(catalog['event_id'], catalog.get('person_id'))
@@ -176,7 +183,7 @@ def collect_graph(controller, task_id, review_bytes, *, confirmed=False):
                 receipt = action_record(catalog, 'epg', 'collected', files, reviewer=meta['reviewer'])
                 receipt['build_task_id'] = task_id
                 entry.update(status='accepted', **accepted_artifact_paths(catalog))
-                with replace_folder(parent/'epg', files):
+                with replace_folder(parent/'epg', files), retire_selection(catalog):
                     try:
                         atomic_text(path, _registry_text(fields, rows))
                         save_action(catalog, receipt, files)

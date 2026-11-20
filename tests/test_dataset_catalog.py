@@ -95,3 +95,16 @@ def test_person_events_cannot_share_a_summary_directory(tmp_path):
     csv_file(path, PROGRESS_FIELDS, rows + [{**rows[0], 'event_id':'ANOTHER-EVENT'}])
     with pytest.raises(ValueError, match='目录重名'):
         DatasetCatalog(root).events('PERSON-TEST')
+
+
+def test_bilingual_event_master_preserves_open_period_and_source_hash(tmp_path):
+    from finmy.search.state import digest
+    root = fixture_dataset(tmp_path / 'dataset')
+    path = root / 'event-epg/events.csv'
+    row = dict(event_id='E1', event_name_en='', event_name_zh='测试事件', coverage_start='2020',
+               coverage_end='', description='Example', scope_include='Action', scope_exclude='')
+    csv_file(path, list(row), [row])
+    selected = DatasetCatalog(root).select('E1')
+    assert selected['event_name'] == '测试事件'
+    assert selected['period'] == '2020 – …'
+    assert selected['files'] == [{'path': 'event-epg/events.csv', 'sha256': digest(path.read_bytes())}]

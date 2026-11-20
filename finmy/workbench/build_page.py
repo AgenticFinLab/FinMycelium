@@ -3,7 +3,7 @@ import streamlit as st
 
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded, display_name
-from finmy.workbench.workflow import navigate
+from finmy.workbench.workflow import navigate, open_local_event
 from finmy.workbench.ui import status, stats
 from finmy.workbench.model_picker import model_picker
 
@@ -76,7 +76,7 @@ def build_panel(store, task_id, row=None):
     from .collection_page import disposition_panel
     disposition_panel(controller, row)
     if st.button("打开事件与审核", key="build-review-"+task_id, type="primary" if row["status"] == "completed" else "secondary", icon=":material/fact_check:"):
-        navigate("数据", detail_id=row["event_id"], **{"ui-event-section-"+row["event_id"]:"图与修订"})
+        open_local_event(row["event_id"], "图与修订")
     if body.get("elapsed_seconds") is not None:
         st.caption(f"运行耗时：{body['elapsed_seconds']:.1f} 秒")
     with st.expander("本次配置、输入和追溯记录"):

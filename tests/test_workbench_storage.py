@@ -46,7 +46,7 @@ def search(store, root, *, mode='simple'):
     controller = SearchController(store.root / 'search', transport=transport,
         fetcher=lambda u: (b'PRIVATE_SOURCE_BODY: a synthetic appointment.', 'txt', 'utf-8'))
     selection = DatasetCatalog(root).select('PERSON-EVENT-TEST', 'PERSON-TEST')
-    task_id = create_catalog_search(store, controller, selection, {}, mode,
+    task_id = create_catalog_search(store, controller, selection, {'providers': ['bocha']}, mode,
         period=selection['period'], include=selection['scope_include'],
         exclude=selection['scope_exclude'], confirmed=True, seeds=[])
     return controller, task_id, calls

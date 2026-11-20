@@ -1,4 +1,5 @@
 """Material confirmation and native person-event drafts in the shared workbench."""
+from functools import partial
 import json
 from pathlib import Path
 
@@ -25,10 +26,20 @@ def effort_label(value):
 
 def create_person_build(store, controller, task_id, data):
     st.subheader('构建本条人物 event')
-    st.caption('确认当前实际材料和已知缺口，保存为独立构建任务；也可先独立确认收录检索材料，再创建构建任务。')
-    model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
-    defaults = EventBuildConfig()
-    with st.form('person-build-create-'+task_id):
+    st.caption('检查实际交接材料和已知缺口后保存构建任务。')
+    person_build_form(store, task_id, partial(BuildController(store).create_person, controller, task_id))
+
+
+def person_build_form(store, task_id, save_task):
+    advanced = st.expander('调整构建配置')
+    with advanced:
+        model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
+        # Transfer the measured Ark Kimi budget only to that model's new tasks.
+        if model == 'ark/kimi-k3-1-pro-261024':
+            defaults = EventBuildConfig(max_calls=60, max_new_tokens=65536, max_context_chars=240000,
+                                        max_read_calls=60, max_read_chars=160000)
+        else:
+            defaults = EventBuildConfig()
         json_supported = person_build_json_mode_supported(model)
         api_json_mode = st.radio('模型输出模式', [False, True] if json_supported else [False],
             format_func=lambda enabled: 'API JSON 模式' if enabled else '普通（提示词约定 JSON）',
@@ -38,22 +49,26 @@ def create_person_build(store, controller, task_id, data):
         effort = st.selectbox('构建思考档位', efforts, format_func=effort_label, disabled=len(efforts) == 1,
             key='person-build-effort-'+task_id+'-'+model,
             help='Kimi 默认在正文抽取时用 low，在行动归并、阶段组织、关系和最终定向修正时用 high。保存后档位固定。')
-        with st.expander('构建上限'):
-            calls=st.number_input('累计模型调用上限',min_value=1,value=defaults.max_calls)
-            tokens=st.number_input('每次输出 token 上限',min_value=1,value=defaults.max_new_tokens,
-                help='是否包含推理 token 取决于所选模型；TokenHub 思考模式需要为推理和最终答案留出额度。')
-            context=st.number_input('单次模型上下文字符上限',min_value=1,value=defaults.max_context_chars)
-            batch=st.number_input('连续正文抽取批次字符数',min_value=defaults.extraction_overlap+1,value=defaults.extraction_chars)
-            local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
-            local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
-            supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
-                help='新任务默认开启，可取消。补读最多调用一次模型，计入总调用上限。Kimi 分阶段模式使用 high；完整请求超出上下文上限时跳过并记录原因。')
-            repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
-            st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
+        calls=st.number_input('累计模型调用上限',min_value=1,value=defaults.max_calls)
+        tokens=st.number_input('每次输出 token 上限',min_value=1,value=defaults.max_new_tokens,
+            help='是否包含推理 token 取决于所选模型；TokenHub 思考模式需要为推理和最终答案留出额度。')
+        context=st.number_input('单次模型上下文字符上限',min_value=1,value=defaults.max_context_chars)
+        batch=st.number_input('连续正文抽取批次字符数',min_value=defaults.extraction_overlap+1,value=defaults.extraction_chars)
+        local_reads=st.number_input('局部读取累计次数上限',min_value=0,value=defaults.max_read_calls)
+        local_chars=st.number_input('局部读取累计字符上限',min_value=1,value=defaults.max_read_chars)
+        supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
+            help='新任务默认开启，可取消。补读最多调用一次模型，计入总调用上限。Kimi 分阶段模式使用 high；完整请求超出上下文上限时跳过并记录原因。')
+        repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
+        st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
+    if model:
+        st.write(model + ' · ' + effort_label(effort))
+        st.caption(f"{'API JSON' if api_json_mode else '普通输出'} · {'全文补读一次' if supplement else '仅逐份抽取'} · "
+                   f"最多 {calls} 次模型调用 · 每次最多 {tokens:,} 输出 token")
+    with st.form('person-build-create-'+task_id):
         confirmed=st.checkbox('我已检查本次实际材料与缺口，确认用于这条 event 的构建')
         if st.form_submit_button('保存人物构建任务',type='primary'):
             try:
-                tid=BuildController(store).create_person(controller,task_id,
+                tid=save_task(
                     dict(lm_name=model,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
                          extraction_chars=batch,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
@@ -71,7 +86,10 @@ def person_build_panel(store, controller, row, labels):
     st.caption('模型输出模式：' + ('API JSON 模式' if body['person_config'].get('api_json_mode', False)
                                  else '普通（提示词约定 JSON）'))
     st.caption('构建输出：' + body['artifact_directory'])
-    if body.get('search_collection'):
+    collected_input = body.get('provenance', {}).get('collected_input')
+    if collected_input:
+        st.caption(f"来自已收录检索材料 · {collected_input['directory']} · 清单 {collected_input['manifest_sha256'][:12]}")
+    elif body.get('search_collection'):
         st.caption('已采用检索：' + str(Path(body['catalog']['root'])/body['search_collection']['directory']))
     st.caption('构建思考档位：' + effort_label(body['person_config'].get('reasoning_effort')))
     run=body.get('run_state',{})
@@ -102,8 +120,13 @@ def person_build_panel(store, controller, row, labels):
         st.caption('执行：'+run['execution_status']+' · 结果：'+run['result_status']+' · 绘图：'+run['render_status'])
         coverage=run.get('coverage',[])
         if coverage:
-            done=sum(r['status']=='processed' for r in coverage)
-            st.caption(f'正文区间处理：{done}/{len(coverage)}；部分采用或未处理的区间保留在检查结果中。')
+            read = sum(r.get('body_status') == 'processed' for r in coverage)
+            resolved = sum(r.get('proposal_status') == 'resolved' for r in coverage)
+            if all('body_status' in r and 'proposal_status' in r for r in coverage):
+                st.caption(f'正文已读取 {read}/{len(coverage)} 个区间 · 提案已处置 {resolved}/{len(coverage)} 个区间')
+            else:
+                done = sum(r['status'] == 'processed' for r in coverage)
+                st.caption(f'正文区间处理 {done}/{len(coverage)}')
     if row['status']=='ready':
         allowed=st.checkbox('允许本次构建调用模型接口',key='person-allow-'+tid)
         a,b=st.columns(2)
@@ -132,6 +155,8 @@ def person_build_panel(store, controller, row, labels):
     else:
         if row['status']=='paused':
             st.info('已暂停；检查点和累计用量已保存，可以关闭电脑，之后恢复原任务。')
+        elif row['status'] == 'partial' and run.get('execution_status') == 'finished' and body.get('graph_schema_version') == 'person-event-1.0':
+            st.info('构建已结束，仍有事项待处理。请在下方「检查与收尾」核对。')
         else:
             st.warning('本次尚未完整完成：'+run.get('reason',run.get('error_type',body.get('error_type',row['status']))))
         if row['status'] in {'partial','failed','interrupted','limit','paused'}:

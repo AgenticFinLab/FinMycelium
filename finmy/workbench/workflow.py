@@ -64,6 +64,37 @@ def progress(store, event_id, controller=None):
 
 def navigate(page, **values):
     import streamlit as st
-    st.session_state.update(values)
-    st.session_state["navigate_to"] = page
+    if page == '任务':
+        if values.get('task-selected'):
+            values.setdefault('ui-task-view', '运行记录')
+        values.setdefault('task-detail-id', values.get('task-selected'))
+        values.setdefault('task-tool', None)
+    if page == '数据集':
+        values.setdefault('dataset-local', False)
+        values.setdefault('return-to-review', False)
+    # Apply widget values before rendering the destination, even within the same page.
+    st.session_state['navigate_to'] = page
+    st.session_state['navigation-values'] = values
     st.rerun()
+
+
+def open_local_event(event_id, section, *, from_review=False, **values):
+    navigate('数据集', detail_id=event_id, **{'dataset-local': True, 'ui-dataset-kind': '普通事件',
+             'data-action': None, 'ui-event-section-'+event_id: section, 'return-to-review': from_review}, **values)
+
+
+def current_page(state):
+    page = state.pop('navigate_to', None) or state.get('navigation') or '数据集'
+    # Streamlit preserves active sessions across an upgrade.
+    if page in ('人物', '数据'):
+        state['ui-dataset-kind'] = '人物事件' if page == '人物' else '普通事件'
+        state['dataset-local'] = page == '数据'
+        page = '数据集'
+    elif page in ('检索', '待审'):
+        state['task-detail-id'] = None
+        state['task-tool'] = 'search' if page == '检索' else None
+        state['ui-task-view'] = '运行记录' if page == '检索' else '待处理'
+        page = '任务'
+    state.update(state.pop('navigation-values', {}))
+    state['navigation'] = page
+    return page

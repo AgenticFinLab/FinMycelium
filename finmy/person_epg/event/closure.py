@@ -1,11 +1,13 @@
 """Explicit offline pending dispositions; retain drafts, gaps and execution history."""
 from copy import deepcopy
 import json
+import re
 from pathlib import Path
 import uuid
 
 from finmy.dataset import within
 from finmy.search.summary import directory_lock
+from .closure_support import decline_support, support_groups
 from .records import fingerprint, sha256
 from .runtime import now, write_json
 from .validation import check_graph
@@ -21,11 +23,13 @@ def load_review(directory):
     for name, field in [('graph', 'output'), ('facts', 'facts'), ('checks', 'checks')]:
         path = within(directory, state[field])
         digest = state['graph_sha256' if name == 'graph' else name + '_sha256']
-        if sha256(path.read_bytes()) != digest:
+        content = path.read_bytes()
+        if sha256(content) != digest:
             raise ValueError('产物校验失败，请保留原文件并检查：' + field)
-        objects[name] = json.loads(path.read_text())
-    payload = json.loads((directory / 'input.json').read_text())
-    if sha256((directory / 'input.json').read_bytes()) != state['input_sha256']:
+        objects[name] = json.loads(content)
+    raw_input = (directory / 'input.json').read_bytes()
+    payload = json.loads(raw_input)
+    if sha256(raw_input) != state['input_sha256']:
         raise ValueError('固定输入校验失败')
     checks = objects['checks']
     if (checks['run_id'] != state['run_id'] or checks['input_sha256'] != state['input_sha256']
@@ -47,11 +51,7 @@ def load_review(directory):
 
 
 def pending_items(review):
-    """Only evidence-linked, already adopted extraction Contexts can be disposed here.
-
-    This does not infer from reason keywords that factual uncertainty is resolved.
-    Other work remains visible and cannot be cleared through this form.
-    """
+    """List outstanding receipts and identify evidenced Contexts that can retain an explicit gap."""
     graph = review['graph']; facts = review['facts']; checks = review['checks']
     contexts = {c['context_id']: c for c in graph['contexts']}
     fact_contexts = {c['context_id']: c for c in facts['contexts']}
@@ -99,20 +99,35 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
             raise ValueError('请填写处置人')
         if not decisions:
             raise ValueError('请至少选择一条明确处置；其他事项可以继续保留')
-        items = {x['key']: x for x in pending_items(review)}
+        pending = pending_items(review)
+        groups = {g['key']: g for g in support_groups(review, pending)}
+        items = {x['key']: x for x in pending}
         graph, facts, checks = (deepcopy(review[k]) for k in ('graph','facts','checks'))
         state = deepcopy(review['state']); stamp = now()
         rid = 'manual-' + uuid.uuid4().hex[:12]
         relative = Path('revisions') / rid
-        resolutions = []; seen = set()
+        resolutions = []; handled = []; seen = set()
         for decision in decisions:
-            key = decision['key']; item = items.get(key)
-            if key in seen or not item or not item['eligible']:
-                raise ValueError('该事项不能通过缺口确认解除，或重复选择')
-            seen.add(key)
-            cid = decision['context_id']
+            key = decision['key']
             reason = decision.get('reason', '').strip()
-            if cid not in item['context_ids'] or not reason:
+            if not reason or key in seen:
+                raise ValueError('请填写每项处置理由，并避免重复选择')
+            seen.add(key)
+            if decision.get('outcome') == 'decline_support_change':
+                group = groups.get(key)
+                if not group:
+                    raise ValueError('这项提案不能按补充引证退回，请核对当前记录')
+                receipts = decline_support(group, decision, checks, facts, 'offline.' + rid)
+                handled.extend(receipts)
+                resolutions.append(dict(key=key, outcome='decline_support_change', kind=group['kind'],
+                    ref=group['ref'], retained_id=group['retained_id'], receipts=receipts,
+                    reason=reason, reviewer=reviewer.strip(), at=stamp))
+                continue
+            item = items.get(key)
+            if decision.get('outcome') not in (None, 'retained_context_with_gap') or not item or not item['eligible']:
+                raise ValueError('该事项不能通过缺口确认解除')
+            cid = decision['context_id']
+            if cid not in item['context_ids']:
                 raise ValueError('请选择有对应证据的 Context，并填写缺口与处置说明')
             gap = dict(target='/description', reason=reason)
             for package in (graph, facts):
@@ -121,6 +136,7 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
                     context['gaps'].append(gap)
             task = next(t for t in checks['unresolved_tasks'] if t['task_id'] == item['task_id'])
             task['report']['pending'].remove(item['pending'])
+            handled.append(item)
             resolutions.append(dict(**item, outcome='retained_context_with_gap', context_id=cid,
                 reason=reason, reviewer=reviewer.strip(), at=stamp))
             ref = dict(collection='contexts', object_id=cid, field='')
@@ -129,15 +145,16 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
         checks['unresolved_tasks'] = [t for t in checks['unresolved_tasks']
                                      if t['report']['pending'] or t['report']['rejected']]
         still_pending = [p for t in checks['unresolved_tasks'] for p in t['report']['pending']]
-        resolved = [r['pending'] for r in resolutions]
+        resolved = [item['pending'] for item in handled]
         facts['pending'] = [p for p in facts['pending'] if p not in resolved or p in still_pending]
         coverage = deepcopy(review['state']['coverage'])
         remaining = {t['task_id'].split('.correct.')[0] for t in checks['unresolved_tasks']}
-        for item in resolutions:
-            tid = item['task_id'].split('.correct.')[0]
-            if tid not in remaining:
-                number = int(tid.split('.')[1])
-                if coverage[number]['body_status'] == 'processed':
+        completed_tasks = {item['task_id'].split('.correct.')[0] for item in handled} - remaining
+        for tid in completed_tasks:
+            block = re.fullmatch(r'extract\.(\d+)', tid)
+            if block:
+                number = int(block[1])
+                if number < len(coverage) and coverage[number]['body_status'] == 'processed':
                     coverage[number].update(proposal_status='resolved', status='processed')
         graph_check = check_graph(graph, review['payload'])
         fact_check = check_graph(facts, review['payload'])
@@ -166,7 +183,15 @@ def close_pending(directory, decisions, *, expected_state_sha256, reviewer):
         target.mkdir(parents=True, exist_ok=False)
         # Parent outputs are immutable. Preserve the exact state bytes before publishing.
         (target / 'parent-state.json').write_bytes((directory / 'state.json').read_bytes())
-        graph_hash = write_json(target / 'epg.json', graph)
+        if graph == review['graph']:
+            # A declined support change must retain even the serialization of the parent graph.
+            parent_graph = within(directory, state['output']).read_bytes()
+            if sha256(parent_graph) != state['graph_sha256']:
+                raise ValueError('图已更新，请重新检查')
+            (target / 'epg.json').write_bytes(parent_graph)
+            graph_hash = state['graph_sha256']
+        else:
+            graph_hash = write_json(target / 'epg.json', graph)
         facts_hash = write_json(target / 'facts.json', facts)
         checks.update(graph_sha256=graph_hash, artifact_hashes=dict(checks['artifact_hashes'], facts=facts_hash),
             summary=graph_check['summary'], issues=graph_check['issues'], coverage=coverage,
