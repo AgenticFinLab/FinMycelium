@@ -10,7 +10,6 @@ from plotly.offline import get_plotlyjs
 from ..visualizer_gantt import _script_json, _wrapped
 from .records import compose_context, index_records, json_bytes, sha256
 from .schema import COLLECTION_IDS
-from .evidence_support import iter_citations
 from .validation import check_graph, interval, order_view
 
 
@@ -55,16 +54,11 @@ def event_view(graph, graph_sha256=None):
             ev = indexes['evidence'].get(eid)
             if not ev:
                 continue
-            for number, citation in enumerate(iter_citations(ev)):
-                source = indexes['sources'].get(citation['source_id'], {})
-                evidence.append(dict(span_id=f'{eid}:{number}' if 'citations' in ev else eid,
-                    evidence_id=eid, statement=ev.get('statement'), source_id=citation['source_id'],
-                    quote=citation['quote'], references=references,
-                    title=source.get('title') or source.get('origin'), url=source.get('url'), published_at=source.get('published_at'),
-                    publisher=source.get('publisher'), upstream_sources=[
-                        indexes['sources'].get(sid, {}).get('title') or sid for sid in source.get('upstream_source_ids', [])],
-                    document_id=citation['sample_id'] if citation['location_status'] == 'matched' else None,
-                    char_start=citation['start'], char_end=citation['end'], locator=citation.get('locator')))
+            source = indexes['sources'].get(ev['source_id'], {})
+            evidence.append(dict(span_id=eid, quote=ev['quote'], references=references,
+                title=source.get('title') or source.get('origin'), url=source.get('url'), published_at=source.get('published_at'),
+                document_id=ev['sample_id'] if ev['location_status'] == 'matched' else None,
+                char_start=ev['start'], char_end=ev['end']))
         label = {'event': 'Event', 'stages': 'Stage', 'phases': 'Phase', 'actions': 'Action',
                  'contexts': 'Context', 'relations': 'Relation'}[collection]
         title = record.get('name') or record.get('description') or record.get('type') or key

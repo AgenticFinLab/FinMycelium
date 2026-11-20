@@ -1,8 +1,7 @@
 # Interactive person event visualization
 
-A saved `person-event-2.0` draft can be exported as a standalone HTML file.
-Existing `person-event-1.0` graphs remain readable using their original quote format.
-The viewer shows stages, phases, actions, context and source evidence. Cards
+A saved `person-event-1.0` draft can be exported as a standalone HTML file.
+The viewer shows stages, phases, actions, context, evidence and sources. Cards
 show a summary and expand in place to reveal their own text. The connecting
 lines follow the expanded card. The workbench uses this scrollable view as the
 primary artifact and saves it as `gantt.html` for review and collection.
@@ -13,10 +12,7 @@ primary artifact and saves it as `gantt.html` for review and collection.
 2. Open an existing person event build task with a saved JSON draft.
 3. Inspect the graph under **交互式人物事件图** or select **下载交互式事件图 HTML**.
 4. Open the downloaded file in a browser and click an action or source card.
-   The card expands and its lines follow its border. A source card opens its
-   supported fact statements and only the excerpts attributed to that source,
-   with their locations. A fact can have several sources; one source can
-   support several facts. Click again or press Escape to collapse the card.
+   The card expands and its lines follow its border. Evidence cards show quotations; source cards show metadata and a link. Click again or press Escape to collapse the card.
 
 For an older native run with a valid saved timeline, the workbench displays the
 scrollable view from its verified JSON. **从已保存 JSON 重新绘图** writes this
@@ -43,7 +39,7 @@ existing renderer.
 The exporter builds one complete canvas per Phase directly from the event JSON.
 Stage and Phase names form the top navigation. Shared Phase context appears in a
 band above the actions. Actions extend horizontally, with their context nearby
-and source evidence below. The canvas grows with the data and supports native
+and separate Evidence and Sources bands below. The canvas grows with the data and supports native
 horizontal and vertical scrolling at a normal, readable scale.
 
 Opening or switching a Phase starts at the left edge and top of its canvas.
@@ -68,7 +64,9 @@ card. Entity links attach to the circular icon while it is collapsed.
 Collapsed cards prefer an explicit short label or summary, otherwise an
 extractive label from the existing text. Repeated actor names and neutral source
 wrappers can be omitted from the preview; original text remains in the detail.
-Source cards show their name and date, with passages available on expansion.
+Source cards show their name and date, with a source link on expansion. Evidence
+cards show their own quotation and location. Each Evidence retains one source;
+the visual links follow Source → Evidence → supported record.
 Evidence lines are faint until their source or target receives hover, keyboard
 focus, or expansion.
 

@@ -110,8 +110,6 @@ def run_relations(snapshot, directory, *, config=None, model=None, allow_network
         status, reason = 'finished', None
         try:
             builder.stage('relations', builder.relate)
-            from .evidence_consolidation import consolidate as consolidate_evidence
-            builder.stage('evidence_consolidation', lambda: consolidate_evidence(builder))
         except PauseRequested as exc:
             status, reason = 'paused', str(exc)
             (directory / 'pause_requested').unlink(missing_ok=True)

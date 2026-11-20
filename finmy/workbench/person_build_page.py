@@ -10,7 +10,7 @@ from finmy.dataset import within
 from finmy.model_config import (PERSON_BUILD_STAGED_EFFORT, person_build_effort_options,
                                 person_build_json_mode_supported)
 from finmy.person_epg.event.runtime import EventBuildConfig
-from finmy.person_epg.event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
+from finmy.person_epg.event.schema import GRAPH_VERSION
 from finmy.search.state import digest
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded
@@ -182,7 +182,7 @@ def person_build_panel(store, controller, row, labels):
         try:
             graph_path=within(body['artifact_directory'],run['output'])
             graph=json.loads(graph_path.read_text())
-            current=graph.get('schema_version') in {GRAPH_VERSION, LEGACY_GRAPH_VERSION}
+            current=graph.get('schema_version') in {GRAPH_VERSION}
             if (digest(graph_path.read_bytes()) if current else digest(graph))!=run['graph_sha256']:raise ValueError('Saved graph integrity mismatch')
             st.caption('已保存的草稿：'+str(graph_path))
             if current:

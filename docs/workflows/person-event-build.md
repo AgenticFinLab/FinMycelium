@@ -4,7 +4,7 @@ For current CLI commands, effective budgets, errors and saved artifacts, see
 [run, resume, inspect and render](person-event-operations.md).
 
 A task reconstructs one confirmed `person / storyline / event`, using
-`person-event-2.0` and the [engineering contract](../person-event-builder/0-overview.md).
+`person-event-1.0` and the [engineering contract](../person-event-builder/0-overview.md).
 The ordinary AgentEventBuilder and SparseRagBuilder paths retain their own protocols.
 
 ## Workbench flow
@@ -345,15 +345,13 @@ Using the project environment from the repository root:
 7z x '/path/to/PBUILD-dee74d7e4a1d(1).7z' -o'/tmp/person-event-real'
 PERSON_EVENT_REAL_RUN_DIR=/tmp/person-event-real/PBUILD-dee74d7e4a1d \
   PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -q -p no:cacheprovider \
-  tests/test_person_event_real_run.py tests/test_person_event_evidence_sources.py
+  tests/test_person_event_real_run.py
 ```
 
 The real-run test reads the original `input.json`,
 `attempts/0004/epg.json` and `attempts/0004/facts.json` in that extracted
 directory. Keep these three files exactly as extracted. It checks the frozen
-input's SHA-256, validates the original and in-memory upgraded graphs, then
-grounds two multi-source Evidence records using exact quotations from the
-historical run. It makes no model calls and writes nothing to the run directory.
+input's SHA-256 and validates the original single-source Evidence records. It makes no model calls and writes nothing to the run directory.
 
 For the broader offline unit suite:
 

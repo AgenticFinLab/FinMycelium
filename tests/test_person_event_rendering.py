@@ -7,7 +7,6 @@ from test_person_event_contract import graph, payload
 from test_person_event_pipeline import SyntheticEventModel
 from finmy.person_epg.build import run_event
 from finmy.person_epg.event.records import unknown_time
-from finmy.person_epg.event.evidence_support import upgrade_package_evidence
 from finmy.person_epg.event.rendering import event_view, render_event
 from finmy.person_epg.rendering import read_gantt, render_saved_event
 
@@ -24,26 +23,6 @@ def test_new_view_has_all_levels_and_retains_unknowns(graph):
     action['time'] = unknown_time()
     rows = event_view(graph)['rows']
     assert rows[-1]['key'] == 'actions:' + action['action_id'] and rows[-1]['interval'] is None
-
-
-def test_fact_citations_keep_source_and_statement_in_timeline_export(graph):
-    graph = upgrade_package_evidence(graph)
-    fact = next(evidence for evidence in graph['evidence'] if evidence['evidence_id'] == 'EV-3')
-    fact['statement'] = 'The participant performed the recorded action.'
-    citation = deepcopy(fact['citations'][0])
-    citation.update(source_id='SECOND-SOURCE', sample_id='SECOND-SAMPLE')
-    fact['citations'].append(citation)
-    graph['sources'].append(dict(graph['sources'][0], source_id='SECOND-SOURCE', title='Second account'))
-    before = deepcopy(graph)
-    view = event_view(graph)
-    action = next(item for item in view['items'] if item['key'] == 'actions:' + graph['actions'][0]['action_id'])
-    spans = [span for span in action['evidence'] if span['evidence_id'] == 'EV-3']
-    assert len(spans) == 2 and len({span['span_id'] for span in spans}) == 2
-    assert {span['source_id'] for span in spans} == {fact['citations'][0]['source_id'], 'SECOND-SOURCE'}
-    assert {span['statement'] for span in spans} == {fact['statement']}
-    assert {span['quote'] for span in spans} == {citation['quote']}
-    assert all(span['char_end'] - span['char_start'] == len(span['quote']) for span in spans)
-    assert graph == before
 
 
 def test_plot_text_cannot_execute_source_instructions(graph):

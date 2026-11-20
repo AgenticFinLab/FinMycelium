@@ -19,7 +19,6 @@ from finmy.builder.agent_build.visualizer_gantt import EventCascadeGanttVisualiz
 from finmy.search.state import digest
 from .time_utils import date_interval
 from .validation import validate_person_epg
-from .event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
 
 
 def _index(rows, key):
@@ -51,7 +50,7 @@ def _time(row):
 
 def event_view(package):
     """A read-only display projection; every item keeps its native identifiers."""
-    if package.get('schema_version') in (GRAPH_VERSION, LEGACY_GRAPH_VERSION):
+    if package.get('schema_version') == 'person-event-1.0':
         from .event.rendering import event_view as person_event_view
         return person_event_view(package)
     result = validate_person_epg(package)
@@ -295,7 +294,7 @@ def _script_json(value):
 
 def render_event(package):
     """Return an offline standalone HTML without modifying the native graph."""
-    if package.get('schema_version') in (GRAPH_VERSION, LEGACY_GRAPH_VERSION):
+    if package.get('schema_version') == 'person-event-1.0':
         from .event.rendering import render_event as render_person_event
         return render_person_event(package)
     view = event_view(package)

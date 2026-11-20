@@ -65,7 +65,7 @@ def test_rejected_candidate_gets_field_feedback_and_is_repaired_once(tmp_path, p
     assert len(final['actions']) == 3
     rejected_id = requests[0]['correction']['allowed_records']['actions'][0]
     assert rejected_id in {a['action_id'] for a in final['actions']}
-    assert len(requests) == 1 and len(state['calls']) == 8
+    assert len(requests) == 1 and len(state['calls']) == 7
     assert not json.loads((tmp_path / state['facts']).read_text())['pending']
     before = len(state['calls'])
     resumed = run_event(payload, tmp_path, model=model, resume=True)
@@ -282,7 +282,7 @@ def test_supported_official_conduct_survives_unknown_time_and_object(tmp_path, p
     final = json.loads((tmp_path / state['output']).read_text())
     retained = next(a for a in final['actions'] if a['name'] == behavior)
     assert retained['time']['start'] is None and retained['actor']['capacity'] == 'official'
-    assert not state['final_repair_used'] and len(state['calls']) == 7
+    assert not state['final_repair_used'] and len(state['calls']) == 6
 
 
 def test_company_execution_requires_attribution_review_not_automatic_person_rewrite(payload):

@@ -92,10 +92,9 @@ def test_nonstandard_time_survives_native_adoption_with_provenance(payload, case
     assert all(s['mode'] == 'I' and s['reason'] == case[-1] for s in inferred)
     assert bool(inferred) == (case[1] is not None or case[2] is not None)
     evidence = result['evidence'][0]
-    citation = evidence['citations'][0]
-    assert citation['location_status'] == 'matched'
-    assert source['samples'][0]['content'][citation['start']:citation['end']] == citation['quote']
-    assert case[0] in citation['quote']  # Native-calendar wording is not replaced by a derived quote.
+    assert evidence['location_status'] == 'matched'
+    assert source['samples'][0]['content'][evidence['start']:evidence['end']] == evidence['quote']
+    assert case[0] in evidence['quote']  # Native-calendar wording is not replaced by a derived quote.
     assert all(s['evidence_ids'] == [evidence['evidence_id']] for s in inferred)
 
 
@@ -115,7 +114,7 @@ def test_normalization_keeps_existing_support_and_interval_guards(payload, mista
     result, report = Receiver(seed_facts(source), source, IdMap(), 'invalid-time').extract(response)
     assert report['rejected']
     assert not result['actions']
-    assert result['evidence'][0]['citations'][0]['location_status'] == 'matched'  # Reject only the invalid proposal.
+    assert result['evidence'][0]['location_status'] == 'matched'  # Reject only the invalid proposal.
 
 
 def assert_time_policy(system):
@@ -134,12 +133,12 @@ def test_time_policy_reaches_native_flow_without_an_extra_call(tmp_path, payload
 
     state = run_event(payload, tmp_path, model=capture)
     assert state['result_status'] == 'draft'
-    assert set(systems) == {'extraction', 'corpus_supplement', 'organization', 'relations', 'evidence_consolidation'}
-    assert len(model.calls) == 7  # Construction, corpus supplement and evidence review.
-    for role in ('extraction', 'corpus_supplement', 'organization', 'relations'):
-        assert_time_policy(systems[role])
+    assert set(systems) == {'extraction', 'corpus_supplement', 'organization', 'relations'}
+    assert len(model.calls) == 6  # Existing fixture flow; no calendar-agent phase was added.
+    for system in systems.values():
+        assert_time_policy(system)
     result = json.loads((tmp_path / state['output']).read_text())
-    assert result['schema_version'] == 'person-event-2.0'
+    assert result['schema_version'] == 'person-event-1.0'
     assert check_graph(result, payload)['valid']
 
 

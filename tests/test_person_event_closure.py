@@ -9,8 +9,6 @@ from test_person_event_pipeline import SyntheticEventModel
 from finmy.person_epg.event.build import run_event
 from finmy.person_epg.event.closure import load_review, pending_items, close_pending
 from finmy.person_epg.event.runtime import write_json
-from finmy.person_epg.event.evidence_support import iter_citations
-from finmy.person_epg.event.schema import GRAPH_VERSION
 from finmy.person_epg.rendering import read_gantt
 
 
@@ -142,7 +140,7 @@ def test_controller_persists_result_without_changing_usage(partial,tmp_path):
     (controller.root/tid).mkdir(parents=True)
     r=load_review(partial)
     body=dict(kind='person_event',artifact_directory=str(partial),run_state=r['state'],usage=['keep'],finished='keep',
-              graph_schema_version=r['state']['graph_schema_version'])
+              graph_schema_version='person-event-1.0')
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',(tid,'event',json.dumps(body),'partial','now'))
     controller.close_person_pending(tid,[decision(r)],expected_state_sha256=r['state_sha256'],reviewer='Reviewer')
@@ -181,8 +179,7 @@ def support_run(partial):
         'candidates:0', [dict(collection='contexts', record=deepcopy(context))], [])
     addition = dict(collection='actions', object_id=action['action_id'], target=support['target'],
                     mode='A' if support['mode'] == 'O' else 'O', reason='Additional citation in a different mode.',
-                    sample_id=next(iter(iter_citations(ev)))['sample_id'],
-                    quote=next(iter(iter_citations(ev)))['quote'])
+                    sample_id=ev['sample_id'], quote=ev['quote'])
     mixed = rejected('actions', action['action_id'], 'Separate record-content and world-assertion claims.',
         'additional_support.0', addition, [dict(code='SUPPORT_MODE_MIXED', severity='error', object_type='actions',
                                                 object_id=action['action_id'])])
@@ -222,7 +219,7 @@ def test_support_decisions_require_acknowledgement_and_preserve_graph(support_ru
     old = load_review(root)
     context, action = groups(old)
     assert [len(context['members']), len(action['members'])] == [3, 1]
-    assert all(c['location_status'] == 'matched' for c in iter_citations(action['changes'][0]['quote']))
+    assert action['changes'][0]['quote']['location_status'] == 'matched'
     chosen = decline(context)
     with pytest.raises(ValueError, match='逐条确认'):
         close_pending(root, [dict(chosen, acknowledged_pending=[])], expected_state_sha256=old['state_sha256'], reviewer='Test')
@@ -281,7 +278,7 @@ def test_review_form_saves_successive_decisions(support_run, tmp_path):
     tid = 'PBUILD-ui'
     controller = BuildController(store)
     (controller.root/tid).mkdir(parents=True)
-    body = dict(kind='person_event', artifact_directory=str(support_run), graph_schema_version=GRAPH_VERSION,
+    body = dict(kind='person_event', artifact_directory=str(support_run), graph_schema_version='person-event-1.0',
                 run_state=load_review(support_run)['state'])
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)', (tid, 'test', json.dumps(body), 'partial', 'now'))

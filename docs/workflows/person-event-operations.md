@@ -2,8 +2,11 @@
 
 This is the current operations guide. Older patch-named documents describe the
 history of individual changes; a checkout containing these changes does not need
-those patch files. Extraction, evidence equivalence, adoption and conflict rules
-are unchanged by the engineering cleanup.
+those patch files. Evidence uses the original single-source quotation contract
+(`person-event-1.0` / `person-event-facts-1.0`); cross-source evidence merging has
+been removed. Existing v2 artifacts remain on disk unchanged. To build with this
+contract, start a new directory using the original input.json; do not relabel v2
+artifacts or try to resume their checkpoints.
 
 ## Run once
 
@@ -35,7 +38,6 @@ historical artifacts. `latest_hierarchy_artifact` is the most recent rendered
 graph containing both Stage and Phase records; this is a display property, not
 a claim of semantic completeness. A later failed attempt does not replace that
 reference. `latest_rendered_artifact` can contain an incomplete hierarchy.
-Evidence merge counts are printed with their attempt path.
 
 Errors include the provider exception type, HTTP status, request ID and retry
 eligibility. Each failed call has a separate `CALL-xxxxxx-error.json`; local
@@ -62,29 +64,24 @@ Repeatedly specifying it adds another N characters.
 
 The current transport defaults are 900 seconds total per request, 60 seconds
 without output growth, and five transport retries. These defaults are defined
-once in `event/config.py`; resume entry points use its shared resolver. The
-evidence-only entry point retains its saved total timeout, as before. Progress
+once in `event/config.py`; resume uses its shared resolver. Progress
 prints once per minute. The CLI shows effective limits, including extensions;
 historical semantic request bodies remain unchanged for checkpoint reuse.
 
-The exact PR #25 head `4df5d0a` can resume through this engineering upgrade without
-reissuing completed matching model requests. The original response dependency
-identity is retained; the running implementation identity is recorded separately.
-Ordinary resume still rejects unrelated implementation changes. Pure graph
-renderer and status-command edits are excluded from the execution fingerprint;
-rendering continues to record its own dependency digest.
+Resume retains the original response dependency identity and records the running
+implementation separately. Ordinary resume rejects unrelated implementation
+changes. Pure graph renderer and status-command edits are excluded from the
+execution fingerprint; rendering records its own dependency digest.
 
-## Evidence-only replay and offline HTML
+## Offline HTML
 
 ```bash
-python -m finmy.person_epg.event.evidence_consolidation "$RUN" --saved-review-only
 python -m finmy.person_epg.event.graph_html \
-  "$RUN/attempts/0004/epg.json" -o "$RUN/attempts/0004/graph-sources.html"
+  "$RUN/attempts/0001/epg.json" -o "$RUN/attempts/0001/graph.html"
 ```
 
 Use the attempt path reported by `status`, rather than assuming the latest
-attempt is the one to present. Saved-review-only requires matching review
-checkpoints; it never falls back to a paid request.
+attempt is the one to present. Rendering does not make model calls.
 
 ## Offline regression checks
 

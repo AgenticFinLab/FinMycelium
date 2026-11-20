@@ -5,8 +5,6 @@ import streamlit as st
 
 from finmy.person_epg.event.closure import load_review, pending_items
 from finmy.person_epg.event.closure_support import support_groups
-from finmy.person_epg.event.evidence_support import iter_citations, evidence_statement
-from finmy.person_epg.event.schema import GRAPH_VERSION
 from finmy.person_epg.event.records import pointer
 
 NAMES = {'contexts': '背景', 'relation_candidates': '关系候选', 'actions': '行动'}
@@ -14,15 +12,9 @@ MODES = {'O': '原文件记载', 'A': '事实主张', 'I': '推断'}
 
 
 def _passage(ev, sources):
-    statement = evidence_statement(ev)
-    if statement:
-        st.write(statement)
-    for citation in iter_citations(ev):
-        sid = citation['source_id']
-        source = sources.get(sid, {})
-        st.caption(f"{source.get('title') or sid} · {citation.get('sample_id') or ''} · "
-                   f"{citation.get('start')}–{citation.get('end')}")
-        st.text(citation['quote'])
+    source = sources.get(ev['source_id'], {})
+    st.caption(f"{source.get('title') or ev['source_id']} · {ev['sample_id']} · {ev['start']}–{ev['end']}")
+    st.text(ev['quote'])
 
 
 def _supports(supports, evidence, sources):
@@ -79,7 +71,7 @@ def _checklist(review, items, groups):
 
 def closure_panel(controller, row):
     body = row['body']
-    if body.get('graph_schema_version') != GRAPH_VERSION:
+    if body.get('graph_schema_version') != 'person-event-1.0':
         return
     with st.expander('检查与收尾', expanded=row['status'] == 'partial'):
         try:

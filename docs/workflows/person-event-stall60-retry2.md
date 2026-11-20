@@ -27,26 +27,15 @@ Refusals, tool-call responses and provider-declared length truncation retain the
 existing handling. A complete but schema-invalid JSON object still goes through
 the existing validation/correction mechanism.
 
-The runtime default and both resume commands now select `stall_timeout=60` and
+The runtime default and resume command select `stall_timeout=60` and
 `max_transport_retries=5`. Operational settings remain excluded from semantic
-checkpoint fingerprints. Completed evidence-review responses and upstream stages
+checkpoint fingerprints. Completed responses and stages
 remain reusable. Existing ordinary `run_event(..., resume=True)` callers retain
 saved settings unless explicitly overridden; use the commands below to upgrade.
 
-## Resume only evidence merging
+## Resume unfinished work
 
 Stop the old process and keep the existing `RUN` value:
-
-```bash
-python -m dotenv -f .env run -- \
-  python -m finmy.person_epg.event.evidence_consolidation "$RUN" \
-  --allow-model --extra-calls 30
-```
-
-This resumes the existing evidence-review input and reuses completed reviews.
-It automatically reads the original input from the run directory.
-
-For the whole pipeline's unfinished work instead, use:
 
 ```bash
 python -m dotenv -f .env run -- \

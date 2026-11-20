@@ -4,7 +4,6 @@ import re
 from .corpus_supplement import TASK_ID as SUPPLEMENT
 from .records import fingerprint, ground_quote, index_records, pointer
 from .validation import SupportIndex
-from .evidence_support import iter_citations
 
 
 def _retained(graph, collection, oid, fact):
@@ -56,8 +55,7 @@ def _supplement_proposal(issue, fact, retained, collection, oid, index):
     if proposal.get('sample_id') not in index.samples or not proposal.get('quote'):
         return None
     quote = ground_quote(proposal, index.samples, 'preview')
-    citations = list(iter_citations(quote))
-    if citations and all(c['location_status'] == 'matched' for c in citations):
+    if quote['location_status'] == 'matched':
         return {'target': proposal['target'], 'mode': proposal['mode'], 'quote': quote}
 
 

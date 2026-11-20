@@ -77,8 +77,7 @@ def test_blind_discovery_and_named_comparison_share_original_without_rebuilding(
         if task == 'review.discover':
             assert 'existing_edges' not in request and 'relation_candidates' not in request
             assert graph['relations'][0]['relation_id'] not in user
-            assert request['evidence'][0]['statement']
-            assert request['evidence'][0]['citations'][0]['quote']
+            assert request['evidence'][0]['quote']
             return {'pairs': []}
         assert request['independent'] == [] and request['existing_edges'][0]['from_name'] in {
             a['name'] for a in graph['actions']}

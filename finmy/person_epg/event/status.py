@@ -19,14 +19,13 @@ def inspect_run(directory):
         details = call.get('failure') or failure_details(transport=call.get('transport', call),
             task_id=call['task_id'], call_id=call['call_id'])
         errors.append(details)
-    evidence = state.get('evidence_consolidation')
     return dict(run=str(directory.resolve()), latest_attempt=dict(attempt=state['attempts'],
         execution_status=state.get('execution_status'), result_status=state.get('result_status'),
         reason=state.get('reason'), output=state.get('output')),
         budgets=budget_summary(state), stages=state.get('stages', {}),
         limited_tasks=[dict(task_id=key, reason=value.get('reason'))
                        for key, value in state.get('task_states', {}).items() if value.get('status') == 'limited'],
-        errors=errors, evidence_consolidation=evidence, **artifact_summary(directory))
+        errors=errors, **artifact_summary(directory))
 
 
 def main(argv=None):
@@ -52,9 +51,6 @@ def main(argv=None):
         print('受限：' + task['task_id'] + ' | ' + str(task['reason']))
     for error in summary['errors']:
         print('错误：' + error['summary'] + ' | retryable=' + str(error['retryable']))
-    report = summary['evidence_consolidation']
-    if report:
-        print(f"证据合并：merged={report.get('merged_records')} | multi_source={report.get('multi_source_after')} | {report.get('path')}")
     print_artifact_summary(summary, args.run)
 
 

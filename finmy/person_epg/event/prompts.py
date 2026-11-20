@@ -12,19 +12,9 @@ event facts from outside knowledge. Applicable calendar rules may normalize sour
 time expressions under the policy below. Return one JSON object and no prose outside it.
 
 Use temporary IDs for new records and exact existing IDs for references. The program
-assigns permanent IDs and verifies quotes. Each Evidence states one specific verifiable
-fact: {evidence_id, statement, citations:[{sample_id, quote}]}. Each citation may also
-include start/end or context_before/context_after verbatim location hints. Preserve
-the source's attribution, uncertainty and temporal scope in the statement. Cite the
-original wording separately for every supporting source; never invent hashes, source
-IDs, locators or page numbers. One source may support several Evidence facts; the same
-quotation may be used by distinct facts. When several documents support exactly the
-same fact, reuse its evidence_id and unchanged statement and append their citations.
-Do not merge distinct actors, events, dates, amounts or conflicting assertions merely
-because their text overlaps. Existing evidence IDs may be reused in support.
-Multiple documents may repeat one original message; source count alone does not
-establish independent corroboration. Preserve disagreements and explain the choice
-through the existing Conflict, Gap and support mechanisms.
+assigns permanent IDs and verifies quotes. New evidence is {evidence_id, sample_id,
+quote} with optional start/end or context_before/context_after verbatim hints. Never
+invent hashes, source IDs, offsets or page numbers. Existing evidence IDs may be reused.
 Support O records what a source contains; A records its assertion about the world;
 I is an explicitly reasoned inference with evidence_ids and/or premise_refs. Do not
 mix O and A on one claim. Unknowns use Gap, competing claims use Conflict. Neither
@@ -159,12 +149,10 @@ Apply the regular direction and attribution rules. Uncertainty and an explained 
 There is exactly one response. All documents are already in the request; do not request tools, external
 materials or a second turn. Return the ordinary extraction arrays and one extra array support_additions.
 Use standard evidence and typed records for newly proposed entities, actions, contexts and relation_candidates.
-For each additional supporting fact for an existing field use:
-{collection,object_id,target,mode,reason,evidence_id}. Put new fact-level Evidence in
-the ordinary evidence array. To add a source to an existing Evidence, use its exact
-evidence_id and unchanged statement with the additional citations in that array.
+For each additional supporting passage for an existing field use:
+{collection,object_id,target,mode,reason,sample_id,quote}, optionally context_before/context_after for repeated text.
 collection is actions, contexts, or relation_candidates. target is a JSON Pointer to the actual fact field, e.g.
-/description, /actor, /time or /type; never /support itself. Every citation quote must be verbatim body text.
+/description, /actor, /time or /type; never /support itself. quote must be verbatim body text from that sample.
 Preserve O/A/I semantics and explain why that field is supported, especially for inference. Other than adding
 support to such an existing field, do not alter old records. No hierarchy assignment, accepted graph edges
 or rewriting of the graph in this pass. Use note if there are no additions. The working language is English."""

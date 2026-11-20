@@ -13,19 +13,19 @@ def test_navigation_keeps_identity_and_locations_but_not_parser_bodies(graph, pa
     facts['entities'][0]['aliases'] = ['M. Lee']
     facts['actions'][0]['object'] = dict(description='A documented commitment',
         entity_refs=[facts['entities'][0]['entity_id']])
-    facts['evidence'][0]['citations'][0]['locator'] = dict(parser_body='unrelated metadata ' * 10000)
+    facts['evidence'][0]['locator'] = dict(parser_body='unrelated metadata ' * 10000)
     before = deepcopy(facts)
     index = navigation(facts)
     assert index['entities'][0]['aliases'] == ['M. Lee']
     assert index['actions'][0]['object']['entity_refs'] == facts['actions'][0]['object']['entity_refs']
     assert index['actions'][0]['object']['description_preview'] == 'A documented commitment'
-    assert index['evidence_index'][0]['start'] == facts['evidence'][0]['citations'][0]['start']
+    assert index['evidence_index'][0]['start'] == facts['evidence'][0]['start']
     assert 'locator' not in index['evidence_index'][0]
     assert len(json.dumps(index)) < 10000
     evidence = facts['evidence'][0]
     read = Corpus(payload, facts, EventBuildConfig()).read(dict(tool='read_records', refs=[dict(
-        collection='evidence', object_id=evidence['evidence_id'], field='/citations/0/quote')]))
-    assert read[0]['value'] == evidence['citations'][0]['quote'] and facts == before
+        collection='evidence', object_id=evidence['evidence_id'], field='/quote')]))
+    assert read[0]['value'] == evidence['quote'] and facts == before
 
 
 def test_context_compresses_navigation_before_required_body(graph, payload):

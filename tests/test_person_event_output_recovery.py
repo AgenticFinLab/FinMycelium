@@ -66,7 +66,7 @@ def test_recovery_reuses_upstream_reads_attempts_and_preserves_originals(tmp_pat
         return model(system, user, name)
     resumed = run_event(payload, tmp_path, state['config'], model=resume, resume=True)
     assert resumed['result_status'] == 'draft'
-    assert model.calls == ['organize', 'relate.0', 'evidence_merge.0']
+    assert model.calls == ['organize', 'relate.0']
     assert resumed['calls'][:len(old['calls'])] == old['calls']
     assert resumed['reads'] == old['reads']
     groups = [v for k,v in resumed['validation_attempts'].items() if k.startswith('organize-')]
@@ -127,7 +127,7 @@ def test_controller_prepares_but_does_not_start(tmp_path, payload, monkeypatch):
         code={'commit':'old', 'python_sources_sha256':'old'}, person_code='old',
         input=deepcopy(payload), input_hash=digest(payload),
         scope_hash=digest(payload['user_query']['extras']['person_event']['scope']),
-        person_config=old['config'], graph_schema_version='person-event-2.0')
+        person_config=old['config'], graph_schema_version='person-event-1.0')
     with store.connection() as db:
         db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)', ('PBUILD-test','event',encoded(body),'failed','now'))
     first = controller.prepare_person_output_recovery('PBUILD-test', max_new_tokens=65536)

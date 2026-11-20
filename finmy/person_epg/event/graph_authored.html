@@ -173,13 +173,6 @@ function directEvidence(record) {
   return [...new Set((record.support || []).flatMap(support => support.evidence_ids || []))]
     .map(id => evidenceById.get(id)).filter(Boolean);
 }
-function sourceCitations(fact, sourceId) {
-  return (fact?.citations || (fact ? [fact] : [])).filter(citation => citation.source_id === sourceId);
-}
-function citationLocation(citation) {
-  const offset = citation.location_status === 'matched' ? `${citation.start}–${citation.end}` : citation.location_status;
-  return [citation.sample_id, offset, citation.locator ? JSON.stringify(citation.locator) : ''].filter(Boolean).join(' · ');
-}
 function parties(record) {
   return [...new Set([record.actor?.entity_id, ...(record.object?.entity_refs || []), ...(record.entity_refs || [])])]
     .filter(id => nodeInfo.get(id)?.kind === 'party');
@@ -232,8 +225,7 @@ function card(parent, id, subtitle, title) {
   button.dataset.node = id;
   button.title = title || info.title;
   button.append(element('small', subtitle), element('strong', title || info.title));
-  const firstEvidence = info.kind === 'source' && displayedSources.get(id)?.quotes.values().next().value;
-  const quote = firstEvidence && sourceCitations(firstEvidence, id)[0]?.quote;
+  const quote = info.kind === 'source' && displayedSources.get(id)?.quotes.values().next().value?.quote;
   if (quote) {
     const excerpt = quote.replace(/\s+/g, ' ').trim();
     button.append(element('small', excerpt.length > 126 ? excerpt.slice(0, 125) + '…' : excerpt));
@@ -313,14 +305,9 @@ function fillCardDetail(detail, id) {
   if (date) detail.append(element('small', date, 'detail-date'));
   for (const text of paragraphs) detail.append(element('span', text, 'detail-text'));
   if (kind === 'source') {
-    for (const fact of displayedSources.get(id).quotes.values()) {
-      const citations = sourceCitations(fact, id);
-      if (!citations.length) continue;
-      if (fact.statement) detail.append(element('strong', fact.statement, 'detail-text'));
-      for (const citation of citations) {
-        detail.append(element('span', citation.quote, 'detail-text quote'));
-        detail.append(element('small', citationLocation(citation), 'detail-text'));
-      }
+    const quotes = new Set([...displayedSources.get(id).quotes.values()].map(passage => passage?.quote));
+    for (const quote of quotes) {
+      if (quote) detail.append(element('span', quote, 'detail-text quote'));
     }
   }
 }

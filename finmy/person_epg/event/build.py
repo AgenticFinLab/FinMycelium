@@ -8,17 +8,16 @@ import uuid
 
 from finmy.search.summary import directory_lock
 from .prompts import system_prompt
-from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference, validate_envelope, replace_references
+from .proposals import Receiver, exact_deduplicate, graph_from_facts, reference, validate_envelope
 from .records import IdMap, fingerprint, index_records, seed_facts, validate_input, prompt_json
 from .runtime import EventBuildConfig, Execution, InvalidResponse, LimitReached, PauseRequested, now, write_json
-from .schema import COLLECTION_IDS, GRAPH_VERSION, LEGACY_GRAPH_VERSION
+from .schema import COLLECTION_IDS
 from .feedback import (correction_scope, correction_issues, validate_correction,
                        unresolved_report, reserved_records, clear_resolved_pending)
 from .context import navigation, sized_request
 from .grouping import ambiguity_groups
 from .validation import check_graph
 from .relation_review import discovery_scope
-from .evidence_support import iter_citations, citation_is_located
 from .scheduling import Task, ModelCallFailed, emit
 
 
@@ -181,9 +180,8 @@ class Construction:
                 if isinstance(value, dict) and {'sample_id', 'start', 'end', 'text'} <= value.keys():
                     ranges[value['sample_id']].append((value['start'], value['end']))
         for evidence in package['evidence']:
-            for citation in iter_citations(evidence):
-                if citation_is_located(citation):
-                    ranges[citation['sample_id']].append((citation['start'], citation['end']))
+            if evidence['location_status'] == 'matched':
+                ranges[evidence['sample_id']].append((evidence['start'], evidence['end']))
         receiver = Receiver(package, self.run.payload, self.ids, namespace, ranges, reserved=reserved)
         method = {'extraction': receiver.extract, 'consolidation': receiver.consolidate,
                   'organization': receiver.organize, 'relations': receiver.relate}[role]
@@ -242,10 +240,6 @@ class Construction:
         self.run.state.setdefault('stages', {})[name] = dict(status='running')
         before = fingerprint(dict(input=self.run.state['input_sha256'], facts=self.facts,
             graph=self.graph, coverage=self.coverage, reports=self.reports))
-        if name == 'evidence_consolidation':
-            from .evidence_consolidation import APPLY_POLICY, REVIEW_POLICY, SYSTEM
-            before = fingerprint(dict(input_state=before, review_policy=REVIEW_POLICY,
-                apply_policy=APPLY_POLICY, system=SYSTEM))
         path = self.run.directory / 'checkpoints' / ('stage-' + name + '.json')
         if path.is_file():
             saved = json.loads(path.read_text())
@@ -583,14 +577,10 @@ class Construction:
             execution_status = 'limit'
             reason = reason or 'Run budget exhausted; completed results retained'
         self.save_facts()
-        evidence_ids = {e['evidence_id'] for e in (self.graph or self.facts)['evidence']}
-        evidence_redirects = {old: new for old, new in self.run.state.get('evidence_redirects', {}).items()
-                              if old not in evidence_ids and new in evidence_ids}
         reviews = [dict(task_id=r['task_id'], scope=r['relation_discovery_scope'],
                         review=r['report'].get('relation_review'),
                         accepted='relation_review' in r['report']['accepted'])
                    for r in self.reports if 'relation_discovery_scope' in r]
-        reviews = replace_references(reviews, {'evidence': evidence_redirects})
         completed = {aid for r in reviews if r['accepted'] for aid in r['scope']['action_ids']}
         expected = {a['action_id'] for a in (self.graph or self.facts)['actions']}
         path, digest = self.run.save('relation-discovery.json', dict(reviews=reviews,
@@ -601,7 +591,6 @@ class Construction:
             self.graph = graph_from_facts(self.facts)
         unresolved = [dict(r, report=self.outstanding(r)) for r in self.reports
                       if self.outstanding(r)['rejected'] or self.outstanding(r)['pending']]
-        unresolved = replace_references(unresolved, {'evidence': evidence_redirects})
         body_done = bool(self.coverage) and all(r['body_status'] == 'processed' for r in self.coverage)
         coverage_done = body_done and all(r['proposal_status'] == 'resolved' for r in self.coverage)
         report = check_graph(self.graph, self.run.payload) if self.graph else check_graph(self.facts, self.run.payload)
@@ -664,11 +653,7 @@ class Construction:
 def run_event(payload, directory=None, config=None, *, allow_network=False, model=None, resume=False, provenance=None,
               stop_after_organization=False, resume_transport_upgrade=False):
     if not resume and not isinstance(config, EventBuildConfig):
-        settings = dict(config or {})
-        # A v1 config is a source of run limits, not a request to write v1 artifacts.
-        if settings.get('graph_schema_version') == LEGACY_GRAPH_VERSION:
-            settings['graph_schema_version'] = GRAPH_VERSION
-        config = EventBuildConfig(**settings)
+        config = EventBuildConfig(**(config or {}))
     validate_input(payload)
     if model is None and not allow_network:
         raise PermissionError('Model execution requires explicit permission')
@@ -719,8 +704,6 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
                 return construction.finish('paused', 'Organization finished; relations not started')
             construction.stage('relations', construction.relate)
             construction.stage('repair', construction.repair)
-            from .evidence_consolidation import consolidate as consolidate_evidence
-            construction.stage('evidence_consolidation', lambda: consolidate_evidence(construction))
             return construction.finish('finished')
         except PauseRequested as exc:
             result = construction.finish('paused', str(exc))

@@ -73,12 +73,12 @@ def test_missing_review_is_partial_and_retry_budget_survives_resume(tmp_path, ba
     root = tmp_path / 'missing'
     state = run_relations(snapshot, root, config={'max_json_attempts': 3}, model=model)
     assert state['execution_status'] == 'finished' and state['result_status'] == 'partial'
-    assert len(base.calls) == 4
+    assert len(base.calls) == 3
     report = json.loads((root / state['relation_discovery']).read_text())
     assert report['incomplete_action_ids'] and not report['completed_action_ids']
     before = deepcopy(state['calls'])
     resumed = run_relations(snapshot, root, model=model, resume=True)
-    assert resumed['calls'] == before and len(base.calls) == 4
+    assert resumed['calls'] == before and len(base.calls) == 3
     assert resumed['result_status'] == 'partial'
 
 
@@ -87,8 +87,6 @@ def test_missing_review_can_be_completed_without_regenerating_edges(tmp_path, ba
     base, corrections = SyntheticEventModel(), []
     def model(system, user, name):
         value = base(system, user, name)
-        if name.startswith('evidence_merge.'):
-            return value
         if name == 'relate.0':
             value.pop('relation_review')
         else:
@@ -121,8 +119,6 @@ def test_candidates_have_one_owner_even_across_batches(payload, graph):
 def context_model(base, requests, *, fix=True, pause_path=None):
     def model(system, user, name):
         request = json.loads(user)['task']
-        if name.startswith('evidence_merge.'):
-            return base(system, user, name)
         requests.append(request)
         if 'correction' not in request:
             value = base(system, user, name)
@@ -163,7 +159,7 @@ def test_bad_context_target_is_locally_corrected_with_edges_and_upstream_retaine
         assert before['relations']  # Adopted edges survive interruption before correction.
         state = run_relations(snapshot, root, model=model, resume=True)
     assert state['result_status'] == 'draft', json.loads((root / state['checks']).read_text())
-    assert len(requests) == 2 and len(state['calls']) == 3
+    assert len(requests) == 2 and len(state['calls']) == 2
     correction = requests[1]
     # Both Phase updates share a new Context and were rejected atomically.
     assert not correction['assigned_action_ids'] and len(correction['assigned_phase_ids']) == 2

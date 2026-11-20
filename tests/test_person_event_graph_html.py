@@ -2,7 +2,6 @@
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -10,12 +9,12 @@ import unittest
 
 from finmy.person_epg.event.graph_html import render_graph_html
 from finmy.person_epg.event.records import fingerprint
-from finmy.person_epg.event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
+from finmy.person_epg.event.schema import GRAPH_VERSION
 
 
 def sample_graph():
     return {
-        'schema_version': LEGACY_GRAPH_VERSION,
+        'schema_version': GRAPH_VERSION,
         'event': {'event_id': 'TEST-E1', 'name': '示例'},
         'person': {'name': 'Test Person'},
         **{name: [] for name in (
@@ -30,65 +29,6 @@ def embedded_data(html, script_id):
 
 
 class PersonEventGraphHtmlTests(unittest.TestCase):
-
-    def test_fact_sources_are_many_to_many_without_duplicate_source_cards(self):
-        graph = sample_graph()
-        graph['schema_version'] = GRAPH_VERSION
-        graph['phases'] = [{'phase_id': 'P1', 'name': 'Investment'}]
-        graph['actions'] = [{'action_id': 'A1', 'name': 'Investment', 'phase_id': 'P1',
-                             'support': [{'evidence_ids': ['E1', 'E2']}]}]
-        graph['sources'] = [{'source_id': 'S1', 'title': 'Announcement', 'publisher': 'Company'},
-                            {'source_id': 'S2', 'title': 'Interview', 'upstream_source_ids': ['S1']}]
-        graph['evidence'] = [
-            {'evidence_id': 'E1', 'statement': 'An investment took place.', 'citations': [
-                {'source_id': 'S1', 'quote': 'We received the investment.'},
-                {'source_id': 'S2', 'quote': 'I made the investment.'}]},
-            {'evidence_id': 'E2', 'statement': 'The investment was one million.', 'citations': [
-                {'source_id': 'S1', 'quote': 'One million was invested.'}]},
-        ]
-        before = json.loads(json.dumps(graph))
-        html = render_graph_html(graph)
-        view = embedded_data(html, 'epg-view')
-        self.assertIn('Publisher: Company', view['details']['S1']['paragraphs'])
-        self.assertIn('Reports information from: Announcement', view['details']['S2']['paragraphs'])
-        page = next(page for page in view['pages'] if page['phase'] == 'P1')
-        sources = [card for card in page['cards'] if card['kind'] == 'source']
-        self.assertEqual({card['id']: card['evidence_ids'] for card in sources},
-                         {'S1': ['E1', 'E2'], 'S2': ['E1']})
-        self.assertEqual(len(sources), 2)
-        self.assertEqual({(edge['from'], edge['to']) for edge in page['edges'] if edge['kind'] == 'evidence'},
-                         {('E1', 'A1'), ('E2', 'A1')})
-        self.assertEqual({(edge['from'], edge['to']) for edge in page['edges'] if edge['kind'] == 'citation'},
-                         {('S1', 'E1'), ('S2', 'E1'), ('S1', 'E2')})
-        self.assertEqual([card['id'] for card in page['cards'] if card['kind'] == 'evidence'], ['E1', 'E2'])
-        self.assertEqual(embedded_data(html, 'epg-data'), before)
-        self.assertEqual(graph, before)
-
-    @unittest.skipUnless(shutil.which('node'), 'Node is needed to execute renderer citation selection')
-    def test_both_html_renderers_only_select_the_current_sources_quotations(self):
-        assets = Path(__file__).parents[1] / 'finmy/person_epg/event'
-        fact = {'statement': 'Investment completed.', 'citations': [
-            {'source_id': 'S1', 'quote': 'Announcement passage'},
-            {'source_id': 'S2', 'quote': 'Interview passage'},
-            {'source_id': 'S1', 'quote': 'Another announcement passage'},
-        ]}
-        for template in ('graph.html', 'graph_authored.html'):
-            text = (assets / template).read_text()
-            function = re.search(r'^function sourceCitations\(.*?^}', text, re.M | re.S).group()
-            script = function + '''
-const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-const old = {source_id:'S2', quote:'Legacy quotation'};
-console.log(JSON.stringify([sourceCitations(input, 'S1'), sourceCitations(input, 'S2'),
-                           sourceCitations(old, 'S1'), sourceCitations(old, 'S2')]));
-'''
-            result = subprocess.run(['node', '-e', script], input=json.dumps(fact),
-                                    text=True, capture_output=True, check=True)
-            selected = json.loads(result.stdout)
-            self.assertEqual([item['quote'] for item in selected[0]],
-                             ['Announcement passage', 'Another announcement passage'])
-            self.assertEqual([item['quote'] for item in selected[1]], ['Interview passage'])
-            self.assertEqual(selected[2], [])
-            self.assertEqual(selected[3][0]['quote'], 'Legacy quotation')
 
     def test_whole_phase_uses_one_wide_canvas_with_deduplicated_nodes(self):
         graph = sample_graph()
@@ -206,6 +146,16 @@ console.log(JSON.stringify([sourceCitations(input, 'S1'), sourceCitations(input,
         self.assertLess(source['box'][3], 100)
         self.assertNotIn('excerpt', source)
         self.assertEqual(source['evidence_ids'], ['E1', 'E2'])
+        self.assertNotIn('quotes', source)
+        page = next(p for p in view['pages'] if any(c['id'] == 'A1' for c in p['cards']))
+        cards = {c['id']: c for c in page['cards']}
+        self.assertEqual({c['id'] for c in page['cards'] if c['kind'] == 'evidence'}, {'E1', 'E2'})
+        self.assertEqual(cards['E1']['quotes'], ['E1'])
+        self.assertGreater(cards['S1']['box'][1], cards['E1']['box'][1])
+        self.assertEqual({(e['from'], e['to']) for e in page['edges'] if e['kind'] == 'citation'},
+                         {('S1', 'E1'), ('S1', 'E2')})
+        self.assertEqual({(e['from'], e['to']) for e in page['edges'] if e['kind'] == 'evidence'},
+                         {('E1', 'A1'), ('E2', 'A1')})
         self.assertEqual(embedded_data(html, 'epg-data')['evidence'], graph['evidence'])
         relation = next(e for p in view['pages'] for e in p['edges'] if e['kind'] == 'relation')
         self.assertEqual(relation['type'], 'order_unknown')

@@ -6,21 +6,6 @@ from itertools import zip_longest
 from .proposals import ID_FIELDS, LIST_REFS
 from .records import index_records, prompt_json
 from .schema import COLLECTION_IDS
-from .evidence_support import iter_citations, evidence_quote
-
-
-def evidence_view(record):
-    """Keep the fact and every source-specific quotation together in model views."""
-    fields = ('sample_id', 'source_id', 'start', 'end', 'quote', 'location_status', 'locator')
-    if 'citations' not in record:
-        return {k: record[k] for k in ('evidence_id', *fields) if k in record}
-    return dict(evidence_id=record['evidence_id'], statement=record['statement'],
-                citations=[{k: c[k] for k in fields if k in c} for c in iter_citations(record)])
-
-
-def has_located_citation(record):
-    # The package validator checks offsets and hashes; this only selects views.
-    return any(c.get('location_status') == 'matched' for c in iter_citations(record))
 
 
 def navigation(package, preview=160, role=None, supplied=None, relation_actions=()):
@@ -56,13 +41,10 @@ def navigation(package, preview=160, role=None, supplied=None, relation_actions=
                 item['description_truncated'] = len(record['description']) > width
             result[collection].append(item)
     # Provenance hashes, parser metadata and copied locator bodies are not navigation.
-    result['evidence_index'] = [dict(evidence_id=e['evidence_id'],
-        **{k: c[k] for k in ('sample_id', 'source_id', 'start', 'end')},
-        **(dict(statement_preview=e['statement'][:preview], statement_truncated=len(e['statement']) > preview)
-           if preview and 'statement' in e else {}))
-        for e in package.get('evidence', []) for c in iter_citations(e)]
+    result['evidence_index'] = [{k: e[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end')}
+                               for e in package.get('evidence', [])]
     if role in ('consolidation', 'organization', 'relations'):
-        result['sources'] = [{k: s.get(k) for k in ('source_id', 'title', 'published_at', 'publisher', 'upstream_source_ids')}
+        result['sources'] = [{k: s.get(k) for k in ('source_id', 'title', 'published_at')}
                              for s in package.get('sources', [])]
     if role == 'relations' and relation_actions:
         fields = ('relation_id', 'from_action_id', 'to_action_id', 'type', 'basis')
@@ -91,7 +73,7 @@ def _relation_passages(indexes, fields):
 
     def cited(record, targets):
         return [eid for support in record.get('support', []) if support.get('target') in targets
-                for eid in support['evidence_ids'] if has_located_citation(evidence.get(eid, {}))]
+                for eid in support['evidence_ids'] if evidence.get(eid, {}).get('location_status') == 'matched']
 
     candidates = fields.get('relation_candidates', [])
     link_groups = [cited(c, ('/type', '')) or cited(c, ('/description',)) for c in candidates]
@@ -107,7 +89,7 @@ def _relation_passages(indexes, fields):
     for groups in zip_longest(action_groups, link_groups, fillvalue=()):
         for quotes in groups:
             if quotes and selected.keys().isdisjoint(quotes):
-                eid = min(quotes, key=lambda eid: len(evidence_quote(evidence[eid])))
+                eid = min(quotes, key=lambda eid: len(evidence[eid]['quote']))
                 selected[eid] = None
     for candidate in candidates:
         selected.update(dict.fromkeys(cited(candidate, ('/type', '/description', ''))))
@@ -121,9 +103,8 @@ def task_records(role, package, fields, *, indexes=None):
     if role == 'extraction':
         body = fields.get('body', {})
         evidence_ids = {e['evidence_id'] for e in package['evidence']
-            if any(c['sample_id'] == body.get('sample_id') and c['start'] is not None and c['end'] is not None
-                   and max(c['start'], body.get('start', 0)) < min(c['end'], body.get('end', 0))
-                   for c in iter_citations(e))}
+            if e['sample_id'] == body.get('sample_id') and e['start'] is not None and e['end'] is not None
+            and max(e['start'], body.get('start', 0)) < min(e['end'], body.get('end', 0))}
         text = body.get('text', '').casefold()
         mentioned = {e['entity_id'] for e in package['entities'] if e['entity_id'] != package['person']['person_id']
             and any(len(n.strip()) >= 3 and n.casefold() in text for n in [e['name'], *e.get('aliases', [])])}
@@ -158,7 +139,7 @@ def task_records(role, package, fields, *, indexes=None):
             continue
         view = deepcopy(record)
         if collection == 'evidence':
-            view = evidence_view(record)
+            view = {k: record[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end', 'quote')}
         records.append(dict(collection=collection, record=view))
     # Deliver the evidence for the candidate links and assigned acts before bulky
     # Context dependencies can exhaust the optional allocation. Keep the entire
@@ -235,7 +216,8 @@ def balanced_relation_request(request, indexes, records, limit, allowance):
             for eid in evidence:
                 if eid in indexes['evidence'] and ('evidence', eid) not in views:
                     e = indexes['evidence'][eid]
-                    views['evidence', eid] = dict(collection='evidence', record=evidence_view(e))
+                    views['evidence', eid] = dict(collection='evidence', record={
+                        k: e[k] for k in ('evidence_id', 'sample_id', 'source_id', 'start', 'end', 'quote')})
             # Prefer evidence for the action itself, then the smallest complete record.
             preferred = {eid for support in record.get('support', [])
                          if support.get('target') in ('', '/description') for eid in support['evidence_ids']}
@@ -248,7 +230,7 @@ def balanced_relation_request(request, indexes, records, limit, allowance):
     selection['related_available'] = len(views)
     link_quotes = {eid for c in request.get('relation_candidates', []) for s in c.get('support', [])
                    if s.get('target') in ('', '/type', '/description') for eid in s['evidence_ids']
-                   if has_located_citation(indexes['evidence'].get(eid, {}))}
+                   if indexes['evidence'].get(eid, {}).get('location_status') == 'matched'}
     selection['relation_evidence_available'] = len(link_quotes)
 
     def refresh():

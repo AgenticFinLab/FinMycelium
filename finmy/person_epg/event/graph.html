@@ -753,16 +753,11 @@ function toggle(key) {
     for (const paragraph of data.paragraphs) item.detail.append(el('p', paragraph));
     for (const eid of item.card.quotes || []) {
       const fact = evidence.get(eid);
-      const citations = item.card.kind === 'evidence' ? (fact?.citations || (fact ? [fact] : [])) :
-        sourceCitations(fact, item.card.id);
-      if (!citations.length) continue;
-      if (fact.statement && fact.statement !== data.title) item.detail.append(el('strong', fact.statement));
-      for (const citation of citations) {
-        const label = view.details[citation.source_id]?.title || citation.source_id;
-        item.detail.append(el('p', label, 'citation-source'));
-        item.detail.append(el('p', citation.quote, 'quote'));
-        item.detail.append(el('small', citationLocation(citation)));
-      }
+      if (!fact) continue;
+      const label = view.details[fact.source_id]?.title || fact.source_id;
+      item.detail.append(el('p', label, 'citation-source'));
+      item.detail.append(el('p', fact.quote, 'quote'));
+      item.detail.append(el('small', citationLocation(fact)));
     }
     const source = sources.get(item.card.id);
     if (source) item.detail.append(el('p', `${(item.card.evidence_ids || []).length} linked evidence records`));
@@ -783,10 +778,6 @@ function toggle(key) {
   }
   if (!open) layoutCards();
   drawEdges();
-}
-
-function sourceCitations(fact, sourceId) {
-  return (fact?.citations || (fact ? [fact] : [])).filter(citation => citation.source_id === sourceId);
 }
 
 function citationLocation(citation) {

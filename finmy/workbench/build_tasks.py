@@ -58,12 +58,6 @@ def check_person_code(body):
             if body['person_execution_code'] != person_execution_version():
                 raise ValueError('构建代码已变化，请从已确认的检索材料创建新任务；旧任务与用量保留')
             return
-        if (body.get('graph_schema_version') == GRAPH_VERSION
-                and body.get('code', {}).get('python_sources_sha256') == '285f244ef31a1db5a48b3c3f29d35ee06789961fb5d6c4b5b18eefdf7d3fba60'
-                and body.get('person_code') == '0d8478631aa2735c0d0e0f3f5e113030dc9c9c6e926c75c2984e4d6ddf212e51'):
-            # Known engineering-only upgrade from PR #25; callers persist body.
-            body['person_execution_code'] = person_execution_version()
-            return
         from finmy.person_epg.build import code_identity
         current = code_version()
         same_code = body['code'] == current

@@ -38,11 +38,11 @@
 source_registry[raw_data_id]
   → 一个来源及其冻结版本
   → 一个或多个 samples
-  → Evidence(statement, citations=[sample_id, quote, offsets, ...])
+  → Evidence(sample_id, quote, offsets)
   → 对象字段的 support
 ```
 
-每条 citation 的 `source_id` 对应输入的 `raw_data_id`；`sample_id` 不能代替来源身份。同一来源的不同片段可以共同支持一个动作。版本与片段到原文件的映射保存在运行溯源中，不能把修改后的正文当成原 sample 继续使用。
+最终图的 `source_id` 对应输入的 `raw_data_id`；`sample_id` 不能代替来源身份。同一来源的不同片段可以共同支持一个动作。版本与片段到原文件的映射保存在运行溯源中，不能把修改后的正文当成原 sample 继续使用。
 
 来源注册表的 `source_url` 映射为输出 Source 的 `url`。已有 `document_id` 可保留为溯源信息；`published_at`、`retrieved_at` 和标题缺失时保留空值，不通过推测填充。URL 与本地来源说明至少有一项可用。输入适配器从同一冻结来源版本保留已知的 `origin / source_type / content_status` 等元数据；有记录的字段不能在交接时丢弃，也不能用当前网页状态替代冻结版本。合并 `extras` 时保留其他键，本任务身份与来源映射发生冲突须先校验，不能静默覆盖。
 
@@ -93,11 +93,11 @@ source_registry[raw_data_id]
 
 `start_precision/end_precision` 描述端点依据；行为的发生粒度由原表述和整个窗口共同表达。年/月规范化仍保留年/月精度；旬的边界可定位到日，不代表行为精确发生在其中某一天。不得取中点、窗口首日或末日作为无依据的实际发生日。可靠历法转换也不自动降低一个已明确“当天”的日期精度。
 
-非原文字面日期的转换、相对时间解析和边界推断，用所属对象的 `support.mode=I` 指向 `/time` 或具体端点，列出证据/前提，并在 `reason` 说明锚点、历法或规则及剩余不确定性。原时间措辞保留在 `Time.text`，原始引文保存在 Evidence 的 citations 中；不新增 `time_window`、`approximate` 或 `Time.basis`。推断标记说明取得方式，不等于低可信度，也不能代替依据。转换规则未核实就不得声称使用了外部核验或计算工具。
+非原文字面日期的转换、相对时间解析和边界推断，用所属对象的 `support.mode=I` 指向 `/time` 或具体端点，列出证据/前提，并在 `reason` 说明锚点、历法或规则及剩余不确定性。原时间措辞保留在 `Time.text`，原始引文仍是 Evidence；不新增 `time_window`、`approximate` 或 `Time.basis`。推断标记说明取得方式，不等于低可信度，也不能代替依据。转换规则未核实就不得声称使用了外部核验或计算工具。
 
 这些约定遵循 [层级时间规则](../person-event-structures/1-hierarchy.md#17-时间与包含关系)、[S6/S7/S9](../person-event-structures/7-specification.md) 和 [形式模型的区间及支持规则](../person-event-structures/8-formal-model.md)：保留半开区间与来源粒度，区分发生窗口和真实持续；未知端点仍不参与确定性区间推导。时间规范化不自动生成 Stage/Phase 边界、动作归属或因果关系。程序核对日期、引用、区间及推断支持协议，历法是否适用和推断内容是否成立仍需语义审核。
 
-## 1.5 事实证据、来源与原文引证
+## 1.5 来源与原文引证
 
 Source：
 
@@ -109,23 +109,14 @@ Source：
 | `origin` | string \| null | 本地或其他来源说明；与 `url` 至少一个非空 |
 | `published_at / retrieved_at` | string \| null | 已知日期或带时区时间；缺失不补造 |
 | `source_type / content_status` | string，可选 | 资料类别及全文/部分/仅标题或摘要/受阻等获取情况；已知必须传递，未知可省略且按未知解释 |
-| `publisher` | string，可选 | 已知发布者，来自输入来源记录 |
-| `upstream_source_ids` | string[]，可选 | 材料明确转述或转载的共同出处；引用当前来源表中的 Source，未知时省略 |
 
 `content_status` 说明来源获取情况，不说明 Builder 已读全文。`provenance` 按来源保留交接的 sample、选择区间及原文映射；步骤记录再标明这些 sample 中实际处理与未处理的区间。获取全文、交接部分正文、处理全部已交接正文可以同时成立。缺少原文映射时不能声称读完原文；来源详情和运行汇总应分别展示获取、交接和处理范围，见 [检查与输出](5-validation-and-output.md)。
 
-Evidence 表达一项可单独核查的事实陈述。它可以由多个 Source 支撑，一份 Source 也可以支撑多条 Evidence。Source 本身仍是文档；引文和定位属于两者的关联。
+Evidence：
 
 | 字段 | 类型 | 约定 |
 | --- | --- | --- |
-| `evidence_id` | string | 稳定事实证据 ID；补充出处时不改变 |
-| `statement` | string | 明确、非空的事实陈述，保留主体、时间、数值及必要限定 |
-| `citations` | object[] | 至少一条来源引证；每条使用下表字段，无独立图节点 ID |
-
-每条 citation：
-
-| 字段 | 类型 | 约定 |
-| --- | --- | --- |
+| `evidence_id` | string | 稳定引证 ID |
 | `sample_id / source_id` | string | 片段与来源引用，`source_id` 由映射确定 |
 | `quote` | string | 原文；不能放翻译、摘要或模型改写 |
 | `start / end` | integer \| null | 相对冻结 `sample.content` 的起止字符偏移，左闭右开 |
@@ -133,13 +124,11 @@ Evidence 表达一项可单独核查的事实陈述。它可以由多个 Source 
 | `sample_sha256` | string | 程序计算的确切片段 UTF-8 字节 SHA256 |
 | `locator` | object，可选 | 实际获得的页码、章节、段落、原文位置；未知项省略 |
 
-事实归并与引文去重分别进行。确定为同一事实时汇集各份来源的引文；同一段原文可以支持不同事实。同一 Source 的不同片段各自保留，不能只保存一个 `source_id` 列表。已知转述共同出处时保留 `upstream_source_ids`，多个网址不自动代表独立印证；一份直接材料也可以形成有据的 Evidence。
-
 偏移按 Unicode 码点计数，不按 UTF-8 字节或浏览器 UTF-16 下标计数。只有 `matched` 使用非空偏移，且必须满足 `content[start:end] == quote`；其余状态的偏移为空。原文出现多次时，程序结合上下文定位，不能任取第一处。模型提出的引文和位置必须经程序核对。
 
 定位先尝试精确原文；无精确匹配时，允许把连续空白统一为一个空格后核对，但不连接原本分开的单词，也不替换大小写、标点或语义内容。只在本任务允许阅读区间内定位；最终保存实际原文切片、偏移和哈希，原提案及空白修正进入运行记录。错误的上下文/偏移提示不能推翻唯一合法匹配；多个可能位置且无有效提示时仍为 ambiguous，不猜测。定位兼容不代替证据的语义审核。
 
-这里的偏移锚定的是**实际交接片段**。若片段由筛选后的多段正文组装，原网页/PDF 的位置还要沿材料选择映射回查；不得把片段偏移标为网页偏移或页码。一条 Evidence 可被多个对象复用，完整原文留在运行资产中，不复制到每个对象。
+这里的偏移锚定的是**实际交接片段**。若片段由筛选后的多段正文组装，原网页/PDF 的位置还要沿材料选择映射回查；不得把片段偏移标为网页偏移或页码。一段 Evidence 可被多个对象复用，完整原文留在运行资产中，不复制到每个对象。
 
 ## 1.6 支持、缺口与冲突
 
@@ -157,7 +146,7 @@ Evidence 表达一项可单独核查的事实陈述。它可以由多个 Source 
 - `A`：命题是来源对世界事实的断言，例如“该交易完成”。
 - `I`：分析推断，需要可追溯的证据或前提和理由。
 
-`O/A` 引用的每条 Evidence 至少需要一条有效定位的 citation。其他未定位引文保留并报告问题，不计作有效出处；定位成功仍须审核其是否支持 `statement` 及所引用的对象字段。`O/A` 按命题区分，同一命题不能同时使用二者；混合描述应拆开。模式不是来源信誉或置信度等级。`derived` 只用于关系的 `basis`，不加入 `mode`；由时间区间确定推导的关系以 `I` 记录前提与规则，不能因来源未直接说出关系就写成无支持。
+`O/A` 需要可定位来源和引文；引文未定位时保留候选记录并报告问题，不将其算作已具备有效支持。`O/A` 按命题区分，同一命题不能同时使用二者；混合描述应拆开。模式不是来源信誉或置信度等级。`derived` 只用于关系的 `basis`，不加入 `mode`；由时间区间确定推导的关系以 `I` 记录前提与规则，不能因来源未直接说出关系就写成无支持。
 
 对象整体、描述、时间、主体、边界和关系端点可以分别有支持。关键字段不能仅凭同对象另一字段的引用宣称有据。程序可检查引用和定位，是否真正支持命题仍需语义审核。
 
@@ -174,13 +163,13 @@ Evidence 表达一项可单独核查的事实陈述。它可以由多个 Source 
 
 | 字段 | 内容 |
 | --- | --- |
-| `schema_version` | `person-event-facts-2.0`，由程序管理 |
+| `schema_version` | `person-event-facts-1.0`，由程序管理 |
 | `person / storyline / event` | 固定身份和范围；事实阶段可暂缺最终摘要 |
 | `entities` | 统一人物/组织等实体 |
 | `actions` | 候选及归并后的动作；`phase_id` 在组织完成前允许为空 |
 | `contexts` | 与本 Event 有关的环境、他人行为和主体状态 |
 | `relation_candidates` | `candidate_id`、已知动作引用、候选类型/来源表述及 support；尚未确认的端点允许为空并附原因 |
-| `sources / evidence` | 实际使用的来源、事实陈述及逐来源引文 |
+| `sources / evidence` | 实际使用的来源和引文 |
 | `pending` | 待解决项目：`refs: ObjectRef[]`、`reason: string`、`evidence_ids: string[]`；尚无可引用对象时 refs 可为空，说明涉及的材料或候选 |
 | `lineage` | 程序记录的对象变更：`operation`、`input_refs / output_refs: ObjectRef[]`、`reason`、`step_id`；保留拆分、合并及转为 Context 的旧新对应 |
 

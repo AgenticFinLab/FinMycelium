@@ -1,7 +1,7 @@
 # 0 · 人物 Event 构建器：工程设计
 
-当前可直接使用的运行、状态查询、恢复和离线渲染命令见
-[操作指南](../workflows/person-event-operations.md)。
+For current run, resume, diagnostics and rendering commands, see
+[the operations guide](../workflows/person-event-operations.md).
 
 本目录规定 FinMycelium 如何将一个已确认的人物 Event 和冻结的资料，构建为可追溯、可检查、可恢复的单 Event 草稿。结构语义以 [person-event-structures](../person-event-structures/0-overview.md) 为依据，规范约束见其 [设计规范](../person-event-structures/7-specification.md) 与 [形式化模型](../person-event-structures/8-formal-model.md)。
 
@@ -11,7 +11,7 @@
 
 | 文档 | 定义内容 |
 | --- | --- |
-| [1 · 输入与统一事实](1-input-and-facts.md) | 任务输入、身份、时间、事实证据、逐来源引文、支持记录和事实检查点 |
+| [1 · 输入与统一事实](1-input-and-facts.md) | 任务输入、身份、时间、来源、引文、支持记录和事实检查点 |
 | [2 · 图数据协议](2-graph-contract.md) | Event、Stage、Phase、Action、Context、关系及引用约束 |
 | [3 · 构建流程](3-construction-flow.md) | 六步顺序、多角色协作、上下文分配、局部检索和有限修正 |
 | [4 · 执行与恢复](4-execution-and-recovery.md) | 配置、预算、调用记录、检查点和恢复失效条件 |

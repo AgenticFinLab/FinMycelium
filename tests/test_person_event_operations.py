@@ -46,18 +46,18 @@ def test_config_extensions_preserve_semantic_fingerprint():
         {**state, 'config': asdict(new)}, max_read_rounds=2)}).read_round_extension == 2
 
 
-def test_exact_pr_head_upgrade_reuses_paid_response(tmp_path, payload, monkeypatch):
+def test_explicit_transport_upgrade_reuses_paid_response(tmp_path, payload, monkeypatch):
     original = runtime.code_identity()
-    monkeypatch.setattr(runtime, 'code_identity', lambda: 'e284e5595c61cbf9a90087e85ceabba2384b6b434ac52b3d6435ca35760b854a')
+    monkeypatch.setattr(runtime, 'code_identity', lambda: 'prior-transport-implementation')
     run = runtime.Execution(tmp_path, payload, EventBuildConfig(), Model([{'ok': True}]))
     facts = seed_facts(payload)
     run.infer('extract.0', 'system', {}, facts, valid)
     model = Model([])
     monkeypatch.setattr(runtime, 'code_identity', lambda: original)
-    resumed = runtime.Execution(tmp_path, payload, run.config, model, resume=True)
+    resumed = runtime.Execution(tmp_path, payload, run.config, model, resume=True, resume_transport_upgrade=True)
     assert resumed.infer('extract.0', 'system', {}, facts, valid) == {'ok': True}
     assert not model.calls and len(resumed.state['calls']) == 1
-    assert resumed.state['execution_upgrades'][-1]['kind'] == 'engineering-maintenance'
+    assert resumed.state['execution_upgrades'][-1]['kind'] == 'transport-guard'
 
 
 def test_renderer_and_smoke_files_are_not_execution_dependencies():
@@ -96,10 +96,7 @@ def test_workbench_resume_uses_execution_identity_instead_of_renderer_digest(mon
     from finmy.workbench import build_tasks
     from finmy.person_epg.event.schema import GRAPH_VERSION
     body = dict(kind='person_event', graph_schema_version=GRAPH_VERSION,
-        code={'python_sources_sha256':'285f244ef31a1db5a48b3c3f29d35ee06789961fb5d6c4b5b18eefdf7d3fba60'},
-        person_code='0d8478631aa2735c0d0e0f3f5e113030dc9c9c6e926c75c2984e4d6ddf212e51')
-    build_tasks.check_person_code(body)
-    assert body['person_execution_code'] == build_tasks.person_execution_version()
+        person_execution_code=build_tasks.person_execution_version())
     monkeypatch.setattr(build_tasks, 'code_version', lambda: {'commit':'renderer-only-commit'})
     build_tasks.check_person_code(body)
     monkeypatch.setattr(build_tasks, 'person_execution_version', lambda: 'changed-execution')

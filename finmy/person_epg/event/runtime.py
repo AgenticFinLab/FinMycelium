@@ -228,9 +228,7 @@ class Execution:
                 validate_recovery(self.directory, self.state)
             previous_code = self.state.get('execution_code_sha256', self.state['code_sha256'])
             changed_code = previous_code != code_identity()
-            # Exact PR #25 baseline only: preserve historical paid-response keys.
-            engineering_upgrade = previous_code == 'e284e5595c61cbf9a90087e85ceabba2384b6b434ac52b3d6435ca35760b854a'
-            if changed_code and not (resume_transport_upgrade or engineering_upgrade):
+            if changed_code and not resume_transport_upgrade:
                 raise ValueError('Implementation changed; create a new run')
             retained = self.directory / 'provenance.json'
             if sha256(retained.read_bytes()) != self.state['provenance_sha256']:
@@ -257,7 +255,7 @@ class Execution:
                 backup = 'recoveries/transport-guard-' + uuid.uuid4().hex + '/state-before.json'
                 backup_hash = write_json(self.directory / backup, original_state)
                 self.state.setdefault('execution_upgrades', []).append(dict(
-                    kind='engineering-maintenance' if engineering_upgrade else 'transport-guard', at=now(), from_code=previous_code,
+                    kind='transport-guard', at=now(), from_code=previous_code,
                     to_code=code_identity(), backup=backup, backup_sha256=backup_hash))
                 self.state['execution_code_sha256'] = code_identity()
             for call in self.state['calls']:
@@ -511,7 +509,7 @@ class Execution:
                     self.persist()
                 if 'read_requests' in value:
                     if not allow_reads:
-                        raise InvalidResponse('All evidence is supplied; return pair decisions without read_requests')
+                        raise InvalidResponse('This task does not allow reads; return the requested role result')
                     if single_response:
                         raise InvalidResponse('The complete handoff is already present; this pass has no local reads')
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:

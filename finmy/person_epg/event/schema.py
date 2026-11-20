@@ -1,10 +1,8 @@
 """Machine-readable contracts for docs/person-event-builder (no model or I/O)."""
 from copy import deepcopy
 
-LEGACY_GRAPH_VERSION = 'person-event-1.0'
-LEGACY_FACTS_VERSION = 'person-event-facts-1.0'
-GRAPH_VERSION = 'person-event-2.0'
-FACTS_VERSION = 'person-event-facts-2.0'
+GRAPH_VERSION = 'person-event-1.0'
+FACTS_VERSION = 'person-event-facts-1.0'
 RELATION_TYPES = ('precedes', 'overlaps', 'order_unknown', 'responds_to', 'enables',
                   'triggers', 'prevents', 'continues', 'resumes', 'interrupted_by', 'joint_action')
 COLLECTION_IDS = {'entities': 'entity_id', 'stages': 'stage_id', 'phases': 'phase_id',
@@ -111,45 +109,24 @@ DEFS['Lineage'] = obj(dict(operation=enum('keep', 'merge', 'split', 'exclude', '
     input_refs=array(ref('StepRef')), output_refs=array(ref('StepRef')), reason=TEXT, step_id=TEXT))
 
 
-# Keep exact v1 contracts for reading historical artifacts. New construction uses
-# fact-level Evidence with source-bound quotations on its nested associations.
-LEGACY_DEFS = deepcopy(DEFS)
-DEFS['Citation'] = deepcopy(DEFS['Evidence'])
-DEFS['Citation']['properties'].pop('evidence_id')
-DEFS['Citation']['required'].remove('evidence_id')
-DEFS['Evidence'] = obj(dict(evidence_id=TEXT, statement=TEXT,
-                            citations=array(ref('Citation'), minItems=1)))
-DEFS['Source']['properties'].update(publisher=NULL_TEXT,
-    upstream_source_ids=array(TEXT, uniqueItems=True))
+def schema_for(name):
+    return {'$schema': 'https://json-schema.org/draft/2020-12/schema', '$defs': deepcopy(DEFS), **ref(name)}
 
 
-def schema_for(name, *, legacy=False):
-    definitions = LEGACY_DEFS if legacy else DEFS
-    return {'$schema': 'https://json-schema.org/draft/2020-12/schema', '$defs': deepcopy(definitions), **ref(name)}
-
-
-def _schemas(definitions, graph_version, facts_version):
-    graph = {**obj(dict(schema_version={'const': graph_version}, person=ref('Person'),
-        storyline=ref('Storyline'), event=ref('Event'), entities=array(ref('Entity')),
-        stages=array(ref('Stage'), minItems=1), phases=array(ref('Phase'), minItems=1),
-        actions=array(ref('Action')), relations=array(ref('Relation')), contexts=array(ref('Context')),
-        sources=array(ref('Source')), evidence=array(ref('Evidence')))),
-        '$schema': 'https://json-schema.org/draft/2020-12/schema', '$defs': deepcopy(definitions)}
-    partial = deepcopy(graph)
-    for key in ('stages', 'phases'):
-        partial['properties'][key].pop('minItems')
-    partial['$defs']['Action']['properties']['phase_id'] = NULL_TEXT
-    partial['$defs']['Event']['required'] = ['event_id', 'person_id', 'storyline_id', 'name', 'scope']
-    facts = deepcopy(partial)
-    facts['properties']['schema_version'] = {'const': facts_version}
-    for key in ('stages', 'phases', 'relations'):
-        facts['properties'].pop(key)
-    facts['properties'].update(relation_candidates=array(ref('Candidate')),
-        pending=array(ref('Pending')), lineage=array(ref('Lineage')))
-    facts['required'] = list(facts['properties'])
-    return graph, partial, facts
-
-
-LEGACY_GRAPH_SCHEMA, LEGACY_PARTIAL_SCHEMA, LEGACY_FACTS_SCHEMA = _schemas(
-    LEGACY_DEFS, LEGACY_GRAPH_VERSION, LEGACY_FACTS_VERSION)
-GRAPH_SCHEMA, PARTIAL_SCHEMA, FACTS_SCHEMA = _schemas(DEFS, GRAPH_VERSION, FACTS_VERSION)
+GRAPH_SCHEMA = {**obj(dict(schema_version={'const': GRAPH_VERSION}, person=ref('Person'),
+    storyline=ref('Storyline'), event=ref('Event'), entities=array(ref('Entity')),
+    stages=array(ref('Stage'), minItems=1), phases=array(ref('Phase'), minItems=1),
+    actions=array(ref('Action')), relations=array(ref('Relation')), contexts=array(ref('Context')),
+    sources=array(ref('Source')), evidence=array(ref('Evidence')))),
+    '$schema': 'https://json-schema.org/draft/2020-12/schema', '$defs': deepcopy(DEFS)}
+PARTIAL_SCHEMA = deepcopy(GRAPH_SCHEMA)
+for key in ('stages', 'phases'):
+    PARTIAL_SCHEMA['properties'][key].pop('minItems')
+PARTIAL_SCHEMA['$defs']['Action']['properties']['phase_id'] = NULL_TEXT
+PARTIAL_SCHEMA['$defs']['Event']['required'] = ['event_id', 'person_id', 'storyline_id', 'name', 'scope']
+FACTS_SCHEMA = deepcopy(PARTIAL_SCHEMA)
+FACTS_SCHEMA['properties']['schema_version'] = {'const': FACTS_VERSION}
+for key in ('stages', 'phases', 'relations'):
+    FACTS_SCHEMA['properties'].pop(key)
+FACTS_SCHEMA['properties'].update(relation_candidates=array(ref('Candidate')), pending=array(ref('Pending')), lineage=array(ref('Lineage')))
+FACTS_SCHEMA['required'] = list(FACTS_SCHEMA['properties'])

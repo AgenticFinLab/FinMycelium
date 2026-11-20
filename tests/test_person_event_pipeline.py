@@ -13,7 +13,7 @@ from finmy.person_epg.event.proposals import Receiver, graph_from_facts, referen
 from finmy.person_epg.event.records import IdMap, seed_facts, sha256
 from finmy.person_epg.event.runtime import EventBuildConfig, Execution
 from finmy.person_epg.event.validation import check_graph
-from finmy.person_epg.event.schema import GRAPH_VERSION, LEGACY_GRAPH_VERSION
+from finmy.person_epg.event.schema import GRAPH_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -42,9 +42,6 @@ class SyntheticEventModel:
         request = json.loads(user)['task']
         self.calls.append(name)
         role, graph = request['role'], deepcopy(self.graph)
-        if role == 'evidence_consolidation':
-            return dict(decisions=[dict(pair_id=p['pair_id'], verdict='different_fact',
-                reason='Distinct facts in the authored fixture.') for p in request['pairs']])
         if role == 'corpus_supplement':
             return dict(entities=[], actions=[], contexts=[], relation_candidates=[], evidence=[], pending=[],
                         support_additions=[], note='No additional facts in the authored fixture.')
@@ -136,22 +133,23 @@ def test_complete_new_protocol_pipeline(tmp_path, payload):
     assert check_graph(graph, payload)['valid']
     assert sha256(graph_path.read_bytes()) == state['graph_sha256']
     assert len(graph['actions']) == 3 and len(graph['phases']) == 2
-    assert len(model.calls) == 7
-    assert model.calls[-1].startswith('evidence_merge.')
+    assert len(model.calls) == 6
+    assert not any(name.startswith('evidence_merge.') for name in model.calls)
     assert all(r['status'] == 'processed' for r in state['coverage'])
     assert json.loads((tmp_path / state['checks']).read_text())['review_required']
 
 
-def test_new_run_upgrades_v1_config_to_v2_artifacts(tmp_path, payload):
-    state = run_event(payload, tmp_path, {'graph_schema_version': LEGACY_GRAPH_VERSION},
-                      model=SyntheticEventModel())
+def test_new_run_restores_single_source_evidence(tmp_path, payload):
+    state = run_event(payload, tmp_path, model=SyntheticEventModel())
     graph = json.loads((tmp_path / state['output']).read_text())
     assert state['execution_status'] == 'finished'
-    assert state['config']['graph_schema_version'] == GRAPH_VERSION
-    assert graph['schema_version'] == GRAPH_VERSION
+    assert graph['schema_version'] == 'person-event-1.0'
     assert graph['evidence']
-    assert all('citations' in evidence and 'source_id' not in evidence
+    assert all('source_id' in evidence and 'quote' in evidence
+               and 'citations' not in evidence and 'statement' not in evidence
                for evidence in graph['evidence'])
+    assert 'evidence_consolidation' not in state['stages']
+    assert state['visualization']['status'] == 'completed'
 
 
 def test_budget_resume_does_not_repeat_body_or_change_ids(tmp_path, payload):
@@ -164,7 +162,7 @@ def test_budget_resume_does_not_repeat_body_or_change_ids(tmp_path, payload):
     assert model.calls.count('extract.0') == 1
     graph = json.loads((tmp_path / second['output']).read_text())
     assert old_actions[0]['action_id'] in {a['action_id'] for a in graph['actions']}
-    assert len(second['calls']) == 7
+    assert len(second['calls']) == 6
 
 
 def test_parallel_extraction_submits_in_input_order_and_resumes(tmp_path, payload):
@@ -414,4 +412,4 @@ def test_valid_information_gap_completes_without_a_repair_round(tmp_path, payloa
         target='/action_type', reason='No narrower action category is established.'))
     state = run_event(payload, tmp_path, model=model)
     assert state['result_status'] == 'draft'
-    assert len(model.calls) == 7 and not state['final_repair_used']
+    assert len(model.calls) == 6 and not state['final_repair_used']

@@ -120,7 +120,7 @@ def test_relation_recovery_replays_upstream_and_preserves_attempts(tmp_path,payl
     model=SyntheticEventModel()
     resumed=run_event(payload,tmp_path,state['config'],model=model,resume=True)
     assert resumed['result_status']=='draft'
-    assert model.calls==['relate.0', 'evidence_merge.0']
+    assert model.calls==['relate.0']
     assert resumed['calls'][:len(original['calls'])]==original['calls']
     new_key=next(k for k in resumed['tasks'] if k.startswith('relate.') and k not in original['tasks'])
     assert any(k.startswith('format:') for k in resumed['validation_attempts'][new_key])
@@ -150,7 +150,7 @@ def test_workbench_relation_recovery_prepares_without_starting(tmp_path,payload,
     store=Store(tmp_path/'workspace');controller=BuildController(store)
     body=dict(kind='person_event',artifact_directory=str(directory),code={'commit':'old','python_sources_sha256':'old'},
         person_code='old',input=payload,input_hash=digest(payload),scope_hash=digest(payload['user_query']['extras']['person_event']['scope']),
-            person_config=original['config'],graph_schema_version='person-event-2.0')
+            person_config=original['config'],graph_schema_version='person-event-1.0')
     with store.connection() as db:db.execute('INSERT INTO build_tasks VALUES(?,?,?,?,?)',('PBUILD-test','event',encoded(body),'limit','now'))
     first=controller.prepare_person_relation_recovery('PBUILD-test',**LIMITS)
     assert first['model_started'] is False
@@ -167,4 +167,4 @@ def test_workbench_relation_recovery_prepares_without_starting(tmp_path,payload,
         return dict(state=state,graph=json.loads((path/state['output']).read_text()))
     controller.run('PBUILD-test',executor=executor)
     assert controller.inspect('PBUILD-test')['status']=='completed'
-    assert model.calls==['relate.0', 'evidence_merge.0']
+    assert model.calls==['relate.0']
