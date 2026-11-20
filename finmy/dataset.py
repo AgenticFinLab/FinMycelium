@@ -130,16 +130,20 @@ class DatasetCatalog:
         if not any(within(self.root, p).is_file() for p in ('event-epg/events.csv', 'person-epg/people.csv')):
             raise ValueError('目录中未找到 event-epg/events.csv 或 person-epg/people.csv')
 
-    def _csv(self, relative, required, identity):
+    def _csv(self, relative, required, identity, *, alternatives=()):
         path = within(self.root, relative)
         if not path.is_file():
             raise ValueError(f'目录中缺少 {relative}')
+        limit = 64 if relative == 'event-epg/events.csv' else 20
+        if path.stat().st_size > limit * 1024 * 1024:
+            raise ValueError(f'目录表格超过 {limit} MiB')
         raw = path.read_bytes()
-        if len(raw) > 20 * 1024 * 1024:
-            raise ValueError('目录表格过大')
         reader = csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
         if not reader.fieldnames or len(set(reader.fieldnames)) != len(reader.fieldnames) or not set(required) <= set(reader.fieldnames):
             raise ValueError(f'{relative} 表头缺失或重复：需要 {", ".join(required)}')
+        for group in alternatives:
+            if not set(group).intersection(reader.fieldnames):
+                raise ValueError(f'{relative} 表头至少需要一列：{", ".join(group)}')
         rows = []
         for row in reader:
             if None in row or any(v is None for v in row.values()):
@@ -167,22 +171,33 @@ class DatasetCatalog:
             raise ValueError('人物研究计划应位于独立人物目录的 research-plan.md')
         return person, plan, source
 
-    def events(self, person_id=None):
+    def _event_table(self, person_id):
         path = 'event-epg/events.csv' if person_id is None else str(self._person(person_id)[1].with_name('events.csv').relative_to(self.root))
-        required = ['event_id', 'event_name', 'period']
-        required += ['description', 'scope_include', 'scope_exclude'] if person_id is None else ['person_id', 'storyline_id', 'storyline_name']
-        rows, _ = self._csv(path, required, 'event_id')
         if person_id:
+            required = ['event_id', 'event_name', 'period', 'person_id', 'storyline_id', 'storyline_name']
+            rows, source = self._csv(path, required, 'event_id')
             if any(r['person_id'] != person_id for r in rows):
                 raise ValueError('人物 events.csv 中存在不同 person_id')
             paths = [(r['storyline_name'], r['event_name']) for r in rows]
             if len(set(paths)) != len(paths):
                 raise ValueError('不同 event 的收录目录重名，请先在主表和研究计划中明确区分')
-        return rows
+        else:
+            rows, source = self._csv(path, ['event_id', 'description', 'scope_include', 'scope_exclude'],
+                                     'event_id', alternatives=[('event_name', 'event_name_en', 'event_name_zh'),
+                                                               ('period', 'coverage_start', 'coverage_end')])
+            for row in rows:
+                row['event_name'] = row.get('event_name') or row.get('event_name_en') or row.get('event_name_zh', '')
+                if not row.get('period'):
+                    start, end = row.get('coverage_start'), row.get('coverage_end')
+                    row['period'] = f'{start or "…"} – {end or "…"}' if start or end else ''
+        return rows, source
+
+    def events(self, person_id=None):
+        return self._event_table(person_id)[0]
 
     def select(self, event_id, person_id=None):
         # Re-read actual files when preparing a snapshot; nothing is written to the dataset.
-        rows = self.events(person_id)
+        rows, event_source = self._event_table(person_id)
         event = next((r for r in rows if r['event_id'] == event_id), None)
         if event is None:
             raise ValueError('主表中不存在该 event')
@@ -212,7 +227,6 @@ class DatasetCatalog:
                     sources.append({'id': row[0], 'record': ' | '.join(row)})
             sources_text = '\n'.join(s['record'] for s in sources)
             leads = list(dict.fromkeys(re.findall(r'https?://[^\s<>\[\]()]+', sources_text + '\n' + questions)))
-            _, event_source = self._csv(str(plan_path.with_name('events.csv').relative_to(self.root)), ['event_id'], 'event_id')
             # Display this deterministic path before confirmation; names with path separators need catalog correction.
             directory = plan_path.parent / component(event['storyline_name']) / component(event['event_name'])
             record.update(person_id=person_id, person_name=person['name'], person_row=person,
@@ -224,12 +238,11 @@ class DatasetCatalog:
                           aliases=string_list(person.get('aliases', '')), key_words=[],
                           files=[person_source, event_source, {'path': str(plan_path.relative_to(self.root)), 'sha256': digest(raw)}])
         else:
-            _, source = self._csv('event-epg/events.csv', ['event_id'], 'event_id')
             directory = self.root / 'event-epg/events' / component(event_id)
             record.update(description=event['description'], scope_include=event['scope_include'], scope_exclude=event['scope_exclude'],
                           key_words=string_list(event.get('keywords', '')), source_leads=string_list(event.get('source_hints', '')),
                           seed_urls=[u for u in string_list(event.get('source_hints', '')) if u.startswith(('https://', 'http://'))],
-                          files=[source])
+                          files=[event_source])
         record['event_dir'] = str(within(self.root, directory.relative_to(self.root)).relative_to(self.root))
         record['snapshot_sha256'] = digest({k: v for k, v in record.items() if k != 'selected_at'})
         return record

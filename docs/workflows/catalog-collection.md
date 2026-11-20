@@ -24,6 +24,28 @@ A subsequent explicit confirmation can replace it; prior task inputs remain fixe
 **已确认用于构建** identifies a handoff already bound to a saved build, even if its
 catalog copy is later withdrawn. These facts do not imply graph acceptance.
 
+## Select a person Event draft for content review
+
+In **数据集 → 人物事件**, select the person, storyline and Event. **检索材料** shows the
+collected sources, gaps, and frozen input. **用已收录材料创建构建** saves a ready
+task using that exact input and receipt. The original search runtime is optional.
+Older collections that contain only a source list and summary can be inspected
+through their original search task.
+
+Under **事件图**, compare completed drafts by their actual frozen input. One
+search task can produce several handoff revisions. The workbench labels drafts
+that use the current material and also allows an earlier version to be selected.
+Choose a draft and click **将此版本送审**. **改送此版本** replaces the pending choice.
+**撤回送审** returns the event to the pool of available drafts.
+
+Open **任务中心 → 待处理** and select **图审核** to find a nominated person draft. Each person event has at most one pending version. Its shared record lives at
+`workbench/review/<person_id>/<storyline_id>/<event_id>.json` and binds the build
+ID to the graph, Gantt and frozen input hashes. On the machine holding the build,
+**下载审核包** provides those three files and a pending `review.md` template.
+Teammates can review that ZIP on another machine. Submit the completed review
+in the build task on the machine holding the original artifacts. Collection and
+discard remove the pending choice. All other experiments remain in task history.
+
 ## Discard a draft
 
 After a build stops, **草稿采用选择 → 舍弃本次草稿** records the reason and marks

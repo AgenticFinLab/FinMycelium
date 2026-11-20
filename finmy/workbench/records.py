@@ -25,6 +25,7 @@ FinMycelium maintains these lightweight records for Git review and collaboration
 - [Build records](build/README.md): frozen input manifest/configuration and execution summary.
 - events/<event_id>/: workbench edits/history, source and graph indexes, and review decisions.
 - `collections/`: material/graph collection and withdrawal receipts; bodies stay in output/.
+- `review/<person_id>/<storyline_id>/<event_id>.json`: the draft currently selected for content review.
 - plans/<task_id>.json: historical task plans, explicitly separate from executed tasks.
 
 These are generated records, not graph acceptance or commands to start a task.
@@ -516,7 +517,7 @@ def export_database(workspace):
                 'input_sha256': body.get('input_hash'), 'input': input_manifest(body.get('input', {})),
                 'research_scope': (body.get('input', {}).get('user_query', {}).get('extras') or {}).get('person_event', {}).get('scope')
                     or pick(body.get('event', {}), ('coverage_start', 'coverage_end', 'scope_include', 'scope_exclude')),
-                'search_handoff': pick(body.get('provenance', {}), ('search_task_id', 'handoff_revision', 'search_input_sha256')),
+                'search_handoff': pick(body.get('provenance', {}), ('search_task_id', 'handoff_revision', 'search_input_sha256', 'collected_input')),
                 'search_collection': ({**pick(body['search_collection'], ('directory', 'manifest_sha256')),
                     'manifest': json.loads(body['search_collection']['files']['manifest.json'])}
                     if body.get('search_collection') else None),

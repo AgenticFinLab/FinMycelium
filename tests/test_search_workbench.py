@@ -21,9 +21,11 @@ def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
         fetcher=lambda u:(b'The deal closed after approval.','txt','utf-8'))
     monkeypatch.setattr(search_page,'get_controller',lambda root:controller)
     app=AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.radio[0].set_value('检索').run()
+    app.button(key='nav-任务').click().run()
+    find(app.button, '独立与批量检索').click().run()
     assert not app.exception
     find(app.selectbox,'检索模式').set_value('simple')
+    find(app.multiselect,'搜索服务').set_value(['bocha'])
     find(app.text_input,'研究对象').set_value('Deal')
     find(app.text_area,'研究要求').set_value('Trace the closing')
     find(app.button,'保存检索任务').click().run()
@@ -37,8 +39,9 @@ def test_search_page_offline_lifecycle(tmp_path,monkeypatch):
     assert controller.inspect(tid)['status']=='finished'
     assert calls==[1]
     assert controller.inspect(tid)['usage']['model']==0
-    assert any(x.value=='资料与交接' for x in app.subheader)
-    find(app.number_input,'交付材料字符上限').set_value(1)
+    assert any(x.label=='资料与交接' for x in app.tabs)
+    find(app.number_input,'本次 Builder 输入字符上限').set_value(1).run()
+    assert find(app.number_input,'本次 Builder 输入字符上限').value == 1
     find(app.button,'重新组装').click().run()
     assert not app.exception
     assert controller.inspect(tid)['builder_input']['samples']==[]
@@ -48,7 +51,8 @@ def test_invalid_form_does_not_create_task(tmp_path,monkeypatch):
     c=SearchController(tmp_path/'search')
     monkeypatch.setattr(search_page,'get_controller',lambda root:c)
     app=AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.radio[0].set_value('检索').run()
+    app.button(key='nav-任务').click().run()
+    find(app.button, '独立与批量检索').click().run()
     find(app.multiselect,'搜索服务').set_value([])
     find(app.button,'保存检索任务').click().run()
     assert not app.exception

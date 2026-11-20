@@ -93,7 +93,8 @@ def create_catalog_search(store, controller, selection, config, mode, *, period,
     if selection['kind'] == 'event':
         # Local records are scope snapshots, not another catalog or an overwrite of existing data.
         row = selection['event_row']
-        values = event_record(dict(event_name_en=selection['event_name'], description=selection['description'],
+        values = event_record(dict(event_name_en=row.get('event_name_en', selection['event_name']),
+            event_name_zh=row.get('event_name_zh', ''), description=selection['description'],
             domain=row.get('domain', ''), category=row.get('category', ''),
             scope_include=f"Activity period: {period or 'Unspecified'}\n{include}", scope_exclude=exclude,
             keywords=task['key_words'], source_hints=task['seed_urls'], owner=row.get('owner', '')))

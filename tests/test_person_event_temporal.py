@@ -134,9 +134,9 @@ def test_time_policy_reaches_native_flow_without_an_extra_call(tmp_path, payload
 
     state = run_event(payload, tmp_path, model=capture)
     assert state['result_status'] == 'draft'
-    assert set(systems) == {'extraction', 'organization', 'relations', 'evidence_consolidation'}
-    assert len(model.calls) == 6  # Five construction calls plus evidence review; no calendar agent.
-    for role in ('extraction', 'organization', 'relations'):
+    assert set(systems) == {'extraction', 'corpus_supplement', 'organization', 'relations', 'evidence_consolidation'}
+    assert len(model.calls) == 7  # Construction, corpus supplement and evidence review.
+    for role in ('extraction', 'corpus_supplement', 'organization', 'relations'):
         assert_time_policy(systems[role])
     result = json.loads((tmp_path / state['output']).read_text())
     assert result['schema_version'] == 'person-event-2.0'

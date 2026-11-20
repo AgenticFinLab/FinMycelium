@@ -114,7 +114,8 @@ def test_all_extractions_fail_but_summary_is_written(tmp_path, payload):
         raise TimeoutError()
     state = run_event(payload, tmp_path, {'extraction_workers': 3}, model=model)
     assert state['execution_status'] == 'finished' and state['result_status'] == 'partial'
-    assert len(state['calls']) == len(payload['samples'])
+    assert len(state['calls']) == len(payload['samples']) + 1
+    assert state['calls'][-1]['task_id'] == 'whole-corpus.supplement'
     assert state['stages']['organization']['status'] == 'blocked'
     assert (tmp_path / state['checks']).is_file()
 

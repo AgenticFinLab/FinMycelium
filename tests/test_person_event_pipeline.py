@@ -45,6 +45,9 @@ class SyntheticEventModel:
         if role == 'evidence_consolidation':
             return dict(decisions=[dict(pair_id=p['pair_id'], verdict='different_fact',
                 reason='Distinct facts in the authored fixture.') for p in request['pairs']])
+        if role == 'corpus_supplement':
+            return dict(entities=[], actions=[], contexts=[], relation_candidates=[], evidence=[], pending=[],
+                        support_additions=[], note='No additional facts in the authored fixture.')
         index = request['facts_index']
         maps = {}
         for collection, key in [('entities', 'entity_id'), ('actions', 'action_id'), ('stages', 'stage_id'), ('phases', 'phase_id')]:
@@ -133,7 +136,7 @@ def test_complete_new_protocol_pipeline(tmp_path, payload):
     assert check_graph(graph, payload)['valid']
     assert sha256(graph_path.read_bytes()) == state['graph_sha256']
     assert len(graph['actions']) == 3 and len(graph['phases']) == 2
-    assert len(model.calls) == 6
+    assert len(model.calls) == 7
     assert model.calls[-1].startswith('evidence_merge.')
     assert all(r['status'] == 'processed' for r in state['coverage'])
     assert json.loads((tmp_path / state['checks']).read_text())['review_required']
@@ -161,7 +164,7 @@ def test_budget_resume_does_not_repeat_body_or_change_ids(tmp_path, payload):
     assert model.calls.count('extract.0') == 1
     graph = json.loads((tmp_path / second['output']).read_text())
     assert old_actions[0]['action_id'] in {a['action_id'] for a in graph['actions']}
-    assert len(second['calls']) == 6
+    assert len(second['calls']) == 7
 
 
 def test_parallel_extraction_submits_in_input_order_and_resumes(tmp_path, payload):
@@ -274,7 +277,7 @@ def test_disjoint_consolidation_groups_run_concurrently(tmp_path, payload, monke
 
 def test_parallel_relation_budget_resume_reuses_completed_scopes(tmp_path, payload):
     model = SyntheticEventModel()
-    first = run_event(payload, tmp_path, {'extraction_workers': 3, 'max_calls': 6}, model=model)
+    first = run_event(payload, tmp_path, {'extraction_workers': 3, 'max_calls': 7}, model=model)
     assert first['execution_status'] == 'limit'
     assert [c['task_id'] for c in first['calls'][-2:]] == ['relate.0', 'relate.1']
     resumed = run_event(payload, tmp_path, {'max_calls': 20}, model=model, resume=True)
@@ -411,4 +414,4 @@ def test_valid_information_gap_completes_without_a_repair_round(tmp_path, payloa
         target='/action_type', reason='No narrower action category is established.'))
     state = run_event(payload, tmp_path, model=model)
     assert state['result_status'] == 'draft'
-    assert len(model.calls) == 6 and not state['final_repair_used']
+    assert len(model.calls) == 7 and not state['final_repair_used']

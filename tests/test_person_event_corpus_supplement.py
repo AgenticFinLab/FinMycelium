@@ -33,7 +33,7 @@ class CorpusModel(SyntheticEventModel):
 @pytest.mark.parametrize('invalid', [False, True])
 def test_fresh_full_corpus_run_preserves_quotations_and_one_call_on_resume(tmp_path, payload, invalid):
     model = CorpusModel(invalid)
-    state = run_event(payload, tmp_path, dict(full_corpus_supplement=True, max_calls=30), model=model)
+    state = run_event(payload, tmp_path, dict(max_calls=30), model=model)
     assert state['execution_status'] == 'finished'
     assert state['corpus_supplement']['status'] == ('invalid_response' if invalid else 'processed')
     assert [d['text'] for d in model.supplements[0]['documents']] == [s['content'] for s in payload['samples']]
@@ -50,3 +50,20 @@ def test_fresh_full_corpus_run_preserves_quotations_and_one_call_on_resume(tmp_p
     assert len(model.supplements) == 1
     assert len([c for c in resumed['calls'] if c['task_id'] == TASK_ID]) == 1
     assert fingerprint(json.loads((tmp_path / resumed['output']).read_text())) == fingerprint(graph)
+
+
+def test_opt_out_survives_resume_with_a_legacy_config(tmp_path, payload):
+    model = CorpusModel()
+    stopped = run_event(payload, tmp_path, dict(full_corpus_supplement=False, max_calls=1), model=model)
+    assert stopped['execution_status'] == 'limit'
+    # Historical tasks created before the checkbox did not record this key.
+    for name in ('config.json', 'state.json'):
+        path = tmp_path / name
+        saved = json.loads(path.read_text())
+        config = saved if name == 'config.json' else saved['config']
+        assert config.pop('full_corpus_supplement') is False
+        path.write_text(json.dumps(saved))
+    resumed = run_event(payload, tmp_path, dict(max_calls=30), model=model, resume=True)
+    assert resumed['result_status'] == 'draft'
+    assert resumed['config']['full_corpus_supplement'] is False
+    assert not model.supplements

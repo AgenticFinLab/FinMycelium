@@ -1,80 +1,74 @@
-# 操作流程
+# 运行手册
 
-## 环境和基线
+## 环境与三种起点
 
-需要Python 3.10+、FinMycelium与EPG-dataset两个checkout、可联网阅读的agent。随仓库交付scripts/curate_events.py及export_event_workbench.py；skill不能脱离它们单独运行。预检和一致性校验用标准库，召回另需scikit-learn：`python -m pip install scikit-learn`。记录实际依赖与工具版本。
+Python 3.10+ 运行随附工具。词法召回需要 scikit-learn，安装到个人虚拟环境，记录版本。来源阅读由具有搜索和正文读取能力的执行者完成。FinMycelium 的工作台解析以目标 checkout 为准，数据目录可为有现行快照的 EPG-dataset 或新建的独立工作区。不需要从数据目录复制旧脚本才能运行本 skill。
 
-在FinMycelium根目录执行，替换实际路径：
+首次使用可先执行[完整教学案例](worked-example.md)。调用各命令时使用同一个 Python 环境，必要时把示例中的 `python` 替换为虚拟环境中的解释器路径。`python -m pip show scikit-learn` 可记录实际召回版本。
 
-```powershell
-$FinmyRoot = (Get-Location).Path
-$DatasetRoot = (Resolve-Path "../EPG-dataset").Path
-$SkillRoot = Join-Path $FinmyRoot "skills/curate-event-dataset"
-$RunDir = Join-Path $DatasetRoot ("output/curation/run-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
-python -X utf8 -B "$SkillRoot/scripts/preflight.py" --finmy-root "$FinmyRoot" --dataset-root "$DatasetRoot" --mode resume --output "$DatasetRoot/output/curation/preflight.json"
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" init --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir" --basis existing
-```
-
-existing冻结当前四张CSV及当前身份基线元数据，分别复制到baseline和stage并登记run.json。独立初建用fresh代替existing，只创建空表头；已有run续跑跳过init，先核对冻结哈希。预检退出0只表示报告生成，须另核对缺失文件、Git冲突、检查点差异和接口结果，不盲目刷新哈希。
-
-大审计CSV可能以.csv.gz保存；使用curate_events.read可读取实际.gz路径或自动解析同名.csv逻辑路径。JSONL事实用gzip.open逐行读取；四张核心CSV保持普通文本。若检查点标记current_snapshot_only，仅使用当前文件，不要求旧批次、历史ZIP或存储映射。
-
-修改只在stage进行。按当前规范和[审计约定](research-and-audit.md)研究、扩充并维护四表；来源、原决策保持不变前缀，变更追加决策及old/new。记录研究截止日、实际查询/工具、已读定位、缓存和覆盖缺口，不执行依赖退役输入的prepare或validate_tables.py。
-
-## 校验、召回和审核
+在 FinMycelium 根目录运行下列 PowerShell。替换数据目录和目标数量。`$Run` 的目录应尚未存在。
 
 ```powershell
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" verify --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir"
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" recall --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir"
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" ledger --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir"
+$Finmy = (Get-Location).Path
+$Dataset = (Resolve-Path "../EPG-dataset").Path
+$Skill = Join-Path $Finmy "skills/curate-event-dataset"
+$Run = Join-Path $Dataset ("output/curation/curation-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$ArgsForRun = @("--dataset-root", $Dataset, "--finmy-root", $Finmy, "--run-dir", $Run)
+python -X utf8 -B "$Skill/scripts/preflight.py" --dataset-root $Dataset --finmy-root $Finmy --mode resume
+python -X utf8 -B "$Skill/scripts/catalog_workflow.py" init @ArgsForRun --basis existing
 ```
 
-verify检查schema、引用、冻结身份覆盖、决策前缀、old/new重放、正式表并发变化和数组冗余，输出revisions.json及validation.json。既有执行信息默认保护，有实际授权变动才用--allow-workflow-state-changes；accepted行需将对应已收录文件一并复制至stage相对路径。
+- **续跑。** `existing` 把现行四张 CSV、当前身份基线、逐对标记底账以及可用的 H2EPR 审计输入冻结在 `baseline/`，同时拷入 `stage/`。读 `run.json` 的哈希及脚本版本。已有运行目录直接复用，先核快照。
+- **从零构建。** `--mode rebuild` 预检并以 `--basis fresh` 建四张空表。从公开来源建立新身份，在暂存区研究。数据目录为空时创建可写目录后再运行。模板与示例见 [字段契约](catalog-spec.md#字段契约)。
+- **复查现行快照。** `--mode review` 预检后可直接用 `snapshot_review.py check` 检查主表、检查点和当前审计的一致性。正式文件的哈希异常要定位原因，记录认可的变更后才更新哈希。复查不自动续写工作台状态。
 
-recall生成字符TF-IDF近邻候选，保存方法、版本、阈值、主表哈希和完整候选键。执行者结合原文填写pair-review.csv的verdict、reason、source_locators、reviewed_on、reviewer。verdict为distinct、bounded_overlap或invalid_signal。需合并者先修改stage、决策和关系，再重跑召回；额外语义信号在审计中留证，不能只依赖词法候选。
+预检返回 0 表示成功生成报告。逐项检查 checkpoint、源代码库存、业务行解析、整表上传和数据集直读。整表上传的字节限制可通过分片处理。旧 `data/events/` 的工作表、注册表和图清单不作为本流程依赖。
 
-ledger生成row-review.csv，预填ID、行哈希、来源ID，verdict=pending。逐行填写identity_note、date_note、scope_note、fact_locators、review_method、verdict、reviewed_on、reviewer；事实定位不能为空，日期不明说明其不确定性。只有实际证据足以支撑目录身份/范围才填supported，保留原文阅读限制。工具不自动填通过。
+已有 `accepted` 行时，按主表相对路径把实际收录的 EPG、Gantt 和审核文件复制进 `stage/` 的对应位置，以便结构检查及快照物化解析路径。保留原文件和审核结论。研究流程中的待审核图或临时图不能充当这些收录文件。
 
-同schema旧审核可用--reuse-ledger <旧CSV>复用哈希一致且supported的记录；其他格式须先映射核对。变更后用以下命令归档旧记录并刷新：
+## 扩充与留证
+
+按用户目标记「现有有效数、目标数、还差的净增数」。每批按缺口调节候选规模和已确认净增，记录新增、修订、合并、暂缓与失败的原因。优先覆盖未充分代表的领域、地区、年代、来源语种和事件类型；减少按单一数据库批量填充带来的偏置。
+
+数量较大时，可先按主管机构或来源类型分组获取候选，再按正式编号批量定位成员原文。索引、列表和相似度可批量处理。每项入选仍需核对身份、时间和范围的实际依据。对同一批文书中的不同学校或项目，分别确认审批对象。对同一事项的多份通告，合到同一过程。按候选数、已读数、可录入数和实际净增分别报告进度。
+
+| 阶段 | 当前行为 | 留下的记录 |
+| --- | --- | --- |
+| 定位 | 用案例号、项目号、任务号或当地语言题名查找原文。 | 实际查询、工具、访问时间、来源状态 |
+| 阅读 | 阅读正文、官方数据库成员或有关页段。逐项支持身份、日期、范围。 | 来源 URL、成员或页段定位、事实摘要、阅读限制 |
+| 入账 | 先更新来源及关联，再更新事件和决策。证据不足的候选进入暂缓队列。 | 四张暂存 CSV、候选去向、剩余问题 |
+| 去重 | 对全表及本批召回，与额外目录并行比对，确认独立范围。 | 候选集、分数、依据、逐对判定 |
+| 收尾 | 刷新变化行的哈希和审核，验收真实导入格式。 | 当前逐行审核、事实档案、检查点、质量报告 |
+
+文件和判定约定见 [来源、去重与终检](research-and-audit.md)。正式发布采用当前快照的目录把旧批次和缓存留在运行区，仅保留必要的当前状态。真实证据记录保持原阅读日期。
+
+## 生成候选与逐行检查
 
 ```powershell
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" ledger --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir" --refresh-ledger --reuse-ledger "$RunDir/row-review.csv"
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" recall --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir" --archive-previous-recall
+python -X utf8 -B "$Skill/scripts/catalog_workflow.py" recall @ArgsForRun
+python -X utf8 -B "$Skill/scripts/catalog_workflow.py" ledger @ArgsForRun
+python -X utf8 -B "$Skill/scripts/catalog_workflow.py" verify @ArgsForRun
 ```
 
-归档在run/history；变更行和重新召回的候选回到pending。旧裁决需确认当前边界仍适用才能复用，不能删候选避开审核。
+- `recall` 写 `pair-review.csv`、`recall-method.json`，初始全为 pending。需跨表时添加 `--compare-csv <独立输入表>`，两表 ID 不重叠。已并入主表的副表使用主表内召回。表内与跨表各自取近邻，并加入双语名称/别名、成员链接和常用正式编号信号。方法文件绑定两侧哈希，保留完整候选键。
+- `ledger` 写 `row-review.csv`，预填 ID、主表行哈希和已关联来源。支持 `--reuse-ledger` 复用 schema 一致、行哈希一致的 supported 结论。复核仍需确认来源和边界适用。修改后用 `--refresh-ledger --reuse-ledger <旧审核>` 和 `--archive-previous-recall` 刷新审查。
+- `verify` 检查结构、引用、决策与来源前缀、变化重放、快照并发变化、工作流状态和新行质量。暂存检查保持未改动的旧数据例外。需要保留已登记 H2EPR 证据缺口时，使用 `--allow-h2epr-audit-exceptions`，该选项绑定随存副表和行审计。
+- **严格验收**用 `verify @ArgsForRun --target <目标> --final`。它同时要求逐行审核、最新候选裁决以及不存在待处理的重复标记。不能与 H2EPR 例外模式组合。可重新运行生成的 `validation.json` 给出实际经过的检查。
 
-## 最终验收和统计
+验收通过再按 [快照物化步骤](catalog-migration.md#物化待发布快照)生成 `snapshot/`。该目录生成后仍处于运行区。正式发布根据用户授权处理。实际导入与 EPG 构建遵循 [接口与验收](workbench.md)。
 
-达到目标并完成实际来源研究、逐行审核、候选裁决和覆盖检查后运行，替换实际目标：
+## 分类计数
 
 ```powershell
-python -X utf8 -B "$SkillRoot/scripts/catalog_workflow.py" verify --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot" --run-dir "$RunDir" --target 10000 --final
-python -X utf8 -B "$DatasetRoot/scripts/curate_events.py" summary --catalog "$RunDir/stage" --baseline-catalog "$RunDir/baseline" --finmy-root "$FinmyRoot" --target 10000
+python -X utf8 -B "$Skill/scripts/snapshot_review.py" classification --master "$Dataset/event-epg/events.csv" --baseline "$Dataset/event-epg/events_H2EPR.csv"
 ```
 
-fresh省略summary的--baseline-catalog。新目录无旧候选文件时，historical_lexical_pairs为null，表示没有历史统计，本轮结果看pair-review。最终校验要求逐行全覆盖、哈希匹配、充分填写、来源可关联，召回与当前表一致且原候选全部裁决。RECORDED_FINAL_CHECKS_PASS只证明记录一致性，实际来源判断仍由执行者负责。
+输出包含主表哈希、两组计数、域和类别总数、领域–类别组合和代表 ID。`--baseline` 接受含唯一 ID 的 CSV，适用于基线子集。评估政策和例子见 [分类复核](catalog-spec.md#分类复核)。
 
-## Web导出与发布
+## 工具回归
 
 ```powershell
-python -X utf8 -B "$DatasetRoot/scripts/export_event_workbench.py" --source "$RunDir/stage/events.csv" --output "$RunDir/workbench-import" --baseline "$RunDir/baseline/events.csv" --chunk-size 2500 --finmy-root "$FinmyRoot"
+python -X utf8 -B "$Skill/scripts/smoke_test.py" --dataset-root $Dataset --finmy-root $Finmy
 ```
 
-fresh省略--baseline；有撤回时先完成映射裁决，再用--allow-withdrawals生成审阅表。导出前19个业务字段并真实解析回环；目录status及三成果路径不作为上传字段。核对manifest、文件哈希、总数和跨文件ID。每片须满足当前行数/字节限制，必要时降低chunk-size或另拆delta再验证。
-
-分别验证三个入口：上传用domain.py的read_table；Web数据集直读用dataset.py的DatasetCatalog；Builder还需正文samples及范围/材料审核。预检检查前两个入口；上传成功不能证明目录直读兼容。sources及链接不会自动导入为正文。已有ID不能靠批量导入覆盖，changed/withdrawn审阅表不作为新增导入。本skill只交付文件和限制说明。
-
-发布前确认正式四表仍匹配冻结快照；有用户修改先协调。工具不自动发布，fresh不能擅自替换现行目录。将四张stage表、研究报告及run.json、revisions.json、validation.json、row-review.csv、pair-review.csv、recall-method.json和实际阅读记录放入正式event-epg；正式目录按检查点保留策略维护；current_snapshot_only时仅发布当前结论、必要事实和检查点，不重新引入旧批次或变更链。更新统计、报告/队列/逐行结论指针，最后登记输出哈希。多文件发布中断不得标完成。
-
-交付代码版本、未提交修改、当前基线及哈希、依赖/命令和必要缓存获取方式。运行两仓库git diff --check，单独报告无关Git冲突，不为通过而修改其他文件；不提交、推送或写数据库。
-
-## 启动与维护
-
-调用示例：`使用 $curate-event-dataset，FinMycelium为<路径>，EPG-dataset为<路径>。从现行基线继续，扩充至总计10000条，逐条来源核查、全局去重及全表终检后交付主表与审计。` 独立建设注明fresh，复查注明只检查修复；已达到目标则直接终检。
-
-工具修改后运行隔离合成数据回归，不会研究或修改正式事件：
-
-```powershell
-python -X utf8 -B "$SkillRoot/scripts/smoke_test.py" --dataset-root "$DatasetRoot" --finmy-root "$FinmyRoot"
-```
+隔离的合成测试覆盖全新 24 列目录、续跑重放、未核审核和候选拒绝、行变更后刷新、压缩记录、跨表召回、分类统计和 Workbench 字段投影。测试不研究真实事件。

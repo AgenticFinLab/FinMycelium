@@ -96,9 +96,29 @@ class BuildController:
 
     def tasks(self, event_id=None):
         with self.store.connection() as db:
-            rows = db.execute("SELECT * FROM build_tasks ORDER BY created DESC,id").fetchall()
-        return [{**dict(row), "body": json.loads(row["body"])} for row in rows
-                if event_id is None or row["event_id"] == event_id]
+            query = "SELECT * FROM build_tasks"
+            params = ()
+            if event_id is not None:
+                query += " WHERE event_id=?"
+                params = (event_id,)
+            rows = db.execute(query + " ORDER BY created DESC,id", params).fetchall()
+        return [{**dict(row), "body": json.loads(row["body"])} for row in rows]
+
+    def person_task_headers(self, dataset, person_id):
+        """List a person's runs without loading frozen inputs or model transcripts."""
+        with self.store.connection() as db:
+            return db.execute("""
+                SELECT id, created, event_id, status, json_extract(body, '$.disposition') AS disposition,
+                       json_extract(body, '$.input_hash') AS input_hash,
+                       json_extract(body, '$.catalog.storyline_id') AS storyline_id,
+                       json_extract(body, '$.person_config.lm_name') AS model,
+                       json_extract(body, '$.provenance.handoff_revision') AS handoff_revision
+                FROM build_tasks
+                WHERE json_extract(body, '$.catalog.root') = ?
+                  AND json_extract(body, '$.catalog.person_id') = ?
+                  AND json_extract(body, '$.catalog.kind') = 'person_event'
+                ORDER BY created DESC, id DESC
+            """, (str(dataset), person_id)).fetchall()
 
     def inspect(self, task_id):
         task_path(self.root, task_id)
@@ -136,15 +156,57 @@ class BuildController:
         return task_id
 
     def create_person(self, search_controller, search_task_id, config=None, *, confirmed=False, artifact_root=None):
-        from dataclasses import asdict
         from finmy.person_epg.input import freeze_search_input
+        bundle, provenance = freeze_search_input(search_controller, search_task_id, confirmed=confirmed)
+        with task_lock(search_controller.root, search_task_id):
+            current = search_controller.inspect(search_task_id)
+            if current.get('build_disposition') == 'excluded':
+                raise ValueError('该任务已标记不参与构建，请先恢复为待检查')
+            adopted = search_snapshot(search_controller, search_task_id, current)
+        if (adopted['search_input_sha256'] != provenance['search_input_sha256']
+                or adopted['handoff_revision'] != provenance['handoff_revision']):
+            raise ValueError('检索交接已变化，请重新确认构建输入')
+        return self._save_person(bundle, provenance, config, artifact_root, [adopted])
+
+    def create_person_from_collection(self, catalog, config=None, *, expected_manifest, confirmed=False):
+        """Start from the reviewed catalog input even on a checkout with no search runtime."""
+        from finmy.dataset import catalog_event_directory
+        from finmy.search.summary import directory_lock
+        from .catalog_actions import search_collection
+        if not confirmed:
+            raise ValueError('请先确认实际构建材料与已知缺口')
+        owner = dataset_root(self.store.root)
+        if catalog.get('kind') != 'person_event' or not owner or Path(owner).resolve() != Path(catalog['root']).resolve():
+            raise ValueError('请选择当前数据集中的人物 event')
+        with directory_lock(catalog_event_directory(catalog)):
+            collection = search_collection(catalog)
+            if not collection or expected_manifest != collection['sha256']:
+                raise ValueError('收录的检索材料已变化，请重新查看后确认')
+            manifest = collection['manifest']
+            if manifest.get('input_file') != 'builder-input.json' or 'builder-input.json' not in collection['files']:
+                raise ValueError('此历史收录没有完整构建正文，请打开原检索任务')
+            bundle = json.loads(collection['files']['builder-input.json'])
+            if digest(bundle) != manifest['input_sha256']:
+                raise ValueError('收录正文与确认的输入版本不一致')
+            handoffs = manifest.get('search_handoffs', [])
+            if len(handoffs) != 1:
+                raise ValueError('人物 event 需要一份明确的检索交接记录')
+            handoff = handoffs[0]
+            provenance = {key: handoff[key] for key in ('search_task_id', 'handoff_revision', 'search_input_sha256')}
+            provenance['catalog'] = {**manifest['catalog'], 'root': str(Path(owner).resolve())}
+            provenance['collected_input'] = dict(directory=str(collection['directory'].relative_to(owner)),
+                manifest_sha256=collection['sha256'], receipt_id=manifest.get('collection_id') or manifest['build_task_id'])
+            return self._save_person(bundle, provenance, config, None, [])
+
+    def _save_person(self, bundle, provenance, config, artifact_root, adoptions):
+        from dataclasses import asdict
         from finmy.person_epg.build import code_identity
         from finmy.person_epg.event.runtime import EventBuildConfig
         from finmy.person_epg.event.records import validate_input
         config = EventBuildConfig(**(config or {}))
-        bundle, provenance = freeze_search_input(search_controller, search_task_id, confirmed=confirmed)
-        validate_input(bundle)
-        event = bundle['user_query']['extras']['person_event']
+        event = validate_input(bundle)
+        if any(event[key] != provenance['catalog'][key] for key in ('event_id', 'person_id', 'storyline_id')):
+            raise ValueError('构建正文与目录中的人物、storyline 或 event 不一致')
         task_id = identifier('PBUILD-')
         artifacts = (Path(artifact_root) if artifact_root is not None
                      else output_directory(provenance['catalog']['root'], 'builds'))
@@ -156,15 +218,7 @@ class BuildController:
                 'person_execution_code':person_execution_version(),
                 'config':{'builder_type':'PersonEvent', 'lm_name':config.lm_name},
                 'artifact_directory':str((artifacts/task_id).resolve()), 'resume':False}
-        with task_lock(search_controller.root, search_task_id):
-            current = search_controller.inspect(search_task_id)
-            if current.get('build_disposition') == 'excluded':
-                raise ValueError('该任务已标记不参与构建，请先恢复为待检查')
-            adopted = search_snapshot(search_controller, search_task_id, current)
-        if (adopted['search_input_sha256'] != provenance['search_input_sha256']
-                or adopted['handoff_revision'] != provenance['handoff_revision']):
-            raise ValueError('检索交接已变化，请重新确认构建输入')
-        self._save_prepared(task_id, event['event_id'], body, [adopted])
+        self._save_prepared(task_id, event['event_id'], body, adoptions)
         return task_id
 
     def _save_prepared(self, task_id, event_id, body, adoptions):
@@ -378,6 +432,15 @@ class BuildController:
                 raise ValueError('请填写舍弃原因')
             body['disposition'] = value
             body.setdefault('disposition_history', []).append(dict(value=value, reason=reason.strip(), time=now()))
+            if value == 'discarded' and body.get('kind') == 'person_event' and body.get('catalog'):
+                from .graph_collection import registry
+                from .review_selection import retire_selection, selected_review
+                from finmy.search.summary import directory_lock
+                catalog = body['catalog']
+                if selected_review(catalog):
+                    with directory_lock(registry(catalog)[0].parent), retire_selection(catalog, task_id):
+                        self.save(task_id, row['status'], body)
+                    return
             self.save(task_id, row['status'], body)
 
     def cancel(self, task_id):

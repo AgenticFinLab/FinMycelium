@@ -67,7 +67,7 @@ def old_run(tmp_path,payload,monkeypatch):
     with monkeypatch.context() as legacy:
         # Reproduce the legacy global-failure boundary, without new stage snapshots.
         legacy.setattr(Construction, 'stage', lambda self, name, operation: (operation(), True)[1])
-        state=run_event(payload,tmp_path,model=FailOrganization())
+        state=run_event(payload,tmp_path,{'full_corpus_supplement': False},model=FailOrganization())
     assert state['execution_status']=='failed'
     monkeypatch.setattr(runtime,'code_identity',actual)
     monkeypatch.setattr(recovery,'compatible_code',lambda:True)

@@ -30,9 +30,12 @@ def search_collection(catalog):
     if not files:
         return None
     manifest = json.loads(files.get('manifest.json', b'{}'))
+    if not isinstance(manifest, dict) or not isinstance(manifest.get('catalog'), dict):
+        raise ValueError('检索收录清单缺少目录信息')
     expected = set(LEGACY_FILES) if manifest.get('format_version') == 1 else set(FILES)
     if (manifest.get('format_version') not in {1, 2, 3} or set(files) != expected or manifest.get('kind') != 'adopted_search'
-            or manifest.get('catalog', {}).get('event_id') != catalog['event_id']
+            or any(manifest.get('catalog', {}).get(k) != catalog.get(k)
+                   for k in ('kind', 'event_id', 'event_dir', 'person_id', 'storyline_id'))
             or any(digest(raw) != manifest.get('file_sha256', {}).get(name)
                    for name, raw in files.items() if name != 'manifest.json')):
         raise ValueError('已收录检索文件已变化或缺失，请检查后再操作')

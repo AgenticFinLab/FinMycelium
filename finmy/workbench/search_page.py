@@ -7,11 +7,11 @@ import streamlit as st
 from finmy.workbench.model_picker import model_picker
 
 from finmy.search.control import SearchController
-from finmy.search.state import SearchConfig, SearchState
+from finmy.search.state import SearchConfig, SearchState, digest
 from finmy.search.sources import SourceStore
 from finmy.workbench.domain import display_name
 from finmy.workbench.search_defaults import BUDGET_FIELDS, load_defaults, request_preview, finalization_label
-from finmy.workbench.workflow import navigate, SEARCH_STATUS as STATUS, search_status_label
+from finmy.workbench.workflow import navigate, open_local_event, SEARCH_STATUS as STATUS, search_status_label
 from finmy.workbench.search_process import render_process, PROVIDERS
 from finmy.workbench.ui import heading, status as show_status, stats, empty
 from finmy.workbench.search_history import budget_policy_label, experiment_runs
@@ -166,7 +166,7 @@ def material_panel(controller, task_id, store, data, active, read_only=False):
             from finmy.workbench.search_bridge import adopt_sources
             try:
                 added=adopt_sources(controller,task_id,store)
-                navigate('数据', detail_id=data['task']['event_id'], **{'ui-event-section-'+data['task']['event_id']:'资料与输入'}, notice=f'新增 {added} 份待审资料，请在资料与输入页签检查并确认。')
+                open_local_event(data['task']['event_id'], '资料与输入', notice=f'新增 {added} 份待审资料，请在资料与输入页签检查并确认。')
             except ValueError as exc:st.error(str(exc))
 
     sources=data['sources']
@@ -232,7 +232,7 @@ def source_assembly_preview(controller, task_id, data, active, read_only=False):
         with st.form('source-package-'+key):
             kept = st.multiselect('保留来源', candidates, default=candidates,
                                    format_func=lambda sid:data['sources'][sid]['title'] or data['sources'][sid]['url'])
-            limit = st.number_input('本次 Builder 输入字符上限', min_value=1, value=data['config']['max_builder_material_chars'])
+            limit = st.number_input('预览输入字符上限', min_value=1, value=data['config']['max_builder_material_chars'])
             if st.form_submit_button('组装预览', disabled=active):
                 try:
                     state = SearchState(controller.root, task_id)
@@ -278,7 +278,7 @@ def source_assembly_preview(controller, task_id, data, active, read_only=False):
 def search_page(store):
     title, auxiliary = st.columns([4, 1], vertical_alignment='center')
     with title:
-        heading('新建检索', '明确研究要求，沿用默认配置，为每个对象保存独立任务。')
+        heading('独立与批量检索', '输入独立研究问题，或选择已确认范围的本机普通事件。')
     with auxiliary:
         with st.popover('辅助工具', icon=':material/history:'):
             show_history = st.checkbox('历史实验回看（只读）', key='ui-search-history')
@@ -296,35 +296,45 @@ def search_page(store):
     search_form(store)
 
 
-def search_form(store, catalog=None):
+def search_form(store, catalog=None, previous_task=''):
     root = store.root/'search'
     controller = get_controller(str(root))
     profile = root/'profile.json'
     defaults = load_defaults(profile)
-    events = {e['event_id']:e for e in store.events()}
     if catalog:
         chosen = []
         event_id = ''
         event = {'description':catalog['description'], 'keywords':catalog['key_words'], 'source_hints':catalog['seed_urls']}
-        case_key = 'ui-search-catalog-' + catalog['snapshot_sha256'][:16] + '-'
+        case_key = 'ui-search-catalog-' + digest([catalog['snapshot_sha256'], previous_task])[:16] + '-'
     else:
-        if 'search_event_ids' in st.session_state:
-            st.session_state['ui-search-events'] = [eid for eid in st.session_state.pop('search_event_ids') if eid in events]
-        chosen = st.multiselect('从主表选择事件（可批量）',list(events),format_func=lambda k:display_name(events[k]),key='ui-search-events',placeholder='留空可创建独立研究任务')
+        selected_ids = st.session_state.pop('search_event_ids', None)
+        if selected_ids is not None or st.session_state.get('ui-search-origin') == '普通事件主表':
+            st.session_state['ui-search-origin'] = '本机普通事件'
+        origin = st.radio('任务来源', ['独立研究', '本机普通事件'], horizontal=True, key='ui-search-origin')
+        chosen = []
+        events = {}
+        if origin == '本机普通事件':
+            events = {e['event_id']: e for e in store.events()}
+            if selected_ids is not None:
+                st.session_state['ui-search-events'] = [eid for eid in selected_ids if eid in events]
+            chosen = st.multiselect('选择本机事件（可批量）', list(events),
+                format_func=lambda k: display_name(events[k]), key='ui-search-events', placeholder='选择一个或多个事件')
+            if not chosen:
+                st.caption('选择事件后可保存检索任务。可在「数据集 → 普通事件 → 本机事件记录」中维护事件并确认范围。')
+                return
         event_id = chosen[0] if chosen else ''
-        event = events.get(event_id,{})
-        case_key = 'ui-search-draft-' + ('batch' if len(chosen)>1 else event_id or 'independent') + '-'
+        event = events.get(event_id, {})
+        case_key = 'ui-search-draft-' + digest(chosen)[:16] + '-'
+    config_key = case_key + digest(defaults)[:12] + '-'
     is_batch = len(chosen)>1
     left, right = st.columns([7, 3])
     with left:
-        with st.container(border=True, key="search-fields"):
+        fields = st.container(border=True, key="search-fields")
+        advanced = st.expander('调整配置')
+        with fields:
             st.subheader('研究对象与范围')
             if is_batch:
                 st.info(f'已选择 {len(chosen)} 个事件，各自采用主表中的名称、研究要求与范围。')
-            a,b = st.columns(2)
-            kind = a.selectbox('对象类型',['event','person','company'],format_func=lambda k:{'event':'事件','person':'人物','company':'公司'}[k],key=case_key+'kind',disabled=is_batch or bool(catalog))
-            mode = b.selectbox('检索模式',['agent','simple'],format_func=lambda k:'增强搜索' if k=='agent' else '简单搜索（固定查询）',key='ui-search-mode')
-            name = st.text_input('研究对象',catalog['event_name'] if catalog else display_name(event) if event else '',key=case_key+'name',disabled=is_batch or bool(catalog))
             if catalog:
                 from finmy.dataset import search_task
                 period = st.text_input('本次研究时期',catalog['period'],key=case_key+'period')
@@ -336,54 +346,62 @@ def search_form(store, catalog=None):
                     query = search_task(catalog,period=period,include=scope_include,exclude=scope_exclude)['query_text']
                 with st.expander('实际搜索要求预览'):
                     st.text(query or '请补齐研究范围与主表中的事件说明。')
+            elif is_batch:
+                kind, name, query = 'event', '', ''
+                st.write('、'.join(display_name(events[eid]) for eid in chosen))
             else:
+                kind = st.selectbox('对象类型',['event','person','company'],format_func=lambda k:{'event':'事件','person':'人物','company':'公司'}[k],key=case_key+'kind',disabled=is_batch)
+                name = st.text_input('研究对象',display_name(event) if event else '',key=case_key+'name',disabled=is_batch)
                 query = st.text_area('研究要求',event.get('description',''),height=140,key=case_key+'query',disabled=is_batch,placeholder='描述需要查明的行动、参与者、交易和时间范围。')
-            providers = st.multiselect('搜索服务',['baidu','bocha','exa'],default=defaults['providers'],format_func=lambda p:PROVIDERS[p]+' Search' if p=='exa' else PROVIDERS[p]+' Web Search',key='ui-search-providers')
+        with advanced:
+            mode = st.selectbox('检索模式',['agent','simple'],format_func=lambda k:'增强搜索' if k=='agent' else '简单搜索（固定查询）',key=config_key+'mode')
+            providers = st.multiselect('搜索服务',['baidu','bocha','exa'],default=defaults['providers'],format_func=lambda p:PROVIDERS[p]+' Search' if p=='exa' else PROVIDERS[p]+' Web Search',key=config_key+'providers')
             limits = defaults['max_results']
             count = dict(limits) if isinstance(limits, dict) else {p: limits for p in PROVIDERS}
             for provider in providers:
                 count[provider] = st.number_input(PROVIDERS[provider]+' 每次查询结果上限', min_value=1, max_value=50,
-                    value=count.get(provider, SearchConfig().results_for(provider)), key='ui-search-count-'+provider)
+                    value=count.get(provider, SearchConfig().results_for(provider)), key=config_key+'count-'+provider)
             st.caption('结果条数与 API 请求次数分别计数；三家均启用时，每组新查询计 3 次请求。')
             if event and not is_batch and not catalog:
                 st.caption(f"事件覆盖：{event.get('coverage_start') or '未限定'} → {event.get('coverage_end') or '未限定'} · 资料发表时间可另行设置")
-        with st.expander('范围与已有来源'):
+        with advanced:
             keywords = st.text_area('关键词（每行一项）','\n'.join(event.get('keywords',[])),key=case_key+'keywords') if catalog else st.text_input('关键词（逗号分隔）',','.join(event.get('keywords',[])),key=case_key+'keywords',disabled=is_batch)
             seeds = st.text_area('已有来源 URL（每行一个）','\n'.join(x for x in event.get('source_hints',[]) if x.startswith(('https://','http://'))),key=case_key+'seeds',disabled=is_batch)
-            fixed = st.text_area('简单搜索查询（每行一条；留空使用对象名称与关键词）',key=case_key+'fixed',disabled=is_batch)
-            include = st.text_input('限定站点（逗号分隔）',','.join(defaults['include_domains']),key='ui-search-include')
-            exclude = st.text_input('排除站点（逗号分隔）',','.join(defaults['exclude_domains']),key='ui-search-exclude')
+            fixed = st.text_area('简单搜索查询（每行一条；留空使用对象名称与关键词）',key=case_key+'fixed',disabled=is_batch) if mode == 'simple' else ''
+            include = st.text_input('限定站点（逗号分隔）',','.join(defaults['include_domains']),key=config_key+'include')
+            exclude = st.text_input('排除站点（逗号分隔）',','.join(defaults['exclude_domains']),key=config_key+'exclude')
             a,b = st.columns(2)
-            start = a.text_input('资料发表开始日期',defaults['publication_start'] or '',placeholder='YYYY-MM-DD',key='ui-search-start')
-            end = b.text_input('资料发表结束日期',defaults['publication_end'] or '',placeholder='YYYY-MM-DD',key='ui-search-end')
+            start = a.text_input('资料发表开始日期',defaults['publication_start'] or '',placeholder='YYYY-MM-DD',key=config_key+'start')
+            end = b.text_input('资料发表结束日期',defaults['publication_end'] or '',placeholder='YYYY-MM-DD',key=config_key+'end')
             st.caption('留空可纳入事后报道和总结；与事件发生时间不同。')
-        with st.expander('预算与模型参数'):
-            lm_name = model_picker(defaults.get('lm_name') or '', 'ui-search-model', purpose='search', label='搜索模型')
+        with advanced:
+            lm_name = model_picker(defaults.get('lm_name') or '', config_key+'model', purpose='search', label='搜索模型')
             options = {}
             cols = st.columns(2)
             for i,(field,label) in enumerate(BUDGET_FIELDS):
-                options[field] = cols[i%2].number_input(label,min_value=1,value=defaults[field],key='ui-search-'+field)
-            output_tokens = st.number_input('模型单次输出 token 上限',min_value=1,value=defaults['generation_config'].get('max_tokens',SearchConfig().generation_config['max_tokens']),key='ui-search-tokens')
+                options[field] = cols[i%2].number_input(label,min_value=1,value=defaults[field],key=config_key+field)
+            output_tokens = st.number_input('模型单次输出 token 上限',min_value=1,value=defaults['generation_config'].get('max_tokens',SearchConfig().generation_config['max_tokens']),key=config_key+'tokens')
             generation = {**defaults['generation_config'], 'max_tokens':output_tokens}
             st.caption('模型与构建侧独立；简单搜索不调用模型。默认 Ark DeepSeek 的输出上限包含思考与答案。')
             if mode != 'simple':
-                with st.expander('模型预设请求参数'):
+                with st.popover('模型预设请求参数'):
                     try:
                         st.json(request_preview(lm_name, generation))
                     except ValueError as exc:
                         st.caption(str(exc))
-            rewrite = st.checkbox('百度 query 改写',value=defaults['baidu_rewrite'],key='ui-search-rewrite')
+            rewrite = st.checkbox('百度 query 改写',value=defaults['baidu_rewrite'],key=config_key+'rewrite')
     with right:
         with st.container(border=True, key="search-summary"):
-            st.subheader('本次任务')
-            st.write(f"**{len(chosen) or 1}** 个独立检索任务")
+            st.subheader('本次检索' if catalog else '本次任务')
+            if not catalog:
+                st.write(f"**{len(chosen) or 1}** 个独立检索任务")
             st.caption(' / '.join(PROVIDERS[p] for p in providers) or '请选择搜索服务')
             st.markdown('**实际交付预算**')
             st.write(f"{options['max_builder_material_chars']:,} 字符 / 事件")
             st.caption(f"累计搜索 {options['max_search_requests']} 次 · 阅读 {options['max_read_sources']} 个来源")
             if mode != 'simple':
                 st.caption(f"搜索模型：{lm_name or '未设置'}")
-            enabled = st.checkbox('允许启动后调用外部搜索与模型',value=False,key='ui-search-allow')
+            enabled = st.checkbox('允许启动后调用外部搜索与模型',value=False,key=config_key+'allow')
             confirmed = st.checkbox('确认本次研究范围与保存目录',value=False,key=case_key+'confirmed') if catalog else False
             st.caption('保存任务不会发起调用；明确启动后才运行。')
             save = st.button('保存检索任务',type='secondary' if catalog else 'primary',icon=':material/add:',width='stretch')
@@ -416,7 +434,7 @@ def search_form(store, catalog=None):
                         if chosen:
                             for eid in chosen:
                                 if store.decision(eid, 'scope') != 'approved':
-                                    raise ValueError(display_name(events[eid]) + '：请先在数据页确认研究范围')
+                                    raise ValueError(display_name(events[eid]) + '：请先在「本机事件记录」确认研究范围')
                         tids = []
                         for eid in chosen or [None]:
                             current = dict(task)

@@ -127,11 +127,22 @@ def test_workbench_confirm_save_and_view_without_model(setup,tmp_path,monkeypatc
     def find(items,label):return next(x for x in items if x.label==label)
     find(app.sidebar.button,'任务中心').click().run()
     assert not app.exception
+    find(app.button, '打开任务').click().run()
+    assert find(app.expander, '调整构建配置')
+    supplement = find(app.checkbox, '逐份抽取后，用完整交接正文补读一次')
+    assert supplement.value is True
+    supplement.uncheck()
     find(app.checkbox,'我已检查本次实际材料与缺口，确认用于这条 event 的构建').check()
     find(app.button,'保存人物构建任务').click().run(timeout=30)
     assert not app.exception
     row=BuildController(store).tasks()[0]
     assert row['status']=='ready' and not Path(row['body']['artifact_directory']).exists()
+    config = row['body']['person_config']
+    assert config['full_corpus_supplement'] is False
+    assert (config['lm_name'], config['reasoning_effort'], config['api_json_mode']) == (
+        'ark/kimi-k3-1-pro-261024', 'by_stage', False)
+    assert (config['max_calls'], config['max_new_tokens'], config['max_context_chars'],
+            config['max_read_calls'], config['max_read_chars']) == (60, 65536, 240000, 60, 160000)
     assert find(app.button,'开始人物构建').disabled
     assert not store.events()
 
@@ -168,6 +179,7 @@ def test_completed_person_panel_displays_and_rerenders_offline(setup, tmp_path, 
     next(b for b in app.sidebar.button if b.label=='任务中心').click().run()
     app.session_state['task-selected'] = bid
     app.run(timeout=30)
+    next(b for b in app.button if b.label == '打开任务').click().run(timeout=30)
     assert not app.exception
     run = builds.inspect(bid)['body']['run_state']
     saved = (tmp_path/'runs'/bid/run['visualization']['output']).read_text()

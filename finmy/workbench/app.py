@@ -23,7 +23,7 @@ from finmy.workbench.ui import heading, apply_style, status as show_status, tabl
 from finmy.workbench.store import Store
 from finmy.workbench.model_picker import model_picker
 from finmy.workbench.search_page import search_page, get_controller, task_panel
-from finmy.workbench.workflow import STEPS, progress, navigate, event_searches, search_status_code, search_status_label
+from finmy.workbench.workflow import SEARCH_STATUS, STEPS, progress, navigate, current_page, open_local_event, event_searches, search_status_code, search_status_label
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.build_page import create_build, build_panel, build_status
 from finmy.workbench.material_status import confirmations, confirmed_builds, saved_confirmations
@@ -134,6 +134,7 @@ def data_page(store):
         if st.button("返回事件列表", icon=":material/arrow_back:", type="tertiary"):
             st.session_state.pop("detail_id", None)
             st.session_state.pop("data-action", None)
+            st.session_state.pop("return-to-review", None)
             st.session_state["master-epoch"] = st.session_state.get("master-epoch", 0) + 1
             st.rerun()
         if view == "new":
@@ -148,7 +149,7 @@ def data_page(store):
         return
     title, actions = st.columns([3, 2], vertical_alignment="center")
     with title:
-        heading("事件数据", f"{len(events)} 个事件 · 从研究范围到最终 EPG")
+        heading("本机事件记录", f"{len(events)} 个普通事件 · 手工录入、导入及从目录检索保存的工作记录")
     with actions:
         with st.container(horizontal=True, horizontal_alignment="right"):
             if st.button("导入主表", icon=":material/upload:"):
@@ -203,7 +204,7 @@ def data_page(store):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.write(f"已选择 **{len(chosen)}** 个事件")
             if st.button("准备批量检索", icon=":material/search:", type="primary"):
-                navigate("检索", search_event_ids=chosen)
+                navigate("任务", search_event_ids=chosen, **{"task-tool": "search", "ui-search-history": False})
             with st.popover("导出所选", icon=":material/download:"):
                 records = [r for r in rows if r["event_id"] in chosen]
                 st.download_button("事件主表 CSV", export_table(records), "events.csv")
@@ -419,10 +420,13 @@ def details(store, eid):
     with primary:
         with st.container(horizontal=True, horizontal_alignment="right"):
             if step >= 2 and st.button("补充检索", icon=":material/search:", key="supplement-"+eid):
-                navigate("检索", search_event_ids=[eid])
+                navigate("任务", search_event_ids=[eid], **{"task-tool": "search", "ui-search-history": False})
             if action in {"开始检索", "查看任务", "查看构建任务"}:
                 if st.button(action, key="next-"+eid, type="primary"):
-                    navigate("检索" if action == "开始检索" else "任务", search_event_ids=[eid], task_event_filter=eid)
+                    if action == "开始检索":
+                        navigate("任务", search_event_ids=[eid], **{"task-tool": "search", "ui-search-history": False})
+                    else:
+                        navigate("任务", task_event_filter=eid, **{"ui-task-view": "运行记录"})
             elif action == "收录导出":
                 st.download_button("导出已审核事件包", store.export_zip([eid]), eid+".zip", key="final-export-"+eid, type="primary")
             else:
@@ -432,11 +436,8 @@ def details(store, eid):
                     st.rerun()
     step_strip(STEPS, step)
     st.caption(eid + " · 流程位置随当前范围、材料和审核状态更新")
-    last_section = st.session_state.get(section_key) or "基本信息"
-    def retain_section():
-        if st.session_state.get(section_key) is None:
-            st.session_state[section_key] = last_section
-    section = st.segmented_control("事件详情", ["基本信息", "资料与输入", "图与修订", "运行记录"], key=section_key, label_visibility="collapsed", on_change=retain_section) or last_section
+    section = st.radio("事件详情", ["基本信息", "资料与输入", "图与修订", "运行记录"],
+                       key=section_key, horizontal=True, label_visibility="collapsed")
     with st.container(key="event-body"):
         if section == "基本信息":
             summary, review = st.columns([7, 3])
@@ -486,17 +487,97 @@ def details(store, eid):
                 empty("暂无运行与审核记录", "检索、构建与确认材料后，记录会保存在这里。")
 
 
+def dataset_workspace(store):
+    from finmy.dataset import dataset_root
+    from finmy.workbench.dataset_page import ordinary_catalog
+    from finmy.workbench.person_data_page import person_data_page
+    if st.session_state.get('dataset-local'):
+        if st.session_state.get('return-to-review'):
+            if st.button('返回待处理', icon=':material/arrow_back:', type='tertiary'):
+                navigate('任务', **{'ui-task-view': '待处理'})
+        elif not st.session_state.get('detail_id') and not st.session_state.get('data-action'):
+            if st.button('返回普通事件目录', icon=':material/arrow_back:', type='tertiary'):
+                navigate('数据集')
+        data_page(store)
+        return
+    heading('数据集')
+    kinds, local = st.columns([3, 1], vertical_alignment='center')
+    kind = kinds.radio('目录类型', ['普通事件', '人物事件'], horizontal=True, key='ui-dataset-kind',
+                       label_visibility='collapsed')
+    if kind == '普通事件' and local.button('本机事件记录', icon=':material/table_view:', width='stretch'):
+        navigate('数据集', detail_id=None, **{'dataset-local': True, 'data-action': None,
+                 'master-epoch': st.session_state.get('master-epoch', 0)+1})
+    if not dataset_root(store.root):
+        st.info('请在设置中选择 EPG-dataset，以打开正式事件目录。')
+        if st.button('前往设置', icon=':material/settings:'):
+            navigate('设置')
+    elif kind == '人物事件':
+        person_data_page(store)
+    else:
+        ordinary_catalog(store)
+
+
 def tasks_page(store):
-    title, action = st.columns([4, 1], vertical_alignment="center")
-    with title:
-        heading("任务中心", "查看检索与构建的实际运行、产物和下一步。")
-    with action:
-        if st.button("新建检索", icon=":material/add:", width="stretch"):
-            navigate("检索")
-    task_workspace(store)
+    if st.session_state.get('task-tool') == 'search':
+        if st.button('返回任务列表', icon=':material/arrow_back:', type='tertiary'):
+            navigate('任务', **{'ui-task-view': '运行记录'})
+        search_page(store)
+        return
+    heading('任务中心')
+    focused = st.session_state.get('task-detail-id')
+    if focused:
+        back = '返回待处理' if st.session_state.get('ui-task-view') == '待处理' else '返回任务列表'
+        if st.button(back, icon=':material/arrow_back:'):
+            navigate('任务')
+        is_build = focused.startswith(("BUILD-", "PBUILD-"))
+        if is_build:
+            try:
+                running = BuildController(store).inspect(focused)["status"] in {"queued", "running"}
+            except ValueError:
+                running = False
+        else:
+            running = get_controller(str(store.root / "search")).active(focused)
+        if running:
+            live_task(store, focused)
+        else:
+            focused_task(store, focused)
+    else:
+        modes, tools = st.columns([3, 1], vertical_alignment='center')
+        view = modes.radio('任务视图', ['运行记录', '待处理'], horizontal=True,
+                           label_visibility='collapsed', key='ui-task-view')
+        if tools.button('独立与批量检索', icon=':material/search:', width='stretch'):
+            navigate('任务', **{'task-tool': 'search', 'ui-search-history': False})
+        if view == '待处理':
+            pending_reviews(store)
+        else:
+            task_workspace(store)
 
 
 @st.fragment(run_every="2s")
+def live_task(store, task_id):
+    if not focused_task(store, task_id):
+        st.rerun()
+
+
+def focused_task(store, task_id):
+    build = task_id.startswith(("BUILD-", "PBUILD-"))
+    try:
+        if build:
+            row = BuildController(store).reconcile(task_id)
+        else:
+            controller = get_controller(str(store.root / "search"))
+            row = controller.inspect(task_id)
+    except (ValueError, FileNotFoundError):
+        st.warning("无法读取这条任务记录，可返回列表重新选择。")
+        return
+    with st.container(key="task-detail"):
+        if build:
+            build_panel(store, task_id, row=row)
+        else:
+            task_panel(controller, task_id, store, data=row)
+    return row["status"] in {"queued", "running"} if build else controller.active(task_id)
+
+
 def task_workspace(store):
     controller = get_controller(str(store.root / "search"))
     builds = BuildController(store)
@@ -527,20 +608,25 @@ def task_workspace(store):
         kind_filter = st.selectbox("任务类型", ["全部类型", "检索", "构建"], key="ui-task-kind", label_visibility="collapsed")
     with state:
         state_filter = st.selectbox("运行状态", ["全部状态", "待启动", "运行中", "待检查", "已确认用于构建", "需处理", "不参与构建", "材料已收录", "已收录", "已舍弃", "已取消"], key="ui-task-state", label_visibility="collapsed")
+    st.button("刷新任务列表", icon=":material/refresh:")
     records = []
     related_ids = {data['task'].get('event_id') for _, data in search_runs if catalog_key(data['task']) == eid}
     for tid, data in search_runs:
         data = {**data, "task_id": tid}
         if not eid or data["task"].get("event_id") == eid or catalog_key(data['task']) == eid:
             matched = confirmed_builds(tid, data, adopted)
-            records.append({"id":tid, "kind":"检索", "name":data["task"]["target_name"], "code":search_status_code(data, matched),
-                            "status":search_status_label(data, matched), "created":data.get("created_at", ""), "data":data})
-    for build in builds.tasks(eid if eid in events else None):
+            code = search_status_code(data, matched)
+            records.append({"id":tid, "kind":"检索", "name":data["task"]["target_name"], "code":code,
+                            "status":SEARCH_STATUS.get(code, code), "created":data.get("created_at", ""), "data":data})
+    for build in build_runs:
+        if eid in events and build["event_id"] != eid:
+            continue
         if eid.startswith('catalog:') and build['event_id'] not in related_ids and catalog_key(build['body']) != eid:
             continue
-        row = builds.reconcile(build["id"])
+        row = builds.reconcile(build["id"]) if build["status"] in {"running", "queued"} else build
+        code, label = build_status(row)
         records.append({"id":row["id"], "kind":"构建", "name":display_name(row["body"]["event"]),
-                        "code":build_status(row)[0], "status":build_status(row)[1], "created":row["created"], "data":row})
+                        "code":code, "status":label, "created":row["created"], "data":row})
     buckets = {"待启动":{"ready"}, "运行中":{"running","queued"}, "待检查":{"finished","completed"}, "已确认用于构建":{"confirmed"},
                "需处理":{"failed","limit","insufficient","paused","interrupted","partial"}, "不参与构建":{"excluded"}, "材料已收录":{"collected"}, "已收录":{"accepted"}, "已舍弃":{"discarded"}, "已取消":{"cancelled"}}
     records = [r for r in records if (kind_filter == "全部类型" or r["kind"] == kind_filter)
@@ -553,20 +639,19 @@ def task_workspace(store):
             selected_rows = st.session_state[table_key]["selection"]["rows"]
             if selected_rows:
                 st.session_state["task-selected"] = keys[selected_rows[0]]
+                st.session_state["task-detail-id"] = keys[selected_rows[0]]
         st.dataframe([{"研究对象":r["name"], "类型":r["kind"], "状态":table_status(r["status"]),
                        "创建时间（北京时间）":local_timestamp(r["created"]), "任务 ID":r["id"][:12]} for r in records],
                      hide_index=True, width="stretch", height=min(240, 38*len(records)+40), row_height=38,
                      on_select=select_task, selection_mode="single-row", key=table_key,
                      column_config={"研究对象":st.column_config.TextColumn(width="large"), "状态":st.column_config.TextColumn(width="medium")})
         selected = st.session_state.get("task-selected")
-        current = next((r for r in records if r["id"] == selected), records[0])
-        st.session_state["task-selected"] = current["id"]
-        st.caption(f"{len(records)} 个任务 · 选择一行查看详情 · 每 2 秒更新运行状态")
-        with st.container(key="task-detail"):
-            if current["kind"] == "构建":
-                build_panel(store, current["id"], row=current["data"])
-            else:
-                task_panel(controller, current["id"], store, data=current["data"])
+        if selected not in keys:
+            selected = keys[0]
+        current = next(r for r in records if r["id"] == selected)
+        st.caption(f"{len(records)} 个任务 · 当前选择 {current['name']} · {selected}")
+        if st.button("打开任务", icon=":material/open_in_new:"):
+            navigate("任务", **{"task-selected": selected})
     else:
         empty("暂无匹配任务", "从主表准备检索，或确认资料后创建构建任务；也可调整筛选条件。")
     jobs = store.jobs()
@@ -581,47 +666,65 @@ def task_workspace(store):
                     st.rerun()
 
 
-def review_page(store):
-    heading("待审", "核对当前版本的范围、材料与图，保存可追溯的审核结论。")
-    events = store.events()
-    pending = [e for e in events if store.decision(e["event_id"], "scope") != "approved" or store.status(e["event_id"]) in {"待审核资料", "待审核图", "待修订"}]
-    def review_kind(e):
-        if store.decision(e['event_id'], 'scope') != 'approved':
-            return '范围'
-        return '材料' if store.decision(e['event_id'], 'evidence') != 'approved' else '图'
-    filtered = st.segmented_control("审核对象", ['全部','范围','材料','图'], default='全部', key='ui-review-kind') or '全部'
-    pending = sorted([e for e in pending if filtered == '全部' or review_kind(e) == filtered], key=lambda e:(['范围','材料','图'].index(review_kind(e)), display_name(e)))
-    if not pending:
-        empty("暂无待审事件", "新材料和 draft 图完成后，可在这里检查并保存审核意见。")
+def pending_reviews(store):
+    from finmy.dataset import dataset_root
+    from finmy.workbench.person_review_page import person_review_panel
+    from finmy.workbench.review_selection import review_queue
+    items = {}
+    root = dataset_root(store.root)
+    if root:
+        try:
+            drafts, errors = review_queue(root)
+            for error in errors:
+                st.warning(error)
+            for item in drafts:
+                ref = item['catalog']
+                name = ' / '.join(ref.get(key) or ref[fallback] for key, fallback in
+                                  [('person_name', 'person_id'), ('storyline_name', 'storyline_id'), ('event_name', 'event_id')])
+                tid = item['binding']['build_task_id']
+                items[tid] = {'label': f"人物事件 · {name} · {ref['event_id']}", 'stage': '图审核', 'draft': item}
+        except (ValueError, OSError) as exc:
+            st.warning(str(exc))
+    for event in store.events():
+        eid = event['event_id']
+        if store.decision(eid, 'scope') != 'approved':
+            stage = '范围确认'
+        else:
+            bundle = store.input_bundle(eid)
+            if not bundle['samples']:
+                continue
+            if store.decision(eid, 'evidence') != 'approved':
+                stage = '材料审核'
+            else:
+                graphs = store.graphs(eid)
+                if not graphs or graphs[0]['input_hash'] != digest(bundle) or store.decision(eid, 'graph') == 'approved':
+                    continue
+                stage = '图审核'
+        items['event:'+eid] = {'label': f'普通事件 · {display_name(event)} · {eid}', 'stage': stage, 'event_id': eid}
+    if not items:
+        empty('当前没有待处理事项', '这里显示本机普通事件的范围、材料和图审核，以及人物事件明确选送的草稿。')
         return
-    keys = [e['event_id'] for e in pending]
-    key = 'review-list-' + digest(keys)[:12]
-    def select_review():
-        rows = st.session_state[key]['selection']['rows']
-        if rows:
-            st.session_state['ui-review-event'] = keys[rows[0]]
-    st.dataframe([{'事件名称':display_name(e),'待审对象':review_kind(e),'状态':table_status(store.status(e['event_id'])),'负责人':e['owner']} for e in pending],
-                 hide_index=True, width='stretch', height=min(230,38*len(pending)+40), row_height=38,
-                 on_select=select_review, selection_mode='single-row', key=key,
-                 column_config={'事件名称':st.column_config.TextColumn(width='large')})
-    eid = st.session_state.get('ui-review-event')
-    if eid not in keys:
-        eid = keys[0]
-    st.session_state['ui-review-event'] = eid
-    index = keys.index(eid)
-    title, actions = st.columns([3,2], vertical_alignment='center')
-    with title:
-        st.subheader(display_name(store.event(eid)))
-        st.caption(f'当前 {index+1} / {len(keys)} · 待审对象：{review_kind(pending[index])}')
-    with actions:
-        with st.container(horizontal=True, horizontal_alignment='right'):
-            if st.button('上一项', disabled=index==0, icon=':material/chevron_left:'):
-                st.session_state['ui-review-event']=keys[index-1]
-                st.rerun()
-            if st.button('下一项', disabled=index==len(keys)-1, icon=':material/chevron_right:'):
-                st.session_state['ui-review-event']=keys[index+1]
-                st.rerun()
-    details(store, eid)
+    requested = st.session_state.pop('review-queue-event', None)
+    if requested in items:
+        st.session_state['ui-review-kind'] = '全部'
+        st.session_state['ui-review-selected'] = requested
+    stages = ['全部', *[stage for stage in ('范围确认', '材料审核', '图审核')
+                       if any(item['stage'] == stage for item in items.values())]]
+    if st.session_state.get('ui-review-kind') not in stages:
+        st.session_state['ui-review-kind'] = '全部'
+    group, choices = st.columns([1, 3], vertical_alignment='bottom')
+    stage = group.selectbox('处理阶段', stages, key='ui-review-kind')
+    keys = [key for key, item in items.items() if stage == '全部' or item['stage'] == stage]
+    if st.session_state.get('ui-review-selected') not in keys:
+        st.session_state['ui-review-selected'] = keys[0]
+    selected = choices.selectbox('选择待处理事项', keys, key='ui-review-selected',
+                                 format_func=lambda k: items[k]['label']+' · '+items[k]['stage'])
+    item = items[selected]
+    if 'draft' in item:
+        person_review_panel(store, item['draft'])
+    elif st.button('打开'+item['stage'], icon=':material/fact_check:', type='primary'):
+        section = {'范围确认':'基本信息', '材料审核':'资料与输入', '图审核':'图与修订'}[item['stage']]
+        open_local_event(item['event_id'], section, from_review=True)
 
 
 def settings_page(store):
@@ -678,28 +781,19 @@ def main():
         dataset_settings(None)
         return
     store = Store(workspace)
-    if "navigate_to" in st.session_state:
-        st.session_state["navigation"] = st.session_state.pop("navigate_to")
-        if st.session_state["navigation"] == "数据" and st.session_state.get("detail_id"):
-            st.session_state.pop("data-action", None)
-    page = st.session_state.get("navigation", "数据")
+    page = current_page(st.session_state)
     with st.sidebar:
         st.markdown('<div class="fm-brand"><strong>FinMycelium</strong><small>事件工作台 · EPG</small></div>', unsafe_allow_html=True)
-        for value, label, icon in [("数据集","数据集","folder_open"), ("数据","事件数据","table_view"), ("检索","新建检索","search"),
-                                   ("任务","任务中心","play_circle"), ("待审","待审","fact_check"), ("设置","设置","tune")]:
-            if st.button(label, icon=":material/"+icon+":", type="primary" if page == value else "secondary", width="stretch", key="nav-"+value):
-                if value == "数据":
-                    st.session_state.pop("detail_id", None)
-                    st.session_state.pop("data-action", None)
-                    st.session_state["master-epoch"] = st.session_state.get("master-epoch", 0)+1
+        for value, label, icon in [('数据集', '数据集', 'folder_open'), ('任务', '任务中心', 'play_circle'), ('设置', '设置', 'tune')]:
+            if st.button(label, icon=f':material/{icon}:', type='primary' if page == value else 'secondary',
+                         width='stretch', key='nav-'+value):
                 navigate(value)
         st.divider()
         st.caption("本地工作区 · 单用户")
         st.caption("范围 → 资料 → 草稿 → 审核")
     if "notice" in st.session_state:
         st.toast(st.session_state.pop("notice"), icon=":material/check_circle:")
-    from finmy.workbench.dataset_page import dataset_page
-    {"数据集": dataset_page, "数据": data_page, "检索": search_page, "任务": tasks_page, "待审": review_page, "设置": settings_page}[page](store)
+    {'数据集': dataset_workspace, '任务': tasks_page, '设置': settings_page}[page](store)
 
 
 if __name__ == "__main__":

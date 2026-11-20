@@ -330,9 +330,10 @@ model requests are reserved for `finish`. Context pressure first switches to com
 finalization; if that still exceeds the limit, execution pauses before a request.
 These controls bound work; they do not force a successful handoff after a failure.
 
-In the workbench, select **新建检索** to create searches; use **任务中心** to start/continue,
-inspect progress, read sources and review omissions. Reusable defaults live in **设置**.
-From **事件数据**, confirm scope and choose one or several events to prepare searches.
+For catalog work, open **数据集**, choose **普通事件** or **人物事件**, and prepare the search from the selected event.
+Use **任务中心 → 独立与批量检索** for an independent question or a batch of local ordinary events with confirmed scopes.
+In **任务中心 → 运行记录**, start or continue a task, inspect progress and sources, and review omissions.
+Reusable defaults live in **设置**.
 New-task advanced settings expose the request timeout and context limit; stopped tasks can revise them under **调整运行上限**. Saved profiles
 retain their configured values until explicitly changed.
 The handoff panel describes the recorded material allocation, and **设置 →
