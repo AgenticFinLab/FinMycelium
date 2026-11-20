@@ -236,3 +236,5 @@ EXPERIMENT/
 *.patch
 .vscode/*
 .vscode*
+input.json
+Buffett_Goldman_Sachs_EPG_Scrollable.html

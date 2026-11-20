@@ -53,11 +53,14 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
         self.assertIn('Reports information from: Announcement', view['details']['S2']['paragraphs'])
         page = next(page for page in view['pages'] if page['phase'] == 'P1')
         sources = [card for card in page['cards'] if card['kind'] == 'source']
-        self.assertEqual({card['id']: card['quotes'] for card in sources},
+        self.assertEqual({card['id']: card['evidence_ids'] for card in sources},
                          {'S1': ['E1', 'E2'], 'S2': ['E1']})
         self.assertEqual(len(sources), 2)
         self.assertEqual({(edge['from'], edge['to']) for edge in page['edges'] if edge['kind'] == 'evidence'},
-                         {('S1', 'A1'), ('S2', 'A1')})
+                         {('E1', 'A1'), ('E2', 'A1')})
+        self.assertEqual({(edge['from'], edge['to']) for edge in page['edges'] if edge['kind'] == 'citation'},
+                         {('S1', 'E1'), ('S2', 'E1'), ('S1', 'E2')})
+        self.assertEqual([card['id'] for card in page['cards'] if card['kind'] == 'evidence'], ['E1', 'E2'])
         self.assertEqual(embedded_data(html, 'epg-data'), before)
         self.assertEqual(graph, before)
 
@@ -202,7 +205,7 @@ console.log(JSON.stringify([sourceCitations(input, 'S1'), sourceCitations(input,
         source = next(c for p in view['pages'] for c in p['cards'] if c['id'] == 'S1')
         self.assertLess(source['box'][3], 100)
         self.assertNotIn('excerpt', source)
-        self.assertEqual(source['quotes'], ['E1', 'E2'])
+        self.assertEqual(source['evidence_ids'], ['E1', 'E2'])
         self.assertEqual(embedded_data(html, 'epg-data')['evidence'], graph['evidence'])
         relation = next(e for p in view['pages'] for e in p['edges'] if e['kind'] == 'relation')
         self.assertEqual(relation['type'], 'order_unknown')
@@ -257,11 +260,12 @@ console.log(JSON.stringify([sourceCitations(input, 'S1'), sourceCitations(input,
         phase = next(page for page in first['pages'] if page['phase'] == 'P1')
         other = next(page for page in second['pages'] if page['phase'] == 'P1')
         self.assertEqual(phase, other)
-        self.assertEqual({card['id'] for card in phase['cards']}, {'A1', 'C1', 'S1'})
-        self.assertEqual(next(card for card in phase['cards'] if card['id'] == 'S1')['quotes'], ['E1'])
+        self.assertEqual({card['id'] for card in phase['cards']}, {'A1', 'C1', 'E1', 'S1'})
+        self.assertEqual(next(card for card in phase['cards'] if card['id'] == 'S1')['evidence_ids'], ['E1'])
         self.assertEqual([section['title'] for section in phase['sections']],
-                         ['Actions and their context', 'Source evidence'])
-        self.assertTrue(any(edge['from'] == 'S1' and edge['to'] == 'A1' for edge in phase['edges']))
+                         ['Actions and their context', 'Evidence', 'Sources'])
+        self.assertTrue(any(edge['from'] == 'S1' and edge['to'] == 'E1' for edge in phase['edges']))
+        self.assertTrue(any(edge['from'] == 'E1' and edge['to'] == 'A1' for edge in phase['edges']))
         self.assertTrue(any(edge['from'] == 'C1' and edge['to'] == 'A1' for edge in phase['edges']))
         graph['event']['event_id'] = original['event']['event_id']
         self.assertEqual(graph, original)

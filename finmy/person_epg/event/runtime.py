@@ -14,6 +14,7 @@ from finmy.model_config import (person_build_effort_options, person_build_json_m
 
 from .records import fingerprint, index_records, json_bytes, pointer, sha256, prompt_json
 from .schema import FACTS_VERSION, GRAPH_VERSION
+from .read_dedup import compact_read_results, next_read_charge
 from ..building.model_transport import error_metadata
 from ..building.completion_errors import IncompleteCompletionError
 
@@ -32,6 +33,9 @@ class EventBuildConfig:
     extraction_overlap: int = 400
     max_read_calls: int = 24
     max_read_rounds: int = 2
+    read_call_extension: int = 0
+    read_round_extension: int = 0
+    read_char_extension: int = 0
     max_read_chars: int = 48000
     read_chars: int = 4000
     retrieval_top_k: int = 4
@@ -64,7 +68,8 @@ class EventBuildConfig:
         for key, value in asdict(self).items():
             if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'reasoning_effort'):
                 continue
-            minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls', 'max_read_rounds', 'max_transport_retries') else 1
+            minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls', 'max_read_rounds', 'max_transport_retries',
+                                  'read_call_extension', 'read_round_extension', 'read_char_extension') else 1
             if type(value) is not int or value < minimum:
                 raise ValueError(key + ' is outside its supported range')
         if self.graph_schema_version != GRAPH_VERSION:
@@ -144,7 +149,8 @@ def code_identity():
 
 def semantic_config(config):
     value = {k: v for k, v in asdict(config).items()
-             if k not in ('max_calls', 'stall_timeout', 'max_transport_retries')}
+             if k not in ('max_calls', 'stall_timeout', 'max_transport_retries',
+                          'read_call_extension', 'read_round_extension', 'read_char_extension')}
     # Missing in historical ordinary-mode configurations. Preserve their hashes;
     # explicit JSON mode still changes all request/checkpoint dependencies.
     if not config.full_corpus_supplement:
@@ -461,22 +467,49 @@ class Execution:
         if single_response and any(call['task_id'] == task_id for call in self.state['calls']):
             raise InvalidResponse('The one-call supplement has already been attempted without a valid checkpoint')
         task = self.state['tasks'].setdefault(key, dict(invalid_attempts=0, read_results=[], read_requests=[]))
-        if task.get('read_round_limit_reached'):
-            raise LimitReached('read_rounds')
         read_rounds = self.state.setdefault('read_rounds', {}).setdefault(group, [])
+        round_limit = self.config.max_read_rounds + self.config.read_round_extension
+        call_limit = self.config.max_read_calls + self.config.read_call_extension
+        char_limit = self.config.max_read_chars + self.config.read_char_extension
+        if task.get('read_round_limit_reached') and len(read_rounds) >= round_limit:
+            raise LimitReached('read_rounds')
+        # Older versions saved the response but not an explicit pending delivery.
+        if not task.get('pending_read_response') and (task.get('read_round_limit_reached')
+                or task.get('read_delivery', {}).get('status') == 'limited'):
+            blocked = next((c for c in reversed(self.state['calls']) if c['task_id'] == task_id
+                and c['dependency'] == dependency and c['status'] == 'limit'), None)
+            if blocked:
+                from finmy.dataset import within
+                saved = json.loads(within(self.directory, blocked['response_path']).read_text())
+                value = parse(saved['raw'])
+                if set(value) == {'read_requests'}:
+                    task['pending_read_response'] = dict(call_id=blocked['call_id'], value=value,
+                        next_page=0 if task.get('read_round_limit_reached') else
+                        task.get('read_delivery', {}).get('delivered_pages', 0))
+        task.pop('read_round_limit_reached', None)
         corpus = Corpus(self.payload, package, self.config)
         effort = person_build_request_effort(self.config.reasoning_effort, request.get('role') or task_id)
         while len(budget) < self.config.max_json_attempts:
             self.check_pause()
-            user = dict(task=request, read_results=task['read_results'])
+            user = dict(task=request, read_results=compact_read_results(request, task['read_results'], corpus.samples))
             if task.get('validation_error'):
                 user['validation_error'] = task['validation_error']
+            prefetched = next((c for c in self.state['calls'] if c['task_id'] == task_id
+                               and c['dependency'] == dependency and c['status'] == 'prefetched'), None)
+            if prefetched and prefetched['request_fingerprint'] != fingerprint(dict(system=system, user=user)):
+                # Reuse paid responses saved before this prompt-only compaction upgrade.
+                legacy = dict(user, read_results=task['read_results'])
+                if prefetched['request_fingerprint'] == fingerprint(dict(system=system, user=legacy)):
+                    user = legacy
             user_text = prompt_json(user)
             if len(system) + len(user_text) > self.config.max_context_chars:
                 raise LimitReached('model_context_chars')
-            prefetched = next((c for c in self.state['calls'] if c['task_id'] == task_id
-                               and c['dependency'] == dependency and c['status'] == 'prefetched'), None)
-            if prefetched is None:
+            pending = task.get('pending_read_response')
+            if pending:
+                call = next(c for c in self.state['calls'] if c['call_id'] == pending['call_id'])
+                call_id = call['call_id']
+                step_path = (self.directory / call['response_path']).parent
+            elif prefetched is None:
                 call = self.reserve_call(task_id, system, user, dependency, effort)
                 call_id = call['call_id']
                 step_path = self.attempt / 'steps' / call_id
@@ -493,7 +526,9 @@ class Execution:
                 retries = self.state.setdefault('transport_retries', {})
                 while True:
                     try:
-                        if prefetched is not None:
+                        if pending:
+                            raw = pending['value']
+                        elif prefetched is not None:
                             from finmy.dataset import within
                             raw = json.loads(within(self.directory, call['prefetched_response']).read_text())['raw']
                             if sha256(json_bytes(raw)) != call['prefetched_sha256']:
@@ -538,7 +573,8 @@ class Execution:
                         raise InvalidResponse('The complete handoff is already present; this pass has no local reads')
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:
                         raise InvalidResponse('Return either read_requests or the role result, never both')
-                    if call_id not in read_rounds and len(read_rounds) >= self.config.max_read_rounds:
+                    task.setdefault('pending_read_response', dict(call_id=call_id, value=value, next_page=0))
+                    if call_id not in read_rounds and len(read_rounds) >= round_limit:
                         task['read_round_limit_reached'] = True
                         raise LimitReached('read_rounds')
                     self.task_event('ReadRequested', call_id=call_id)
@@ -552,13 +588,18 @@ class Execution:
                     if call_id not in read_rounds:
                         read_rounds.append(call_id)
                         self.persist()
-                    # Each delivered page spends existing read quotas. Save progress before stopping.
+                    # Keep every delivery, but charge source characters only once across tasks.
                     for number, (original, read, result) in enumerate(pages):
+                        if number < task['pending_read_response']['next_page']:
+                            continue
                         chars = len(json_bytes(result).decode('utf-8'))
-                        reason = ('read_calls' if len(self.state['reads']) >= self.config.max_read_calls else
-                                  'read_chars' if sum(r['chars'] for r in self.state['reads']) + chars > self.config.max_read_chars else None)
+                        spent, budget_chars = next_read_charge(corpus.samples, self.state['reads'], read, result)
+                        reason = ('read_calls' if len(self.state['reads']) >= call_limit else
+                                  'read_chars' if spent + budget_chars > char_limit else None)
                         next_results = task['read_results'] + [dict(request=read, result=result)]
-                        next_user = dict(task=request, read_results=next_results)
+                        next_user = dict(task=request, read_results=compact_read_results(request, next_results, corpus.samples))
+                        if task.get('validation_error'):
+                            next_user['validation_error'] = task['validation_error']
                         if not reason and len(system) + len(prompt_json(next_user)) > self.config.max_context_chars:
                             reason = 'model_context_chars'
                         if reason:
@@ -567,13 +608,22 @@ class Execution:
                             self.persist()
                             raise LimitReached(reason)
                         record = dict(call_id=call_id, task_id=task_id, request=read, original_request=original,
-                                      result=result, chars=chars, result_fingerprint=fingerprint(result))
+                                      result=result, chars=chars, budget_chars=budget_chars,
+                                      result_fingerprint=fingerprint(result))
+                        if read.get('tool') in ('read_sample', 'search'):
+                            items = result if isinstance(result, list) else [result]
+                            record['sample_versions'] = {item['sample_id']:
+                                sha256(corpus.samples[item['sample_id']]['content'].encode('utf-8')) for item in items}
                         self.state['reads'].append(record)
+                        self.state['read_budget'] = dict(accounting='unique-source-ranges-v1',
+                            charged_chars=spent + budget_chars, max_chars=char_limit)
                         task['read_results'].append(dict(request=read, result=result))
                         task['read_requests'].append(read)
                         task['read_delivery'] = dict(status='completed' if number == len(pages)-1 else 'delivering',
                             delivered_pages=number+1, remaining_requests=[p[1] for p in pages[number+1:]])
+                        task['pending_read_response']['next_page'] = number + 1
                         self.persist()
+                    task.pop('pending_read_response', None)
                     call['status'] = 'read_requested'
                     if call.get('transport', {}).get('output_recovered'):
                         call['recovery_status'] = 'validated_read_requests'

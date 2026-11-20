@@ -96,6 +96,7 @@ def test_semantic_merge_rewrites_refs_preserves_sources_and_renders(case, tmp_pa
     for e in graph['evidence']:
         if e['evidence_id'] in pair:
             assert all(c in merged['citations'] for c in e['citations'])
+            assert e['statement'] in merged['statement']
     before = check_graph(graph, payload, complete=False)
     after = check_graph(builder.graph, payload, complete=False)
     assert after['summary']['errors'] <= before['summary']['errors']
@@ -173,7 +174,7 @@ def test_cli_postprocess_and_resume_make_no_upstream_calls(case, tmp_path, monke
     state = json.loads((tmp_path / 'state.json').read_text())
     assert state[ec.STAGE]['multi_source_after'] == 1
     assert state['config']['stall_timeout'] == 60 and state['config']['timeout'] == 900
-    assert state['config']['max_transport_retries'] == 2
+    assert state['config']['max_transport_retries'] == EventBuildConfig().max_transport_retries
     assert state['visualization']['status'] == 'completed'
     graph_first = json.loads((tmp_path / state['output']).read_text())
     ec.main([str(tmp_path), '--allow-model'])

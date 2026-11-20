@@ -242,6 +242,10 @@ class Construction:
         self.run.state.setdefault('stages', {})[name] = dict(status='running')
         before = fingerprint(dict(input=self.run.state['input_sha256'], facts=self.facts,
             graph=self.graph, coverage=self.coverage, reports=self.reports))
+        if name == 'evidence_consolidation':
+            from .evidence_consolidation import APPLY_POLICY, REVIEW_POLICY, SYSTEM
+            before = fingerprint(dict(input_state=before, review_policy=REVIEW_POLICY,
+                apply_policy=APPLY_POLICY, system=SYSTEM))
         path = self.run.directory / 'checkpoints' / ('stage-' + name + '.json')
         if path.is_file():
             saved = json.loads(path.read_text())
@@ -574,7 +578,7 @@ class Construction:
 
     def finish(self, execution_status, reason=None):
         if execution_status == 'finished' and any(
-                t['status'] == 'limited' and t.get('reason') in ('model_calls', 'read_calls', 'read_chars')
+                t['status'] == 'limited' and t.get('reason') in ('model_calls', 'read_calls', 'read_chars', 'read_rounds')
                 for t in self.run.state.get('task_states', {}).values()):
             execution_status = 'limit'
             reason = reason or 'Run budget exhausted; completed results retained'
