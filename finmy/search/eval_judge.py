@@ -1,5 +1,7 @@
 """Cached Kimi judgments for evaluation only; never drives search decisions."""
 import json
+import re
+from copy import deepcopy
 import time
 from pathlib import Path
 
@@ -73,6 +75,9 @@ def validate_labels(answer, units, questions):
         raise ValueError('Return exactly one label for every supplied unit')
     found = {}
     for row in rows:
+        row = deepcopy(row)
+        if isinstance(row, dict) and type(row.get('grade')) is int and row.get('grade') in (0, 1):
+            row.setdefault('supports', [])
         if not isinstance(row, dict) or set(row) != {'unit_id', 'grade', 'mismatch', 'reason', 'supports'}:
             raise ValueError('Each label needs unit_id, grade, mismatch, reason and supports')
         uid = row['unit_id']
@@ -97,8 +102,14 @@ def validate_labels(answer, units, questions):
             if not isinstance(support['question_id'], str) or support['question_id'] not in question_ids:
                 raise ValueError('Unknown question_id')
             quote = support['quote']
-            if not isinstance(quote, str) or not quote.strip() or quote not in expected[uid]['text']:
+            if not isinstance(quote, str) or not quote.strip():
                 raise ValueError('Support quote must be an exact nonempty substring of this unit text')
+            text = expected[uid]['text']
+            if quote not in text:
+                match = re.search(r'\s+'.join(re.escape(t) for t in quote.split()), text)
+                if not match:
+                    raise ValueError('Support quote must be an exact nonempty substring of this unit text')
+                support['quote'] = match.group()  # Actual original bytes/offsets, whitespace only.
         found[uid] = row
     return found
 
@@ -123,6 +134,8 @@ class JudgeSession:
             result = validator(saved['answer'])
             self.cache_hits += 1
             return result
+        if payload.get('operation') == 'label':
+            return self.ask_labels(payload, identity, key, cache)
         error = None
         for attempt in range(2):
             request = dict(payload)
@@ -153,6 +166,105 @@ class JudgeSession:
                               finish_reason=getattr(self.model, 'last_finish_reason', None))
                 with (self.directory/'calls.jsonl').open('a', encoding='utf-8') as stream:
                     stream.write(json.dumps(record, ensure_ascii=False)+'\n')
+
+    def ask_labels(self, payload, identity, key, cache):
+        units = {u['unit_id']: u for u in payload['units']}
+        questions = payload['questions']
+        progress = self.directory / (key + '.partial.json')
+        accepted, errors = {}, {}
+
+        def ingest(answer):
+            if not isinstance(answer, dict) or not isinstance(answer.get('labels'), list):
+                return
+            rows = answer['labels']
+            counts = {}
+            for row in rows:
+                if isinstance(row, dict) and isinstance(row.get('unit_id'), str):
+                    uid = row['unit_id']; counts[uid] = counts.get(uid, 0) + 1
+            for row in rows:
+                if not isinstance(row, dict): continue
+                uid = row.get('unit_id')
+                if not isinstance(uid, str) or uid not in units or uid in accepted: continue
+                if counts[uid] != 1:
+                    errors[uid] = 'Duplicate label; return exactly one label.'
+                    continue
+                try:
+                    accepted.update(validate_labels({'labels':[row]}, [units[uid]], questions))
+                    errors.pop(uid, None)
+                except ValueError as exc:
+                    errors[uid] = str(exc)
+
+        if progress.exists():
+            saved = json.loads(progress.read_text(encoding='utf-8'))
+            if saved['request_hash'] != key or saved['answer_hash'] != digest(saved['answer']):
+                raise ValueError('Judge partial cache integrity mismatch')
+            ingest(saved['answer'])
+        # Salvage independently valid rows from the old evaluator's failed batches.
+        history = self.directory/'calls.jsonl'
+        if history.exists():
+            for line in history.read_text(encoding='utf-8').splitlines():
+                try:
+                    call = json.loads(line)
+                    if call.get('request_hash') == key and call.get('response') is not None:
+                        ingest(parse_action(call['response']))
+                except (ValueError, TypeError):
+                    continue
+
+        def save_partial():
+            answer = {'labels': list(accepted.values())}
+            write_json(progress, dict(request_hash=key, answer_hash=digest(answer), answer=answer))
+
+        save_partial()
+        response_attempts = transient_failures = 0
+        last_error = None
+        while response_attempts < 2 and transient_failures < 3:
+            if len(accepted) == len(units): break
+            pending = [u for uid,u in units.items() if uid not in accepted]
+            request = dict(payload, units=pending)
+            request['correction'] = dict(errors=errors, instruction=(
+                'Return only these pending unit IDs. Quotes MUST be from each unit.text, '
+                'never context_before/context_after or another unit. If text alone contains '
+                'no support, use grade 0 or 1 with supports []. Local context may clarify '
+                'attribution but cannot supply the quoted evidence.'))
+            started = time.monotonic(); raw = None
+            record = dict(request_hash=key, operation='label', started_at=now(),
+                          pending_unit_ids=[u['unit_id'] for u in pending])
+            fatal = False
+            try:
+                raw = self.model(SYSTEM, request)
+                response_attempts += 1
+                last_error = None
+                ingest(parse_action(raw))
+                record['status'] = 'accepted' if len(accepted)==len(units) else 'partial'
+            except Exception as exc:
+                # Transport failures do not consume the two judgment attempts.
+                last_error = type(exc).__name__
+                record.update(status='failed', error=last_error)
+                transient = (isinstance(exc, (TimeoutError, ConnectionError))
+                    or type(exc).__name__ in {'APITimeoutError', 'APIConnectionError'}
+                    or getattr(exc, 'status_code', None) in {408, 429, 500, 502, 503, 504})
+                if transient:
+                    transient_failures += 1
+                    if transient_failures < 3:
+                        time.sleep(2 ** transient_failures)
+                elif raw is None:
+                    fatal = True
+                # Malformed responses already consumed a response attempt above.
+            finally:
+                save_partial()
+                record.update(response=raw, duration_seconds=time.monotonic()-started,
+                    usage=getattr(self.model,'last_usage',None),
+                    finish_reason=getattr(self.model,'last_finish_reason',None))
+                with history.open('a',encoding='utf-8') as stream:
+                    stream.write(json.dumps(record,ensure_ascii=False)+'\n')
+            if fatal: break
+        if len(accepted) != len(units):
+            detail = last_error or next(iter(errors.values()), 'Missing or invalid labels')
+            raise RuntimeError('Judge failed; rerun the same command to reuse completed work: ' + detail)
+        answer = {'labels':[accepted[uid] for uid in units]}
+        write_json(cache, dict(request_hash=key, answer_hash=digest(answer),
+                               answer=answer, request=identity))
+        return accepted
 
     def questions(self, task):
         return self.ask(dict(operation='rubric', task=task, instruction=(

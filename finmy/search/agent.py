@@ -259,6 +259,11 @@ def context_for(state, *, finalize=False):
                     model=remaining_model),
                 finalization_calls_reserved=finalization_reserve(state.config),
                 prior_actions=[] if finalizing else state.data.get('actions',[])[-6:])
+    if state.data.get('retrieval_plan'):
+        context['retrieval_plan'] = state.data['retrieval_plan']
+        context['retrieval_guidance'] = ('Use the facets as separate reading/search questions; pursue the current evidence gap. '
+            'Exclusions are constraints, not positive queries. Local lexical no_match is not absence of evidence; '
+            'use an explicit original location for indirect personal statements or unfamiliar aliases.')
     # Spend only the remaining context allowance on located originals. This works
     # at finalization too, after the latest feedback spans have been removed.
     available = max(0,state.config.max_model_context_chars-len(SYSTEM_PROMPT)

@@ -409,7 +409,7 @@ class SourceStore:
         if query is not None:
             from .reading import targeted_spans, read_coverage
             spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,
-                                            entry.get('read_ranges', []))
+                                            entry.get('read_ranges', []), topic_plan=self.state.data.get('retrieval_plan'))
             ranges = entry.setdefault('read_ranges', [])
             for span in spans:
                 record = dict(version=doc['version'], **{k:span[k] for k in ('block','start','end')})

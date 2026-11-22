@@ -72,7 +72,7 @@ def bound_replayed_text(entry, result, *, priority_key):
     result['spans'] = []
 
 
-def targeted_spans(document, query, limit, read_ranges, *, replay=True):
+def targeted_spans(document, query, limit, read_ranges, *, replay=True, topic_plan=None):
     """Rank temporary text windows, then read anchors and nearby context within limit.
 
     Temporary windows never replace saved parsing or alter original evidence locations.
@@ -80,6 +80,9 @@ def targeted_spans(document, query, limit, read_ranges, *, replay=True):
     Previously read matches yield to unread matches; explicit
     location reads remain available for rereading. Lexical matches are navigation hints.
     """
+    if topic_plan:
+        from .topic_reading import read_topic
+        return read_topic(document, query, limit, read_ranges, topic_plan, replay=replay)
     current = [r for r in read_ranges if r['version'] == document['version']]
     saved_chars = sum(len(b['text']) for b in document['blocks'])
     if 0 < saved_chars <= limit:

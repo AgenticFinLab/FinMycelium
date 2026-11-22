@@ -317,3 +317,64 @@ def test_kimi_judge_sdk_request_and_truncation(finish):
         assert requests[0]['response_format'] == {'type':'json_object'}
         assert requests[0]['reasoning_effort'] == 'low'
         assert requests[0]['max_tokens'] == 8192
+
+
+def test_whitespace_quote_maps_to_original_but_neighbor_quote_is_rejected():
+    units=[dict(unit_id='x',text='Goldman\nSachs paid  $5 billion.',context_before='Other evidence.')]
+    row=dict(unit_id='x',grade=2,mismatch=[],reason='direct',supports=[dict(question_id='Q1',quote='Goldman Sachs paid $5 billion.')])
+    answer=validate_labels({'labels':[row]},units,QUESTIONS)
+    assert answer['x']['supports'][0]['quote']=='Goldman\nSachs paid  $5 billion.'
+    row['supports'][0]['quote']='Other evidence.'
+    with pytest.raises(ValueError):validate_labels({'labels':[row]},units,QUESTIONS)
+    assert validate_labels({'labels':[dict(unit_id='x',grade=0,mismatch=[],reason='irrelevant')]},units,QUESTIONS)['x']['supports']==[]
+
+
+def test_only_bad_units_are_retried_and_survive_restart(tmp_path):
+    units=[dict(unit_id='good',text=GOOD),dict(unit_id='bad',text=SETTLEMENT)]
+    requests=[]
+    def fail(system,payload):
+        requests.append([u['unit_id'] for u in payload['units']])
+        return {'labels':[dict(unit_id=u['unit_id'],grade=2,mismatch=[],reason='direct',
+            supports=[dict(question_id='Q1',quote=u['text'] if u['unit_id']=='good' else 'neighbor')]) for u in payload['units']]}
+    with pytest.raises(RuntimeError):JudgeSession(tmp_path,fail).label(TASK,QUESTIONS,units)
+    assert requests==[['good','bad'],['bad']]
+    def repair(system,payload):
+        assert [u['unit_id'] for u in payload['units']]==['bad']
+        return {'labels':[dict(unit_id='bad',grade=1,mismatch=[],reason='context',supports=[])]}
+    result=JudgeSession(tmp_path,repair).label(TASK,QUESTIONS,units)
+    assert result['good']['grade']==2 and result['bad']['grade']==1
+    assert JudgeSession(tmp_path,lambda *a:pytest.fail('cache lost')).label(TASK,QUESTIONS,units)==result
+
+
+def test_transport_retry_preserves_correction_budget(tmp_path, monkeypatch):
+    from finmy.search import eval_judge
+    monkeypatch.setattr(eval_judge.time, 'sleep', lambda _: None)
+    units = [dict(unit_id='good', text=GOOD), dict(unit_id='bad', text=SETTLEMENT)]
+    requests = []
+    def model(system, payload):
+        requests.append([u['unit_id'] for u in payload['units']])
+        if len(requests) == 2:
+            raise TimeoutError('private SDK details')
+        return {'labels': [dict(unit_id=u['unit_id'], grade=2, mismatch=[], reason='direct',
+            supports=[dict(question_id='Q1', quote=(
+                'neighbor' if len(requests)==1 and u['unit_id']=='bad' else u['text']))])
+            for u in payload['units']]}
+    result = JudgeSession(tmp_path, model).label(TASK, QUESTIONS, units)
+    assert requests == [['good', 'bad'], ['bad'], ['bad']]
+    assert len(result) == 2
+
+
+def test_final_timeout_is_not_hidden_by_old_quote_error(tmp_path, monkeypatch):
+    from finmy.search import eval_judge
+    monkeypatch.setattr(eval_judge.time, 'sleep', lambda _: None)
+    requests = []
+    def model(system, payload):
+        requests.append(payload)
+        if len(requests) > 1:
+            raise TimeoutError('private SDK details')
+        return {'labels':[dict(unit_id='bad',grade=2,mismatch=[],reason='direct',
+            supports=[dict(question_id='Q1',quote='neighbor')])]}
+    with pytest.raises(RuntimeError, match='reuse completed work: TimeoutError$'):
+        JudgeSession(tmp_path, model).label(TASK, QUESTIONS, [dict(unit_id='bad',text=GOOD)])
+    assert len(requests) == 4
+    assert 'private SDK details' not in (tmp_path/'calls.jsonl').read_text()

@@ -212,6 +212,9 @@ def refers_to_previous(text):
 
 
 def shared_input(state,complete,budget,queries, *, policy=LEGACY_POLICY):
+    if policy == 'entity_attribute_windows_v1':
+        from .topic import allocate
+        return allocate(state, complete, budget)
     if policy == SAVED_WINDOW_POLICY and complete['material_chars'] > budget:
         from .assembly_windows import allocate_windows
         return allocate_windows(state, complete, budget, queries, policy=policy)

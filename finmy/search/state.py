@@ -118,6 +118,10 @@ class SearchState:
                              input_sha256=digest(task), code_sha256=digest({p.name:digest(p.read_bytes()) for p in Path(__file__).parent.glob('*.py')}),
                              status='ready', usage={'search': 0, 'model': 0},
                              read_sources=[], sources={}, cache={}, feedback=None)
+            from .topic import plan_for
+            plan = plan_for(task)
+            if plan["entities"]:
+                self.data["retrieval_plan"] = plan
             self.save()
 
     def save(self):

@@ -180,6 +180,9 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
         record['source_review'] = source_review
     from .budget import BUDGET_POLICY
     record['budget_policy'] = BUDGET_POLICY
+    if state.data.get('retrieval_plan'):
+        record['retrieval_plan'] = state.data['retrieval_plan']
+        record['budget_policy'] = state.data['retrieval_plan']['policy']
     record['complete_id'] = digest(record)
     return materialize_complete(state, record), record
 
