@@ -48,8 +48,18 @@ graphs use their existing renderer.
 
 ## Reading the graph
 
-Stage and Phase names form the top navigation. Each Phase has one scrollable
-canvas. Shared context appears above its actions. Actions extend horizontally,
+Each Phase opens at **100%**, the largest scale that fits its action rows,
+context, participants, Evidence and Sources in the available width and height.
+Switching Phase starts a new 100% overview. Resizing the window or opening
+details recalculates the fit. **+** and **−** zoom relative to that overview,
+and **Fit phase** returns to it. On a dense Phase, use **Reading size** to
+see the cards at their original text size. Each Action
+keeps the row and order assigned by the layout. Columns spread into the
+available width. When the rows need more room, scroll horizontally inside the
+diagram. The toolbar and Stage navigation stay in place. **Stages and phases**
+opens the outline on smaller screens.
+
+Shared context appears above its actions. Actions extend horizontally,
 with their specific context nearby. People and organizations appear as circular
 nodes. Structural lines show action relations in purple, roles in blue-gray
 and context in ochre. Recorded `precedes` and `enables` links help place
@@ -57,6 +67,8 @@ actions. Unknown order has its own line style. Context without an explicit
 Phase can be grouped using its date or shared evidence. These placements are
 display choices.
 
+Evidence and Sources appear below the diagram and take part in the same
+zoom. Their cards wrap to the available width.
 Evidence cards contain excerpts. Each points to one Source. One Source may
 contain several excerpts, and one field may cite several excerpts from the same
 or different sources. Select a record or a field to highlight its evidence
@@ -80,3 +92,7 @@ python -m unittest discover -s tests -p 'test_person_event_graph_html.py' -v
 The tests cover offline export, field ownership, source and passage navigation,
 cross-Phase relations, quotation checks, layout binding and preservation of
 saved records.
+
+With Playwright installed, set `FINMY_TEST_CHROMIUM` to a local Chromium
+executable and run `pytest -q tests/test_person_event_rendering.py` to check
+the overview, zoom and evidence navigation at desktop and phone sizes.

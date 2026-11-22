@@ -24,8 +24,13 @@
 
 body {
   margin: 0;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: var(--ink);
-  background: #edf2f6;
+  background: white;
   font: 14px/1.4 Arial, Helvetica, sans-serif
 }
 
@@ -46,8 +51,9 @@ select:focus-visible {
 }
 
 #toolbar {
-  height: 46px;
+  flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
@@ -64,64 +70,67 @@ select:focus-visible {
 }
 
 #picker {
-  max-width: 650px
+  flex: 0 1 28em;
+  min-width: 0;
+  width: 0
 }
 
-.spacer {
-  flex: 1
+.phase-controls, .zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px
 }
+.phase-controls { flex: 1 1 160px; min-width: 0 }
+.phase-controls button, .zoom-controls button { white-space: nowrap }
+#toolbar > span { font-size: 12px; color: var(--muted) }
+#zoom-level { min-width: 4ch; text-align: center; font-variant-numeric: tabular-nums }
+#toolbar button[aria-pressed=true] { color: var(--navy); border-color: #6689a8; background: #edf4fa }
 
-#viewport {
+#workspace, #sheet, #viewport {
   flex: 1;
   min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px;
-  touch-action: pan-x pan-y
+  min-height: 0
 }
+#workspace { display: flex; overflow: hidden }
+#sheet { display: flex; flex-direction: column }
 
-#sheet {
-  width: 1134px;
-  position: relative;
-  background: white;
-  box-shadow: 0 2px 10px #20354716
-}
+#viewport { overflow: hidden auto }
+#viewport.phase-fitted, #viewport.measuring-fit { overflow-y: hidden }
+
+#content { position: relative; isolation: isolate }
+#diagram-scroll { overflow: auto hidden }
+#diagram-size { position: relative; overflow: clip; min-width: 100% }
+#graph { position: absolute; inset: 0 auto auto 0; transform-origin: top left }
+#trace-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3 }
 
 #heading {
   background: var(--navy);
   color: white;
-  padding: 14px 24px;
-  font-size: 24px;
+  margin: 0;
+  padding: 10px 18px;
+  font-size: clamp(17px, 2vw, 24px);
   line-height: 1.2
 }
+#heading, #subheading { overflow-wrap: anywhere }
 
 #subheading {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   justify-content: space-between;
-  padding: 9px 24px;
+  padding: 6px 18px;
   color: var(--muted)
 }
 
+#outline { flex: none; border-bottom: 1px solid var(--border) }
+#outline summary { cursor: pointer; color: var(--navy); padding: 3px 18px 5px; font-size: 12px }
 #navigation {
   display: flex;
   gap: 8px;
-  padding: 0 22px 10px;
+  padding: 0 16px 6px;
+  max-height: 18vh;
+  overflow: auto;
   align-items: stretch
-}
-
-/* Keep the existing stage controls in reach while the canvas scrolls sideways. */
-#heading,
-#subheading,
-#navigation {
-  position: sticky;
-  left: 0;
-  width: 1134px;
-  max-width: 100%
-}
-
-#subheading,
-#navigation {
-  background: white
 }
 
 .stage {
@@ -165,11 +174,6 @@ select:focus-visible {
   border-color: #2868a8
 }
 
-#graph {
-  position: relative;
-  width: 1134px
-}
-
 #regions,
 #cards,
 #links {
@@ -185,15 +189,21 @@ select:focus-visible {
   background: white
 }
 
-.section.evidence {
-  background: #f8fbfa
-}
-.section.sources { background: #f7f9fc }
+#references { display: grid; gap: 12px; padding: 0 16px }
+#references, #jumps { zoom: var(--content-scale, 1) }
+#references:empty, #jumps:empty { display: none }
+.reference-section { border: 1px solid var(--border); border-radius: 7px; padding: 12px; background: #f8fbfa }
+.reference-section.sources { background: #f7f9fc }
+.reference-section header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px }
+.reference-section h3 { font-size: 18px; margin: 0 }
+.reference-section .legend { flex-wrap: wrap; font-size: 11px }
+.reference-grid { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)) }
+.reference-grid .card { position: relative; z-index: 4; min-height: 64px; width: 100% }
+.reference-grid .card.evidence .title { -webkit-line-clamp: 4 }
 .card.evidence { background: #f0f6ee; border-color: #9eb699 }
 .relation-control { pointer-events: stroke; cursor: pointer }
 .relation-control:focus-visible { stroke: var(--purple); stroke-opacity: .35; outline: none }
 .edge-label.relation-control { pointer-events: all }
-#workspace { display: flex; height: calc(100vh - 46px); height: calc(100dvh - 46px) }
 #inspector { flex: 0 0 clamp(320px, 32vw, 480px); min-width: 0; display: flex; flex-direction: column;
   background: #fff; border-left: 1px solid var(--border); color: var(--ink) }
 .inspector-nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px;
@@ -221,15 +231,22 @@ select:focus-visible {
 .trace-link:hover { border-color: #719782 }
 .relation-list .trace-link, .passage-list .trace-link { display: block; width: 100% }
 .occurrence .claim { margin-left: 10px }
-@media (max-width: 740px) {
+@media (max-width: 600px), (max-width: 1024px) and (min-height: 520px) {
   #workspace { flex-direction: column }
-  #inspector { max-height: 57%; flex: 0 1 auto; border-left: 0; border-top: 1px solid var(--border) }
-  #toolbar { gap: 4px; padding: 5px }
-  #toolbar button { flex-shrink: 0; padding: 4px }
-  #picker { min-width: 0 }
-  #toolbar > span:not(.spacer) { flex: 0 0 68px; font-size: 10px; line-height: 1.1 }
-  #toolbar .phase-word { display: none }
+  #inspector { min-height: 0; max-height: 48%; flex: 0 1 auto; border-left: 0; border-top: 1px solid var(--border) }
   #inspection { padding: 10px 14px }
+}
+@media (max-width: 640px) {
+  #toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 5px }
+  #toolbar button, #toolbar select { padding: 4px 6px }
+  .phase-controls { grid-column: 1 / -1 }
+  #toolbar > span { grid-area: 2 / 1; font-size: 11px }
+  #picker { flex: 1 }
+  .zoom-controls { grid-area: 2 / 2 }
+  #toolbar .phase-word { display: none }
+  #heading, #subheading, #outline summary { padding-inline: 10px }
+  #references { padding-inline: 8px }
+  .reference-section { padding: 9px }
 }
 
 .section h3 {
@@ -494,21 +511,26 @@ svg text {
 </head>
 <body>
 <div id="toolbar">
-<button id="previous" aria-label="Previous phase">←<span class="phase-word"> Phase</span></button>
+<div class="phase-controls"><button id="previous" aria-label="Previous phase">←<span class="phase-word"> Phase</span></button>
 <select id="picker" aria-label="Phase"></select>
-<button id="next" aria-label="Next phase"><span class="phase-word">Phase </span>→</button>
-<span class="spacer"></span>
+<button id="next" aria-label="Next phase"><span class="phase-word">Phase </span>→</button></div>
 <!--__BUILD_STATUS__-->
+<div class="zoom-controls" role="group" aria-label="Diagram zoom">
+<button id="fit" aria-pressed="true" title="Fit all cards in this phase (100%)">Fit phase</button>
 <button id="minus" aria-label="Zoom out">−</button>
-<button id="zoom" aria-label="Reset zoom">100%</button>
+<output id="zoom-level" aria-label="Zoom relative to the fitted phase"></output>
 <button id="plus" aria-label="Zoom in">+</button>
+<button id="zoom" title="Show cards at their original reading size">Reading size</button></div>
 </div>
-<div id="workspace"><div id="viewport"><div id="sheet">
-<div id="heading"></div><div id="subheading"></div>
-<nav id="navigation" aria-label="Stages and phases"></nav>
-<div id="graph"><div id="regions"></div><svg id="links" aria-label="Graph relationships"></svg><div id="cards"></div></div>
+<div id="workspace"><main id="sheet">
+<h1 id="heading"></h1><div id="subheading"></div>
+<details id="outline"><summary>Stages and phases</summary><nav id="navigation" aria-label="Stages and phases"></nav></details>
+<div id="viewport"><div id="content">
+<div id="diagram-scroll" tabindex="0" role="region" aria-label="Phase diagram"><div id="diagram-size"><div id="graph"><div id="regions"></div><svg id="links" aria-label="Graph relationships"></svg><div id="cards"></div></div></div></div>
+<div id="references"></div>
 <div id="jumps"></div>
-</div></div>
+<svg id="trace-overlay" aria-hidden="true"><defs id="trace-defs"></defs><g id="evidence-lines"></g></svg>
+</div></div></main>
 <aside id="inspector" hidden aria-labelledby="inspection-title">
   <div class="inspector-nav"><button id="inspection-back" type="button">← Back</button>
   <button id="inspection-close" type="button" aria-label="Close details">Close ×</button></div>
@@ -526,7 +548,7 @@ const evidence = new Map(graph.evidence.map(item => [item.evidence_id, item]));
 const sources = new Map(graph.sources.map(item => [item.source_id, item]));
 const cards = new Map();
 let drawnEdges = [], hovered = null, focused = null;
-let relationshipLabels = null, relationshipObstacles = [], evidenceLayer = null;
+let relationshipLabels = null, relationshipObstacles = [];
 const EDGE_STYLES = {
   relation: {color: '#80589f', tint: '#f7f3fa', border: '#d8c9e3', width: 2.2, opacity: .94},
   party: {color: '#607f9c', tint: '#f2f7fb', border: '#c0d1df', width: 1.4, opacity: .76},
@@ -547,7 +569,10 @@ function edgePattern(edge) {
 }
 let current = 0,
   expanded = null,
-  scale = 1;
+  scale = 1,
+  zoomRatio = 1,
+  fitCache = null;
+let diagramWidth = 0;
 
 function el(tag, text, cls) {
   const node = document.createElement(tag);
@@ -641,7 +666,7 @@ function drawRelationshipLabels(active) {
   for (const item of visible) {
     const {edge, points} = item;
     const text = edge.type === 'precedes' ? 'before' : edge.type.replaceAll('_', ' ');
-    const location = labelPosition(points, text, obstacles, view.pages[current].width);
+    const location = labelPosition(points, text, obstacles, diagramWidth);
     if (!location) continue;
     const {box, anchor, connector} = location;
     obstacles.push(box);
@@ -686,7 +711,7 @@ function relationshipLegend() {
   return legend;
 }
 
-function paintCard(card) {
+function paintCard(card, container) {
   const button = el('button', null, 'card ' + card.kind + (card.box[3] < 100 ? ' compact' : ''));
   button.type = 'button';
   button.dataset.key = card.key;
@@ -694,7 +719,7 @@ function paintCard(card) {
   button.setAttribute('aria-expanded', 'false');
   button.setAttribute('aria-label', card.alias + ' ' + card.title);
   button.title = view.details[card.id].title;
-  position(button, card.box);
+  if (container === $('cards')) position(button, card.box);
   const preview = el('span', null, 'preview');
   if (card.kind === 'party') {
     preview.append(partyIcon(card.entity_type), el('span', card.title, 'title'),
@@ -715,7 +740,7 @@ function paintCard(card) {
   button.onmouseleave = () => highlight(null);
   button.onfocus = () => { focused = card.key; highlight(hovered); };
   button.onblur = () => { if (focused === card.key) focused = null; highlight(hovered); };
-  $('cards').append(button);
+  container.append(button);
   cards.set(card.key, {card, button});
 }
 
@@ -728,8 +753,7 @@ function showPage(index) {
   focused = null;
   cards.clear();
   const page = view.pages[index];
-  $('sheet').style.width = page.width + 'px';
-  $('graph').style.width = page.width + 'px';
+  diagramWidth = 0;
   $('picker').value = String(index);
   $('previous').disabled = index === 0;
   $('next').disabled = index === view.pages.length - 1;
@@ -769,19 +793,35 @@ function showPage(index) {
   }
   $('regions').replaceChildren();
   $('cards').replaceChildren();
+  $('references').replaceChildren();
   $('jumps').replaceChildren();
-  $('graph').style.height = page.height + 'px';
+  const grids = {};
+  let diagramHeight = 0;
   for (const region of page.sections) {
+    if (region.title === 'Evidence' || region.title === 'Sources') {
+      const section = el('section', null, 'reference-section ' + region.title.toLowerCase());
+      const header = el('header');
+      header.append(el('h3', region.title));
+      if (region.title === 'Evidence') header.append(relationshipLegend());
+      const grid = el('div', null, 'reference-grid');
+      section.append(header, grid);
+      $('references').append(section);
+      grids[region.title === 'Sources' ? 'source' : 'evidence'] = grid;
+      continue;
+    }
     const section = el('section', null, 'section');
-    if (region.title === 'Evidence' || region.title === 'Sources') section.classList.add(region.title.toLowerCase());
     position(section, region.box);
-    if (region.title === 'Evidence') section.append(relationshipLegend());
+    section.style.right = (page.width - region.box[0] - region.box[2]) + 'px';
+    section.style.width = 'auto';
+    diagramHeight = Math.max(diagramHeight, region.box[1] + region.box[3] + 10);
     if (region.title === 'Actions and their context') section.append(el('span',
       '● People / organizations · ■ Actions · ■ Context', 'legend'));
     section.append(el('h3', region.title));
     $('regions').append(section);
   }
-  for (const card of page.cards) paintCard(card);
+  $('graph').style.height = diagramHeight + 'px';
+  $('diagram-scroll').hidden = !diagramHeight;
+  for (const card of page.cards) paintCard(card, grids[card.kind] || $('cards'));
   for (const jump of page.jumps) {
     const row = el('span');
     const title = jump.from + ' → ' + jump.to + ' · ' + pretty(jump.type);
@@ -801,7 +841,10 @@ function showPage(index) {
     $('jumps').append(row);
   }
   $('viewport').scrollTo(0, 0);
-  drawEdges();
+  $('diagram-scroll').scrollLeft = 0;
+  zoomRatio = 1;
+  fitCache = null;
+  sizeDiagram();
 }
 
 function port(box, side) {
@@ -1003,11 +1046,14 @@ function drawEdges() {
   const page = view.pages[current],
     canvas = $('links'),
     height = parseFloat($('graph').style.height);
+  const focusId = canvas.contains(document.activeElement) && document.activeElement.dataset.relationId;
+  const returnId = canvas.contains(returnTo) && returnTo.dataset.relationId;
   canvas.replaceChildren();
   drawnEdges = [];
-  canvas.setAttribute('width', page.width);
+  canvas.setAttribute('width', diagramWidth);
   canvas.setAttribute('height', height);
   const defs = svg('defs', {});
+  $('trace-defs').replaceChildren();
   for (const [kind, style] of Object.entries(EDGE_STYLES)) {
     const marker = svg('marker', {
       id: 'arrow-' + kind,
@@ -1023,15 +1069,14 @@ function drawEdges() {
       d: 'M0 1L9 5L0 9L3 5Z',
       fill: style.color
     }));
-    defs.append(marker);
+    (kind === 'evidence' ? $('trace-defs') : defs).append(marker);
   }
   canvas.append(defs);
   const baseLayer = svg('g', {'class': 'edge-layer'});
   const emphasisLayer = svg('g', {'class': 'edge-emphasis-layer'});
   relationshipLabels = svg('g', {'class': 'edge-label-layer'});
-  evidenceLayer = svg('g', {'class': 'evidence-layer', 'aria-hidden': true});
   const hitLayer = svg('g', {});
-  canvas.append(evidenceLayer, baseLayer, emphasisLayer, hitLayer, relationshipLabels);
+  canvas.append(baseLayer, emphasisLayer, hitLayer, relationshipLabels);
   const boxes = new Map([...cards].filter(([, item]) => !['source', 'evidence'].includes(item.card.kind))
     .map(([key, item]) => [key, linkBox(item)]));
   const partyLabels = [...cards.values()].filter(item => item.card.kind === 'party').map(item => {
@@ -1047,7 +1092,7 @@ function drawEdges() {
   }
   const obstacles = [...boxes.values(), ...partyLabels, ...headings];
   relationshipObstacles = obstacles;
-  const grid = routingGrid(obstacles, page.width, height);
+  const grid = routingGrid(obstacles, diagramWidth, height);
   const structural = page.edges.filter(edge => edge.kind !== 'evidence');
   structural.sort((a, b) => Number(a.kind === 'relation') - Number(b.kind === 'relation'));
   for (const edge of structural) {
@@ -1098,6 +1143,8 @@ function drawEdges() {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inspectRecord(edge.relation_id); }
       };
       hitLayer.append(hit);
+      if (edge.relation_id === returnId) returnTo = hit;
+      if (edge.relation_id === focusId) hit.focus({preventScroll: true});
     }
     const emphasis = svg('g', {'class': 'edge-emphasis'});
     const halo = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'white',
@@ -1116,7 +1163,7 @@ function drawEdges() {
 }
 
 function paintEvidenceSelection() {
-  if (!evidenceLayer) return;
+  const evidenceLayer = $('evidence-lines');
   evidenceLayer.replaceChildren();
   for (const item of cards.values()) item.button.classList.remove('evidence-active');
   if (!selection) return;
@@ -1128,11 +1175,20 @@ function paintEvidenceSelection() {
   if (!fieldFocus && (kind === 'entity' || kind === 'person')) {
     for (const edge of links) if (edge.to === id) quotes.add(edge.from);
   }
+  const origin = $('trace-overlay').getBoundingClientRect();
+  const frame = $('diagram-scroll').getBoundingClientRect();
+  function relativePoint(x, y, inDiagram) {
+    if (inDiagram && (x < frame.left || x > frame.right)) return null;
+    return [x - origin.left, y - origin.top];
+  }
   function point(key, top) {
-    const [x, y, w, h] = linkBox(cards.get(key));
-    return [x + w / 2, top ? y : y + h];
+    const {card, button} = cards.get(key);
+    const node = card.kind === 'party' ? button.querySelector('.party-icon') : button;
+    const box = node.getBoundingClientRect();
+    return relativePoint(box.left + box.width / 2, top ? box.top : box.bottom, $('graph').contains(button));
   }
   function connect(a, b) {
+    if (!a || !b) return;
     const middle = (a[1] + b[1]) / 2;
     evidenceLayer.append(svg('path', {d: 'M' + a + ' C' + [a[0], middle] + ' ' + [b[0], middle] + ' ' + b,
       fill: 'none', stroke: EDGE_STYLES.evidence.color, 'stroke-width': 1.6, 'stroke-dasharray': '3 5',
@@ -1149,18 +1205,127 @@ function paintEvidenceSelection() {
   for (const line of drawnEdges) {
     const rid = line.edge.relation_id;
     if (!rid || (rid !== id && !(kind === 'evidence' && selectedPassages(rid, null).has(id)))) continue;
-    const p = line.line.getPointAtLength(line.line.getTotalLength() / 2);
+    const p = line.line.getPointAtLength(line.line.getTotalLength() / 2).matrixTransform(line.line.getScreenCTM());
     for (const [key, item] of cards) if (item.card.kind === 'evidence' && quotes.has(item.card.id)) {
       item.button.classList.add('evidence-active');
-      connect(point(key, true), [p.x, p.y]);
+      connect(point(key, true), relativePoint(p.x, p.y, true));
     }
   }
 }
 
-function zoom(value) {
-  scale = Math.max(.5, Math.min(1.8, value));
-  $('sheet').style.zoom = scale;
-  $('zoom').textContent = Math.round(scale * 100) + '%';
+function fitScale() {
+  const viewport = $('viewport');
+  const width = viewport.offsetWidth, height = viewport.clientHeight;
+  if (!width || !height) return 0;
+  if (fitCache?.width === width && fitCache.height === height) return fitCache.scale;
+  const coreHeight = $('diagram-scroll').hidden ? 0 : $('graph').offsetHeight;
+  const content = $('content'), refs = $('references'), jumps = $('jumps');
+  viewport.classList.add('measuring-fit');
+  // Quote and source rows wrap at different scales. Measure their actual layout
+  // without redrawing the diagram or routing any edges during the search.
+  function fits(value) {
+    content.style.setProperty('--content-scale', value);
+    const tail = refs.getBoundingClientRect().height + jumps.getBoundingClientRect().height;
+    return Math.round(coreHeight * value) + tail <= height &&
+      refs.scrollWidth <= refs.clientWidth + 1 && jumps.scrollWidth <= jumps.clientWidth + 1;
+  }
+  let upper = coreHeight ? Math.min(width / view.pages[current].width, height / coreHeight) : 1;
+  if (!coreHeight) while (upper < height && fits(upper)) upper *= 2;
+  let best = upper;
+  if (!fits(upper)) {
+    best = 0;
+    for (let i = 0; i < 14; i++) {
+      const middle = (best + upper) / 2;
+      if (fits(middle)) best = middle;
+      else upper = middle;
+    }
+  }
+  viewport.classList.remove('measuring-fit');
+  fitCache = {width, height, scale: best};
+  return best;
+}
+
+function spreadColumns(width) {
+  diagramWidth = width;
+  $('graph').style.width = width + 'px';
+  const nodes = [...cards.values()].filter(item => $('cards').contains(item.button));
+  if (!nodes.length) return;
+  const boxes = nodes.map(item => item.card.box);
+  const left = Math.min(...boxes.map(([x]) => x));
+  const right = Math.max(...boxes.map(([x, , w]) => x + w));
+  const centers = boxes.map(([x, , w]) => x + w / 2);
+  const first = Math.min(...centers), last = Math.max(...centers);
+  const inset = Math.min(left, view.pages[current].width - right);
+  const extra = Math.max(0, width - right - inset);
+  // Every row shares the same horizontal mapping. The layout owns row assignment and order.
+  nodes.forEach(({button, card}, i) => {
+    const share = first === last ? .5 : (centers[i] - first) / (last - first);
+    button.style.left = (card.box[0] + extra * share) + 'px';
+  });
+}
+
+function sizeDiagram() {
+  const area = $('diagram-scroll'), diagram = $('graph');
+  const empty = area.hidden && !$('references').childElementCount;
+  $('viewport').classList.toggle('phase-fitted', zoomRatio === 1);
+  for (const button of ['fit', 'minus', 'plus', 'zoom']) $(button).disabled = empty;
+  if (empty) {
+    $('zoom-level').textContent = '—';
+    if (!diagramWidth) { spreadColumns(view.pages[current].width); drawEdges(); }
+    return;
+  }
+  const fit = fitScale();
+  if (!fit) return;
+  scale = fit * zoomRatio;
+  $('content').style.setProperty('--content-scale', scale);
+  $('diagram-size').style.height = Math.round(diagram.offsetHeight * scale) + 'px';
+  const width = Math.max(view.pages[current].width, area.clientWidth / scale);
+  diagram.style.transform = 'scale(' + scale + ')';
+  $('diagram-size').style.width = Math.round(width * scale) + 'px';
+  $('fit').setAttribute('aria-pressed', String(zoomRatio === 1));
+  $('zoom-level').textContent = Math.round(zoomRatio * 100) + '%';
+  $('minus').disabled = zoomRatio <= Math.min(.25, 1 / fit) + .001;
+  $('plus').disabled = zoomRatio >= Math.max(2, 2 / fit) - .001;
+  if (width !== diagramWidth) {
+    spreadColumns(width);
+    drawEdges();
+  } else {
+    paintEvidenceSelection();
+  }
+}
+
+function changeZoom(value) {
+  const area = $('diagram-scroll'), viewport = $('viewport');
+  const frame = viewport.getBoundingClientRect(), before = $('graph').getBoundingClientRect();
+  const centerX = area.clientWidth / 2;
+  const centerY = Math.min(viewport.clientHeight, Math.max(0, before.bottom - frame.top)) / 2;
+  const fractionX = before.width ? (frame.left + centerX - before.left) / before.width : 0;
+  let y = (frame.top + centerY - before.top) / scale;
+  let targetY = centerY;
+  // Start detailed reading at the selected card or the first action in the overview.
+  const selected = cards.get(expanded)?.button;
+  const anchor = zoomRatio === 1 && value > 1 && centerY
+    ? ($('cards').contains(selected) ? selected : $('cards').querySelector('.action')) : null;
+  if (anchor) {
+    const box = anchor.getBoundingClientRect();
+    y = (box.top + box.height / 2 - before.top) / scale;
+    targetY = viewport.clientHeight / 2;
+  }
+  const fit = fitScale();
+  if (!fit) return;
+  zoomRatio = Math.max(Math.min(.25, 1 / fit), Math.min(Math.max(2, 2 / fit), value));
+  sizeDiagram();
+  if (zoomRatio === 1) {
+    area.scrollLeft = 0;
+    viewport.scrollTop = 0;
+  } else if (!area.hidden) {
+    const after = $('graph').getBoundingClientRect();
+    const box = anchor?.getBoundingClientRect();
+    const targetX = box ? box.left + box.width / 2 : after.left + fractionX * after.width;
+    area.scrollLeft += targetX - frame.left - centerX;
+    if (centerY) viewport.scrollTop += after.top + y * scale - frame.top - targetY;
+  }
+  paintEvidenceSelection();
 }
 
 function phaseLabel(page) {
@@ -1169,9 +1334,17 @@ function phaseLabel(page) {
 }
 /*__FIELD_INSPECTOR__*/
 
-$('minus').onclick = () => zoom(scale - .1);
-$('plus').onclick = () => zoom(scale + .1);
-$('zoom').onclick = () => zoom(1);
+$('fit').onclick = () => changeZoom(1);
+$('minus').onclick = () => changeZoom((Math.ceil(zoomRatio * 10 - .000001) - 1) / 10);
+$('plus').onclick = () => changeZoom((Math.floor(zoomRatio * 10 + .000001) + 1) / 10);
+$('zoom').onclick = () => changeZoom(1 / fitScale());
+const wideOutline = matchMedia('(min-width: 800px) and (min-height: 600px)');
+$('outline').open = wideOutline.matches;
+wideOutline.addEventListener('change', e => { $('outline').open = e.matches; });
+new ResizeObserver(sizeDiagram).observe($('viewport'));
+$('diagram-scroll').addEventListener('scroll', () => {
+  if (selection) paintEvidenceSelection();
+}, {passive: true});
 $('previous').onclick = () => showPage(current - 1);
 $('next').onclick = () => showPage(current + 1);
 $('picker').onchange = e => showPage(Number(e.target.value));

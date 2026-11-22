@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+import os
 
 import pytest
 
@@ -106,8 +107,177 @@ def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload):
     assert {c['kind'] for page in view['pages'] for c in page['cards']} >= {'action', 'context', 'party', 'evidence', 'source'}
 
     # The workbench can display an earlier renderer's receipt without rewriting it.
-    state['visualization']['renderer'] = 'person-event-scrollable-v1'
+    state['visualization']['renderer'] = 'person-event-scrollable-v4'
     assert read_gantt(tmp_path, state, current_view=True) == html
     frozen.write_text(frozen.read_text() + ' ')
     with pytest.raises(ValueError, match='input integrity'):
         read_gantt(tmp_path, state, current_view=True)
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_phase_overview_and_reading_size_in_browser(tmp_path, graph):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event.graph_html import render_graph_html
+    from test_person_event_graph_html import sample_graph
+
+    for i in range(7):
+        graph['actions'].append(dict(graph['actions'][0], action_id=f'EXTRA-{i}'))
+    output = tmp_path / 'viewer.html'
+    output.write_text(render_graph_html(graph), encoding='utf-8')
+    fits = """() => {
+        const diagram = document.querySelector('#diagram-scroll');
+        const viewport = document.querySelector('#viewport'), box = viewport.getBoundingClientRect();
+        const nodes = [...document.querySelectorAll('.card')];
+        return nodes.length && document.querySelector('#zoom-level').textContent === '100%' &&
+          diagram.scrollWidth === diagram.clientWidth && viewport.scrollHeight <= viewport.clientHeight + 1 &&
+          nodes.every(node => {
+            const r = node.getBoundingClientRect();
+            return r.left >= box.left - 1 && r.right <= box.right + 1 &&
+                   r.top >= box.top - 1 && r.bottom <= box.bottom + 1;
+        });
+    }"""
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        page = browser.new_page(viewport={'width': 1366, 'height': 768}, offline=True)
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        page.goto(output.as_uri())
+        for width, height in [(1366, 768), (390, 844), (844, 390)]:
+            page.set_viewport_size({'width': width, 'height': height})
+            page.wait_for_function(fits)
+            first = page.locator('.action').first
+            first.click()
+            page.wait_for_function(fits)
+            before = [page.locator(s).bounding_box() for s in ['#heading', '#toolbar', '#inspector']]
+            quote = page.locator('.card.evidence').first
+            action_width = first.bounding_box()['width']
+            page.locator('#plus').click()
+            assert page.locator('#zoom-level').inner_text() == '110%'
+            assert first.bounding_box()['width'] == pytest.approx(action_width * 1.1, abs=1)
+            page.locator('#fit').click()
+            page.wait_for_function(fits)
+            page.locator('#zoom').click()
+            assert first.bounding_box()['width'] > action_width
+            assert first.evaluate('el => Math.abs(el.getBoundingClientRect().width - el.offsetWidth) < 1')
+            card, viewport = first.bounding_box(), page.locator('#viewport').bounding_box()
+            for axis, extent in [('x', 'width'), ('y', 'height')]:
+                assert viewport[axis] - 1 <= card[axis]
+                assert card[axis] + card[extent] <= viewport[axis] + viewport[extent] + 1
+            assert before == [page.locator(s).bounding_box() for s in ['#heading', '#toolbar', '#inspector']]
+            assert page.evaluate('document.documentElement.scrollWidth === innerWidth && document.documentElement.scrollHeight === innerHeight')
+            page.locator('#fit').click()
+            page.wait_for_function(fits)
+            quote.click()
+            assert page.locator('#inspection blockquote').is_visible()
+            assert page.locator('#evidence-lines path').count() > 0
+            page.locator('#inspection h3:text-is("Source") + button').click()
+            assert page.locator('#inspection .inspection-meta').first.inner_text().startswith('SOURCE')
+            page.locator('#inspection-back').click()
+            assert page.locator('#inspection blockquote').is_visible()
+            page.keyboard.press('Escape')
+            page.locator('#plus').click()
+            page.locator('#next').click()
+            page.wait_for_function(fits)
+            page.locator('#previous').click()
+        background = sample_graph()
+        background.update(sources=graph['sources'], evidence=graph['evidence'])
+        background_file = tmp_path / 'background.html'
+        background_file.write_text(render_graph_html(background), encoding='utf-8')
+        page.goto(background_file.as_uri())
+        assert page.locator('#diagram-scroll').is_hidden()
+        page.wait_for_function(fits)
+        page.locator('#minus').click()
+        assert page.locator('#zoom-level').inner_text() == '90%'
+        page.locator('.card.evidence').first.click()
+        assert page.locator('#evidence-lines path').count() > 0
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path, monkeypatch):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event import graph_html
+    from test_person_event_graph_html import sample_graph
+
+    graph = sample_graph()
+    graph['phases'] = [{'phase_id': 'P', 'name': 'Phase'}]
+    graph['actions'] = [{'action_id': f'A{i}', 'phase_id': 'P', 'name': f'Action {i}'} for i in range(6)]
+    graph['sources'] = [{'source_id': f'S{i}', 'title': f'Source {i}'} for i in range(24)]
+    graph['evidence'] = [{'evidence_id': f'E{i}', 'source_id': f'S{i}', 'quote': f'Quote {i}'} for i in range(24)]
+    graph['actions'][0]['support'] = [{'target': '/name', 'evidence_ids': [e['evidence_id'] for e in graph['evidence']]}]
+    graph['relations'] = [{'relation_id': 'R', 'from_action_id': 'A0', 'to_action_id': 'A1', 'type': 'precedes'}]
+    arrange = graph_html.arrange_graph
+
+    def arrange_two_rows(*args):
+        view = arrange(*args)
+        phase = next(p for p in view['pages'] if p['phase'] == 'P')
+        actions = [c for c in phase['cards'] if c['kind'] == 'action']
+        for i, card in enumerate(actions[4:]):
+            card['box'][0] = actions[i + 1]['box'][0]
+            card['box'][1] += 140
+        next(s for s in phase['sections'] if s['title'] == 'Actions and their context')['box'][3] += 140
+        return view
+
+    monkeypatch.setattr(graph_html, 'arrange_graph', arrange_two_rows)
+    output = tmp_path / 'two-rows.html'
+    output.write_text(graph_html.render_graph_html(graph), encoding='utf-8')
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        page = browser.new_page(viewport={'width': 2500, 'height': 1320}, offline=True)
+        page.goto(output.as_uri())
+        assert page.locator('#zoom-level').inner_text() == '100%'
+        grids = page.locator('.reference-grid')
+
+        def cards_in_first_rows():
+            return grids.evaluate_all("""grids => grids.map(grid => [...grid.children].filter(
+                card => card.offsetTop === grid.firstElementChild.offsetTop).length)""")
+
+        def rows():
+            return page.locator('.action').evaluate_all("""cards => {
+                const rows = new Map();
+                for (const card of cards) {
+                    if (!rows.has(card.offsetTop)) rows.set(card.offsetTop, []);
+                    rows.get(card.offsetTop).push(card);
+                }
+                return [...rows.entries()].sort((a,b) => a[0]-b[0]).map(([,row]) =>
+                    row.sort((a,b) => a.offsetLeft-b.offsetLeft).map(c => c.dataset.id));
+            }""")
+
+        expected = [['A0', 'A1', 'A2', 'A3'], ['A4', 'A5']]
+        assert rows() == expected
+        at_full_size = cards_in_first_rows()
+        for _ in range(3):
+            page.locator('#minus').click()
+        assert page.locator('#zoom-level').inner_text() == '70%'
+        assert all(b > a for a, b in zip(at_full_size, cards_in_first_rows(), strict=True))
+        assert rows() == expected
+        fills = """() => {
+            const area = document.querySelector('#diagram-scroll');
+            const last = document.querySelector('.action[data-id="A3"]'), box = last.getBoundingClientRect();
+            const gap = area.getBoundingClientRect().right - box.right;
+            return area.scrollWidth === area.clientWidth && gap >= 0 && gap <= 45 * box.width / last.offsetWidth + 1;
+        }"""
+        page.wait_for_function(fills)
+        page.locator('.action').first.click()
+        page.wait_for_function(fills)
+        assert rows() == expected
+        page.keyboard.press('Escape')
+        page.wait_for_function(fills)
+        page.set_viewport_size({'width': 600, 'height': 750})
+        page.locator('#zoom').click()
+        page.wait_for_function("""() => {const s=document.querySelector('#diagram-scroll');
+            return s.scrollWidth > s.clientWidth && document.documentElement.scrollWidth === innerWidth;}""")
+        assert rows() == expected
+        assert page.locator('[data-relation-id="R"]').count() == 1
+        path = page.locator('[data-relation-id="R"]')
+        path.focus()
+        path.press('Enter')
+        page.set_viewport_size({'width': 2500, 'height': 1320})
+        # A Phase reset brings the relation into the full-width overview.
+        page.locator('#fit').click()
+        page.wait_for_function(fills)
+        page.keyboard.press('Escape')
+        page.wait_for_function(fills)
+        assert path.evaluate('node => node === document.activeElement')
+        browser.close()

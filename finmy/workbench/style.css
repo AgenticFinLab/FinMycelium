@@ -56,3 +56,10 @@
 }
 
 .stApp .st-key-search-fields,.stApp .st-key-search-summary { background:#fff; }
+.st-key-person-event-viewer [data-testid="stElementContainer"]:has(iframe),
+.st-key-person-event-viewer iframe {
+  height: 82vh;
+  height: 82dvh;
+}
+/* Streamlit also reserves the component's declared height as a flex basis. */
+.st-key-person-event-viewer [data-testid="stElementContainer"]:has(iframe) { flex-basis: auto }

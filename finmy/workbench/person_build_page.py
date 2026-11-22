@@ -198,7 +198,11 @@ def person_build_panel(store, controller, row, labels):
                 label = '下载交互式事件图 HTML' if current else '下载独立 Gantt HTML'
                 st.download_button(label, html, tid+'-gantt.html', 'text/html',
                                    key='person-gantt-'+tid, on_click='ignore')
-                components.html(html, height=850, scrolling=True)
+                if current:
+                    with st.container(key='person-event-viewer'):
+                        components.html(html, height=850, scrolling=False)
+                else:
+                    components.html(html, height=850, scrolling=True)
             except (OSError, ValueError, KeyError):
                 st.info('这份 JSON 暂无可用的配套图，可从已保存的 JSON 重新绘制。')
             if st.button('从已保存 JSON 重新绘图', disabled=row['status'] in {'ready','queued','running'}, key='person-render-'+tid):
