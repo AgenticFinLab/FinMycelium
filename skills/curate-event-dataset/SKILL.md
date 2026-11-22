@@ -1,31 +1,34 @@
 ---
 name: curate-event-dataset
-description: "建设、扩充、合并或复核 EPG 事件目录，交付规范 CSV、来源和去重审计，以及经 FinMycelium 解析的导入分片。适合从零构建、续跑、分类复核或事实终检。"
+description: 从历史候选或指定主题重新构建独立事件数据集。依据公开原文辨认事项、确定研究边界、处理重复候选，输出 FinMycelium 可读取的事件输入 CSV。
 ---
 
-# EPG 事件目录整理
+# 构建独立事件数据集
 
-以可追溯的证据建立事件身份、覆盖时间和研究范围。正式主表使用 [24 列模板](assets/events.template.csv)。用户给出的数量、编号、去重处置和保留范围优先。历史任务的 10,000 条和现行目录的 13,000 条是不同交付接受条件。
+用户已确认 `EPG-dataset/data/events/events.csv` 的 3,000 条全部入选。重建时保留这些事件的编号，逐条补全资料。新增事件按自身的研究价值和 FinMycelium 的事件过程重建目标判断。原表供把握整体选题方向和粒度；新领域、新类型同样可按[事件入选标准](references/event-selection.md)评估。先说明重建这件事能回答什么问题，再核对公开材料能否支持其关键变化及研究边界。运行时将新版统一构建在 `EPG-dataset/event-epg/`，交付 `README.md`、`events.csv`、`research-plan.md`、`sources.csv` 和 `ISSUES.md`；单事件材料和图按 `events/<event_id>/` 收录。首次建库从历史输入与本轮阅读的原文开始，续做只使用本轮新版记录。
 
-## 选择工作方式
+执行前阅读[18 列字段规范](references/input-format.md)，按其中的必填、条件必填与选填规则逐列检查。每条交付记录必须有稳定 ID、中英文事件名、英文简介、主领域、具体类别、纳入范围、检索词和可定位的已读来源。仅 event_name_zh 可以使用中文；其他字段及嵌套说明使用英文。遇到无法核实的必填事实，保留历史编号并在工作稿补研；对别名、地点、参与方及活动起止日期做针对性查找，已证实的逐项填入，仍无可靠依据的留空。
 
-| 任务 | 先读 |
-| --- | --- |
-| 从零建设、接续扩充、全表检查 | [运行手册](references/runbook.md)及[来源、去重与终检](references/research-and-audit.md) |
-| 第一次学习或验证本地环境 | [可运行的完整教学案例](references/worked-example.md) |
-| 填写 CSV、审查分类、理解标记 | [主表规范与分类](references/catalog-spec.md)及[合成示例](assets/events.example.csv) |
-| 合并表、替换重复项、显式改号、复查现行 13,000 条 | [合并、编号与发布](references/catalog-migration.md) |
-| Workbench 上传、数据集直读或 Builder 对接 | [接口与验收](references/workbench.md) |
-| 核对产物的字段、哈希或验收报错 | [文件契约与排错](references/artifact-contract.md) |
+实际建库遵循[建库顺序与阶段验收](references/build-workflow.md)。先在新主表登记并逐条检索 event1 至 event3000，完成跨全表查重，把重复双方、相同之处和原文依据写入新版 `event-epg/ISSUES.md`。历史部分通过验收后，再按计划构建 event3001 至 event10000。新增候选须同时具备值得独立研究的实际影响，以及足以重建关键过程的公开材料。影响轻微、缺乏研究价值，或经定向检索后可核实的信息仍过少，均不进入主表、不分配 ID。满足这两项后，再按[入选判定](references/event-selection.md)确认范围独立并完成查重。
 
-执行工具在 `scripts/`，CSV 校验和导出已经随包提供。指定数据目录和目标 FinMycelium checkout，让导入验证运行实际解析器。公开来源研究需要可用的搜索与正文读取能力。现行快照可用于继续核查和复算，重新研究时记录所用来源及版本。
+使用[本轮问题记录模板](assets/issues.template.md)维护每对 ID 的当前裁决。不同批次发现同一配对时合并核查；身份仍待核时保留待核记录。
 
-## 核心流程
+1. **登记与选批。** 为历史 3,000 项按原 ID 的数字部分预留 event1 至 event3000，新事件从 event3001 起顺延。本轮总目标 10,000 条。规划新增批次时，对照[领域和类别的数量目标](references/domain-category-plan.md)核算尚缺数量，按实际研究范围归类。按用户要求选批，核实后填写，完整交付时覆盖所有预留编号。
+2. **阅读并界定。** 用公开原文确认主体、对象和可定位的行动。简介记录有依据的事实，纳入和排除范围说明本次研究的边界。已读来源的 URL 和定位说明写入 source_hints。待核的历史行保留其编号。
+3. **查重。** 对照当事方、具体对象、案号及过程边界。仅经核实的重复行在 `is_duplicate` 填小写 `true`；其余行留空。保留原编号并在 related_events 记录确认重复的对应关系。涉及同一公司或同期发生本身不足以判重。
+4. **交付。** 使用[主表模板](assets/events.input.template.csv)和[18 列字段规范](references/input-format.md)。对照剩余空项检查原文和已有研究记录：若简介或原文已明确给出对应事实，就填入结构化列；仍有疑问时按字段补查。对已补查仍无法确认或确实不适用的项保留空值。无需为已核过的同一缺口重复检索。[FTX 示例](assets/events.example.csv)演示 event2 如何保留历史身份并界定研究窗口。最终事件图生成并确定采用后再填写 epg_path。
 
-1. **确定输入与交付。** 确认权威主表、目标数量、ID 规则、来源副表和发布路径。先核对检查点哈希以及现有待核和重复情况。以当前主表和保留审计起步。
-2. **在暂存区研究。** 读原文，按具体事件写明身份、日期含义和范围。为每条关联记录来源位置、支持字段和阅读限制。关键主张证据不足时保留待核状态或暂缓入选。
-3. **回查身份与分类。** 召回双语名、别名、主体、标识和来源近邻，结合过程与边界裁决。确定重复、范围重叠或独立事件。分类先复用已有标签，提出新标签时记录区分标准和代表行。
-4. **保持关联。** 稳定 ID、范围和成果状态。用户明确要求改号或替换时，先保存身份映射，再同步关系、来源关联、决策、审核、逐对记录及哈希。
-5. **验收与交付。** 结构检查、事实审核、候选逐对裁决和接口解析各有独立结论。按交付目标决定是否可以标为完成。对按要求保留的重复和开放事实，披露数量、ID 及证据缺口。
+在 FinMycelium 根目录运行格式检查。默认检查完整主表的编号连续性及历史编号覆盖；检查节选或示例时使用 `--batch`。
 
-主表事实审核和 EPG 图审核是两个阶段。新事件通常使用 `planned`，协作人和成果路径留空。已退役的旧表和 draft 不作为必需输入。按照本次授权决定是否发布文件，工作台数据库写入、真实导入和图生成单独授权。
+```shell
+python -X utf8 skills/curate-event-dataset/scripts/check_input.py --review-prose path/to/events.csv
+python -X utf8 skills/curate-event-dataset/scripts/check_input.py --batch --show-gaps --review-prose --sources skills/curate-event-dataset/assets/sources.example.csv skills/curate-event-dataset/assets/events.example.csv
+```
+
+校验器汇总别名、地区、参与方、起止日期的空项数量；加 `--show-gaps` 可按字段查看事件 ID，供交付前复查。所有交付行统一检查纳入范围和检索词，包括单批节选。执行者仍须阅读原文，确认英文表述自然、译名同指一事、活动日期和每项事实有据，并核实图文件确属该事件。
+
+完整主表检查同目录的 sources.csv；分批交付时也应传入本批来源索引。只给独立节选且缺少索引时，仅能检查引用格式。写简介和研究范围时，按[主表的逐行回读规则](references/input-format.md)从各案原文选取可辨认的事实。批内表述重复时先核对内容，保留确实共用的事实与术语。
+
+节选文件放在新版目录以外时，用 `--batch --catalog-root <本轮新版event-epg目录>` 按正式目录核对来源及图路径。批外关系的目标和代表行身份在完整主表中核对。阶段交付前，主表内的疑似重复关系须全部复核。
+
+阶段一交付用 `--stage baseline`，最终交付用 `--stage final`。校验器核对主表、配套文件、重复裁决与双方来源，并从研究计划的批次表分别检查事实核验和查重已覆盖的 ID。图路径有值时，使用 Workbench 的普通事件图读取器检查文件。原文更正、研究范围改变或批次中断时，按[建库流程](references/build-workflow.md)复查受影响的 ID 后再登记完成。
