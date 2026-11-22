@@ -204,6 +204,7 @@ def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
     graph['phases'] = [{'phase_id': pid, 'name': pid} for pid in ('Planning', 'Decision', 'Execution')]
     graph['actions'] = [{'action_id': aid, 'phase_id': p['phase_id'], 'name': aid}
                         for aid, p in zip(('Proposal', 'Vote', 'Delivery'), graph['phases'])]
+    graph['actions'].append({'action_id': 'Consent', 'phase_id': 'Planning', 'name': 'Consent'})
     graph['contexts'] = [{'context_id': 'terms', 'description': 'Shared condition'}]
     for action in graph['actions'][:2]:
         action['delta_context_refs'] = [{'context_id': 'terms', 'relation_type': 'condition'}]
@@ -212,7 +213,9 @@ def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
     graph['relations'] = [
         {'relation_id': 'r1', 'from_action_id': 'Proposal', 'to_action_id': 'Vote', 'type': 'enables',
          'support': [{'target': '/type', 'evidence_ids': ['e'], 'mode': 'A'}]},
-        {'relation_id': 'r2', 'from_action_id': 'Vote', 'to_action_id': 'Delivery', 'type': 'overlaps'},
+        {'relation_id': 'r2', 'from_action_id': 'Vote', 'to_action_id': 'Delivery', 'type': 'overlaps', 'basis': 'inferred'},
+        {'relation_id': 'r3', 'from_action_id': 'Proposal', 'to_action_id': 'Consent', 'type': 'order_unknown',
+         'basis': 'asserted'},
     ]
     path = tmp_path / 'navigation.html'
     path.write_text(render_graph_html(graph), encoding='utf-8')
@@ -222,31 +225,39 @@ def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
             page = browser.new_page(viewport={'width': width, 'height': height}, offline=True)
             page.goto(path.as_uri())
             assert page.locator('#jumps').count() == 0
-            assert page.locator('.phase-link').count() == 1
-            page.get_by_role('button', name='A01 · enables → A02 · Phase 2').press('Enter')
-            assert page.locator('#inspection-title').inner_text() == 'A01 → A02 · enables'
+            assert not page.locator('.phase-link').count()
+            assert page.locator('#outline').evaluate('el => el.open')
+            label = page.locator('#links .edge-label[data-relation=r1]')
+            assert label.text_content() == 'A01 enables A02'
+            assert page.locator('#links .edge-label[data-relation=r3]').text_content() == 'A01 order unknown A04'
+            bridge = page.locator('#phase-bridges .bridge[data-relation-id=r1]')
+            assert bridge.get_attribute('data-page') == '2'
+            assert bridge.get_attribute('marker-end') == 'url(#phase-arrow)'
+            assert bridge.get_attribute('stroke-dasharray') == 'none'
+            assert bridge.evaluate("""path => {
+                const tab = document.querySelector('#navigation [data-page="2"]').getBoundingClientRect();
+                const tip = path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM());
+                return tip.x >= tab.left && tip.x <= tab.right && Math.abs(tip.y - tab.bottom) < 1;
+            }""")
+            page.get_by_role('button', name='A01 enables A02').press('Enter')
+            assert page.locator('#inspection-title').inner_text() == 'A01 enables A02'
             assert page.locator('#inspection [data-target="e"]').count() == 1
-            if width > 800:
-                assert page.locator('#phase-guide path').get_attribute('d')
-                page.locator('.phase-list .relation-destination').click()
-            else:
-                assert page.locator('#phase-destination').is_visible()
-                page.get_by_role('button', name='Go to A02 · Phase 2').click()
+            page.locator('.phase-list .relation-destination').click()
             assert page.locator('.action[data-id=Vote]').evaluate('el => el === document.activeElement')
-            page.get_by_role('button', name='A02 · 2 cross-phase relations').click()
-            groups = page.locator('#inspection .phase-group')
-            assert groups.locator('summary').all_text_contents() == ['Phase 1 (1)', 'Phase 3 (1)']
-            groups.first.locator('summary').click()
-            groups.first.get_by_role('button', name='A01 → A02 · enables').click()
-            assert page.locator('#navigation .relation-destination').get_attribute('data-page') == '1'
+            assert bridge.get_attribute('data-page') == '1'
+            assert bridge.get_attribute('marker-end') is None
+            assert page.locator('#links .edge-label[data-relation=r2]').text_content() == 'A02 overlaps A03'
+            label.click()
             page.get_by_role('button', name='Go to A01 · Phase 1').click()
             page.get_by_role('button', name='Back to A02 · Phase 2').click()
             page.get_by_role('button', name='Back to A01 · Phase 1').click()
             assert page.locator('.action[data-id=Proposal]').evaluate('el => el === document.activeElement')
-            assert page.locator('#phase-guide path').get_attribute('d') is None
             page.locator('#picker').select_option('3')
-            page.get_by_role('button', name='A03 · overlaps ↔ A02 · Phase 2').click()
-            assert page.locator('#inspection-title').inner_text() == 'A02 ↔ A03 · overlaps'
+            symmetric = page.locator('#phase-bridges .bridge[data-relation-id=r2]')
+            assert symmetric.get_attribute('marker-end') is None
+            assert symmetric.get_attribute('stroke-dasharray') != 'none'
+            page.locator('#links .edge-label[data-relation=r2]').click()
+            assert page.locator('#inspection-title').inner_text() == 'A02 overlaps A03'
             page.close()
         browser.close()
 

@@ -76,13 +76,14 @@ def arrange_graph(graph, view, issues=None):
     phase_pages = {p['phase_id']: i for i, p in enumerate(phases, 1)}
     action_phases = {a['action_id']: a.get('phase_id') for a in graph.get('actions', [])}
     phase_links = {pid: [] for pid in phase_pages}
-    linked_actions = set()
+    local_relations = {pid: [] for pid in (None, *phase_pages)}
     for rid, relation in relations.items():
         start, end = relation['from_action_id'], relation['to_action_id']
         first, second = action_phases.get(start), action_phases.get(end)
+        if first == second and first in local_relations and start in action_phases and end in action_phases:
+            local_relations[first].append(rid)
         if first == second or first not in phase_pages or second not in phase_pages:
             continue
-        linked_actions.update((start, end))
         for local, other, here, there in ((start, end, first, second), (end, start, second, first)):
             phase_links[here].append({'action_id': local, 'id': other, 'page': phase_pages[there],
                                       'relation_id': rid, 'from': aliases[start], 'to': aliases[end],
@@ -307,9 +308,11 @@ def arrange_graph(graph, view, issues=None):
         return {
             'phase': pid, 'title': title, 'cards': cards, 'sections': sections,
             'edges': edges, 'height': max(820, top), 'width': canvas_width, 'jumps': phase_links.get(pid, []),
+            'relation_slots': relation_slots[pid],
         }
 
     plans = []
+    relation_slots = {}
     for phase in [None, *phases]:
         pid = phase['phase_id'] if phase else None
         actions = list(next(page for page in view['pages'] if page['phase'] == pid)['columns'][1])
@@ -325,7 +328,18 @@ def arrange_graph(graph, view, issues=None):
                            54 + min(6, max(3, math.ceil(math.sqrt(len(context))))) * 360)
         columns = max(1, (canvas_width - 54) // 360)
         cards, sections, shown = [], [], set()
-        y = 18
+        # Cross-page labels sit on the wires below the outline. Keep a spare
+        # position for each local relation if its route is too crowded for text.
+        links = sorted(phase_links.get(pid, []), key=lambda link: link['page'])
+        ids = [link['relation_id'] for link in links] + local_relations[pid]
+        columns_for_labels = max(1, canvas_width // 185)
+        slots = {}
+        for offset in range(0, len(ids), columns_for_labels):
+            row = ids[offset:offset + columns_for_labels]
+            for i, rid in enumerate(row):
+                slots[rid] = [(i + 0.5) / len(row), 32 + offset // columns_for_labels * 32]
+        relation_slots[pid] = slots
+        y = 18 + (12 + math.ceil(len(ids) / columns_for_labels) * 32 if ids else 0)
         if baseline:
             for i, cid in enumerate(baseline):
                 cards.append(make_card(cid, [42 + i % columns * 360, y + 44 + i // columns * 96, 330, 72]))
@@ -353,12 +367,9 @@ def arrange_graph(graph, view, issues=None):
                 cards.append(make_card(cid, [left + column * 320, y + i * 104, 260, 72]))
         if ordered:
             action_y = y + max(map(len, before), default=0) * 104
-            row_height = 88
             for column, aid in enumerate(ordered):
-                height = 114 if aid in linked_actions else 88
-                cards.append(make_card(aid, [left + column * 320, action_y, 260, height]))
-                row_height = max(row_height, height)
-            y = action_y + row_height + 44
+                cards.append(make_card(aid, [left + column * 320, action_y, 260, 88]))
+            y = action_y + 132
             for column, neighbors in enumerate(after):
                 for i, cid in enumerate(neighbors):
                     cards.append(make_card(cid, [left + column * 320, y + i * 104, 260, 72]))

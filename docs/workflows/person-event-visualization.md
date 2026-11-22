@@ -57,25 +57,31 @@ see the cards at their original text size. Each Action
 keeps the row and order assigned by the layout. Columns spread into the
 available width. When the rows need more room, scroll horizontally inside the
 diagram. The toolbar and Stage navigation stay in place. **Stages and phases**
-opens the outline on smaller screens.
+toggles the outline.
 
 Shared context appears above its actions. Actions extend horizontally,
 with their specific context nearby. People and organizations appear as circular
-nodes. Structural lines show action relations in purple, roles in blue-gray
-and context in ochre. Recorded `precedes` and `enables` links help place
-actions. Unknown order has its own line style. Context without an explicit
+nodes. Recorded `precedes` and `enables` links help place
+actions. Context without an explicit
 Phase can be grouped using its date or shared evidence. These placements are
 display choices.
 
-A purple control on an Action card leads to its relations with Actions in
-other Phases. A single link shows its direction, type and the other Action’s
-Phase. A count opens the relations grouped by destination Phase. Select a
-relation to inspect its evidence and highlight the destination in **Stages and
-phases**. When both the card and the destination tab are visible, a dashed
-guide connects them. Select the highlighted Phase or **Go to** to focus the
-other Action. **Back to** above the graph returns to the originating Action.
-Both endpoints display the direction recorded in the graph. Symmetric relations
-such as `overlaps` display **↔** at either endpoint.
+Each purple Action relation is visible when the Phase opens. Read its label in
+the order **from Action · predicate · to Action**, for example
+`A04 continues A21`. Within a Phase the wire connects two Action cards.
+Across Phases the local portion connects the Action to the existing tab of the
+other Action’s Phase. The label gives both Action IDs on either page.
+Select the wire or its label to inspect the relation and its evidence. **Go to**
+or the highlighted Phase tab focuses the other Action. **Back to** returns to
+the originating Action. Phases with cross-Phase relations open with their
+outline expanded. At reading size, scroll the diagram or the outline to see
+endpoints outside the viewport.
+
+For Action relations, a dashed stroke marks an inferred relation or
+`order_unknown`. Other observed, asserted and rule-derived relations use a
+solid stroke. Symmetric relations (`overlaps`, `order_unknown`, `joint_action`)
+have no arrowhead. These conventions apply on both sides of a Phase boundary.
+Context uses ochre dashes, roles use blue-gray lines, and evidence uses green dots.
 
 A Context can appear in several Phases under the same identifier. Each
 appearance shows its links to the Actions on that page and opens the same
