@@ -11,7 +11,13 @@
   --muted: #687c8b;
   --border: #d5e0e7;
   --green: #2c745e;
-  --purple: #80589f
+  --purple: #80589f;
+  --shared-fill: #e0edfc;
+  --shared-edge: #346994;
+  --action-context-fill: #fff0c9;
+  --action-context-edge: #ba944a;
+  --reference-fill: #f0f2f5;
+  --reference-edge: #788594
 }
 
 * {
@@ -118,12 +124,31 @@ select:focus-visible {
 #heading, #subheading { overflow-wrap: anywhere }
 
 #subheading {
+  container: context-header / inline-size;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
   justify-content: space-between;
   padding: 6px 18px;
   color: var(--muted)
+}
+.context-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 20px; max-width: 100%; min-width: 0 }
+@container context-header (max-width: 94rem) {
+  .context-keys { order: 1; flex-basis: 100% }
+}
+.context-key { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: 12px; color: #394f60 }
+.context-key strong { font-weight: 600 }
+.context-key > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap }
+.scope-swatch { display: inline-block; width: 18px; height: 12px; border-radius: 2px }
+.category-swatch { flex: none; height: 13px }
+.scope-swatch[data-scope="shared"], .card.context[data-scope="shared"] {
+  background: var(--shared-fill); border: 1px solid var(--shared-edge); border-top-width: 4px
+}
+.scope-swatch[data-scope="action"], .card.context[data-scope="action"] {
+  background: var(--action-context-fill); border: 1px solid var(--action-context-edge)
+}
+.scope-swatch[data-scope="reference"], .card.context[data-scope="reference"] {
+  background: var(--reference-fill); border: 2px dashed var(--reference-edge)
 }
 
 #outline { flex: none; border-bottom: 1px solid var(--border) }
@@ -202,9 +227,13 @@ select:focus-visible {
   border-radius: 7px;
   background: white
 }
+.section.shared-context { background: #eff5fd; border: 1px solid #8aa9c5; border-top: 4px solid var(--shared-edge) }
+.section.additional-context { background: #f8f9fa; border: 2px dashed var(--reference-edge) }
+.shared-context .scope-heading { padding: 2px 8px; border-radius: 3px; background: #2d567b; color: white }
+.additional-context .scope-heading { color: #475566 }
+.section .context-note { margin-left: 12px; color: #455969; font-size: 14px; font-weight: 400 }
 
-#references { display: grid; gap: 12px; padding: 0 16px }
-#references { zoom: var(--content-scale, 1) }
+#references { display: grid; gap: 12px; padding: 0 16px; zoom: var(--content-scale, 1) }
 #references:empty { display: none }
 .reference-section { border: 1px solid var(--border); border-radius: 7px; padding: 12px; background: #f8fbfa }
 .reference-section.sources { background: #f7f9fc }
@@ -259,6 +288,7 @@ select:focus-visible {
   .zoom-controls { grid-area: 2 / 2 }
   #toolbar .phase-word { display: none }
   #heading, #subheading, #outline summary { padding-inline: 10px }
+  .context-key { column-gap: 7px }
   #references { padding-inline: 8px }
   .reference-section { padding: 9px }
 }
@@ -342,6 +372,11 @@ select:focus-visible {
   background: #fff4d7;
   border-color: #d8be76
 }
+.card.context[data-category], .category-swatch { border-left: 5px solid var(--context-accent) }
+.card.context[data-category] { padding-left: 7px }
+[data-category="environment"] { --context-accent: #987226 }
+[data-category="relations"] { --context-accent: #52738b }
+[data-category="person_state"] { --context-accent: #995668 }
 
 .card.source {
   background: #f2f6fa;
@@ -387,6 +422,7 @@ select:focus-visible {
 .card.relation-neighbor { box-shadow: 0 0 0 2px #7eac9566 }
 .card.context.relation-neighbor { box-shadow: 0 0 0 2px #d8be7680 }
 .card.relation-focus { outline: 2px solid #537f98; outline-offset: 2px }
+.card.action.scope-member { outline: 3px solid var(--shared-edge); outline-offset: 1px; border-bottom: 4px solid var(--shared-edge) }
 .card.party.relation-neighbor,
 .card.party.relation-focus { outline: none; box-shadow: none }
 .card.party.relation-neighbor .party-icon circle:first-child {
@@ -409,6 +445,11 @@ select:focus-visible {
   margin-bottom: 5px;
   color: #385164
 }
+.card .context-meta { display: flex; align-items: baseline; gap: 5px }
+.context-meta .context-kind, .context-meta .retrospective, .context-meta .context-id { flex: none }
+.context-meta .context-date { flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400 }
+.context-meta .retrospective { color: #704735; font-style: italic }
+.card .context-meta .badges { position: static; margin-left: auto; flex: 0 1 auto; line-height: 1; min-width: 0 }
 
 .card .title {
   font-size: 13px;
@@ -493,10 +534,6 @@ select:focus-visible {
   z-index: 8;
   box-shadow: 0 5px 20px #233b4c35;
   outline: 2px solid #537f98
-}
-
-[hidden] {
-  display: none !important
 }
 
 svg text {
@@ -623,21 +660,34 @@ function linkBox(item) {
   return box;
 }
 
+function involvesCard(edge, key) {
+  if (edge.from_key === key || edge.to_key === key) return true;
+  const id = cards.get(key)?.card.id;
+  if (edge.type === 'about' && id === edge.to) return true;
+  return Boolean(id && edge.kind === 'context' && (edge.record?.context_id === id || edge.owner === id));
+}
+
+function showMention(edge, active) {
+  return edge.type !== 'about' || contextScopes.get(edge.from)?.kind !== 'shared' || cards.get(active)?.card.id === edge.to;
+}
+
 function highlight(key) {
   hovered = key;
   const active = hovered || focused || expanded;
   const moving = Boolean(hovered || (focused && !expanded));
   const neighbors = new Set(active ? [active] : []);
+  const inherited = contextScopes.get(selection?.id)?.members;
   for (const item of drawnEdges) {
     const {edge, line, halo, flow, origin, emphasis} = item;
-    const selected = (edge.relation_id && edge.relation_id === selection?.id) ||
-      Boolean(active && (active === edge.from_key || active === edge.to_key));
+    const visible = showMention(edge, active);
+    const selected = visible && ((edge.relation_id && edge.relation_id === selection?.id) ||
+      Boolean(active && involvesCard(edge, active)));
     const style = edgeStyle(edge);
     if (selected) {
       neighbors.add(edge.from_key);
       neighbors.add(edge.to_key);
     }
-    line.setAttribute('opacity', selected ? 1 : active ? .16 : style.opacity);
+    line.setAttribute('opacity', visible ? (selected ? 1 : active ? .16 : style.opacity) : 0);
     line.setAttribute('stroke-width', selected ? style.width + .8 : style.width);
     halo.setAttribute('stroke-width', style.width + 4);
     halo.setAttribute('opacity', selected ? .95 : 0);
@@ -647,9 +697,11 @@ function highlight(key) {
     origin.setAttribute('opacity', selected && !symmetricRelation(edge.type) ? .9 : 0);
   }
   for (const [nodeKey, item] of cards) {
+    const member = Boolean(inherited?.has(item.card.id));
+    item.button.classList.toggle('scope-member', member);
     item.button.classList.toggle('relation-focus', nodeKey === active);
     item.button.classList.toggle('relation-neighbor', nodeKey !== active && neighbors.has(nodeKey));
-    item.button.classList.toggle('relation-muted', Boolean(active && !neighbors.has(nodeKey)));
+    item.button.classList.toggle('relation-muted', Boolean(active && !member && !neighbors.has(nodeKey)));
   }
   drawRelationshipLabels(active);
 }
@@ -663,14 +715,15 @@ function drawRelationshipLabels(active) {
   const obstacles = [...relationshipObstacles];
   const priority = {relation: 0, context: 1, party: 2, evidence: 3};
   const visible = drawnEdges.filter(({edge}) => edge.kind === 'relation' || (active ?
-    edge.from_key === active || edge.to_key === active :
+    involvesCard(edge, active) && showMention(edge, active) :
     edge.kind !== 'evidence' && edge.type !== 'about'));
   visible.sort((a, b) => (priority[a.edge.kind] ?? 4) - (priority[b.edge.kind] ?? 4));
   for (const item of visible) {
     const {edge, points} = item;
     const relation = edge.kind === 'relation';
     if (relation && item.label) { obstacles.push(item.labelBox); continue; }
-    const text = relation ? relationName(edge.record) : pretty(edge.type);
+    const text = relation ? relationName(edge.record) :
+      edge.type === 'participation' ? short(contextUseName(edge.record), 42) : pretty(edge.type);
     let location;
     if (edge.jump) {
       const connector = port(item.slot, 3);
@@ -724,6 +777,31 @@ function relationshipLegend() {
   return legend;
 }
 
+function contextKey(dimension, title, entries) {
+  const key = el('span', null, 'context-key ' + dimension + '-key');
+  key.setAttribute('role', 'group');
+  key.setAttribute('aria-label', title);
+  key.append(el('strong', title));
+  for (const [value, label] of entries) {
+    const item = el('span', null, dimension + '-item'), swatch = el('i', null, dimension + '-swatch');
+    swatch.dataset[dimension] = value;
+    swatch.setAttribute('aria-hidden', 'true');
+    item.append(swatch, label);
+    key.append(item);
+  }
+  return key;
+}
+
+function contextKeys() {
+  const keys = el('span', null, 'context-keys');
+  const scopes = new Set([...contextScopes.values()].map(scope => scope.kind));
+  keys.append(contextKey('scope', 'Context scope', Object.entries(scopeNames).filter(([kind]) => scopes.has(kind))));
+  if ([...contextScopes.keys()].some(id => contextCategories.has(objects.get(id)?.record.category))) {
+    keys.append(contextKey('category', 'Context category (left stripe)', contextCategories));
+  }
+  return keys;
+}
+
 function paintCard(card, container) {
   const button = el('button', null, 'card ' + card.kind + (card.box[3] < 100 ? ' compact' : ''));
   button.type = 'button';
@@ -738,12 +816,32 @@ function paintCard(card, container) {
     preview.append(partyIcon(card.entity_type), el('span', card.title, 'title'),
       el('span', card.caption, 'party-caption'));
   } else {
-    const meta = el('span', [card.alias, card.date].filter(Boolean).join(' · '), 'meta');
+    const meta = el('span', null, 'meta');
+    if (card.kind === 'context') {
+      const record = objects.get(card.id).record;
+      const scope = contextScopes.get(card.id);
+      button.dataset.scope = scope.kind;
+      button.title = scope.label + ' · ' + button.title;
+      const category = contextCategories.get(record.category), retrospective = record.perspective === 'post_hoc';
+      if (category) button.dataset.category = record.category;
+      meta.classList.add('context-meta');
+      meta.append(el('span', card.alias, 'context-id'), el('span', category || 'Context', 'context-kind'));
+      if (retrospective) meta.append(el('span', 'Retrospective', 'retrospective'));
+      if (card.date) meta.append(el('span', card.date, 'context-date'));
+      const caption = [card.alias, scope.label, category, retrospective && 'Retrospective', card.date, card.title];
+      button.setAttribute('aria-label', caption.filter(Boolean).join(' · '));
+    } else {
+      meta.textContent = [card.alias, card.date].filter(Boolean).join(' · ');
+    }
     preview.append(meta, el('span', card.title, 'title'));
     if (card.kind !== 'source' && card.badges.length) {
       const badges = card.badges.join(', ');
-      meta.style.paddingRight = Math.min(94, badges.length * 6 + 12) + 'px';
-      preview.append(el('span', badges, 'badges'));
+      const badge = el('span', badges, 'badges');
+      if (card.kind === 'context') meta.append(badge);
+      else {
+        meta.style.paddingRight = Math.min(94, badges.length * 6 + 12) + 'px';
+        preview.append(badge);
+      }
     }
   }
   button.setAttribute('aria-controls', 'inspector');
@@ -839,6 +937,7 @@ function showPage(index, trail = []) {
   focused = null;
   cards.clear();
   const page = view.pages[index];
+  contextScopes = contextScopesOn(page);
   if (page.jumps.length) $('outline').open = true;
   diagramWidth = 0;
   $('picker').value = String(index);
@@ -863,7 +962,9 @@ function showPage(index, trail = []) {
     areas.append(button);
   }
   const eventName = traceButton(graph.person.name + ' · ' + graph.event.name, graph.event.event_id);
-  $('subheading').replaceChildren(eventName, areas);
+  $('subheading').replaceChildren(eventName);
+  if (contextScopes.size) $('subheading').append(contextKeys());
+  $('subheading').append(areas);
   $('navigation').replaceChildren();
   const stages = graph.stages.length ? graph.stages : [{
     stage_id: null,
@@ -917,7 +1018,14 @@ function showPage(index, trail = []) {
     diagramHeight = Math.max(diagramHeight, region.box[1] + region.box[3] + 10);
     if (region.title === 'Actions and their context') section.append(el('span',
       '● People / organizations · ■ Actions · ■ Context', 'legend'));
-    section.append(el('h3', region.title));
+    const heading = el('h3');
+    if (region.title === 'Shared phase context' || region.title === 'Additional context') {
+      const shared = region.title === 'Shared phase context';
+      section.classList.add(shared ? 'shared-context' : 'additional-context');
+      heading.append(el('span', region.title, 'scope-heading'), ' ', el('small', shared
+        ? 'Select a card to highlight the Actions that inherit it' : 'No recorded action or phase link on this page', 'context-note'));
+    } else heading.textContent = region.title;
+    section.append(heading);
     $('regions').append(section);
   }
   $('graph').style.height = diagramHeight + 'px';
@@ -1217,7 +1325,9 @@ function drawEdges() {
   for (const section of page.sections) {
     if (['Evidence', 'Sources'].includes(section.title)) continue;
     const [x, y] = section.box;
-    headings.push([x + 10, y + 5, Math.min(400, section.title.length * 10), 30]);
+    const width = ['Shared phase context', 'Additional context'].includes(section.title)
+      ? 495 : Math.min(400, section.title.length * 10);
+    headings.push([x + 10, y + 5, width, 30]);
     if (section.title === 'Actions and their context') headings.push([645, y + 7, 450, 28]);
   }
   const obstacles = [...boxes.values(), ...partyLabels, ...headings];
@@ -1280,7 +1390,7 @@ function drawEdges() {
     };
     const line = svg('polyline', {...attributes, 'class': 'edge-line'});
     const tooltip = svg('title', {});
-    tooltip.textContent = edge.type.replaceAll('_', ' ');
+    tooltip.textContent = edge.type === 'participation' ? contextUseName(edge.record) : pretty(edge.type);
     line.append(tooltip);
     baseLayer.append(line);
     if (edge.relation_id) {

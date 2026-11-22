@@ -109,7 +109,7 @@ def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload, monk
 
     with monkeypatch.context() as patch:
         patch.setattr(graph_html, 'render_graph_html', lambda *a, **kw: pytest.fail('downgraded the saved viewer'))
-        state['visualization']['renderer'] = 'person-event-scrollable-v10'
+        state['visualization']['renderer'] = 'person-event-scrollable-v999'
         assert read_gantt(tmp_path, state, current_view=True) == html
 
     # The workbench can display an earlier renderer's receipt without rewriting it.
@@ -392,6 +392,111 @@ def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path, monkeypatch):
         page.keyboard.press('Escape')
         page.wait_for_function(fills)
         assert path.evaluate('node => node === document.activeElement')
+        browser.close()
+
+
+def test_shared_context_coverage_applies_exclusions_per_reference(graph):
+    from finmy.person_epg.event.graph_html import render_graph_html
+    from test_person_event_graph_html import embedded_data
+
+    def coverage():
+        pages = embedded_data(render_graph_html(graph), 'epg-view')['pages']
+        p1 = next(page for page in pages if page['phase'] == 'PHASE-1')
+        return next(card for card in p1['cards'] if card['id'] == 'CTX-1')['baseline_coverage']
+
+    ref = graph['phases'][0]['baseline_context_refs'][0]
+    exclusion = dict(context_ref_id=ref['context_ref_id'], reason='Exception for this action.',
+                     support=[dict(target='/context_ref_id', mode='A', evidence_ids=['EV-4'])])
+    graph['actions'][1]['baseline_context_exclusions'] = [exclusion]
+    assert coverage() == dict(applies=['ACTION-1'], excluded=['ACTION-2'], unresolved=[])
+    exclusion['support'] = []
+    assert coverage() == dict(applies=['ACTION-1'], excluded=[], unresolved=['ACTION-2'])
+    graph['phases'][0]['baseline_context_refs'].append(dict(ref, context_ref_id='another-use', relation_type='constraint'))
+    assert set(coverage()['applies']) == {'ACTION-1', 'ACTION-2'}
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_context_categories_and_reference_details_in_browser(tmp_path):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event.graph_html import render_graph_html
+    from test_person_event_graph_html import context_graph
+
+    path = tmp_path / 'context.html'
+    graph = context_graph()
+    graph['actions'][-1]['delta_context_refs'].append(dict(context_id='roles', relation_type='condition'))
+    graph['contexts'][0]['entity_refs'] = ['org']
+    path.write_text(render_graph_html(graph), encoding='utf-8')
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        page = browser.new_page(viewport={'width': 1366, 'height': 768}, offline=True)
+        page.goto(path.as_uri())
+        page.locator('#picker').select_option('1')
+        categories = page.get_by_role('group', name='Context category (left stripe)', exact=True)
+        names = ['Environment', 'Parties & relationships', 'Personal state']
+        assert categories.locator('.category-item').all_text_contents() == names
+        colors = set()
+        for cid, category in [('roles', 'Parties & relationships'), ('terms', 'Environment'), ('briefing', 'Personal state')]:
+            card = page.locator(f'.context[data-id="{cid}"]')
+            assert card.locator('.context-kind').inner_text() == category
+            color = card.evaluate('el => getComputedStyle(el).borderLeftColor')
+            stripe = categories.get_by_text(category, exact=True).locator('.category-swatch')
+            assert stripe.evaluate('el => getComputedStyle(el).borderLeftColor') == color
+            assert 0 < stripe.bounding_box()['width'] < stripe.bounding_box()['height']
+            colors.add(color)
+        assert len(colors) == 3
+        key = page.locator('.scope-key')
+        assert key.locator('.scope-item').all_text_contents() == ['Phase-wide', 'Action-linked', 'Reference only']
+        key_height = key.locator('.scope-swatch').first.bounding_box()['height']
+        stripe_height = categories.locator('.category-swatch').first.bounding_box()['height']
+        page.locator('#plus').click()
+        assert key.locator('.scope-swatch').first.bounding_box()['height'] == key_height
+        assert categories.locator('.category-swatch').first.bounding_box()['height'] == stripe_height
+        page.locator('#fit').click()
+        assert 'highlight' in page.locator('.section.shared-context .context-note').inner_text()
+        assert page.locator('.section.additional-context h3').inner_text().startswith('Additional context')
+        colored_cards = []
+        for cid, kind, border in [('roles', 'shared', 'solid'), ('terms', 'action', 'solid'), ('report', 'reference', 'dashed')]:
+            card = page.locator(f'.context[data-id="{cid}"]')
+            assert card.get_attribute('data-scope') == kind
+            swatch = key.locator(f'.scope-swatch[data-scope="{kind}"]')
+            style = 'el => [getComputedStyle(el).backgroundColor, getComputedStyle(el).borderTopStyle]'
+            fill, stroke = card.evaluate(style)
+            assert [fill, stroke] == swatch.evaluate(style) and stroke == border
+            colored_cards.append(fill)
+        assert len(set(colored_cards)) == 3
+        report = page.locator('.context[data-id="report"]')
+        assert report.locator('.retrospective').inner_text() == 'Retrospective'
+        report.click()
+        assert 'Perspective · Retrospective' in page.locator('#inspection').inner_text()
+        assert 'Scope on this page · Reference only' in page.locator('#inspection').inner_text()
+        page.keyboard.press('Escape')
+        page.locator('.context[data-id="roles"]').click()
+        assert 'Scope on this page · Phase-wide and action-linked' in page.locator('#inspection').inner_text()
+        assert page.locator('.action.scope-member').evaluate_all('els => els.map(el => el.dataset.id)') == ['A2']
+        assert page.locator('.scope-summary').inner_text() == 'Applies by default to 1 of 2 Actions in Phase 1.'
+        assert 'Scope unresolved · A01' in page.locator('#inspection').inner_text()
+        mention_opacity = """() => drawnEdges.find(x => x.edge.type === 'about' && x.edge.from === 'roles'
+            && x.edge.to === 'org').line.getAttribute('opacity')"""
+        assert page.evaluate(mention_opacity) == '0'
+        page.locator('#inspection').get_by_role('button', name='Foundation', exact=True).first.click()
+        assert page.evaluate(mention_opacity) == '1'
+        assert page.locator('.scope-member').count() == 0
+        page.locator('#inspection-back').click()
+        assert page.get_by_role('button', name='A01 · participation · Adviser · Foundation').count() == 1
+        page.get_by_role('button', name='A01 · participation · Sponsor · Foundation').click()
+        assert page.locator('#inspection [data-field="/delta_context_refs/1"][open]').count() == 1
+        assert 'Only for the appointment.' in page.locator('#inspection').inner_text()
+        assert 'Acting independently.' in page.locator('#inspection').inner_text()
+        page.keyboard.press('Escape')
+        assert 'participation · Adviser' in page.locator('#links .edge-layer title').all_text_contents()
+        page.locator('#picker').select_option('2')
+        assert page.locator('.section.additional-context').count() == 0
+        assert page.locator('.section.shared-context').count() == 0
+        assert key.locator('.scope-item').all_text_contents() == ['Action-linked']
+        assert categories.locator('.category-item').all_text_contents() == names
+        assert page.locator('.scope-member').count() == 0
+        assert page.locator('.context[data-id="roles"]').get_attribute('data-scope') == 'action'
+        assert 'knowledge-source' not in page.locator('#links .edge-layer title').all_text_contents()
         browser.close()
 
 

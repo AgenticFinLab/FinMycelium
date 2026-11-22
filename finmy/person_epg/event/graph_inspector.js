@@ -26,6 +26,40 @@ const alias = id => view.aliases[id] || id;
 const pretty = value => String(value || '').replaceAll('_', ' ');
 const displayName = id => view.details[id]?.title || objects.get(id)?.record?.name || id;
 const short = (value, n = 85) => value.length <= n ? value : value.slice(0, n - 1).trimEnd() + '…';
+const contextCategories = new Map([
+  ['environment', 'Environment'], ['relations', 'Parties & relationships'], ['person_state', 'Personal state']
+]);
+const contextPerspectives = new Map([
+  ['world', 'World as described'], ['belief', 'Known or believed at the time'],
+  ['post_hoc', 'Retrospective'], ['unknown', 'Unknown']
+]);
+const contextUses = new Map();
+for (const [items, key, field] of [[graph.phases, 'phase_id', 'baseline_context_refs'],
+    [graph.actions, 'action_id', 'delta_context_refs']]) {
+  for (const item of items || []) for (const [i, ref] of (item[field] || []).entries()) {
+    if (!contextUses.has(ref.context_id)) contextUses.set(ref.context_id, []);
+    contextUses.get(ref.context_id).push({owner: item[key], path: '/' + field + '/' + i, ref});
+  }
+}
+const scopeNames = {shared: 'Phase-wide', action: 'Action-linked', reference: 'Reference only'};
+let contextScopes = new Map();
+function contextScopesOn(page) {
+  const actions = new Set(page.cards.filter(card => card.kind === 'action').map(card => card.id));
+  const scopes = new Map();
+  for (const card of page.cards) {
+    if (card.kind !== 'context') continue;
+    const uses = contextUses.get(card.id) || [];
+    const coverage = card.baseline_coverage;
+    const linked = uses.some(use => actions.has(use.owner));
+    const kind = coverage ? 'shared' : linked ? 'action' : 'reference';
+    scopes.set(card.id, {kind, coverage, label: coverage && linked ? 'Phase-wide and action-linked' : scopeNames[kind],
+      members: coverage ? new Set(coverage.applies) : null});
+  }
+  return scopes;
+}
+function contextUseName(ref) {
+  return [pretty(ref.relation_type), ref.relation_type === 'participation' && ref.role].filter(Boolean).join(' · ');
+}
 function at(record, path) {
   for (const part of (path || '').split('/').slice(1)) {
     record = record?.[part.replaceAll('~1', '/').replaceAll('~0', '~')];
@@ -202,6 +236,57 @@ function renderInspection() {
   } else {
     for (const key of ['description', 'summary']) if (record[key] && record[key] !== title.textContent) panel.append(el('p', record[key]));
     if (record.time?.text) panel.append(el('p', record.time.text, 'inspection-meta'));
+    if (/^\/(?:baseline|delta)_context_refs\/\d+$/.test(field || '')) {
+      const ref = at(record, field);
+      if (ref) {
+        panel.append(el('h3', 'Context reference'), traceButton(alias(ref.context_id) + ' · ' + contextUseName(ref), ref.context_id));
+        if (ref.entity_id) panel.append(traceButton(displayName(ref.entity_id), ref.entity_id));
+        else if (['knowledge-source', 'participation'].includes(ref.relation_type))
+          panel.append(el('p', ref.relation_type === 'knowledge-source' ? 'Recipient not recorded' : 'Participant not recorded', 'field-note'));
+        if (ref.interaction_type) panel.append(el('p', pretty(ref.interaction_type)));
+        if (ref.qualification) panel.append(el('p', ref.qualification));
+      }
+    }
+    if (kind === 'context') {
+      const scope = contextScopes.get(id);
+      if (scope) panel.append(el('p', 'Scope on this page · ' + scope.label, 'inspection-meta'));
+      const coverage = scope?.coverage;
+      if (coverage) {
+        const {applies, excluded, unresolved} = coverage, total = applies.length + excluded.length + unresolved.length;
+        const summary = total ? 'Applies by default to ' + applies.length + ' of ' + total +
+          (total === 1 ? ' Action in ' : ' Actions in ') + phaseLabel(view.pages[current]) + '.' :
+          'No Actions are recorded in this phase.';
+        panel.append(el('p', summary, 'field-note scope-summary'));
+        for (const [label, ids] of [['Highlighted', applies], ['Excluded', excluded], ['Scope unresolved', unresolved]]) {
+          if (ids.length) panel.append(el('p', label + ' · ' + ids.map(alias).join(', '), 'inspection-meta'));
+        }
+        const mentioned = (record.entity_refs || []).filter(eid => objects.has(eid));
+        if (mentioned.length) {
+          panel.append(el('h3', 'Entities mentioned'));
+          for (const eid of mentioned) panel.append(traceButton(displayName(eid), eid));
+        }
+      }
+      panel.append(el('p', 'Category · ' + (contextCategories.get(record.category) || 'Not recorded'), 'inspection-meta'),
+        el('p', 'Perspective · ' + (contextPerspectives.get(record.perspective) || 'Not recorded'), 'inspection-meta'));
+      const uses = contextUses.get(id) || [];
+      if (uses.length) {
+        panel.append(el('h3', 'Recorded uses'));
+        for (const {owner, path, ref} of uses) {
+          const party = ref.entity_id && displayName(ref.entity_id);
+          panel.append(traceButton([alias(owner), contextUseName(ref), party].filter(Boolean).join(' · '), owner, path));
+        }
+      }
+    }
+    if (kind === 'action' && record.baseline_context_exclusions?.length) {
+      panel.append(el('h3', 'Recorded exceptions to shared context'));
+      const baseline = objects.get(record.phase_id)?.record.baseline_context_refs || [];
+      for (const [i, exclusion] of record.baseline_context_exclusions.entries()) {
+        const ref = baseline.find(r => r.context_ref_id === exclusion.context_ref_id);
+        const label = ref ? alias(ref.context_id) + ' · ' + contextUseName(ref) : exclusion.context_ref_id;
+        panel.append(traceButton([label, exclusion.reason].filter(Boolean).join(' · '),
+          id, '/baseline_context_exclusions/' + i));
+      }
+    }
     if (kind === 'entity' || kind === 'person') {
       if (record.aliases?.length) panel.append(el('p', 'Aliases · ' + record.aliases.join(', '), 'inspection-meta'));
       partyEntries(panel, id);

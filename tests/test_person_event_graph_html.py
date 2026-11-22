@@ -28,7 +28,64 @@ def embedded_data(html, script_id):
     return json.loads(match[1])
 
 
+def context_graph():
+    graph = sample_graph()
+    def ref(cid, kind, **fields):
+        return dict(context_id=cid, relation_type=kind, **fields)
+    graph.update(
+        entities=[dict(entity_id='pat', name='Pat'), dict(entity_id='org', name='Foundation')],
+        phases=[dict(phase_id='P1', name='Appointment', time=dict(start='2020-01-01', end='2020-12-31'),
+                     baseline_context_refs=[ref('roles', 'participation', entity_id='org', role='Host',
+                                                context_ref_id='shared')]),
+                dict(phase_id='P2', name='Follow-up')],
+        actions=[dict(action_id='A1', name='Accept', phase_id='P1', actor=dict(entity_id='pat'),
+                      delta_context_refs=[ref('roles', 'participation', entity_id='org', role='Adviser'),
+                                          ref('roles', 'participation', entity_id='org', role='Sponsor',
+                                              qualification='Only for the appointment.'),
+                                          ref('briefing', 'knowledge-source', entity_id='pat'),
+                                          ref('terms', 'result'),
+                                          ref('roles', 'participation')],
+                      baseline_context_exclusions=[dict(context_ref_id='shared', reason='Acting independently.')]),
+                 dict(action_id='A2', name='Sign', phase_id='P1', delta_context_refs=[ref('terms', 'condition')]),
+                 dict(action_id='A3', name='Report', phase_id='P2', actor=dict(entity_id='pat'),
+                      delta_context_refs=[ref('briefing', 'condition')])],
+        contexts=[dict(context_id='roles', category='relations', perspective='world', description='Foundation roles'),
+                  dict(context_id='briefing', category='person_state', perspective='belief', description='Briefing'),
+                  dict(context_id='terms', category='environment', perspective='world', description='Terms'),
+                  dict(context_id='report', category='environment', perspective='post_hoc', description='Later report',
+                       time=dict(start='2020-07-01', end='2020-07-01'))])
+    return graph
+
+
 class PersonEventGraphHtmlTests(unittest.TestCase):
+
+    def test_context_of_an_unassigned_action_stays_with_its_owner(self):
+        graph = context_graph()
+        graph['actions'].append(dict(action_id='outside', name='Unassigned action', phase_id=None,
+                                     delta_context_refs=[dict(context_id='report', relation_type='trigger')]))
+        for time in [dict(start='2020-07-01', end='2020-07-01'), dict(text='In 2020')]:
+            with self.subTest(time=time):
+                graph['contexts'][-1]['time'] = time
+                pages = embedded_data(render_graph_html(graph), 'epg-view')['pages']
+                self.assertEqual([p['phase'] for p in pages if any(c['id'] == 'report' for c in p['cards'])], [None])
+                self.assertTrue(any(e['from'] == 'report' and e['to'] == 'outside' for e in pages[0]['edges']))
+
+    def test_context_placement_and_edges_follow_scoped_references(self):
+        graph = context_graph()
+        html = render_graph_html(graph)
+        self.assertEqual(embedded_data(html, 'epg-data'), graph)
+        _, first, second = embedded_data(html, 'epg-view')['pages']
+        roles = [(e['from'], e['to'], e['record']['role']) for e in first['edges'] if e['type'] == 'participation']
+        self.assertCountEqual(roles, [('org', 'P1', 'Host'), ('org', 'A1', 'Adviser'), ('org', 'A1', 'Sponsor')])
+        edges = [(e['from'], e['to'], e['type']) for e in first['edges'] if e['kind'] == 'context']
+        self.assertIn(('briefing', 'pat', 'knowledge-source'), edges)
+        self.assertIn(('A1', 'terms', 'result'), edges)
+        self.assertIn(('terms', 'A2', 'condition'), edges)
+        self.assertFalse(any(e['type'] == 'knowledge-source' for e in second['edges']))
+        self.assertEqual(sum(c['id'] == 'terms' for c in first['cards']), 1)
+        band = next(s['box'] for s in first['sections'] if s['title'] == 'Additional context')
+        self.assertEqual([c['id'] for c in first['cards'] if band[1] <= c['box'][1] < band[1] + band[3]], ['report'])
+        self.assertFalse(any(s['title'] == 'Additional context' for s in second['sections']))
 
     def test_whole_phase_uses_one_wide_canvas_with_deduplicated_nodes(self):
         graph = sample_graph()

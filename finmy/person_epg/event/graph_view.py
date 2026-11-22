@@ -19,30 +19,44 @@ def build_views(graph):
     evidence = {item['evidence_id']: item for item in graph.get('evidence', [])}
     source_ids = {item['source_id'] for item in graph.get('sources', [])}
     memberships = {phase['phase_id']: set() for phase in phases}
+    overview_refs = set()
     edges = []
 
-    def references(owner, refs, phase_id):
-        for ref in refs:
+    def references(record, key, field):
+        owner, phase_id = record[key], record.get('phase_id')
+        for i, ref in enumerate(record.get(field, [])):
             context = ref.get('context_id')
             if context not in context_ids:
                 continue
             if phase_id in memberships:
                 memberships[phase_id].add(context)
-            result = ref.get('relation_type') == 'result'
+            else:
+                overview_refs.add(context)
+            kind = ref.get('relation_type', 'context')
+            start, end = context, owner
+            if kind == 'result':
+                start, end = owner, context
+            elif kind in ('participation', 'knowledge-source'):
+                party = ref.get('entity_id')
+                if party not in entity_ids:
+                    continue  # A recorded gap has no known endpoint.
+                if kind == 'participation':
+                    start = party
+                else:
+                    end = party
             edges.append({
-                'from': owner if result else context,
-                'to': context if result else owner,
-                'type': ref.get('relation_type', 'context'), 'kind': 'context', 'record': ref,
+                'from': start, 'to': end, 'type': kind, 'kind': 'context', 'record': ref,
+                'owner': owner, 'ref_path': f'/{field}/{i}',
             })
 
     for phase in phases:
-        references(phase['phase_id'], phase.get('baseline_context_refs', []), phase['phase_id'])
+        references(phase, 'phase_id', 'baseline_context_refs')
     for action in actions:
-        references(action['action_id'], action.get('delta_context_refs', []), action.get('phase_id'))
+        references(action, 'action_id', 'delta_context_refs')
     assigned = set().union(*memberships.values()) if memberships else set()
     for context in contexts:
         cid = context['context_id']
-        if cid in assigned:
+        if cid in assigned or cid in overview_refs:
             continue
         span = context.get('time') or {}
         start, end = span.get('start'), span.get('end')
@@ -104,17 +118,21 @@ def build_views(graph):
             context = list(dict.fromkeys(context))
         visible = {owner, *activity, *context}
         people = [owner]
-        for edge in edges:
+        owners = {owner, *activity}
+        scoped_edges = [edge for edge in edges if edge['kind'] != 'context' or edge['owner'] in owners]
+        for edge in scoped_edges:
             if edge['kind'] == 'party' and edge['to'] in visible:
                 people.append(edge['from'])
+            elif edge['kind'] == 'context' and edge['type'] in ('participation', 'knowledge-source'):
+                people.append(edge['record']['entity_id'])
         if not phase:
             people += [item['entity_id'] for item in graph.get('entities', [])
-                       if not any(edge['from'] == item['entity_id'] for edge in edges)]
+                       if not any(item['entity_id'] in (edge['from'], edge['to']) for edge in edges)]
         people = list(dict.fromkeys(people))
         visible.update(people)
-        local_edges = [edge for edge in edges if edge['from'] in visible and edge['to'] in visible]
+        local_edges = [edge for edge in scoped_edges if edge['from'] in visible and edge['to'] in visible]
         jumps = []
-        for edge in edges:
+        for edge in scoped_edges:
             if edge['kind'] == 'party':
                 continue
             missing = edge['to'] if edge['from'] in visible else edge['from']
@@ -134,7 +152,7 @@ def build_views(graph):
                     sources.setdefault(sid, set()).add(eid)
                     local_edges.append({'from': sid, 'to': node, 'type': 'supports', 'kind': 'evidence'})
         # Retain passages cited by relations, even when neither endpoint has its own support.
-        for edge in edges:
+        for edge in scoped_edges:
             if edge['from'] not in visible and edge['to'] not in visible:
                 continue
             for support in edge.get('record', {}).get('support', []):
@@ -164,7 +182,8 @@ def build_views(graph):
             'evidence_top': evidence_top,
             'height': evidence_top + 80 + ((len(ordered_sources) + 2) // 3) * 180,
             'sources': {sid: sorted(sources[sid]) for sid in ordered_sources},
-            'edges': list({(edge['from'], edge['to'], edge['type']): edge for edge in local_edges}.values()),
+            'edges': list({(e['from'], e['to'], e['type'], e.get('owner'), e.get('ref_path')): e
+                           for e in local_edges}.values()),
             'jumps': list({item['id']: item for item in jumps}.values()),
         })
     return {'details': details, 'pages': pages}

@@ -5,10 +5,40 @@ from urllib.parse import urlparse
 
 from .graph_evidence import cited_evidence, field_index, party_uses
 from .graph_labels import card_label, shorten
+from .records import compose_context
 
 
 def _short(text, limit=175):
     return shorten(text, limit)
+
+
+def _baseline_coverage(graph, refs, actions):
+    """Which Actions inherit at least one Phase reference to a displayed Context."""
+    ref_ids = {}
+    for ref in refs:
+        if ref.get('context_id'):
+            ref_ids.setdefault(ref['context_id'], set()).add(ref.get('context_ref_id'))
+    coverage = {cid: {'applies': [], 'excluded': [], 'unresolved': []} for cid in ref_ids}
+    for action in actions:
+        aid = action['action_id']
+        excluded, unresolved = set(), set()
+        if action.get('baseline_context_exclusions'):
+            try:
+                composed = compose_context(graph, aid)
+                excluded.update(composed['excluded_ref_ids'])
+                unresolved.update(issue['context_ref_id'] for issue in composed['issues'])
+            except (KeyError, TypeError, ValueError):
+                # An incomplete saved draft can still be displayed. Its proposed
+                # exceptions remain unresolved until their support can be checked.
+                unresolved.update(item.get('context_ref_id') for item in action['baseline_context_exclusions'])
+        for cid, ids in ref_ids.items():
+            if ids - excluded - unresolved:
+                coverage[cid]['applies'].append(aid)
+            elif ids & unresolved:
+                coverage[cid]['unresolved'].append(aid)
+            else:
+                coverage[cid]['excluded'].append(aid)
+    return coverage
 
 
 def action_order(actions, edges):
@@ -120,16 +150,18 @@ def arrange_graph(graph, view, issues=None):
     # Retain explicit memberships and place remaining background using its own
     # dates or evidence shared with a Phase. This is a display assignment.
     phase_context = {page['phase']: list(page['columns'][2]) for page in view['pages'][1:]}
+    overview_refs = {ref.get('context_id') for aid in view['pages'][0]['columns'][1]
+                     for ref in records[aid].get('delta_context_refs', [])}
     unassigned = []
-    profiles = {}
+    phase_evidence = {}
     for phase in phases:
         pid = phase['phase_id']
         associated = [phase] + [a for a in graph.get('actions', []) if a.get('phase_id') == pid]
-        profiles[pid] = (
-            set().union(*(passages(item) for item in associated)),
-            set().union(*(source_ids(item) for item in associated)),
-        )
+        phase_evidence[pid] = set().union(*(passages(item) for item in associated))
     for cid in view['pages'][0]['columns'][2]:
+        if cid in overview_refs:
+            unassigned.append(cid)
+            continue
         record = records[cid]
         span = record.get('time') or {}
         years = set(re.findall(r'\b(?:19|20)\d{2}\b', span.get('text') or ''))
@@ -138,7 +170,7 @@ def arrange_graph(graph, view, issues=None):
         scores = []
         for phase in phases:
             pid = phase['phase_id']
-            overlap = len(passages(record) & profiles[pid][0])
+            overlap = len(passages(record) & phase_evidence[pid])
             score = overlap * 10
             period = phase.get('time') or {}
             lower, upper = period.get('start'), period.get('end')
@@ -154,12 +186,11 @@ def arrange_graph(graph, view, issues=None):
         else:
             unassigned.append(cid)
 
-    all_edges = []
-    for page in view['pages']:
-        all_edges.extend(edge for edge in page['edges'] if edge['kind'] == 'context')
-    # Include action relations with endpoints on different Phases.
-    all_edges = list({(edge['from'], edge['to'], edge['type']): edge for edge in all_edges}.values())
-    all_edges += [
+    # A ContextRef belongs to its owning Phase or Action. Two visible endpoints
+    # alone do not establish that the reference applies on another page.
+    context_edges = {page['phase']: [e for e in page['edges'] if e['kind'] == 'context']
+                     for page in view['pages']}
+    all_edges = [
         {'from': item['from_action_id'], 'to': item['to_action_id'], 'type': item['type'],
          'kind': 'relation', 'record': item, 'relation_id': rid}
         for rid, item in relations.items()
@@ -179,19 +210,18 @@ def arrange_graph(graph, view, issues=None):
     def make_card(nid, box):
         record = records[nid]
         kind = kinds.get(nid, 'context')
-        parties = [(record.get('actor') or {}).get('entity_id')]
-        parties += (record.get('object') or {}).get('entity_refs', []) + record.get('entity_refs', [])
+        actor = records.get((record.get('actor') or {}).get('entity_id'))
         badges = sorted(source_ids(record), key=lambda key: aliases.get(key, key))
         return {
             'key': nid, 'id': nid, 'kind': kind, 'alias': aliases.get(nid, ''),
-            'title': card_label(record, kind, details[nid]['title'], records.get(parties[0])),
+            'title': card_label(record, kind, details[nid]['title'], actor),
             'date': _short(details[nid]['date'], 36), 'parties': '',
             'entity_type': record.get('type', 'person') if kind == 'party' else '',
             'badges': [aliases.get(sid, '') for sid in badges], 'box': box,
         }
 
-    def add_parties(cards, body_top, body_end, canvas_width, page_owner):
-        visible = {card['id'] for card in cards}
+    def add_parties(cards, body_top, body_end, canvas_width, page_owner, additional):
+        visible = {card['id'] for card in cards} | set(additional)
         actors = list(dict.fromkeys(edge['from'] for edge in all_edges
                                    if edge['kind'] == 'party' and edge['type'] == 'actor'
                                    and edge['to'] in visible))
@@ -259,7 +289,8 @@ def arrange_graph(graph, view, issues=None):
 
     def finish(pid, title, cards, sections, body_end, canvas_width, extra_evidence=(), extra_sources=()):
         present = {card['id'] for card in cards}
-        edges = [dict(edge) for edge in all_edges if edge['from'] in present and edge['to'] in present]
+        edges = [dict(edge) for edge in (*context_edges[pid], *all_edges)
+                 if edge['from'] in present and edge['to'] in present]
         owner = pid or graph['event']['event_id']
         local_evidence = set(extra_evidence) | citations.get(owner, set())
         if pid:
@@ -337,13 +368,20 @@ def arrange_graph(graph, view, issues=None):
         relation_slots[pid] = slots
         y = 18 + (12 + math.ceil(len(ids) / columns_for_labels) * 32 if ids else 0)
         if baseline:
-            for i, cid in enumerate(baseline):
-                cards.append(make_card(cid, [42 + i % columns * 360, y + 44 + i // columns * 96, 330, 72]))
-                shown.add(cid)
-            end = y + 48 + math.ceil(len(baseline) / columns) * 96
+            coverage = _baseline_coverage(graph, phase['baseline_context_refs'], [records[aid] for aid in ordered])
+            shared_cards = baseline
+            if any(e['owner'] == pid and e['type'] == 'participation' for e in context_edges[pid]):
+                shared_cards = [pid, *baseline]  # A phase-scoped role has a Phase endpoint.
+            for i, nid in enumerate(shared_cards):
+                card = make_card(nid, [42 + i % columns * 360, y + 44 + i // columns * 96, 330, 72])
+                if nid in coverage:
+                    card['baseline_coverage'] = coverage[nid]
+                cards.append(card)
+            shown.update(baseline)
+            end = y + 48 + math.ceil(len(shared_cards) / columns) * 96
             sections.append({'title': 'Shared phase context', 'box': [22, y, canvas_width - 44, end - y]})
             y = end + 20
-        body_top = y
+        body_top, shared_count = y, len(cards)
         y += 54
         before, after = [], []
         # Each action owns a horizontal column. A shared context is drawn once;
@@ -371,18 +409,21 @@ def arrange_graph(graph, view, issues=None):
                     cards.append(make_card(cid, [left + column * 320, y + i * 104, 260, 72]))
             y += max(map(len, after), default=0) * 104
         remaining = list(dict.fromkeys(cid for cid in context if cid not in shown))
-        if remaining:
-            columns = max(1, (canvas_width - left - 12) // 360)
-            for i, cid in enumerate(remaining):
-                cards.append(make_card(cid, [left + i % columns * 360, y + i // columns * 112, 330, 80]))
-            y += math.ceil(len(remaining) / columns) * 112
-        if not cards and phase:
+        if not cards and not remaining and phase:
             cards.append(make_card(pid, [42, y, 1050, 116]))
             y += 146
-        y = add_parties(cards, body_top, y, canvas_width, pid or graph['event']['event_id'])
-        if cards:
+        y = add_parties(cards, body_top, y, canvas_width, pid or graph['event']['event_id'], remaining)
+        if len(cards) > shared_count:
             sections.append({'title': 'Actions and their context' if ordered else 'Context',
                              'box': [22, body_top, canvas_width - 44, y - body_top]})
+        else:
+            y = body_top
+        if remaining:
+            top = y + (18 if len(cards) > shared_count else 0)
+            for i, cid in enumerate(remaining):
+                cards.append(make_card(cid, [42 + i % columns * 360, top + 44 + i // columns * 96, 330, 80]))
+            y = top + 44 + math.ceil(len(remaining) / columns) * 96
+            sections.append({'title': 'Additional context', 'box': [22, top, canvas_width - 44, y - top]})
         # Keep a source-free plan so uncited evidence can be merged into the
         # existing overview, instead of creating extra views for the same scope.
         plans.append((pid, title, cards, sections, y, canvas_width))
