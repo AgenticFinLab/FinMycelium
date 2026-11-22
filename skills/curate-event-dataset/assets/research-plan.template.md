@@ -2,7 +2,7 @@
 
 ## Scope and baseline
 
-Record the baseline input path, its Git object ID or file SHA-256, the historical ID mapping, the research cutoff, the current phase and the coverage objective.
+Record the baseline input path, its Git object ID or file SHA-256, the historical ID mapping, the research review date, the activity period under study, the current phase and the coverage objective. If the task also limits what could have been known by a particular date, record that evidence cutoff separately.
 
 ## Research questions and coverage
 
