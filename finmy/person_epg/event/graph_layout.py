@@ -73,6 +73,20 @@ def arrange_graph(graph, view, issues=None):
         rid = relation.get('relation_id', f'relation:{i}')
         relations[rid] = records[rid] = relation
         kinds[rid], aliases[rid] = 'relation', f'R{i:02}'
+    phase_pages = {p['phase_id']: i for i, p in enumerate(phases, 1)}
+    action_phases = {a['action_id']: a.get('phase_id') for a in graph.get('actions', [])}
+    phase_links = {pid: [] for pid in phase_pages}
+    linked_actions = set()
+    for rid, relation in relations.items():
+        start, end = relation['from_action_id'], relation['to_action_id']
+        first, second = action_phases.get(start), action_phases.get(end)
+        if first == second or first not in phase_pages or second not in phase_pages:
+            continue
+        linked_actions.update((start, end))
+        for local, other, here, there in ((start, end, first, second), (end, start, second, first)):
+            phase_links[here].append({'action_id': local, 'id': other, 'page': phase_pages[there],
+                                      'relation_id': rid, 'from': aliases[start], 'to': aliases[end],
+                                      'type': relation['type']})
     fields = {nid: entries for nid, record in records.items() if (entries := field_index(record))}
     uses = party_uses(graph, fields)
     eligible = evidence.keys() - issues.keys()
@@ -292,7 +306,7 @@ def arrange_graph(graph, view, issues=None):
             top += height + 18
         return {
             'phase': pid, 'title': title, 'cards': cards, 'sections': sections,
-            'edges': edges, 'height': max(820, top), 'width': canvas_width, 'jumps': [],
+            'edges': edges, 'height': max(820, top), 'width': canvas_width, 'jumps': phase_links.get(pid, []),
         }
 
     plans = []
@@ -339,9 +353,12 @@ def arrange_graph(graph, view, issues=None):
                 cards.append(make_card(cid, [left + column * 320, y + i * 104, 260, 72]))
         if ordered:
             action_y = y + max(map(len, before), default=0) * 104
+            row_height = 88
             for column, aid in enumerate(ordered):
-                cards.append(make_card(aid, [left + column * 320, action_y, 260, 88]))
-            y = action_y + 132
+                height = 114 if aid in linked_actions else 88
+                cards.append(make_card(aid, [left + column * 320, action_y, 260, height]))
+                row_height = max(row_height, height)
+            y = action_y + row_height + 44
             for column, neighbors in enumerate(after):
                 for i, cid in enumerate(neighbors):
                     cards.append(make_card(cid, [left + column * 320, y + i * 104, 260, 72]))
@@ -373,20 +390,7 @@ def arrange_graph(graph, view, issues=None):
         pid, title, cards, sections, end, width = plans[0]
         output[0] = finish(pid, title, list(cards), list(sections), end, width, unused, unused_sources)
 
-    destinations = {}
-    for i,page in enumerate(output):
-        for card in page['cards']:
-            destinations.setdefault(card['id'],i)
     for page in output:
-        present = {card['id'] for card in page['cards']}
-        for edge in all_edges:
-            other = edge['to'] if edge['from'] in present else edge['from']
-            if (edge['kind'] != 'party' and (edge['from'] in present or
-                    (edge['kind'] == 'relation' and edge['to'] in present)) and other not in present and other in destinations):
-                page['jumps'].append({'from': aliases.get(edge['from'], ''),
-                                     'to': aliases.get(edge['to'], ''), 'id': other,
-                                     'relation_id': edge.get('relation_id'),
-                                     'type': edge['type'], 'page': destinations[other]})
         # Assign unique keys to all card instances, including repeated contexts.
         instances = {}
         for i,card in enumerate(page['cards']):

@@ -195,6 +195,63 @@ def test_phase_overview_and_reading_size_in_browser(tmp_path, graph):
 
 
 @pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event.graph_html import render_graph_html
+    from test_person_event_graph_html import sample_graph
+
+    graph = sample_graph()
+    graph['phases'] = [{'phase_id': pid, 'name': pid} for pid in ('Planning', 'Decision', 'Execution')]
+    graph['actions'] = [{'action_id': aid, 'phase_id': p['phase_id'], 'name': aid}
+                        for aid, p in zip(('Proposal', 'Vote', 'Delivery'), graph['phases'])]
+    graph['contexts'] = [{'context_id': 'terms', 'description': 'Shared condition'}]
+    for action in graph['actions'][:2]:
+        action['delta_context_refs'] = [{'context_id': 'terms', 'relation_type': 'condition'}]
+    graph['sources'] = [{'source_id': 's', 'title': 'Minutes'}]
+    graph['evidence'] = [{'evidence_id': 'e', 'source_id': 's', 'quote': 'The proposal enabled the vote.'}]
+    graph['relations'] = [
+        {'relation_id': 'r1', 'from_action_id': 'Proposal', 'to_action_id': 'Vote', 'type': 'enables',
+         'support': [{'target': '/type', 'evidence_ids': ['e'], 'mode': 'A'}]},
+        {'relation_id': 'r2', 'from_action_id': 'Vote', 'to_action_id': 'Delivery', 'type': 'overlaps'},
+    ]
+    path = tmp_path / 'navigation.html'
+    path.write_text(render_graph_html(graph), encoding='utf-8')
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        for width, height in ((1366, 768), (390, 844)):
+            page = browser.new_page(viewport={'width': width, 'height': height}, offline=True)
+            page.goto(path.as_uri())
+            assert page.locator('#jumps').count() == 0
+            assert page.locator('.phase-link').count() == 1
+            page.get_by_role('button', name='A01 · enables → A02 · Phase 2').press('Enter')
+            assert page.locator('#inspection-title').inner_text() == 'A01 → A02 · enables'
+            assert page.locator('#inspection [data-target="e"]').count() == 1
+            if width > 800:
+                assert page.locator('#phase-guide path').get_attribute('d')
+                page.locator('.phase-list .relation-destination').click()
+            else:
+                assert page.locator('#phase-destination').is_visible()
+                page.get_by_role('button', name='Go to A02 · Phase 2').click()
+            assert page.locator('.action[data-id=Vote]').evaluate('el => el === document.activeElement')
+            page.get_by_role('button', name='A02 · 2 cross-phase relations').click()
+            groups = page.locator('#inspection .phase-group')
+            assert groups.locator('summary').all_text_contents() == ['Phase 1 (1)', 'Phase 3 (1)']
+            groups.first.locator('summary').click()
+            groups.first.get_by_role('button', name='A01 → A02 · enables').click()
+            assert page.locator('#navigation .relation-destination').get_attribute('data-page') == '1'
+            page.get_by_role('button', name='Go to A01 · Phase 1').click()
+            page.get_by_role('button', name='Back to A02 · Phase 2').click()
+            page.get_by_role('button', name='Back to A01 · Phase 1').click()
+            assert page.locator('.action[data-id=Proposal]').evaluate('el => el === document.activeElement')
+            assert page.locator('#phase-guide path').get_attribute('d') is None
+            page.locator('#picker').select_option('3')
+            page.get_by_role('button', name='A03 · overlaps ↔ A02 · Phase 2').click()
+            assert page.locator('#inspection-title').inner_text() == 'A02 ↔ A03 · overlaps'
+            page.close()
+        browser.close()
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
 def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path, monkeypatch):
     from playwright.sync_api import sync_playwright
     from finmy.person_epg.event import graph_html

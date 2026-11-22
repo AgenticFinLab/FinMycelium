@@ -9,7 +9,7 @@ from finmy.search.state import digest, now, write_json
 from finmy.search.summary import directory_lock
 
 
-SCROLLABLE_VIEW = 'person-event-scrollable-v5'
+SCROLLABLE_VIEW = 'person-event-scrollable-v6'
 
 
 def _view_input(directory, expected=None):

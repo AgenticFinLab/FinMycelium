@@ -92,7 +92,10 @@ select:focus-visible {
   min-height: 0
 }
 #workspace { display: flex; overflow: hidden }
-#sheet { display: flex; flex-direction: column }
+#sheet { position: relative; display: flex; flex-direction: column }
+#phase-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4 }
+#phase-guide path { fill: none; stroke: var(--purple); stroke-width: 1.5; stroke-dasharray: 4 4 }
+#outline[open] #phase-destination { display: none }
 
 #viewport { overflow: hidden auto }
 #viewport.phase-fitted, #viewport.measuring-fit { overflow-y: hidden }
@@ -173,6 +176,7 @@ select:focus-visible {
   color: white;
   border-color: #2868a8
 }
+.phase-list button.relation-destination { outline: 2px solid var(--purple); outline-offset: 1px }
 
 #regions,
 #cards,
@@ -190,8 +194,8 @@ select:focus-visible {
 }
 
 #references { display: grid; gap: 12px; padding: 0 16px }
-#references, #jumps { zoom: var(--content-scale, 1) }
-#references:empty, #jumps:empty { display: none }
+#references { zoom: var(--content-scale, 1) }
+#references:empty { display: none }
 .reference-section { border: 1px solid var(--border); border-radius: 7px; padding: 12px; background: #f8fbfa }
 .reference-section.sources { background: #f7f9fc }
 .reference-section header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px }
@@ -484,21 +488,14 @@ select:focus-visible {
   display: none !important
 }
 
-#jumps {
-  padding: 4px 24px 20px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap
-}
-
-#jumps button {
-  background: white;
-  color: var(--purple);
-  font-size: 11px;
-  border: 1px solid #d6c9df;
-  border-radius: 4px;
-  padding: 6px 10px
-}
+.card.with-phase-link { padding-bottom: 34px }
+.phase-link { position: absolute; pointer-events: auto; z-index: 9; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; text-align: left; color: #603c7a;
+  background: #faf6fc; border: 1px solid #d6c9df; border-radius: 4px; padding: 2px 7px; font-size: 12px; font-weight: 600 }
+.phase-link:hover, .phase-link:focus-visible { border-color: var(--purple) }
+.phase-group { margin: 6px 0 }
+.phase-group summary { cursor: pointer; color: var(--navy) }
+.phase-group .trace-link { display: block; text-align: left }
 
 svg text {
   font: 10px Arial, Helvetica, sans-serif;
@@ -524,13 +521,14 @@ svg text {
 </div>
 <div id="workspace"><main id="sheet">
 <h1 id="heading"></h1><div id="subheading"></div>
-<details id="outline"><summary>Stages and phases</summary><nav id="navigation" aria-label="Stages and phases"></nav></details>
+<details id="outline"><summary>Stages and phases<span id="phase-destination"></span></summary><nav id="navigation" aria-label="Stages and phases"></nav></details>
 <div id="viewport"><div id="content">
 <div id="diagram-scroll" tabindex="0" role="region" aria-label="Phase diagram"><div id="diagram-size"><div id="graph"><div id="regions"></div><svg id="links" aria-label="Graph relationships"></svg><div id="cards"></div></div></div></div>
 <div id="references"></div>
-<div id="jumps"></div>
 <svg id="trace-overlay" aria-hidden="true"><defs id="trace-defs"></defs><g id="evidence-lines"></g></svg>
-</div></div></main>
+</div></div>
+<svg id="phase-guide" aria-hidden="true"><path></path></svg>
+</main>
 <aside id="inspector" hidden aria-labelledby="inspection-title">
   <div class="inspector-nav"><button id="inspection-back" type="button">← Back</button>
   <button id="inspection-close" type="button" aria-label="Close details">Close ×</button></div>
@@ -573,6 +571,7 @@ let current = 0,
   zoomRatio = 1,
   fitCache = null;
 let diagramWidth = 0;
+let phaseTrail = [];
 
 function el(tag, text, cls) {
   const node = document.createElement(tag);
@@ -641,9 +640,9 @@ function highlight(key) {
     halo.setAttribute('stroke-width', style.width + 4);
     halo.setAttribute('opacity', selected ? .95 : 0);
     emphasis.style.display = selected ? '' : 'none';
-    flow.style.display = selected && moving && edge.type !== 'order_unknown' &&
+    flow.style.display = selected && moving && !symmetricRelation(edge.type) &&
       edge.record?.basis !== 'inferred' ? '' : 'none';
-    origin.setAttribute('opacity', selected && edge.type !== 'order_unknown' ? .9 : 0);
+    origin.setAttribute('opacity', selected && !symmetricRelation(edge.type) ? .9 : 0);
   }
   for (const [nodeKey, item] of cards) {
     item.button.classList.toggle('relation-focus', nodeKey === active);
@@ -741,13 +740,84 @@ function paintCard(card, container) {
   button.onfocus = () => { focused = card.key; highlight(hovered); };
   button.onblur = () => { if (focused === card.key) focused = null; highlight(hovered); };
   container.append(button);
-  cards.set(card.key, {card, button});
+  const item = {card, button};
+  cards.set(card.key, item);
+  if (card.kind !== 'action') return;
+  const links = view.pages[current].jumps.filter(link => link.action_id === card.id);
+  if (!links.length) return;
+  const link = links[0], other = alias(link.id) + ' · ' + phaseLabel(view.pages[link.page]);
+  let label = links.length + ' cross-phase relations';
+  if (links.length === 1) {
+    if (symmetricRelation(link.type)) label = pretty(link.type) + ' ↔ ' + other;
+    else if (card.alias === link.from) label = pretty(link.type) + ' → ' + other;
+    else label = other + ' → ' + card.alias + ' · ' + pretty(link.type);
+  }
+  const control = el('button', label, 'phase-link');
+  control.type = 'button';
+  control.dataset.action = card.id;
+  control.setAttribute('aria-label', card.alias + ' · ' + label);
+  control.setAttribute('aria-controls', 'inspector');
+  control.title = links.length === 1 ? relationName(objects.get(link.relation_id).record) : label;
+  control.onclick = () => inspectRecord(links.length === 1 ? link.relation_id : card.id);
+  const [x, y, w, h] = card.box;
+  position(control, [x + 6, y + h - 28, w - 12, 23]);
+  button.classList.add('with-phase-link');
+  container.append(control);
+  item.phaseLink = control;
 }
 
-function showPage(index) {
+function selectedPhaseLink() {
+  return view.pages[current].jumps.find(link => link.relation_id === selection?.id);
+}
+
+function markPhaseDestination() {
+  const link = selectedPhaseLink();
+  for (const tab of $('navigation').querySelectorAll('[data-page]')) {
+    const target = Number(tab.dataset.page) === link?.page;
+    tab.classList.toggle('relation-destination', target);
+    if (target && $('outline').open) tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  }
+  $('phase-destination').textContent = link ? ' · ' + phaseLabel(view.pages[link.page]) + ' · ' + alias(link.id) : '';
+  drawPhaseGuide();
+}
+
+function drawPhaseGuide() {
+  const path = $('phase-guide').firstElementChild;
+  path.removeAttribute('d');
+  const link = selectedPhaseLink();
+  const tab = $('navigation').querySelector('.relation-destination');
+  if (!link || !tab || !$('outline').open) return;
+  const local = [...cards.values()].find(item => item.card.id === link.action_id);
+  if (!local) return;
+  const card = local.button.getBoundingClientRect(), dest = tab.getBoundingClientRect();
+  const frame = $('viewport').getBoundingClientRect(), nav = $('navigation').getBoundingClientRect();
+  const startX = card.left + card.width / 2, endX = dest.left + dest.width / 2;
+  if (startX < frame.left || startX > frame.right || card.top < frame.top || card.top > frame.bottom ||
+      endX < nav.left || endX > nav.right || dest.bottom > nav.bottom || dest.bottom < nav.top) return;
+  const base = $('phase-guide').getBoundingClientRect();
+  const x = startX - base.left, y = card.top - base.top;
+  const tx = endX - base.left, ty = dest.bottom - base.top, mid = (ty + y) / 2;
+  path.setAttribute('d', 'M' + x + ' ' + y + ' C' + x + ' ' + mid + ' ' + tx + ' ' + mid + ' ' + tx + ' ' + ty);
+}
+
+function showAction(index, id, trail) {
+  showPage(index, trail);
+  const target = [...cards.values()].find(item => item.card.id === id);
+  if (target) {
+    target.button.focus({preventScroll: true});
+    target.button.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  }
+}
+
+function followPhaseLink(link) {
+  showAction(link.page, link.id, [...phaseTrail, {page: current, id: link.action_id}]);
+}
+
+function showPage(index, trail = []) {
   if (!view.pages[index]) return;
   closeInspection(false);
   current = index;
+  phaseTrail = trail;
   expanded = null;
   hovered = null;
   focused = null;
@@ -759,6 +829,12 @@ function showPage(index) {
   $('next').disabled = index === view.pages.length - 1;
   $('heading').textContent = page.title;
   const areas = el('span', null, 'area-links');
+  if (trail.length) {
+    const origin = trail[trail.length - 1];
+    const back = el('button', 'Back to ' + alias(origin.id) + ' · ' + phaseLabel(view.pages[origin.page]));
+    back.onclick = () => showAction(origin.page, origin.id, trail.slice(0, -1));
+    areas.append(back);
+  }
   const owner = page.phase || graph.event.event_id;
   areas.append(traceButton(phaseLabel(page), owner));
   for (const region of page.sections.filter(s => ['Evidence', 'Sources'].includes(s.title))) {
@@ -785,7 +861,13 @@ function showPage(index) {
     for (const phase of graph.phases.filter(p => p.stage_id === stage.stage_id || !graph.stages.length)) {
       const button = el('button', phase.name);
       button.classList.toggle('active', page.phase === phase.phase_id);
-      button.onclick = () => showPage(view.pages.findIndex(p => p.phase === phase.phase_id));
+      const pageIndex = view.pages.findIndex(p => p.phase === phase.phase_id);
+      button.dataset.page = pageIndex;
+      button.onclick = () => {
+        const link = selectedPhaseLink();
+        if (link?.page === pageIndex) followPhaseLink(link);
+        else showPage(pageIndex);
+      };
       phaseList.append(button);
     }
     section.append(phaseList);
@@ -794,7 +876,6 @@ function showPage(index) {
   $('regions').replaceChildren();
   $('cards').replaceChildren();
   $('references').replaceChildren();
-  $('jumps').replaceChildren();
   const grids = {};
   let diagramHeight = 0;
   for (const region of page.sections) {
@@ -822,24 +903,6 @@ function showPage(index) {
   $('graph').style.height = diagramHeight + 'px';
   $('diagram-scroll').hidden = !diagramHeight;
   for (const card of page.cards) paintCard(card, grids[card.kind] || $('cards'));
-  for (const jump of page.jumps) {
-    const row = el('span');
-    const title = jump.from + ' → ' + jump.to + ' · ' + pretty(jump.type);
-    if (jump.relation_id) row.append(traceButton(title, jump.relation_id));
-    const button = el('button', (jump.relation_id ? 'Go to ' + alias(jump.id) : title) +
-      ' · ' + phaseLabel(view.pages[jump.page]));
-    button.onclick = () => {
-      showPage(jump.page);
-      const target = [...cards.values()].find(item => item.card.id === jump.id);
-      if (target) {
-        target.button.focus({preventScroll: true});
-        target.button.scrollIntoView({block: 'nearest', inline: 'center'});
-        inspectRecord(jump.id);
-      }
-    };
-    row.append(button);
-    $('jumps').append(row);
-  }
   $('viewport').scrollTo(0, 0);
   $('diagram-scroll').scrollLeft = 0;
   zoomRatio = 1;
@@ -1123,7 +1186,7 @@ function drawEdges() {
       points: points.map(p => p.join(',')).join(' '),
       fill: 'none',
       stroke: style.color,
-      'marker-end': edge.type === 'order_unknown' ? 'none' : 'url(#arrow-' + edge.kind + ')',
+      'marker-end': symmetricRelation(edge.type) ? 'none' : 'url(#arrow-' + edge.kind + ')',
       'stroke-dasharray': edgePattern(edge) || 'none',
       'data-from': edge.from_key,
       'data-to': edge.to_key
@@ -1172,6 +1235,10 @@ function paintEvidenceSelection() {
   const page = view.pages[current];
   const links = page.edges.filter(edge => edge.kind === 'evidence');
   const kind = objects.get(id)?.kind;
+  if (kind === 'relation' && selectedPhaseLink()) {
+    for (const {card, button} of cards.values())
+      if (card.kind === 'evidence' && quotes.has(card.id)) button.classList.add('evidence-active');
+  }
   if (!fieldFocus && (kind === 'entity' || kind === 'person')) {
     for (const edge of links) if (edge.to === id) quotes.add(edge.from);
   }
@@ -1219,15 +1286,15 @@ function fitScale() {
   if (!width || !height) return 0;
   if (fitCache?.width === width && fitCache.height === height) return fitCache.scale;
   const coreHeight = $('diagram-scroll').hidden ? 0 : $('graph').offsetHeight;
-  const content = $('content'), refs = $('references'), jumps = $('jumps');
+  const content = $('content'), refs = $('references');
   viewport.classList.add('measuring-fit');
   // Quote and source rows wrap at different scales. Measure their actual layout
   // without redrawing the diagram or routing any edges during the search.
   function fits(value) {
     content.style.setProperty('--content-scale', value);
-    const tail = refs.getBoundingClientRect().height + jumps.getBoundingClientRect().height;
+    const tail = refs.getBoundingClientRect().height;
     return Math.round(coreHeight * value) + tail <= height &&
-      refs.scrollWidth <= refs.clientWidth + 1 && jumps.scrollWidth <= jumps.clientWidth + 1;
+      refs.scrollWidth <= refs.clientWidth + 1;
   }
   let upper = coreHeight ? Math.min(width / view.pages[current].width, height / coreHeight) : 1;
   if (!coreHeight) while (upper < height && fits(upper)) upper *= 2;
@@ -1258,9 +1325,11 @@ function spreadColumns(width) {
   const inset = Math.min(left, view.pages[current].width - right);
   const extra = Math.max(0, width - right - inset);
   // Every row shares the same horizontal mapping. The layout owns row assignment and order.
-  nodes.forEach(({button, card}, i) => {
+  nodes.forEach(({button, card, phaseLink}, i) => {
     const share = first === last ? .5 : (centers[i] - first) / (last - first);
-    button.style.left = (card.box[0] + extra * share) + 'px';
+    const x = card.box[0] + extra * share;
+    button.style.left = x + 'px';
+    if (phaseLink) phaseLink.style.left = (x + 6) + 'px';
   });
 }
 
@@ -1292,6 +1361,7 @@ function sizeDiagram() {
   } else {
     paintEvidenceSelection();
   }
+  drawPhaseGuide();
 }
 
 function changeZoom(value) {
@@ -1344,7 +1414,11 @@ wideOutline.addEventListener('change', e => { $('outline').open = e.matches; });
 new ResizeObserver(sizeDiagram).observe($('viewport'));
 $('diagram-scroll').addEventListener('scroll', () => {
   if (selection) paintEvidenceSelection();
+  drawPhaseGuide();
 }, {passive: true});
+$('viewport').addEventListener('scroll', drawPhaseGuide, {passive: true});
+$('navigation').addEventListener('scroll', drawPhaseGuide, {passive: true});
+$('outline').addEventListener('toggle', drawPhaseGuide);
 $('previous').onclick = () => showPage(current - 1);
 $('next').onclick = () => showPage(current + 1);
 $('picker').onchange = e => showPage(Number(e.target.value));

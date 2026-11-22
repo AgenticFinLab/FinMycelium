@@ -21,8 +21,8 @@ and collection.
    filing and a person named by a news report can have different attributions.
 6. Select a purple action link, its label, or the relation listed on an Action.
    Inspect the two endpoints and the relation type separately. An inference
-   includes its recorded reason and links to any premise fields. A cross-Phase
-   relation opens from either endpoint. **Escape** closes the details panel.
+   includes its recorded reason and links to any premise fields. **Escape**
+   closes the details panel.
 
 For an older native run with a valid saved timeline, the workbench displays the
 scrollable view from its verified JSON. **从已保存 JSON 重新绘图** writes this
@@ -66,6 +66,21 @@ and context in ochre. Recorded `precedes` and `enables` links help place
 actions. Unknown order has its own line style. Context without an explicit
 Phase can be grouped using its date or shared evidence. These placements are
 display choices.
+
+A purple control on an Action card leads to its relations with Actions in
+other Phases. A single link shows its direction, type and the other Action’s
+Phase. A count opens the relations grouped by destination Phase. Select a
+relation to inspect its evidence and highlight the destination in **Stages and
+phases**. When both the card and the destination tab are visible, a dashed
+guide connects them. Select the highlighted Phase or **Go to** to focus the
+other Action. **Back to** above the graph returns to the originating Action.
+Both endpoints display the direction recorded in the graph. Symmetric relations
+such as `overlaps` display **↔** at either endpoint.
+
+A Context can appear in several Phases under the same identifier. Each
+appearance shows its links to the Actions on that page and opens the same
+evidence record. Cross-Phase navigation is reserved for Action-to-Action
+relations whose endpoints belong to different Phases.
 
 Evidence and Sources appear below the diagram and take part in the same
 zoom. Their cards wrap to the available width.

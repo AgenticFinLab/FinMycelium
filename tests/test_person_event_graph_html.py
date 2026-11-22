@@ -218,9 +218,14 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
             {'action_id': 'A2', 'phase_id': 'P2', 'name': 'Second action'},
             {'action_id': 'A3', 'name': 'Unassigned action'},
         ]
+        for action in graph['actions'][:2]:
+            action['delta_context_refs'] = [{'context_id': 'C1', 'relation_type': 'condition'}]
         graph['contexts'] = [{'context_id': 'C1', 'description': 'Undated context'}]
         graph['sources'] = [{'source_id': 'S1', 'title': 'Unused source'}]
-        graph['relations'] = [{'from_action_id': 'A1', 'to_action_id': 'A2', 'type': 'precedes'}]
+        graph['relations'] = [
+            {'from_action_id': 'A1', 'to_action_id': 'A2', 'type': 'precedes'},
+            {'from_action_id': 'A1', 'to_action_id': 'A3', 'type': 'continues'},
+        ]
         pages = embedded_data(render_graph_html(graph), 'epg-view')['pages']
         shown = {card['id'] for page in pages for card in page['cards']}
         self.assertTrue({'A3', 'C1', 'S1'} <= shown)
@@ -231,6 +236,10 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
         self.assertEqual(reverse['relation_id'], jump['relation_id'])
         self.assertEqual((reverse['from'], reverse['to']), (jump['from'], jump['to']))
         self.assertTrue(any(card['id'] == 'A2' for card in pages[jump['page']]['cards']))
+        self.assertEqual([p['jumps'] for p in pages], [[], [jump], [reverse]])
+        for item, aid in ((page, 'A1'), (pages[jump['page']], 'A2')):
+            self.assertTrue(any(e['from'] == 'C1' and e['to'] == aid and e['type'] == 'condition'
+                                for e in item['edges']))
 
     def test_field_support_and_documented_participation_stay_separate(self):
         graph = sample_graph()

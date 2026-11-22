@@ -50,7 +50,11 @@ function valueText(value) {
     !['support','conflicts','gaps'].includes(k) && v != null).map(([k,v]) => pretty(k) + ' — ' + valueText(v)).join('\n');
   return String(value);
 }
-function relationName(r) { return alias(r.from_action_id) + ' → ' + alias(r.to_action_id) + ' · ' + pretty(r.type); }
+const symmetricRelation = type => ['overlaps', 'order_unknown', 'joint_action'].includes(type);
+function relationName(r) {
+  return alias(r.from_action_id) + (symmetricRelation(r.type) ? ' ↔ ' : ' → ') +
+    alias(r.to_action_id) + ' · ' + pretty(r.type);
+}
 function traceButton(text, id, field = null) {
   const button = el('button', text, 'trace-link');
   button.type = 'button';
@@ -165,6 +169,23 @@ function renderInspection() {
     kind === 'evidence' ? (view.passage_issues[id] ? 'Recorded reference' : 'Quoted passage') : displayName(id));
   title.id = 'inspection-title'; title.tabIndex = -1;
   panel.append(title);
+  const crossLinks = kind === 'action' ? view.pages[current].jumps.filter(link => link.action_id === id) : [];
+  if (crossLinks.length) {
+    panel.append(el('h3', 'Cross-phase action relations'));
+    const groups = new Map();
+    for (const link of crossLinks) {
+      if (!groups.has(link.page)) groups.set(link.page, []);
+      groups.get(link.page).push(link);
+    }
+    for (const page of [...groups.keys()].sort((a, b) => a - b)) {
+      const group = el('details', null, 'phase-group'), links = groups.get(page);
+      group.open = groups.size === 1;
+      group.append(el('summary', phaseLabel(view.pages[page]) + ' (' + links.length + ')'));
+      for (const link of links)
+        group.append(traceButton(relationName(objects.get(link.relation_id).record), link.relation_id));
+      panel.append(group);
+    }
+  }
   if (kind === 'evidence') {
     const issue = view.passage_issues[id];
     if (issue) panel.append(el('p', locationNotes[issue], 'field-note warning'));
@@ -204,6 +225,12 @@ function renderInspection() {
       partyEntries(panel, id);
     }
     if (kind === 'relation') {
+      const link = selectedPhaseLink();
+      if (link) {
+        const go = el('button', 'Go to ' + alias(link.id) + ' · ' + phaseLabel(view.pages[link.page]), 'trace-link');
+        go.onclick = () => followPhaseLink(link);
+        panel.append(go);
+      }
       panel.append(el('p', 'Recorded basis · ' + pretty(record.basis || 'unspecified'), 'inspection-meta'));
       for (const [label, endpoint] of [['From', record.from_action_id], ['To', record.to_action_id]])
         panel.append(traceButton(label + ' · ' + alias(endpoint) + ' · ' + short(displayName(endpoint)), endpoint));
@@ -217,7 +244,8 @@ function renderInspection() {
       panel.append(el('h3', 'Evidence by field'));
       fieldRows(panel, id, targets, field);
     }
-    const links = actionRelations.get(id) || [];
+    const crossIds = new Set(crossLinks.map(link => link.relation_id));
+    const links = (actionRelations.get(id) || []).filter(rid => !crossIds.has(rid));
     if (links.length) {
       panel.append(el('h3', 'Action relations'));
       const list = el('div', null, 'relation-list');
@@ -240,6 +268,7 @@ function inspectRecord(id, field = null, remember = true) {
   for (const [key, item] of cards) item.button.setAttribute('aria-expanded', String(key === expanded));
   $('inspector').hidden = false;
   renderInspection();
+  markPhaseDestination();
   highlight(null);
   paintEvidenceSelection();
 }
@@ -247,6 +276,7 @@ function closeInspection(restore = true) {
   if (!selection) return;
   selection = null; fieldFocus = null; expanded = null; backStack = [];
   $('inspector').hidden = true;
+  markPhaseDestination();
   for (const item of cards.values()) item.button.setAttribute('aria-expanded', 'false');
   if (restore && returnTo?.isConnected) returnTo.focus({preventScroll: true});
   returnTo = null;
