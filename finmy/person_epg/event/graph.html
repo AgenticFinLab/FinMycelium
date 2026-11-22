@@ -72,7 +72,9 @@ select:focus-visible {
 }
 
 #viewport {
-  height: calc(100vh - 46px);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 12px;
   touch-action: pan-x pan-y
@@ -184,7 +186,50 @@ select:focus-visible {
 }
 
 .section.evidence {
-  background: #fafdfe
+  background: #f8fbfa
+}
+.section.sources { background: #f7f9fc }
+.card.evidence { background: #f0f6ee; border-color: #9eb699 }
+.relation-control { pointer-events: stroke; cursor: pointer }
+.relation-control:focus-visible { stroke: var(--purple); stroke-opacity: .35; outline: none }
+.edge-label.relation-control { pointer-events: all }
+#workspace { display: flex; height: calc(100vh - 46px); height: calc(100dvh - 46px) }
+#inspector { flex: 0 0 clamp(320px, 32vw, 480px); min-width: 0; display: flex; flex-direction: column;
+  background: #fff; border-left: 1px solid var(--border); color: var(--ink) }
+.inspector-nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px;
+  border-bottom: 1px solid var(--border) }
+.inspector-nav button, .trace-link { background: #fff; border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; font-size: 12px; text-align: left }
+.area-links { display: inline-flex; gap: 10px; align-items: center }
+.stage h2 .trace-link, #subheading .trace-link { background: transparent; color: inherit; border: 0; padding: 0; margin: 0; font: inherit }
+.stage h2 .trace-link:hover, #subheading .trace-link:hover { text-decoration: underline }
+.area-links button { border: 0; padding: 0; background: transparent; color: var(--navy); text-decoration: underline }
+.inspector-nav button:disabled { opacity: .45; cursor: default }
+#inspection { overflow: auto; padding: 18px; overflow-wrap: anywhere }
+#inspection h2 { margin: 4px 0 12px; font-size: 20px; line-height: 1.25; color: var(--navy) }
+#inspection h3 { margin: 20px 0 7px; color: var(--navy); font-size: 15px }
+#inspection p { margin: 5px 0 9px; white-space: pre-wrap }
+#inspection blockquote { margin: 12px 0; padding: 10px 12px; background: #f1f6f1;
+  border-left: 3px solid var(--green); white-space: pre-wrap }
+#inspection a { color: var(--navy); text-underline-offset: 2px }
+.inspection-meta, .field-note { font-size: 12px; color: #506678 }
+.field-note.warning { color: #84501d }
+.claim, .occurrence { padding: 7px 0; border-top: 1px solid #dbe4e8 }
+.claim summary, .occurrence summary { cursor: pointer; font-weight: 600; line-height: 1.4 }
+.claim .support { padding: 5px 0 4px 10px; margin: 7px 0; border-left: 2px solid #c3d7ca }
+.trace-link { margin: 2px 4px 3px 0; color: #235d49; background: #f7faf7 }
+.trace-link:hover { border-color: #719782 }
+.relation-list .trace-link, .passage-list .trace-link { display: block; width: 100% }
+.occurrence .claim { margin-left: 10px }
+@media (max-width: 740px) {
+  #workspace { flex-direction: column }
+  #inspector { max-height: 57%; flex: 0 1 auto; border-left: 0; border-top: 1px solid var(--border) }
+  #toolbar { gap: 4px; padding: 5px }
+  #toolbar button { flex-shrink: 0; padding: 4px }
+  #picker { min-width: 0 }
+  #toolbar > span:not(.spacer) { flex: 0 0 68px; font-size: 10px; line-height: 1.1 }
+  #toolbar .phase-word { display: none }
+  #inspection { padding: 10px 14px }
 }
 
 .section h3 {
@@ -267,8 +312,8 @@ select:focus-visible {
 }
 
 .card.source {
-  background: white;
-  border-color: #8fb5a4
+  background: #f2f6fa;
+  border-color: #a5b6c7
 }
 
 .card.party {
@@ -299,13 +344,6 @@ select:focus-visible {
   margin-top: 3px
 }
 
-.card.party[aria-expanded=true] {
-  padding: 9px;
-  text-align: left;
-  background: #e5f0fa;
-  border: 1px solid #92b2d5
-}
-
 .card:hover {
   outline: 2px solid #7093a8;
   outline-offset: 1px
@@ -313,6 +351,7 @@ select:focus-visible {
 
 .card { transition: opacity 140ms ease, box-shadow 140ms ease }
 .card.relation-muted { opacity: .48 }
+.card.evidence-active { opacity: 1; box-shadow: 0 0 0 2px #709983 }
 .card.relation-neighbor { box-shadow: 0 0 0 2px #7eac9566 }
 .card.context.relation-neighbor { box-shadow: 0 0 0 2px #d8be7680 }
 .card.relation-focus { outline: 2px solid #537f98; outline-offset: 2px }
@@ -424,36 +463,6 @@ select:focus-visible {
   outline: 2px solid #537f98
 }
 
-.card .detail {
-  display: block;
-  height: 100%;
-  overflow: auto;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap
-}
-
-.card .detail strong {
-  display: block;
-  font-size: 14px;
-  line-height: 1.35;
-  margin-bottom: 8px
-}
-
-.card .detail p {
-  margin: 8px 0
-}
-
-.card .detail .quote {
-  border-top: 1px solid #cddfd6;
-  padding-top: 8px
-}
-
-.card .detail a {
-  color: #2868a8;
-  word-break: break-all
-}
-
 [hidden] {
   display: none !important
 }
@@ -485,21 +494,26 @@ svg text {
 </head>
 <body>
 <div id="toolbar">
-<button id="previous" aria-label="Previous phase">← Phase</button>
+<button id="previous" aria-label="Previous phase">←<span class="phase-word"> Phase</span></button>
 <select id="picker" aria-label="Phase"></select>
-<button id="next" aria-label="Next phase">Phase →</button>
+<button id="next" aria-label="Next phase"><span class="phase-word">Phase </span>→</button>
 <span class="spacer"></span>
 <!--__BUILD_STATUS__-->
 <button id="minus" aria-label="Zoom out">−</button>
 <button id="zoom" aria-label="Reset zoom">100%</button>
 <button id="plus" aria-label="Zoom in">+</button>
 </div>
-<div id="viewport"><div id="sheet">
+<div id="workspace"><div id="viewport"><div id="sheet">
 <div id="heading"></div><div id="subheading"></div>
 <nav id="navigation" aria-label="Stages and phases"></nav>
 <div id="graph"><div id="regions"></div><svg id="links" aria-label="Graph relationships"></svg><div id="cards"></div></div>
 <div id="jumps"></div>
 </div></div>
+<aside id="inspector" hidden aria-labelledby="inspection-title">
+  <div class="inspector-nav"><button id="inspection-back" type="button">← Back</button>
+  <button id="inspection-close" type="button" aria-label="Close details">Close ×</button></div>
+  <div id="inspection"></div>
+</aside></div>
 <script id="epg-data" type="application/json">__EPG_GRAPH_JSON__</script>
 <script id="epg-layout" type="application/json">__EPG_LAYOUT_JSON__</script>
 <script id="epg-view" type="application/json">__EPG_VIEW_JSON__</script>
@@ -511,8 +525,8 @@ const view = JSON.parse($('epg-view').textContent);
 const evidence = new Map(graph.evidence.map(item => [item.evidence_id, item]));
 const sources = new Map(graph.sources.map(item => [item.source_id, item]));
 const cards = new Map();
-let drawnEdges = [], hovered = null, focused = null, regionBoxes = [];
-let relationshipLabels = null, relationshipObstacles = [];
+let drawnEdges = [], hovered = null, focused = null;
+let relationshipLabels = null, relationshipObstacles = [], evidenceLayer = null;
 const EDGE_STYLES = {
   relation: {color: '#80589f', tint: '#f7f3fa', border: '#d8c9e3', width: 2.2, opacity: .94},
   party: {color: '#607f9c', tint: '#f2f7fb', border: '#c0d1df', width: 1.4, opacity: .76},
@@ -578,7 +592,7 @@ function partyIcon(type) {
 
 function linkBox(item) {
   const box = bounds(item.button);
-  if (item.card.kind === 'party' && expanded !== item.card.key)
+  if (item.card.kind === 'party')
     return [box[0] + (box[2] - 56) / 2, box[1], 56, 56];
   return box;
 }
@@ -590,7 +604,8 @@ function highlight(key) {
   const neighbors = new Set(active ? [active] : []);
   for (const item of drawnEdges) {
     const {edge, line, halo, flow, origin, emphasis} = item;
-    const selected = Boolean(active && (active === edge.from_key || active === edge.to_key));
+    const selected = (edge.relation_id && edge.relation_id === selection?.id) ||
+      Boolean(active && (active === edge.from_key || active === edge.to_key));
     const style = edgeStyle(edge);
     if (selected) {
       neighbors.add(edge.from_key);
@@ -632,6 +647,11 @@ function drawRelationshipLabels(active) {
     obstacles.push(box);
     const style = edgeStyle(edge);
     const label = svg('g', {'class': 'edge-label', 'data-from': edge.from_key, 'data-to': edge.to_key});
+    if (edge.relation_id) {
+      label.classList.add('relation-control');
+      label.dataset.relation = edge.relation_id;
+      label.onclick = () => inspectRecord(edge.relation_id);
+    }
     if (Math.abs(anchor[0] - connector[0]) + Math.abs(anchor[1] - connector[1]) > 8) {
       label.append(svg('line', {x1: anchor[0], y1: anchor[1], x2: connector[0], y2: connector[1],
         stroke: style.color, 'stroke-width': .8, opacity: .6}));
@@ -688,86 +708,20 @@ function paintCard(card) {
       preview.append(el('span', badges, 'badges'));
     }
   }
-  const detail = el('span', null, 'detail');
-  detail.hidden = true;
-  button.append(preview, detail);
-  button.onclick = event => {
-    if (!event.target.closest('a')) toggle(card.key);
-  };
+  button.setAttribute('aria-controls', 'inspector');
+  button.append(preview);
+  button.onclick = () => selection?.id === card.id ? closeInspection() : inspectRecord(card.id);
   button.onmouseenter = () => highlight(card.key);
   button.onmouseleave = () => highlight(null);
   button.onfocus = () => { focused = card.key; highlight(hovered); };
   button.onblur = () => { if (focused === card.key) focused = null; highlight(hovered); };
   $('cards').append(button);
-  cards.set(card.key, {
-    card,
-    button,
-    preview,
-    detail
-  });
-}
-
-function layoutCards(item = null, height = 0) {
-  const page = view.pages[current];
-  const boundary = item ? item.card.box[1] + item.card.box[3] : Infinity;
-  const extra = item ? Math.max(0, height - item.card.box[3]) : 0;
-  for (const value of cards.values()) {
-    const box = [...value.card.box];
-    if (value === item) box[3] += extra;
-    else if (box[1] >= boundary) box[1] += extra;
-    position(value.button, box);
-  }
-  regionBoxes = page.sections.map(section => {
-    const box = [...section.box];
-    if (box[1] >= boundary) box[1] += extra;
-    else if (box[1] + box[3] >= boundary) box[3] += extra;
-    return box;
-  });
-  [...$('regions').children].forEach((node, i) => position(node, regionBoxes[i]));
-  $('graph').style.height = page.height + extra + 'px';
-}
-
-function toggle(key) {
-  const previous = cards.get(expanded);
-  if (previous) {
-    previous.preview.hidden = false;
-    previous.detail.hidden = true;
-    previous.detail.replaceChildren();
-    previous.button.setAttribute('aria-expanded', 'false');
-    position(previous.button, previous.card.box);
-  }
-  const open = expanded !== key && key !== null;
-  expanded = open ? key : null;
-  hovered = null;
-  if (open) {
-    const item = cards.get(key),
-      data = view.details[item.card.id];
-    item.detail.append(el('strong', data.title));
-    if (data.date) item.detail.append(el('p', data.date));
-    for (const paragraph of data.paragraphs) item.detail.append(el('p', paragraph));
-    for (const eid of item.card.quotes || []) item.detail.append(el('p', evidence.get(eid)?.quote, 'quote'));
-    const source = sources.get(item.card.id);
-    if (source && /^https?:\/\//.test(source.url || '')) {
-      const link = el('a', 'Open source');
-      link.href = source.url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      item.detail.append(link);
-    }
-    item.preview.hidden = true;
-    item.detail.hidden = false;
-    item.button.setAttribute('aria-expanded', 'true');
-    const [x, y, w, h] = item.card.box;
-    const height = Math.max(h + 30, Math.min(300, item.detail.scrollHeight + 24));
-    layoutCards(item, height);
-    item.detail.scrollTop = 0;
-  }
-  if (!open) layoutCards();
-  drawEdges();
+  cards.set(card.key, {card, button});
 }
 
 function showPage(index) {
   if (!view.pages[index]) return;
+  closeInspection(false);
   current = index;
   expanded = null;
   hovered = null;
@@ -780,8 +734,19 @@ function showPage(index) {
   $('previous').disabled = index === 0;
   $('next').disabled = index === view.pages.length - 1;
   $('heading').textContent = page.title;
-  $('subheading').replaceChildren(el('span', graph.person.name + ' · ' + graph.event.name),
-    el('span', phaseLabel(page)));
+  const areas = el('span', null, 'area-links');
+  const owner = page.phase || graph.event.event_id;
+  areas.append(traceButton(phaseLabel(page), owner));
+  for (const region of page.sections.filter(s => ['Evidence', 'Sources'].includes(s.title))) {
+    const button = el('button', region.title);
+    button.onclick = () => {
+      const card = [...cards.values()].find(item => item.card.kind === (region.title === 'Sources' ? 'source' : 'evidence'));
+      if (card) { card.button.scrollIntoView({block: 'center', inline: 'nearest'}); card.button.focus({preventScroll:true}); }
+    };
+    areas.append(button);
+  }
+  const eventName = traceButton(graph.person.name + ' · ' + graph.event.name, graph.event.event_id);
+  $('subheading').replaceChildren(eventName, areas);
   $('navigation').replaceChildren();
   const stages = graph.stages.length ? graph.stages : [{
     stage_id: null,
@@ -789,7 +754,9 @@ function showPage(index) {
   }];
   for (const [i, stage] of stages.entries()) {
     const section = el('section', null, 'stage');
-    section.append(el('small', 'STAGE ' + (i + 1)), el('h2', stage.name));
+    const name = el('h2');
+    name.append(stage.stage_id ? traceButton(stage.name, stage.stage_id) : document.createTextNode(stage.name));
+    section.append(el('small', 'STAGE ' + (i + 1)), name);
     const phaseList = el('div', null, 'phase-list');
     for (const phase of graph.phases.filter(p => p.stage_id === stage.stage_id || !graph.stages.length)) {
       const button = el('button', phase.name);
@@ -805,30 +772,33 @@ function showPage(index) {
   $('jumps').replaceChildren();
   $('graph').style.height = page.height + 'px';
   for (const region of page.sections) {
-    const section = el('section', null, 'section' + (region.title === 'Source evidence' ? ' evidence' : ''));
+    const section = el('section', null, 'section');
+    if (region.title === 'Evidence' || region.title === 'Sources') section.classList.add(region.title.toLowerCase());
     position(section, region.box);
-    if (region.title === 'Source evidence') section.append(relationshipLegend());
+    if (region.title === 'Evidence') section.append(relationshipLegend());
     if (region.title === 'Actions and their context') section.append(el('span',
       '● People / organizations · ■ Actions · ■ Context', 'legend'));
     section.append(el('h3', region.title));
     $('regions').append(section);
   }
   for (const card of page.cards) paintCard(card);
-  layoutCards();
   for (const jump of page.jumps) {
-    const button = el('button', jump.from + ' → ' + jump.to + ' · ' + jump.type.replaceAll('_', ' ') +
+    const row = el('span');
+    const title = jump.from + ' → ' + jump.to + ' · ' + pretty(jump.type);
+    if (jump.relation_id) row.append(traceButton(title, jump.relation_id));
+    const button = el('button', (jump.relation_id ? 'Go to ' + alias(jump.id) : title) +
       ' · ' + phaseLabel(view.pages[jump.page]));
     button.onclick = () => {
       showPage(jump.page);
       const target = [...cards.values()].find(item => item.card.id === jump.id);
       if (target) {
-        toggle(target.card.key);
-        target.button.scrollIntoView({
-          block: 'nearest', inline: 'center'
-        });
+        target.button.focus({preventScroll: true});
+        target.button.scrollIntoView({block: 'nearest', inline: 'center'});
+        inspectRecord(jump.id);
       }
     };
-    $('jumps').append(button);
+    row.append(button);
+    $('jumps').append(row);
   }
   $('viewport').scrollTo(0, 0);
   drawEdges();
@@ -1059,28 +1029,28 @@ function drawEdges() {
   const baseLayer = svg('g', {'class': 'edge-layer'});
   const emphasisLayer = svg('g', {'class': 'edge-emphasis-layer'});
   relationshipLabels = svg('g', {'class': 'edge-label-layer'});
-  canvas.append(baseLayer, emphasisLayer, relationshipLabels);
-  const boxes = new Map([...cards].map(([key, item]) => [key, linkBox(item)]));
-  const partyLabels = [...cards.values()].filter(item => item.card.kind === 'party' &&
-    expanded !== item.card.key).map(item => {
+  evidenceLayer = svg('g', {'class': 'evidence-layer', 'aria-hidden': true});
+  const hitLayer = svg('g', {});
+  canvas.append(evidenceLayer, baseLayer, emphasisLayer, hitLayer, relationshipLabels);
+  const boxes = new Map([...cards].filter(([, item]) => !['source', 'evidence'].includes(item.card.kind))
+    .map(([key, item]) => [key, linkBox(item)]));
+  const partyLabels = [...cards.values()].filter(item => item.card.kind === 'party').map(item => {
       const [x, y, w] = bounds(item.button);
       return [x, y + 60, w, 48];
     });
-  const headings = page.sections.map((section, i) => [
-    regionBoxes[i][0] + 10, regionBoxes[i][1] + 5,
-    Math.min(400, section.title.length * 10), 30
-  ]);
-  page.sections.forEach((section, i) => {
-    if (section.title === 'Actions and their context' || section.title === 'Source evidence')
-      headings.push([645, regionBoxes[i][1] + 7, 450, 28]);
-  });
+  const headings = [];
+  for (const section of page.sections) {
+    if (['Evidence', 'Sources'].includes(section.title)) continue;
+    const [x, y] = section.box;
+    headings.push([x + 10, y + 5, Math.min(400, section.title.length * 10), 30]);
+    if (section.title === 'Actions and their context') headings.push([645, y + 7, 450, 28]);
+  }
   const obstacles = [...boxes.values(), ...partyLabels, ...headings];
   relationshipObstacles = obstacles;
   const grid = routingGrid(obstacles, page.width, height);
-  // Draw evidence first so the action sequence stays visually in front.
-  for (const edge of [...page.edges].sort((a, b) =>
-      (a.kind === 'evidence' ? 0 : a.kind === 'relation' ? 2 : 1) -
-      (b.kind === 'evidence' ? 0 : b.kind === 'relation' ? 2 : 1))) {
+  const structural = page.edges.filter(edge => edge.kind !== 'evidence');
+  structural.sort((a, b) => Number(a.kind === 'relation') - Number(b.kind === 'relation'));
+  for (const edge of structural) {
     const a = boxes.get(edge.from_key),
       b = boxes.get(edge.to_key);
     if (!a || !b) continue;
@@ -1118,6 +1088,17 @@ function drawEdges() {
     tooltip.textContent = edge.type.replaceAll('_', ' ');
     line.append(tooltip);
     baseLayer.append(line);
+    if (edge.relation_id) {
+      const hit = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'transparent',
+        'stroke-width': 14, 'class': 'relation-control', role: 'button', tabindex: 0,
+        'data-relation-id': edge.relation_id, 'aria-controls': 'inspector',
+        'aria-label': relationName(edge.record)});
+      hit.onclick = () => inspectRecord(edge.relation_id);
+      hit.onkeydown = event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inspectRecord(edge.relation_id); }
+      };
+      hitLayer.append(hit);
+    }
     const emphasis = svg('g', {'class': 'edge-emphasis'});
     const halo = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'white',
       'class': 'edge-halo'});
@@ -1131,6 +1112,49 @@ function drawEdges() {
     drawnEdges.push({edge, line, points, halo, focusLine, flow, origin, emphasis, label: null});
   }
   highlight(hovered);
+  paintEvidenceSelection();
+}
+
+function paintEvidenceSelection() {
+  if (!evidenceLayer) return;
+  evidenceLayer.replaceChildren();
+  for (const item of cards.values()) item.button.classList.remove('evidence-active');
+  if (!selection) return;
+  const {id, field} = fieldFocus || selection;
+  const quotes = selectedPassages(id, field);
+  const page = view.pages[current];
+  const links = page.edges.filter(edge => edge.kind === 'evidence');
+  const kind = objects.get(id)?.kind;
+  if (!fieldFocus && (kind === 'entity' || kind === 'person')) {
+    for (const edge of links) if (edge.to === id) quotes.add(edge.from);
+  }
+  function point(key, top) {
+    const [x, y, w, h] = linkBox(cards.get(key));
+    return [x + w / 2, top ? y : y + h];
+  }
+  function connect(a, b) {
+    const middle = (a[1] + b[1]) / 2;
+    evidenceLayer.append(svg('path', {d: 'M' + a + ' C' + [a[0], middle] + ' ' + [b[0], middle] + ' ' + b,
+      fill: 'none', stroke: EDGE_STYLES.evidence.color, 'stroke-width': 1.6, 'stroke-dasharray': '3 5',
+      'marker-end': 'url(#arrow-evidence)'}));
+  }
+  for (const edge of links) {
+    const show = edge.type === 'contains' ? quotes.has(edge.to) :
+      quotes.has(edge.from) && (edge.to === id || edge.from === id);
+    if (!show) continue;
+    cards.get(edge.from_key).button.classList.add('evidence-active');
+    cards.get(edge.to_key).button.classList.add('evidence-active');
+    connect(point(edge.from_key, true), point(edge.to_key, false));
+  }
+  for (const line of drawnEdges) {
+    const rid = line.edge.relation_id;
+    if (!rid || (rid !== id && !(kind === 'evidence' && selectedPassages(rid, null).has(id)))) continue;
+    const p = line.line.getPointAtLength(line.line.getTotalLength() / 2);
+    for (const [key, item] of cards) if (item.card.kind === 'evidence' && quotes.has(item.card.id)) {
+      item.button.classList.add('evidence-active');
+      connect(point(key, true), [p.x, p.y]);
+    }
+  }
 }
 
 function zoom(value) {
@@ -1143,15 +1167,14 @@ function phaseLabel(page) {
   const index = graph.phases.findIndex(phase => phase.phase_id === page.phase);
   return index >= 0 ? 'Phase ' + (index + 1) : 'Event background';
 }
+/*__FIELD_INSPECTOR__*/
+
 $('minus').onclick = () => zoom(scale - .1);
 $('plus').onclick = () => zoom(scale + .1);
 $('zoom').onclick = () => zoom(1);
 $('previous').onclick = () => showPage(current - 1);
 $('next').onclick = () => showPage(current + 1);
 $('picker').onchange = e => showPage(Number(e.target.value));
-$('viewport').addEventListener('keydown', e => {
-  if (e.key === 'Escape') toggle(null);
-});
 for (const [i, page] of view.pages.entries()) {
   const option = el('option', phaseLabel(page) + (page.phase ? ' · ' + page.title : ''));
   option.value = i;

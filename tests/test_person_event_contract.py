@@ -8,7 +8,8 @@ import pytest
 from finmy.person_epg.event.records import (
     IdMap, compose_context, ground_quote, seed_facts, sha256, unknown_time, validate_input,
 )
-from finmy.person_epg.event.validation import check_graph, order_view
+from finmy.person_epg.event.proposals import Receiver
+from finmy.person_epg.event.validation import SupportIndex, check_graph, order_view
 from finmy.person_epg.validation import validate_person_epg
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'person_event'
@@ -58,6 +59,84 @@ def test_quote_offsets_are_unicode_and_repeated_quote_is_ambiguous():
     assert located['sample_sha256'] == sha256(sample['content'].encode('utf-8'))
     assert ground_quote(proposal, {'S': sample}, 'E', [(0, 5)])['start'] == 2
     assert ground_quote({**proposal, 'quote': 'fabrication'}, {'S': sample}, 'E')['location_status'] == 'unmatched'
+
+
+def test_search_metadata_isolated_from_body_and_time_inference(payload):
+    sample = payload['samples'][0]
+    sid, sample_id = sample['raw_data_id'], sample['sample_id']
+    source = payload['user_query']['extras']['source_registry'][sid]
+    source.update(title='Edition one\nMarket report', published_at='2013-03-26',
+                  retrieved_at='2026-01-02T08:00:00Z')
+    date_line = 'Publication date (source/provider metadata): 2013-03-26'
+    header = (f"[source={sid} version=v1 status=partial]\nhttps://example.org/report\n{source['title']}\n"
+              f"{date_line}\nRetrieved at: {source['retrieved_at']}\n")
+    body = 'The option expires on 1 October this year.'
+    text = sample['content'] = header + body
+    original = deepcopy(payload)
+    receiver = Receiver(seed_facts(payload), payload, IdMap(), 'extract', {sample_id: [(0, len(text))]})
+    proposals = [dict(sample_id=sample_id, evidence_id=str(i), quote=quote) for i, quote in enumerate(
+        (date_line, 'https://example.org/report', 'Market report', 'Retrieved at: ' + source['retrieved_at'], body))]
+    facts, report = receiver.extract(dict(entities=[], actions=[], contexts=[], relation_candidates=[],
+                                          evidence=proposals, pending=[], note='Passage records a deadline.'))
+    assert len(report['rejected']) == 4
+    assert all('source body' in item['reason'] for item in report['rejected'])
+    [located] = facts['evidence']
+    assert (located['start'], located['end'], located['quote']) == (len(header), len(text), body)
+    assert located['sample_sha256'] == sha256(text.encode())
+    support = dict(target='/description', mode='I', evidence_ids=[located['evidence_id']],
+                   reason=f"'This year' refers to {sid}, published_at 2013-03-26, so the year is 2013.")
+    assert SupportIndex(facts, payload).valid(support)
+    assert check_graph(facts, payload)['valid']
+
+    # A previous producer could save an exact, hash-correct offset into the header.
+    start = header.index(date_line)
+    legacy = dict(located, evidence_id='old', quote=date_line, start=start, end=start + len(date_line))
+    facts['evidence'].append(legacy)
+    assert not SupportIndex(facts, payload).valid(dict(support, evidence_ids=['old']))
+    assert 'QUOTE_NOT_SOURCE_BODY' in codes(check_graph(facts, payload))
+    assert payload == original
+
+
+def test_ground_quote_chooses_citable_occurrence_and_respects_read_range():
+    header = '[source=R version=v1 status=partial]\nurl\nMeeting today\n'
+    sample = dict(sample_id='S', raw_data_id='R', content=header + '🙂 Meeting\ntoday')
+    proposal = dict(sample_id='S', quote='Meeting today', start=header.index('Meeting'))
+    proposal['end'] = proposal['start'] + len(proposal['quote'])
+    result = ground_quote(proposal, {'S': sample}, 'E')
+    assert (result['start'], result['quote']) == (len(header) + 2, 'Meeting\ntoday')
+    with pytest.raises(ValueError, match='source body'):
+        ground_quote(proposal, {'S': sample}, 'E', [(0, len(header))])
+    sample['content'] = header + 'Meeting today\nMeeting today'
+    assert ground_quote(dict(sample_id='S', quote='Meeting today'), {'S': sample}, 'E')['location_status'] == 'ambiguous'
+
+
+def test_search_markers_and_header_boundary_are_not_citable():
+    header = '[source=R version=v1 status=partial]\nurl\ntitle\nPublication date: conflicted (see source metadata)\n'
+    marker = '[... omitted original blocks 2:4 ...]'
+    label = '[original block 5 chars 0:10]'
+    body = f'First passage.\n\n{marker}\n{label}\nSecond passage.'
+    sample = dict(sample_id='S', raw_data_id='R', content=header + body)
+    for quote in ('conflicted (see source metadata)\nFirst passage.', marker, label, body):
+        with pytest.raises(ValueError, match='source body'):
+            ground_quote(dict(sample_id='S', quote=quote), {'S': sample}, 'E')
+    for quote in ('First passage.', 'Second passage.'):
+        assert ground_quote(dict(sample_id='S', quote=quote), {'S': sample}, 'E')['start'] == sample['content'].index(quote)
+
+
+@pytest.mark.parametrize('handoff', ['excerpt', 'document', 'plain'])
+def test_publication_line_present_in_the_source_remains_citable(handoff):
+    body = 'Publication date (source/provider metadata): 2013-03-26\n作者原文。'
+    header = ''
+    if handoff == 'excerpt':
+        header = f'[source=R version=v1 block=2 chars=7:{7 + len(body)}]\nurl\na\nlong title\n'
+    elif handoff == 'document':
+        header = ('[source=R version=v1 status=partial]\nurl\nlong title\n'
+                  'Publication date (source/provider metadata): 2013-03-26\nRetrieved at: 2026-01-02\n')
+    sample = dict(sample_id='S', raw_data_id='R', content=header + body)
+    assert ground_quote(dict(sample_id='S', quote=body), {'S': sample}, 'E')['start'] == len(header)
+    if header:
+        with pytest.raises(ValueError, match='source body'):
+            ground_quote(dict(sample_id='S', quote='long title'), {'S': sample}, 'E')
 
 
 def test_stable_program_ids_survive_resume():

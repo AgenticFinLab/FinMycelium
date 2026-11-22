@@ -32,11 +32,13 @@ class CorpusModel(SyntheticEventModel):
 
 @pytest.mark.parametrize('invalid', [False, True])
 def test_fresh_full_corpus_run_preserves_quotations_and_one_call_on_resume(tmp_path, payload, invalid):
+    payload['user_query']['extras']['source_registry']['SRC-1']['published_at'] = '2020-02-01'
     model = CorpusModel(invalid)
     state = run_event(payload, tmp_path, dict(max_calls=30), model=model)
     assert state['execution_status'] == 'finished'
     assert state['corpus_supplement']['status'] == ('invalid_response' if invalid else 'processed')
     assert [d['text'] for d in model.supplements[0]['documents']] == [s['content'] for s in payload['samples']]
+    assert model.supplements[0]['documents'][0]['published_at'] == '2020-02-01'
     assert state['coverage'] and all(v['body_status'] == 'processed' for v in state['coverage'])
     call = next(c for c in state['calls'] if c['task_id'] == TASK_ID)
     assert call['reasoning_effort'] == 'high'

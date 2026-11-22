@@ -8,7 +8,7 @@ from test_person_event_pipeline import SyntheticEventModel
 from finmy.person_epg.build import run_event
 from finmy.person_epg.event.records import unknown_time
 from finmy.person_epg.event.rendering import event_view, render_event
-from finmy.person_epg.rendering import read_gantt, render_saved_event
+from finmy.person_epg.rendering import SCROLLABLE_VIEW, read_gantt, render_saved_event, save_gantt
 
 
 def test_new_view_has_all_levels_and_retains_unknowns(graph):
@@ -83,3 +83,31 @@ def test_historical_timeline_previews_current_graph_without_changing_receipts(tm
     assert 'id="epg-view"' in preview and state['graph_sha256'] in preview
     assert artifact.read_text() == timeline and (tmp_path / 'state.json').read_bytes() == snapshot
     assert read_gantt(tmp_path, render_saved_event(tmp_path)) == preview
+
+
+def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload):
+    from finmy.person_epg.event.records import sha256
+    from test_person_event_graph_html import embedded_data
+
+    frozen = tmp_path / 'input.json'
+    frozen.write_text(json.dumps(payload))
+    graph_path = tmp_path / 'epg.json'
+    graph_path.write_text(json.dumps(graph))
+    state = dict(output='epg.json', result_status='draft', input_sha256=sha256(frozen.read_bytes()),
+                 graph_sha256=sha256(graph_path.read_bytes()))
+    (tmp_path / 'state.json').write_text(json.dumps(state))
+    state['visualization'] = save_gantt(graph, tmp_path, graph_path, result_status='draft')
+    assert state['visualization']['renderer'] == SCROLLABLE_VIEW
+    html = read_gantt(tmp_path, state, current_view=True)
+    assert html == (tmp_path / 'gantt.html').read_text()
+    assert embedded_data(html, 'epg-data') == graph
+    view = embedded_data(html, 'epg-view')
+    assert view['checked_input'] and not view['passage_issues']
+    assert {c['kind'] for page in view['pages'] for c in page['cards']} >= {'action', 'context', 'party', 'evidence', 'source'}
+
+    # The workbench can display an earlier renderer's receipt without rewriting it.
+    state['visualization']['renderer'] = 'person-event-scrollable-v1'
+    assert read_gantt(tmp_path, state, current_view=True) == html
+    frozen.write_text(frozen.read_text() + ' ')
+    with pytest.raises(ValueError, match='input integrity'):
+        read_gantt(tmp_path, state, current_view=True)

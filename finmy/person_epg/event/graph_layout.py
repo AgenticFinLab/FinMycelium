@@ -3,6 +3,7 @@ import math
 import re
 from urllib.parse import urlparse
 
+from .graph_evidence import cited_evidence, field_index, party_uses
 from .graph_labels import card_label, shorten
 
 
@@ -47,7 +48,8 @@ def action_order(actions, edges):
     return [aid for component in components for aid in component]
 
 
-def arrange_graph(graph, view):
+def arrange_graph(graph, view, issues=None):
+    issues = issues or {}
     records = {graph['event']['event_id']: graph['event']}
     kinds, aliases = {}, {}
     for field, key, kind, prefix in (
@@ -56,6 +58,8 @@ def arrange_graph(graph, view):
         ('entities', 'entity_id', 'party', 'E'),
         ('sources', 'source_id', 'source', 'S'),
         ('phases', 'phase_id', 'phase', 'P'),
+        ('stages', 'stage_id', 'stage', 'ST'),
+        ('evidence', 'evidence_id', 'evidence', 'EV'),
     ):
         for index, record in enumerate(graph.get(field, []), 1):
             nid = record[key]
@@ -64,15 +68,29 @@ def arrange_graph(graph, view):
     phases = graph.get('phases', [])
     evidence = {record['evidence_id']: record for record in graph.get('evidence', [])}
     evidence_order = {eid: i for i, eid in enumerate(evidence)}
+    relations = {}
+    for i, relation in enumerate(graph.get('relations', []), 1):
+        rid = relation.get('relation_id', f'relation:{i}')
+        relations[rid] = records[rid] = relation
+        kinds[rid], aliases[rid] = 'relation', f'R{i:02}'
+    fields = {nid: entries for nid, record in records.items() if (entries := field_index(record))}
+    uses = party_uses(graph, fields)
+    eligible = evidence.keys() - issues.keys()
+    citations = {nid: cited_evidence(records[nid], entries.values()) & eligible
+                 for nid, entries in fields.items()}
 
     def passages(record):
         return {eid for support in record.get('support', []) for eid in support.get('evidence_ids', [])
                 if eid in evidence}
 
     def source_ids(record):
-        return {evidence[eid]['source_id'] for eid in passages(record)}
+        return {evidence[eid]['source_id'] for eid in passages(record) if eid not in issues}
 
     details = view['details']
+    for eid, ev in evidence.items():
+        details[eid] = dict(title=_short(ev.get('quote'), 105), date='', paragraphs=[])
+    for stage in graph.get('stages', []):
+        details[stage['stage_id']] = dict(title=stage.get('name', ''), date='', paragraphs=[])
     person = graph.get('person', {})
     person_id = person.get('person_id')
     if person_id and person_id not in records:
@@ -126,14 +144,14 @@ def arrange_graph(graph, view):
 
     all_edges = []
     for page in view['pages']:
-        all_edges.extend(edge for edge in page['edges'] if edge['kind'] not in ('evidence', 'party'))
+        all_edges.extend(edge for edge in page['edges'] if edge['kind'] == 'context')
     # Include action relations with endpoints on different Phases.
+    all_edges = list({(edge['from'], edge['to'], edge['type']): edge for edge in all_edges}.values())
     all_edges += [
         {'from': item['from_action_id'], 'to': item['to_action_id'], 'type': item['type'],
-         'kind': 'relation', 'record': item}
-        for item in graph.get('relations', [])
+         'kind': 'relation', 'record': item, 'relation_id': rid}
+        for rid, item in relations.items()
     ]
-    all_edges = list({(edge['from'], edge['to'], edge['type']): edge for edge in all_edges}.values())
     for nid, record in records.items():
         actor = (record.get('actor') or {}).get('entity_id')
         if actor in records and kinds.get(actor) == 'party':
@@ -160,7 +178,7 @@ def arrange_graph(graph, view):
             'badges': [aliases.get(sid, '') for sid in badges], 'box': box,
         }
 
-    def add_parties(cards, body_top, body_end, canvas_width):
+    def add_parties(cards, body_top, body_end, canvas_width, page_owner):
         visible = {card['id'] for card in cards}
         actors = list(dict.fromkeys(edge['from'] for edge in all_edges
                                    if edge['kind'] == 'party' and edge['type'] == 'actor'
@@ -169,7 +187,9 @@ def arrange_graph(graph, view):
         for edge in all_edges:
             if edge['kind'] == 'party' and edge['from'] in visible:
                 related.add(edge['to'])
-        other = [nid for nid in records if nid in related and nid not in actors]
+        related.update(party for party, entries in uses.items() if
+                       any(entry['owner'] in visible or entry['owner'] == page_owner for entry in entries))
+        other = [nid for nid in records if kinds.get(nid) == 'party' and nid in related and nid not in actors]
         action_tops = [card['box'][1] for card in cards if card['kind'] == 'action']
         first = min(action_tops, default=body_top + 52)
         for i, nid in enumerate(actors):
@@ -228,40 +248,51 @@ def arrange_graph(graph, view):
     def finish(pid, title, cards, sections, body_end, canvas_width, extra_evidence=(), extra_sources=()):
         present = {card['id'] for card in cards}
         edges = [dict(edge) for edge in all_edges if edge['from'] in present and edge['to'] in present]
-        quotes = {sid: set() for sid in extra_sources}
+        owner = pid or graph['event']['event_id']
+        local_evidence = set(extra_evidence) | citations.get(owner, set())
+        if pid:
+            local_evidence.update(citations.get(records[pid].get('stage_id'), ()))
         for card in cards:
-            for eid in sorted(passages(records[card['id']]), key=evidence_order.get):
-                sid = evidence[eid]['source_id']
-                if sid not in records:
+            nid = card['id']
+            attached = set(citations.get(nid, ()))
+            for use in uses.get(nid, []):
+                if use['owner'] not in present and use['owner'] != owner:
                     continue
-                quotes.setdefault(sid, set()).add(eid)
-                edges.append({'from': sid, 'to': card['id'], 'type': 'supports', 'kind': 'evidence'})
-        for edge in edges[:]:
-            for eid in sorted(passages(edge.get('record', {})), key=evidence_order.get):
-                sid = evidence[eid]['source_id']
-                if sid in records:
-                    quotes.setdefault(sid, set()).add(eid)
-        for eid in extra_evidence:
-            sid = evidence[eid]['source_id']
-            if sid in records:
-                quotes.setdefault(sid, set()).add(eid)
+                targets = use['fields']
+                if use['label'] in ('Participation', 'Knowledge recipient'):
+                    # Evidence attached only to context_id establishes an association,
+                    # not the identity or role of any individual party in it.
+                    targets = [p for p in targets if p in (use['path'] + '/entity_id', use['path'] + '/role')]
+                attached.update(cited_evidence(records[use['owner']], (fields[use['owner']][p] for p in targets)))
+            for eid in sorted(attached & eligible, key=evidence_order.get):
+                local_evidence.add(eid)
+                edges.append({'from': eid, 'to': nid, 'type': 'supports', 'kind': 'evidence'})
+        for rid, relation in relations.items():
+            if relation['from_action_id'] in present or relation['to_action_id'] in present:
+                local_evidence.update(citations.get(rid, ()))
         top = body_end + 30
-        source_list = sorted(quotes, key=lambda sid: aliases[sid])
-        source_columns = max(1, (canvas_width - 38) // 274)
-        for i, sid in enumerate(source_list):
-            card = make_card(sid, [38 + i % source_columns * 274, top + 48 + i // source_columns * 104, 248, 82])
-            ids = sorted(quotes[sid], key=evidence_order.get)
-            card['quotes'] = ids
-            card['targets'] = [aliases.get(edge['to'], '') for edge in edges
-                               if edge['kind'] == 'evidence' and edge['from'] == sid]
-            card['targets'] = list(dict.fromkeys(card['targets']))
-            cards.append(card)
-        height = top + 72 + max(1, math.ceil(len(source_list) / source_columns)) * 104
-        sections.append({'title': 'Source evidence', 'box': [22, top, canvas_width - 44, height - top - 20]})
-        edges = list({(edge['from'], edge['to'], edge['type']): edge for edge in edges}.values())
+        columns = max(1, (canvas_width - 38) // 274)
+        quotes = {sid: [] for sid in extra_sources}
+        eids = sorted(local_evidence, key=evidence_order.get)
+        for eid in eids:
+            sid = evidence[eid]['source_id']
+            if kinds.get(sid) == 'source':
+                quotes.setdefault(sid, []).append(eid)
+                edges.append({'from': sid, 'to': eid, 'kind': 'evidence', 'type': 'contains'})
+        for section, items in [('Evidence', eids), ('Sources', sorted(quotes, key=aliases.get))]:
+            if not items:
+                continue
+            for i, nid in enumerate(items):
+                card = make_card(nid, [38 + i % columns * 274, top + 48 + i // columns * 104, 248, 82])
+                if section == 'Sources':
+                    card['quotes'] = quotes[nid]
+                cards.append(card)
+            height = 56 + math.ceil(len(items) / columns) * 104
+            sections.append({'title': section, 'box': [22, top, canvas_width - 44, height]})
+            top += height + 18
         return {
             'phase': pid, 'title': title, 'cards': cards, 'sections': sections,
-            'edges': edges, 'height': max(820, height), 'width': canvas_width, 'jumps': [],
+            'edges': edges, 'height': max(820, top), 'width': canvas_width, 'jumps': [],
         }
 
     plans = []
@@ -324,7 +355,7 @@ def arrange_graph(graph, view):
         if not cards and phase:
             cards.append(make_card(pid, [42, y, 1050, 116]))
             y += 146
-        y = add_parties(cards, body_top, y, canvas_width)
+        y = add_parties(cards, body_top, y, canvas_width, pid or graph['event']['event_id'])
         if cards:
             sections.append({'title': 'Actions and their context' if ordered else 'Context',
                              'box': [22, body_top, canvas_width - 44, y - body_top]})
@@ -334,12 +365,10 @@ def arrange_graph(graph, view):
     for pid, title, cards, sections, end, width in plans:
         output.append(finish(pid, title, list(cards), list(sections), end, width))
 
-    used_evidence = {eid for page in output for card in page['cards'] for eid in card.get('quotes', [])}
-    unused = [eid for eid in evidence if eid not in used_evidence]
+    used_evidence = {card['id'] for page in output for card in page['cards'] if card['kind'] == 'evidence'}
+    unused = [eid for eid in evidence if eid not in used_evidence and eid not in issues]
     displayed_sources = {card['id'] for page in output for card in page['cards'] if card['kind'] == 'source'}
-    unused_sources = list(dict.fromkeys([evidence[eid]['source_id'] for eid in unused] +
-                                      [source['source_id'] for source in graph.get('sources', [])
-                                       if source['source_id'] not in displayed_sources]))
+    unused_sources = [s['source_id'] for s in graph.get('sources', []) if s['source_id'] not in displayed_sources]
     if unused or unused_sources:
         pid, title, cards, sections, end, width = plans[0]
         output[0] = finish(pid, title, list(cards), list(sections), end, width, unused, unused_sources)
@@ -351,19 +380,23 @@ def arrange_graph(graph, view):
     for page in output:
         present = {card['id'] for card in page['cards']}
         for edge in all_edges:
-            if (edge['kind'] != 'party' and edge['from'] in present
-                    and edge['to'] not in present and edge['to'] in destinations):
+            other = edge['to'] if edge['from'] in present else edge['from']
+            if (edge['kind'] != 'party' and (edge['from'] in present or
+                    (edge['kind'] == 'relation' and edge['to'] in present)) and other not in present and other in destinations):
                 page['jumps'].append({'from': aliases.get(edge['from'], ''),
-                                     'to':aliases.get(edge['to'],''), 'id':edge['to'],
-                                     'type':edge['type'], 'page':destinations[edge['to']]})
+                                     'to': aliases.get(edge['to'], ''), 'id': other,
+                                     'relation_id': edge.get('relation_id'),
+                                     'type': edge['type'], 'page': destinations[other]})
         # Assign unique keys to all card instances, including repeated contexts.
+        instances = {}
         for i,card in enumerate(page['cards']):
             card['key'] = 'card:' + str(i)
+            instances.setdefault(card['id'], []).append(card)
         for edge in page['edges']:
-            pairs = [(a,b) for a in page['cards'] for b in page['cards']
-                     if a['id']==edge['from'] and b['id']==edge['to']]
+            pairs = [(a,b) for a in instances.get(edge['from'], []) for b in instances.get(edge['to'], [])]
             if pairs:
                 a,b = min(pairs,key=lambda pair:abs(pair[0]['box'][0]-pair[1]['box'][0])+abs(pair[0]['box'][1]-pair[1]['box'][1]))
                 edge['from_key'],edge['to_key'] = a['key'],b['key']
         page['edges'] = [edge for edge in page['edges'] if 'from_key' in edge]
-    return {'details':details,'pages':output}
+    return dict(details=details, pages=output, fields=fields, party_uses=uses, aliases=aliases,
+                passage_issues=issues)

@@ -9,7 +9,20 @@ from finmy.search.state import digest, now, write_json
 from finmy.search.summary import directory_lock
 
 
-SCROLLABLE_VIEW = 'person-event-scrollable-v1'
+SCROLLABLE_VIEW = 'person-event-scrollable-v2'
+
+
+def _view_input(directory, expected=None):
+    path = Path(directory) / 'input.json'
+    if not path.is_file():
+        return None
+    raw = path.read_bytes()
+    state = path.with_name('state.json')
+    if expected is None and state.is_file():
+        expected = json.loads(state.read_bytes()).get('input_sha256')
+    if expected and digest(raw) != expected:
+        raise ValueError('Saved input integrity mismatch')
+    return json.loads(raw)
 
 
 def save_gantt(graph, directory, graph_path, *, result_status=None):
@@ -23,10 +36,13 @@ def save_gantt(graph, directory, graph_path, *, result_status=None):
             if json.loads(source) != graph:
                 raise ValueError('Saved graph differs from rendering input')
             record['graph_sha256'] = digest(source)
-            html = render_graph_html(graph, graph_sha256=record['graph_sha256'], result_status=result_status).encode('utf-8')
+            html = render_graph_html(graph, graph_sha256=record['graph_sha256'], result_status=result_status,
+                                     payload=_view_input(directory)).encode('utf-8')
             record['renderer'] = SCROLLABLE_VIEW
             dependencies = ('rendering.py', 'event/graph_html.py', 'event/graph.html',
-                            'event/graph_layout.py', 'event/graph_view.py', 'event/graph_labels.py')
+                            'event/graph_layout.py', 'event/graph_view.py', 'event/graph_labels.py',
+                            'event/graph_evidence.py', 'event/graph_inspector.js', 'event/records.py',
+                            'event/validation.py')
         elif graph.get('schema_version') == 'person-epg-3.0':
             from .visualizer_gantt import render_event
             html = render_event(graph).encode('utf-8')
@@ -98,5 +114,6 @@ def read_gantt(directory, state, *, current_view=False):
         raise ValueError('Saved Gantt integrity mismatch; regenerate it from the saved JSON')
     if current_view and current and record.get('renderer') != SCROLLABLE_VIEW:
         from .event.graph_html import render_graph_html
-        return render_graph_html(graph, graph_sha256=state['graph_sha256'], result_status=state.get('result_status'))
+        return render_graph_html(graph, graph_sha256=state['graph_sha256'], result_status=state.get('result_status'),
+                                 payload=_view_input(directory, state.get('input_sha256')))
     return content.decode('utf-8')

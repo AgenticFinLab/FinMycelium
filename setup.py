@@ -40,7 +40,7 @@ setuptools.setup(
     package_data={
         "finmy.workbench": ["style.css"],
         "finmy.person_epg": ["schema.json", "schema_model.json", "gantt.html"],
-        "finmy.person_epg.event": ["graph.html", "graph_authored.html"],
+        "finmy.person_epg.event": ["graph.html", "graph_authored.html", "graph_inspector.js"],
     },
     options={"bdist_wheel": {"python_tag": "py311"}},
     classifiers=[

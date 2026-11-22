@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from jsonschema import Draft202012Validator
 
-from .records import fingerprint, ground_quote, index_records, pointer
+from .records import evidence_samples, fingerprint, ground_quote, index_records, pointer
 from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_VERSION, schema_for
 from .validation import check_graph, covers, record_temporal_conflicts, SupportIndex
 from .relation_review import validate_review
@@ -264,7 +264,7 @@ class Receiver:
                 for item in value.values():
                     associations(item)
         associations(response)
-        samples = {s['sample_id']: s for s in self.payload['samples']}
+        samples = evidence_samples(self.payload)
         for proposal in response['evidence']:
             try:
                 if (not isinstance(proposal, dict) or not {'evidence_id', 'sample_id', 'quote'} <= proposal.keys()

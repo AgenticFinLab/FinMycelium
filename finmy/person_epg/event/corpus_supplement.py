@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from .prompts import system_prompt
 from .proposals import Receiver, exact_deduplicate, reference, validate_envelope
-from .records import fingerprint, ground_quote, index_records, pointer, prompt_json
+from .records import evidence_samples, fingerprint, ground_quote, index_records, pointer, prompt_json
 from .runtime import InvalidResponse
 from .schema import COLLECTION_IDS
 
@@ -27,7 +27,9 @@ def make_request(facts, payload):
         existing[collection] = summaries
     source_by_id = index_records(facts)['sources']
     documents = [dict(sample_id=s['sample_id'], source_id=s['raw_data_id'],
-                      title=source_by_id[s['raw_data_id']].get('title'), text=s['content']) for s in payload['samples']]
+                      title=source_by_id[s['raw_data_id']].get('title'),
+                      published_at=source_by_id[s['raw_data_id']].get('published_at'),
+                      text=s['content']) for s in payload['samples']]
     return dict(role='corpus_supplement', identity=payload['user_query']['extras']['person_event'],
                 query_text=payload['user_query']['query_text'], existing=existing, documents=documents)
 
@@ -41,7 +43,7 @@ def validate_delta(value):
 def adopt_delta(build, raw, request):
     validate_delta(raw)
     payload = build.run.payload
-    samples = {s['sample_id']: s for s in payload['samples']}
+    samples = evidence_samples(payload)
     ranges = {s: [(0, len(r['content']))] for s, r in samples.items()}
     namespace = TASK_ID + ':' + fingerprint(dict(request=request, response=raw))
     receiver = Receiver(build.facts, payload, build.ids, namespace, ranges)

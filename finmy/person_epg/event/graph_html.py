@@ -5,6 +5,7 @@ import re
 from hashlib import sha256
 from pathlib import Path
 
+from .graph_evidence import passage_issues
 from .graph_view import build_views
 from .graph_layout import arrange_graph
 from .records import fingerprint
@@ -41,14 +42,19 @@ def _layout_pages(graph, layout):
     return pages
 
 
-def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=None):
+def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=None, payload=None):
     """Generate an offline graph view, or use an explicitly supplied authored layout."""
     if not isinstance(graph, dict) or graph.get('schema_version') != GRAPH_VERSION:
         raise ValueError(f'The EPG viewer requires a {GRAPH_VERSION} graph')
     pages = _layout_pages(graph, layout)
     view = build_views(graph)
     if pages is None:
-        view = arrange_graph(graph, view)
+        if payload is not None:
+            identity = payload.get('user_query', {}).get('extras', {}).get('person_event', {})
+            if any(identity.get(key) != graph['event'].get(key) for key in ('person_id', 'storyline_id', 'event_id')):
+                raise ValueError('The frozen input belongs to a different person event')
+        view = arrange_graph(graph, view, passage_issues(graph, payload))
+        view['checked_input'] = payload is not None
     template_name = 'graph_authored.html' if pages is not None else 'graph.html'
     template = (_ASSETS / template_name).read_text(encoding='utf-8')
     # Split the template before embedding untrusted record text.
@@ -63,6 +69,8 @@ def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=No
     head = head.replace('<!--__BUILD_STATUS__-->', f'<span>{status_label}</span>' if status_label else '', 1)
     between, remainder = remainder.split('__EPG_LAYOUT_JSON__', 1)
     middle, tail = remainder.split('__EPG_VIEW_JSON__', 1)
+    if pages is None:
+        tail = tail.replace('/*__FIELD_INSPECTOR__*/', (_ASSETS / 'graph_inspector.js').read_text(encoding='utf-8'), 1)
     return ''.join((head, _script_data(graph), between, _script_data(pages),
                     middle, _script_data(view), tail))
 
@@ -72,15 +80,17 @@ def main(argv=None):
     parser.add_argument('graph', type=Path, help='Saved person event JSON')
     parser.add_argument('-o', '--output', required=True, type=Path, help='Destination HTML file')
     parser.add_argument('--layout', type=Path, help='Optional authored layout JSON for this exact graph')
+    parser.add_argument('--input', type=Path, help='Frozen person build input for checking quoted passages')
     args = parser.parse_args(argv)
-    inputs = (path for path in (args.graph, args.layout) if path is not None)
+    inputs = (path for path in (args.graph, args.layout, args.input) if path is not None)
     if any(args.output.resolve() == path.resolve() for path in inputs):
         parser.error('The output path must differ from the input paths')
     try:
         source = args.graph.read_bytes()
         html = render_graph_html(json.loads(source.decode('utf-8-sig')),
                                  layout=_read_json(args.layout) if args.layout else None,
-                                 graph_sha256=sha256(source).hexdigest())
+                                 graph_sha256=sha256(source).hexdigest(),
+                                 payload=_read_json(args.input) if args.input else None)
         args.output.write_text(html, encoding='utf-8')
     except (OSError, ValueError) as error:
         parser.error(str(error))

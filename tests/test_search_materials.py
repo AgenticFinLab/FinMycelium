@@ -13,7 +13,7 @@ from finmy.search.handoff import assemble_sources, prepare_complete_sources, der
 from finmy.search.control import SearchController
 from finmy.search.agent import context_for
 from finmy.person_epg.input import freeze_search_input
-from finmy.person_epg.event.records import seed_facts
+from finmy.person_epg.event.records import evidence_samples, ground_quote, seed_facts
 
 
 @pytest.fixture(autouse=True)
@@ -156,6 +156,11 @@ def test_published_dates_reach_person_builder_and_stay_frozen(tmp_path):
     assert facts['sources'][0]['title'] == 'Official report'
     assert provenance['sources'][0]['source_metadata']['publication_candidates'][0]['provider'] == 'exa'
     assert frozen['samples'] == payload['samples']
+    samples = evidence_samples(frozen)
+    sample_id = frozen['samples'][0]['sample_id']
+    with pytest.raises(ValueError, match='source body'):
+        ground_quote(dict(sample_id=sample_id, quote='2011-03-18'), samples, 'E')
+    assert ground_quote(dict(sample_id=sample_id, quote='Aster approval was announced.'), samples, 'E')['location_status'] == 'matched'
 
 
 def test_legacy_person_handoff_recovers_provider_metadata(tmp_path):

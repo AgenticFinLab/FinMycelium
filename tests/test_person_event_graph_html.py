@@ -200,11 +200,12 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
         phase = next(page for page in first['pages'] if page['phase'] == 'P1')
         other = next(page for page in second['pages'] if page['phase'] == 'P1')
         self.assertEqual(phase, other)
-        self.assertEqual({card['id'] for card in phase['cards']}, {'A1', 'C1', 'S1'})
+        self.assertEqual({card['id'] for card in phase['cards']}, {'A1', 'C1', 'E1', 'S1'})
         self.assertEqual(next(card for card in phase['cards'] if card['id'] == 'S1')['quotes'], ['E1'])
         self.assertEqual([section['title'] for section in phase['sections']],
-                         ['Actions and their context', 'Source evidence'])
-        self.assertTrue(any(edge['from'] == 'S1' and edge['to'] == 'A1' for edge in phase['edges']))
+                         ['Actions and their context', 'Evidence', 'Sources'])
+        provenance = {(edge['from'], edge['to'], edge['type']) for edge in phase['edges'] if edge['kind'] == 'evidence'}
+        self.assertEqual(provenance, {('S1', 'E1', 'contains'), ('E1', 'A1', 'supports')})
         self.assertTrue(any(edge['from'] == 'C1' and edge['to'] == 'A1' for edge in phase['edges']))
         graph['event']['event_id'] = original['event']['event_id']
         self.assertEqual(graph, original)
@@ -226,7 +227,70 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
         page = next(page for page in pages if any(card['id'] == 'A1' for card in page['cards']))
         jump = next(link for link in page['jumps'] if link['id'] == 'A2')
         self.assertEqual(jump['type'], 'precedes')
+        reverse = next(link for link in pages[jump['page']]['jumps'] if link['id'] == 'A1')
+        self.assertEqual(reverse['relation_id'], jump['relation_id'])
+        self.assertEqual((reverse['from'], reverse['to']), (jump['from'], jump['to']))
         self.assertTrue(any(card['id'] == 'A2' for card in pages[jump['page']]['cards']))
+
+    def test_field_support_and_documented_participation_stay_separate(self):
+        graph = sample_graph()
+        graph.update(
+            entities=[dict(entity_id='p', name='Lee', type='person'),
+                      dict(entity_id='org', name='Association', type='organization')],
+            phases=[dict(phase_id='phase', name='Public statement')],
+            actions=[dict(action_id='a', phase_id='phase', name='Statement',
+                          actor=dict(entity_id='p', role='Chair', on_behalf_of='org'),
+                          support=[dict(target='/actor/role', mode='O', evidence_ids=['e1']),
+                                   dict(target='/description', mode='A', evidence_ids=['e1', 'e2', 'e3'])],
+                          delta_context_refs=[dict(context_id='c', relation_type='participation',
+                                                   entity_id='org', role='Party to agreement',
+                                                   support=[dict(target='/context_id', mode='A', evidence_ids=['e3'])])])],
+            contexts=[dict(context_id='c', description='The organization was named in an agreement.')],
+            sources=[dict(source_id='s1', title='Interview'), dict(source_id='s2', title='Filing')],
+            evidence=[dict(evidence_id='e1', source_id='s1', quote='Lee, chair of the association'),
+                      dict(evidence_id='e2', source_id='s1', quote='Lee made the statement'),
+                      dict(evidence_id='e3', source_id='s2', quote='The association signed the agreement')])
+        view = embedded_data(render_graph_html(graph), 'epg-view')
+        self.assertEqual(view['fields']['a']['/actor/role']['support'], ['/support/0'])
+        self.assertEqual(view['fields']['a']['/delta_context_refs/0/context_id']['support'],
+                         ['/delta_context_refs/0/support/0'])
+        person, = view['party_uses']['p']
+        self.assertEqual(person['fields'], ['/actor/role'])
+        participation = next(u for u in view['party_uses']['org'] if u['label'] == 'Participation')
+        self.assertEqual(participation['fields'], ['/delta_context_refs/0/context_id'])
+        phase = next(p for p in view['pages'] if p['phase'] == 'phase')
+        links = {(e['from'], e['to']) for e in phase['edges'] if e['kind'] == 'evidence'}
+        self.assertTrue({('s1', 'e1'), ('s1', 'e2'), ('s2', 'e3'), ('e1', 'p'), ('e3', 'a')} <= links)
+        self.assertNotIn(('e3', 'org'), links)
+        self.assertNotIn(('e2', 'p'), links)
+
+    def test_handoff_metadata_stays_in_the_archive_and_out_of_passage_cards(self):
+        from finmy.person_epg.event.records import sha256
+
+        fixtures = Path(__file__).parent / 'fixtures' / 'person_event'
+        graph = json.loads((fixtures / 'graph.json').read_text())
+        payload = json.loads((fixtures / 'input.json').read_text())
+        sample = payload['samples'][0]
+        sid = sample['raw_data_id']
+        source = payload['user_query']['extras']['source_registry'][sid]
+        line = 'Publication date (source/provider metadata): 2020-02-07'
+        body = 'She addressed the question.'
+        text = sample['content'] = f"[source={sid} version=v1 status=partial]\nhttps://example.org/story\n{source['title']}\n{line}\n{body}"
+        def quoted(eid, quote):
+            start = text.index(quote)
+            return dict(evidence_id=eid, source_id=sid, sample_id=sample['sample_id'], quote=quote,
+                        start=start, end=start + len(quote), sample_sha256=sha256(text.encode()), location_status='matched')
+        graph['evidence'] = [quoted('header', line), quoted('body', body)]
+        graph['actions'][0]['support'] = [dict(target='/description', mode='A', evidence_ids=['header', 'body'])]
+        html = render_graph_html(graph, payload=payload)
+        self.assertEqual(embedded_data(html, 'epg-data'), graph)
+        view = embedded_data(html, 'epg-view')
+        self.assertTrue(view['checked_input'])
+        self.assertEqual(view['passage_issues'], {'header': 'handoff'})
+        self.assertEqual({c['id'] for p in view['pages'] for c in p['cards'] if c['kind'] == 'evidence'}, {'body'})
+        graph['event']['event_id'] = 'another-event'
+        with self.assertRaisesRegex(ValueError, 'different person event'):
+            render_graph_html(graph, payload=payload)
 
     def test_module_exports_offline_html_and_protects_input(self):
         with TemporaryDirectory() as directory:

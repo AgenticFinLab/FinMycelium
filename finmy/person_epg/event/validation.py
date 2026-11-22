@@ -4,7 +4,7 @@ from datetime import date
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from .records import compose_context, index_records, pointer, sha256, source_records
+from .records import compose_context, evidence_samples, in_source_body, index_records, pointer, sha256, source_records
 from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_SCHEMA, PARTIAL_SCHEMA
 
 
@@ -52,7 +52,7 @@ def located_evidence(evidence, indexes, samples=None):
     if samples is not None:
         sample = samples.get(evidence['sample_id'])
         return bool(sample and sample['raw_data_id'] == evidence['source_id']
-                    and end <= len(sample['content']) and sample['content'][start:end] == evidence['quote']
+                    and in_source_body(sample, start, end) and sample['content'][start:end] == evidence['quote']
                     and evidence['sample_sha256'] == sha256(sample['content'].encode('utf-8')))
     return True
 
@@ -62,7 +62,7 @@ class SupportIndex:
     def __init__(self, package, payload=None):
         self.package = package
         self.records = index_records(package)
-        self.samples = {s['sample_id']: s for s in payload['samples']} if payload is not None else None
+        self.samples = evidence_samples(payload) if payload is not None else None
 
     def supported(self, collection, oid, field, seen=frozenset(), *, respect_conflicts=True):
         node = (collection, oid, field)
@@ -303,7 +303,6 @@ def check_graph(package, payload=None, *, complete=True):
             return False
         return True
 
-    samples = {s['sample_id']: s for s in payload['samples']} if payload else {}
     support_index = SupportIndex(package, payload)
     for eid, evidence in indexes['evidence'].items():
         foreign('sources', evidence['source_id'], 'evidence', eid, '/source_id')
@@ -315,16 +314,20 @@ def check_graph(package, payload=None, *, complete=True):
             if type(evidence['start']) is not int or type(evidence['end']) is not int:
                 continue
         if payload:
-            sample = samples.get(evidence['sample_id'])
+            sample = support_index.samples.get(evidence['sample_id'])
             if not sample or sample['raw_data_id'] != evidence['source_id']:
                 issue('QUOTE_SOURCE_INVALID', 'Evidence does not belong to a frozen sample/source.', 'evidence', eid)
                 continue
             if evidence['sample_sha256'] != sha256(sample['content'].encode('utf-8')):
                 issue('SAMPLE_HASH_MISMATCH', 'Evidence hash does not match the exact frozen text.', 'evidence', eid)
-            if evidence['location_status'] == 'matched' and evidence['end'] > len(sample['content']):
-                issue('QUOTE_LOCATION_INVALID', 'Quote offsets exceed the frozen sample.', 'evidence', eid)
-            if evidence['location_status'] == 'matched' and sample['content'][evidence['start']:evidence['end']] != evidence['quote']:
-                issue('QUOTE_MISMATCH', 'Quote is not the exact original text at the retained offsets.', 'evidence', eid)
+            if evidence['location_status'] == 'matched':
+                start, end = evidence['start'], evidence['end']
+                if end > len(sample['content']):
+                    issue('QUOTE_LOCATION_INVALID', 'Quote offsets exceed the frozen sample.', 'evidence', eid)
+                if sample['content'][start:end] != evidence['quote']:
+                    issue('QUOTE_MISMATCH', 'Quote is not the exact original text at the retained offsets.', 'evidence', eid)
+                elif 0 <= start < end <= len(sample['content']) and not in_source_body(sample, start, end):
+                    issue('QUOTE_NOT_SOURCE_BODY', 'Quote includes Search handoff metadata or an assembly marker.', 'evidence', eid)
         if evidence['location_status'] != 'matched':
             issue('QUOTE_UNLOCATED', 'This candidate quote is not valid located support.', 'evidence', eid, severity='warning')
 

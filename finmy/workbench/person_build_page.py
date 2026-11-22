@@ -191,7 +191,7 @@ def person_build_panel(store, controller, row, labels):
             st.download_button('下载人物 event JSON',encoded(graph),tid+'-epg.json',key='person-json-'+tid)
             st.subheader('交互式人物事件图' if current else '本条 event 的 Gantt')
             if current:
-                st.caption('按阶段浏览，点击行动、背景或来源卡片查看原文和关联。')
+                st.caption('点击行动、背景、主体或关系，查看具体字段的依据。每段引文都可回到对应来源。')
             from finmy.person_epg.rendering import read_gantt
             try:
                 html = read_gantt(body['artifact_directory'], run, current_view=current)
@@ -210,7 +210,7 @@ def person_build_panel(store, controller, row, labels):
                         st.error('绘图未完成（'+result.get('error_type','unknown')+'），JSON 与模型用量保持不变。')
                 except (OSError, ValueError) as exc:
                     st.error(str(exc))
-            st.caption('重新绘图只读取已保存 JSON，不调用搜索或模型。')
+            st.caption('重新绘图使用已保存的事件图和本次构建输入，可离线完成。')
             with st.expander('原生图内容与检查结果'):
                 st.json(graph,expanded=False)
                 checks=within(body['artifact_directory'],run['checks'])

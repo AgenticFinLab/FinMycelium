@@ -15,6 +15,8 @@ Use temporary IDs for new records and exact existing IDs for references. The pro
 assigns permanent IDs and verifies quotes. New evidence is {evidence_id, sample_id,
 quote} with optional start/end or context_before/context_after verbatim hints. Never
 invent hashes, source IDs, offsets or page numbers. Existing evidence IDs may be reused.
+Quote the source body. Search-added headers (URL, title, publication and retrieval
+metadata) and assembly markers are outside the citable body.
 Support O records what a source contains; A records its assertion about the world;
 I is an explicitly reasoned inference with evidence_ids and/or premise_refs. Do not
 mix O and A on one claim. Unknowns use Gap, competing claims use Conflict. Neither
@@ -74,8 +76,12 @@ fields or a Time.basis flag. If part remains ambiguous, retain any independently
 supported Gregorian year/month window or single bound, original wording and a scoped
 Gap. Do not broaden an understood quarter/旬 to an arbitrary year; if no Gregorian
 bound is supported, keep null endpoints with unknown precision and explain why.
-Relative dates use the passage's supported anchor, never the run date or a convenient
-research-scope year. 'By March 2020' can give end 2020-04-01 with month precision and
+Relative dates use the passage's supported anchor. When its wording refers to the
+source's publication, cite that wording and give the source_id, frozen published_at
+and date rule in the I reason. Check whose words they are, including when a source
+quotes an earlier interview. If the anchor is missing or disputed, retain the
+uncertainty. Never substitute the retrieval date, run date or research-scope year.
+'By March 2020' can give end 2020-04-01 with month precision and
 unknown start; it does not prove occurrence during March. A missing side gets a Gap
 on /time/start or /time/end, preserving support for the known side and any conflicts.
 

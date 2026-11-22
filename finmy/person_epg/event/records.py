@@ -146,6 +146,78 @@ def _whitespace_view(text):
     return ''.join(chars), spans
 
 
+_HANDOFF_HEADER = re.compile(
+    r'\[source=(?P<source>\S+) version=\S+ (?:status=[^\]\n]+|'
+    r'block=\d+ chars=(?P<start>\d+):(?P<end>\d+))\]\n')
+_PUBLICATION_LINE = re.compile(
+    r'Publication date \(source/provider metadata\): \d{4}-\d{2}-\d{2}\n|'
+    r'Publication date: (?:conflicted|unverified) \(see source metadata\)\n')
+_RETRIEVAL_LINE = re.compile(r'Retrieved at: \d{4}-\d{2}-\d{2}(?:T[^\n ]+)?\n')
+_ASSEMBLY_LINE = re.compile(
+    r'^(?:\[\.\.\. omitted original blocks (?:(?:before|after) \d+|\d+:\d+) \.\.\.\]|'
+    r'\[original block \d+ chars \d+:\d+\])(?:\n|$)', re.MULTILINE)
+
+
+def _body_ranges(sample, source=None):
+    """Ranges in the unchanged sample, using the two public Search handoff formats."""
+    text = sample['content']
+    header = _HANDOFF_HEADER.match(text)
+    if not header or header['source'] != sample['raw_data_id']:
+        return ((0, len(text)),)
+    source = source or {}
+    url_end = text.find('\n', header.end())
+    if url_end == -1:
+        return ()
+    title_start = url_end + 1
+    title = source.get('title')
+    if title and text.startswith(title + '\n', title_start):
+        start = title_start + len(title) + 1
+    else:
+        title_end = text.find('\n', title_start)
+        if title_end == -1:
+            return ()
+        start = title_end + 1
+
+    if header['start'] is not None:
+        # Exact excerpts end with the declared source slice, even for multiline titles.
+        width = int(header['end']) - int(header['start'])
+        excerpt_start = len(text) - width
+        if width > 0 and excerpt_start >= start and text[excerpt_start - 1] == '\n':
+            return ((excerpt_start, len(text)),)
+        return ()
+
+    # Only these optional lines in the generated prefix have metadata semantics.
+    line = _PUBLICATION_LINE.match(text, start)
+    if line:
+        start = line.end()
+    line = _RETRIEVAL_LINE.match(text, start)
+    if line:
+        start = line.end()
+
+    spans = []
+    for marker in _ASSEMBLY_LINE.finditer(text, start):
+        if start < marker.start():
+            spans.append((start, marker.start()))
+        start = marker.end()
+    if start < len(text):
+        spans.append((start, len(text)))
+    return tuple(spans)
+
+
+def evidence_samples(payload):
+    """Index citable spans privately; frozen samples and their hashes stay intact."""
+    registry = payload['user_query']['extras']['source_registry']
+    return {s['sample_id']: dict(s, _body_ranges=_body_ranges(s, registry[s['raw_data_id']]))
+            for s in payload['samples']}
+
+
+def in_source_body(sample, start, end):
+    spans = sample.get('_body_ranges')
+    if spans is None:
+        spans = _body_ranges(sample)
+    return any(lo <= start < end <= hi for lo, hi in spans)
+
+
 def ground_quote(proposal, samples, evidence_id, allowed_ranges=None, *, audit=None):
     """Exact first; uniquely located whitespace-equivalent text keeps raw bytes.
 
@@ -160,7 +232,13 @@ def ground_quote(proposal, samples, evidence_id, allowed_ranges=None, *, audit=N
         if proposal.get(key) is not None and not isinstance(proposal[key], str):
             raise ValueError('Quote context must be original text')
 
+    outside_body = False
+
     def permitted(start, end):
+        nonlocal outside_body
+        if not in_source_body(sample, start, end):
+            outside_body = True
+            return False
         return allowed_ranges is None or any(lo <= start and end <= hi for lo, hi in allowed_ranges)
 
     positions = [(m.start(), m.start() + len(quote)) for m in re.finditer('(?=' + re.escape(quote) + ')', text)
@@ -173,6 +251,9 @@ def ground_quote(proposal, samples, evidence_id, allowed_ranges=None, *, audit=N
             start, end = spans[match.start()][0], spans[match.start() + len(normalized) - 1][1]
             if permitted(start, end):
                 positions.append((start, end))
+    if not positions and outside_body:
+        raise ValueError('Quote has no permitted occurrence in the source body. '
+                         'Search handoff metadata and assembly markers cannot serve as Evidence.')
     candidates = positions
     for key, before in (('context_before', True), ('context_after', False)):
         hint = proposal.get(key)
