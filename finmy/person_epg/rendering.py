@@ -10,7 +10,7 @@ from finmy.search.state import digest, now, write_json
 from finmy.search.summary import directory_lock
 
 
-_VIEW_REVISION = 12
+_VIEW_REVISION = 13
 SCROLLABLE_VIEW = f'person-event-scrollable-v{_VIEW_REVISION}'
 
 
@@ -27,7 +27,7 @@ def _view_input(directory, expected=None):
     return json.loads(raw)
 
 
-def save_gantt(graph, directory, graph_path, *, result_status=None):
+def save_gantt(graph, directory, graph_path, *, result_status=None, previous=None):
     """Return a render record; a plotting failure never invalidates saved JSON."""
     record = {'status': 'failed', 'graph_sha256': digest(graph), 'rendered_at': now()}
     temporary = None
@@ -50,12 +50,25 @@ def save_gantt(graph, directory, graph_path, *, result_status=None):
             record['renderer_sha256'] = digest({name: digest((module/name).read_bytes()) for name in dependencies})
         else:
             raise ValueError('Unsupported graph protocol')
+        html_hash = digest(html)
         target = Path(graph_path).with_name('gantt.html')
-        with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.gantt-', delete=False) as f:
-            temporary = Path(f.name)
-            f.write(html)
-        os.replace(temporary, target)
-        record.update(status='completed', output=str(target.relative_to(directory)), html_sha256=digest(html))
+        if previous is not None:
+            # An earlier attempt or review may still bind its own gantt.html.
+            version = record.get('renderer', 'legacy-gantt')
+            target = within(directory, f'visualizations/{version}/{html_hash}/gantt.html')
+            if (previous.get('status') == 'completed' and previous.get('output')
+                    and previous.get('graph_sha256') == record['graph_sha256']
+                    and previous.get('html_sha256') == html_hash):
+                prior = within(directory, previous['output'])
+                if prior.name == 'gantt.html' and (not prior.exists() or prior.read_bytes() == html):
+                    target = prior
+        if not target.is_file() or target.read_bytes() != html:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.gantt-', delete=False) as f:
+                temporary = Path(f.name)
+                f.write(html)
+            os.replace(temporary, target)
+        record.update(status='completed', output=str(target.relative_to(directory)), html_sha256=html_hash)
     except Exception as exc:
         record['error_type'] = type(exc).__name__
     finally:
@@ -89,7 +102,11 @@ def render_saved_event(directory):
                 raise ValueError('Saved input and graph do not match')
         else:
             check_identity(graph, payload['user_query']['extras']['person_event'])
-        state['visualization'] = save_gantt(graph, directory, graph_path, result_status=state.get('result_status'))
+        previous = state.get('visualization') or {}
+        rendered = save_gantt(graph, directory, graph_path, result_status=state.get('result_status'), previous=previous)
+        if rendered['status'] == 'failed' and previous.get('status') == 'completed':
+            raise ValueError(f"Redraw failed ({rendered['error_type']}). Previous visualization retained.")
+        state['visualization'] = rendered
         if current:
             state['render_status'] = state['visualization']['status']
         write_json(directory/'state.json', state)

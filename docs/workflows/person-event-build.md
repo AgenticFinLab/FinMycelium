@@ -246,24 +246,20 @@ whole-person aggregation remain separate work.
 ## Gantt and historical graphs
 
 Native builds save a standalone scrollable event graph in `gantt.html`.
-Stage and Phase navigation opens action, context and evidence cards. Readers
-can follow a relation across Phases and expand a source to inspect its quoted
-text. The workbench preview and download show the same HTML. See the
-[interactive viewer](person-event-visualization.md) for layout and navigation.
+Each Phase shows its Actions, their Context and their evidence. The workbench
+preview and download use the same HTML. Instructions for following a relation,
+checking a quotation and exporting a graph are in the
+[interactive viewer guide](person-event-visualization.md).
 
 JSON, checks and HTML bind to the same exact graph-file bytes. **从已保存 JSON
-重新绘图** regenerates the saved view locally and preserves the graph, calls
-and build status. A drawing failure is recorded independently of construction.
+重新绘图** regenerates the view locally. Changed HTML gets a separate file in
+the run. Existing attempts and reviews retain their original HTML. The graph,
+model-call history and build status are preserved.
 
 Historical `person-epg-3.0` graphs retain their validator, hash interpretation and
 renderer. They are not silently converted. Their checkpoints cannot resume in the
 new protocol; rebuilding creates a new task from confirmed original input. The
 separately named legacy builder entry supports offline regression of historical assets.
-
-## Interactive EPG visualization
-
-Use the [standalone EPG guide](person-event-visualization.md) to export a saved event,
-inspect evidence, or verify the fixed slide layout locally.
 
 ## Offline verification
 

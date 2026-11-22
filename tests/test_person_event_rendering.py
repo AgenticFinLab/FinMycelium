@@ -83,7 +83,25 @@ def test_historical_timeline_previews_current_graph_without_changing_receipts(tm
     preview = read_gantt(tmp_path, state, current_view=True)
     assert 'id="epg-view"' in preview and state['graph_sha256'] in preview
     assert artifact.read_text() == timeline and (tmp_path / 'state.json').read_bytes() == snapshot
-    assert read_gantt(tmp_path, render_saved_event(tmp_path)) == preview
+    current = render_saved_event(tmp_path)
+    assert read_gantt(tmp_path, current) == preview
+    assert read_gantt(tmp_path, state) == timeline
+    assert current['visualization']['output'] != state['visualization']['output']
+    assert render_saved_event(tmp_path)['visualization']['output'] == current['visualization']['output']
+
+
+def test_failed_rerender_keeps_the_previous_receipt(tmp_path, payload, monkeypatch):
+    from finmy.person_epg.event import graph_html
+
+    state = run_event(payload, tmp_path, model=SyntheticEventModel())
+    previous = (tmp_path / 'state.json').read_bytes()
+    def fail(*args, **kwargs):
+        raise RuntimeError('renderer unavailable')
+    monkeypatch.setattr(graph_html, 'render_graph_html', fail)
+    with pytest.raises(ValueError, match='RuntimeError'):
+        render_saved_event(tmp_path)
+    assert (tmp_path / 'state.json').read_bytes() == previous
+    assert read_gantt(tmp_path, state)
 
 
 def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload, monkeypatch):

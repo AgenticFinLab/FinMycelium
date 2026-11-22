@@ -28,8 +28,11 @@ The embedded preview and the HTML download use the same document. When the
 saved viewer is current or newer, the workbench serves the verified file directly.
 For an older native run with a valid saved timeline, the workbench displays the
 scrollable view from its verified JSON. **从已保存 JSON 重新绘图** writes this
-version to that run and refreshes its HTML receipt. A collected graph keeps its
-reviewed copy. Draft and partial downloads carry their review status.
+version to the run and refreshes its HTML receipt. A changed export is stored
+under the run’s `visualizations/` directory. Earlier attempts and collected
+graphs keep their original files. A repeat export with identical bytes can
+reuse the same file. If redrawing fails, a previously successful receipt stays
+available. Draft and partial downloads carry their review status.
 
 ## Export from a saved JSON file
 
@@ -101,7 +104,9 @@ qualifications and evidence. Open **Recorded uses** on the Context to inspect
 individual references, including ones with an unknown endpoint.
 
 People and organizations appear as circular nodes. Recorded `precedes` and
-`enables` links help place Actions.
+`enables` links help place Actions. For the timing of two Actions, consult
+their time fields and relationship. Horizontal position alone does not
+establish which occurred first.
 
 Each purple Action relation is visible when the Phase opens. Read its label in
 the order **from Action · predicate · to Action**, for example
