@@ -671,13 +671,14 @@ function drawRelationshipLabels(active) {
     const relation = edge.kind === 'relation';
     if (relation && item.label) { obstacles.push(item.labelBox); continue; }
     const text = relation ? relationName(edge.record) : pretty(edge.type);
-    let location = edge.jump ? null : labelPosition(points, labelWidth(text, relation), obstacles, diagramWidth);
-    if (!location && item.slot) {
-      const box = item.slot, connector = port(box, 3);
-      const anchor = edge.jump ? connector : points.reduce((best, p) =>
-        Math.hypot(p[0] - connector[0], p[1] - connector[1]) <
-        Math.hypot(best[0] - connector[0], best[1] - connector[1]) ? p : best);
-      location = {box, anchor, connector};
+    let location;
+    if (edge.jump) {
+      const connector = port(item.slot, 3);
+      location = {box: item.slot, anchor: connector, connector};
+    } else if (relation) {
+      location = actionLabelPosition(points, item.slot, obstacles);
+    } else {
+      location = labelPosition(points, labelWidth(text, false), obstacles, diagramWidth);
     }
     if (!location) continue;
     const {box, anchor, connector} = location;
@@ -1101,10 +1102,32 @@ function labelWidth(text, relation) {
   return Math.ceil(text.length * (relation ? 6.6 : 5.7)) + 14;
 }
 
+function overlapsLabel([x, y, w, h], [ox, oy, ow, oh]) {
+  return x < ox + ow + 3 && x + w > ox - 3 && y < oy + oh + 3 && y + h > oy - 3;
+}
+
+// Project onto the wire itself, including the interior of each orthogonal segment.
+function actionLabelPosition(points, slot, obstacles) {
+  const [left, top, w, h] = slot, cx = left + w / 2, cy = top + h / 2;
+  const clamp = (v, a, b) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), v));
+  let anchor = points[0], distance = Infinity;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const x = clamp(cx, a[0], b[0]), y = clamp(cy, a[1], b[1]);
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < distance) { anchor = [x, y]; distance = d; }
+  }
+  const [x, y] = anchor;
+  const positions = [[x - w / 2, y - h - 5], [x - w / 2, y + 5],
+                     [x + 5, y - h / 2], [x - w - 5, y - h / 2]];
+  const box = positions.map(([bx, by]) => [bx, by, w, h]).find(b =>
+    b[0] >= 8 && b[0] + w <= diagramWidth - 8 && b[1] >= 0 &&
+    !obstacles.some(o => o !== slot && overlapsLabel(b, o))) || slot;
+  return {box, anchor, connector: [clamp(x, box[0], box[0] + w), clamp(y, box[1], box[1] + h)]};
+}
+
 function labelPosition(points, width, obstacles, canvasWidth) {
   const height = 20;
-  const overlaps = ([x, y, w, h], [ox, oy, ow, oh]) =>
-    x < ox + ow + 3 && x + w > ox - 3 && y < oy + oh + 3 && y + h > oy - 3;
   const candidates = [];
   for (let offset = 0; offset < 4; offset++) {
     const gap = 5 + offset * 27;
@@ -1125,7 +1148,7 @@ function labelPosition(points, width, obstacles, canvasWidth) {
   return candidates.find(({box, anchor, connector}) =>
     box[0] > 8 && box[0] + box[2] < canvasWidth - 10 && box[1] > 0 &&
     box[1] + box[3] < parseFloat($('graph').style.height) - 5 &&
-    !obstacles.some(other => overlaps(box, other)) && !blocked(anchor, connector, obstacles));
+    !obstacles.some(other => overlapsLabel(box, other)) && !blocked(anchor, connector, obstacles));
 }
 
 function drawEdges() {
@@ -1167,7 +1190,8 @@ function drawEdges() {
   const boxes = new Map([...cards].filter(([, item]) => !['source', 'evidence'].includes(item.card.kind))
     .map(([key, item]) => [key, linkBox(item)]));
   const slots = new Map();
-  for (const [rid, [fraction, y]] of Object.entries(page.relation_slots)) {
+  for (const {relation_id: rid} of page.jumps) {
+    const [fraction, y] = page.relation_slots[rid];
     const width = labelWidth(relationName(objects.get(rid).record), true);
     slots.set(rid, [fraction * diagramWidth - width / 2, y - 10, width, 20]);
   }
@@ -1197,6 +1221,11 @@ function drawEdges() {
     if (section.title === 'Actions and their context') headings.push([645, y + 7, 450, 28]);
   }
   const obstacles = [...boxes.values(), ...partyLabels, ...headings];
+  for (const {edge, lane, width} of page.actionLabels) {
+    const a = boxes.get(edge.from_key), b = boxes.get(edge.to_key);
+    slots.set(edge.relation_id, [actionLabelX(a, b) - width / 2,
+      Math.max(a[1], b[1]) - (lane + 1) * LABEL_LANE_HEIGHT, width, 20]);
+  }
   relationshipObstacles = obstacles.concat([...slots.values()]);
   const grid = routingGrid(obstacles, diagramWidth, height, cross.map(edge => edge.gateX));
   const structural = page.edges.filter(edge => edge.kind !== 'evidence').concat(cross);
@@ -1476,10 +1505,7 @@ function prepareLegacyRelationLayout(page) {
         objects.get(link.id)?.record.phase_id !== destination) return [];
     return [{...link, action_id: local}];
   });
-  const ids = [...new Set([
-    ...[...page.jumps].sort((a, b) => a.page - b.page).map(link => link.relation_id),
-    ...page.edges.filter(edge => edge.kind === 'relation').map(edge => edge.relation_id)
-  ])];
+  const ids = [...page.jumps].sort((a, b) => a.page - b.page).map(link => link.relation_id);
   const columns = Math.max(1, Math.floor(page.width / 185));
   page.relation_slots = Object.fromEntries(ids.map((id, i) => {
     const row = Math.floor(i / columns), count = Math.min(columns, ids.length - row * columns);
@@ -1489,6 +1515,50 @@ function prepareLegacyRelationLayout(page) {
   const inset = 12 + 32 * Math.ceil(ids.length / columns);
   for (const item of [...page.cards, ...page.sections]) item.box[1] += inset;
   page.height += inset;
+}
+
+const LABEL_LANE_HEIGHT = 26;
+function actionLabelX(a, b) {
+  const ax = a[0] + a[2] / 2, bx = b[0] + b[2] / 2;
+  if (a[1] === b[1]) return (ax + bx) / 2;
+  return a[1] > b[1] ? ax : bx;
+}
+
+// Measure at the narrowest diagram width. As columns spread, these local
+// positions move with their Actions and the clearance between labels grows.
+function prepareActionLabelLanes(page) {
+  page.actionLabels = [];
+  const diagramCards = page.cards.filter(c => c.kind !== 'source' && c.kind !== 'evidence');
+  const boxes = new Map(diagramCards.map(c => [c.key, c.box]));
+  const rows = new Map();
+  for (const edge of page.edges.filter(e => e.kind === 'relation')) {
+    const a = boxes.get(edge.from_key), b = boxes.get(edge.to_key);
+    const row = Math.max(a[1], b[1]), x = actionLabelX(a, b);
+    const width = labelWidth(relationName(edge.record), true);
+    if (!rows.has(row)) rows.set(row, []);
+    rows.get(row).push({edge, width, left: x - width / 2});
+  }
+  // An inset above one row shifts every lower row together with its labels.
+  for (const [y, labels] of [...rows].sort((a, b) => b[0] - a[0])) {
+    const ends = [];
+    for (const entry of labels.sort((a, b) => a.left - b.left)) {
+      let lane = ends.findIndex(right => right + 6 <= entry.left);
+      if (lane < 0) lane = ends.length;
+      ends[lane] = entry.left + entry.width;
+      page.actionLabels.push({edge: entry.edge, width: entry.width, lane});
+    }
+    const above = Math.max(0,
+      ...diagramCards.filter(c => c.box[1] < y).map(c => c.box[1] + c.box[3]),
+      ...page.sections.filter(s => s.box[1] < y).map(s => s.box[1] + 38));
+    const inset = above + ends.length * LABEL_LANE_HEIGHT + 6 - y;
+    if (inset <= 0) continue;
+    for (const c of page.cards) if (c.box[1] >= y) c.box[1] += inset;
+    for (const s of page.sections) {
+      if (s.box[1] >= y) s.box[1] += inset;
+      else if (s.box[1] + s.box[3] > y) s.box[3] += inset;
+    }
+    page.height += inset;
+  }
 }
 
 $('fit').onclick = () => changeZoom(1);
@@ -1511,6 +1581,7 @@ $('next').onclick = () => showPage(current + 1);
 $('picker').onchange = e => showPage(Number(e.target.value));
 for (const [i, page] of view.pages.entries()) {
   prepareLegacyRelationLayout(page);
+  prepareActionLabelLanes(page);
   const option = el('option', phaseLabel(page) + (page.phase ? ' · ' + page.title : ''));
   option.value = i;
   $('picker').append(option);

@@ -393,3 +393,61 @@ def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path, monkeypatch):
         page.wait_for_function(fills)
         assert path.evaluate('node => node === document.activeElement')
         browser.close()
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_crowded_action_relation_labels_stay_with_their_row_while_zooming(tmp_path, monkeypatch):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event import graph_html
+    from test_person_event_graph_html import sample_graph
+
+    graph = sample_graph()
+    graph['phases'] = [{'phase_id': p, 'name': p} for p in ('P1', 'P2')]
+    graph['actions'] = [{'action_id': f'A{i}', 'name': f'Action {i}', 'phase_id': 'P1' if i < 6 else 'P2'}
+                        for i in range(7)]
+    graph['relations'] = [
+        {'relation_id': kind, 'from_action_id': 'A2', 'to_action_id': 'A3', 'type': kind}
+        for kind in ('before', 'enables', 'responds_to', 'continues')
+    ] + [{'relation_id': 'cross', 'from_action_id': 'A3', 'to_action_id': 'A6', 'type': 'enables'}]
+    arrange = graph_html.arrange_graph
+
+    def stepped_wire(*args):
+        view = arrange(*args)
+        cards = next(p['cards'] for p in view['pages'] if p['phase'] == 'P1')
+        # Saved layouts can have adjacent Actions of different heights.
+        next(c for c in cards if c['id'] == 'A3')['box'][3] += 26
+        return view
+
+    monkeypatch.setattr(graph_html, 'arrange_graph', stepped_wire)
+    path = tmp_path / 'crowded.html'
+    path.write_text(graph_html.render_graph_html(graph), encoding='utf-8')
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        page = browser.new_page(viewport={'width': 1366, 'height': 768}, offline=True)
+        page.goto(path.as_uri())
+        page.locator('#picker').select_option('1')
+        labels = page.locator('#links .edge-label[data-relation]:not([data-relation=cross])')
+        for button, levels in (('#plus', range(110, 161, 10)), ('#minus', range(150, 99, -10))):
+            for zoom in levels:
+                page.locator(button).click()
+                assert page.locator('#zoom-level').inner_text() == f'{zoom}%'
+                assert labels.count() == 4
+                assert labels.evaluate_all("""els => {
+                    const bounds = el => el.getBoundingClientRect();
+                    const cards = [...document.querySelectorAll('.action')];
+                    const action = id => bounds(cards.find(c => c.dataset.id === id));
+                    const a = action('A2'), b = action('A3');
+                    const region = bounds([...document.querySelectorAll('.section')].find(
+                        s => s.textContent.includes('Actions and their context')));
+                    const boxes = els.map(el => bounds(el.querySelector('rect')));
+                    const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+                    return boxes.every((box, i) => {
+                        const x = (box.left + box.right) / 2, leader = els[i].querySelector('line');
+                        return x >= Math.min(a.left, b.left) && x <= Math.max(a.right, b.right) &&
+                            box.top >= region.top && box.bottom <= region.bottom &&
+                            !boxes.slice(i + 1).some(other => overlaps(box, other)) &&
+                            !cards.some(card => overlaps(box, bounds(card))) && (!leader || leader.getTotalLength() < 170);
+                    });
+                }""")
+                assert page.locator('#phase-bridges .bridge[data-relation-id=cross]').count() == 1
+        browser.close()

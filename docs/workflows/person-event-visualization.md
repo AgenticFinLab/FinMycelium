@@ -71,6 +71,8 @@ display choices.
 Each purple Action relation is visible when the Phase opens. Read its label in
 the order **from Action · predicate · to Action**, for example
 `A04 continues A21`. Within a Phase the wire connects two Action cards.
+Its label follows the wire as you zoom. When the space between cards is too
+narrow, the label sits beside the Action row with a short line back to the wire.
 Across Phases the local portion connects the Action to the existing tab of the
 other Action’s Phase. The label gives both Action IDs on either page.
 Select the wire or its label to inspect the relation and its evidence. **Go to**
