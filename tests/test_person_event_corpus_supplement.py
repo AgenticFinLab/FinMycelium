@@ -3,10 +3,16 @@ import json
 import pytest
 
 from finmy.person_epg.event.build import run_event
+from finmy.person_epg.event.prompts import CONTEXT_DISCOVERY, system_prompt
 from finmy.person_epg.event.records import fingerprint
 from finmy.person_epg.event.corpus_supplement import TASK_ID
 from test_person_event_contract import payload
 from test_person_event_pipeline import SyntheticEventModel
+
+
+def test_both_extraction_modes_receive_the_context_discovery_guidance():
+    for role in ('extraction', 'corpus_supplement'):
+        assert CONTEXT_DISCOVERY in system_prompt(role)
 
 
 class CorpusModel(SyntheticEventModel):

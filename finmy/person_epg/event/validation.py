@@ -4,6 +4,7 @@ from datetime import date
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from .context_links import shared_passage_leads
 from .records import compose_context, evidence_samples, in_source_body, index_records, pointer, sha256, source_records
 from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_SCHEMA, PARTIAL_SCHEMA
 
@@ -426,9 +427,10 @@ def check_graph(package, payload=None, *, complete=True):
         if complete and not facts and not any(p['stage_id'] == sid for p in package['phases']):
             issue('STAGE_WITHOUT_PHASE', 'A complete Stage requires at least one Phase.', 'stages', sid)
     ref_ids = set()
+    knowledge_reviews = {}
 
     def context_refs(owner, collection, oid, key, register=True):
-        for reference in owner.get(key, []):
+        for pos, reference in enumerate(owner.get(key, [])):
             rid = reference['context_ref_id']
             if register and rid in ref_ids:
                 issue('DUPLICATE_CONTEXT_REF', 'Context association IDs must be unique.', collection, oid, '/' + key)
@@ -450,7 +452,12 @@ def check_graph(package, payload=None, *, complete=True):
                 if a and c and not has_time_conflict(owner) and not has_time_conflict(context) and c[0] >= a[1]:
                     issue('FUTURE_CONTEXT', 'This input context only occurs after its target.', collection, oid, '/' + key)
                 if context['perspective'] in ('world', 'unknown') and not reference.get('gaps'):
-                    issue('KNOWLEDGE_REVIEW', 'World facts alone do not prove knowledge at the action time.', collection, oid, '/' + key, 'warning')
+                    if register:
+                        knowledge_reviews[collection, oid, rid] = (f'/{key}/{pos}', reference, [])
+                    else:
+                        origin = ('phases', owner.get('phase_id'), rid)
+                        if origin in knowledge_reviews:
+                            knowledge_reviews[origin][2].append(oid)
 
     for pid, phase in indexes['phases'].items():
         if foreign('stages', phase['stage_id'], 'phases', pid, '/stage_id'):
@@ -481,6 +488,26 @@ def check_graph(package, payload=None, *, complete=True):
             for problem in composed['issues']:
                 issue(problem['code'], 'Baseline exclusion is not valid for this Action: ' + problem['context_ref_id'],
                       'actions', aid, '/baseline_context_exclusions')
+    for (collection, oid, rid), (field, ref, inherited) in knowledge_reviews.items():
+        message = (f"Check knowledge at the time for {ref['relation_type']} association {rid} "
+                   f"to {ref['context_id']}. World facts alone do not establish what the person knew.")
+        if inherited:
+            message += ' Inherited by Actions: ' + ', '.join(inherited) + '.'
+        citations = sorted({eid for s in ref['support'] for eid in s['evidence_ids']})
+        issue('KNOWLEDGE_REVIEW', message, collection, oid, field, 'warning', citations)
+
+    if complete and not facts:
+        # Only the final report carries these leads; proposals are never rejected for omitting a link.
+        invalid = {i['object_id'] for i in issues if i['object_type'] == 'evidence' and i['severity'] == 'error'}
+        leads = defaultdict(dict)
+        for lead in shared_passage_leads(indexes, indexes['actions']):
+            citations = set(lead['evidence_ids']) - invalid
+            if citations:
+                leads[lead['context_id']][lead['action_id']] = citations
+        for cid, actions in leads.items():
+            issue('CONTEXT_LINK_REVIEW', 'Inspect the shared passages for a specific role in Actions '
+                  + ', '.join(actions) + '. Co-citation alone does not establish a link.',
+                  'contexts', cid, '/description', 'info', sorted(set().union(*actions.values())))
     for cid, context in indexes['contexts'].items():
         for eid in context['entity_refs']:
             foreign('entities', eid, 'contexts', cid, '/entity_refs')

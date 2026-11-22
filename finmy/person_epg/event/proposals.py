@@ -442,6 +442,10 @@ class Receiver:
             raise ValueError('Unknown consolidation operation')
         if operation in ('keep', 'merge') and outputs:
             target = outputs[0]['record']
+            if operation == 'merge' and inputs[0][0] == 'contexts':
+                perspectives = {old['perspective'] for old in originals} - {'unknown'}
+                if perspectives and perspectives != {target['perspective']}:
+                    raise ValueError('A Context merge must preserve the perspective of each known account')
             preserve_known_fields(originals, target, decision, package)
             for old in originals:
                 for field in ('support', 'conflicts'):

@@ -4,7 +4,41 @@ import pytest
 
 from test_person_event_contract import facts_from_graph, graph, payload
 from finmy.person_epg.event.proposals import Receiver, reference, replace_references
-from finmy.person_epg.event.records import IdMap, seed_facts
+from finmy.person_epg.event.records import IdMap, compose_context, seed_facts
+
+
+@pytest.mark.parametrize('found_at', ['extraction', 'relations'])
+def test_action_specific_knowledge_and_shared_phase_constraint(graph, payload, found_at):
+    # The acknowledgement passage supports both the act and Lee's awareness at that time.
+    action, briefing = graph['actions'][:2]
+    [link] = action.pop('delta_context_refs')
+    context = next(c for c in graph['contexts'] if c['context_id'] == link['context_id'])
+    graph['contexts'].remove(context)
+    if found_at == 'extraction':
+        facts, report = Receiver(facts_from_graph(graph, payload), payload, IdMap(), 'extract-awareness').extract(
+            dict(entities=[], actions=[], contexts=[context], relation_candidates=[], evidence=[], pending=[]))
+        assert not report['rejected'], report
+        graph['contexts'] = facts['contexts']
+        link['context_id'] = next(c['context_id'] for c in facts['contexts'] if c['description'] == context['description'])
+
+    result, report = Receiver(graph, payload, IdMap(), 'associate-awareness').relate(
+        dict(contexts=[context] if found_at == 'relations' else [], relations=[], evidence=[], pending=[],
+             phase_context_updates=[], action_context_updates=[
+                 dict(action_id=action['action_id'], delta_context_refs=[link], baseline_context_exclusions=[]),
+                 dict(action_id=briefing['action_id'], delta_context_refs=[], baseline_context_exclusions=[])]),
+        action_ids=[action['action_id'], briefing['action_id']], phase_ids=[])
+    assert not report['rejected'], report
+    assert result['phases'] == graph['phases']
+    scope = compose_context(result, action['action_id'])['associations']
+    assert {r['reference']['relation_type'] for r in scope} == {'constraint', 'knowledge-source'}
+    [specific] = result['actions'][0]['delta_context_refs']
+    fact = next(c for c in result['contexts'] if c['context_id'] == specific['context_id'])
+    [evidence_id] = specific['support'][0]['evidence_ids']
+    assert evidence_id in fact['support'][0]['evidence_ids']
+    assert any(evidence_id in s['evidence_ids'] for s in action['support'])
+    assert specific['support'][0]['reason'] != fact['support'][0]['reason']
+    [inherited] = compose_context(result, briefing['action_id'])['associations']
+    assert inherited['reference']['relation_type'] == 'constraint'
 
 
 def test_relation_context_addition_and_action_update_are_atomic(graph, payload):

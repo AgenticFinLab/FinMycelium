@@ -3,6 +3,7 @@ from collections import deque
 from copy import deepcopy
 from itertools import zip_longest
 
+from .context_links import shared_passage_leads
 from .proposals import ID_FIELDS, LIST_REFS
 from .records import index_records, prompt_json
 from .schema import COLLECTION_IDS
@@ -284,8 +285,30 @@ def balanced_relation_request(request, indexes, records, limit, allowance):
                 while queue:
                     if add(('evidence', queue.popleft())):
                         break
+    review_context = request.get('assigned_action_ids') and request.get('relation_discovery') and not request.get('correction')
+    source_ids = []
     for item in records:
         collection = item['collection']
-        add((collection, item['record'][COLLECTION_IDS[collection]]))
+        oid = item['record'][COLLECTION_IDS[collection]]
+        if review_context and collection == 'sources':
+            source_ids.append(oid)
+        else:
+            add((collection, oid))
     refresh()
+    if review_context:
+        # Passages and substantive records come first. Source titles and dates
+        # are already in the global index; additional full Source records follow.
+        room = min(allowance - used, limit - len(prompt_json(dict(task=request, read_results=[]))))
+        leads = []
+        overhead = len(prompt_json({'context_leads': []}))
+        for lead in shared_passage_leads(indexes, request['assigned_action_ids']):
+            size = len(prompt_json(lead)) + (1 if leads else overhead)
+            if size <= room:
+                leads.append(lead)
+                room -= size
+                used += size
+        if leads:
+            selection['context_leads'] = leads
+        for oid in source_ids:
+            add(('sources', oid))
     return request

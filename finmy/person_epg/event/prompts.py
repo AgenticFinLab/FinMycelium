@@ -134,11 +134,20 @@ go from earlier/enabling act to affected act; responds_to/continues/resumes go f
 the responding/continuing/resumed act to its antecedent; interrupted_by goes from the
 interrupted act to the interrupting act. Others' independent acts remain Context."""
 
+CONTEXT_DISCOVERY = """For each focal Action, look for a distinct fact that changes how to understand it:
+another party's request or role, a resource or constraint, what the person learned or said they believed,
+or a change the act produced. Preserve that fact as Context even when it is already described in the
+Action. One passage can document both. Keep who acted, knew or reported what, and when; attribute stated
+beliefs to the speaker. Keep one reusable fact when accounts support the same statement. Isolate a
+shared detail only if it independently explains an Action or Phase; preserve each account's limits.
+When several passages jointly imply a conclusion, mark I and state the premises. Leave baseline and delta assignment
+to the relations role. An Action with no such fact needs no extra Context."""
+
 SUPPLEMENT_ROLE = """Read the complete ordered corpus in documents together with the existing first-pass fact index.
 This is one incremental cross-document extraction. Each document is a supplied continuous evidence range;
 all have already been read individually. Produce only meaningful additions. Preserve the identity, role and
 scope in the request. Look for (1) consequential independent support for a specific field of an existing fact,
-(2) missing documented focal-person actions, (3) evidence for Action-to-Action links across these documents.
+(2) missing documented focal-person actions or explanatory Context, (3) evidence for Action-to-Action links across these documents.
 Existing IDs are read-only. Connect supported new or existing Actions; a repeated description of the same act
 does not create a new Action or relation. Separate the focal person from their organization. A retrospective
 statement is not itself the earlier act. Shared dates, common topics or adjacent text alone do not demonstrate
@@ -160,11 +169,11 @@ ROLES = {
 actions, contexts and explicit relation_candidates. Keep actions phase_id:null and
 do not assign hierarchy or baseline/delta Context. Preserve uncertainty and distinct
 claims. Quote only this body range or explicit read results; first extraction must
-not skip provided text in favor of retrieved snippets. Reading the whole body does
-not require turning every clause into Context: retain material that explains relevant
-conditions, interactions, person state or outcomes of the Event. Preserve distinct
+not skip provided text in favor of retrieved snippets. Preserve distinct
 supported acts instead of compressing a process into a single summary. Existing entity
 IDs are canonical; reuse them and add evidenced aliases without changing name/type.
+If this batch adds a new passage for a previously indexed Context, preserve the claim and its
+new field-specific support as a candidate with a fresh temporary ID for consolidation.
 
 While extracting each process, preserve its explicitly supported links in
 relation_candidates, together with the Actions and their time evidence. Clear narration
@@ -186,7 +195,14 @@ the unresolved candidate. Preserve all previous support and competing claims in
 keep/merge. No source or scope changes. Do not copy every old quote indiscriminately
 to each split child. Report ambiguous remappings instead of inventing multiple edges.
 The assigned group is a review shortlist, not a claim that its members are identical.
-Compare actor/executor, concrete object, behavior, time compatibility and source accounts.
+For Context, compare the actual claim, applicable time, perspective and quoted passages. Merge accounts
+of the same fact and keep the evidence for each field. A single direct source can suffice. Reprints of
+one account can supply locators but do not independently confirm its claim. When accounts
+overlap only in part, keep their distinct claims, qualifications and disagreements. Split out a shared
+detail only when it independently explains an Action or Phase, with support specific to that detail.
+A plan and its later fulfilment are separate facts. Mark a conclusion drawn jointly from sources as I
+with its premises. Facts can be reused across Actions without implying the same role for each.
+For Action candidates, compare actor/executor, concrete object, behavior, time compatibility and source accounts.
 Different wording or an unknown date does not prevent identity; the same object/date
 does not prove it. Distinguish a repeated report of one act from separate negotiations,
 decisions, statements and executions within the same matter. Merge only the same act,
@@ -295,22 +311,35 @@ go to pending; do not generate new Actions. Relation sources must be assigned ac
 targets may be any existing action. Consider meaningful candidates, not all N^2 pairs.
 Phase baseline covers environment, relations and person_state where evidenced; retain
 unknowns as gaps. Action Context is baseline minus supported exclusions plus delta.
-Reuse shared baseline Context and add only relevant Action-specific changes. A retained
-Context need not be linked to every Action. A missing edge does not erase either Action.
+For each assigned Action Context update, compare its original passages with existing Context and its
+Phase baseline. A baseline needs support for its role across the Phase; consider all its member
+Actions, including those outside this batch. A stable fact may explain only a few of them. In that
+case reuse its Context ID in each applicable assigned Action's typed delta and support each link.
+A shared fact may also play a distinct role in one Action. Add that supported role to its delta
+without repeating the baseline role. Use a supported exclusion for an actual exception.
+When present, context_selection.context_leads identifies passages cited for both records' content.
+Inspect the words for the proposed role. Also check promising Context from other sources in the index.
+If the excerpt cuts off a lead, use a targeted read of the frozen passage.
+Follow up explanatory facts embedded in the Action narrative against the original passages. Reuse a matching
+Context ID or propose the missing Context together with its supported ContextRef. Support the fact and its
+role for this Action or Phase separately; the same passage may establish both. For an inference, identify its
+premises and explain the link. A shared source or nearby mention alone does not establish it. An empty
+delta is valid when the baseline suffices or the passages support no Action-specific association.
 Exclusions target this Phase's context_ref_id and require reason/support; qualification
 text never performs replacement. Replacement is one exclusion+delta update. Distinguish
 world, belief, post_hoc and unknown perspectives. Later information cannot be an earlier
 decision input. Distinguish event time, the person's knowledge time, and publication
 time: a later publication can document an earlier action or belief without being later
-knowledge. Check each linked Context's perspective, including in a shared Phase baseline.
+knowledge. Distinguish information being public, reaching the person, and informing the action.
+Check each linked Context's perspective, including in a shared Phase baseline. Preserve forecasts
+and reported expectations as qualified claims; an anticipated outcome alone does not establish its fulfilment.
 A post_hoc Context cannot serve as condition, trigger or knowledge-source. Its original
 passage can still be evidence for an earlier fact. Use a result link only for an evidenced outcome.
 Participation needs entity and role; knowledge-source needs a knower.
 Interpersonal interactions belong in Context, not Action edges. Temporal derived
 precedes/overlaps require complete conflict-free intervals and both /time premise refs;
 derived overlaps requires two durations. Keep raw conflicting claims for program checks.
-Unknown order is not generated for every unlinked pair. New Context and its associations
-must have separate support and appear together. Empty Context lists do not prove absence.""",
+Unknown order is not generated for every unlinked pair.""",
 }
 
 
@@ -367,6 +396,8 @@ silence do not resolve rejected work. All correction calls share the task attemp
 '''
     common = COMMON_START + OUTPUT_GUIDANCE if is_supplement else COMMON
     instruction = SUPPLEMENT_ROLE + '\n' + CANDIDATE_DIRECTION if is_supplement else ROLES[role]
+    if role == 'extraction':
+        instruction += '\n' + CONTEXT_DISCOVERY
     arrays = (*FIELDS[role], 'support_additions') if is_supplement else FIELDS[role]
     return common + '\nROLE\n' + instruction + support_rules + json.dumps(dict(
         fields=field_contract, time_fields=TIME_SUPPORT if role != 'relations' else []), ensure_ascii=False) + \

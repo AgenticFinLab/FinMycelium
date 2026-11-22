@@ -15,6 +15,17 @@ def terms(text):
     return {w for w in re.findall(r'[^\W_]+', text.casefold()) if len(w) > 2 and w not in STOP}
 
 
+def context_overlap(left_parts, right_parts, minimum):
+    """One specific shared statement can be embedded in a longer description."""
+    best = 0
+    for left in left_parts:
+        for right in right_parts:
+            shared = len(left & right)
+            if shared >= minimum:
+                best = max(best, shared / min(len(left), len(right)))
+    return best
+
+
 def ambiguity_groups(facts, max_group=8):
     """Sparse postings select local competitors, then form disjoint review groups.
 
@@ -29,6 +40,7 @@ def ambiguity_groups(facts, max_group=8):
     entity_names = {n for e in facts['entities']
                     for name in [e['name'], *e.get('aliases', [])] for n in terms(name)}
     action_terms = {}
+    context_parts = {}
     for collection in ('entities', 'actions', 'contexts', 'relation_candidates'):
         for record in facts[collection]:
             ref = (collection, record[COLLECTION_IDS[collection]])
@@ -36,6 +48,12 @@ def ambiguity_groups(facts, max_group=8):
             name = re.sub(r'\W+', ' ', record.get('name', record.get('description', '')).casefold()).strip()
             if name:
                 buckets[(collection, 'name', name)].append(ref)
+            if collection == 'contexts':
+                parts = [{w for w in terms(sentence) - entity_names if not w.isnumeric()}
+                         for sentence in re.split(r'(?<=[.;!?])\s+|\n+', record['description'])]
+                context_parts[ref] = parts
+                for word in sorted(set().union(*parts)):
+                    buckets[(collection, 'context_word', record['perspective'], word)].append(ref)
             if collection != 'actions':
                 continue
             actor = record['actor']['entity_id']
@@ -50,12 +68,13 @@ def ambiguity_groups(facts, max_group=8):
             for word in sorted(action_terms[ref]):
                 buckets[(collection, 'word', actor, word)].append(ref)
 
+    compared_contexts = set()
     for key, refs in sorted(buckets.items()):
         refs = sorted(set(refs))
         for i, left in enumerate(refs):
             for right in refs[i + 1:i + 13]:
                 pair = (left, right)
-                if key[1] in ('name', 'actor_time'):
+                if key[0] != 'contexts' and key[1] in ('name', 'actor_time'):
                     scores[pair] = max(scores.get(pair, 0), 2 if key[1] == 'name' else 1)
                     continue
                 a, b = records[left], records[right]
@@ -63,6 +82,19 @@ def ambiguity_groups(facts, max_group=8):
                 if (all(t.get('start') and t.get('end') for t in (ta, tb))
                         and (ta['end'] <= tb['start'] or tb['end'] <= ta['start'])):
                     continue  # Different known occurrences are not lexical duplicates.
+                if key[0] == 'contexts':
+                    if a['perspective'] != b['perspective']:
+                        continue
+                    if key[1] == 'name':
+                        scores[pair] = 2
+                    elif pair not in compared_contexts:
+                        compared_contexts.add(pair)
+                        common_entities = set(a['entity_refs']).intersection(b['entity_refs']) - {facts['person']['person_id']}
+                        minimum = 3 if common_entities and a['category'] == b['category'] else 5
+                        score = context_overlap(context_parts[left], context_parts[right], minimum)
+                        if score >= .3:
+                            scores[pair] = max(scores.get(pair, 0), score)
+                    continue
                 shared = action_terms[left] & action_terms[right]
                 objects = set(a.get('object', {}).get('entity_refs', [])) & set(b.get('object', {}).get('entity_refs', []))
                 objects.discard(facts['person']['person_id'])
