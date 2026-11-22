@@ -21,8 +21,16 @@ def offline(monkeypatch):
     monkeypatch.setattr(socket.socket, 'connect_ex', lambda *a, **k: pytest.fail('No real API calls'))
 
 
-@pytest.mark.parametrize('pause_after', [1, 2, 3, 4])
-def test_pause_finishes_current_call_then_resumes_without_repeating(tmp_path, payload, pause_after):
+@pytest.fixture
+def uninterrupted_calls(tmp_path, payload):
+    model = SyntheticEventModel()
+    state = run_event(payload, tmp_path/'uninterrupted', model=model)
+    assert state['result_status'] == 'draft'
+    return model.calls
+
+
+@pytest.mark.parametrize('pause_after', [1, 2, 3, 4, 5])
+def test_pause_finishes_current_call_then_resumes_without_repeating(tmp_path, payload, pause_after, uninterrupted_calls):
     model = SyntheticEventModel()
     def request_pause(system, user, name):
         result = model(system, user, name)
@@ -38,7 +46,8 @@ def test_pause_finishes_current_call_then_resumes_without_repeating(tmp_path, pa
     assert (tmp_path/first['facts']).is_file()
     second = run_event(payload, tmp_path, model=request_pause, resume=True)
     assert second['execution_status'] == 'finished' and second['result_status'] == 'draft', second
-    assert second['attempts'] == 2 and len(second['calls']) == len(model.calls) == 5
+    assert second['attempts'] == 2 and len(second['calls']) == len(uninterrupted_calls)
+    assert model.calls == uninterrupted_calls
     assert second['calls'][:pause_after] == first['calls']
 
 
@@ -67,11 +76,11 @@ def test_pause_blocks_format_retry_and_tool_followup(tmp_path, payload, answer, 
     assert (tmp_path/'attempts/0001/steps/CALL-000001/response.json').is_file()
 
 
-def test_last_call_can_finish_normally_and_transport_errors_are_not_hidden(tmp_path, payload):
+def test_last_call_can_finish_normally_and_transport_errors_are_not_hidden(tmp_path, payload, uninterrupted_calls):
     model = SyntheticEventModel()
     def last_pause(system, user, name):
         result = model(system, user, name)
-        if len(model.calls) == 5:
+        if len(model.calls) == len(uninterrupted_calls):
             write_json(tmp_path/'done/pause_requested', {})
         return result
     assert run_event(payload, tmp_path/'done', model=last_pause)['execution_status'] == 'finished'
