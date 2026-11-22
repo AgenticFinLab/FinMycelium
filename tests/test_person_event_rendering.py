@@ -86,7 +86,8 @@ def test_historical_timeline_previews_current_graph_without_changing_receipts(tm
     assert read_gantt(tmp_path, render_saved_event(tmp_path)) == preview
 
 
-def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload):
+def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload, monkeypatch):
+    from finmy.person_epg.event import graph_html
     from finmy.person_epg.event.records import sha256
     from test_person_event_graph_html import embedded_data
 
@@ -106,12 +107,26 @@ def test_workbench_evidence_view_from_saved_input(tmp_path, graph, payload):
     assert view['checked_input'] and not view['passage_issues']
     assert {c['kind'] for page in view['pages'] for c in page['cards']} >= {'action', 'context', 'party', 'evidence', 'source'}
 
+    with monkeypatch.context() as patch:
+        patch.setattr(graph_html, 'render_graph_html', lambda *a, **kw: pytest.fail('downgraded the saved viewer'))
+        state['visualization']['renderer'] = 'person-event-scrollable-v10'
+        assert read_gantt(tmp_path, state, current_view=True) == html
+
     # The workbench can display an earlier renderer's receipt without rewriting it.
     state['visualization']['renderer'] = 'person-event-scrollable-v4'
     assert read_gantt(tmp_path, state, current_view=True) == html
     frozen.write_text(frozen.read_text() + ' ')
     with pytest.raises(ValueError, match='input integrity'):
         read_gantt(tmp_path, state, current_view=True)
+
+
+def test_running_renderer_keeps_its_matching_template(tmp_path, graph, monkeypatch):
+    from finmy.person_epg.event import graph_html
+
+    html = graph_html.render_graph_html(graph)
+    (tmp_path / 'graph.html').write_text('asset from another deployment')
+    monkeypatch.setattr(graph_html, '_ASSETS', tmp_path)
+    assert graph_html.render_graph_html(graph) == html
 
 
 @pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
@@ -195,9 +210,10 @@ def test_phase_overview_and_reading_size_in_browser(tmp_path, graph):
 
 
 @pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
-def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
+@pytest.mark.parametrize('pre_slot_layout', [False, True])
+def test_cross_phase_action_navigation_from_both_endpoints(tmp_path, monkeypatch, pre_slot_layout):
     from playwright.sync_api import sync_playwright
-    from finmy.person_epg.event.graph_html import render_graph_html
+    from finmy.person_epg.event import graph_html
     from test_person_event_graph_html import sample_graph
 
     graph = sample_graph()
@@ -217,13 +233,40 @@ def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
         {'relation_id': 'r3', 'from_action_id': 'Proposal', 'to_action_id': 'Consent', 'type': 'order_unknown',
          'basis': 'asserted'},
     ]
+    if pre_slot_layout:
+        arrange = graph_html.arrange_graph
+
+        def earlier_layout(*args):
+            view = arrange(*args)
+            for sheet in view['pages']:
+                sheet.pop('relation_slots')
+                inset = sheet['sections'][0]['box'][1] - 18 if sheet['sections'] else 0
+                for item in [*sheet['cards'], *sheet['sections']]:
+                    item['box'][1] -= inset
+                for jump in sheet['jumps']:
+                    jump.pop('action_id')
+            view['pages'][1]['jumps'].append({'relation_id': None, 'id': 'terms', 'page': 2})
+            return view
+
+        monkeypatch.setattr(graph_html, 'arrange_graph', earlier_layout)
     path = tmp_path / 'navigation.html'
-    path.write_text(render_graph_html(graph), encoding='utf-8')
+    html = graph_html.render_graph_html(graph)
+    path.write_text(html, encoding='utf-8')
     with sync_playwright() as engine:
         browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
         for width, height in ((1366, 768), (390, 844)):
-            page = browser.new_page(viewport={'width': width, 'height': height}, offline=True)
-            page.goto(path.as_uri())
+            tab = browser.new_page(viewport={'width': width, 'height': height}, offline=True)
+            errors = []
+            tab.on('pageerror', lambda exc: errors.append(str(exc)))
+            if pre_slot_layout and width > 800:
+                tab.set_content('<style>* {margin:0} iframe {width:100vw;height:100vh;border:0}</style><iframe></iframe>')
+                iframe = tab.locator('iframe')
+                iframe.evaluate('(el, html) => { el.srcdoc = html; }', html)
+                page = tab.frame_locator('iframe')
+            else:
+                tab.goto(path.as_uri())
+                page = tab
+            page.locator('#links .edge-layer polyline').first.wait_for(state='attached')
             assert page.locator('#jumps').count() == 0
             assert not page.locator('.phase-link').count()
             assert page.locator('#outline').evaluate('el => el.open')
@@ -258,7 +301,8 @@ def test_cross_phase_action_navigation_from_both_endpoints(tmp_path):
             assert symmetric.get_attribute('stroke-dasharray') != 'none'
             page.locator('#links .edge-label[data-relation=r2]').click()
             assert page.locator('#inspection-title').inner_text() == 'A02 overlaps A03'
-            page.close()
+            assert not errors
+            tab.close()
         browser.close()
 
 

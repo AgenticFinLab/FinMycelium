@@ -1462,6 +1462,35 @@ function phaseLabel(page) {
 }
 /*__FIELD_INSPECTOR__*/
 
+// A workbench already running during an upgrade can supply pre-slot page geometry.
+// Reserve the label band once, before measuring the diagram or drawing any edges.
+function prepareLegacyRelationLayout(page) {
+  if (page.relation_slots) return;
+  page.jumps = (page.jumps || []).flatMap(link => {
+    const r = objects.get(link.relation_id)?.record;
+    if (!r || !page.phase) return [];
+    const local = link.id === r.to_action_id ? r.from_action_id :
+      link.id === r.from_action_id ? r.to_action_id : null;
+    const destination = view.pages[link.page]?.phase;
+    if (!destination || destination === page.phase || objects.get(local)?.record.phase_id !== page.phase ||
+        objects.get(link.id)?.record.phase_id !== destination) return [];
+    return [{...link, action_id: local}];
+  });
+  const ids = [...new Set([
+    ...[...page.jumps].sort((a, b) => a.page - b.page).map(link => link.relation_id),
+    ...page.edges.filter(edge => edge.kind === 'relation').map(edge => edge.relation_id)
+  ])];
+  const columns = Math.max(1, Math.floor(page.width / 185));
+  page.relation_slots = Object.fromEntries(ids.map((id, i) => {
+    const row = Math.floor(i / columns), count = Math.min(columns, ids.length - row * columns);
+    return [id, [(i % columns + .5) / count, (row + 1) * 32]];
+  }));
+  if (!ids.length) return;
+  const inset = 12 + 32 * Math.ceil(ids.length / columns);
+  for (const item of [...page.cards, ...page.sections]) item.box[1] += inset;
+  page.height += inset;
+}
+
 $('fit').onclick = () => changeZoom(1);
 $('minus').onclick = () => changeZoom((Math.ceil(zoomRatio * 10 - .000001) - 1) / 10);
 $('plus').onclick = () => changeZoom((Math.floor(zoomRatio * 10 + .000001) + 1) / 10);
@@ -1481,6 +1510,7 @@ $('previous').onclick = () => showPage(current - 1);
 $('next').onclick = () => showPage(current + 1);
 $('picker').onchange = e => showPage(Number(e.target.value));
 for (const [i, page] of view.pages.entries()) {
+  prepareLegacyRelationLayout(page);
   const option = el('option', phaseLabel(page) + (page.phase ? ' · ' + page.title : ''));
   option.value = i;
   $('picker').append(option);

@@ -14,6 +14,21 @@ from .schema import GRAPH_VERSION
 _ASSETS = Path(__file__).parent
 
 
+def _load_automatic_view():
+    # Keep the template and inspector with the layout code imported by this worker.
+    # A deployment can replace these files while a workbench session is still open.
+    names = ('rendering.py', 'event/graph_html.py', 'event/graph.html', 'event/graph_layout.py',
+             'event/graph_view.py', 'event/graph_labels.py', 'event/graph_evidence.py',
+             'event/graph_inspector.js', 'event/records.py', 'event/validation.py')
+    files = {name: (_ASSETS.parent / name).read_bytes() for name in names}
+    template = files['event/graph.html'].decode('utf-8').replace(
+        '/*__FIELD_INSPECTOR__*/', files['event/graph_inspector.js'].decode('utf-8'), 1)
+    return template, {name: sha256(data).hexdigest() for name, data in files.items()}
+
+
+_AUTOMATIC_TEMPLATE, AUTOMATIC_VIEW_DEPENDENCIES = _load_automatic_view()
+
+
 def _script_data(value):
     # Prevent record text from closing a script data element.
     return json.dumps(value, ensure_ascii=False, allow_nan=False).replace('<', r'\u003c')
@@ -55,8 +70,8 @@ def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=No
                 raise ValueError('The frozen input belongs to a different person event')
         view = arrange_graph(graph, view, passage_issues(graph, payload))
         view['checked_input'] = payload is not None
-    template_name = 'graph_authored.html' if pages is not None else 'graph.html'
-    template = (_ASSETS / template_name).read_text(encoding='utf-8')
+    template = (_AUTOMATIC_TEMPLATE if pages is None else
+                (_ASSETS / 'graph_authored.html').read_text(encoding='utf-8'))
     # Split the template before embedding untrusted record text.
     head, remainder = template.split('__EPG_GRAPH_JSON__', 1)
     if graph_sha256 is not None:
@@ -69,8 +84,6 @@ def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=No
     head = head.replace('<!--__BUILD_STATUS__-->', f'<span>{status_label}</span>' if status_label else '', 1)
     between, remainder = remainder.split('__EPG_LAYOUT_JSON__', 1)
     middle, tail = remainder.split('__EPG_VIEW_JSON__', 1)
-    if pages is None:
-        tail = tail.replace('/*__FIELD_INSPECTOR__*/', (_ASSETS / 'graph_inspector.js').read_text(encoding='utf-8'), 1)
     return ''.join((head, _script_data(graph), between, _script_data(pages),
                     middle, _script_data(view), tail))
 

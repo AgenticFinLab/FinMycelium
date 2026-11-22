@@ -24,6 +24,8 @@ and collection.
    includes its recorded reason and links to any premise fields. **Escape**
    closes the details panel.
 
+The embedded preview and the HTML download use the same document. When the
+saved viewer is current or newer, the workbench serves the verified file directly.
 For an older native run with a valid saved timeline, the workbench displays the
 scrollable view from its verified JSON. **从已保存 JSON 重新绘图** writes this
 version to that run and refreshes its HTML receipt. A collected graph keeps its
