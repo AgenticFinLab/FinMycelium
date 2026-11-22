@@ -39,11 +39,11 @@ def test_entity_attribute_both_required_numbers_do_not_qualify():
     assert {w['block'] for w in result}=={3}
 
 
-def test_qualification_and_pronoun_keep_offsets_without_crossing_topic():
+def test_pronoun_alone_does_not_expand_event_context():
     d=doc('Atlas Bank redeemed preferred shares.', 'It paid the agreed premium.',
           'Insurance Operations','Beacon Bank announced a price increase.')
     result=picked(d,'Atlas Bank redemption')
-    assert {w['block'] for w in result}=={0,1}
+    assert {w['block'] for w in result}=={0}
     for w in result:assert w['text']==d['blocks'][w['block']]['text'][w['start']:w['end']]
 
 

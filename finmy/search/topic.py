@@ -6,7 +6,7 @@ replayable; this policy is attached only when a new task has a positive entity c
 import re
 from .budget import tokens, rank_blocks
 
-POLICY = 'entity_attribute_windows_v1'
+POLICY = 'entity_attribute_windows_v2'
 GENERIC = set('crisis investment investments financing acquisition event transaction process research company person stock stocks shares securities preferred common commitment commitments decision decisions'.split())
 WEAK = GENERIC - {'preferred','common','commitment','commitments','decision','decisions'}
 SYNONYMS = [set('redeem redeemed redemption repaid repayment'.split()),
@@ -42,7 +42,7 @@ def plan_for(task):
         entities = [n for n in names if set(tokens(n))-GENERIC]
     # An event's focal person alone does not identify its business counterparty.
     if catalog.get('kind') == 'person_event':
-        person = catalog.get('person_name', '')
+        person = catalog.get('person_name', '') or (task.get('target_name','') if task.get('target_type')=='person' else '')
         entities = [e for e in entities if not contains(person, e)]
     facets = [x.strip(' .') for x in re.split(r',|;|，|；|\band\b', scope.get('include', '')) if x.strip(' .')]
     if not facets:
@@ -52,7 +52,11 @@ def plan_for(task):
     # Exclusions remain distinct constraints. Only explicit names gate candidates;
     # an excluded entity in a mixed paragraph never vetoes positive target evidence.
     excluded = re.findall(r'\b[A-Z]{2,}\b|\b[A-Z][a-z]+(?:\s+(?:of\s+)?[A-Z][a-z]+)+\b', re.sub(r'\b(?:Exclude|Excluded|Except)\b[: ]*', '', scope.get('exclude', '')))
-    return dict(policy=POLICY, entities=list(dict.fromkeys(entities)), facets=list(dict.fromkeys(facets)),
+    person = catalog.get('person_name', '') or (task.get('target_name','') if task.get('target_type')=='person' else '')
+    if not person:
+        match = re.search(r'(?:^|\n)Person:\s*([^\n(]+)', task.get('query_text', ''))
+        person = match.group(1).strip() if match else ''
+    return dict(policy=POLICY, focal_people=[person] if person else [], entities=list(dict.fromkeys(entities)), facets=list(dict.fromkeys(facets)),
                 excluded_entities=excluded, exclusion_text=scope.get('exclude', ''),
                 activity_period=scope.get('period', ''), publication_filter=False,
                 basis='positive task names and scope; lexical cues, not factual attribution')
@@ -96,7 +100,7 @@ def windows(document, indexes=None):
 
 
 def linked(w, plan):
-    return any(contains(w['text'],e) or contains(w.get('section',''),e) for e in plan['entities'])
+    return w.get('entity_context', False) or any(contains(w['text'],e) or contains(w.get('section',''),e) for e in plan['entities'])
 
 
 def excluded(w, plan):
@@ -114,7 +118,8 @@ def neighbors(items, i, plan):
         a,b=items[i],items[j]
         if abs(a['block']-b['block'])>1 or a['section']!=b['section'] or excluded(b,plan): continue
         qualification = len(b['text']) <= 350 and bool(re.search(r'\b(?:not (?:reported|disclosed|known)|unknown|uncertain|undisclosed)\b', b['text'], re.I))
-        if linked(b,plan) or qualification or (j>i and continuation(b['text'])) or (j<i and continuation(a['text'])):
+        legacy_continuation = plan.get('policy') != POLICY and ((j>i and continuation(b['text'])) or (j<i and continuation(a['text'])))
+        if linked(b,plan) or qualification or legacy_continuation:
             chosen.add(j)
     return chosen
 
@@ -161,6 +166,9 @@ def queries_for(plan, query=None):
 
 def select(document, plan, queries, indexes=None, priorities=()):
     items=windows(document,indexes)
+    if plan.get('policy') == POLICY:
+        from .topic_context import enrich
+        enrich(document, items, plan)
     ranks=rankings(items,plan,queries)
     groups=[];seen=set()
     # Validated action anchors bypass lexical gates, including personal statements.
@@ -173,6 +181,12 @@ def select(document, plan, queries, indexes=None, priorities=()):
             if n<len(r['ranking']):
                 i=r['ranking'][n][0]
                 if i not in seen: groups.append((neighbors(items,i,plan),'ranked'));seen.add(i)
+    if plan.get('policy') == POLICY:
+        from .topic_context import protected
+        for i,w in enumerate(items):
+            if i not in seen and protected(w, plan):
+                groups.insert(0, ({i}, 'ranked'))
+                seen.add(i)
     # Keep source-local titles and dates when the opening explicitly names the target.
     # This metadata never turns a whole mixed report into target evidence.
     front=set()
@@ -201,13 +215,21 @@ def allocate(state, complete, budget):
         sid=e['source_id'];doc=store.document(sid,e['version'])
         marks=[p for p in complete.get('priority_passages',[]) if p['source_id']==sid and p['version']==e['version']]
         own=[q['query'] for q in complete.get('reading_queries',[]) if q['source_id']==sid and q['version']==e['version']]
-        items,groups=select(doc,plan,queries_for(plan)+own,e['blocks'],marks)
-        groups=[(g,phase) for g,phase in groups if phase != 'priority']
+        if plan.get('policy') == POLICY:
+            # Lexical hits are reading candidates, not delivery decisions.
+            # Metadata is already in the source header; body context must be marked.
+            items,groups=[],[]
+        else:
+            items,groups=select(doc,plan,queries_for(plan)+own,e['blocks'],marks)
+            groups=[(g,phase) for g,phase in groups if phase != 'priority']
         # Preserve the exact validated span even when a lexical/noise rule excluded it.
         for p in marks:
             if p['block'] in e['blocks']:
                 items.append(dict(block=p['block'],start=p['start'],end=p['end'],text=doc['blocks'][p['block']]['text'][p['start']:p['end']]))
-                groups.insert(0,({len(items)-1},'priority'))
+                if plan.get('policy') == POLICY:
+                    groups.append(({len(items)-1},'priority'))
+                else:
+                    groups.insert(0,({len(items)-1},'priority'))
         # Merge coordinates before rendering; overlapping priority spans count once.
         docs[sid]=doc;entries[sid]=(e,items);queues[sid]=groups;picked[sid]=set();sizes[sid]=0
     def render(sid,chosen):
@@ -246,5 +268,10 @@ def allocate(state, complete, budget):
                 if cursor<r['start']:missing.append(dict(block=b,start=cursor,end=r['start']))
                 cursor=r['end']
             if cursor<len(docs[sid]['blocks'][b]['text']): missing.append(dict(block=b,start=cursor,end=len(docs[sid]['blocks'][b]['text'])))
-        if missing: omitted.append(dict(source_id=sid,blocks=sorted({r['block'] for r in missing}),ranges=missing,omission_reason='topic_or_material_limit',retained_in_complete=True))
-    return dict(user_query=complete['user_query'],samples=samples),dict(budget_policy=POLICY,retrieval_plan=plan,selected=selected,omitted=omitted,material_chars=sum(sizes.values()),max_material_chars=budget,unused_chars=remaining)
+        if missing: omitted.append(dict(source_id=sid,blocks=sorted({r['block'] for r in missing}),ranges=missing,omission_reason='unmarked_or_material_limit' if plan.get('policy') == POLICY else 'topic_or_material_limit',retained_in_complete=True))
+    ranges_by_source = {e['source_id']: e['ranges'] for e in selected}
+    decisions = []
+    for p in complete.get('priority_passages', []):
+        ranges = [(r['start'], r['end']) for r in ranges_by_source.get(p['source_id'], []) if r['block'] == p['block']]
+        decisions.append(dict(passage=p, status='retained' if any(a <= p['start'] and b >= p['end'] for a, b in ranges) else 'material_limit'))
+    return dict(user_query=complete['user_query'],samples=samples),dict(budget_policy=plan['policy'],retrieval_plan=plan,selected=selected,omitted=omitted,material_chars=sum(sizes.values()),max_material_chars=budget,unused_chars=remaining,priority_decisions=decisions)

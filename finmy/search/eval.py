@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .control import task_lock
 from .eval_judge import JUDGE_VERSION, KIMI_MODEL, JudgeSession
-from .eval_metrics import evaluate_metrics, merge_ranges
+from .eval_metrics import evaluate_metrics, merge_ranges, material_metrics
 from .pipeline import _run_search
 from .sources import SourceStore, canonical_url
 from .state import SearchConfig, SearchState, digest, now, write_json
@@ -117,6 +117,19 @@ def collect_pool(state, selection, payload):
     return units, selected
 
 
+def selected_units(units, ranges):
+    """Judge only exact delivered text; unseen context cannot earn support."""
+    result = []
+    for u in units:
+        for a,b in ranges.get((u['source_id'],u['version'],u['block']), []):
+            start,end=max(a,u['start']),min(b,u['end'])
+            if start>=end: continue
+            item=dict(u, start=start, end=end, text=u['text'][start-u['start']:end-u['start']])
+            item['unit_id']=digest([u['source_id'],u['version'],u['block'],start,end])[:24]
+            result.append(item)
+    return result
+
+
 def batches(units):
     """Stable source/order-independent batches bound prompt and output size."""
     batch, chars = [], 0
@@ -197,7 +210,10 @@ class ProgressModel:
 
 
 def evaluate(task, *, root='output/search-eval', config=None, output=None, fresh=False,
-             search_model=None, transport=None, fetcher=None, judge_model=None, emit=print):
+             search_model=None, transport=None, fetcher=None, judge_model=None, emit=print,
+             eval_mode="manual", eval_scope="selected"):
+    if eval_mode not in {'manual','auto'} or eval_scope not in {'selected','pool'}:
+        raise ValueError('eval_mode must be manual/auto; eval_scope must be selected/pool')
     config = config or default_config()
     if isinstance(config, dict):
         config = SearchConfig(**config)
@@ -225,7 +241,7 @@ def evaluate(task, *, root='output/search-eval', config=None, output=None, fresh
     report = dict(schema='search-eval-1', status='searching', created_at=now(),
                   task_id=task_id, task=task, git_commit=commit, search_code_sha256=fingerprint,
                   search_config=asdict(config), judge_model=KIMI_MODEL,
-                  evaluation_version=JUDGE_VERSION, output=str(output))
+                  evaluation_version=JUDGE_VERSION, eval_mode=eval_mode, eval_scope=eval_scope, output=str(output))
     session = None
     # Same coordinator and lock as Workbench; no Builder imports or calls.
     with task_lock(root, task_id):
@@ -258,22 +274,46 @@ def evaluate(task, *, root='output/search-eval', config=None, output=None, fresh
                 report['status'] = 'search_incomplete'
                 emit('[search] stopped with %s; same command resumes saved work' % result['status'])
                 return report
+            report['selected_passages'] = selected_units(units, selected_ranges)
+            bodies = [' '.join(u['text'].split()) for u in report['selected_passages']]
+            total = sum(map(len, bodies))
+            report['material_stats'] = dict(selected_body_chars=sum(len(u['text']) for u in report['selected_passages']),
+                selected_units=len(bodies), exact_duplicate_text_fraction=(1-sum(map(len,set(bodies)))/total) if total else None)
+            report['fact_checks'] = state.data.get('fact_checks', [])
+            report['source_lead_review'] = state.data.get('source_lead_review', [])
+            if eval_mode == 'manual':
+                report.update(status='finished', judgments={}, metrics=None,
+                    evaluation_status='manual_review_pending',
+                    review_instructions='Assess entity/attribute relevance, personal attribution, atomic fact coverage, conditions, planned versus completed actions and missing originals. Pool evidence is available for checking omissions.')
+                return report
             report.update(status='judging', judgments={}, metrics=None)
             write_json(output, report)  # Search output survives a subsequent judge failure.
             if not units:
                 report.update(status='no_acquired_evidence')
                 return report
-            session = JudgeSession(directory/'judge', judge_model)
+            session = JudgeSession(directory/'judge', judge_model, cache_directory=root/'judge-cache')
             report['questions'] = session.questions(task)
-            groups = list(batches(units))
+            judged = report['selected_passages'] if eval_scope == 'selected' else units
+            groups = list(batches(judged))
             for index, group in enumerate(groups, 1):
                 emit('[judge] %s/%s batches (%s passages)' % (index, len(groups), len(group)))
                 report['judgments'].update(session.label(task, report['questions'], group))
                 report['judged_units'] = len(report['judgments'])
                 write_json(output, report)
             versions = {sid:e.get('version') for sid, e in state.data['sources'].items()}
-            report['metrics'] = evaluate_metrics(units, report['judgments'], selected_ranges,
-                                                  report['questions'], rankings, versions)
+            if eval_scope == 'pool':
+                report['metrics'] = evaluate_metrics(units, report['judgments'], selected_ranges,
+                                                      report['questions'], rankings, versions)
+            else:
+                material = material_metrics(judged, report['judgments'], selected_ranges, report['questions'])
+                for key in ('evidence_quote_recall_in_saved_pool','reference_evidence_quotes',
+                            'question_coverage_in_saved_pool','missed_supported_question_ids',
+                            'questions_without_pool_support'):
+                    material[key] = None
+                report['metrics'] = dict(material=material, scope='selected',
+                    provider_rankings=None, provider_macro_at=None,
+                    note='Selected originals only: no candidate-pool recall or provider ranking estimates.')
+            report['evaluation_status'] = 'judged'
             report['status'] = 'finished'
             return report
         except BaseException as exc:
@@ -301,6 +341,8 @@ def main(argv=None):
     parser.add_argument('--task', required=True, help='Research task JSON, e.g. buffett_goldman.json')
     parser.add_argument('--output', help='Optional combined output JSON path')
     parser.add_argument('--config', help='Optional existing SearchConfig JSON/YAML; default uses Kimi')
+    parser.add_argument('--eval_mode', choices=['manual','auto'], default='manual')
+    parser.add_argument('--eval_scope', choices=['selected','pool'], default='selected', help='auto only: delivered text or full saved candidate pool')
     parser.add_argument('--fresh', action='store_true', help='Start a new run instead of resuming this task/config')
     args = parser.parse_args(argv)
     from dotenv import load_dotenv
@@ -320,18 +362,23 @@ def main(argv=None):
                 raise ValueError('Search configuration must be an object')
             config = SearchConfig(**{**asdict(config), **values, 'allow_network':True})
         from finmy.model_config import api_key_variable, model_name
-        required = {'ARK_API_KEY', api_key_variable(model_name(config.lm_name).split('/', 1)[0])}
+        required = {api_key_variable(model_name(config.lm_name).split('/', 1)[0])}
+        if args.eval_mode == 'auto': required.add('ARK_API_KEY')
         required.update(ENDPOINTS[p][1] for p in config.providers)
         missing = sorted(k for k in required if not os.environ.get(k))
         if missing:
             raise ValueError('Set these existing .env entries: ' + ', '.join(missing))
-        report = evaluate(task, config=config, output=args.output, fresh=args.fresh)
+        report = evaluate(task, config=config, output=args.output, fresh=args.fresh,
+                          eval_mode=args.eval_mode, eval_scope=args.eval_scope)
         if report.get('metrics'):
             material = report['metrics']['material']
             print(json.dumps(dict(status=report['status'],
                 question_coverage=material['question_coverage'],
                 evidence_quote_recall=material['evidence_quote_recall_in_saved_pool'],
                 topic_mismatch_rate=material['topic_mismatch_rate']), ensure_ascii=False))
+        else:
+            print(json.dumps(dict(status=report['status'], eval_mode=args.eval_mode,
+                evaluation_status=report.get('evaluation_status')), ensure_ascii=False))
         return 0 if report['status'] == 'finished' else 2
     except KeyboardInterrupt:
         print('Interrupted; rerun the same command to resume.', file=sys.stderr)

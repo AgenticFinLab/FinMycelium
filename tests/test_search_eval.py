@@ -84,7 +84,7 @@ def config():
 def options(tmp_path, judge):
     return dict(root=tmp_path, config=config(), search_model=search_model,
                 transport=transport, fetcher=lambda url:(GOOD.encode(), 'txt', 'utf-8'),
-                judge_model=judge, emit=lambda text:None)
+                judge_model=judge, emit=lambda text:None, eval_mode="auto", eval_scope="pool")
 
 
 def test_complete_search_then_eval_and_resume_without_research(tmp_path):
@@ -282,7 +282,7 @@ def test_changed_search_code_does_not_reuse_old_search(tmp_path, monkeypatch):
     second = evaluate(TASK, **options(tmp_path, second_judge))
     assert first['task_id'] != second['task_id']
     assert second['search_code_sha256'] == 'code-b'
-    assert second_judge.calls == 2
+    assert second_judge.calls == 0  # Unchanged originals reuse unit labels across search runs.
 
 
 @pytest.mark.parametrize('finish', ['stop', 'length'])
@@ -378,3 +378,45 @@ def test_final_timeout_is_not_hidden_by_old_quote_error(tmp_path, monkeypatch):
         JudgeSession(tmp_path, model).label(TASK, QUESTIONS, [dict(unit_id='bad',text=GOOD)])
     assert len(requests) == 4
     assert 'private SDK details' not in (tmp_path/'calls.jsonl').read_text()
+
+
+def test_manual_to_auto_reuses_search_and_only_judges_delivered_text(tmp_path):
+    settings=options(tmp_path, lambda *a:pytest.fail('manual must not judge'))
+    settings.update(eval_mode='manual',eval_scope='selected')
+    report=evaluate(TASK,**settings)
+    assert report['evaluation_status']=='manual_review_pending' and report['metrics'] is None
+    assert report['judge_usage']['calls']==0
+    settings.update(eval_mode='auto',judge_model=Judge(),
+        search_model=lambda *a:pytest.fail('search must be reused'),
+        transport=lambda *a:pytest.fail('search must be reused'))
+    graded=evaluate(TASK,**settings)
+    assert graded['task_id']==report['task_id']
+    assert graded['judged_units']==1
+    assert graded['metrics']['material']['evidence_quote_recall_in_saved_pool'] is None
+    assert graded['metrics']['material']['atomic_fact_coverage']==.5
+    assert graded['metrics']['provider_rankings'] is None
+
+
+def test_unit_cache_survives_regrouping_and_rejects_changed_context(tmp_path):
+    a=dict(unit_id='a',text=GOOD,context_before='Alice said:')
+    b=dict(unit_id='b',text=SETTLEMENT)
+    first=Judge()
+    JudgeSession(tmp_path/'first',first,cache_directory=tmp_path/'shared').label(TASK,QUESTIONS,[a])
+    seen=[]
+    def model(system,payload):
+        seen.append([u['unit_id'] for u in payload['units']])
+        return Judge()(system,payload)
+    session=JudgeSession(tmp_path/'second',model,cache_directory=tmp_path/'shared')
+    session.label(TASK,QUESTIONS,[b,a])
+    assert seen==[['b']]
+    session.label(TASK,QUESTIONS,[dict(a,context_before='Someone else said:')])
+    assert seen[-1]==['a']
+
+
+def test_unchanged_unit_reuses_label_when_document_version_and_offsets_change(tmp_path):
+    a=dict(unit_id='old',source_id='source',version='v1',block=0,start=0,end=len(GOOD),text=GOOD)
+    b=dict(a,unit_id='new',version='v2',block=9)
+    JudgeSession(tmp_path/'a',Judge(),cache_directory=tmp_path/'shared').label(TASK,QUESTIONS,[a])
+    labels=JudgeSession(tmp_path/'b',lambda *a:pytest.fail('unchanged evidence must reuse'),
+        cache_directory=tmp_path/'shared').label(TASK,QUESTIONS,[b])
+    assert labels['new']['unit_id']=='new'

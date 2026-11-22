@@ -1,91 +1,100 @@
 # Search-only evaluation
 
-From the repository root, with the existing project environment and .env:
+Run from the repository root with the existing project environment and `.env`:
 
-    python -m finmy.search.eval --task examples/search_eval/buffett_goldman.json
+```bash
+python -m finmy.search.eval --task examples/search_eval/buffett_goldman.json
+```
 
-The bundled example preserves the confirmed Buffett/Goldman event scope.
-Pass your own task JSON path in the same way.
+The task is the ordinary research task JSON (`target_type`, `target_name`,
+`query_text`, optional `key_words`, `seed_urls`, `catalog`, `research_scope`).
+The example is a fixture, not an algorithm-specific entity rule. No extraction
+or Builder stage runs.
 
-The task JSON is the same research task object used by the search pipeline:
-target_type, target_name, query_text, and optional key_words, seed_urls,
-catalog and research_scope. Keep catalog.kind=person_event for person events.
-There is no required model, task ID, output-directory or execute flag.
+## Two evaluation modes
 
-The command runs Workbench's existing enhanced-search coordinator and then
-evaluates the saved originals using Kimi. Search tools, prompts, reading,
-selection and budgets are unchanged. This CLI defaults both search and Judge
-to ark/kimi-k3-1-pro-261024 with low reasoning effort; ordinary Workbench
-defaults remain unchanged. The search output limit is 8,192 tokens.
-An optional --config path accepts an existing SearchConfig JSON or YAML when
-matching a particular Workbench run's model and limits.
+`--eval_mode manual` is the default. Search runs and exports the task, exact
+final text, original locations, full acquired reference pool, source choices,
+remaining gaps, factual checks, lead decisions, duplicate fraction, token usage
+and timings. No Judge is called. `status=finished` means search/export completed;
+`evaluation_status=manual_review_pending` explicitly leaves quality ungraded.
+Upload the run folder/combined output for human or conversational review.
 
-The default providers are Baidu, Bocha and Exa. The command loads the repository
-.env without overriding exported variables. Existing ARK_API_KEY,
-BAIDUSEARCH_API_KEY, BOCHA_API_KEY and EXA_API_KEY entries are used.
-It stops after search and evaluation; no extraction, graph construction or
-Builder entry point is called.
+`--eval_mode auto` uses the existing Kimi configuration to grade **only the
+selected originals**, with task-derived atomic fact questions. Switch modes
+without `--fresh` to add judgments to the same search result:
 
-## Output and resume
+```bash
+python -m finmy.search.eval --task examples/search_eval/buffett_goldman.json --eval_mode auto
+```
 
-The combined report is:
+For an occasional full reference-pool evaluation, append `--eval_scope pool`.
+This is more expensive; the default `selected` scope never reports pool recall
+or provider ranking estimates. Both scopes use the same cached task rubric.
+Ordinary Workbench defaults are unchanged. The CLI defaults search and Judge
+to `ark/kimi-k3-1-pro-261024` and uses the existing API keys. `--config` accepts
+an existing SearchConfig JSON/YAML if required.
 
-    output/search-eval/eval-<task-config-code-hash>/output.json
+## Output, cache and recovery
 
-It contains the complete task/configuration, candidate source metadata,
-original text and source locations for the acquired reference pool, the exact
-final search material, selection records, Judge rubric and labels, metrics,
-token usage and timings. The existing search state/raw responses remain beside
-it under runs/initial and sources. Judge requests, responses and cache records
-are saved under judge.
+The combined report is `output/search-eval/eval-<task-config-code-hash>/output.json`.
+Use `--output path.json` to choose another report path. Raw search artifacts and
+checkpoints are preserved. Repeating a command reuses completed work; changing
+only evaluation mode/scope does not change search identity. Changing search
+code/config creates a new search run; this patch therefore starts a new search
+identity on its first run. `--fresh` explicitly starts another trial.
 
-Use --output path.json to choose a different combined report filename.
-Repeat the same command to reuse finished search work and validated Judge
-answers. Completed Judge batches survive a later failure. --fresh creates a
-separate run for another trial. Search configuration or search code changes
-create a separate task identity, including uncommitted algorithm edits.
-A search that has not reached finished/insufficient saves its
-output and exits with code 2, without starting the Judge.
+Validated labels are cached by task, rubric, model policy, exact unit text and
+attribution context under `output/search-eval/judge-cache`. Batch order and
+unrelated document edits do not invalidate unchanged units. Changed text,
+context or rubric does invalidate them. Valid rows survive failed batches;
+only unresolved rows are retried. API failures have a separate bounded retry
+budget. No cache value can bypass quote/schema validation.
 
-## What the metrics measure
+This release uses `search-eval-2` judgments with atomic questions. Old broad
+rubrics are left on disk but not reused as atomic-fact judgments.
 
-The Judge first derives up to eight evidence questions from the task, then labels
-all usable acquired originals, including unread and excluded sources. It does
-not see which material the search selected or its rank. Evaluation-only windows
-carry original offsets and nearby context; they never change search chunks.
-Grade 0 means irrelevant/mismatched, 1 useful context, and 2 direct support.
-Grade 2 requires exact original quotations tied to a question; invalid IDs,
-quotes, grades and incomplete batches are rejected and retried once.
+## Metrics
 
-- Provider result lists: Precision, Recall, nDCG, AP, reciprocal rank and hit
-  rate at 1, 3, 5 and 10. Macro AP is MAP. These use the actual per-provider,
-  per-query order and the overall task's relevance judgments. A short list is
-  padded with misses for Precision@k. The source grade is its maximum window
-  grade. nDCG's gain is 2**grade-1.
-- Final delivered material: useful/direct-evidence character fractions,
-  entity/event/attribute/scope mismatch rate, retained evidence-quote coverage,
-  question coverage, and exact text duplication. Identical quote/question
-  pairs across reposts count once for quote coverage.
-- Usage: search and Judge calls/tokens separately, cache tokens as a subset of
-  input tokens, provider/read/model timings and invocation wall time. Provider
-  billing prices are not inferred from token counts.
+- Atomic fact coverage: each question asks one fact. Requested dates, individual
+  actions, explicitly named documents and completion versus planning are assessed
+  separately. Unsupported/conflicting facts remain visible.
+- Useful/direct-evidence character fractions: **unit-level** grade weighted by
+  selected characters; these do not claim every character is evidentiary.
+- `exact_support_quote_char_fraction`: actual validated quote spans divided by
+  delivered body characters. Overlapping quote spans count once. This measures
+  cited-text density, not semantic completeness.
+- Topic mismatch: wrong entity/person, event, attribute or explicit scope.
+- `pool` only: quote recall within the saved pool and Precision/Recall/nDCG/AP/
+  reciprocal rank/hit rate at 1, 3, 5, 10 for actual provider lists. Unknown source
+  bodies yield null ranking metrics. Short lists are padded with misses.
 
-Recall is relative to the acquired, judged source pool. Unfetched URLs and
-failed parses have unknown relevance; they are not negative examples.
-Rank metrics for lists containing unknown top-k bodies are null, with judgment
-coverage and the excluded-list count available. Empty relevance denominators
-are also null. Final material has no global relevance ordering, so the report
-does not manufacture a global nDCG from file order. These are single-task
-baseline metrics; use held-out tasks and the same budget/configuration when
-comparing algorithm versions.
+Question coverage is not exhaustive world knowledge; quote recall is not unique
+fact recall. Keep task/rubric and comparison pool fixed for controlled comparisons.
+The Judge sees originals/context, never search ranks or selection flags.
 
-For a frozen comparison across runs, pool the acquired originals and reuse one
-set of judgments; independently built reference pools are not interchangeable.
+## Search changes and compatibility
 
-## Offline verification
+- Provider length limits are local: whitespace compaction for Baidu;
+  if still too long, record `skipped_length` and keep full queries for other
+  providers. No name, number, negation or quoted phrase is truncated. A shorter
+  Baidu-specific variant can still be supplied when that provider is needed.
+- Query reads locate explicit contract aliases and local attribution, return
+  matching original spans before peripheral context, and expose exact continuation
+  locations. Weak lexical candidates are labeled as hints, not verified evidence.
+- Task-derived focal-person statements, relevant conditions and execution status
+  are retained alongside validated priority spans. No fixture names or IDs occur
+  in these rules. All output remains original text with original coordinates.
+- Finish records atomic `fact_checks` and `source_lead_decisions`. Explicitly
+  unresolved leads or planned/missing/conflicting requested facts prevent a
+  `supported` stop. A future announcement must not be presented as completed fact.
+  Semantic status remains a model assessment, not a claim of programmatic proof.
+- New tasks use `entity_attribute_windows_v2`; saved v1 plans retain their old
+  selection behavior. Read budgets, checkpoint accounting and Builder topology
+  are not reduced or replaced.
 
-    python -m pytest -q tests/test_search_eval.py
+Offline checks:
 
-The tests inject search/model transports, forbid network access and Builder
-imports, exercise the real search coordinator, check metric arithmetic,
-retained quote offsets, unknown candidates, failed judgments and cache reuse.
+```bash
+python -m pytest -q tests/test_search_eval.py tests/test_search_topic.py tests/test_search_improvements.py
+```

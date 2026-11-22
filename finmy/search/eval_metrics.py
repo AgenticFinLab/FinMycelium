@@ -68,6 +68,7 @@ def material_metrics(units, labels, selected_ranges, questions):
     selected_units = selected_chars = useful_chars = direct_chars = mismatch_units = 0
     mismatches = Counter()
     texts = []
+    quote_ranges = {}
     for unit in units:
         label = labels[unit['unit_id']]
         key = (unit['source_id'], unit['version'], unit['block'])
@@ -93,6 +94,7 @@ def material_metrics(units, labels, selected_ranges, questions):
             while offset >= 0:
                 start = unit['start'] + offset
                 if covered(ranges, start, start+len(support['quote'])):
+                    quote_ranges.setdefault(key, []).append((start,start+len(support['quote'])))
                     direct_selected.add(identity)
                     selected_questions.add(support['question_id'])
                     break
@@ -101,6 +103,9 @@ def material_metrics(units, labels, selected_ranges, questions):
     total = sum(map(len, normalized))
     unique = sum(map(len, set(normalized)))
     return dict(
+        exact_support_quote_char_fraction=fraction(sum(b-a for rr in quote_ranges.values() for a,b in merge_ranges(rr)), selected_chars),
+        atomic_fact_coverage=fraction(len(selected_questions), len(questions)),
+        fact_coverage=[dict(id=q['id'], question=q['question'], supported=q['id'] in selected_questions) for q in questions],
         selected_body_chars=selected_chars, selected_annotation_units=selected_units,
         useful_char_fraction=fraction(useful_chars, selected_chars),
         direct_evidence_char_fraction=fraction(direct_chars, selected_chars),

@@ -67,7 +67,7 @@ def test_joint_full_chain_resume_and_independent_source_text(tmp_path,kind):
 def test_selected_provider_constraints_match_validation(tmp_path):
     state=SearchState(tmp_path,'case',task=task(),config=SearchConfig(providers=['exa','baidu','bocha']))
     c=context_for(state)['tool_constraints']
-    assert c['requests_per_new_query']==3 and c['query_max_units']==72
+    assert c['requests_per_new_query']==3 and c['provider_query_max_units']['baidu']==72
     request_payload('baidu','中'*36,state.config)
     with pytest.raises(ValueError):request_payload('baidu','中'*37,state.config)
     state.config.providers=['exa','bocha']
@@ -195,7 +195,7 @@ def test_existing_task_keeps_previously_saved_limits(tmp_path):
     assert asdict(restored.config)==asdict(old)
 
 
-def test_rejected_query_feedback_includes_length_and_query_without_provider_calls(tmp_path):
+def test_oversize_query_skips_only_baidu_without_model_repair(tmp_path):
     config=SearchConfig(providers=['baidu','bocha','exa'],max_model_calls=6)
     state=SearchState(tmp_path,'case',task=task(),config=config)
     too_long='合并' * 19
@@ -208,13 +208,10 @@ def test_rejected_query_feedback_includes_length_and_query_without_provider_call
         contexts.append(context)
         if len(contexts)==1:return dict(action='search',query=too_long)
         if len(contexts)==2:
-            assert calls==[] and context['remaining']['search']==config.max_search_requests
-            assert '76 units' in context['feedback']['hint']
-            assert 'limit is 72' in context['feedback']['hint']
-            assert too_long in context['feedback']['hint']
-            return dict(action='search',query='Synthetic merger closing')
+            assert calls==['bocha','exa']
+            assert context['feedback']['providers'][0]['status']=='skipped_length'
         return dict(action='finish',source_ids=[],gaps=['Sources not yet inspected'],reason='insufficient')
     run_agent(state,SearchTools(state,transport=observed),decide)
     assert state.data['status']=='insufficient'
-    assert state.data['usage']=={'model':3,'search':3}
-    assert calls==['baidu','bocha','exa']
+    assert state.data['usage']=={'model':2,'search':2}
+    assert calls==['bocha','exa']

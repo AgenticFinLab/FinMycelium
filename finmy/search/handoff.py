@@ -174,6 +174,8 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     record['retrieval_queries'] = list(dict.fromkeys(q for q in queries if q.strip()))
     from .evidence import retained_passages
     record['priority_passages'],record['priority_omissions'] = retained_passages(state,retained_versions)
+    record['fact_checks'] = state.data.get('fact_checks', [])
+    record['source_lead_review'] = state.data.get('source_lead_review', [])
     if state.data.get('person_evidence'):
         record['person_evidence'] = dict(state.data['person_evidence'])
     if source_review is not None:
@@ -203,7 +205,7 @@ def materialize_complete(state, record):
 
 
 def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', allocation_policy=None):
-    """Allocate source quotas and share remaining space within the input budget."""
+    """Derive selected evidence under a hard size ceiling, without a length target."""
     # Keep the caller-label alias; policy replay follows the manifest unless explicitly overridden.
     if budget_policy not in {'balanced', 'c2'}:
         raise ValueError('Unknown input budget policy')
@@ -221,6 +223,10 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', a
         omission_reason=e.get('omission_reason','material_limit'), note='Retained in complete material; omitted only from this input')
         for e in allocation['omitted']]
     notes = list(complete['gaps'])
+    if policy == 'entity_attribute_windows_v2' and not payload['samples']:
+        notes.append('No marked evidence fits this input. Mark inspected support and necessary context; lexical candidates are not delivered automatically.')
+    if any(d['status'] == 'material_limit' for d in allocation.get('priority_decisions', [])):
+        notes.append('Marked evidence was omitted by the material limit; inspect priority_decisions before relying on coverage.')
     if any(o['omission_reason'] == 'material_limit' for o in omitted):
         notes.append('Some complete paragraphs were omitted by the material limit; review the omission record.')
     if any(o['omission_reason'] == 'relevance_selection' for o in omitted):

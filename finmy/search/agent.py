@@ -37,8 +37,22 @@ Return ONE JSON action, then wait; no prose/XML/DSML or invented results:
 {"action":"search","query":"short question","provider_queries":{},"gap":"Missing fact, importance and why current evidence is insufficient"}
 {"action":"read_source","source":"runtime ID or public URL","query":"passage keywords"}
 {"action":"finish","source_ids":["inspected ID"],"source_exclusions":{},"priority_passages":[],"gaps":["question and attempt status"],"reason":"supported|low_gain|insufficient","reason_detail":"Evidence and limits"}
-Follow tool_constraints; for a 72-unit limit aim below 60. Read rationale goes in gap.
+Follow provider-specific tool_constraints; keep queries concise. Read rationale goes in gap.
 Read long bodies with distinctive names/actions, not broad years/report words.
+Use reading.candidate_locations when a query misses or a matching window is long;
+do not repeatedly reformulate the same no-gain read. Review search_attempts before
+searching: name the remaining atomic fact in gap, and use saved originals first.
+Preserve the focal person's direct statements, decisions and qualifications from
+any case; names come only from the task. Keep original transaction conditions.
+Distinguish announcement, scheduled execution and confirmed completion: future-tense
+records cannot establish completed actions. At finish supply fact_checks for the
+requested facts, each {"question":"one verifiable fact", "status":"supported|planned|missing|conflicting",
+"source_ids":["inspected ID"], "detail":"What the original establishes"}.
+Only mark supported when the cited text answers that exact fact. If completion was
+requested but only a plan is evidenced, use planned and retain the gap.
+Read explicitly supplied source leads or supply source_lead_decisions mapping IDs
+or seed URLs to concrete skip reasons. Do not silently substitute another source
+when the task specifically asks what a named document says.
 Use runtime IDs; planning SRC-* citations are not reads.
 For sequential reading use {"action":"read_source","source":"runtime ID","location":{"block":0,"offset":0}}; omit query.
 Copy read_location; block/start/end identifies an evidence range, not a cursor.
@@ -47,6 +61,11 @@ Mark decisive PREVIOUSLY READ passages on the next action; at finish add only mi
 [{"source_id":"runtime ID","block":3,"start":0,"end":200,"reason":"Preserve response and qualification"}].
 Copy read/read_evidence locations. Version/reason are optional; reasons are not facts.
 Keep actions, conditions, outcomes and conflicts. Marks persist; explain exclusions.
+For entity_attribute_windows_v2 handoffs, only validated marked body spans are delivered.
+Source IDs retain originals for review; they do not select the entire source for delivery.
+Mark every fact-check support, including necessary speaker attribution, dates, conditions,
+and independent corroboration. Mark neighboring context explicitly when needed; lexical
+hits alone are not delivery selections. There is no target length or minimum material size.
 Person-event finish includes person_evidence:
 {"status":"supported|limited|unattempted","detail":"Personal evidence, attempts and unknowns"}.
 Assess separately from chronology. Finish in about 1,000 output tokens; no repeated quotes
@@ -238,7 +257,8 @@ def context_for(state, *, finalize=False):
     feedback = state.data.get('feedback')
     if finalizing and isinstance(feedback, dict):
         feedback = {k:v for k,v in feedback.items() if k != 'spans'}
-    context = dict(task=state.data['task'], sources=sources, feedback=feedback,
+    from .review import lead_reviews
+    context = dict(source_leads=lead_reviews(state), task=state.data['task'], sources=sources, feedback=feedback,
                 priority_feedback=state.data.get('priority_feedback'),
                 provider_observations=provider_observations(state),
                 research_progress=state.data.get('research_progress'),
@@ -290,7 +310,7 @@ def execute_action(state, tools, action):
         raise ValueError('Action must be an object')
     kind=action.get('action')
     allowed={'search':{'action','query','gap','provider_queries'}, 'read_source':{'action','source','location','query','gap'},
-             'finish':{'action','source_ids','source_exclusions','selections','gaps','reason','reason_detail','finalization_reason'}}
+             'finish':{'action','source_ids','source_exclusions','selections','gaps','reason','reason_detail','finalization_reason','source_lead_decisions','fact_checks'}}
     if not isinstance(kind,str) or kind not in allowed:
         raise ValueError('Unknown action; choose search, read_source or finish')
     # Repair only unambiguous cursor placement; never choose between query and cursor.
@@ -367,6 +387,8 @@ def execute_action(state, tools, action):
         else:
             state.data['person_evidence'] = dict(status='not_assessed',
                 detail='The model did not provide a valid personal-evidence assessment; review required.')
+    from .review import finish_review
+    finish_review(state, action)
     if 'source_ids' in action:
         retained,review=source_pool(state,action['source_ids'],action.get('source_exclusions'))
         payload=assemble_sources(state,retained,gaps=action['gaps'],reason=action['reason'],source_review=review)

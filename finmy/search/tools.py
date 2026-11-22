@@ -16,6 +16,10 @@ ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', '
 BAIDU_QUERY_UNITS = 72
 
 
+def query_units(query):
+    return sum(2 if '\u4e00' <= c <= '\u9fff' else 1 for c in query)
+
+
 def search_constraints(config):
     """Expose the same limits used by payload validation to the decision model."""
     return dict(providers=config.providers, requests_per_new_query=len(config.providers),
@@ -24,7 +28,7 @@ def search_constraints(config):
                                     query_uses_saved_body=True, consumes_search_requests=False,
                                     partial_body_original_fetch_once=True),
                 max_results_per_provider=config.max_results,
-                query_max_units=BAIDU_QUERY_UNITS if 'baidu' in config.providers else None,
+                query_max_units=None, provider_query_max_units={'baidu': BAIDU_QUERY_UNITS},
                 query_unit_rule='U+4E00..U+9FFF counts 2; each other character counts 1',
                 provider_queries='Optional mapping of selected providers to language/alias variants of the same question',
                 strategy='All selected providers search the same question; optional provider_queries adapts its expression, not its scope.')
@@ -130,10 +134,22 @@ class SearchTools:
         if (not isinstance(provider_queries, dict) or set(provider_queries) - set(config.providers)
                 or any(not isinstance(q, str) or not q.strip() for q in provider_queries.values())):
             raise ValueError('provider_queries must map selected providers to nonempty query strings')
-        # Validate all selected providers before any request; never silently truncate.
+        # A provider's length limit must not reject the entire search action.
         queries = {p:provider_queries.get(p, query) for p in config.providers}
-        payloads = {p:request_payload(p, queries[p], config) for p in config.providers}
-        found, outcomes = [], []
+        payloads, found, outcomes = {}, [], []
+        for provider, original in queries.items():
+            adapted = ' '.join(original.split())
+            if provider == 'baidu' and query_units(adapted) > BAIDU_QUERY_UNITS:
+                # Do not delete entity tokens, negation, qualifiers or operators
+                # to satisfy one provider. Preserve the full question elsewhere.
+                self.state.trace(dict(action='query_adapted', provider=provider,
+                                      original=original, query=adapted))
+                if query_units(adapted) > BAIDU_QUERY_UNITS:
+                    outcomes.append(dict(provider=provider, query=original, status='skipped_length',
+                        hint='Other providers retain the full question. Use a shorter provider_queries variant only if this provider is needed.'))
+                    continue
+            queries[provider] = adapted
+            payloads[provider] = request_payload(provider, adapted, config)
         for provider, payload in payloads.items():
             configuration_error = None
             key = digest([provider, payload])
