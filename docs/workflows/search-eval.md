@@ -32,17 +32,25 @@ For an occasional full reference-pool evaluation, append `--eval_scope pool`.
 This is more expensive; the default `selected` scope never reports pool recall
 or provider ranking estimates. Both scopes use the same cached task rubric.
 Ordinary Workbench defaults are unchanged. The CLI defaults search and Judge
-to `ark/kimi-k3-1-pro-261024` and uses the existing API keys. `--config` accepts
-an existing SearchConfig JSON/YAML if required.
+to `ark/kimi-k3-1-pro-261024` and uses the existing API keys. Search settings,
+including `retrieval`, load from the repository's `configs/search.yml` by default;
+the evaluation keeps its Kimi model and generation defaults. `--config` accepts
+SearchConfig JSON/YAML overrides, including an explicit model override.
+
+The repository profile enables BM25 passage reading. Confirm the effective mode
+in `output.json` under `search_config.retrieval`, and inspect `passage_retrieval`
+events in the saved trace to confirm execution. For a topic-reader comparison,
+pass an override containing only `retrieval: {mode: topic}` to retain the same
+evaluation model. See [搜索功能演进与效果对比](../experiments/search-feature-comparison.md)
+for the recorded feature-level comparison and the default-BM25 decision.
 
 ## Output, cache and recovery
 
-The combined report is `output/search-eval/eval-<task-config-code-hash>/output.json`.
+The combined report is `output/search-eval/<task-id>/output.json`.
 Use `--output path.json` to choose another report path. Raw search artifacts and
 checkpoints are preserved. Repeating a command reuses completed work; changing
 only evaluation mode/scope does not change search identity. Changing search
-code/config creates a new search run; this patch therefore starts a new search
-identity on its first run. `--fresh` explicitly starts another trial.
+code/config creates a new search run. `--fresh` explicitly starts another trial.
 
 Validated labels are cached by task, rubric, model policy, exact unit text and
 attribution context under `output/search-eval/judge-cache`. Batch order and

@@ -236,8 +236,14 @@ def test_cache_is_bound_to_task_original_and_prompt(tmp_path):
         session.ask(saved['request']['payload'], lambda value:value)
 
 
-def test_cli_needs_only_task_and_defaults_to_kimi(tmp_path, monkeypatch):
+@pytest.mark.parametrize('retrieval', [{}, {'mode':'bm25'}])
+def test_cli_needs_only_task_and_defaults_to_kimi(tmp_path, monkeypatch, retrieval):
     from finmy.search import eval as module
+    profile = tmp_path/'search.yml'
+    profile.write_text(json.dumps(dict(retrieval=retrieval, max_model_calls=7,
+        lm_name='ark/deepseek-v4-1-flash-261017', generation_config={'max_tokens':1})))
+    monkeypatch.setattr(module, 'DEFAULT_CONFIG_PATH', profile)
+    monkeypatch.chdir(tmp_path)  # Profile resolution must not depend on the shell's cwd.
     path = tmp_path/'task.json'
     path.write_text(json.dumps(TASK), encoding='utf-8')
     for key in ('ARK_API_KEY', 'EXA_API_KEY', 'BOCHA_API_KEY', 'BAIDUSEARCH_API_KEY'):
@@ -251,8 +257,24 @@ def test_cli_needs_only_task_and_defaults_to_kimi(tmp_path, monkeypatch):
     assert main(['--task', str(path)]) == 0
     assert received['task'] == TASK
     assert received['config'].lm_name == KIMI_MODEL
-    assert received['config'].max_model_calls == SearchConfig().max_model_calls
+    assert received['config'].max_model_calls == 7
+    assert received['config'].retrieval == retrieval
+    assert received['config'].generation_config['max_tokens'] == 8192
     assert default_config().generation_config['reasoning_effort'] == 'low'
+    state = SearchState(tmp_path, 'configured-reader', task=TASK, config=received['config'])
+    store = SourceStore(state)
+    sid = store.register('https://example.org/notice')
+    store.save_raw(sid, GOOD.encode(), 'txt')
+    reading = store.read(sid, query='Buffett Goldman approved investment')
+    assert (reading['reading'].get('mode') == 'bm25') == bool(retrieval)
+    if retrieval:
+        trace = module.read_jsonl(state.run_dir/'trace.jsonl')
+        assert any(e.get('action') == 'passage_retrieval' and e['mode'] == 'bm25' for e in trace)
+    override = tmp_path/'override.yml'
+    override.write_text('retrieval: {mode: topic}\n')
+    assert main(['--task', str(path), '--config', str(override)]) == 0
+    assert received['config'].retrieval == {'mode':'topic'}
+    assert received['config'].lm_name == KIMI_MODEL
 
 
 def test_usage_counts_cached_tokens_as_subset():

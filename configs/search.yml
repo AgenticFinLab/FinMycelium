@@ -20,4 +20,4 @@ timeout: 120  # Per-request timeout; saved tasks retain their own values.
 max_download_bytes: 20000000
 max_model_context_chars: 180000  # Conservative character guard, not a model token guarantee.
 # Optional local BM25 reading: {mode: bm25}; empty keeps the existing topic reader.
-retrieval: {}
+retrieval: {mode: bm25}

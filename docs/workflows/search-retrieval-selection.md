@@ -1,17 +1,22 @@
 # Passage retrieval and evidence selection
 
-Based on `person-epg-yuntao-search` at `8bca5d8`, with marginal-value selection.
-There is no material-length target.
+Evidence delivery combines validated original spans with coverage-aware selection.
+The material budget is an upper limit; unused budget may remain.
 
 ## Defaults and separate comparisons
 
-`retrieval: {}` keeps the existing `topic` reader, including its lexical ranking.
-The optional `bm25` mode ranks saved original windows directly. Both modes run
-locally without additional model calls or model weights. Retrieval scores do not
-create delivery marks automatically. Web providers and source acquisition are
-unchanged.
+The repository profile in `configs/search.yml` enables `retrieval: {mode: bm25}`.
+The search-evaluation CLI loads that profile by default while retaining its Kimi
+model and generation settings. BM25 ranks passages within a saved source; the
+research agent still decides which sources to read and which originals to mark.
 
-An opt-in JSON config, passed to the existing `--config` argument:
+`retrieval: {}` or `{mode: topic}` selects the existing topic reader, including
+its lexical ranking. A directly constructed `SearchConfig()` still defaults to
+the topic reader unless configured. Both readers run locally without additional
+model calls or model weights. Retrieval scores do not create delivery marks
+automatically. Web providers and source acquisition are unchanged.
+
+Optional BM25 settings, passed to the existing `--config` argument:
 
 ```json
 {
@@ -27,6 +32,9 @@ An opt-in JSON config, passed to the existing `--config` argument:
 are `mode`, `top_k` and `window_chars`. Removed retrieval modes and model options
 are rejected explicitly. Existing `topic`, `bm25` and empty-config checkpoints
 remain resumable with their saved configuration.
+
+Feature-level results and the decision to retain default BM25 are recorded in
+[搜索功能演进与效果对比](../experiments/search-feature-comparison.md).
 
 ## Metadata and time
 
@@ -94,7 +102,7 @@ Use independently reviewed case labels against fixed source versions:
 [
   {
     "source_id": "saved-source-id",
-    "version": "saved-version-sha256",
+    "version": "saved-source-version",
     "query": "What confirms completed delivery?",
     "expected_ranges": [{"block": 12, "start": 0, "end": 240}]
   }

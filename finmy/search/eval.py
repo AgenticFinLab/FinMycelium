@@ -21,6 +21,9 @@ from .state import SearchConfig, SearchState, digest, now, write_json
 from .tools import ENDPOINTS, normalize
 
 
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2]/'configs'/'search.yml'
+
+
 def read_json(path, default=None):
     path = Path(path)
     return json.loads(path.read_text(encoding='utf-8')) if path.exists() else default
@@ -43,9 +46,13 @@ def read_jsonl(path):
 
 
 def default_config():
-    # Only this new CLI chooses Kimi. Existing Workbench defaults are untouched.
-    return SearchConfig(lm_name=KIMI_MODEL, allow_network=True,
-                        generation_config={'max_tokens':8192, 'reasoning_effort':'low'})
+    import yaml
+    values = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text(encoding='utf-8-sig'))
+    if not isinstance(values, dict):
+        raise ValueError('Search configuration must be an object')
+    # Inherit search settings, including retrieval, while keeping the eval model.
+    return SearchConfig(**{**values, 'lm_name':KIMI_MODEL, 'allow_network':True,
+                           'generation_config':{'max_tokens':8192, 'reasoning_effort':'low'}})
 
 
 def search_fingerprint():
@@ -347,7 +354,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--task', required=True, help='Research task JSON, e.g. buffett_goldman.json')
     parser.add_argument('--output', help='Optional combined output JSON path')
-    parser.add_argument('--config', help='Optional existing SearchConfig JSON/YAML; default uses Kimi')
+    parser.add_argument('--config', help='Override configs/search.yml with SearchConfig JSON/YAML; default keeps Kimi')
     parser.add_argument('--eval_mode', choices=['manual','auto'], default='manual')
     parser.add_argument('--eval_scope', choices=['selected','pool'], default='selected', help='auto only: delivered text or full saved candidate pool')
     parser.add_argument('--fresh', action='store_true', help='Start a new run instead of resuming this task/config')
