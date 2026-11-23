@@ -11,12 +11,12 @@
 
 import os
 
-# mysql config - Use MindSpider's database configuration
-MYSQL_DB_PWD = "LYrxcTXM5Kpz5z3S"
-MYSQL_DB_USER = "finmyceliumdata"
-MYSQL_DB_HOST = "10.123.4.30"
-MYSQL_DB_PORT = 3306
-MYSQL_DB_NAME = "finmyceliumdata"
+# Standalone defaults. The FinMycelium launcher passes overrides to each child.
+MYSQL_DB_PWD = os.getenv("MYSQL_DB_PWD", "")
+MYSQL_DB_USER = os.getenv("MYSQL_DB_USER", "")
+MYSQL_DB_HOST = os.getenv("MYSQL_DB_HOST", "127.0.0.1")
+MYSQL_DB_PORT = int(os.getenv("MYSQL_DB_PORT", "3306"))
+MYSQL_DB_NAME = os.getenv("MYSQL_DB_NAME", "media_crawler")
 
 mysql_db_config = {
     "user": MYSQL_DB_USER,

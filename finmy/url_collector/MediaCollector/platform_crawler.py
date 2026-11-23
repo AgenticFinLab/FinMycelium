@@ -9,18 +9,15 @@ Based on the MindSpider/DeepSentimentCrawling module of the project BettaFish (h
 import os
 import sys
 import subprocess
-import tempfile
-
-
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 
 import json
 from loguru import logger
 
-from configs import media_config
+from finmy.url_collector.MediaCollector.database_settings import database_url
 
 
 class PlatformCrawler:
@@ -41,182 +38,6 @@ class PlatformCrawler:
         logger.info(
             f"Initialized Platform Crawler Manager, MediaCrawler path: {self.mediacrawler_path}"
         )
-
-    def configure_mediacrawler_db(self):
-        """Configure MediaCrawler to use our database (MySQL or PostgreSQL)"""
-        try:
-            # Determine database type
-            db_dialect = (media_config.settings.DB_DIALECT or "mysql").lower()
-            is_postgresql = db_dialect in ("postgresql", "postgres")
-
-            # Modify MediaCrawler's database configuration
-            db_config_path = self.mediacrawler_path / "config" / "db_config.py"
-
-            # Read original configuration
-            with open(db_config_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # PostgreSQL configuration values: Use MindSpider configuration if using PostgreSQL, otherwise use default values or environment variables
-            pg_password = (
-                media_config.settings.DB_PASSWORD if is_postgresql else "bettafish"
-            )
-            pg_user = media_config.settings.DB_USER if is_postgresql else "bettafish"
-            pg_host = media_config.settings.DB_HOST if is_postgresql else "127.0.0.1"
-            pg_port = media_config.settings.DB_PORT if is_postgresql else 5432
-            pg_db_name = media_config.settings.DB_NAME if is_postgresql else "bettafish"
-
-            # Replace database configuration - Use MindSpider's database configuration
-            new_config = f"""# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：  
-# 1. 不得用于任何商业用途。  
-# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。  
-# 3. 不得进行大规模爬取或对平台造成运营干扰。  
-# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。   
-# 5. 不得用于任何非法或不当的用途。
-#   
-# 详细许可条款请参阅项目根目录下的LICENSE文件。  
-# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。  
-
-
-import os
-
-# mysql config - Use MindSpider's database configuration
-MYSQL_DB_PWD = "{media_config.settings.DB_PASSWORD}"
-MYSQL_DB_USER = "{media_config.settings.DB_USER}"
-MYSQL_DB_HOST = "{media_config.settings.DB_HOST}"
-MYSQL_DB_PORT = {media_config.settings.DB_PORT}
-MYSQL_DB_NAME = "{media_config.settings.DB_NAME}"
-
-mysql_db_config = {{
-    "user": MYSQL_DB_USER,
-    "password": MYSQL_DB_PWD,
-    "host": MYSQL_DB_HOST,
-    "port": MYSQL_DB_PORT,
-    "db_name": MYSQL_DB_NAME,
-}}
-
-
-# redis config
-REDIS_DB_HOST = "127.0.0.1"  # your redis host
-REDIS_DB_PWD = os.getenv("REDIS_DB_PWD", "123456")  # your redis password
-REDIS_DB_PORT = os.getenv("REDIS_DB_PORT", 6379)  # your redis port
-REDIS_DB_NUM = os.getenv("REDIS_DB_NUM", 0)  # your redis db num
-
-# cache type
-CACHE_TYPE_REDIS = "redis"
-CACHE_TYPE_MEMORY = "memory"
-
-# sqlite config
-SQLITE_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database", "sqlite_tables.db")
-
-sqlite_db_config = {{
-    "db_path": SQLITE_DB_PATH
-}}
-
-# postgresql config - Use MindSpider's database configuration (if DB_DIALECT is postgresql) or environment variables
-POSTGRESQL_DB_PWD = os.getenv("POSTGRESQL_DB_PWD", "{pg_password}")
-POSTGRESQL_DB_USER = os.getenv("POSTGRESQL_DB_USER", "{pg_user}")
-POSTGRESQL_DB_HOST = os.getenv("POSTGRESQL_DB_HOST", "{pg_host}")
-POSTGRESQL_DB_PORT = os.getenv("POSTGRESQL_DB_PORT", "{pg_port}")
-POSTGRESQL_DB_NAME = os.getenv("POSTGRESQL_DB_NAME", "{pg_db_name}")
-
-postgresql_db_config = {{
-    "user": POSTGRESQL_DB_USER,
-    "password": POSTGRESQL_DB_PWD,
-    "host": POSTGRESQL_DB_HOST,
-    "port": POSTGRESQL_DB_PORT,
-    "db_name": POSTGRESQL_DB_NAME,
-}}
-
-"""
-
-            # Write new configuration
-            with open(db_config_path, "w", encoding="utf-8") as f:
-                f.write(new_config)
-
-            db_type = "PostgreSQL" if is_postgresql else "MySQL"
-            logger.info(f"Configured MediaCrawler to use MindSpider {db_type} database")
-            return True
-
-        except Exception as e:
-            logger.exception(f"Failed to configure MediaCrawler database: {e}")
-            return False
-
-    def create_base_config(
-        self,
-        platform: str,
-        keywords: List[str],
-        crawler_type: str = "search",
-        max_notes: int = 50,
-    ) -> bool:
-        """
-        Create base configuration for MediaCrawler
-
-        Args:
-            platform: Platform name
-            keywords: Keyword list
-            crawler_type: Crawling type
-            max_notes: Maximum crawling count
-
-        Returns:
-            Whether configuration was successful
-        """
-        try:
-            # Determine database type, set SAVE_DATA_OPTION
-            db_dialect = (media_config.settings.DB_DIALECT or "mysql").lower()
-            is_postgresql = db_dialect in ("postgresql", "postgres")
-            save_data_option = "postgresql" if is_postgresql else "db"
-
-            base_config_path = self.mediacrawler_path / "config" / "base_config.py"
-
-            # Convert keyword list to comma-separated string
-            keywords_str = ",".join(keywords)
-
-            # Read original configuration file
-            with open(base_config_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Modify key configuration items
-            lines = content.split("\n")
-            new_lines = []
-
-            for line in lines:
-                if line.startswith("PLATFORM = "):
-                    new_lines.append(
-                        f'PLATFORM = "{platform}"  # Platform, xhs | dy | ks | bili | wb | tieba | zhihu'
-                    )
-                elif line.startswith("KEYWORDS = "):
-                    new_lines.append(f'KEYWORDS = "{keywords_str}" ')
-                elif line.startswith("CRAWLER_TYPE = "):
-                    new_lines.append(
-                        f'CRAWLER_TYPE = "{crawler_type}"  # Crawling type, search(keyword search) | detail(post details)| creator(creator homepage data)'
-                    )
-                elif line.startswith("SAVE_DATA_OPTION = "):
-                    new_lines.append(
-                        f'SAVE_DATA_OPTION = "{save_data_option}"  # csv or db or json or sqlite or postgresql'
-                    )
-                elif line.startswith("CRAWLER_MAX_NOTES_COUNT = "):
-                    new_lines.append(f"CRAWLER_MAX_NOTES_COUNT = {max_notes}")
-                elif line.startswith("ENABLE_GET_COMMENTS = "):
-                    new_lines.append("ENABLE_GET_COMMENTS = True")
-                elif line.startswith("CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = "):
-                    new_lines.append("CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 20")
-                elif line.startswith("HEADLESS = "):
-                    new_lines.append("HEADLESS = True")  # Use headless mode
-                else:
-                    new_lines.append(line)
-
-            # Write new configuration
-            with open(base_config_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(new_lines))
-
-            logger.info(
-                f"Configured {platform} platform, crawling type: {crawler_type}, keyword count: {len(keywords)}, maximum crawling count: {max_notes}, data saving method: {save_data_option}"
-            )
-            return True
-
-        except Exception as e:
-            logger.exception(f"Failed to create base configuration: {e}")
-            return False
 
     def run_crawler(
         self,
@@ -250,18 +71,13 @@ postgresql_db_config = {{
         start_time = datetime.now()
 
         try:
-            # Configure database
-            if not self.configure_mediacrawler_db():
-                return {"success": False, "error": "Database configuration failed"}
-
-            # Create base configuration
-            if not self.create_base_config(platform, keywords, "search", max_notes):
-                return {"success": False, "error": "Base configuration creation failed"}
-
-            # Determine database type, set save_data_option
-            db_dialect = (media_config.settings.DB_DIALECT or "mysql").lower()
-            is_postgresql = db_dialect in ("postgresql", "postgres")
-            save_data_option = "db"  # "postgresql" if is_postgresql else "db"
+            url = database_url()
+            if url.get_backend_name() != "mysql":
+                raise ValueError("The bundled MediaCrawler database writer supports MySQL only")
+            child_env = dict(os.environ, MYSQL_DB_USER=url.username or "",
+                             MYSQL_DB_PWD=url.password or "", MYSQL_DB_HOST=url.host,
+                             MYSQL_DB_PORT=str(url.port), MYSQL_DB_NAME=url.database,
+                             FINMY_MEDIA_MAX_NOTES=str(max_notes))
 
             # Build command
             cmd = [
@@ -274,14 +90,17 @@ postgresql_db_config = {{
                 "--type",
                 "search",
                 "--save_data_option",
-                save_data_option,
+                "db",
+                "--keywords=" + ",".join(keywords),
+                "--get_comment",
+                "true",
             ]
 
             logger.info(f"Executing command: {' '.join(cmd)}")
 
             # Switch to MediaCrawler directory and execute
             result = subprocess.run(
-                cmd, cwd=self.mediacrawler_path, timeout=3600  # 60-minute timeout
+                cmd, cwd=self.mediacrawler_path, env=child_env, timeout=3600  # 60-minute timeout
             )
 
             end_time = datetime.now()
@@ -316,10 +135,10 @@ postgresql_db_config = {{
             return crawl_stats
 
         except subprocess.TimeoutExpired:
-            logger.exception(f"❌ {platform} crawling timeout")
+            logger.error(f"❌ {platform} crawling timeout")
             return {"success": False, "error": "Crawling timeout", "platform": platform}
         except Exception as e:
-            logger.exception(f"❌ {platform} crawling exception: {e}")
+            logger.error(f"❌ {platform} crawling exception: {e}")
             return {"success": False, "error": str(e), "platform": platform}
 
     def _parse_crawl_output(

@@ -6,25 +6,15 @@ Get keywords and assign them to different platforms for crawling
 Based on the MindSpider/DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
 """
 
-import sys
 import json
 from datetime import date, timedelta, datetime
-from pathlib import Path
+from typing import Dict, List, Optional
 
 import random
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-# Add project root directory to path
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
-
-try:
-    import config
-except ImportError:
-    raise ImportError("Cannot import config.py configuration file")
-
-from config import settings
+from finmy.url_collector.MediaCollector.database_settings import database_url
 from loguru import logger
 
 
@@ -39,15 +29,9 @@ class KeywordManager:
     def connect(self):
         """Connect to database"""
         try:
-            dialect = (settings.DB_DIALECT or "mysql").lower()
-            if dialect in ("postgresql", "postgres"):
-                url = f"postgresql+psycopg://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-            else:
-                url = f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}?charset={settings.DB_CHARSET}"
+            url = database_url()
             self.engine = create_engine(url, future=True)
-            logger.info(
-                f"Keyword Manager successfully connected to database: {settings.DB_NAME}"
-            )
+            logger.info(f"Keyword Manager initialized for database: {url.database}")
         except ModuleNotFoundError as e:
             missing: str = str(e)
             if "psycopg" in missing:

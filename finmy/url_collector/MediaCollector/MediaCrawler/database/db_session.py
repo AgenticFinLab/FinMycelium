@@ -16,7 +16,7 @@
 # 详细许可条款请参阅项目根目录下的LICENSE文件。
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
-from sqlalchemy import text
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
@@ -28,13 +28,20 @@ from config.db_config import mysql_db_config, sqlite_db_config
 _engines = {}
 
 
+def mysql_url(database=None):
+    return URL.create("mysql+asyncmy", username=mysql_db_config["user"],
+                      password=mysql_db_config["password"], host=mysql_db_config["host"],
+                      port=mysql_db_config["port"], database=database)
+
+
 async def create_database_if_not_exists(db_type: str):
     if db_type == "mysql" or db_type == "db":
         # Connect to the server without a database
-        server_url = f"mysql+asyncmy://{mysql_db_config['user']}:{mysql_db_config['password']}@{mysql_db_config['host']}:{mysql_db_config['port']}"
+        server_url = mysql_url()
         engine = create_async_engine(server_url, echo=False)
         async with engine.connect() as conn:
-            await conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {mysql_db_config['db_name']}"))
+            name = conn.dialect.identifier_preparer.quote_identifier(mysql_db_config["db_name"])
+            await conn.exec_driver_sql(f"CREATE DATABASE IF NOT EXISTS {name}")
         await engine.dispose()
 
 
@@ -51,7 +58,7 @@ def get_async_engine(db_type: str = None):
     if db_type == "sqlite":
         db_url = f"sqlite+aiosqlite:///{sqlite_db_config['db_path']}"
     elif db_type == "mysql" or db_type == "db":
-        db_url = f"mysql+asyncmy://{mysql_db_config['user']}:{mysql_db_config['password']}@{mysql_db_config['host']}:{mysql_db_config['port']}/{mysql_db_config['db_name']}"
+        db_url = mysql_url(mysql_db_config["db_name"])
     else:
         raise ValueError(f"Unsupported database type: {db_type}")
 

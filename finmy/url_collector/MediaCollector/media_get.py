@@ -6,18 +6,12 @@ Full-platform keyword crawling based on topics
 Based on the MindSpider/DeepSentimentCrawling module of the project BettaFish (https://github.com/666ghj/BettaFish)
 """
 
-import sys
 import argparse
 from datetime import date, datetime
-from pathlib import Path
 from typing import List, Dict
 
-# Add project root directory to path
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
-
-from keyword_manager import KeywordManager
-from platform_crawler import PlatformCrawler
+from finmy.url_collector.MediaCollector.keyword_manager import KeywordManager
+from finmy.url_collector.MediaCollector.platform_crawler import PlatformCrawler
 
 
 class MediaCrawling:
