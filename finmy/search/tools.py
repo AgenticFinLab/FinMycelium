@@ -30,7 +30,7 @@ def search_constraints(config):
                 max_results_per_provider=config.max_results,
                 query_max_units=None, provider_query_max_units={'baidu': BAIDU_QUERY_UNITS},
                 query_unit_rule='U+4E00..U+9FFF counts 2; each other character counts 1',
-                provider_queries='Optional mapping of selected providers to language/alias variants of the same question',
+                provider_queries='For selected baidu, include a <=72-unit same-question variant in this action; optional for other providers',
                 strategy='All selected providers search the same question; optional provider_queries adapts its expression, not its scope.')
 
 
@@ -112,10 +112,15 @@ def normalize(provider, response):
     for item in items:
         if not isinstance(item, dict) or not isinstance(item.get('url'), str):
             raise ValueError('Malformed result item')
+        # Only documented original-text fields can become partial source bodies.
+        # Bocha summary and generic snippets remain discovery leads.
+        field = {'baidu':'content', 'exa':'text'}.get(provider)
+        body = item.get(field) if field else None
         results.append(dict(url=item['url'], title=item.get('title',item.get('name','')),
-            snippet=item.get('snippet',''), summary=item.get('summary',''),
+            snippet=item.get('snippet') or (body if provider == 'baidu' and isinstance(body, str) else ''),
+            summary=item.get('summary',''),
             published_at=item.get('publishedDate',item.get('datePublished',item.get('date'))),
-            text=item.get('text') if provider == 'exa' else None))
+            text=body, text_field=field))
     return results
 
 
@@ -178,7 +183,9 @@ class SearchTools:
                     ids.append(sid)
                     # Search-returned text may be incomplete. Never label it a full document.
                     if isinstance(item['text'], str) and item['text'].strip() and not self.state.data['sources'][sid].get('version'):
-                        self.sources.save_raw(sid, item['text'].encode(), 'txt', partial=True)
+                        self.sources.save_raw(sid, item['text'].encode(), 'txt', partial=True,
+                            fetch_metadata=dict(origin='search_response', provider=provider,
+                                                content_field=item['text_field']))
                 self.state.data['cache'][key] = ids
                 found.extend(ids)
                 outcomes.append(dict(provider=provider,query=queries[provider],status='success' if ids else 'no_results'))
@@ -218,6 +225,14 @@ class SearchTools:
         previous = list(self.state.data['sources'][source].get('read_ranges', []))
         self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))
         result = self.sources.read(source, **(location or {}), query=query)
+        if result.get('status') == 'partial':
+            result['body_origin'] = self.sources.document(source, result['version']).get('fetch_metadata', {})
+        if result.get('status') not in {'success', 'partial'}:
+            # Keep leads visible on acquisition failure, outside evidence spans.
+            result['search_leads'] = [
+                {k:d[k] for k in ('provider', 'snippet', 'summary') if d.get(k)}
+                for d in self.state.data['sources'][source]['discoveries'][-2:]
+                if d.get('snippet') or d.get('summary')]
         current = [r for r in previous if r['version'] == result.get('version')]
         new_chars = 0
         for span in result.get('spans', []):

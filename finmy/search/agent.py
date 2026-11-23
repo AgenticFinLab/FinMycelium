@@ -21,6 +21,12 @@ unknown/negative evidence and association/causation. Snippets are leads only.
 Deliver reasons/narrative in English; query/read in source language. Lexical reads do not
 translate. For important gaps with weak English results and Chinese leads, try Chinese or
 aliases. provider_queries maps selected providers to SAME-question variants; others get query.
+When baidu is selected, include provider_queries.baidu in the SAME search action:
+at most 72 units (each CJK character counts 2, others 1). Preserve entity names,
+dates, negation and essential conditions; remove filler or use established aliases.
+Do not rely on the full query fitting Baidu or spend a separate model call rewriting it.
+Search-returned original content is partial evidence; snippets and summaries remain leads.
+Read selected URLs to acquire full bodies; on failure use search_leads to trace originals.
 Use provider_observations; no Chinese-only channel or required bilingual duplication.
 Apply equal evidence standards, trace originals, preserve quotes and label translations.
 Inspect results before exhausting searches; leave room for gaps/inaccessible originals.
