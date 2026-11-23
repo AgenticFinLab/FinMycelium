@@ -1,6 +1,6 @@
 # 7 · 术语、与现有表示的关系、设计问答
 
-> 收口文档。关联：[0-overview](0-overview.md) 及全部前序文件。
+> 早期方案的术语笔记。关联：[人物 Event 总览](../person-event-structures/0-overview.md) 及全部前序文件。
 
 ---
 
@@ -81,7 +81,7 @@ flowchart LR
 | 上下文（环境/他人/自身状态） | entity / entity_relation / 部分 occurrence 信息 | participant/relations | PBG 增加“三类上下文 + 六种链接语义 + belief 分离” |
 | 证据包 | source_document / evidence_span / evidence_set / evidence_link | VerifiableField（值+证据+理由） | PBG 要求证据包整体成为一等公民 |
 
-> 实现层建议（非本框架强制）：不要复制 schema；优先在现有事实/证据之上做“行为叠加视图”，保持事实层与行为层分离。详见 [4-evidence-and-provenance](4-evidence-and-provenance.md)。
+> 实现层建议（非本框架强制）：不要复制 schema；优先在现有事实/证据之上做“行为叠加视图”，保持事实层与行为层分离。详见 [证据与溯源](../person-event-structures/4-evidence.md)。
 
 ---
 

@@ -6,7 +6,8 @@ sections. Select a card or action relation to inspect the fields it asserts and
 follow their evidence. The workbench saves this view as `gantt.html` for review
 and collection.
 
-The automatic layout currently puts the ordered Action cards on a single row.
+Each Phase places Actions by evidenced time and order. Actions may share a
+column on separate rows when the available information leaves their order open.
 The [person Event visualization design](../person-event-visualization/0-overview.md)
 covers the full diagram, its [visual legend](../person-event-visualization/4-visual-legend.md)
 and the rules for multi-row placement.

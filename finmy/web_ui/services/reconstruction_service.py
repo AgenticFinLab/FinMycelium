@@ -10,7 +10,6 @@ import json
 from typing import Dict, Any, List
 import streamlit as st
 
-from finmy.pipeline import FinmyPipeline
 from finmy.builder.utils import estimate_complete_time
 from finmy.web_ui.utils.formatters import format_timestamp
 from finmy.web_ui.services.data_collector_service import DataCollectorService
@@ -140,6 +139,7 @@ class ReconstructionService:
             )
             logging.info("config: %s", self.config)
             
+            from finmy.pipeline import FinmyPipeline
             pipeline = FinmyPipeline(self.config)
             logging.info("Pipeline is initialized")
             st.write(f"**{format_timestamp()}** - Building pipeline is initialized")

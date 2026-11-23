@@ -1,42 +1,30 @@
 ---
 name: person-epg-visualization
-description: 用 SVG 示意图和交互式 HTML 示例说明如何让 AI 绘制草图、把布局写成可复用的代码，再按阅读体验调整点击高亮和滚动效果，供设计事件关系图、流程图或依赖图时参考。
+description: 从人物 Event 的 JSON 或 SVG 草图设计与验证交互式关系图，使用 FinMycelium 的自动布局、证据详情和独立 HTML 导出。
 ---
 
-# PersonBuilder 可滚动事件关系图的画法
+# 人物 Event 关系图
 
-这套画法让读者沿着一项行动，找到参与方、前置条件、结果和支持它的证据。Python 在导出时决定卡片的分组和初始位置；浏览器用 HTML/CSS 排卡片，用 SVG 画关系线，再由原生 JavaScript 处理展开、避让和高亮。整张图可以保存为一个离线 HTML 文件。
+先确定读者要追踪的行动、关系和出处。用少量记录试读布局，再替换成完整事件。图中每个对象沿用输入 ID。对时间、关系方向和证据的解释以结构与绘图设计为准。[绘图设计](../../docs/person-event-visualization/0-overview.md)
 
-## 用 AI 从示意图做到交互图
+## 从草图到可操作的页面
 
-1. **先让 AI 画出你想看的图。** 选几条有代表性的数据，说清楚希望读者看懂什么。例如，可以请 AI「画一张 SVG 草图，上方放阶段，中间横排投资行动，底部放来源。同一份报告画一次，用线连到它支持的行动」。先看分区是否清楚、箭头能否顺着读，再确定布局。[示例一 · 高盛投资事件的 SVG 示意图](assets/goldman-event-subgraph-v2.svg)
-2. **把满意的草图和样例数据一起交给 AI，让它写通用 HTML。** 可以这样提要求：「每个节点用 ID、类型和标题描述，每条关系用起点 ID 和终点 ID 描述。根据数据生成卡片，按草图的分区自动排布，用 SVG 连接卡片。」然后把输入换成另一个事件，或多加一项行动和一条关系，看新卡片和连线能否自动就位。
-3. **打开 HTML 试读，把具体问题反馈给 AI。** 在浏览器打开导出的 HTML，点一张行动卡查看详情和高亮的关联线，再横向滚动查看后续行动。微调时可以直接描述期望的行为，例如「行动多时保留字号，让画布横向滚动」「点击卡片时加粗与它相连的线，淡化其他线」「展开长文字后，把箭头重新接到卡片边缘」。可以在仓库根目录用[合成事件 JSON](../../tests/fixtures/person_event/graph.json)生成一个可操作的示例。
+1. 用有代表性的行动、背景和引文画 SVG 草图。预览背景的作用范围、连线方向，以及从一个事实回到原文的路径。仓库保留了一份早期布局草图，可作构图参考。[高盛案例 SVG](assets/goldman-event-subgraph-v2.svg)
+2. 导出一份有字段和引用的合成图。已有冻结输入时，可向导出器传入 `--input /path/to/input.json`，以便同时核对引文位置。
+3. 在不同 Phase、窄窗口和阅读缩放下，检查同一 Action 的行列、跨页连线、字段依据与返回导航。验收用例覆盖单行动、多行、时间不明和证据复用。[示例与验收](../../docs/person-event-visualization/5-examples-and-checks.md)
 
-   ```bash
-   mkdir -p output
-   python -m finmy.person_epg.event.graph_html tests/fixtures/person_event/graph.json -o output/person-event-preview.html
-   ```
+```bash
+mkdir -p output
+python -m finmy.person_epg.event.graph_html tests/fixtures/person_event/graph.json -o output/person-event-preview.html
+```
 
-## 可滚动关系图如何实现
+## 自动布局和交互
 
-1. **把业务记录转换成节点和边。** `build_views()` 按 ID 将行动、参与方、背景、来源等记录关联起来。例如，一项行动引用一段证据，证据又指向一份报告，图上就可以画「报告 → 行动」的支持关系。原文和日期保存在按记录 ID 索引的 `details` 中，卡片先显示短标题，展开时再取全文。[数据转换](../../finmy/person_epg/event/graph_view.py)
-2. **在 Python 中算好初始位置。** `arrange_graph()` 为每个阶段生成一张图。相连的行动放在一起，明确的先后或促成关系决定组内的排列顺序。每项行动占一列，前置背景放在上方，结果放在下方，来源集中到底部。同一阶段的多个行动共用一份背景或来源时，只画一张对应卡片，多条线汇到它上面。这样读者一眼能看出哪些行动依赖同一个条件或同一份证据。每张卡片得到一个 `box = [x, y, width, height]`；行动越多，整张图就越宽。横向扩展能保留可读字号，代价是长阶段需要滚动。列仅表达排列顺序，读者可从卡片日期了解实际时间。[布局算法](../../finmy/person_epg/event/graph_layout.py)
-3. **在浏览器里叠放卡片和连线。** `render_graph_html()` 把数据、布局和模板写入同一个 HTML 文件。打开后，`paintCard()` 创建可点击的 HTML 卡片，`position()` 按 `box` 设置位置和大小。卡片层和 SVG 连线层共用同一坐标系，外层容器用 CSS 的 `overflow: auto` 提供滚动。这样可以保持文字大小，沿水平方向浏览整张图。[HTML 导出](../../finmy/person_epg/event/graph_html.py) · [前端模板](../../finmy/person_epg/event/graph.html)
-4. **根据卡片的实际边界画线。** `drawEdges()` 用边的 `from_key` 和 `to_key` 找到两张卡片，读取它们在页面上的位置，从卡片边缘选择出入口。`routingGrid()` 将卡片和标题作为障碍，`route()` 在网格中寻找只走水平或垂直方向的路径。最后把路径上的点交给 SVG 的 `polyline` 画折线，用 `marker-end` 加箭头。关系类型决定颜色和线型，顺序未知的关系省略箭头。[连线实现](../../finmy/person_epg/event/graph.html)
+| 读者看到的内容 | 绘图依据 |
+| --- | --- |
+| 每个 Phase 有自己的行动区。能比较先后的行动按序排列，可同列的行动按行排布。 | `build_views()` 将对象和引用按 ID 关联，时间与偏序决定可用的位置。排完行动后再放背景、参与方和连线。缩放保留逻辑行列。[行动排布](../../docs/person-event-visualization/1-action-layout.md) |
+| 同一个 Context 可以出现在多个 Phase。相同颜色和线型在各页含义一致。 | 区分 Phase 共享、Action 引用和本页其他背景。跨 Phase 的 Action 关系连接到已有 Phase 标签，标签说明两端行动和关系。[连线与背景](../../docs/person-event-visualization/2-relations-and-context.md) |
+| 点行动卡、背景卡或关系标签会打开详情面板。选择具体字段可看到支持方式、原文引文和来源。 | `inspectRecord()` 按 ID 和字段读取记录。Evidence 保存片段，每段指向一份 Source，一份 Source 可以收录多段引文。用 Back 返回上一级，用 Escape 关闭面板。[详情实现](../../finmy/person_epg/event/graph_inspector.js) |
+| 打开 Phase 时先看全图，放大后可滚动，选择记录可突出相关连线。 | HTML 卡片和 SVG 连线共享页面坐标。窗口或面板尺寸改变时重新计算显示比例与端点，操作指南列出首屏、缩放和下载行为。[自动模板](../../finmy/person_epg/event/graph.html) · [操作指南](../../docs/workflows/person-event-visualization.md) |
 
-## 当前 PersonBuilder 模板的交互设计
-
-| 读者想做什么 | 图上看到的效果与好处 | 代码如何实现 |
-| --- | --- | --- |
-| 点击一项行动，弄清楚谁参与、有哪些依据 | 卡片原地展开，当前行动、直接相连的参与方、来源和关系线一起高亮，其余内容淡化。读者可以对照原文和关系，不必跳到另一页。 | 卡片是原生 `button`。点击触发 `toggle(key)`，以 `expanded` 记住展开项，按记录 ID 取出详情。来源卡还可展开引用原文和来源链接。 |
-| 在密集图中快速追踪关系 | 鼠标悬停或用 Tab 聚焦一张卡即可预览它的直接关系。相关线条加粗并带描边，相邻卡片也有轮廓；移开鼠标后可回到仍有焦点或仍展开的卡片。 | `highlight()` 按 `hovered \|\| focused \|\| expanded` 选当前卡片，扫描已绘制边的两个端点，把匹配边两端加入邻居集合，再切换卡片的 CSS 类和 SVG 线条的透明度。 |
-| 辨认关系的类型和方向 | 行动关系、参与方、背景和证据各有配色。证据线平时较淡，查看某个节点时才突出它的证据和关系标签。悬停在有明确方向的关系端点上时，沿线移动的虚线提示流向。 | `edgeStyle()` 和 `edgePattern()` 决定颜色与线型；`drawRelationshipLabels()` 为当前关联边寻找不遮住卡片和已有标签的位置。方向动效由 SVG 上的 CSS `stroke-dashoffset` 驱动，推断关系与顺序未知的关系保持静态，并尊重系统的减弱动态效果设置。 |
-| 阅读长说明后继续看图 | 展开卡片时下方各行让出空间，箭头仍接在卡片边缘；再次点击或按 Esc 可收起，恢复原来的位置。 | `toggle()` 读取详情的 `scrollHeight`，`layoutCards()` 从初始 `box` 算出各行位移，再调用 `drawEdges()` 重算连线。超出展开高度的文字可在卡片内部滚动。 |
-| 在长流程中找到另一阶段的行动 | 同一阶段的行动可以连续横向浏览，也可缩放看全貌。遇到跨阶段关系，点跳转项就会打开目标阶段、展开目标卡片并滚动到它的位置。 | Python 给跨阶段边保存目标页和记录 ID；前端依次调用 `showPage()`、`toggle()` 和 `scrollIntoView()`。缩放由 `zoom()` 统一作用于卡片和连线所在的容器。 |
-
-实现这些交互时，可以按**是否改变节点位置**决定更新范围。悬停和聚焦只更新样式和关系标签，所有卡片留在原位，便于连续比较。展开或收起会改变卡片边界，才需要重新排布和布线；重绘结束后再根据当前状态恢复高亮。[交互与样式源码](../../finmy/person_epg/event/graph.html)
-
-## 迁移到另一张图
-
-例如画项目交付依赖图，可以把任务作为卡片，用任务 ID 保存依赖边，把负责人和交付物放进详情。先按里程碑分组，再按依赖顺序排任务列。一项任务有三个后续任务时，画一个起点、三条出边。悬停时突出这三条依赖和对应任务，便于读者判断这项工作直接影响谁；点击才展开任务说明，并按新的卡片边界重画连线。换题材时，主要改动是**哪些记录成为节点、边表示什么、节点按什么规则排列**；卡片定位、滚动、连线路由和展开交互都可以参考同一套实现。
+如已制作与某份图绑定的手工版式，可通过 `--layout` 提供对应图指纹和页面坐标。自动导出和手工版式分别选用各自的模板。[导出入口](../../finmy/person_epg/event/graph_html.py) · [手工模板](../../finmy/person_epg/event/graph_authored.html)

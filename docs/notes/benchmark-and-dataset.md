@@ -1,7 +1,7 @@
 # 5 · 用途：训练数据集与评测协议（benchmark）
 
-> 对应框架规则：**FR-10**（并依赖 FR-8、FR-9）。框架层定义，不含字段/schema。
-> 关联：[2-action-graph](2-action-graph.md) · [3-context-model](3-context-model.md) · [4-evidence-and-provenance](4-evidence-and-provenance.md) · [6-production-review-and-validation](6-production-review-and-validation.md)
+> 早期方案笔记，沿用当时的规则编号。对应框架规则：**FR-10**（并依赖 FR-8、FR-9）。框架层定义，不含字段/schema。
+> 关联：[行动图](../person-event-structures/2-action-graph.md) · [背景模型](../person-event-structures/3-context-model.md) · [证据与溯源](../person-event-structures/4-evidence.md) · [生产复核笔记](production-review.md)
 
 ---
 
@@ -138,8 +138,8 @@ flowchart LR
 
 ## 5.8 与其他文件的关系
 
-- 规则来源：[0-overview](0-overview.md) FR-10。
-- 结构：[1-hierarchy](1-hierarchy.md)、[2-action-graph](2-action-graph.md)。
-- 上下文与防泄漏：[3-context-model](3-context-model.md)。
-- 证据与 closed-world：[4-evidence-and-provenance](4-evidence-and-provenance.md)。
-- 生产/复核/冻结：[6-production-review-and-validation](6-production-review-and-validation.md)。
+- 本笔记沿用早期评测提案的规则编号 FR-10。当前结构定义见[人物 Event 总览](../person-event-structures/0-overview.md)。
+- 结构：[事件层级](../person-event-structures/1-hierarchy.md)、[行动图](../person-event-structures/2-action-graph.md)。
+- 上下文与防泄漏：[背景模型](../person-event-structures/3-context-model.md)。
+- 证据与 closed-world：[证据与溯源](../person-event-structures/4-evidence.md)。
+- 生产/复核/冻结：[生产复核笔记](production-review.md)。

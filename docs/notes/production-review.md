@@ -1,7 +1,7 @@
 # 6 · 生产、复核与校验
 
-> 对应框架规则：**FR-11**（并落实 FR-2/3/4/5/7/8/9）。框架层定义，不含字段/schema。
-> 关联：[2-action-graph](2-action-graph.md) · [3-context-model](3-context-model.md) · [4-evidence-and-provenance](4-evidence-and-provenance.md) · [5-benchmark-and-dataset](5-benchmark-and-dataset.md)
+> 早期方案笔记，沿用当时的规则编号。对应框架规则：**FR-11**（并落实 FR-2/3/4/5/7/8/9）。框架层定义，不含字段/schema。
+> 关联：[行动图](../person-event-structures/2-action-graph.md) · [背景模型](../person-event-structures/3-context-model.md) · [证据与溯源](../person-event-structures/4-evidence.md) · [评测设想](benchmark-and-dataset.md)
 
 ---
 
