@@ -4,17 +4,14 @@ An interface to test the pdf parser under the finmy/collector.
 
 import logging
 import argparse
-import json
 
 from dotenv import load_dotenv
 
 from finmy.pdf_collector.pdf_collector import PDFCollector
-from finmy.pdf_collector.base import PDFCollectorInput, PDFCollectorOutput
+from finmy.pdf_collector.base import PDFCollectorInput
 
 
-if __name__ == "__main__":
-    # Load environment variables
-    load_dotenv()
+def main():
 
     parser = argparse.ArgumentParser(
         description="Parse PDFs with configurable options."
@@ -69,6 +66,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    load_dotenv()
 
     config = {
         # The directory to store output files
@@ -100,27 +98,9 @@ if __name__ == "__main__":
 
     # Collect the parsed and filtered results
     collect_results = parser_instance.collect(pdf_collector_input)
-    filter_results = parser_instance.filter(pdf_collector_input,collect_results)
+    filter_results = parser_instance.filter(pdf_collector_input, collect_results)
+    print(f"Parsed {len(collect_results.records)} PDFs; {len(filter_results.records)} matched.")
 
-    # Print final results summary
-    test_row={"name":"aaa","time":"bbb"}
-    test_row["parsed_content"]=collect_results.records[0].__dict__
-    print("test_row: ",test_row)
-    print("test_row['parsed_content']['Location']",test_row["parsed_content"]["Location"])
-    
-    with open(test_row["parsed_content"]["Location"],"r",encoding="utf-8") as f:
-        print(f.read())
-    with open("output/test_row.json","w",encoding="utf-8") as f:
-        json.dump(test_row,f,ensure_ascii=False,indent=4)
 
-    print("============")
-    print("===== collect_results =====")
-    print(list(collect_results.records))
-    print(collect_results.records[0].Location)
-    print("============")
-
-    print("============")
-    print("===== filter_results =====")
-    print(filter_results)
-    print("============")
-
+if __name__ == "__main__":
+    main()

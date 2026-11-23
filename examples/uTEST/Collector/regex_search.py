@@ -1,95 +1,48 @@
-"""Example script for searching keywords in PDF full text files.
-
-This script demonstrates how to use the base module to search for keywords
-in multiple 'full.md' files within different directories and save the results
-to a JSON file.
-
-Example Usage:
-    python examples/Collector/regex_search.py -i output -k reinforcement,reinforcement-learning,LLM -c 1000
-
-    -> Searching for keywords: ['reinforcement', 'reinforcement learning', 'LLM']
-
-"""
-
-import os
-import sys
+"""Search parsed full.md files and save literal matches and their context."""
 import argparse
+import json
+from pathlib import Path
+import re
 
-from finmy.matcher import re_match
+from finmy.matcher.utils import extract_context_with_paragraphs, split_paragraphs
+
+
+def search_files(root, keywords, context_chars):
+    results = []
+    patterns = [(kw, re.compile(re.escape(kw), re.IGNORECASE)) for kw in keywords]
+    for path in sorted(root.rglob("full.md")):
+        content = path.read_text(encoding="utf-8")
+        paragraphs = split_paragraphs(content)
+        matches = []
+        for keyword, pattern in patterns:
+            for match in pattern.finditer(content):
+                start, end = match.span()
+                context, _ = extract_context_with_paragraphs(
+                    content, start, end, context_chars, paragraphs)
+                matches.append(dict(matched_keyword=keyword, keyword_position=[start, end],
+                                    line_number=1 + content.count("\n", 0, start), context=context))
+        if matches:
+            results.append(dict(Source=str(path.relative_to(root)), keyword=keywords,
+                                match_count=len(matches), matches=matches))
+    return results
 
 
 def main():
-    """Main function to parse arguments and execute the search."""
-    parser = argparse.ArgumentParser(
-        description="Search for keywords in PDF extracted markdown files."
-    )
-
-    parser.add_argument(
-        "--input-path",
-        "-i",
-        type=str,
-        default="pdf_parse_results",
-        help="Directory containing subfolders with full.md files",
-    )
-
-    parser.add_argument(
-        "--keyword",
-        "-k",
-        type=str,
-        required=True,
-        help="""Keyword or list of keywords to search for in the markdown files. Can be a single keyword, comma-separated keywords (e.g., 'keyword1,keyword2,keyword3')""",
-    )
-
-    parser.add_argument(
-        "--output-path",
-        "-o",
-        type=str,
-        help="Path for the output JSON file (default: search_information.json in input directory)",
-    )
-
-    parser.add_argument(
-        "--context-chars",
-        "-c",
-        type=int,
-        default=2000,
-        help="Number of characters to include before and after each keyword match (default: 2000)",
-    )
-
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("-i", "--input-path", type=Path, default=Path("pdf_parse_results"))
+    parser.add_argument("-k", "--keyword", required=True, help="Comma-separated words or phrases")
+    parser.add_argument("-o", "--output-path", type=Path, help="Default: search_information.json in the input directory")
+    parser.add_argument("-c", "--context-chars", type=int, default=2000,
+                        help="Characters per side before expansion to paragraph boundaries")
     args = parser.parse_args()
-
-    # Validate input directory
-    if not os.path.isdir(args.input_path):
-        print(f"Error: Input path '{args.input_path}' is not a valid directory.")
-        return 1
-
-    # Parse keywords from input
-    keywords = re_match.parse_keywords(args.keyword)
-    print(f"Parsed keywords: {keywords}")
-
-    # Perform the keyword search
-    try:
-        print(f"Searching for keywords: {keywords}")
-        results = re_match.perform_keyword_search(
-            input_directory=args.input_path,
-            # Pass the list of keywords
-            keyword=keywords,
-            context_chars=args.context_chars,
-            output_path=args.output_path,
-        )
-
-        print(f"Search completed. Found matches in {len(results)} files.")
-        if args.output_path:
-            print(f"Results saved to: {args.output_path}")
-        else:
-            default_output = os.path.join(args.input_path, "search_information.json")
-            print(f"Results saved to: {default_output}")
-
-        return 0
-
-    except Exception as e:
-        print(f"An error occurred during the search: {str(e)}")
-        return 1
+    keywords = list(dict.fromkeys(k.strip().replace("-", " ") for k in args.keyword.split(",") if k.strip()))
+    if not args.input_path.is_dir() or not keywords or args.context_chars < 0:
+        parser.error("Supply an existing input directory, at least one keyword and a nonnegative context size")
+    results = search_files(args.input_path, keywords, args.context_chars)
+    output = args.output_path or args.input_path / "search_information.json"
+    output.write_text(json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"{len(results)} matching files. Saved {output}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

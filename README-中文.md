@@ -120,6 +120,7 @@ python -m finmy.workbench --port 8537
 #### 详细指南
 
 - [数据准备指南](docs/instruction.md) - PDF 处理、关键词检索与数据导入
+- [人物事件构建](docs/workflows/person-event-build.md) - 从已确认的单条人物事件开始构建
 - [事件工作台](docs/workflows/event-workbench.md) - 本地工作区与审核流程
 - [事件主表规范](docs/workflows/event-master.md) - 字段、范围与表格导入规则
 - [检索工作流](docs/workflows/search-enhancement.md) - 来源获取与构建输入交接

@@ -125,6 +125,7 @@ Builder tasks use confirmed inputs and a separate build-only worker.
 #### Detailed Guidance
 
 - [Data Preparation Guide](docs/instruction.md) - PDF processing, keyword search, and data import
+- [Person Event Build](docs/workflows/person-event-build.md) - Build one cataloged person event
 - [Event Workbench](docs/workflows/event-workbench.md) - Local workspace and review workflow
 - [Event Master](docs/workflows/event-master.md) - Fields, scope and table import rules
 - [Search Workflow](docs/workflows/search-enhancement.md) - Source acquisition and Builder handoff
