@@ -19,3 +19,5 @@ generation_config:
 timeout: 120  # Per-request timeout; saved tasks retain their own values.
 max_download_bytes: 20000000
 max_model_context_chars: 180000  # Conservative character guard, not a model token guarantee.
+# Optional passage retrieval stages; empty keeps the existing zero-extra-call reader.
+retrieval: {}

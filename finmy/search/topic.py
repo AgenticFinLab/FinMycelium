@@ -225,7 +225,7 @@ def allocate(state, complete, budget):
         # Preserve the exact validated span even when a lexical/noise rule excluded it.
         for p in marks:
             if p['block'] in e['blocks']:
-                items.append(dict(block=p['block'],start=p['start'],end=p['end'],text=doc['blocks'][p['block']]['text'][p['start']:p['end']]))
+                items.append(dict(block=p['block'],start=p['start'],end=p['end'],text=doc['blocks'][p['block']]['text'][p['start']:p['end']],mark=p))
                 if plan.get('policy') == POLICY:
                     groups.append(({len(items)-1},'priority'))
                 else:
@@ -247,14 +247,19 @@ def allocate(state, complete, budget):
         entry=dict(e,blocks=list(range(len(blocks))))
         return render_windows(entry,view,entry['blocks']) if blocks else '', original_ranges(view,entry['blocks'])
     remaining=budget
-    for phase in ('priority','ranked'):
-        pending={sid:[g for g,p in queues[sid] if p==phase] for sid in queues}
-        while any(pending.values()):
-            for sid in sorted(pending):
-                if not pending[sid]:continue
-                group=pending[sid].pop(0);candidate=picked[sid]|group
-                content,_=render(sid,candidate);cost=len(content)-sizes[sid]
-                if cost<=remaining: picked[sid]=candidate;sizes[sid]=len(content);remaining-=cost
+    coverage_decisions = None
+    if plan.get('policy') == POLICY:
+        from .coverage import choose
+        remaining, coverage_decisions = choose(entries, render, picked, sizes, budget)
+    else:
+        for phase in ('priority','ranked'):
+            pending={sid:[g for g,p in queues[sid] if p==phase] for sid in queues}
+            while any(pending.values()):
+                for sid in sorted(pending):
+                    if not pending[sid]:continue
+                    group=pending[sid].pop(0);candidate=picked[sid]|group
+                    content,_=render(sid,candidate);cost=len(content)-sizes[sid]
+                    if cost<=remaining: picked[sid]=candidate;sizes[sid]=len(content);remaining-=cost
     samples=[];selected=[];omitted=[]
     for sid,(e,items) in entries.items():
         content,ranges=render(sid,picked[sid])
@@ -274,4 +279,6 @@ def allocate(state, complete, budget):
     for p in complete.get('priority_passages', []):
         ranges = [(r['start'], r['end']) for r in ranges_by_source.get(p['source_id'], []) if r['block'] == p['block']]
         decisions.append(dict(passage=p, status='retained' if any(a <= p['start'] and b >= p['end'] for a, b in ranges) else 'material_limit'))
-    return dict(user_query=complete['user_query'],samples=samples),dict(budget_policy=plan['policy'],retrieval_plan=plan,selected=selected,omitted=omitted,material_chars=sum(sizes.values()),max_material_chars=budget,unused_chars=remaining,priority_decisions=decisions)
+    if coverage_decisions is not None:
+        decisions = coverage_decisions
+    return dict(user_query=complete['user_query'],samples=samples),dict(selection_policy='marginal_evidence_v1' if coverage_decisions is not None else 'legacy',budget_policy=plan['policy'],retrieval_plan=plan,selected=selected,omitted=omitted,material_chars=sum(sizes.values()),max_material_chars=budget,unused_chars=remaining,priority_decisions=decisions)

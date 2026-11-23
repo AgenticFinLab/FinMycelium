@@ -183,10 +183,13 @@ def usage_totals(rows):
 def search_usage(state):
     trace = read_jsonl(state.run_dir/'trace.jsonl')
     # Failed completions sometimes expose usage without a model_response record.
-    calls = [row for row in trace if row['action'] == 'model_response' or
+    calls = [row for row in trace if row['action'] in {'model_response', 'rerank_response'} or
              (row['action'] == 'action_error' and row.get('usage')
               and not row.get('usage_recorded_in_response'))]
     usage = usage_totals(calls)
+    usage['reranking'] = usage_totals([r for r in trace if r['action'] == 'rerank_response'])
+    embeddings = [r for r in trace if r['action'] == 'embedding_batch']
+    usage['embedding'] = dict(batches=len(embeddings), texts=sum(r['count'] for r in embeddings), seconds=sum(r['duration_seconds'] for r in embeddings))
     usage['attempted_model_calls'] = state.data['usage']['model']
     usage['provider_requests'] = state.data['usage']['search']
     usage['provider_seconds'] = sum(r.get('duration_seconds', 0) or 0 for r in trace

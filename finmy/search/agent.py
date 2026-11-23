@@ -66,6 +66,14 @@ Source IDs retain originals for review; they do not select the entire source for
 Mark every fact-check support, including necessary speaker attribution, dates, conditions,
 and independent corroboration. Mark neighboring context explicitly when needed; lexical
 hits alone are not delivery selections. There is no target length or minimum material size.
+Mark optional fact_ids (stable atomic-question keys), claim_id (same only for equivalent
+propositions), and evidence_role: terms, personal, condition, outcome, corroboration,
+contradiction, or context. Different dates, conditions, planned/completed states and
+opposing claims require distinct claim_ids. Necessary context belongs INSIDE the support
+span; standalone background marked context does not enter delivery. A verified independent
+corroboration may add independence_key naming its original evidence origin; reposts share
+one origin. Do not infer independence merely from different URLs. These selection judgments
+do not replace quotations. Cover the requested facts before adding repeated descriptions.
 Person-event finish includes person_evidence:
 {"status":"supported|limited|unattempted","detail":"Personal evidence, attempts and unknowns"}.
 Assess separately from chronology. Finish in about 1,000 output tokens; no repeated quotes
@@ -101,7 +109,8 @@ the program validates marks and allocates original text within budget.
 
 class LmbaseModel:
     """Lazy existing lmbase connection, no SDK retries hidden from task accounting."""
-    def __init__(self, config):
+    def __init__(self, config, *, system_prompt=SYSTEM_PROMPT):
+        self.system_prompt = system_prompt
         self.config = config
         self.adapter = None
         self.last_usage = None
@@ -141,7 +150,7 @@ class LmbaseModel:
         try:
             response = self.adapter.client.chat.completions.create(
                 model=self.adapter.model_name,
-                messages=[{'role':'system','content':SYSTEM_PROMPT},
+                messages=[{'role':'system','content':self.system_prompt},
                           {'role':'user','content':json.dumps(context,ensure_ascii=False)}], **params)
         except Exception as exc:
             configuration_error = api_configuration_error(exc, 'Search model API')

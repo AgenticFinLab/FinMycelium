@@ -41,3 +41,7 @@ The attached implementation was also replayed against the supplied Buffett run,
 using its existing original text, priority marks and fixed Judge labels. This
 isolates material selection, not a new end-to-end web search. The existing eval
 rubric limitations still apply; no Judge labels are consulted by the algorithm.
+
+Optional mixed recall, evidence reranking and marginal-value delivery are described
+in [search-retrieval-selection.md](search-retrieval-selection.md). The default
+reader remains `topic`; opt-in modes have separate cache and usage records.

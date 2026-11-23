@@ -41,8 +41,8 @@ def source_pool(state, proposed, exclusions=None):
 
 
 def validate_passage(state, item, *, versions=None):
-    if not isinstance(item,dict) or set(item)-{'source_id','version','block','start','end','reason'}:
-        raise ValueError('Use source_id, block, start, end and a short reason')
+    if not isinstance(item,dict) or set(item)-{'source_id','version','block','start','end','reason','fact_ids','claim_id','evidence_role','independence_key'}:
+        raise ValueError('Use source_id, block, start, end, reason and optional coverage fields')
     sid = item.get('source_id')
     if not isinstance(sid,str) or sid not in state.data['sources']:
         raise ValueError('Unknown passage source')
@@ -65,7 +65,8 @@ def validate_passage(state, item, *, versions=None):
     reason = item.get('reason','')
     if not isinstance(reason,str) or len(reason)>300:
         raise ValueError('Passage reason must be text of at most 300 characters')
-    return dict(source_id=sid,version=version,block=block,start=start,end=end,reason=reason)
+    from .coverage import annotation
+    return dict(source_id=sid,version=version,block=block,start=start,end=end,reason=reason, **annotation(item))
 
 
 def record_passages(state, items):
@@ -88,7 +89,7 @@ def record_passages(state, items):
         if old is None:
             saved.append(item)
         else:
-            old['reason'] = item['reason']
+            old.update(item)
     report = dict(accepted=len(accepted),rejected=rejected)
     state.data['priority_feedback'] = report
     state.trace(dict(action='priority_passages',**report))

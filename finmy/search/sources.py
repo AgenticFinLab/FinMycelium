@@ -408,8 +408,17 @@ class SourceStore:
                 navigation=navigation_hints(doc.get('metadata', {})))
         if query is not None:
             from .reading import targeted_spans, read_coverage
-            spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,
-                                            entry.get('read_ranges', []), topic_plan=self.state.data.get('retrieval_plan'))
+            if self.state.config.retrieval.get('mode', 'topic') != 'topic':
+                from .hybrid import RetrievalSession, read_retrieved
+                from .metadata import source_metadata
+                if not hasattr(self, '_retrieval_session'):
+                    self._retrieval_session = RetrievalSession(self.state)
+                spans, reading = read_retrieved(self._retrieval_session, doc, query,
+                    self.state.config.max_read_chars, entry.get('read_ranges', []),
+                    source_id=sid, metadata=source_metadata(entry, doc))
+            else:
+                spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,
+                                                entry.get('read_ranges', []), topic_plan=self.state.data.get('retrieval_plan'))
             ranges = entry.setdefault('read_ranges', [])
             for span in spans:
                 record = dict(version=doc['version'], **{k:span[k] for k in ('block','start','end')})

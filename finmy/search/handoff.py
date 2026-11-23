@@ -59,7 +59,7 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
     return payload
 
 
-def _clean_blocks(document):
+def _clean_blocks(document, protected=()):
     """Conservative cleanup only; keep original paragraph text and its block index."""
     chrome = {'首页', '登录', '注册', '返回顶部', 'home', 'sign in', 'log in', 'back to top'}
     kept, removed, seen = [], [], {}
@@ -71,7 +71,7 @@ def _clean_blocks(document):
             why = 'empty'
         elif document['kind'] == 'html' and normalized.casefold() in chrome:
             why = 'navigation_label'
-        elif len(normalized) >= 80 and normalized in seen:
+        elif index not in protected and len(normalized) >= 80 and normalized in seen:
             why = 'exact_repeated_paragraph'
         if why:
             removed.append(dict(block=index, reason=why))
@@ -114,14 +114,25 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
             raise ValueError('Inspect this source before keeping it: ' + sid)
         document = store.document(sid, version)
         selected_versions[sid] = version
-        blocks, removed = _clean_blocks(document)
+        from .evidence import validate_passage
+        marks = []
+        for mark in state.data.get('priority_passages', []):
+            if mark.get('source_id') != sid:
+                continue
+            try:
+                marks.append(validate_passage(state, mark, versions={sid: version}))
+            except (ValueError, KeyError, TypeError, IndexError, OSError):
+                continue  # retained_passages reports invalid/stale marks below.
+        blocks, removed = _clean_blocks(document, {m['block'] for m in marks})
         cleanup.extend(dict(source_id=sid, version=version, **r) for r in removed)
         if not blocks:
             omitted.append(dict(source_id=sid, version=version, omission_reason='no_usable_body'))
             continue
         body = '\n\n'.join(text for _, text in blocks)
         from .state import digest
-        fingerprint = digest(' '.join(body.split()))
+        origins = sorted({m['independence_key'] for m in marks
+                          if m.get('evidence_role') == 'corroboration' and m.get('independence_key')})
+        fingerprint = digest(dict(body=' '.join(body.split()), independent_origins=origins))
         if fingerprint in fingerprints:
             duplicates.append(dict(source_id=sid, version=version, duplicate_of=fingerprints[fingerprint]))
             continue
