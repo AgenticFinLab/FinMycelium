@@ -1,6 +1,8 @@
 """Display columns and lanes for one Phase, using verified windows and order only."""
-from collections import defaultdict
+from bisect import bisect_left
+from collections import Counter, defaultdict
 from graphlib import TopologicalSorter
+from math import ceil
 
 from .temporal import ActionWindow, time_pairs
 
@@ -213,20 +215,96 @@ def _relative_components(ids, info):
         yield [a for a in ids if a in component]
 
 
+def _group_time_slots(chronology, cells, ticks):
+    """Widen a crowded, unordered time slot by one card. All dates keep their own tick."""
+    candidates = defaultdict(list)
+    for aid, cell in cells.items():
+        mark = cell['mark']
+        if mark not in ('upper', 'lower', 'scope', 'window'):
+            continue
+        window = chronology.windows[aid]
+        time = chronology.actions[aid].get('time') or {}
+        if mark == 'window' and (not window or window.intraday or time.get('kind') == 'duration'):
+            continue
+        precision = (time.get('start_precision'), time.get('end_precision')) if window else None
+        key = (cell['column'], cell['first'], cell['last'], mark, cell['note'],
+               chronology.limits.get(aid), window, precision, chronology.labels.get(aid))
+        candidates[key].append(aid)
+
+    groups = [members for members in candidates.values()
+              if len(members) >= 3 and all(chronology.after[a].isdisjoint(members) for a in members)]
+    if not groups:
+        return
+    splits = sorted({cells[members[0]]['column'] for members in groups})
+
+    def left(col):
+        return col + bisect_left(splits, col)
+
+    def middle(col):
+        return left(col) + (0.5 if col in splits else 0)
+
+    for tick in ticks:
+        tick['column'] = middle(tick['column'])
+    for cell in cells.values():
+        col, lo, hi = cell['column'], cell['first'], cell['last']
+        cell['column'] = middle(col)
+        if lo == hi and not cell['mark']:
+            cell['first'] = cell['last'] = cell['column']
+            continue
+        # The closed cap of a one-sided limit stays on the date. Open ends
+        # and two-ended windows cover the full display width of their slot.
+        cell['first'] = middle(lo) if cell['mark'] == 'lower' else left(lo)
+        cell['last'] = middle(hi) if cell['mark'] == 'upper' else left(hi) + int(hi in splits)
+    for members in groups:
+        for i in range(0, len(members), 2):
+            pair = members[i:i + 2]
+            for j, a in enumerate(pair):
+                cell = cells[a]
+                cell['card_column'] = cell['column'] + j - (len(pair) - 1) / 2
+                # The first card draws the range for both selectable endpoints.
+                cell['mark_members'] = pair if j == 0 else []
+
+
+def _compact_lanes(members, cells, info):
+    """Cards and the time brackets below them occupy two different tracks per row."""
+    lanes = []
+    for a in members:
+        cell = cells[a]
+        unit = cell.get('mark_members', [a])
+        if not unit:
+            continue
+        columns = [cells[b].get('card_column', cells[b]['column']) for b in unit]
+        # Time caps are centred on a tick. Every open end extends under the card.
+        span = None
+        if cell['mark']:
+            span = (cell['first'] - (0 if cell['mark'] == 'lower' else 0.4),
+                    cell['last'] + (0 if cell['mark'] == 'upper' else 0.4))
+        free = [lane for lane in lanes
+                if all(abs(x - y) >= 1 for x in columns for y in lane['columns'])
+                and (not span or all(span[0] > hi or span[1] < lo for lo, hi in lane['spans']))]
+        if free:
+            predecessors = {b for member in unit for b in info[member]['earlier']}
+            lane = next((lane for lane in free if not predecessors.isdisjoint(lane['actions'])), free[0])
+        else:
+            lane = dict(actions=[], columns=[], spans=[])
+            lanes.append(lane)
+        lane['actions'].extend(unit)
+        lane['columns'].extend(columns)
+        if span:
+            lane['spans'].append(span)
+    return [lane['actions'] for lane in lanes]
+
+
 def phase_layout(chronology, ordered, info, aliases, *, in_phase=True):
     """Assign every Action exactly once. Row numbers have no temporal meaning."""
     cells, ticks = _calendar_cells(chronology, ordered, info, aliases)
     order_index = {a: i for i, a in enumerate(chronology.actions)}
-    bands = []
-    if cells:
-        # Give the clearest sequence the uninterrupted main row. Broader
-        # windows then reserve their entire span on the first available lane.
-        dated = sorted((a for a in cells if a not in chronology.limits),
-                       key=lambda a: (cells[a]['last'] - cells[a]['first'], cells[a]['column'], order_index[a]))
-        limited = sorted((a for a in cells if a in chronology.limits),
-                         key=lambda a: (cells[a]['column'], chronology.limits[a][0],
-                                        chronology.limits[a][1].start, order_index[a]))
-        bands.extend([('calendar', dated), ('calendar', limited)])
+    # Give the clearest sequence first choice of a row.
+    dated = sorted((a for a in cells if a not in chronology.limits),
+                   key=lambda a: (cells[a]['last'] - cells[a]['first'], cells[a]['column'], order_index[a]))
+    limited = sorted((a for a in cells if a in chronology.limits),
+                     key=lambda a: (cells[a]['column'], chronology.limits[a][0],
+                                    chronology.limits[a][1].start, order_index[a]))
     remaining = [a for a in ordered if a not in cells and not info[a]['conflict']]
     unplaced = []
     chains = []
@@ -244,35 +322,31 @@ def phase_layout(chronology, ordered, info, aliases, *, in_phase=True):
         note = _anchor_note(a, chronology, aliases) or ('Phase only' if in_phase else 'Date unknown')
         cells[a] = dict(column=last_col / 2, first=0, last=last_col, band=scope_band,
                         mark='scope' if in_phase else None, note=note)
-    bands.append((scope_band, unplaced))
-    bands.extend(chains)
     disputed = [a for a in ordered if info[a]['conflict']]
     for a in disputed:
         cells[a] = dict(column=last_col / 2, first=0, last=last_col, band='disputed', mark=None, note='Order disputed')
-    bands.append(('disputed', disputed))
+    bands = [('timeline', dated + limited + unplaced), *chains, ('disputed', disputed)]
 
+    _group_time_slots(chronology, cells, ticks)
     rows = []
     for band, members in bands:
-        lanes = []
-        same_column = defaultdict(list)
-        for a in members:
-            same_column[cells[a]['column']].append(a)
+        column_counts = Counter((cells[a]['band'], cells[a]['column']) for a in members)
         for a in members:
             cell = cells[a]
-            if len(same_column[cell['column']]) > 1:
-                if band == 'relative':
+            if column_counts[cell['band'], cell['column']] > 1:
+                if cell['band'] == 'relative':
                     cell['note'] = 'Order within branch group unresolved'
-                elif band == 'calendar' and not cell['note'] and not cell['mark']:
+                elif cell['band'] == 'calendar' and not cell['note'] and not cell['mark']:
                     cell['note'] = 'Order within group unresolved'
-            free = [i for i, lane in enumerate(lanes) if all(
-                cell['first'] > cells[b]['last'] or cell['last'] < cells[b]['first'] for b in lane)]
-            preferred = [i for i in free if any(b in info[a]['earlier'] for b in lanes[i])]
-            i = next(iter(preferred or free), len(lanes))
-            if i == len(lanes):
-                lanes.append([])
-            lanes[i].append(a)
-            cell['row'] = len(rows) + i
+        lanes = _compact_lanes(members, cells, info)
+        if band == 'timeline':
+            # Keep the main lane in the middle. Additional lanes alternate
+            # below and above it; vertical position makes no assertion.
+            above = list(reversed(lanes[2::2]))
+            lanes = above + lanes[:1] + lanes[1::2]
         for i, lane in enumerate(lanes):
+            for a in lane:
+                cells[a]['row'] = len(rows)
             rows.append(dict(band=band, header=i == 0, actions=lane))
-    columns = max([0, *(t['column'] for t in ticks), *(c['last'] for c in cells.values())]) + 1
+    columns = ceil(max([0, *(t['column'] for t in ticks), *(c['last'] for c in cells.values())])) + 1
     return cells, rows, ticks, columns

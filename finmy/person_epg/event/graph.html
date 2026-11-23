@@ -318,6 +318,7 @@ select:focus-visible {
 .action-span.lower { border-right: 0; border-top-style: dashed }
 .action-span span { display: inline-block; margin-top: 1px; padding: 0 5px; background: white;
   font-size: 11px; white-space: nowrap; vertical-align: top }
+.action-span.shared-time span { position: absolute; transform: translateX(-50%) }
 .time-key { font: 12px Arial, sans-serif; margin-left: 14px; color: #405e59; white-space: nowrap }
 .time-key::before { content: ''; display: inline-block; margin-right: 5px; width: 21px; height: 4px;
   border-inline: 1px solid; border-top: 2px dotted }
@@ -416,6 +417,7 @@ select:focus-visible {
   padding: 0;
   text-align: center
 }
+.card.party > .preview { position: absolute; inset: 0; display: block }
 
 .party-icon {
   display: block;
@@ -902,17 +904,24 @@ function paintCard(card, container) {
     button.dataset.row = cell.row;
     button.dataset.column = cell.column;
     button.dataset.band = cell.band;
-    button.title = [button.title, card.date, cell.note].filter(Boolean).join(' · ');
-    if (cell.mark) {
+    const grouped = Array.isArray(cell.mark_members);
+    const timeHint = [card.date, cell.note, grouped && 'Order within group unknown'].filter(Boolean).join(' · ');
+    button.title = [button.title, timeHint].filter(Boolean).join(' · ');
+    if (cell.mark && (!grouped || cell.mark_members.length)) {
       const kind = timeMarkName(cell.mark);
       span = el('div', null, 'action-span ' + cell.mark);
       span.dataset.action = card.id;
-      const caption = cell.mark === 'scope' && cell.note === 'Phase only' ? cell.note : [kind, cell.note].filter(Boolean).join(' · ');
+      let caption = cell.mark === 'scope' && cell.note === 'Phase only' ? cell.note : [kind, cell.note].filter(Boolean).join(' · ');
+      const aliases = grouped ? cell.mark_members.map(id => view.aliases[id]).join(' / ') : card.alias;
+      if (grouped) {
+        span.classList.add('shared-time');
+        caption = aliases + ' · Order unknown';
+      } else caption = card.alias + ' · ' + caption;
       span.append(el('span', caption));
-      span.setAttribute('aria-label', [card.alias, kind, card.date, cell.note].filter(Boolean).join(' · '));
+      span.setAttribute('aria-label', [aliases, kind, timeHint].filter(Boolean).join(' · '));
       $('regions').append(span);
     }
-    button.setAttribute('aria-label', [card.alias, card.title, card.date, cell.note].filter(Boolean).join(' · '));
+    button.setAttribute('aria-label', [card.alias, card.title, timeHint].filter(Boolean).join(' · '));
   }
   cards.set(card.key, {card, button, span});
 }
@@ -1445,7 +1454,12 @@ function drawEdges() {
     headings.push([x + 10, y + 5, width, 30]);
     if (section.title === 'Actions and their context') headings.push([645, y + 7, 450, 28]);
   }
-  const obstacles = [...boxes.values(), ...partyLabels, ...headings];
+  const graphBounds = $('graph').getBoundingClientRect();
+  const timeLabels = [...$('regions').querySelectorAll('.action-span span')].map(el => {
+    const r = el.getBoundingClientRect();
+    return [(r.left - graphBounds.left) / scale, (r.top - graphBounds.top) / scale, r.width / scale, r.height / scale];
+  });
+  const obstacles = [...boxes.values(), ...partyLabels, ...headings, ...timeLabels];
   for (const {edge, lane, width} of page.actionLabels) {
     const a = boxes.get(edge.from_key), b = boxes.get(edge.to_key);
     slots.set(edge.relation_id, [actionLabelX(a, b) - width / 2,
@@ -1675,9 +1689,16 @@ function spreadColumns(width) {
   const first = Math.min(...centers), last = Math.max(...centers);
   const inset = Math.min(left, page.width - right), extra = Math.max(0, width - right - inset);
   const mapX = x => x + extra * (first === last ? .5 : (x - first) / (last - first));
-  nodes.forEach(({button, card}, i) => { button.style.left = mapX(centers[i]) - card.box[2] / 2 + 'px'; });
+  nodes.forEach(({button, card}, i) => {
+    const cell = card.chronology?.placement;
+    // Spare screen width separates time slots. Keep siblings sharing one
+    // bracket together with their original gutter at every zoom level.
+    const anchor = body && Array.isArray(cell?.mark_members) ? body.origin + cell.column * body.step : centers[i];
+    button.style.left = mapX(anchor) + centers[i] - anchor - card.box[2] / 2 + 'px';
+  });
   if (!body) return;
   const columnX = col => mapX(body.origin + col * body.step);
+  const nodesById = new Map(nodes.map(({card, button}) => [card.id, button]));
   for (const label of $('regions').querySelectorAll('.axis-tick')) {
     const region = label.parentElement;
     label.style.left = columnX(Number(label.dataset.column)) - region.offsetLeft - region.clientLeft + 'px';
@@ -1688,7 +1709,12 @@ function spreadColumns(width) {
     // The closed end of a one-sided limit aligns with the calendar column.
     const start = columnX(cell.first) - (cell.mark === 'lower' ? 0 : 126);
     const end = columnX(cell.last) + (cell.mark === 'upper' ? 0 : 126);
-    position(span, [start, button.offsetTop + button.offsetHeight + 7, end - start, 7]);
+    let height = button.offsetHeight;
+    if (cell.mark_members) {
+      span.firstElementChild.style.left = columnX(cell.column) - start + 'px';
+      for (const id of cell.mark_members) height = Math.max(height, nodesById.get(id).offsetHeight);
+    }
+    position(span, [start, button.offsetTop + height + 7, end - start, 7]);
   }
 }
 
@@ -1815,6 +1841,12 @@ function prepareActionLabelLanes(page) {
     if (!rows.has(row)) rows.set(row, []);
     rows.get(row).push({edge, width, left: x - width / 2});
   }
+  if (!rows.size) return;
+  const actions = diagramCards.filter(c => c.kind === 'action');
+  const actors = new Set(diagramCards.filter(c => c.caption === 'Focal person' || c.caption === 'Actor'));
+  const actionMidline = () => (Math.min(...actions.map(c => c.box[1])) +
+    Math.max(...actions.map(c => c.box[1] + c.box[3]))) / 2;
+  const originalMidline = actionMidline();
   // An inset above one row shifts every lower row together with its labels.
   for (const [y, labels] of [...rows].sort((a, b) => b[0] - a[0])) {
     const ends = [];
@@ -1825,17 +1857,20 @@ function prepareActionLabelLanes(page) {
       page.actionLabels.push({edge: entry.edge, width: entry.width, lane});
     }
     const above = Math.max(0,
-      ...diagramCards.filter(c => c.box[1] < y).map(c => c.box[1] + c.box[3]),
+      ...diagramCards.filter(c => c.box[1] < y && !actors.has(c)).map(c =>
+        c.box[1] + c.box[3] + (c.chronology?.placement?.mark ? 24 : 0)),
       ...page.sections.filter(s => s.box[1] < y).map(s => s.box[1] + 38));
     const inset = above + ends.length * LABEL_LANE_HEIGHT + 6 - y;
     if (inset <= 0) continue;
-    for (const c of page.cards) if (c.box[1] >= y) c.box[1] += inset;
+    for (const c of page.cards) if (c.box[1] >= y && !actors.has(c)) c.box[1] += inset;
     for (const s of page.sections) {
       if (s.box[1] >= y) s.box[1] += inset;
       else if (s.box[1] + s.box[3] > y) s.box[3] += inset;
     }
     page.height += inset;
   }
+  const shift = actionMidline() - originalMidline;
+  for (const c of actors) c.box[1] += shift;
 }
 
 $('fit').onclick = () => changeZoom(1);

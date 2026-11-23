@@ -209,7 +209,8 @@ def test_native_view_keeps_source_graph_and_groups_open_order(graph):
     assert cards['X']['box'][0] == cards['M']['box'][0] and cards['X']['box'][1] > cards['M']['box'][1]
     cell = cards['U']['chronology']['placement']
     assert cell['band'] == 'phase' and cell['note'] == 'Phase only' and cell['mark'] == 'scope'
-    assert cards['U']['box'][1] > group['box'][1] and all(s['title'] != 'Timing unresolved' for s in page['sections'])
+    assert cards['U']['box'][1] < cards['M']['box'][1] < cards['X']['box'][1] < group['box'][1]
+    assert all(s['title'] != 'Timing unresolved' for s in page['sections'])
     assert cards['M']['chronology']['unordered'] == ['U', 'X']
     assert any(e['from'] == 'L' and e['to'] == 'M' and e['type'] == 'responds_to' for e in page['edges'])
 
@@ -290,6 +291,58 @@ def test_equal_single_limits_are_adjacent_and_do_not_determine_order(graph, side
     assert cells['L']['note'] == 'Phase only' and cells['U']['mark'] in ('lower', 'upper')
 
 
+@pytest.mark.parametrize('side', ['start', 'end'])
+def test_crowded_limit_shares_a_bracket_and_keeps_the_date_and_each_action(graph, side):
+    temporal_graph(graph)
+    day = dict(kind='occurrence_window', text='March 1', start=str(DAY), end='2024-03-02',
+               start_precision='day', end_precision='day')
+    bound = dict(unknown_time(), kind='occurrence_window', **{side:day[side], side+'_precision':'day'})
+    for action in graph['actions']:
+        action['time'] = day if action['action_id'] == 'X' else bound.copy()
+    before = deepcopy(graph)
+    page = embedded_data(render_graph_html(graph), 'epg-view')['pages'][1]
+    cards = {c['id']: c for c in page['cards'] if c['kind'] == 'action'}
+    cells = {a: c['chronology']['placement'] for a, c in cards.items()}
+    group = [cells[a] for a in ('L', 'U', 'M')]
+    assert cells['L']['mark_members'] == ['L', 'U'] and cells['U']['mark_members'] == []
+    assert cells['M']['mark_members'] == ['M']
+    assert cells['L']['row'] == cells['U']['row'] != cells['M']['row']
+    assert len({p['column'] for p in group}) == 1
+    assert len({p['row'] for p in cells.values()}) == 2
+    xs = [cards[a]['box'][0] for a in ('L', 'U', 'M')]
+    tick, = next(s['ticks'] for s in page['sections'] if s['title'] == 'Action chronology')
+    closed = 'first' if side == 'start' else 'last'
+    assert all(p[closed] == tick['column'] == cells['X']['column'] for p in group)
+    if side == 'start':
+        assert min(xs) > cards['X']['box'][0]
+    else:
+        assert max(xs) < cards['X']['box'][0]
+    assert all(not c['chronology']['earlier'] and not c['chronology']['later'] for c in cards.values())
+    assert len(group) == len(set(xs)) and graph == before
+    link(graph, 'U', 'precedes', 'L')
+    cells = lane_view(graph)
+    assert cells['U']['column'] < cells['L']['column']
+    assert all(not {'U', 'L'} <= set(c.get('mark_members', [])) for c in cells.values())
+
+
+def test_phase_only_actions_share_rows_around_focal_actor_without_borrowing_dates(graph):
+    temporal_graph(graph)
+    graph['actions'].extend(dict(graph['actions'][0], action_id=aid) for aid in ('Y', 'Z', 'W'))
+    for action in graph['actions']:
+        action['time'] = unknown_time()
+    page = embedded_data(render_graph_html(graph), 'epg-view')['pages'][1]
+    actions = [c for c in page['cards'] if c['kind'] == 'action']
+    cells = [c['chronology']['placement'] for c in actions]
+    tops = {c['box'][1] for c in actions}
+    focal = next(c for c in page['cards'] if c.get('caption') == 'Focal person')
+    assert len(actions) == 7 and len(tops) == 4
+    assert focal['box'][1] + 28 == (min(tops) + max(tops) + 90) / 2
+    assert all(c['note'] == 'Phase only' and c['mark'] == 'scope' for c in cells)
+    assert all(not c['date'] and not c['chronology']['earlier'] and not c['chronology']['later'] for c in actions)
+    axis = next(s for s in page['sections'] if s['title'] == 'Action chronology')
+    assert axis['ticks'] == [] and axis['box'][1] > max(tops) + 90
+
+
 def test_action_with_conflicting_bound_or_without_phase_cannot_acquire_date(graph):
     temporal_graph(graph)
     a = graph['actions'][1]
@@ -339,11 +392,15 @@ def test_known_sequence_within_boundary_day_overrides_default_flank(graph, side,
 
 def test_mixed_context_uses_only_an_existing_gap(graph):
     temporal_graph(graph)
+    graph['actions'] = [a for a in graph['actions'] if a['action_id'] != 'U']
     actions = {a['action_id']: a for a in graph['actions']}
     for a in actions.values():
         a['delta_context_refs'] = []
-    actions['X']['time'] = dict(unknown_time(), kind='occurrence_window', start=str(DAY), end='2024-03-02',
-                                start_precision='day', end_precision='day')
+    # A wide window needs a different bracket row. The middle date on the
+    # narrower Actions' row remains free for the dual-use Context.
+    for aid, lo, hi in [('M', 0, 1), ('X', 0, 3), ('L', 2, 3)]:
+        actions[aid]['time'] = dict(unknown_time(), kind='occurrence_window', start=str(DAY + timedelta(days=lo)),
+                                    end=str(DAY + timedelta(days=hi)), start_precision='day', end_precision='day')
     graph['contexts'].append(dict(context_id='C', description='Consequence and subsequent condition.'))
     def snapshot():
         page = embedded_data(render_graph_html(graph), 'epg-view')['pages'][1]

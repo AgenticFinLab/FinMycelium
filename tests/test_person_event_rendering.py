@@ -148,6 +148,53 @@ def test_running_renderer_keeps_its_matching_template(tmp_path, graph, monkeypat
 
 
 @pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_shared_time_slot_stays_together_and_focal_icon_stays_centred(tmp_path, graph):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event.graph_html import render_graph_html
+    from test_person_event_chronology import link, temporal_graph
+
+    temporal_graph(graph)
+    for a in graph['actions']:
+        a['time'] = dict(unknown_time(), kind='occurrence_window', end='2024-03-02', end_precision='day')
+    graph['actions'][-1]['time'].update(start='2024-03-01', start_precision='day')
+    link(graph, 'M', 'enables', 'L')
+    output = tmp_path / 'shared-limit.html'
+    output.write_text(render_graph_html(graph), encoding='utf-8')
+    geometry = """() => {
+        const cards = [...document.querySelectorAll('#cards .action')];
+        const rect = node => node.getBoundingClientRect();
+        const card = id => rect(cards.find(c => c.dataset.id === id));
+        const [a, b, c, date] = ['L','U','M','X'].map(card);
+        const icon = rect([...document.querySelectorAll('.party')].find(p =>
+          p.innerText.includes('Focal person')).querySelector('.party-icon'));
+        const marks = [...document.querySelectorAll('.shared-time')], bracket = rect(marks[0]);
+        const y = (Math.min(...cards.map(c=>rect(c).top)) + Math.max(...cards.map(c=>rect(c).bottom))) / 2;
+        const ratio = a.width / cards[0].offsetWidth;
+        return a.top === b.top && a.bottom < c.top && a.right < b.left && b.right < date.left &&
+          Math.abs((b.left - a.right) / ratio - 60) < 2 && Math.abs((icon.top + icon.bottom)/2 - y) < 1 &&
+          marks.length === 2 && marks[0].textContent.includes('A01 / A02') &&
+          Math.abs(bracket.right - (date.left + date.right)/2) < 1;
+    }"""
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        page = browser.new_page(viewport={'width': 1920, 'height': 900}, offline=True)
+        page.goto(output.as_uri())
+        page.locator('#picker').select_option('1')
+        page.wait_for_function(geometry)
+        for button in ['#minus', '#fit', '#plus', '#zoom']:
+            page.locator(button).click()
+            page.wait_for_function(geometry)
+        page.set_viewport_size({'width': 580, 'height': 740})
+        page.locator('#fit').click()
+        page.wait_for_function(geometry)
+        page.locator('.action[data-id="U"]').focus()
+        page.keyboard.press('Enter')
+        assert page.locator('.action[data-id="U"]').get_attribute('aria-expanded') == 'true'
+        page.wait_for_function(geometry)
+        browser.close()
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
 def test_phase_overview_and_reading_size_in_browser(tmp_path, graph):
     from playwright.sync_api import sync_playwright
     from finmy.person_epg.event.graph_html import render_graph_html

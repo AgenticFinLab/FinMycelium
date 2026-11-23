@@ -52,7 +52,7 @@ def _context_homes(ordered, records, context_ids, placement, chronology, inline,
     above, below, between = defaultdict(list), defaultdict(list), defaultdict(dict)
 
     def place_outside(cid, owners, side):
-        cols = sorted(placement[a]['column'] for a in set(owners))
+        cols = sorted(placement[a].get('card_column', placement[a]['column']) for a in set(owners))
         side[math.floor(cols[(len(cols)-1)//2])].append(cid)
 
     for cid in inline:
@@ -316,13 +316,19 @@ def arrange_graph(graph, view, issues=None, payload=None):
                        any(entry['owner'] in visible or entry['owner'] == page_owner for entry in entries))
         other = [nid for nid in records if kinds.get(nid) == 'party' and nid in related and nid not in actors]
         action_tops = [card['box'][1] for card in cards if card['kind'] == 'action']
-        first = min(action_tops, default=body_top + 52)
-        for i, nid in enumerate(actors):
-            card = make_card(nid, [42, first + i * 138, 148, 108])
+        first = body_top + 52
+        if action_tops:
+            # The 56px party icon is the endpoint of the actor's edges.
+            first = (min(action_tops) + max(action_tops) + 90) / 2 - 28
+        actors.sort(key=lambda nid: nid != person_id)
+        above = min(len(actors) // 2, int((first - body_top - 48) // 138))
+        actor_rows = [0, *range(-1, -above - 1, -1), *range(1, len(actors) - above)]
+        for nid, row in zip(actors, actor_rows):
+            card = make_card(nid, [42, first + row * 138, 148, 108])
             card['caption'] = 'Focal person' if nid == person_id else 'Actor'
             cards.append(card)
         if actors:
-            body_end = max(body_end, first + (len(actors) - 1) * 138 + 132)
+            body_end = max(body_end, first + max(actor_rows) * 138 + 132)
         # Reuse free slots beside the action rows before adding another row.
         xs = [] if reserve_timeline else sorted({card['box'][0] for card in cards if card['kind'] == 'action'})
         width = 260
@@ -512,23 +518,9 @@ def arrange_graph(graph, view, issues=None, payload=None):
             return bottom
 
         y = place_neighbors(before, y)
-        # The rail separates anchored rows from less precise ones on the same
-        # grid. It never divides two Actions with the same open boundary.
-        dated_rows = [i for i, row in enumerate(rows) if any(chronology.windows[a]
-                      and not timing[a]['conflict'] for a in row['actions'])]
-        calendar_end = max((i for i, row in enumerate(rows) if row['band'] == 'calendar'), default=-1)
-        axis_row = max(dated_rows, default=calendar_end)
         phase_period = chronology.phase_periods.get(pid)
-
-        def add_axis(top):
-            sections.append(dict(title='Action chronology', ticks=ticks, phase_period=phase_period, origin=left + 130,
-                                 step=320, box=[22, top, canvas_width - 44, 82]))
-            return top + 98
-
-        if phase and not ticks and len(ordered) > 1 and any(c['mark'] == 'scope' for c in placement.values()):
-            y = add_axis(y)
         for i, row in enumerate(rows):
-            lane = sorted(row['actions'], key=lambda a: placement[a]['column'])
+            lane = row['actions']
             band = row['band']
             if row['header'] and band in ('relative', 'disputed'):
                 label = 'Relative order' if band == 'relative' else 'Order disputed'
@@ -538,12 +530,15 @@ def arrange_graph(graph, view, issues=None, payload=None):
                 cards.append(make_card(cid, [left + col * 320, y, 260, 72]))
             for aid in lane:
                 cell = placement[aid]
-                card = make_card(aid, [left + cell['column'] * 320, y, 260, 90])
+                col = cell.get('card_column', cell['column'])
+                card = make_card(aid, [left + col * 320, y, 260, 90])
                 card.update(chronology={**timing[aid], 'placement': cell}, date=_short(timing[aid]['label'], 48))
                 cards.append(card)
             y += 132 if any(placement[a]['mark'] for a in lane) else 114
-            if ticks and len(ordered) > 1 and i == axis_row:
-                y = add_axis(y)
+        if len(ordered) > 1 and (ticks or any(c['mark'] == 'scope' for c in placement.values())):
+            sections.append(dict(title='Action chronology', ticks=ticks, phase_period=phase_period, origin=left + 130,
+                                 step=320, box=[22, y, canvas_width - 44, 82]))
+            y += 98
         y = place_neighbors(after, y)
         remaining = list(dict.fromkeys(cid for cid in context if cid not in shown))
         if not cards and not remaining and phase:

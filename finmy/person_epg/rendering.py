@@ -10,7 +10,7 @@ from finmy.search.state import digest, now, write_json
 from finmy.search.summary import directory_lock
 
 
-_VIEW_REVISION = 18
+_VIEW_REVISION = 19
 SCROLLABLE_VIEW = f'person-event-scrollable-v{_VIEW_REVISION}'
 
 
