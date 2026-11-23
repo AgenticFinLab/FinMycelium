@@ -1,12 +1,14 @@
 """Provider adapters behind one search operation. No provider-specific agent loop."""
+import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from urllib.parse import urlsplit
 from .sources import SourceStore
 from .errors import SearchConfigurationError, api_configuration_error
 from .state import LimitReached, digest, write_json
-from .reading import bound_replayed_text, unread_ranges
+from .reading import bound_replayed_text, unread_ranges, located_preview
 
 ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', 'BAIDUSEARCH_API_KEY'),
              'bocha': ('https://api.bocha.cn/v1/web-search', 'BOCHA_API_KEY'),
@@ -199,9 +201,52 @@ class SearchTools:
             self.state.save()
             if configuration_error:
                 raise configuration_error
-        result = dict(source_ids=list(dict.fromkeys(found)), providers=outcomes)
+        ids = list(dict.fromkeys(found))
+        # Finish acquisition for providers that return leads without originals.
+        # Reuse cached bodies across providers/queries/resume. Failed discovery
+        # downloads are not retried here; explicit reads retain their retry policy.
+        missing = [sid for sid in ids if self.sources.can_complete_partial
+            and not self.state.data['sources'][sid].get('version')
+            and not self.state.data['sources'][sid].get('fetch_attempts')
+            and any(d.get('provider') in {'baidu','bocha'}
+                    for d in self.state.data['sources'][sid]['discoveries'])]
+        if missing:
+            # Download concurrently; parse and persist only on this writer thread.
+            with ThreadPoolExecutor(max_workers=min(3, len(missing))) as pool:
+                downloads = {sid:pool.submit(self.sources.partial_fetcher,
+                    self.state.data['sources'][sid]['url']) for sid in missing}
+                for sid, download in downloads.items():
+                    started = time.monotonic()
+                    self.sources.acquire(sid, fetcher=lambda url, result=download:result.result())
+                    self.state.trace(dict(action='search_body_acquisition', source=sid,
+                        status=self.state.data['sources'][sid]['status'],
+                        wait_and_save_seconds=round(time.monotonic()-started,3)))
+        result = dict(source_ids=ids, providers=outcomes)
+        previews = self.body_previews(ids, query)
+        if previews:
+            result['body_previews'] = previews
         self.state.trace(dict(action='search',query=query,provider_queries=provider_queries,result=result))
         return result
+
+    def body_previews(self, source_ids, query):
+        """Expose cached originals in search feedback; never record inspection."""
+        sources = self.state.data['sources']
+        available = [sid for sid in source_ids if sources[sid].get('version')
+                     and sources[sid]['status'] in {'success','partial'}]
+        output = []
+        for i, sid in enumerate(available):
+            room = 3200-len(json.dumps(output, ensure_ascii=False))
+            quota = min(900, room//(len(available)-i)-160)
+            if quota < 160:
+                break
+            doc = self.sources.document(sid)
+            ranges = [dict(version=doc['version'], block=b, start=0, end=len(row['text']))
+                      for b,row in enumerate(doc['blocks']) if row['text']]
+            for span in located_preview(doc, ranges, [query], quota):
+                item = dict(source_id=sid, version=doc['version'], **span)
+                if len(json.dumps(output+[item], ensure_ascii=False)) <= 3200:
+                    output.append(item)
+        return output
 
     def read_source(self, source, location=None, *, query=None, agent_feedback=False):
         if location is not None and (not isinstance(location,dict) or set(location)-{'block','offset'}

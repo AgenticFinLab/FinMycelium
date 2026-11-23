@@ -1,8 +1,12 @@
 from copy import deepcopy
+import json
+import pytest
+from finmy.search.agent import context_for, run_agent
 from finmy.search.state import SearchState, SearchConfig
 from finmy.search.sources import SourceStore
 from finmy.search.evidence import record_passages
 from finmy.search.handoff import prepare_complete_sources, derive_input
+from finmy.search.tools import SearchTools
 from test_search_improvements import task
 
 
@@ -89,3 +93,50 @@ def test_identical_wording_with_explicit_independent_origins_can_corroborate(tmp
                       ('Payment was completed.',dict(fields,independence_key='independent-receipt'))])
     p,a=derive_input(s,c)
     assert len(p['samples'])==2
+
+
+@pytest.mark.parametrize('fields,length', [
+    ({'fact_id':'delivery'},302),
+    ({'fact_ids':['delivery']},304),
+    ({'fact_id':'delivery','fact_ids':['delivery','authorization']},302),
+])
+def test_coverage_alias_and_long_reason_survive_finish_and_resume(tmp_path,fields,length):
+    s=SearchState(tmp_path,'x',task=task(),config=SearchConfig(max_model_calls=1))
+    store=SourceStore(s);sid=store.register('https://example.org/delivery')
+    text='Mira Vale confirmed that Orion Works delivered the units on April 3.'
+    doc=store.save_raw(sid,('Unrelated preface.\n\n'+text+'\n\nUnrelated tail.').encode(),'txt')
+    store.read(sid)
+    mark=dict(source_id=sid,block=1,start=0,end=len(text),reason='r'*length,**fields)
+    original=deepcopy(mark)
+    run_agent(s,SearchTools(s),lambda _:dict(action='finish',source_ids=[sid],
+        priority_passages=[mark],gaps=[],reason='supported'))
+    assert mark==original
+    assert s.data['status']=='finished' and s.data['usage']=={'search':0,'model':1}
+    restored=SearchState(tmp_path,'x')
+    accepted=restored.data['priority_passages'][0]
+    assert accepted['fact_ids']==sorted(fields.get('fact_ids',['delivery']))
+    assert 'fact_id' not in accepted and accepted['reason']=='r'*300
+    assert (accepted['block'],accepted['start'],accepted['end'],accepted['version'])==(1,0,len(text),doc['version'])
+    payload=json.loads((s.run_dir/'builder_input.json').read_text())
+    assert len(payload['samples'])==1 and text in payload['samples'][0]['content']
+    assert 'Unrelated' not in payload['samples'][0]['content']
+    assert store.document(sid)==doc
+
+
+@pytest.mark.parametrize('fields', [
+    {'fact_id':None}, {'fact_id':[]}, {'fact_id':''}, {'fact_ids':'delivery'},
+    {'fact_id':'different','fact_ids':['delivery']}, {'reason':None},
+])
+def test_coverage_compatibility_still_rejects_invalid_metadata(tmp_path,fields):
+    s,c=setup(tmp_path,[('Mira Vale confirmed delivery.',{})])
+    before=deepcopy(s.data['priority_passages'])
+    result=record_passages(s,[dict(c['priority_passages'][0],**fields)])
+    assert result['accepted']==0 and result['rejected']
+    assert s.data['priority_passages']==before
+
+
+def test_unknown_mark_field_is_named_in_model_feedback(tmp_path):
+    s,c=setup(tmp_path,[('Mira Vale confirmed delivery.',{})])
+    record_passages(s,[dict(c['priority_passages'][0],factz=['delivery'])])
+    feedback=context_for(s)['priority_feedback']
+    assert feedback['accepted']==0 and 'factz' in feedback['rejected'][0]['reason']

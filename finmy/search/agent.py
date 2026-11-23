@@ -25,8 +25,11 @@ When baidu is selected, include provider_queries.baidu in the SAME search action
 at most 72 units (each CJK character counts 2, others 1). Preserve entity names,
 dates, negation and essential conditions; remove filler or use established aliases.
 Do not rely on the full query fitting Baidu or spend a separate model call rewriting it.
-Search-returned original content is partial evidence; snippets and summaries remain leads.
-Read selected URLs to acquire full bodies; on failure use search_leads to trace originals.
+Search feedback body_previews contains cached original text for selecting sources.
+Use read_source to inspect a chosen body before marking it; previews do not record a read.
+Missing Baidu/Bocha bodies are fetched from their URLs and cached during search.
+Search-returned original content may be partial; snippets and summaries remain leads.
+On acquisition failure use search_leads to trace originals.
 Use provider_observations; no Chinese-only channel or required bilingual duplication.
 Apply equal evidence standards, trace originals, preserve quotes and label translations.
 Inspect results before exhausting searches; leave room for gaps/inaccessible originals.
@@ -72,7 +75,8 @@ Source IDs retain originals for review; they do not select the entire source for
 Mark every fact-check support, including necessary speaker attribution, dates, conditions,
 and independent corroboration. Mark neighboring context explicitly when needed; lexical
 hits alone are not delivery selections. There is no target length or minimum material size.
-Mark optional fact_ids (stable atomic-question keys), claim_id (same only for equivalent
+Mark optional fact_ids as a list of stable atomic-question keys, e.g. ["payment"],
+claim_id (same only for equivalent
 propositions), and evidence_role: terms, personal, condition, outcome, corroboration,
 contradiction, or context. Different dates, conditions, planned/completed states and
 opposing claims require distinct claim_ids. Necessary context belongs INSIDE the support

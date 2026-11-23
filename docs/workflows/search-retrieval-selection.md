@@ -36,6 +36,25 @@ remain resumable with their saved configuration.
 Feature-level results and the decision to retain default BM25 are recorded in
 [搜索功能演进与效果对比](../experiments/search-feature-comparison.md).
 
+## Baidu and Bocha original bodies
+
+Baidu `content` is stored as a partial original. Bocha `summary` and provider
+snippets remain leads. For Baidu/Bocha results without a saved body, search now
+fetches the original URL once and caches its parsed text before source selection.
+Up to three URLs download concurrently, using the existing 20-second acquisition
+timeout (or a shorter configured timeout); saved bodies and failed discovery downloads are reused across searches
+and resume. Downloads add HTTP work, not model or search-provider calls.
+
+Search feedback includes located `body_previews` from saved originals, sharing a
+3,200-character serialized limit. Fetching and previewing do not mark a body read.
+The existing `read_source` action inspects the cached text; ordinary original-range
+marks then enter the existing delivery selector. Failed downloads keep their leads
+and acquisition errors visible. Search summaries never become original evidence.
+
+The later claim-ID checks, incremental fact ledger, mandatory followup return and
+checked-subrange selection have been removed. BM25, budgets and the earlier
+selection/finish behavior are retained. No new review stage is introduced.
+
 ## Metadata and time
 
 Optional `task.retrieval_constraints` and original document/block

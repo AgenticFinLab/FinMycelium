@@ -41,8 +41,17 @@ def source_pool(state, proposed, exclusions=None):
 
 
 def validate_passage(state, item, *, versions=None):
-    if not isinstance(item,dict) or set(item)-{'source_id','version','block','start','end','reason','fact_ids','claim_id','evidence_role','independence_key'}:
-        raise ValueError('Use source_id, block, start, end, reason and optional coverage fields')
+    if not isinstance(item,dict):
+        raise ValueError('Each priority passage must be an object')
+    if 'fact_id' in item:
+        item = dict(item)
+        fact_id = item.pop('fact_id')
+        if 'fact_ids' in item and (not isinstance(item['fact_ids'],list) or fact_id not in item['fact_ids']):
+            raise ValueError('fact_id conflicts with fact_ids; use fact_ids: ["fact-key"]')
+        item.setdefault('fact_ids',[fact_id])
+    unknown = set(item)-{'source_id','version','block','start','end','reason','fact_ids','claim_id','evidence_role','independence_key'}
+    if unknown:
+        raise ValueError('Unknown priority passage fields: ' + ', '.join(sorted(map(str,unknown))))
     sid = item.get('source_id')
     if not isinstance(sid,str) or sid not in state.data['sources']:
         raise ValueError('Unknown passage source')
@@ -63,8 +72,9 @@ def validate_passage(state, item, *, versions=None):
     if covered<end:
         raise ValueError('Priority passage was not inspected in this version')
     reason = item.get('reason','')
-    if not isinstance(reason,str) or len(reason)>300:
-        raise ValueError('Passage reason must be text of at most 300 characters')
+    if not isinstance(reason,str):
+        raise ValueError('Passage reason must be text')
+    reason = reason[:300]  # Bound the explanation, never discard or truncate the source evidence.
     from .coverage import annotation
     return dict(source_id=sid,version=version,block=block,start=start,end=end,reason=reason, **annotation(item))
 

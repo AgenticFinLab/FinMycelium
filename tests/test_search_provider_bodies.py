@@ -1,10 +1,12 @@
 """Search excerpts, original acquisition and provider queries, without services."""
+import json
 import socket
 
 import pytest
 
 from finmy.search.state import SearchConfig, SearchState
 from finmy.search.tools import SearchTools, query_units
+from finmy.search.agent import context_for, execute_action
 
 
 @pytest.fixture(autouse=True)
@@ -59,24 +61,96 @@ def test_original_excerpt_is_cached_completed_or_retained_on_failure(tmp_path, p
 
 
 @pytest.mark.parametrize('fetch_ok', [True, False])
-def test_bocha_summary_stays_a_lead_and_selected_url_is_fetched(tmp_path, fetch_ok):
+def test_bocha_body_is_cached_before_selection_without_promoting_summary(tmp_path, fetch_ok):
     state = state_at(tmp_path, ['bocha'])
     item = dict(url='https://example.org/interview', snippet='Interview lead',
                 summary='A search summary describing the commitment.')
+    downloads = []
     def fetch(url):
+        downloads.append(url)
         if not fetch_ok: raise TimeoutError()
         return b'Ada said: I would sign only after local consent.', 'txt', None
     tools = SearchTools(state, transport=lambda p, *_: response(p, item), fetcher=fetch)
-    sid = tools.search('Ada consent')['source_ids'][0]
-    assert not state.data['sources'][sid].get('version')
+    search = tools.search('Ada consent')
+    sid = search['source_ids'][0]
+    assert len(downloads) == 1
+    assert state.data['read_sources'] == []
+    assert not state.data['sources'][sid].get('read_ranges')
+    if fetch_ok:
+        assert state.data['sources'][sid].get('version')
+        assert 'I would sign' in search['body_previews'][0]['text']
+        assert item['summary'] not in str(search.get('body_previews'))
+    else:
+        assert not state.data['sources'][sid].get('version')
+        assert not search.get('body_previews')
+    tools.search('Ada consent again')
+    assert len(downloads) == 1  # A second search must not download/retry it again.
     result = tools.read_source(sid)
     if fetch_ok:
         assert result['status'] == 'success' and 'I would sign' in result['spans'][0]['text']
         assert item['summary'] not in result['spans'][0]['text']
     else:
         assert result['status'] == 'fetch_failed' and not result.get('spans')
-        assert result['search_leads'] == [dict(provider='bocha', snippet=item['snippet'], summary=item['summary'])]
+        assert result['search_leads'][-1] == dict(provider='bocha', snippet=item['snippet'], summary=item['summary'])
         assert not state.data['sources'][sid].get('version')
+
+
+@pytest.mark.parametrize('provider', ['baidu', 'bocha'])
+def test_cached_body_reaches_agent_read_and_handoff_with_plain_marks(tmp_path, provider):
+    state = state_at(tmp_path, [provider])
+    body = 'Ada said: I would sign only after local consent.'
+    item = dict(url='https://example.org/interview', snippet='Interview lead', summary='Generated summary')
+    if provider=='baidu': item['content']=body
+    fetched=[]
+    def fetch(url):
+        fetched.append(url)
+        return body.encode(), 'txt', None
+    tools=SearchTools(state, transport=lambda p,*_:response(p,item), fetcher=fetch)
+    search=execute_action(state,tools,dict(action='search',query='Ada consent'))
+    state.data['feedback']=search
+    assert context_for(state)['feedback']['body_previews'][0]['text']==body
+    sid=search['source_ids'][0]
+    assert not state.data['sources'][sid].get('read_ranges')
+    result=execute_action(state,tools,dict(action='read_source',source=sid,query='Ada consent'))
+    span=next(s for s in result['spans'] if body in s['text'])
+    mark=dict(source_id=sid,**{k:span[k] for k in ('block','start','end')},reason='Consent condition')
+    finish=execute_action(state,tools,dict(action='finish',source_ids=[sid],gaps=[],reason='supported',priority_passages=[mark]))
+    assert 'handoff' in finish and state.data['stop_reason']=='supported'
+    payload=json.loads((state.run_dir/'builder_input.json').read_text())
+    assert body in payload['samples'][0]['content']
+    assert 'Generated summary' not in payload['samples'][0]['content']
+    assert not state.data.get('followup_finish_reviewed')
+    assert state.data['usage']=={'search':1,'model':0}
+    resumed=SearchState(tmp_path,'case')
+    again=SearchTools(resumed,fetcher=lambda u:pytest.fail('Cached original was fetched again'))
+    assert body in str(again.read_source(sid)['spans'])
+    assert len(fetched)==1
+
+
+def test_missing_baidu_body_is_fetched_and_multi_provider_url_is_fetched_once(tmp_path):
+    state=state_at(tmp_path,['baidu','bocha'])
+    item=dict(url='https://example.org/shared',snippet='Lead',summary='Summary')
+    calls=[]
+    def fetch(url):
+        calls.append(url)
+        return b'Ada obtained local consent before signing.', 'txt', None
+    tools=SearchTools(state,transport=lambda p,*_:response(p,item),fetcher=fetch)
+    result=tools.search('Ada consent')
+    assert len(result['source_ids'])==1 and calls==[item['url']]
+    assert 'local consent' in str(result['body_previews'])
+    assert state.data['usage']=={'search':2,'model':0}
+
+
+def test_body_previews_share_a_bound_and_do_not_mark_cache_as_inspected(tmp_path):
+    state=state_at(tmp_path,['bocha'])
+    items=[dict(url='https://example.org/'+str(i),summary='Summary') for i in range(3)]
+    tools=SearchTools(state,transport=lambda *a:{'data':{'webPages':{'value':items}}},
+        fetcher=lambda u:((('Ada needs consent at '+u+'. ')*200).encode(),'txt',None))
+    result=tools.search('Ada consent')
+    assert len(json.dumps(result['body_previews'],ensure_ascii=False))<=3200
+    assert {p['source_id'] for p in result['body_previews']}==set(result['source_ids'])
+    assert not state.data['read_sources']
+    assert all(not e.get('read_ranges') for e in state.data['sources'].values())
 
 
 def test_baidu_short_variant_executes_alongside_full_queries_and_is_cached(tmp_path):

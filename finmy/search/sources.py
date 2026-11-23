@@ -358,15 +358,9 @@ class SourceStore:
         self.state.save()
         self.state.trace(dict(action='source_acquisition_result', source=sid, **attempt))
 
-    def read(self, sid, block=0, offset=0, *, query=None):
-        if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
-            raise ValueError('Invalid source location')
-        if query is not None and (not isinstance(query, str) or not query.strip()):
-            raise ValueError('Reading query must be nonempty text')
-        if query is not None and (block or offset):
-            raise ValueError('Choose a reading query or an explicit location, not both')
+    def acquire(self, sid, *, fetcher=None):
+        """Cache a URL body without spending a read or marking text inspected."""
         entry = self.state.data['sources'][sid]
-        self.state.reading(sid)
         if not entry.get('version'):
             attempts = entry.setdefault('fetch_attempts', [])
             if attempts:
@@ -382,7 +376,7 @@ class SourceStore:
             attempts.append(attempt)
             self.state.save()
             try:
-                fetched = self.fetcher(entry['url'])
+                fetched = (fetcher or self.fetcher)(entry['url'])
                 raw, kind, encoding = fetched
                 self.save_raw(sid, raw, kind, encoding, fetch_metadata=getattr(fetched, 'metadata', {}))
                 attempt['status'] = entry['status']
@@ -395,6 +389,19 @@ class SourceStore:
                 self.state.save()
                 return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__,
                             fetch_error=error, attempts=len(attempts))
+
+    def read(self, sid, block=0, offset=0, *, query=None):
+        if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
+            raise ValueError('Invalid source location')
+        if query is not None and (not isinstance(query, str) or not query.strip()):
+            raise ValueError('Reading query must be nonempty text')
+        if query is not None and (block or offset):
+            raise ValueError('Choose a reading query or an explicit location, not both')
+        entry = self.state.data['sources'][sid]
+        self.state.reading(sid)
+        error = self.acquire(sid)
+        if error:
+            return error
         # An explicit nonzero cursor belongs to the existing saved version.
         if not block and not offset:
             self.complete_partial(sid)
