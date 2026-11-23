@@ -80,6 +80,8 @@ Look for experiences with a continuing object, objective, or identifiable bounda
 
 Follow names, organizations, projects, dates, agreements, and reporting leads found in the material. Seek sources covering different periods or perspectives. Read relevant page or document content; search titles and snippets are discovery leads, not automatically sufficient evidence.
 
+When adding sources, consider biographies, biographical case studies, and extended interviews that clarify the person's role or the course of an event. Prefer freely downloadable full texts when available. Index the edition consulted once. In the Search leads of each event it supports, reuse its source ID and say where you found the relevant passage and what it adds to that event.
+
 An annual report, a meeting, or a shared date does not automatically make unrelated matters one event. Conversely, a continuing matter mentioned across years or multiple sources should not become duplicate events. If a meeting's own process is the research subject, assess its boundary as a candidate in its own right.
 
 ### 3. Assess candidate relevance and boundaries

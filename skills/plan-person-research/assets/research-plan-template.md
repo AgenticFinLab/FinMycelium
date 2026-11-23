@@ -71,7 +71,7 @@ Repeat the following block for each candidate. Keep it concise, with detail prop
 #### Further research
 
 - **Questions:** {{Specific unresolved process questions grounded in the overview or scope. Phrase them without assuming unverified actions, motives, or causal relations occurred. Explain what remains to be established; do not impose a fixed number or repeat questions already answered without a reason for further verification.}}
-- **Search leads:** {{Relevant names, aliases, organizations, documents, or source IDs, with a brief indication of what they may clarify. Distinguish read sources from unvisited leads in the shared source index. Query suggestions are optional; do not invent document titles or links.}}
+- **Search leads:** {{Relevant names, aliases, organizations, documents, or source IDs, with a brief indication of what they may clarify. For a long work, give the source ID and the chapter, named section, or page range actually read for this event. Distinguish read sources from unvisited leads in the shared source index. Query suggestions are optional; do not invent document titles or links.}}
 - **Open issues and decisions:** {{Material conflicts, evidence limitations, or grouping/scope choices still requiring confirmation. Distinguish these from ordinary details for later search; refer to an existing question instead of repeating it. If none is identified, state that briefly.}}
 
 Supported process facts may appear in the overview. Do not generate a completed EPG, preassign stages, or fabricate action, transaction, or relation structures. Reference the shared source index in section 6 rather than creating a separate bibliography for each event.
@@ -90,7 +90,7 @@ Supported process facts may appear in the overview. Do not generate a completed 
 
 | Source ID | Original title and link | Publisher and publication date | Actual reading and locator | Supported judgment |
 | --- | --- | --- | --- | --- |
-| {{SRC-ID}} | {{Original-language title and a clickable source-page or document link; a separately labeled English gloss is optional}} | {{State unknown when unavailable}} | {{Body read / snippet only / access restricted; section, page, or paragraph as available}} | {{Related event or person identity and what the source supports}} |
+| {{SRC-ID}} | {{Original-language title and a clickable source-page or document link; a separately labeled English gloss is optional}} | {{State unknown when unavailable}} | {{Body read, selected passages read, snippet only, or access restricted. Give a section, page, or paragraph when available. Label printed or PDF page numbers when they differ.}} | {{Related event or person identity and what the source supports}} |
 
 Generate the adjacent `sources.csv` from this table using the Skill’s export helper after updates; edit the index here rather than maintaining a second source list.
 
