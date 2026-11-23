@@ -187,9 +187,13 @@ def search_usage(state):
              (row['action'] == 'action_error' and row.get('usage')
               and not row.get('usage_recorded_in_response'))]
     usage = usage_totals(calls)
-    usage['reranking'] = usage_totals([r for r in trace if r['action'] == 'rerank_response'])
+    # Historical traces still count toward costs; new runs have no such stages.
+    reranks = [r for r in trace if r['action'] == 'rerank_response']
+    if reranks: usage['reranking'] = usage_totals(reranks)
     embeddings = [r for r in trace if r['action'] == 'embedding_batch']
-    usage['embedding'] = dict(batches=len(embeddings), texts=sum(r['count'] for r in embeddings), seconds=sum(r['duration_seconds'] for r in embeddings))
+    if embeddings:
+        usage['embedding'] = dict(batches=len(embeddings), texts=sum(r['count'] for r in embeddings),
+                                  seconds=sum(r['duration_seconds'] for r in embeddings))
     usage['attempted_model_calls'] = state.data['usage']['model']
     usage['provider_requests'] = state.data['usage']['search']
     usage['provider_seconds'] = sum(r.get('duration_seconds', 0) or 0 for r in trace

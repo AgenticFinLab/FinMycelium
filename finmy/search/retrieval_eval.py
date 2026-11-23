@@ -6,7 +6,7 @@ from pathlib import Path
 from .state import SearchConfig, SearchState, digest, write_json
 from .sources import SourceStore
 from .reading import targeted_spans
-from .hybrid import MODES, RetrievalSession, read_retrieved
+from .retrieval import MODES, RetrievalSession, read_retrieved
 from .eval_metrics import merge_ranges
 
 

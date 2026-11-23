@@ -1,68 +1,32 @@
 # Passage retrieval and evidence selection
 
-Based on `person-epg-yuntao-search` at `8bca5d8`. The marked-span delivery fix
-is already present in that commit; this change adds optional retrieval stages
-and marginal-value selection. There is no material-length target.
+Based on `person-epg-yuntao-search` at `8bca5d8`, with marginal-value selection.
+There is no material-length target.
 
 ## Defaults and separate comparisons
 
-The existing task format and search command continue to work. `retrieval` is an
-optional `SearchConfig` dictionary. Its default mode is `topic`, which keeps the
-existing topic reader and makes no embedding or rerank calls. Validate task scope,
-original windows and baseline selection before opting into the extra stages.
-
-| Mode | Passage candidates | Extra model work |
-|---|---|---|
-| `topic` | Existing entity/attribute reader | None |
-| `bm25` | BM25 over original windows | None |
-| `hybrid` | BM25 + local dense retrieval, reciprocal-rank fusion | Local embeddings |
-| `bm25_rerank` | BM25 then evidence reranking | Existing search LLM |
-| `hybrid_rerank` | Fused candidates then evidence reranking | Local embeddings + search LLM |
-
-This operates inside saved-source reading; web providers, source acquisition and
-Builder execution are unchanged. Numbers, dates and names remain in the lexical
-index. Dense results are not subjected to the old literal-entity gate, so indirect
-wording can reach the reader. Neither retrieval scores nor reranker labels create
-priority marks automatically.
+`retrieval: {}` keeps the existing `topic` reader, including its lexical ranking.
+The optional `bm25` mode ranks saved original windows directly. Both modes run
+locally without additional model calls or model weights. Retrieval scores do not
+create delivery marks automatically. Web providers and source acquisition are
+unchanged.
 
 An opt-in JSON config, passed to the existing `--config` argument:
 
 ```json
 {
   "retrieval": {
-    "mode": "hybrid_rerank",
-    "embedding_model_path": "/absolute/path/to/local-sentence-transformer",
-    "device": "cpu",
-    "query_prefix": "",
-    "passage_prefix": "",
+    "mode": "bm25",
     "top_k": 24,
-    "window_chars": 1600,
-    "embedding_batch_size": 32,
-    "rerank_batch_size": 8
+    "window_chars": 1600
   }
 }
 ```
 
-Install the optional `sentence-transformers` package and supply local weights.
-No weights are downloaded by this implementation. Configure query/passage prefixes
-for the chosen encoder if it requires them. The API used is documented at
-https://sbert.net/docs/package_reference/sentence_transformer/model.html .
-`top_k` is per recall channel, not a final material quota. The union is reranked.
-The encoder uses CPU by default to avoid unexpectedly taking the training GPU.
-Missing weights/dependencies and malformed model responses fail explicitly.
-
-Reranking uses the existing `lm_name`, generation configuration, network switch
-and model-call budget. Finalization calls remain reserved. Successfully validated
-batches are cached separately from evaluation judgments. Failed calls still count;
-unjudged candidates remain unknown if the reserve is reached. Reranking checks
-entity **and event** identity, requested attributes and direct evidence. Affirmative
-mismatches require quoted original support; missing information is retained.
-
-Caches bind to input/model identity; original source versions/coordinates identify
-candidates. Embedding cache identity includes the local model directory's file
-sizes and modification times. Replace weights normally (do not preserve all file
-metadata when modifying bytes). If manually modifying weights in place, remove the
-trial's embedding cache. Only validated cache records are reused.
+`top_k` limits passage candidates, not final material length. The accepted options
+are `mode`, `top_k` and `window_chars`. Removed retrieval modes and model options
+are rejected explicitly. Existing `topic`, `bm25` and empty-config checkpoints
+remain resumable with their saved configuration.
 
 ## Metadata and time
 
@@ -145,25 +109,14 @@ python -m finmy.search.retrieval_eval \
   --cases cases.json --modes topic bm25 --output baseline.json
 ```
 
-After baseline validation, explicitly compare the costly variants:
-
-```bash
-python -m finmy.search.retrieval_eval \
-  --run-dir output/search-eval/TASK/runs/initial \
-  --cases cases.json --config hybrid-config.json \
-  --modes bm25 hybrid bm25_rerank hybrid_rerank --output comparison.json
-```
-
-The comparison does not rerun web searches or alter the original run. Each variant
-has its own checkpoint/caches next to the report. Reports include original returned
-ranges, labeled-evidence character recall, delivered characters, local embedding
-time, and reranker calls/tokens. This is recall against supplied range labels, not
-whole-web recall or overall precision. Labels must be independent of the selector;
-synthetic unit fixtures demonstrate mechanics, not real embedding-model gains.
-Keep the encoder, source versions, labels and read limit fixed across variants.
+The comparison does not rerun web searches or alter the original run. Each mode
+has its own checkpoint next to the report. Reports include original returned
+ranges, labeled-evidence character recall and delivered characters. This is recall
+against supplied range labels, not whole-web recall or overall precision. Keep the
+source versions, labels and read limit fixed across modes.
 
 Offline tests:
 
 ```bash
-python -m pytest -q tests/test_search_hybrid.py tests/test_search_coverage.py
+python -m pytest -q tests/test_search_retrieval.py tests/test_search_coverage.py
 ```

@@ -47,7 +47,7 @@ class SearchConfig:
     generation_config: dict = field(default_factory=lambda: {'max_tokens':8192})
 
     def __post_init__(self):
-        from .hybrid import validate_options
+        from .retrieval import validate_options
         validate_options(self.retrieval)
         if not self.providers or len(set(self.providers)) != len(self.providers):
             raise ValueError('Select unique providers')

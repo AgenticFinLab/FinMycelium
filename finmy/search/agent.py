@@ -109,8 +109,7 @@ the program validates marks and allocates original text within budget.
 
 class LmbaseModel:
     """Lazy existing lmbase connection, no SDK retries hidden from task accounting."""
-    def __init__(self, config, *, system_prompt=SYSTEM_PROMPT):
-        self.system_prompt = system_prompt
+    def __init__(self, config):
         self.config = config
         self.adapter = None
         self.last_usage = None
@@ -150,7 +149,7 @@ class LmbaseModel:
         try:
             response = self.adapter.client.chat.completions.create(
                 model=self.adapter.model_name,
-                messages=[{'role':'system','content':self.system_prompt},
+                messages=[{'role':'system','content':SYSTEM_PROMPT},
                           {'role':'user','content':json.dumps(context,ensure_ascii=False)}], **params)
         except Exception as exc:
             configuration_error = api_configuration_error(exc, 'Search model API')

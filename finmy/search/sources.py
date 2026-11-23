@@ -409,7 +409,7 @@ class SourceStore:
         if query is not None:
             from .reading import targeted_spans, read_coverage
             if self.state.config.retrieval.get('mode', 'topic') != 'topic':
-                from .hybrid import RetrievalSession, read_retrieved
+                from .retrieval import RetrievalSession, read_retrieved
                 from .metadata import source_metadata
                 if not hasattr(self, '_retrieval_session'):
                     self._retrieval_session = RetrievalSession(self.state)
