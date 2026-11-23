@@ -6,8 +6,9 @@ sections. Select a card or action relation to inspect the fields it asserts and
 follow their evidence. The workbench saves this view as `gantt.html` for review
 and collection.
 
-Each Phase places Actions by evidenced time and order. Actions may share a
-column on separate rows when the available information leaves their order open.
+Each Phase places Actions by evidenced time and order. Its focal actor is
+centred vertically among the Actions. Cards can share a row. A bracket labelled
+with two Action IDs and **Order unknown** identifies a shared time limit or scope.
 The [person Event visualization design](../person-event-visualization/0-overview.md)
 covers the full diagram, its [visual legend](../person-event-visualization/4-visual-legend.md)
 and the rules for multi-row placement.
@@ -114,8 +115,10 @@ individual references, including ones with an unknown endpoint.
 
 People and organizations appear as circular nodes. Read the dated Action cards from
 left to right at the precision supported by the graph. A simple chain can occupy one
-row. Branches, overlapping intervals and Actions with the same unresolved position
-use separate rows. Dotted **Possible window** brackets show where an Action could
+row. Additional rows accommodate branches and overlapping intervals. Three or more
+unordered Actions with the same coarse window, one-sided limit or Phase scope
+can sit two to a row. Each retains its own relations and evidence.
+Dotted **Possible window** brackets show where an Action could
 have occurred. A solid **Duration** bar spans a documented continuing activity.
 The **Action chronology** axis marks the available dates and times. Spacing adapts
 to the page and does not measure elapsed time.
