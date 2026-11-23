@@ -43,6 +43,12 @@ two-builder comparison; do not shorten the evidence between runs.
 
 ## Preflight and execute
 
+The build-only CLI uses Sparse by default. With no `--config`, it reads
+`configs/build_only_sparse.yml` from the working directory when present, then
+falls back to the installed preset. An explicit `--config` selects that exact
+file. The workbench starts from the packaged Agent or Sparse preset and applies
+the task’s model and output directory.
+
 Offline checks, with no model calls or run directories created:
 
 ```bash

@@ -73,7 +73,7 @@ cp .env.example .env
 ```
 
 编辑 `.env` 文件，填入您的 API 密钥和配置设置。
-FinMycelium 依赖 [lmbase](https://github.com/AgenticFinLab/lmbase) 仓库提供核心 LLM 推理与基础工具组件。
+FinMycelium 依赖 [lmbase](https://github.com/AgenticFinLab/lmbase) 仓库提供核心 LLM 推理与基础工具组件。[本地安装步骤](docs/workflows/sparse-rag-build.md#install-and-configure)
 
 ### 基本使用
 

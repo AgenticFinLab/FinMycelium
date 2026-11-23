@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-import yaml
+from finmy.runner.configuration import load_builder_config
 
 from finmy.builder.agent_build_adapter import BuildOnlyAgentEventBuilder, replay_original, validated_config
 from finmy.builder.sparse_build.main_build import SparseRagBuilder
@@ -47,7 +47,7 @@ def replay(directory):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="configs/build_only_sparse.yml")
+    parser.add_argument("--config", help="Builder settings (default: configs/build_only_sparse.yml, then the installed preset)")
     parser.add_argument("--input", help="JSON containing user_query and samples")
     parser.add_argument("--env-file", help="Optional local dotenv file; never printed")
     parser.add_argument("--execute", action="store_true", help="Allow real model calls")
@@ -66,7 +66,7 @@ def main(argv=None):
         if not Path(args.env_file).is_file():
             raise ValueError("Requested dotenv file does not exist")
         load_dotenv(args.env_file, override=False)
-    config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))["builder_config"]
+    config = load_builder_config("build_only_sparse.yml", path=args.config, local_default=True)
     builder_class, checked_config = select_builder(config)
     build_input, input_hash = load_inputs(args.input)
     report = preflight(checked_config, build_input)

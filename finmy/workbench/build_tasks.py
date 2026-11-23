@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-import yaml
+from finmy.runner.configuration import load_builder_config
 
 from finmy.dataset import dataset_root, output_directory
 from finmy.model_config import model_name
@@ -63,7 +63,7 @@ def build_config(settings, directory):
     Store.validate_configuration(settings)
     kind = settings["builder"]
     filename = "build_only_sparse.yml" if kind == "SparseRagBuilder" else "build_only_agent.yml"
-    config = yaml.safe_load((ROOT / "configs" / filename).read_text())["builder_config"]
+    config = load_builder_config(filename)
     config["lm_name"] = model_name(settings["model"])
     config["save_folder"] = str(Path(directory).resolve() / "output")
     return config

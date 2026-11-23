@@ -38,6 +38,7 @@ setuptools.setup(
     extras_require={"tests": ["pytest"]},
     include_package_data=True,
     package_data={
+        "configs": ["*.yml", "uTEST/builder/*.yml"],
         "finmy.workbench": ["style.css"],
         "finmy.person_epg": ["schema.json", "schema_model.json", "gantt.html"],
         "finmy.person_epg.event": ["graph.html", "graph_authored.html", "graph_inspector.js"],

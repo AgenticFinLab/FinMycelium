@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import sys
 
-import yaml
+from finmy.runner.configuration import load_builder_config
 
 from finmy.model_config import api_key_variable, model_name
 from finmy.builder.base import BuildInput
@@ -44,7 +44,7 @@ def preflight(config, build_input):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="configs/sparse_pipeline.yml")
+    parser.add_argument("--config", help="Builder settings (default: configs/sparse_pipeline.yml, then the installed preset)")
     parser.add_argument("--input", help="JSON containing user_query and samples")
     parser.add_argument("--env-file", help="Optional local dotenv file; values are never printed")
     parser.add_argument("--execute", action="store_true", help="Allow real model calls")
@@ -70,7 +70,7 @@ def main(argv=None):
         if not Path(args.env_file).is_file():
             raise ValueError("Requested dotenv file does not exist")
         load_dotenv(args.env_file, override=False)
-    config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))["builder_config"]
+    config = load_builder_config("sparse_pipeline.yml", path=args.config, local_default=True)
     if config.get("builder_type") != "SparseRagBuilder":
         raise ValueError("This entry only accepts SparseRagBuilder")
     build_input, input_hash = load_inputs(args.input)
