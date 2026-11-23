@@ -6,19 +6,15 @@ for processing different types of URL inputs.
 """
 
 import os
-import sys
+from tempfile import TemporaryDirectory
 import pandas as pd
 import json
 
 from finmy.url_collector.SearchCollector.user_search import UserSearchProcessor
 
 
-def create_test_files():
+def create_test_files(test_dir):
     """Create simple test files for demonstration."""
-
-    # Create test directory
-    test_dir = "examples/utest/Collector/test_files"
-    os.makedirs(test_dir, exist_ok=True)
 
     # Sample data
     sample_data = [
@@ -50,11 +46,11 @@ def create_test_files():
     return xlsx_path, csv_path, json_path
 
 
-def test_processor():
+def demonstrate_inputs(test_dir):
     """Test the UserSearchProcessor with different inputs."""
 
     processor = UserSearchProcessor()
-    xlsx_path, csv_path, json_path = create_test_files()
+    xlsx_path, csv_path, json_path = create_test_files(test_dir)
 
     print("\n" + "=" * 50)
     print("TESTING UserSearchProcessor")
@@ -98,4 +94,5 @@ def test_processor():
 
 
 if __name__ == "__main__":
-    test_processor()
+    with TemporaryDirectory() as directory:
+        demonstrate_inputs(directory)
