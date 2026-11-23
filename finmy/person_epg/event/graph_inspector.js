@@ -245,6 +245,19 @@ function renderInspection() {
           panel.append(el('p', ref.relation_type === 'knowledge-source' ? 'Recipient not recorded' : 'Participant not recorded', 'field-note'));
         if (ref.interaction_type) panel.append(el('p', pretty(ref.interaction_type)));
         if (ref.qualification) panel.append(el('p', ref.qualification));
+        if (kind === 'phase') {
+          const branches = view.pages.find(page => page.phase === id)?.edges.filter(edge =>
+            edge.inherited && edge.ref_path === field) || [];
+          if (branches.length) {
+            const row = el('div', null, 'relation-list');
+            row.append(el('span', 'Applies by default to'));
+            for (const branch of branches) row.append(traceButton(alias(branch.to), branch.to));
+            panel.append(row);
+            for (const branch of branches) for (const path of branch.direct_paths || []) {
+              panel.append(traceButton('Explicit reference on ' + alias(branch.to), branch.to, path));
+            }
+          }
+        }
       }
     }
     if (kind === 'context') {
@@ -274,6 +287,48 @@ function renderInspection() {
         for (const {owner, path, ref} of uses) {
           const party = ref.entity_id && displayName(ref.entity_id);
           panel.append(traceButton([alias(owner), contextUseName(ref), party].filter(Boolean).join(' · '), owner, path));
+        }
+      }
+    }
+    if (kind === 'action') {
+      const chronology = view.pages.flatMap(p => p.cards).find(c => c.id === id)?.chronology;
+      if (chronology) {
+        panel.append(el('h3', 'Chronology in this phase'));
+        if (record.time?.text) panel.append(el('p', record.time.text, 'inspection-meta'));
+        if (chronology.note) panel.append(el('p', chronology.note, 'inspection-meta'));
+        const cell = chronology.placement;
+        if (cell?.note && cell.note !== chronology.note) panel.append(el('p', cell.note, 'field-note'));
+        if (cell?.mark === 'scope') {
+          panel.append(el('p', 'This guide shows Phase membership. The Action has no supported calendar position here.', 'inspection-meta'));
+        } else if (cell?.mark) {
+          const label = timeMarkName(cell.mark);
+          const time = record.time || {};
+          panel.append(el('p', [label, time.start, time.end && 'until ' + time.end + ' (exclusive)']
+            .filter(Boolean).join(' · '), 'inspection-meta'));
+          if (cell.mark === 'upper' || cell.mark === 'lower') {
+            panel.append(el('p', cell.mark === 'upper'
+              ? 'The Action could occur before or during the indicated period.'
+              : 'The Action could occur during or after the indicated period.', 'inspection-meta'));
+          }
+        }
+        for (const [key, label] of [['earlier', 'Earlier'], ['later', 'Later'], ['unordered', 'Order unresolved'],
+          ['anchor_before', 'Dated predecessors'], ['anchor_after', 'Dated successors']]) {
+          const ids = chronology[key] || [];
+          if (!ids.length) continue;
+          const row = el('div', null, 'relation-list');
+          row.append(el('span', label));
+          for (const aid of ids) {
+            const basis = ['earlier', 'later'].includes(key)
+              ? (chronology.by_time.includes(aid) ? ' · dated windows' : ' · order path') : '';
+            row.append(traceButton(alias(aid) + basis, aid));
+          }
+          panel.append(row);
+        }
+        if (chronology.order_steps?.length) {
+          const row = el('div', null, 'relation-list');
+          row.append(el('span', 'Recorded precedence steps'));
+          for (const rid of chronology.order_steps) row.append(traceButton(relationName(objects.get(rid).record), rid));
+          panel.append(row);
         }
       }
     }

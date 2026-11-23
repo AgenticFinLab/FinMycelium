@@ -30,7 +30,7 @@ def navigation(package, preview=160, role=None, supplied=None, relation_actions=
                         description_truncated=len(obj['description']) > preview)
             if 'time' in record:
                 item['time'] = {k: v for k, v in record['time'].items()
-                                if k in ('start', 'end', 'kind') or (not compact_context and k != 'text')}
+                                if k in ('start', 'end', 'kind', 'intraday', 'utc_offset', 'anchor_source_id') or (not compact_context and k != 'text')}
                 if preview and record['time'].get('text') and collection in ('actions', 'stages', 'phases'):
                     item['time']['text_preview'] = record['time']['text'][:preview]
                     item['time']['text_truncated'] = len(record['time']['text']) > preview

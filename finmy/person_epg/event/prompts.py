@@ -52,10 +52,18 @@ verification or tool use that did not occur; no extra search or execution is aut
 
 Use existing Time fields only: half-open [start,end), ISO date boundaries and
 start_precision/end_precision in year/month/day/unknown. A named day ends at the next
-day; an inclusive last day becomes the following exclusive boundary. Keep finer clock
-or timezone wording in text/evidence; the current contract stores dates, not timestamps.
+day; an inclusive last day becomes the following exclusive boundary. For a single-day
+Action occurrence, also record time.intraday when the wording establishes morning, noon,
+afternoon, evening, or a local 24-hour HH:MM[:SS]. Preserve the original expression.
+Keep minute precision for a minute clock. Record time.utc_offset (Z or ±HH:MM) only
+from a supported zone/offset; do not guess a timezone or turn 'afternoon' into 15:00.
+Use local time without an offset only in a documented common civil frame. If the day,
+the local frame, or a part spanning midnight is ambiguous, keep the wording and Gap.
+Cite /time or the relevant subfield for the qualifier as well as the day.
 An occurrence_window bounds when an act happened, not how long it continued. Never
 replace a coarse window with its midpoint, first day or last day as the occurrence date.
+For a duration, cite the evidence for the action continuing across the interval under
+/time or /time/kind. Preserve this distinction when consolidating accounts.
 Preserve source granularity in text and the full window. Precision describes supported
 boundaries, not confidence: computable day boundaries do not imply a day-known act.
 Calendar conversion alone does not make an exact named day uncertain.
@@ -78,12 +86,20 @@ Gap. Do not broaden an understood quarter/旬 to an arbitrary year; if no Gregor
 bound is supported, keep null endpoints with unknown precision and explain why.
 Relative dates use the passage's supported anchor. When its wording refers to the
 source's publication, cite that wording and give the source_id, frozen published_at
-and date rule in the I reason. Check whose words they are, including when a source
-quotes an earlier interview. If the anchor is missing or disputed, retain the
-uncertainty. Never substitute the retrieval date, run date or research-scope year.
+and date rule in the I reason. For an Action stated as today/tonight, this morning,
+yesterday or last night in the original publisher's voice, also set time.anchor_source_id
+to that frozen source. Use its original local publication date and the actual passage;
+never use a retrieval date, later update, or the date of an article quoting an earlier
+speaker as the anchor. An independently dated interview or explicitly narrated day
+can anchor a relative expression through its own quoted evidence without this field.
+If the anchor is missing or disputed, retain the uncertainty.
 'By March 2020' can give end 2020-04-01 with month precision and
 unknown start; it does not prove occurrence during March. A missing side gets a Gap
 on /time/start or /time/end, preserving support for the known side and any conflicts.
+When an exact date is missing, check the passage for a narrower period, a single
+limit, or an identified act explicitly described as earlier or later. Retain the
+strongest supported information, including its source and any inference. Phase
+membership alone supplies neither an occurrence date nor a precedence claim.
 
 Distinguish an act, a later statement about it, publication, retrieval and holding/as-of
 times. A quarter-end position is not a purchase on that date. A report of an already
@@ -208,8 +224,10 @@ does not prove it. Distinguish a repeated report of one act from separate negoti
 decisions, statements and executions within the same matter. Merge only the same act,
 retaining every supporting account and explicit disagreement. Keep distinct acts and
 state why when identity is not supported. Do not use an overlap edge to hide duplicates.
-Keep supported coarse time and single bounds when known, not just exact dates;
-uncertain timing must not erase an otherwise supported action.""",
+Compare accounts of the same act for compatible bounds. Retain the tightest
+supported occurrence window or single limit, with its evidence and any inference.
+Keep supported coarse time when no stronger bound exists. Preserve disagreements
+and keep an otherwise supported action even when its timing remains open.""",
     'organization': """Jointly organize situation Stages and behavioral-mode Phases for
 this Event. Stages are not arbitrary date bins and Phases are not actor lists.
 Explain changes in situation and behavioral mode using evidence or explicit inference;
@@ -254,6 +272,11 @@ interrupted_by goes from interrupted to interrupting act. Unknown dates do not b
 source-supported order or process links. Use derived only for eligible interval rules,
 not as a label for general reasoning. No edge quota, connectivity requirement or
 automatic edges for every ordered pair; existing precedence paths may suffice.
+When wording explicitly places one act before another (even without a calendar date),
+retain that supported precedes claim separately from a response or enabling link when
+it adds order information. Do not use the direction of a process arrow as its time order.
+For an undated act, check for an identifiable earlier or later act in the cited
+accounts. Preserve the supported direction and its basis even across Phases.
 
 For an inferred Relation, cite the passages identifying each actual endpoint under
 /from_action_id and /to_action_id. Under /type use I, the cited premises and a reason

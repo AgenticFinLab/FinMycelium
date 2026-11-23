@@ -1,6 +1,8 @@
 """Machine-readable contracts for docs/person-event-builder (no model or I/O)."""
 from copy import deepcopy
 
+from .temporal import CLOCK, OFFSET, PARTS
+
 GRAPH_VERSION = 'person-event-1.0'
 FACTS_VERSION = 'person-event-facts-1.0'
 RELATION_TYPES = ('precedes', 'overlaps', 'order_unknown', 'responds_to', 'enables',
@@ -47,6 +49,12 @@ DEFS['Time'] = obj(dict(text=NULL_TEXT, kind=enum('occurrence_window', 'duration
                        end={'type': ['string', 'null'], 'format': 'date'},
                        start_precision=enum('year', 'month', 'day', 'unknown'),
                        end_precision=enum('year', 'month', 'day', 'unknown')))
+# Action occurrences can additionally identify a supported part of a single civil day.
+DEFS['ActionTime'] = deepcopy(DEFS['Time'])
+DEFS['ActionTime']['properties'].update(
+    intraday={'anyOf': [enum(*PARTS), {'type': 'string', 'pattern': '^' + CLOCK + '$'}]},
+    utc_offset={'type': 'string', 'pattern': '^' + OFFSET + '$'}, anchor_source_id=TEXT)
+DEFS['ActionTime']['dependentRequired'] = {'utc_offset': ['intraday']}
 DEFS['Support'] = obj(dict(target=POINTER, mode=enum('O', 'A', 'I'), evidence_ids=array(TEXT, uniqueItems=True),
                           premise_refs=array(ref('ObjectRef')), reason=TEXT), ['target', 'mode', 'evidence_ids'])
 DEFS['Support']['allOf'] = [
@@ -82,7 +90,7 @@ DEFS['Exclusion']['properties']['support']['items'] = {'allOf': [ref('Support'),
 DEFS['Action'] = semantic(dict(action_id=TEXT, name=TEXT, description=TEXT,
     actor=obj(dict(entity_id=TEXT, capacity=enum('personal', 'official', 'delegated', 'unknown'),
                    role=TEXT, on_behalf_of=TEXT), ['entity_id', 'capacity']),
-    time=ref('Time'), phase_id=TEXT, support=array(ref('Support')), action_type=TEXT,
+    time=ref('ActionTime'), phase_id=TEXT, support=array(ref('Support')), action_type=TEXT,
     object=obj(dict(description=TEXT, entity_refs=array(TEXT, uniqueItems=True))),
     delta_context_refs=array(ref('ContextRef')), baseline_context_exclusions=array(ref('Exclusion'))),
     ['action_id', 'name', 'description', 'actor', 'time', 'phase_id', 'support'])

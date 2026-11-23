@@ -130,6 +130,9 @@ def preserve_known_fields(originals, target, decision, package):
     for old in originals:
         paths = []
         if 'actor' in old:
+            if (old.get('time', {}).get('kind') in ('occurrence_window', 'duration')
+                    and support_index.supported('actions', old['action_id'], '/time/kind')):
+                paths.append('/time/kind')
             paths += ['/actor/' + key for key in ('entity_id', 'capacity', 'role', 'on_behalf_of') if key in old['actor']]
             if 'object' in old:
                 # Wording may change; the known object and its entity identities remain.
@@ -142,6 +145,8 @@ def preserve_known_fields(originals, target, decision, package):
         for side in ('start', 'end'):
             if old.get('time', {}).get(side) is not None:
                 paths.extend(['/time/' + side, '/time/' + side + '_precision'])
+        paths.extend('/time/' + key for key in ('intraday', 'utc_offset', 'anchor_source_id')
+                     if old.get('time', {}).get(key) is not None)
         for field in paths:
             before = pointer(old, field)
             try:

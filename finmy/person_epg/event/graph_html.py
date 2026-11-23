@@ -19,7 +19,8 @@ def _load_automatic_view():
     # A deployment can replace these files while a workbench session is still open.
     names = ('rendering.py', 'event/graph_html.py', 'event/graph.html', 'event/graph_layout.py',
              'event/graph_view.py', 'event/graph_labels.py', 'event/graph_evidence.py',
-             'event/graph_inspector.js', 'event/records.py', 'event/validation.py')
+             'event/graph_inspector.js', 'event/records.py', 'event/validation.py',
+             'event/temporal.py', 'event/chronology.py', 'event/action_layout.py', 'event/schema.py')
     files = {name: (_ASSETS.parent / name).read_bytes() for name in names}
     template = files['event/graph.html'].decode('utf-8').replace(
         '/*__FIELD_INSPECTOR__*/', files['event/graph_inspector.js'].decode('utf-8'), 1)
@@ -68,7 +69,7 @@ def render_graph_html(graph, *, layout=None, graph_sha256=None, result_status=No
             identity = payload.get('user_query', {}).get('extras', {}).get('person_event', {})
             if any(identity.get(key) != graph['event'].get(key) for key in ('person_id', 'storyline_id', 'event_id')):
                 raise ValueError('The frozen input belongs to a different person event')
-        view = arrange_graph(graph, view, passage_issues(graph, payload))
+        view = arrange_graph(graph, view, passage_issues(graph, payload), payload)
         view['checked_input'] = payload is not None
     template = (_AUTOMATIC_TEMPLATE if pages is None else
                 (_ASSETS / 'graph_authored.html').read_text(encoding='utf-8'))

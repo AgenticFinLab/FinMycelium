@@ -28,6 +28,19 @@ def embedded_data(html, script_id):
     return json.loads(match[1])
 
 
+def record_sequence(graph, pairs):
+    """Give each test precedence claim its own located, asserted passage."""
+    graph['sources'].append(dict(source_id='sequence', title='Minutes'))
+    for i, (a, b) in enumerate(pairs):
+        quote = f'{a} preceded {b}.'
+        eid = f'sequence-{i}'
+        graph['evidence'].append(dict(evidence_id=eid, source_id='sequence', quote=quote,
+                                      location_status='matched', start=0, end=len(quote)))
+        graph['relations'].append(dict(relation_id=f'order-{i}', type='precedes', basis='asserted',
+                                       from_action_id=a, to_action_id=b,
+                                       support=[dict(target='', mode='A', evidence_ids=[eid])]))
+
+
 def context_graph():
     graph = sample_graph()
     def ref(cid, kind, **fields):
@@ -87,6 +100,43 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
         self.assertEqual([c['id'] for c in first['cards'] if band[1] <= c['box'][1] < band[1] + band[3]], ['report'])
         self.assertFalse(any(s['title'] == 'Additional context' for s in second['sections']))
 
+    def test_one_action_inherits_a_condition_and_keeps_phase_only_endpoints(self):
+        graph = context_graph()
+        phase = graph['phases'][1]
+        base = dict(context_id='briefing', relation_type='condition', context_ref_id='base')
+        phase['baseline_context_refs'] = [base]
+        page = embedded_data(render_graph_html(graph), 'epg-view')['pages'][2]
+        cards = {c['id']: c for c in page['cards']}
+        self.assertTrue(cards['briefing']['phase_inline'])
+        self.assertLess(cards['briefing']['box'][1], cards['A3']['box'][1])
+        self.assertNotIn('Shared phase context', [s['title'] for s in page['sections']])
+        wire, = [e for e in page['edges'] if e['kind'] == 'context']
+        self.assertEqual((wire['from'], wire['to'], wire['owner'], wire['ref_path'], wire['direct_paths']),
+                         ('briefing', 'A3', 'P2', '/baseline_context_refs/0', ['/delta_context_refs/0']))
+
+        phase['baseline_context_refs'].extend(
+            dict(context_ref_id=kind, relation_type=kind, context_id='roles', **extra)
+            for kind, extra in [('trigger', {}), ('result', {}), ('participation', {'entity_id': 'org'}),
+                                ('knowledge-source', {'entity_id': 'pat'})])
+        graph['actions'][-1]['delta_context_refs'][0]['qualification'] = 'Only after receipt.'
+        page = embedded_data(render_graph_html(graph), 'epg-view')['pages'][2]
+        wires = [e for e in page['edges'] if e['kind'] == 'context']
+        self.assertCountEqual([(e['from'], e['type'], e['to']) for e in wires], [
+            ('briefing', 'condition', 'A3'), ('briefing', 'condition', 'A3'),
+            ('roles', 'trigger', 'P2'), ('P2', 'result', 'roles'), ('org', 'participation', 'P2'),
+            ('roles', 'knowledge-source', 'pat')])
+        self.assertEqual([e['owner'] for e in wires if e['type'] == 'condition'], ['P2', 'A3'])
+
+    def test_empty_phase_preserves_the_original_context_endpoint(self):
+        graph = context_graph()
+        graph['actions'].pop()
+        graph['phases'][1]['baseline_context_refs'] = [
+            dict(context_id='briefing', relation_type='condition', context_ref_id='base')]
+        page = embedded_data(render_graph_html(graph), 'epg-view')['pages'][2]
+        wires = [(e['from'], e['to']) for e in page['edges'] if e['kind'] == 'context']
+        self.assertEqual(wires, [('briefing', 'P2')])
+        self.assertFalse(any(c.get('phase_inline') for c in page['cards']))
+
     def test_whole_phase_uses_one_wide_canvas_with_deduplicated_nodes(self):
         graph = sample_graph()
         graph['person'] = {'person_id': 'PERSON-X', 'name': 'Example Person'}
@@ -103,12 +153,9 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
             for i in range(12)
         ] + [{'action_id': 'NEXT', 'phase_id': 'P2', 'name': 'Next phase action'}]
         graph['contexts'] = [{'context_id': 'SHARED', 'description': 'Shared condition'}]
-        graph['relations'] = [
-            {'from_action_id': f'A{i}', 'to_action_id': f'A{i+1}', 'type': 'precedes'}
-            for i in range(11)
-        ] + [{'from_action_id': 'A11', 'to_action_id': 'NEXT', 'type': 'precedes'}]
         graph['sources'] = [{'source_id': 'S1', 'title': 'Shared source'}]
         graph['evidence'] = [{'evidence_id': 'E1', 'source_id': 'S1', 'quote': 'Exact evidence'}]
+        record_sequence(graph, [(f'A{i}', f'A{i+1}') for i in range(11)] + [('A11', 'NEXT')])
         before = json.loads(json.dumps(graph))
         view = embedded_data(render_graph_html(graph), 'epg-view')
         phase_pages = [page for page in view['pages'] if page['phase'] == 'P1']
@@ -164,10 +211,7 @@ class PersonEventGraphHtmlTests(unittest.TestCase):
             {'action_id': 'A3', 'phase_id': 'P1', 'name': 'Ada records the decision',
              'actor': {'entity_id': 'PERSON-X'}},
         ]
-        graph['relations'] = [
-            {'from_action_id': 'A1', 'to_action_id': 'A2', 'type': 'precedes'},
-            {'from_action_id': 'A2', 'to_action_id': 'A3', 'type': 'precedes'},
-        ]
+        record_sequence(graph, [('A1', 'A2'), ('A2', 'A3')])
         original = json.loads(json.dumps(graph))
         view = embedded_data(render_graph_html(graph), 'epg-view')
         page = next(p for p in view['pages'] if p['phase'] == 'P1')

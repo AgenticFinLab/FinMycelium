@@ -103,11 +103,11 @@ def pointer(value, path):
     return value
 
 
-def index_records(package):
-    indexes = {name: {record[key]: record for record in package.get(name, [])}
+def index_records(package, *, partial=False):
+    indexes = {name: {record[key]: record for record in package.get(name, []) if not partial or key in record}
                for name, key in COLLECTION_IDS.items()}
     for name in ('person', 'storyline', 'event'):
-        if name in package:
+        if name in package and (not partial or name + '_id' in (package[name] or {})):
             indexes[name] = {package[name][name + '_id']: package[name]}
     return indexes
 

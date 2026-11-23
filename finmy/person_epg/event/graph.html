@@ -247,6 +247,9 @@ select:focus-visible {
 .relation-control { pointer-events: stroke; cursor: pointer }
 .relation-control:focus-visible { stroke: var(--purple); stroke-opacity: .35; outline: none }
 .edge-label.relation-control { pointer-events: all }
+.scope-control { pointer-events: stroke; cursor: pointer }
+.scope-control:focus-visible { stroke: #866a32; stroke-opacity: .4; outline: none }
+.edge-label.scope-control { pointer-events: all }
 #inspector { flex: 0 0 clamp(320px, 32vw, 480px); min-width: 0; display: flex; flex-direction: column;
   background: #fff; border-left: 1px solid var(--border); color: var(--ink) }
 .inspector-nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px;
@@ -298,6 +301,30 @@ select:focus-visible {
   margin: 9px 12px
 }
 
+/* Time marks use the same column coordinates as the cards. */
+.chronology-heading small { margin-left: 12px; font: 13px Arial, sans-serif; color: var(--muted) }
+.section.time-axis { background: #f7faf9; border-inline: 0; border-radius: 0 }
+.section.action-band { background: transparent; border: 0; border-top: 1px dashed #9aaab5; border-radius: 0 }
+.section.action-band h3 { color: #44596a; margin: 5px 12px; font-size: 15px }
+.axis-tick { position: absolute; bottom: 6px; transform: translateX(-50%); max-width: 288px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-top: 2px solid #577b77;
+  text-align: center; padding: 4px 8px 0; font-size: 13px; color: #305553 }
+.axis-scope { display: block; margin: 3px 12px; color: #626e74; border-top: 1px dashed #aebbc0; padding-top: 5px }
+.action-span { position: absolute; border-top: 2px dotted #597773; height: 7px; color: #405e59;
+  border-inline: 2px solid #597773; text-align: center }
+.action-span.duration { border-top-style: solid; border-top-width: 3px }
+.action-span.scope { color: #626e74; border: 0; border-top: 1px dashed #aebbc0 }
+.action-span.upper { border-left: 0; border-top-style: dashed }
+.action-span.lower { border-right: 0; border-top-style: dashed }
+.action-span span { display: inline-block; margin-top: 1px; padding: 0 5px; background: white;
+  font-size: 11px; white-space: nowrap; vertical-align: top }
+.time-key { font: 12px Arial, sans-serif; margin-left: 14px; color: #405e59; white-space: nowrap }
+.time-key::before { content: ''; display: inline-block; margin-right: 5px; width: 21px; height: 4px;
+  border-inline: 1px solid; border-top: 2px dotted }
+.time-key.duration::before { border-top-style: solid }
+.time-key.upper::before { border-left: 0; border-top-style: dashed }
+.time-key.lower::before { border-right: 0; border-top-style: dashed }
+.time-key.scope::before { border: 0; border-top: 1px dashed #8a9aa0 }
 .section .legend {
   position: absolute;
   left: 620px;
@@ -714,20 +741,30 @@ function drawRelationshipLabels(active) {
   contextual.replaceChildren();
   const obstacles = [...relationshipObstacles];
   const priority = {relation: 0, context: 1, party: 2, evidence: 3};
-  const visible = drawnEdges.filter(({edge}) => edge.kind === 'relation' || (active ?
+  const labelledScopes = new Set();
+  const visible = drawnEdges.filter(({edge}) => edge.kind === 'relation' || edge.inherited || (active ?
     involvesCard(edge, active) && showMention(edge, active) :
     edge.kind !== 'evidence' && edge.type !== 'about'));
   visible.sort((a, b) => (priority[a.edge.kind] ?? 4) - (priority[b.edge.kind] ?? 4));
   for (const item of visible) {
     const {edge, points} = item;
     const relation = edge.kind === 'relation';
-    if (relation && item.label) { obstacles.push(item.labelBox); continue; }
+    if (edge.inherited) {
+      if (labelledScopes.has(edge.ref_path)) continue;
+      labelledScopes.add(edge.ref_path);
+    }
+    if ((relation || edge.inherited) && item.label) { obstacles.push(item.labelBox); continue; }
     const text = relation ? relationName(edge.record) :
+      edge.inherited ? pretty(edge.type) + ' · Phase-wide' :
       edge.type === 'participation' ? short(contextUseName(edge.record), 42) : pretty(edge.type);
     let location;
     if (edge.jump) {
       const connector = port(item.slot, 3);
       location = {box: item.slot, anchor: connector, connector};
+    } else if (edge.inherited) {
+      const [x, y] = item.junction, width = labelWidth(text, false);
+      const left = Math.max(8, Math.min(x + 8, diagramWidth - width - 8));
+      location = {box: [left, y - 10, width, 20], anchor: [x, y], connector: [left, y]};
     } else if (relation) {
       location = actionLabelPosition(points, item.slot, obstacles);
     } else {
@@ -742,6 +779,10 @@ function drawRelationshipLabels(active) {
       label.classList.add('relation-control');
       label.dataset.relation = edge.relation_id;
       label.onclick = () => inspectRecord(edge.relation_id);
+    } else if (edge.kind === 'context') {
+      label.classList.add('scope-control');
+      label.onclick = () => inspectRecord(edge.owner, edge.ref_path);
+      if (edge.inherited) label.dataset.phaseRef = edge.ref_path;
     }
     if (Math.abs(anchor[0] - connector[0]) + Math.abs(anchor[1] - connector[1]) > 8) {
       label.append(svg('line', {x1: anchor[0], y1: anchor[1], x2: connector[0], y2: connector[1],
@@ -753,7 +794,7 @@ function drawRelationshipLabels(active) {
       fill: style.color, 'text-anchor': 'middle'});
     caption.textContent = text;
     label.append(caption);
-    (relation ? persistent : contextual).append(label);
+    (relation || edge.inherited ? persistent : contextual).append(label);
     item.label = label;
     item.labelBox = box;
   }
@@ -826,12 +867,15 @@ function paintCard(card, container) {
       if (category) button.dataset.category = record.category;
       meta.classList.add('context-meta');
       meta.append(el('span', card.alias, 'context-id'), el('span', category || 'Context', 'context-kind'));
+      if (card.phase_inline) meta.append(el('span', 'Phase-wide', 'context-kind'));
       if (retrospective) meta.append(el('span', 'Retrospective', 'retrospective'));
       if (card.date) meta.append(el('span', card.date, 'context-date'));
       const caption = [card.alias, scope.label, category, retrospective && 'Retrospective', card.date, card.title];
       button.setAttribute('aria-label', caption.filter(Boolean).join(' · '));
     } else {
-      meta.textContent = [card.alias, card.date].filter(Boolean).join(' · ');
+      const placement = card.chronology?.placement;
+      const time = card.date || placement?.note || (card.chronology && 'Time unknown');
+      meta.textContent = [card.alias, time].filter(Boolean).join(' · ');
     }
     preview.append(meta, el('span', card.title, 'title'));
     if (card.kind !== 'source' && card.badges.length) {
@@ -852,7 +896,30 @@ function paintCard(card, container) {
   button.onfocus = () => { focused = card.key; highlight(hovered); };
   button.onblur = () => { if (focused === card.key) focused = null; highlight(hovered); };
   container.append(button);
-  cards.set(card.key, {card, button});
+  let span = null;
+  const cell = card.chronology?.placement;
+  if (cell) {
+    button.dataset.row = cell.row;
+    button.dataset.column = cell.column;
+    button.dataset.band = cell.band;
+    button.title = [button.title, card.date, cell.note].filter(Boolean).join(' · ');
+    if (cell.mark) {
+      const kind = timeMarkName(cell.mark);
+      span = el('div', null, 'action-span ' + cell.mark);
+      span.dataset.action = card.id;
+      const caption = cell.mark === 'scope' && cell.note === 'Phase only' ? cell.note : [kind, cell.note].filter(Boolean).join(' · ');
+      span.append(el('span', caption));
+      span.setAttribute('aria-label', [card.alias, kind, card.date, cell.note].filter(Boolean).join(' · '));
+      $('regions').append(span);
+    }
+    button.setAttribute('aria-label', [card.alias, card.title, card.date, cell.note].filter(Boolean).join(' · '));
+  }
+  cards.set(card.key, {card, button, span});
+}
+
+function timeMarkName(mark) {
+  return {window:'Possible window', duration:'Duration', upper:'Upper limit', lower:'Lower limit',
+    scope:'Phase scope'}[mark];
 }
 
 function selectedPhaseLink() {
@@ -1019,11 +1086,36 @@ function showPage(index, trail = []) {
     if (region.title === 'Actions and their context') section.append(el('span',
       '● People / organizations · ■ Actions · ■ Context', 'legend'));
     const heading = el('h3');
+    if (region.title === 'Action chronology') {
+      section.classList.add('time-axis');
+      heading.className = 'chronology-heading';
+      heading.append('Action chronology', el('small', 'Spacing does not measure elapsed time.'));
+      for (const type of ['window', 'duration', 'upper', 'lower', 'scope']) {
+        if (page.cards.some(c => c.chronology?.placement?.mark === type)) {
+          heading.append(el('span', timeMarkName(type), 'time-key ' + type));
+        }
+      }
+      section.append(heading);
+      if (!region.ticks.length) {
+        const period = region.phase_period ? region.phase_period[0] + ' to before ' + region.phase_period[1] : '';
+        section.append(el('small', ['Phase scope', period, 'Action dates unknown'].filter(Boolean).join(' · '), 'axis-scope'));
+      }
+      if (region.phase_period) section.title = 'Phase bounds: ' + region.phase_period[0] + ' to ' + region.phase_period[1] + ' (exclusive)';
+      for (const tick of region.ticks) {
+        const label = el('span', tick.label, 'axis-tick');
+        label.dataset.column = tick.column;
+        label.title = tick.label;
+        section.append(label);
+      }
+      $('regions').append(section);
+      continue;
+    }
+    if (region.kind === 'action-band') section.classList.add('action-band');
     if (region.title === 'Shared phase context' || region.title === 'Additional context') {
       const shared = region.title === 'Shared phase context';
       section.classList.add(shared ? 'shared-context' : 'additional-context');
       heading.append(el('span', region.title, 'scope-heading'), ' ', el('small', shared
-        ? 'Select a card to highlight the Actions that inherit it' : 'No recorded action or phase link on this page', 'context-note'));
+        ? 'Select a card to highlight its scope and inspect exceptions' : 'No recorded action or phase link on this page', 'context-note'));
     } else heading.textContent = region.title;
     section.append(heading);
     $('regions').append(section);
@@ -1075,9 +1167,9 @@ function blocked(a, b, boxes) {
   });
 }
 
-function routingGrid(boxes, canvasWidth, height, gates) {
+function routingGrid(boxes, canvasWidth, height, gates, tracks) {
   const xs = new Set([10, canvasWidth - 10, ...gates]),
-    ys = new Set([8, height - 10]);
+    ys = new Set([8, height - 10, ...tracks]);
   for (const [x, y, w, h] of boxes) {
     [x - 12, x + w + 12, x + w / 2].forEach(v => xs.add(v));
     [y - 12, y + h + 12, y + h / 2].forEach(v => ys.add(v));
@@ -1259,12 +1351,35 @@ function labelPosition(points, width, obstacles, canvasWidth) {
     !obstacles.some(other => overlapsLabel(box, other)) && !blocked(anchor, connector, obstacles));
 }
 
+// Reserve off-centre ports for inherited branches; the main relation wires
+// use the centre of a card. Parallel uses have distinct arrowheads.
+function scopePort(box, side, index, count) {
+  const fraction = .14 + .32 * (index + 1) / (count + 1);
+  return [box[0] + box[2] * fraction, port(box, side)[1]];
+}
+
+function inheritedRoute(a, b, junction, fromPort, toPort, grid, obstacles) {
+  const [x, y] = junction;
+  for (const entry of [2, 0, 1, 3]) {
+    const end = entry === 2 ? toPort : port(b, entry), approach = outward(end, entry);
+    const turn = [approach[0], y];
+    const tail = !blocked(junction, turn, obstacles) && route(turn, approach, grid);
+    if (!tail) continue;
+    for (const exit of [3, 1, 0, 2]) {
+      const start = exit === 3 ? fromPort : port(a, exit);
+      const stem = route(outward(start, exit), [x, y], grid);
+      if (stem) return simplify([start, ...stem, ...tail, end]);
+    }
+  }
+  return null;
+}
+
 function drawEdges() {
   const page = view.pages[current],
     canvas = $('links'),
     height = parseFloat($('graph').style.height);
-  const focusId = canvas.contains(document.activeElement) && document.activeElement.dataset.relationId;
-  const returnId = canvas.contains(returnTo) && returnTo.dataset.relationId;
+  const focusId = canvas.contains(document.activeElement) && document.activeElement.dataset.edgeControl;
+  const returnId = canvas.contains(returnTo) && returnTo.dataset.edgeControl;
   canvas.replaceChildren();
   drawnEdges = [];
   canvas.setAttribute('width', diagramWidth);
@@ -1337,8 +1452,31 @@ function drawEdges() {
       Math.max(a[1], b[1]) - (lane + 1) * LABEL_LANE_HEIGHT, width, 20]);
   }
   relationshipObstacles = obstacles.concat([...slots.values()]);
-  const grid = routingGrid(obstacles, diagramWidth, height, cross.map(edge => edge.gateX));
   const structural = page.edges.filter(edge => edge.kind !== 'evidence').concat(cross);
+  const sharedBand = page.sections.find(section => section.title === 'Shared phase context');
+  const inherited = structural.filter(edge => edge.inherited);
+  const scopeRoutes = new Map(), portXs = cross.map(edge => edge.gateX), trackYs = new Set();
+  const usesByCard = new Map();
+  for (const edge of inherited) {
+    for (const key of [edge.from_key, edge.to_key]) {
+      if (!usesByCard.has(key)) usesByCard.set(key, new Set());
+      usesByCard.get(key).add(edge.ref_path);
+    }
+  }
+  for (const edge of inherited) {
+    const a = boxes.get(edge.from_key);
+    const getPort = (key, side) => {
+      const uses = [...usesByCard.get(key)];
+      return scopePort(boxes.get(key), side, uses.indexOf(edge.ref_path), uses.length);
+    };
+    const from = getPort(edge.from_key, 3), to = getPort(edge.to_key, 2);
+    const base = cards.get(edge.from_key).card.phase_inline ? a[1] + a[3] : sharedBand.box[1] + sharedBand.box[3];
+    const junction = [from[0], base + 16 + 28 * edge.scope_lane];
+    scopeRoutes.set(edge, {from, to, junction});
+    portXs.push(from[0], to[0]);
+    trackYs.add(junction[1]);
+  }
+  const grid = routingGrid(obstacles, diagramWidth, height, portXs, trackYs);
   structural.sort((a, b) => Number(a.kind === 'relation') - Number(b.kind === 'relation'));
   for (const edge of structural) {
     const a = boxes.get(edge.from_key),
@@ -1347,7 +1485,8 @@ function drawEdges() {
     const preferred = ports(a, b, edge.kind);
     // A cross-page wire passes through its label and exits at the graph's upper border.
     if (edge.jump) preferred[edge.remoteFrom ? 0 : 1] = 3;
-    let points = null;
+    const scope = scopeRoutes.get(edge), junction = scope?.junction;
+    let points = scope && inheritedRoute(a, b, junction, scope.from, scope.to, grid, obstacles);
     const alternatives = [
       [...preferred]
     ];
@@ -1356,6 +1495,7 @@ function drawEdges() {
         if (as !== preferred[0] || bs !== preferred[1]) alternatives.push([as, bs]);
       }
     for (const [as, bs] of alternatives) {
+      if (points) break;
       if (edge.jump && (edge.remoteFrom ? as : bs) !== 3) continue;
       const start = port(a, as),
         end = port(b, bs);
@@ -1390,21 +1530,28 @@ function drawEdges() {
     };
     const line = svg('polyline', {...attributes, 'class': 'edge-line'});
     const tooltip = svg('title', {});
-    tooltip.textContent = edge.type === 'participation' ? contextUseName(edge.record) : pretty(edge.type);
+    tooltip.textContent = edge.inherited ? pretty(edge.type) + ' · Phase-wide' :
+      edge.type === 'participation' ? contextUseName(edge.record) : pretty(edge.type);
+    if (edge.inherited) line.dataset.phaseRef = edge.ref_path;
     line.append(tooltip);
     baseLayer.append(line);
-    if (edge.relation_id) {
+    if (edge.relation_id || edge.kind === 'context') {
+      const controlId = edge.relation_id || JSON.stringify([edge.owner, edge.ref_path, edge.from, edge.to]);
+      const caption = edge.relation_id ? relationName(edge.record) :
+        [alias(edge.from), tooltip.textContent, alias(edge.to)].join(' · ');
       const hit = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'transparent',
-        'stroke-width': 14, 'class': 'relation-control', role: 'button', tabindex: 0,
-        'data-relation-id': edge.relation_id, 'aria-controls': 'inspector',
-        'aria-label': relationName(edge.record)});
-      hit.onclick = () => inspectRecord(edge.relation_id);
+        'stroke-width': 14, 'class': edge.relation_id ? 'relation-control' : 'scope-control',
+        role: 'button', tabindex: 0, 'aria-controls': 'inspector', 'aria-label': caption});
+      if (edge.relation_id) hit.dataset.relationId = edge.relation_id;
+      hit.dataset.edgeControl = controlId;
+      const inspect = () => edge.relation_id ? inspectRecord(edge.relation_id) : inspectRecord(edge.owner, edge.ref_path);
+      hit.onclick = inspect;
       hit.onkeydown = event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inspectRecord(edge.relation_id); }
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inspect(); }
       };
       hitLayer.append(hit);
-      if (edge.relation_id === returnId) returnTo = hit;
-      if (edge.relation_id === focusId) hit.focus({preventScroll: true});
+      if (controlId === returnId) returnTo = hit;
+      if (controlId === focusId) hit.focus({preventScroll: true});
     }
     const emphasis = svg('g', {'class': 'edge-emphasis'});
     const halo = svg('polyline', {points: attributes.points, fill: 'none', stroke: 'white',
@@ -1417,7 +1564,7 @@ function drawEdges() {
     emphasis.append(halo, focusLine, flow, origin);
     emphasisLayer.append(emphasis);
     drawnEdges.push({edge, line, points, halo, focusLine, flow, origin, emphasis,
-      slot: slots.get(edge.relation_id), label: null});
+      slot: slots.get(edge.relation_id), junction, label: null});
   }
   highlight(hovered);
   paintEvidenceSelection();
@@ -1516,18 +1663,33 @@ function spreadColumns(width) {
   const nodes = [...cards.values()].filter(item => $('cards').contains(item.button));
   if (!nodes.length) return;
   const boxes = nodes.map(item => item.card.box);
+  const page = view.pages[current];
+  const body = page.sections.find(s => s.columns);
+  // A window endpoint can occupy a column even when no card is centred on it.
+  if (body) for (const col of [0, body.columns - 1]) {
+    boxes.push([body.origin + col * body.step - 130, 0, 260, 0]);
+  }
   const left = Math.min(...boxes.map(([x]) => x));
   const right = Math.max(...boxes.map(([x, , w]) => x + w));
   const centers = boxes.map(([x, , w]) => x + w / 2);
   const first = Math.min(...centers), last = Math.max(...centers);
-  const inset = Math.min(left, view.pages[current].width - right);
-  const extra = Math.max(0, width - right - inset);
-  // Every row shares the same horizontal mapping. The layout owns row assignment and order.
-  nodes.forEach(({button, card}, i) => {
-    const share = first === last ? .5 : (centers[i] - first) / (last - first);
-    const x = card.box[0] + extra * share;
-    button.style.left = x + 'px';
-  });
+  const inset = Math.min(left, page.width - right), extra = Math.max(0, width - right - inset);
+  const mapX = x => x + extra * (first === last ? .5 : (x - first) / (last - first));
+  nodes.forEach(({button, card}, i) => { button.style.left = mapX(centers[i]) - card.box[2] / 2 + 'px'; });
+  if (!body) return;
+  const columnX = col => mapX(body.origin + col * body.step);
+  for (const label of $('regions').querySelectorAll('.axis-tick')) {
+    const region = label.parentElement;
+    label.style.left = columnX(Number(label.dataset.column)) - region.offsetLeft - region.clientLeft + 'px';
+  }
+  for (const {card, button, span} of nodes) {
+    if (!span) continue;
+    const cell = card.chronology.placement;
+    // The closed end of a one-sided limit aligns with the calendar column.
+    const start = columnX(cell.first) - (cell.mark === 'lower' ? 0 : 126);
+    const end = columnX(cell.last) + (cell.mark === 'upper' ? 0 : 126);
+    position(span, [start, button.offsetTop + button.offsetHeight + 7, end - start, 7]);
+  }
 }
 
 function sizeDiagram() {
@@ -1580,6 +1742,9 @@ function changeZoom(value) {
   }
   const fit = fitScale();
   if (!fit) return;
+  // Keep visible Phase ports at the top when stepping the zoom on a tall diagram.
+  // Reading size and an explicit selection still focus the card being read.
+  const keepTop = !selection && viewport.scrollTop === 0 && value !== 1 / fit;
   zoomRatio = Math.max(Math.min(.25, 1 / fit), Math.min(Math.max(2, 2 / fit), value));
   sizeDiagram();
   if (zoomRatio === 1) {
@@ -1590,8 +1755,10 @@ function changeZoom(value) {
     const box = anchor?.getBoundingClientRect();
     const targetX = box ? box.left + box.width / 2 : after.left + fractionX * after.width;
     area.scrollLeft += targetX - frame.left - centerX;
-    if (centerY) viewport.scrollTop += after.top + y * scale - frame.top - targetY;
+    if (keepTop) viewport.scrollTop = 0;
+    else if (centerY) viewport.scrollTop += after.top + y * scale - frame.top - targetY;
   }
+  drawPhaseBridges();
   paintEvidenceSelection();
 }
 

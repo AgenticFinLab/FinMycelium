@@ -1,5 +1,6 @@
 """Non-mutating shape, identity, evidence and temporal checks for person Events."""
 from collections import defaultdict, deque
+import re
 from datetime import date
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -7,6 +8,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from .context_links import shared_passage_leads
 from .records import compose_context, evidence_samples, in_source_body, index_records, pointer, sha256, source_records
 from .schema import COLLECTION_IDS, FACTS_SCHEMA, FACTS_VERSION, GRAPH_SCHEMA, PARTIAL_SCHEMA
+from .temporal import (ActionWindow, CLOCK, OFFSET, PARTS, descendants, publication_day,
+                       quoted_daypart, relative_days, single_day, solely_relative, time_pairs)
 
 
 def interval(record):
@@ -48,29 +51,40 @@ def located_evidence(evidence, indexes, samples=None):
             or evidence.get('source_id') not in indexes['sources']):
         return False
     start, end = evidence.get('start'), evidence.get('end')
-    if type(start) is not int or type(end) is not int or not 0 <= start < end or end - start != len(evidence['quote']):
+    if type(start) is not int or type(end) is not int or not 0 <= start < end or end - start != len(evidence.get('quote') or ''):
         return False
     if samples is not None:
-        sample = samples.get(evidence['sample_id'])
+        sample = samples.get(evidence.get('sample_id'))
         return bool(sample and sample['raw_data_id'] == evidence['source_id']
                     and in_source_body(sample, start, end) and sample['content'][start:end] == evidence['quote']
-                    and evidence['sample_sha256'] == sha256(sample['content'].encode('utf-8')))
+                    and evidence.get('sample_sha256') == sha256(sample['content'].encode('utf-8')))
     return True
 
 
 class SupportIndex:
     """Deterministic provenance eligibility; no semantic entailment scoring."""
-    def __init__(self, package, payload=None):
+    def __init__(self, package, payload=None, *, partial=False):
         self.package = package
-        self.records = index_records(package)
+        self.records = index_records(package, partial=partial)
         self.samples = evidence_samples(payload) if payload is not None else None
+        self.sources = (payload.get('user_query', {}).get('extras', {}).get('source_registry', {})
+                        if payload is not None else self.records['sources'])
+        self._windows = {}
+        self.disputed = defaultdict(set)
+        for collection, index in self.records.items():
+            for oid, item in index.items():
+                for conflict in item.get('conflicts', []):
+                    self.disputed[collection, oid].add(conflict['target'])
+                    for ref in conflict.get('related_refs', []):
+                        self.disputed[ref['collection'], ref['object_id']].add(ref['field'])
 
     def supported(self, collection, oid, field, seen=frozenset(), *, respect_conflicts=True):
         node = (collection, oid, field)
         if node in seen:
             return False
         record = self.records.get(collection, {}).get(oid)
-        if record is None or (respect_conflicts and field_conflicted(self.package, collection, oid, field)):
+        if record is None or (respect_conflicts and any(
+                covers(t, field, root=True) or covers(field, t) for t in self.disputed.get((collection, oid), ()))):
             return False
         if any(covers(g['target'], field, root=True) for g in record.get('gaps', [])):
             return False
@@ -82,7 +96,7 @@ class SupportIndex:
             return all(self.supported(collection, oid, '/time/' + side, seen) for side in ('start', 'end'))
         # Relations are single propositions, including their endpoints and type.
         root = collection in ('relations', 'relation_candidates') or field in ('', '/description', '/summary')
-        return any(covers(s['target'], field, root=root) and self.valid(s, seen | {node})
+        return any(isinstance(s.get('target'), str) and covers(s['target'], field, root=root) and self.valid(s, seen | {node})
                    for s in record.get('support', []))
 
     def valid(self, support, seen=frozenset()):
@@ -90,9 +104,9 @@ class SupportIndex:
         premises = support.get('premise_refs', [])
         if any(not located_evidence(self.records['evidence'].get(eid), self.records, self.samples) for eid in evidence):
             return False
-        if support['mode'] in ('O', 'A'):
+        if support.get('mode') in ('O', 'A'):
             return bool(evidence)
-        return bool(support.get('reason') and (evidence or premises)
+        return bool(support.get('mode') == 'I' and support.get('reason') and (evidence or premises)
                     and all(self.supported(r['collection'], r['object_id'], r['field'], seen) for r in premises))
 
     def time_ready(self, collection, oid):
@@ -100,15 +114,95 @@ class SupportIndex:
         bounds = interval(record)
         return bool(bounds and bounds[0] < bounds[1] and self.supported(collection, oid, '/time'))
 
+    def supported_duration(self, aid):
+        time = self.records['actions'][aid].get('time', {})
+        return time.get('kind') == 'duration' and self.supported('actions', aid, '/time/kind')
+
+    def time_quotes(self, action, field, *, inferred=False):
+        for support in action.get('support', []):
+            if inferred and support.get('mode') != 'I':
+                continue
+            if not covers(support.get('target', ''), field) or not self.valid(support):
+                continue
+            for eid in support.get('evidence_ids', []):
+                yield self.records['evidence'][eid]
+
+    def publication_anchor_valid(self, action):
+        time = action['time']
+        sid = time['anchor_source_id']
+        published = self.sources.get(sid, {}).get('published_at')
+        bounds = interval(time)
+        day = publication_day(time.get('text'), published)
+        if not day or not single_day(time, bounds) or bounds[0] != day:
+            return False
+        offsets = relative_days(time['text'])
+        return all(any(ev['source_id'] == sid and offsets == relative_days(ev['quote'])
+                       for ev in self.time_quotes(action, '/time/' + side, inferred=True))
+                   for side in ('start', 'end'))
+
+    def relative_inference_valid(self, action):
+        # Apply the extra check to the new fine-grained contract. Older saved
+        # records may have no such qualifier and retain their original status.
+        time = action['time']
+        if 'intraday' not in time or not solely_relative(time.get('text')):
+            return True
+        return all(any(s.get('mode') == 'I' and covers(s.get('target', ''), '/time/' + side)
+                       and self.valid(s) for s in action.get('support', [])) for side in ('start', 'end'))
+
+    def action_window(self, aid, *, legacy=False):
+        key = (aid, legacy)
+        if key not in self._windows:
+            self._windows[key] = self._action_window(aid, legacy)
+        return self._windows[key]
+
+    def _action_window(self, aid, legacy):
+        if not self.time_ready('actions', aid):
+            return None
+        action = self.records['actions'][aid]
+        time = action['time']
+        bounds = interval(time)
+        if time.get('kind') not in ('duration', 'occurrence_window'):
+            return None
+        if not self.relative_inference_valid(action) or (
+                'anchor_source_id' in time and not self.publication_anchor_valid(action)):
+            return None
+        part, offset = None, None
+        if single_day(time, bounds):
+            value = time.get('intraday', '')
+            if (isinstance(value, str) and (value in PARTS or re.fullmatch(CLOCK, value))
+                    and self.supported('actions', aid, '/time/intraday')):
+                part = value
+                if 'utc_offset' in time:
+                    if (isinstance(time['utc_offset'], str) and re.fullmatch(OFFSET, time['utc_offset'])
+                            and self.supported('actions', aid, '/time/utc_offset')):
+                        offset = time['utc_offset']
+                    else:
+                        return None  # Cannot safely compare this civil date with another frame.
+            elif legacy and 'intraday' not in time and 'utc_offset' not in time and not any(
+                    covers(g['target'], '/time/intraday', root=True) for g in action.get('gaps', [])):
+                term = quoted_daypart(time.get('text'))
+                if term:
+                    quotes = {ev['evidence_id']: ev for ev in self.time_quotes(action, '/time/text')}
+                    start_ids = {ev['evidence_id'] for ev in self.time_quotes(action, '/time/start')}
+                    quotes.update((ev['evidence_id'], ev) for ev in self.time_quotes(action, '/time/end')
+                                  if ev['evidence_id'] in start_ids)
+                    parts = {p for ev in quotes.values() for sentence in re.split(r'(?<=[.!?。！？])\s*', ev['quote'])
+                             if (p := quoted_daypart(sentence))}
+                    if parts == {term}:
+                        part = term
+        return ActionWindow(*bounds, part, offset)
+
     def derived(self, relation):
         a, b = (self.records['actions'].get(relation[k], {}) for k in ('from_action_id', 'to_action_id'))
         if not all(self.time_ready('actions', relation[k]) for k in ('from_action_id', 'to_action_id')):
             return False
         ia, ib = interval(a), interval(b)
         if relation['type'] == 'precedes':
-            valid = ia[1] <= ib[0]
+            first, second = (self.action_window(relation[k]) for k in ('from_action_id', 'to_action_id'))
+            valid = first and second and first.before(second)
         elif relation['type'] == 'overlaps':
-            valid = a['time']['kind'] == b['time']['kind'] == 'duration' and max(ia[0], ib[0]) < min(ia[1], ib[1])
+            valid = (self.supported_duration(a['action_id']) and self.supported_duration(b['action_id'])
+                     and max(ia[0], ib[0]) < min(ia[1], ib[1]))
         else:
             return False
         supports = [s for s in relation['support'] if s['mode'] == 'I' and self.valid(s)]
@@ -137,6 +231,7 @@ def critical_fields(collection, record):
     """Only explicit field contracts, not a requirement to annotate every scalar."""
     fields = list(FIELD_SUPPORT.get(collection, {}).get('required', []))
     if collection == 'actions':
+        fields += ['/time/' + key for key in ('intraday', 'utc_offset') if key in record['time']]
         contract = FIELD_SUPPORT[collection]
         fields += ['/actor/' + key for key in contract['optional_actor'] if key in record['actor']]
         if record.get('phase_id') is not None:
@@ -163,12 +258,12 @@ def reachable(edges, start, end):
     return False
 
 
-def order_view(package, payload=None):
+def order_view(package, payload=None, *, support=None):
     """Preserve raw claims; exclude every conflicting edge, not an arbitrary cycle cut."""
-    support = SupportIndex(package, payload)
+    support = support or SupportIndex(package, payload)
     actions = {a['action_id']: a for a in package.get('actions', [])}
     candidates = [r for r in package.get('relations', [])
-                  if r['type'] == 'precedes' and r['basis'] in ('observed', 'asserted', 'derived')
+                  if r.get('relation_id') and r.get('type') == 'precedes' and r.get('basis') in ('observed', 'asserted', 'derived')
                   and r['from_action_id'] in actions and r['to_action_id'] in actions]
     declared, conflicted_times = set(), {aid for aid, action in actions.items() if has_time_conflict(action)}
     for conflict in package.get('event', {}).get('conflicts', []):
@@ -197,9 +292,10 @@ def order_view(package, payload=None):
         conflicts.append(dict(relation_ids=sorted(cycle_ids), reason='Raw precedence claims form a cycle.'))
     for relation in candidates:
         rid, a, b = relation['relation_id'], actions[relation['from_action_id']], actions[relation['to_action_id']]
-        ia, ib = interval(a), interval(b)
-        contradiction = support.time_ready('actions', a['action_id']) and support.time_ready('actions', b['action_id']) and (
-            ia[0] >= ib[1] or (a['time']['kind'] == b['time']['kind'] == 'duration' and ia[1] > ib[0]))
+        wa, wb = support.action_window(a['action_id']), support.action_window(b['action_id'])
+        contradiction = wa and wb and (wb.before(wa) or (
+            support.supported_duration(a['action_id']) and support.supported_duration(b['action_id'])
+            and wa.end > wb.start))
         reasons = excluded.get(rid, [])
         if contradiction:
             conflicts.append(dict(relation_ids=[rid], reason='Precedence contradicts supported action intervals.'))
@@ -212,7 +308,31 @@ def order_view(package, payload=None):
             reasons.append('unresolved_time_premise')
         if reasons:
             excluded[rid] = reasons
+    unknown_pairs = [r for r in package.get('relations', []) if r.get('type') == 'order_unknown'
+                     and r.get('relation_id') and r['relation_id'] not in declared]
     usable = [r for r in candidates if r['relation_id'] not in excluded]
+    if usable or unknown_pairs:
+        combined = defaultdict(set)
+        for r in usable:
+            combined[r['from_action_id']].add(r['to_action_id'])
+        for first, second in time_pairs({a: support.action_window(a) for a in actions}):
+            combined[first].add(second)
+        reach = {a: descendants(combined, a) for a in actions}
+        for r in usable:
+            rid, a, b = r['relation_id'], r['from_action_id'], r['to_action_id']
+            if a in reach[b]:
+                excluded[rid] = ['time_path_conflict']
+        mixed = [r['relation_id'] for r in usable if r['relation_id'] in excluded]
+        if mixed:
+            conflicts.append(dict(relation_ids=sorted(mixed),
+                                  reason='Supported time windows and precedence paths form a cycle.'))
+            usable = [r for r in usable if r['relation_id'] not in excluded]
+        for r in unknown_pairs:
+            rid, a, b = r['relation_id'], r['from_action_id'], r['to_action_id']
+            if ((b in reach.get(a, ()) or a in reach.get(b, ())) and all(
+                    support.supported('relations', rid, '/' + key) for key in ('from_action_id', 'to_action_id', 'type'))):
+                excluded[rid] = ['order_unknown_conflict']
+                conflicts.append(dict(relation_ids=[rid], reason='Recorded unknown order disagrees with supported chronology.'))
     return dict(relation_ids=[r['relation_id'] for r in usable], excluded=excluded,
                 conflicts=conflicts, declared_relation_ids=sorted(declared))
 
@@ -310,7 +430,7 @@ def check_graph(package, payload=None, *, complete=True):
         if evidence['location_status'] == 'matched' and (
                 type(evidence['start']) is not int or type(evidence['end']) is not int
                 or not 0 <= evidence['start'] < evidence['end']
-                or evidence['end'] - evidence['start'] != len(evidence['quote'])):
+                or evidence['end'] - evidence['start'] != len(evidence.get('quote') or '')):
             issue('QUOTE_LOCATION_INVALID', 'Matched Unicode offsets must span exactly the nonempty quote.', 'evidence', eid)
             if type(evidence['start']) is not int or type(evidence['end']) is not int:
                 continue
@@ -392,6 +512,12 @@ def check_graph(package, payload=None, *, complete=True):
             if 'time' in record:
                 time = record['time']
                 known = interval(record)
+                if 'intraday' in time and not single_day(time, known):
+                    issue('TIME_INTRADAY_INVALID', 'A time of day requires an evidenced single-day occurrence and its original wording.', collection, oid, '/time/intraday')
+                if not support_index.relative_inference_valid(record):
+                    issue('TIME_INFERENCE_REQUIRED', 'A relative expression needs inferred calendar endpoints with a grounded reason.', collection, oid, '/time')
+                if 'anchor_source_id' in time and not support_index.publication_anchor_valid(record):
+                    issue('TIME_ANCHOR_INVALID', 'Publisher-relative time needs the original publication day, matching relative wording in a located source quote, and inferred endpoint support.', collection, oid, '/time/anchor_source_id')
                 if known and known[0] >= known[1]:
                     issue('TIME_INTERVAL_INVALID', 'Time intervals are half open with start < end.', collection, oid, '/time')
                 for side in ('start', 'end'):
@@ -537,7 +663,7 @@ def check_graph(package, payload=None, *, complete=True):
                 issue('SELF_RELATION', 'An action relation requires two different actions.', collection, rid)
             if relation.get('basis') == 'derived' and not support_index.derived(relation):
                 issue('DERIVED_RELATION_INVALID', 'Derived temporal relations need supported consistent intervals and their time premises.', collection, rid)
-    order = order_view(package, payload)
+    order = order_view(package, payload, support=support_index)
     declared = set(order['declared_relation_ids'])
     for conflict in order['conflicts']:
         if not set(conflict['relation_ids']) <= declared:

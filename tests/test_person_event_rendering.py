@@ -325,10 +325,10 @@ def test_cross_phase_action_navigation_from_both_endpoints(tmp_path, monkeypatch
 
 
 @pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
-def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path, monkeypatch):
+def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path):
     from playwright.sync_api import sync_playwright
     from finmy.person_epg.event import graph_html
-    from test_person_event_graph_html import sample_graph
+    from test_person_event_graph_html import record_sequence, sample_graph
 
     graph = sample_graph()
     graph['phases'] = [{'phase_id': 'P', 'name': 'Phase'}]
@@ -336,20 +336,9 @@ def test_zoom_uses_spare_width_and_preserves_layout_rows(tmp_path, monkeypatch):
     graph['sources'] = [{'source_id': f'S{i}', 'title': f'Source {i}'} for i in range(24)]
     graph['evidence'] = [{'evidence_id': f'E{i}', 'source_id': f'S{i}', 'quote': f'Quote {i}'} for i in range(24)]
     graph['actions'][0]['support'] = [{'target': '/name', 'evidence_ids': [e['evidence_id'] for e in graph['evidence']]}]
-    graph['relations'] = [{'relation_id': 'R', 'from_action_id': 'A0', 'to_action_id': 'A1', 'type': 'precedes'}]
-    arrange = graph_html.arrange_graph
-
-    def arrange_two_rows(*args):
-        view = arrange(*args)
-        phase = next(p for p in view['pages'] if p['phase'] == 'P')
-        actions = [c for c in phase['cards'] if c['kind'] == 'action']
-        for i, card in enumerate(actions[4:]):
-            card['box'][0] = actions[i + 1]['box'][0]
-            card['box'][1] += 140
-        next(s for s in phase['sections'] if s['title'] == 'Actions and their context')['box'][3] += 140
-        return view
-
-    monkeypatch.setattr(graph_html, 'arrange_graph', arrange_two_rows)
+    record_sequence(graph, [('A0', 'A1'), ('A1', 'A2'), ('A2', 'A3'),
+                            ('A0', 'A4'), ('A4', 'A5'), ('A5', 'A3')])
+    graph['relations'][0]['relation_id'] = 'R'
     output = tmp_path / 'two-rows.html'
     output.write_text(graph_html.render_graph_html(graph), encoding='utf-8')
     with sync_playwright() as engine:
@@ -417,20 +406,71 @@ def test_shared_context_coverage_applies_exclusions_per_reference(graph):
     from finmy.person_epg.event.graph_html import render_graph_html
     from test_person_event_graph_html import embedded_data
 
-    def coverage():
+    def phase():
         pages = embedded_data(render_graph_html(graph), 'epg-view')['pages']
-        p1 = next(page for page in pages if page['phase'] == 'PHASE-1')
-        return next(card for card in p1['cards'] if card['id'] == 'CTX-1')['baseline_coverage']
+        return next(page for page in pages if page['phase'] == 'PHASE-1')
+
+    def coverage():
+        return next(card for card in phase()['cards'] if card['id'] == 'CTX-1')['baseline_coverage']
+
+    def branches():
+        return {(e['ref_path'], e['to']) for e in phase()['edges'] if e.get('inherited')}
 
     ref = graph['phases'][0]['baseline_context_refs'][0]
     exclusion = dict(context_ref_id=ref['context_ref_id'], reason='Exception for this action.',
                      support=[dict(target='/context_ref_id', mode='A', evidence_ids=['EV-4'])])
     graph['actions'][1]['baseline_context_exclusions'] = [exclusion]
     assert coverage() == dict(applies=['ACTION-1'], excluded=['ACTION-2'], unresolved=[])
+    assert branches() == {('/baseline_context_refs/0', 'ACTION-1')}
     exclusion['support'] = []
     assert coverage() == dict(applies=['ACTION-1'], excluded=[], unresolved=['ACTION-2'])
+    assert branches() == {('/baseline_context_refs/0', 'ACTION-1')}
     graph['phases'][0]['baseline_context_refs'].append(dict(ref, context_ref_id='another-use', relation_type='constraint'))
     assert set(coverage()['applies']) == {'ACTION-1', 'ACTION-2'}
+    assert branches() == {('/baseline_context_refs/0', 'ACTION-1'), ('/baseline_context_refs/1', 'ACTION-1'),
+                          ('/baseline_context_refs/1', 'ACTION-2')}
+    ref['gaps'] = [dict(target='/relation_type', reason='The use is disputed.')]
+    assert branches() == {('/baseline_context_refs/1', 'ACTION-1'), ('/baseline_context_refs/1', 'ACTION-2')}
+
+
+@pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
+def test_inherited_condition_branches_and_single_action_inspection(tmp_path):
+    from playwright.sync_api import sync_playwright
+    from finmy.person_epg.event.graph_html import render_graph_html
+    from test_person_event_graph_html import context_graph
+
+    graph = context_graph()
+    for phase, cid in zip(graph['phases'], ['terms', 'briefing']):
+        phase.setdefault('baseline_context_refs', []).append(dict(
+            context_id=cid, context_ref_id=phase['phase_id'] + '-condition', relation_type='condition'))
+    path = tmp_path / 'scoped.html'
+    path.write_text(render_graph_html(graph))
+    with sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=os.environ['FINMY_TEST_CHROMIUM'])
+        page = browser.new_page(viewport={'width': 1366, 'height': 768}, offline=True)
+        page.goto(path.as_uri())
+        label = page.locator('#links .edge-label[data-phase-ref]')
+        branches = page.locator('#links .edge-layer .edge-line[data-phase-ref]')
+        assert label.all_text_contents() == ['condition · Phase-wide'] and branches.count() == 2
+        assert page.locator('.section.shared-context').count() == 1
+        page.locator('#picker').select_option('2')
+        assert label.all_text_contents() == ['condition · Phase-wide'] and branches.count() == 1
+        assert page.locator('.section.shared-context').count() == 0
+        assert page.locator('.context[data-id="briefing"]').get_by_text('Phase-wide', exact=True).is_visible()
+        page.locator('#plus').click()
+        assert page.evaluate("""() => {
+            const branch = drawnEdges.find(item => item.edge.inherited);
+            const [x,y,w] = linkBox(cards.get(branch.edge.to_key)), [endX,endY] = branch.points.at(-1);
+            return endY === y && endX > x && endX < x + w && endX !== x + w / 2;
+        }""")
+        hit = page.get_by_role('button', name='C02 · condition · Phase-wide · A03', exact=True)
+        hit.focus()
+        page.keyboard.press('Enter')
+        assert page.locator('#inspection').get_by_text('Context reference', exact=True).is_visible()
+        assert page.evaluate('() => [selection.id, selection.field]') == ['P2', '/baseline_context_refs/0']
+        page.get_by_role('button', name='Explicit reference on A03').click()
+        assert page.evaluate('() => [selection.id, selection.field]') == ['A3', '/delta_context_refs/0']
+        browser.close()
 
 
 @pytest.mark.skipif(not os.getenv('FINMY_TEST_CHROMIUM'), reason='Set FINMY_TEST_CHROMIUM for the offline viewport check')
