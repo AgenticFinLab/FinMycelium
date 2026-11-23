@@ -2,15 +2,8 @@
 A session to test the lx_match module.
 
 Run:
-    python examples/Matcher/lx_matcher/test_lm_match.py
+    python examples/uTEST/Matcher/lx_matcher/test_lm_match.py
 """
-
-from finmy.matcher.lx_match import LMMatcher
-from finmy.summarizer.summarizer import SummarizedUserQuery
-from finmy.matcher.base import MatchInput
-import dotenv
-
-dotenv.load_dotenv()
 
 QUERY_TEXT = "识别与人工智能在金融风控与合规相关的内容"
 key_words = ["人工智能", "AI", "风险管理", "模型合规", "透明度"]
@@ -26,12 +19,25 @@ CONTENT = """
 展望未来，生成式 AI 在投研、客服与运营场景的应用将更广泛。与此同时，企业需要在创新与风险之间寻找平衡，将模型合规、透明度与韧性纳入治理框架的核心指标。
 """
 
-sq = SummarizedUserQuery(summarization=QUERY_TEXT, key_words=key_words)
-match_input = MatchInput(match_data=CONTENT, summarized_query=sq)
 
-matcher = LMMatcher()
-result = matcher.run(match_input)
+def main():
+    from finmy.matcher.lx_match import LMMatcher
+    from finmy.summarizer.summarizer import SummarizedUserQuery
+    from finmy.matcher.base import MatchInput
+    import dotenv
 
-for item in result.items:
-    print(item.start, item.end)
-    print(item.paragraph)
+    dotenv.load_dotenv()
+
+    sq = SummarizedUserQuery(summarization=QUERY_TEXT, key_words=key_words)
+    match_input = MatchInput(match_data=CONTENT, summarized_query=sq)
+
+    matcher = LMMatcher()
+    result = matcher.run(match_input)
+
+    for item in result.items:
+        print(item.start, item.end)
+        print(item.paragraph)
+
+
+if __name__ == "__main__":
+    main()

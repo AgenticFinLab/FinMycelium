@@ -2,22 +2,8 @@
 A session to test the lm_match module.
 
 Run:
-    python examples/Matcher/test_lm_match.py
+    python examples/uTEST/Matcher/test_lm_match.py
 """
-
-import time
-import uuid
-
-import dotenv
-
-from finmy.matcher.lm_match import LLMMatcher
-from finmy.summarizer.summarizer import SummarizedUserQuery
-from finmy.matcher.base import MatchInput
-from finmy.generic import RawData
-from finmy.converter import match_output_to_meta_samples
-
-
-dotenv.load_dotenv()
 
 QUERY_TEXT = "识别与人工智能在金融风控与合规相关的内容"
 key_words = ["人工智能", "AI", "风险管理", "模型合规", "透明度"]
@@ -32,33 +18,50 @@ CONTENT = """
 
 展望未来，生成式 AI 在投研、客服与运营场景的应用将更广泛。与此同时，企业需要在创新与风险之间寻找平衡，将模型合规、透明度与韧性纳入治理框架的核心指标。
 """
-rd = RawData(
-    raw_data_id=str(uuid.uuid4()),
-    source="xxx/technical_report.pdf",
-    location="https://example.com/xxx/technical_report.pdf",
-    time=time.strftime("%Y-%m-%d %H:%M:%S %z"),
-    data_copyright="© 2023 ACM, Inc., All rights reserved.",
-    method="PyMuPDF (v1.23.0)",
-    tag="AgenticFin",
-)
 
-sq = SummarizedUserQuery(summarization=QUERY_TEXT, key_words=key_words)
-match_input = MatchInput(match_data=CONTENT, summarized_query=sq, db_item=rd)
 
-matcher = LLMMatcher(config={"lm_name": "deepseek/deepseek-chat"})
-result = matcher.run(match_input)
+def main():
+    import time
+    import uuid
+    import dotenv
+    from finmy.matcher.lm_match import LLMMatcher
+    from finmy.summarizer.summarizer import SummarizedUserQuery
+    from finmy.matcher.base import MatchInput
+    from finmy.generic import RawData
+    from finmy.converter import match_output_to_meta_samples
 
-meta_samples = match_output_to_meta_samples(
-    result, rd, category="fintech", knowledge_field="accountant"
-)
+    dotenv.load_dotenv()
 
-print(f"Method: {result.method}")
-print(f"Elapsed: {result.time:.6f}s")
-print(f"Matched items: {len(result.items)}")
+    rd = RawData(
+        raw_data_id=str(uuid.uuid4()),
+        source="xxx/technical_report.pdf",
+        location="https://example.com/xxx/technical_report.pdf",
+        time=time.strftime("%Y-%m-%d %H:%M:%S %z"),
+        data_copyright="© 2023 ACM, Inc., All rights reserved.",
+        method="PyMuPDF (v1.23.0)",
+        tag="AgenticFin",
+    )
 
-for item in result.items:
-    print(f"Span: ({item.start}, {item.end})")
-    print(item.paragraph)
+    sq = SummarizedUserQuery(summarization=QUERY_TEXT, key_words=key_words)
+    match_input = MatchInput(match_data=CONTENT, summarized_query=sq, db_item=rd)
 
-print("meta_sample:", meta_samples)
-#
+    matcher = LLMMatcher(config={"lm_name": "deepseek/deepseek-chat"})
+    result = matcher.run(match_input)
+
+    meta_samples = match_output_to_meta_samples(
+        result, rd, category="fintech", knowledge_field="accountant"
+    )
+
+    print(f"Method: {result.method}")
+    print(f"Elapsed: {result.time:.6f}s")
+    print(f"Matched items: {len(result.items)}")
+
+    for item in result.items:
+        print(f"Span: ({item.start}, {item.end})")
+        print(item.paragraph)
+
+    print("meta_sample:", meta_samples)
+
+
+if __name__ == "__main__":
+    main()

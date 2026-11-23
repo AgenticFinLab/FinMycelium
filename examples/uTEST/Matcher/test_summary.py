@@ -10,9 +10,8 @@ from dotenv import load_dotenv
 from finmy.summarizer.summarizer import KWLMSummarizer
 from finmy.generic import UserQueryInput
 
-load_dotenv()
-
 if __name__ == "__main__":
+    load_dotenv()
 
     # Create extractor instance
     summarizer = KWLMSummarizer(config={"llm_name": "deepseek/deepseek-chat"})
