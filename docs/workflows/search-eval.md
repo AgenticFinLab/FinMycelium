@@ -42,7 +42,7 @@ in `output.json` under `search_config.retrieval`, and inspect `passage_retrieval
 events in the saved trace to confirm execution. For a topic-reader comparison,
 pass an override containing only `retrieval: {mode: topic}` to retain the same
 evaluation model. See [搜索功能演进与效果对比](../experiments/search-feature-comparison.md)
-for the recorded feature-level comparison and the default-BM25 decision.
+for the feature-level comparison, repeated-run results and current retained fixes.
 
 ## Output, cache and recovery
 
@@ -61,6 +61,33 @@ budget. No cache value can bypass quote/schema validation.
 
 This release uses `search-eval-2` judgments with atomic questions. Old broad
 rubrics are left on disk but not reused as atomic-fact judgments.
+
+## Repeated runs
+
+Keep the task, code, model and search configuration fixed, and start an independent
+trial with `--fresh`:
+
+```bash
+python -m finmy.search.eval \
+  --task examples/search_eval/buffett_goldman.json \
+  --eval_mode manual --fresh
+```
+
+`--fresh` creates a new task ID with a random suffix and preserves previous runs.
+Keep each printed output path with its run number. Every `--fresh` invocation
+starts another trial. An ordinary invocation without it continues or reuses the
+deterministic task ID for the same task, configuration and code.
+
+Compare effective task/configuration and code identity in the saved reports.
+Keep the same fact questions and evidence-family grouping, distinguish partial
+from complete support, and show every run alongside the per-run arithmetic mean.
+Record model cost separately from provider/read wait time. Name versions by their
+features; keep code identifiers in the saved artifacts for reproducibility.
+
+The manual feature-comparison table scores deduplicated delivered evidence in a
+shared pool of 31 original-evidence groups and 20 fixed facts. If the pool grows,
+recompute all historical rows with the same denominator. These delivery metrics
+are separate from the automatic Judge/provider metrics below.
 
 ## Metrics
 
@@ -90,9 +117,11 @@ The Judge sees originals/context, never search ranks or selection flags.
 - Query reads locate explicit contract aliases and local attribution, return
   matching original spans before peripheral context, and expose exact continuation
   locations. Weak lexical candidates are labeled as hints, not verified evidence.
-- Task-derived focal-person statements, relevant conditions and execution status
-  are retained alongside validated priority spans. No fixture names or IDs occur
-  in these rules. All output remains original text with original coordinates.
+- Final body delivery uses validated, previously read priority spans. The prompt
+  asks for focal-person statements, conditions and execution status; retrieval
+  hits alone do not select evidence. New-fact `context` marks may be retained,
+  and new prose annotations may complete sentences inside the same read block.
+  See [passage selection](search-retrieval-selection.md) for the exact rules.
 - Finish records atomic `fact_checks` and `source_lead_decisions`. Explicitly
   unresolved leads or planned/missing/conflicting requested facts prevent a
   `supported` stop. A future announcement must not be presented as completed fact.

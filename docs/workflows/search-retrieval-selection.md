@@ -106,14 +106,37 @@ origins can still add value for an already-covered fact. Numeric/date/negation
 changes survive even if a model reuses a claim ID incorrectly.
 
 Necessary attribution, dates and qualifications must be included inside the marked
-support span, or marked as a specific condition. Standalone `context` background
-adds no evidence value. Marks without these new annotations remain supported:
-unique original text is retained without inventing semantic equivalence. Exact
+support span, or marked as a specific condition. A `context` mark can earn value
+for `fact_ids` not yet covered by selected evidence. Pure background and context
+whose facts are already covered add no value; existing duplicate checks still apply.
+Marks without semantic annotations remain supported: unique original text is
+retained without inventing semantic equivalence. Exact
 reposts are deduplicated unless an explicit independent corroboration adds value.
 
 All original files, versions, hashes, marks and omitted ranges remain intact.
 `selection.json` records marginal gains, new facts, and `retained`, `redundant` or
 `material_limit` decisions. Retained text always comes from original coordinates.
+
+## Read coverage and sentence boundaries
+
+The existing `read_evidence` preview contains only previously read text and adds
+`mark_status: marked|partial|unmarked`, calculated from marks in the same source
+version. It uses the existing preview budget. The prompt asks the agent to check
+all returned spans and add missing useful marks in its next action, including
+finish; an unmarked excerpt may still be irrelevant. This adds no model stage
+and does not automatically select background or schedule another read.
+
+New annotations may expand clipped prose to closed sentence boundaries inside
+the same source block. Each extension must be fully covered by existing reads in
+that version. Blank lines delimit paragraphs; tables and unfinished source
+tails are not completed by this rule. Saved marks and frozen handoffs keep their
+exact coordinates. A repeated mark is matched against its original and aligned
+coordinates to avoid retaining both copies.
+
+Alignment preserves the source wording. It does not correct a relevance mistake:
+an endpoint already inside company boilerplate may include the rest of that
+sentence. The agent still chooses the supporting passage. These checks are local
+and introduce no model calls or additional search requests.
 
 ## Frozen-source comparison
 
@@ -147,5 +170,6 @@ source versions, labels and read limit fixed across modes.
 Offline tests:
 
 ```bash
-python -m pytest -q tests/test_search_retrieval.py tests/test_search_coverage.py
+python -m pytest -q tests/test_search_retrieval.py tests/test_search_coverage.py \
+  tests/test_search_passage_boundaries.py tests/test_search_evidence_selection.py
 ```
