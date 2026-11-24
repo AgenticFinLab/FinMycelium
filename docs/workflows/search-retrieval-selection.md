@@ -45,8 +45,10 @@ Up to three URLs download concurrently, using the existing 20-second acquisition
 timeout (or a shorter configured timeout); saved bodies and failed discovery downloads are reused across searches
 and resume. Downloads add HTTP work, not model or search-provider calls.
 
-Search feedback includes located `body_previews` from saved originals, sharing a
-3,200-character serialized limit. Fetching and previewing do not mark a body read.
+Search feedback returns source IDs and provider results. Sources remain selectable
+through their titles and discovery leads; cached bodies are inspected with `read_source`.
+Fetching does not mark a body read. All-provider body previews have been removed,
+including from model context when resuming older checkpoints.
 The existing `read_source` action inspects the cached text; ordinary original-range
 marks then enter the existing delivery selector. Failed downloads keep their leads
 and acquisition errors visible. Search summaries never become original evidence.

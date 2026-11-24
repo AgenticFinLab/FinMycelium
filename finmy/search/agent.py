@@ -25,8 +25,7 @@ When baidu is selected, include provider_queries.baidu in the SAME search action
 at most 72 units (each CJK character counts 2, others 1). Preserve entity names,
 dates, negation and essential conditions; remove filler or use established aliases.
 Do not rely on the full query fitting Baidu or spend a separate model call rewriting it.
-Search feedback body_previews contains cached original text for selecting sources.
-Use read_source to inspect a chosen body before marking it; previews do not record a read.
+Use read_source to inspect a chosen body before marking it.
 Missing Baidu/Bocha bodies are fetched from their URLs and cached during search.
 Search-returned original content may be partial; snippets and summaries remain leads.
 On acquisition failure use search_leads to trace originals.
@@ -66,13 +65,18 @@ Use runtime IDs; planning SRC-* citations are not reads.
 For sequential reading use {"action":"read_source","source":"runtime ID","location":{"block":0,"offset":0}}; omit query.
 Copy read_location; block/start/end identifies an evidence range, not a cursor.
 
-Mark decisive PREVIOUSLY READ passages on the next action; at finish add only missing marks:
+On the next action, include priority_passages for distinct requested facts in PREVIOUSLY
+READ text. Check every returned span for initiation, reasons, personal decisions,
+conditions, outcomes and conflicts; one transaction paragraph may not cover them all:
 [{"source_id":"runtime ID","block":3,"start":0,"end":200,"reason":"Preserve response and qualification"}].
 Copy read/read_evidence locations. Version/reason are optional; reasons are not facts.
-Keep actions, conditions, outcomes and conflicts. Marks persist; explain exclusions.
+Marks persist; explain exclusions. read_evidence.mark_status is location coverage:
+marked, partial or unmarked. Before finish, check partial/unmarked excerpts for missing
+requested facts and add useful missing marks in that action. Unmarked does not mean
+relevant; pure background needs no mark. Use the available text without another read.
 For entity_attribute_windows_v2 handoffs, only validated marked body spans are delivered.
 Source IDs retain originals for review; they do not select the entire source for delivery.
-Mark every fact-check support, including necessary speaker attribution, dates, conditions,
+Mark complete sentences for fact-check support, including speaker attribution, dates, conditions,
 and independent corroboration. Mark neighboring context explicitly when needed; lexical
 hits alone are not delivery selections. There is no target length or minimum material size.
 Mark optional fact_ids as a list of stable atomic-question keys, e.g. ["payment"],
@@ -80,7 +84,8 @@ claim_id (same only for equivalent
 propositions), and evidence_role: terms, personal, condition, outcome, corroboration,
 contradiction, or context. Different dates, conditions, planned/completed states and
 opposing claims require distinct claim_ids. Necessary context belongs INSIDE the support
-span; standalone background marked context does not enter delivery. A verified independent
+span. Context supporting a new requested fact needs fact_ids; background without new
+facts does not enter delivery. A verified independent
 corroboration may add independence_key naming its original evidence origin; reposts share
 one origin. Do not infer independence merely from different URLs. These selection judgments
 do not replace quotations. Cover the requested facts before adding repeated descriptions.
@@ -273,6 +278,8 @@ def context_for(state, *, finalize=False):
             source.pop('navigation', None)
         sources.append(source)
     feedback = state.data.get('feedback')
+    if isinstance(feedback, dict) and 'body_previews' in feedback:
+        feedback = {k:v for k,v in feedback.items() if k != 'body_previews'}  # Older checkpoints.
     if finalizing and isinstance(feedback, dict):
         feedback = {k:v for k,v in feedback.items() if k != 'spans'}
     from .review import lead_reviews

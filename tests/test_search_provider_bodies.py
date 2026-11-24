@@ -76,13 +76,12 @@ def test_bocha_body_is_cached_before_selection_without_promoting_summary(tmp_pat
     assert len(downloads) == 1
     assert state.data['read_sources'] == []
     assert not state.data['sources'][sid].get('read_ranges')
+    assert 'body_previews' not in search
     if fetch_ok:
         assert state.data['sources'][sid].get('version')
-        assert 'I would sign' in search['body_previews'][0]['text']
-        assert item['summary'] not in str(search.get('body_previews'))
+        assert 'I would sign' in tools.sources.document(sid)['blocks'][0]['text']
     else:
         assert not state.data['sources'][sid].get('version')
-        assert not search.get('body_previews')
     tools.search('Ada consent again')
     assert len(downloads) == 1  # A second search must not download/retry it again.
     result = tools.read_source(sid)
@@ -108,8 +107,10 @@ def test_cached_body_reaches_agent_read_and_handoff_with_plain_marks(tmp_path, p
     tools=SearchTools(state, transport=lambda p,*_:response(p,item), fetcher=fetch)
     search=execute_action(state,tools,dict(action='search',query='Ada consent'))
     state.data['feedback']=search
-    assert context_for(state)['feedback']['body_previews'][0]['text']==body
     sid=search['source_ids'][0]
+    context=context_for(state)
+    assert 'body_previews' not in context['feedback']
+    assert context['sources'][0]['source_id']==sid and context['sources'][0]['body_available']
     assert not state.data['sources'][sid].get('read_ranges')
     result=execute_action(state,tools,dict(action='read_source',source=sid,query='Ada consent'))
     span=next(s for s in result['spans'] if body in s['text'])
@@ -137,20 +138,38 @@ def test_missing_baidu_body_is_fetched_and_multi_provider_url_is_fetched_once(tm
     tools=SearchTools(state,transport=lambda p,*_:response(p,item),fetcher=fetch)
     result=tools.search('Ada consent')
     assert len(result['source_ids'])==1 and calls==[item['url']]
-    assert 'local consent' in str(result['body_previews'])
+    assert 'body_previews' not in result
+    assert 'local consent' in tools.sources.document(result['source_ids'][0])['blocks'][0]['text']
     assert state.data['usage']=={'search':2,'model':0}
 
 
-def test_body_previews_share_a_bound_and_do_not_mark_cache_as_inspected(tmp_path):
-    state=state_at(tmp_path,['bocha'])
-    items=[dict(url='https://example.org/'+str(i),summary='Summary') for i in range(3)]
-    tools=SearchTools(state,transport=lambda *a:{'data':{'webPages':{'value':items}}},
-        fetcher=lambda u:((('Ada needs consent at '+u+'. ')*200).encode(),'txt',None))
+def test_all_provider_bodies_stay_cached_without_search_previews(tmp_path):
+    state=state_at(tmp_path,['baidu','bocha','exa'])
+    body='Ada needs local consent before signing the agreement.'
+    def transport(provider,*_):
+        item=dict(url='https://example.org/'+provider,snippet='Discovery lead',
+                  content=body,text=body,summary='Summary')
+        return response(provider,item)
+    tools=SearchTools(state,transport=transport,fetcher=lambda u:(body.encode(),'txt',None))
     result=tools.search('Ada consent')
-    assert len(json.dumps(result['body_previews'],ensure_ascii=False))<=3200
-    assert {p['source_id'] for p in result['body_previews']}==set(result['source_ids'])
+    assert 'body_previews' not in result and len(result['source_ids'])==3
+    assert all(body==tools.sources.document(sid)['blocks'][0]['text'] for sid in result['source_ids'])
+    state.data['feedback']=result
+    assert body not in json.dumps(context_for(state))
     assert not state.data['read_sources']
     assert all(not e.get('read_ranges') for e in state.data['sources'].values())
+
+
+@pytest.mark.parametrize('finalize',[False,True])
+def test_resume_drops_old_search_previews_from_context(tmp_path,finalize):
+    state=state_at(tmp_path,['bocha'])
+    state.data['feedback']=dict(source_ids=[],providers=[],body_previews=[dict(text='OLD_PREVIEW')])
+    state.save()
+    resumed=SearchState(tmp_path,'case')
+    context=context_for(resumed,finalize=finalize)
+    assert context['feedback']==dict(source_ids=[],providers=[])
+    assert 'OLD_PREVIEW' not in json.dumps(context)
+    assert resumed.data['feedback']==state.data['feedback']
 
 
 def test_baidu_short_variant_executes_alongside_full_queries_and_is_cached(tmp_path):

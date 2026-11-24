@@ -200,6 +200,7 @@ def located_preview(document, ranges, queries, limit, priorities=()):
     if limit < 160:
         return []
     current = [r for r in ranges if r['version'] == document['version']]
+    marks = [p for p in priorities if p.get('version', document['version']) == document['version']]
     candidates, seen = [], []
     for r in sorted(current,key=lambda x:(x['block'],x['start'])):
         for start,end in unread_ranges(r['block'],r['start'],r['end'],seen):
@@ -224,12 +225,13 @@ def located_preview(document, ranges, queries, limit, priorities=()):
     def key(i):
         c = candidates[i]
         marked = any(p['block']==c['block'] and p['start']<c['end'] and p['end']>c['start']
-                     for p in priorities)
+                     for p in marks)
         return (not marked,-scores.get(i,0),i)
     output = []
     for i in sorted(range(len(candidates)),key=key):
         c = dict(candidates[i])
         c['read_location'] = dict(block=c['block'],offset=c['start'])
+        c['mark_status'] = 'unmarked'  # Reserve the longest status before bounding text.
         overhead = len(json.dumps(output+[dict(c,text='')],ensure_ascii=False))
         room = limit-overhead
         if room < 80:
@@ -240,5 +242,8 @@ def located_preview(document, ranges, queries, limit, priorities=()):
         while c['text'] and len(json.dumps(output+[c],ensure_ascii=False))>limit:
             c['text'] = c['text'][:-1];c['end']-=1
         if c['text']:
+            unmarked = sum(end-start for start,end in unread_ranges(c['block'],c['start'],c['end'],marks))
+            c['mark_status'] = ('marked' if not unmarked else
+                                'partial' if unmarked < c['end']-c['start'] else 'unmarked')
             output.append(c)
     return sorted(output,key=lambda c:(c['block'],c['start']))

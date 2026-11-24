@@ -1,4 +1,6 @@
 """Located selection advice from the Search Agent, separate from source evidence."""
+import re
+from .reading import unread_ranges
 from .sources import SourceStore
 
 
@@ -40,7 +42,34 @@ def source_pool(state, proposed, exclusions=None):
     return retained, review
 
 
-def validate_passage(state, item, *, versions=None):
+def sentence_bounds(block, start, end):
+    """Expand clipped prose to closed sentences; keep tables and unfinished tails."""
+    text = block['text']
+    if (start == 0 and end == len(text)) or block.get('table') or block.get('cells') or '|' in text:
+        return start, end
+    left = 0
+    for match in re.finditer(r'''\n[ \t]*\n|(?:[。！？]+|[.!?]+(?=["'”’»）)\]」』]*(?:\s|$)))["'”’»）)\]」』]*''', text):
+        if match.group().isspace():
+            left = match.end()
+            continue
+        # Decimal points are excluded above. Titles/initials are not sentence ends.
+        if (text[match.start()] == '.' and text[match.end():].strip()
+                and re.search(r'\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Inc|Ltd|Co|Corp|No|vs|e\.g|i\.e|(?:[A-Z]\.)*[A-Z])\.$',
+                              text[:match.start()+1], re.I)):
+            continue
+        right = match.end()
+        if left < start < right and text[left:start].strip():
+            start = left
+        if left < end < right:
+            end = right
+        left = right
+        while left < len(text) and text[left].isspace():
+            left += 1
+    return start, end
+
+
+def validate_passage(state, item, *, versions=None, align=False):
+    """Keep saved coordinates exact; new annotations may complete inspected sentences."""
     if not isinstance(item,dict):
         raise ValueError('Each priority passage must be an object')
     if 'fact_id' in item:
@@ -65,12 +94,15 @@ def validate_passage(state, item, *, versions=None):
     doc = SourceStore(state).document(sid,version)
     if not 0<=block<len(doc['blocks']) or not 0<=start<end<=len(doc['blocks'][block]['text']):
         raise ValueError('Passage lies outside the saved original')
-    covered = start
-    for r in sorted(entry.get('read_ranges',[]),key=lambda r:r['start']):
-        if r['version']==version and r['block']==block and r['start']<=covered:
-            covered = max(covered,r['end'])
-    if covered<end:
+    ranges = [r for r in entry.get('read_ranges',[]) if r['version']==version and r['block']==block]
+    if any(unread_ranges(block,start,end,ranges)):
         raise ValueError('Priority passage was not inspected in this version')
+    if align:
+        left, right = sentence_bounds(doc['blocks'][block],start,end)
+        if not any(unread_ranges(block,left,start,ranges)):
+            start = left
+        if not any(unread_ranges(block,end,right,ranges)):
+            end = right
     reason = item.get('reason','')
     if not isinstance(reason,str):
         raise ValueError('Passage reason must be text')
@@ -87,19 +119,22 @@ def record_passages(state, items):
     else:
         for index,item in enumerate(items):
             try:
-                accepted.append(validate_passage(state,item))
+                accepted.append((item,validate_passage(state,item,align=True)))
             except (ValueError,KeyError,IndexError,TypeError,OSError) as exc:
                 rejected.append(dict(index=index,reason=str(exc) if isinstance(exc,ValueError)
                                      else 'Passage cannot be resolved in the saved source'))
     saved = state.data.setdefault('priority_passages',[])
-    for item in accepted:
+    for original,item in accepted:
         identity = tuple(item[k] for k in ('source_id','version','block','start','end'))
-        old = next((x for x in saved if tuple(x[k] for k in
-                    ('source_id','version','block','start','end'))==identity),None)
-        if old is None:
+        original_identity = identity[:3] + (original['start'],original['end'])
+        matches = [x for x in saved if tuple(x[k] for k in
+                    ('source_id','version','block','start','end')) in {identity,original_identity}]
+        if not matches:
             saved.append(item)
         else:
-            old.update(item)
+            matches[0].update(item)
+            for duplicate in matches[1:]:
+                saved.remove(duplicate)
     report = dict(accepted=len(accepted),rejected=rejected)
     state.data['priority_feedback'] = report
     state.trace(dict(action='priority_passages',**report))

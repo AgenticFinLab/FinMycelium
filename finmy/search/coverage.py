@@ -39,7 +39,8 @@ def features(mark, text):
     keys = facts or {'unclassified'}
     result = {('claim', f, claim, role) for f in keys}
     if role == 'context':
-        return set()  # Necessary context belongs inside a marked support span.
+        # Context earns value only for facts not already covered by selected evidence.
+        return {('fact', f) for f in facts}
     result |= {('fact', f) for f in facts}
     result |= {('role', f, role) for f in facts if role != 'unclassified'}
     if mark.get('independence_key') and role == 'corroboration':

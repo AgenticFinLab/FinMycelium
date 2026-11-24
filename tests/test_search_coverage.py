@@ -32,7 +32,7 @@ def test_new_facts_conditions_personal_conflicts_and_independent_support(tmp_pat
         ('An independent receipt confirms payment.',dict(fact_ids=['payment'],claim_id='paid',evidence_role='corroboration',independence_key='receipt-original')),
         ('The same receipt verifies the payment.',dict(fact_ids=['payment'],claim_id='paid',evidence_role='corroboration',independence_key='receipt-original')),
         ('A separate ledger independently records payment.',dict(fact_ids=['payment'],claim_id='paid',evidence_role='corroboration',independence_key='ledger-original')),
-        ('The organization sponsors a community festival.',dict(fact_ids=['background'],claim_id='festival',evidence_role='context'))])
+        ('The organization sponsors a community festival.',dict(claim_id='festival',evidence_role='context'))])
     before=deepcopy(s.data)
     p,a=derive_input(s,c,max_chars=20000)
     text=' '.join(x['content'] for x in p['samples'])
@@ -44,6 +44,36 @@ def test_new_facts_conditions_personal_conflicts_and_independent_support(tmp_pat
     assert a['allocation']['unused_chars']>0
     assert s.data==before
     assert derive_input(s,c,max_chars=200000)[0]==p
+
+
+@pytest.mark.parametrize('text,facts,retained', [
+    ('Their longstanding relationship led to the investment approach.', ['approach'], True),
+    ('The transaction involved a payment by the purchaser.', ['payment'], False),
+    ('The organization sponsors a community festival.', None, False),
+    ('Payment was completed.\n\nReposted source footer.', ['approach'], False),
+])
+def test_context_delivery_requires_new_fact_and_keeps_duplicate_checks(tmp_path,text,facts,retained):
+    fields=dict(claim_id='context-claim',evidence_role='context')
+    if facts is not None:
+        fields['fact_ids']=facts
+    s,c=setup(tmp_path,[
+        ('Payment was completed.',dict(fact_ids=['payment'],claim_id='paid',evidence_role='outcome')),
+        (text,fields)])
+    sid=c['source_ids'][1]
+    before=deepcopy(s.data)
+    payload,selection=derive_input(s,c)
+    decision=next(d for d in selection['allocation']['priority_decisions'] if d['passage']['source_id']==sid)
+    assert decision['status']==('retained' if retained else 'redundant')
+    assert (sid in {sample['raw_data_id'] for sample in payload['samples']})==retained
+    if retained:
+        assert decision['new_facts']==['approach']
+        assert text in next(sample['content'] for sample in payload['samples'] if sample['raw_data_id']==sid)
+        original=next(e for e in selection['selected'] if e['source_id']!=sid)
+        limited,report=derive_input(s,c,max_chars=original['material_chars'])
+        assert len(limited['samples'])==1 and limited['samples'][0]['raw_data_id']!=sid
+        assert any(d['passage']['source_id']==sid and d['status']=='material_limit'
+                   for d in report['allocation']['priority_decisions'])
+    assert s.data==before
 
 
 def test_dates_amounts_and_negation_survive_same_claim_annotation(tmp_path):
