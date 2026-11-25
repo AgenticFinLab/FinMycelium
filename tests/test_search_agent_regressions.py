@@ -153,10 +153,10 @@ def test_search_model_does_not_overwrite_builder_model(tmp_path,monkeypatch):
     assert factory.call_args.args[0]['builder_config']['lm_name']=='ark/builder-test'
 
 
-def test_default_search_profile_matches_python_and_leaves_network_off():
+def test_default_search_profile_enables_bm25_and_leaves_network_off():
     repo=Path(__file__).resolve().parents[1]
     saved=yaml.safe_load((repo/'configs/search.yml').read_text())
-    assert saved==asdict(SearchConfig())
+    assert saved==asdict(SearchConfig(retrieval={'mode':'bm25'}))
     assert saved['lm_name']=='ark/deepseek-v4-1-flash-261017'
     assert saved['allow_network'] is False
     assert saved['max_builder_material_chars'] == 90000

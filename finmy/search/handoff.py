@@ -130,9 +130,7 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
             continue
         body = '\n\n'.join(text for _, text in blocks)
         from .state import digest
-        origins = sorted({m['independence_key'] for m in marks
-                          if m.get('evidence_role') == 'corroboration' and m.get('independence_key')})
-        fingerprint = digest(dict(body=' '.join(body.split()), independent_origins=origins))
+        fingerprint = digest(' '.join(body.split()))
         if fingerprint in fingerprints:
             duplicates.append(dict(source_id=sid, version=version, duplicate_of=fingerprints[fingerprint]))
             continue
@@ -186,6 +184,7 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     from .evidence import retained_passages
     record['priority_passages'],record['priority_omissions'] = retained_passages(state,retained_versions)
     record['fact_checks'] = state.data.get('fact_checks', [])
+    record['evidence_policy'] = 'question_flow_v3'
     record['source_lead_review'] = state.data.get('source_lead_review', [])
     if state.data.get('person_evidence'):
         record['person_evidence'] = dict(state.data['person_evidence'])
@@ -257,6 +256,25 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', a
         scope='Budgeted input derived from independently retained complete material')
     if 'source_review' in complete:
         record['source_review'] = complete['source_review']
+    if complete.get('evidence_policy') in {'located_delivery_v1','located_support_v2','question_flow_v3'}:
+        from .review import delivered_checks, delivered_person_evidence, check_gaps
+        record['fact_checks'],record['delivery_issues'] = delivered_checks(complete.get('fact_checks',[]),selected,state=state)
+        if complete.get('evidence_policy') == 'question_flow_v3':
+            record['gaps'] = check_gaps(record['fact_checks'],record['gaps'])
+        if record['delivery_issues']:
+            if complete.get('evidence_policy') != 'question_flow_v3':
+                record['gaps'] += [i['question']+': '+i['reason'] for i in record['delivery_issues']]
+            if record['reason'] == 'supported':
+                record['reason'] = 'low_gain'
+        if complete.get('evidence_policy') in {'located_support_v2','question_flow_v3'}:
+            record['person_evidence'] = delivered_person_evidence(
+                complete.get('person_evidence'),record['fact_checks'],record['delivery_issues'],
+                derive=complete.get('evidence_policy')=='question_flow_v3')
+            person = record['person_evidence']
+            if (person and person['status']=='limited'
+                    and complete['person_evidence']['status']=='supported' and record['reason']=='supported'):
+                record['reason'] = 'low_gain'
+                record['gaps'].append('Personal assessment has unresolved support; see person_evidence.')
     return payload, record
 
 
@@ -271,6 +289,11 @@ def assemble_sources(state, source_ids, *, complete_manifest=None, **options):
     if complete_manifest is None:
         _, complete_manifest = prepare_complete_sources(state,source_ids,**options)
     payload, record = derive_input(state,complete_manifest,max_chars=limit,allocation_policy=allocation_policy)
+    return save_handoff(state,complete_manifest,payload,record)
+
+
+def save_handoff(state, complete_manifest, payload, record):
+    """Persist the exact selection already checked by the finish controller."""
     from pathlib import Path
     from .state import digest
     record['assembly_code_sha256'] = digest({p.name:digest(p.read_bytes()) for p in Path(__file__).parent.glob('*.py')})
@@ -283,5 +306,8 @@ def assemble_sources(state, source_ids, *, complete_manifest=None, **options):
         write_json(folder / 'builder_input.json',payload)
     from .state import now
     state.data.update(handoff_revision=revision.name, handoff_updated_at=now())
+    for key in ('fact_checks','person_evidence'):
+        if record.get(key) is not None:
+            state.data[key] = record[key]
     state.save()
     return payload

@@ -4,6 +4,10 @@ from .reading import unread_ranges
 from .sources import SourceStore
 
 
+class UninspectedPassage(ValueError):
+    """A valid saved location still needs to be read before it can be marked."""
+
+
 def source_pool(state, proposed, exclusions=None):
     """Account for every inspected current version before character allocation.
 
@@ -25,20 +29,24 @@ def source_pool(state, proposed, exclusions=None):
     for sid in set(proposed) | set(exclusions):
         if sid not in sources:
             raise ValueError('Unknown source ID: ' + sid)
-        if sid in proposed and sid not in inspected:
+    # A reasoned exclusion overrides the proposed pool, including unread IDs.
+    # Normalize before the inspection check; excluded candidates need no retry.
+    overlap = sorted(set(proposed) & set(exclusions))
+    proposed = list(dict.fromkeys(sid for sid in proposed if sid not in exclusions))
+    for sid in proposed:
+        if sid not in inspected:
             raise ValueError('Inspect this source before retaining it: ' + sid)
-    if set(proposed) & set(exclusions):
-        raise ValueError('A source cannot appear in both source_ids and source_exclusions')
     uninspected = {sid: dict(reason=reason, status='uninspected', evidence_reviewed=False)
                    for sid,reason in exclusions.items() if sid not in inspected}
     exclusions = {sid:reason for sid,reason in exclusions.items() if sid in inspected}
-    proposed = list(dict.fromkeys(proposed))
     recovered = sorted(set(inspected) - set(proposed) - set(exclusions))
     retained = proposed + recovered
     review = dict(policy='inspected_source_pool_v1', proposed_source_ids=proposed,
                   automatically_retained=recovered, exclusions=dict(exclusions),
                   inspected_versions=inspected, uninspected_exclusions=uninspected,
                   note='Inspected candidates, not factual verification; cleanup and character allocation follow')
+    if overlap:
+        review['excluded_from_proposed'] = overlap
     return retained, review
 
 
@@ -96,7 +104,7 @@ def validate_passage(state, item, *, versions=None, align=False):
         raise ValueError('Passage lies outside the saved original')
     ranges = [r for r in entry.get('read_ranges',[]) if r['version']==version and r['block']==block]
     if any(unread_ranges(block,start,end,ranges)):
-        raise ValueError('Priority passage was not inspected in this version')
+        raise UninspectedPassage('Priority passage was not inspected in this version')
     if align:
         left, right = sentence_bounds(doc['blocks'][block],start,end)
         if not any(unread_ranges(block,left,start,ranges)):

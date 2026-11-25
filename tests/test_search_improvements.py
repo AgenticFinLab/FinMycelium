@@ -6,6 +6,7 @@ from finmy.search.tools import SearchTools, query_units
 from finmy.search.topic import plan_for, select
 from finmy.search.topic_reading import read_topic
 from finmy.search.review import finish_review
+from finmy.search.inspection import commit_evidence
 from finmy.search.sources import SourceStore
 
 
@@ -76,10 +77,12 @@ def test_finish_retains_unread_lead_and_planned_completion(tmp_path):
     sid=store.register('https://example.org/notice');store.save_raw(sid,b'Orion Works will deliver tomorrow.','txt');store.read(sid)
     action=dict(reason='supported',gaps=[],fact_checks=[dict(question='Was delivery completed?',
         status='planned',source_ids=[sid],detail='The announcement only schedules delivery.')])
+    commit_evidence(s,action)
     finish_review(s,action)
     assert action['reason']=='low_gain' and len(action['gaps'])==2
     assert s.data['source_lead_review'][0]['status']=='unresolved'
     action=dict(reason='supported',gaps=[],source_lead_decisions={t['seed_urls'][0]:'Duplicate edition of the inspected source.'})
+    commit_evidence(s,action)
     finish_review(s,action)
     assert s.data['source_lead_review'][0]['status']=='skipped'
 

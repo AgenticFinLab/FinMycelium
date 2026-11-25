@@ -117,12 +117,12 @@ def test_original_ranges_and_unlabelled_mark_compatibility(tmp_path):
             assert doc['blocks'][r['block']]['text'][r['start']:r['end']] in next(x['content'] for x in p['samples'] if x['raw_data_id']==e['source_id'])
 
 
-def test_identical_wording_with_explicit_independent_origins_can_corroborate(tmp_path):
+def test_identical_originals_cannot_gain_independence_from_labels(tmp_path):
     fields=dict(fact_ids=['payment'],claim_id='paid',evidence_role='corroboration')
     s,c=setup(tmp_path,[('Payment was completed.',dict(fields,independence_key='independent-ledger')),
                       ('Payment was completed.',dict(fields,independence_key='independent-receipt'))])
     p,a=derive_input(s,c)
-    assert len(p['samples'])==2
+    assert len(p['samples'])==1 and c['duplicates']
 
 
 @pytest.mark.parametrize('fields,length', [
@@ -168,5 +168,5 @@ def test_coverage_compatibility_still_rejects_invalid_metadata(tmp_path,fields):
 def test_unknown_mark_field_is_named_in_model_feedback(tmp_path):
     s,c=setup(tmp_path,[('Mira Vale confirmed delivery.',{})])
     record_passages(s,[dict(c['priority_passages'][0],factz=['delivery'])])
-    feedback=context_for(s)['priority_feedback']
+    feedback=context_for(s)['evidence_feedback']['priority_passages']
     assert feedback['accepted']==0 and 'factz' in feedback['rejected'][0]['reason']

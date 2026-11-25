@@ -18,9 +18,9 @@ def offline(monkeypatch):
     monkeypatch.setattr(socket.socket,'connect',lambda *a:pytest.fail('No service during configuration'))
 
 
-def test_code_yaml_and_new_form_defaults_are_identical(tmp_path):
+def test_yaml_enables_bm25_and_new_form_keeps_python_defaults(tmp_path):
     expected=asdict(SearchConfig())
-    assert yaml.safe_load((Path(__file__).resolve().parents[1]/'configs/search.yml').read_text())==expected
+    assert yaml.safe_load((Path(__file__).resolve().parents[1]/'configs/search.yml').read_text())==dict(expected, retrieval={'mode':'bm25'})
     assert load_defaults(tmp_path/'missing-profile.json')==expected
     assert expected['providers']==['baidu','bocha','exa']
     assert (expected['max_read_sources'],expected['max_model_calls'],expected['max_model_context_chars'])==(40,80,180000)

@@ -36,13 +36,14 @@ def save(store, sid, text):
 
 
 @pytest.mark.parametrize('finalize', [False, True])
-def test_uncached_and_cached_unread_hints_survive_without_implicit_fetch(tmp_path, finalize):
+@pytest.mark.parametrize('summary', ['Ada discussed community approval before committing.', ''])
+def test_uncached_and_cached_unread_hints_survive_without_implicit_fetch(tmp_path, finalize, summary):
     state = SearchState(tmp_path, 'case', task=TASK)
     store = SourceStore(state)
-    cached = lead(store, 'cached', 'exa')
+    cached = lead(store, 'cached', 'exa', summary=summary)
     save(store, cached, 'The schools opened.')
-    unfetched = lead(store, 'interview', 'baidu')
-    failed = lead(store, 'unavailable')
+    unfetched = lead(store, 'interview', 'baidu', summary=summary)
+    failed = lead(store, 'unavailable', summary=summary)
     def blocked(url):
         raise OSError('Synthetic inaccessible page')
     assert SearchTools(state, fetcher=blocked).read_source(failed)['status'] == 'fetch_failed'
@@ -53,7 +54,9 @@ def test_uncached_and_cached_unread_hints_survive_without_implicit_fetch(tmp_pat
     for sid in (cached, unfetched, failed):
         assert not candidates[sid]['reviewed']
         assert candidates[sid]['title'] and candidates[sid]['url']
-        assert (candidates[sid]['leads'][0].get('summary') or candidates[sid]['leads'][0]['snippet']).startswith('Ada discussed')
+        hint = candidates[sid]['leads'][0]
+        assert hint['query'] == 'Ada school commitment'  # Usable even with empty provider excerpts.
+        assert hint['summary'] == hint['snippet'] == summary
         assert 'read_evidence' not in candidates[sid]
     assert candidates[cached]['body_available']
     assert not candidates[unfetched]['body_available']

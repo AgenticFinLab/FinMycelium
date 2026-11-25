@@ -202,6 +202,37 @@ def select(document, plan, queries, indexes=None, priorities=()):
     return items,groups
 
 
+def marked_table_ranges(document, mark, marks, entities):
+    """Trim a broad holdings table only with explicitly selected column context."""
+    if mark.get('evidence_role') == 'contradiction' or not entities:
+        return None
+    text = document['blocks'][mark['block']]['text']
+    rows, offset = [], 0
+    for line in text.splitlines(keepends=True):
+        end = offset+len(line)
+        if mark['start'] <= offset and end <= mark['end'] and line.count('|') >= 3:
+            rows.append(dict(block=mark['block'],start=offset,end=end,text=line))
+        offset = end
+    data = [r for r in rows if re.search(r'\d',r['text'])]
+    target = [r for r in data if any(contains(r['text'],e) for e in entities)]
+    if len(data) < 2 or not target or len(target) == len(data):
+        return None
+    # PDF-to-Markdown may label its first DATA row as a header. Numeric rows
+    # never become column context merely because a separator follows them.
+    headers = [r for r in rows if r['start'] < data[0]['start'] and not re.search(r'\d',r['text'])
+               and re.search(r'[A-Za-z\u4e00-\u9fff]',r['text'])]
+    for p in marks:
+        if p['block'] not in (mark['block']-2,mark['block']-1):
+            continue
+        body = document['blocks'][p['block']]['text']
+        if (p['start']==0 and p['end']==len(body) and len(body)<=120
+                and not re.search(r'\d|[.!?。！？]',body)):
+            headers.append(dict(block=p['block'],start=0,end=len(body),text=body))
+    if not headers:
+        return None  # Keep units/column meaning until the Agent marks its header.
+    return sorted(headers+target,key=lambda r:(r['block'],r['start']))
+
+
 def allocate(state, complete, budget):
     from .sources import SourceStore
     from .handoff import materialize_complete
@@ -225,7 +256,12 @@ def allocate(state, complete, budget):
         # Preserve the exact validated span even when a lexical/noise rule excluded it.
         for p in marks:
             if p['block'] in e['blocks']:
-                items.append(dict(block=p['block'],start=p['start'],end=p['end'],text=doc['blocks'][p['block']]['text'][p['start']:p['end']],mark=p))
+                item = dict(block=p['block'],start=p['start'],end=p['end'],text=doc['blocks'][p['block']]['text'][p['start']:p['end']],mark=p)
+                if complete.get('evidence_policy') in {'located_delivery_v1','located_support_v2','question_flow_v3'}:
+                    ranges = marked_table_ranges(doc,p,marks,plan['entities'])
+                    if ranges:
+                        item.update(ranges=ranges,text='\n'.join(r['text'] for r in ranges))
+                items.append(item)
                 if plan.get('policy') == POLICY:
                     groups.append(({len(items)-1},'priority'))
                 else:
@@ -235,7 +271,8 @@ def allocate(state, complete, budget):
     def render(sid,chosen):
         e,items=entries[sid];ranges={}
         for i in chosen:
-            w=items[i];ranges.setdefault(w['block'],[]).append((w['start'],w['end']))
+            for w in items[i].get('ranges',[items[i]]):
+                ranges.setdefault(w['block'],[]).append((w['start'],w['end']))
         blocks=[]
         for b,rr in sorted(ranges.items()):
             merged=[]
@@ -250,7 +287,12 @@ def allocate(state, complete, budget):
     coverage_decisions = None
     if plan.get('policy') == POLICY:
         from .coverage import choose
-        remaining, coverage_decisions = choose(entries, render, picked, sizes, budget)
+        support = [ref for check in complete.get('fact_checks', []) if check['status'] == 'supported'
+                   for ref in check.get('evidence', []) if isinstance(ref,dict)
+                   and ref.get('source_id') in check['source_ids']
+                   ] if complete.get('evidence_policy') in {'located_support_v2','question_flow_v3'} else []
+        remaining, coverage_decisions = choose(entries, render, picked, sizes, budget,
+            deduplicate=complete.get('evidence_policy') in {'located_delivery_v1','located_support_v2','question_flow_v3'}, support=support)
     else:
         for phase in ('priority','ranked'):
             pending={sid:[g for g,p in queues[sid] if p==phase] for sid in queues}

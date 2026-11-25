@@ -162,7 +162,9 @@ def test_finish_records_person_assessment_without_inventing_builder_text(tmp_pat
     summary,_=render(data,'case',selection,payload)
     assert 'Valid priority annotations: 1; retained in input: 1' in summary
     assert 'Search Agent assessment: limited' in summary
-    assert review['detail'] in summary
+    assert review['detail'] not in summary
+    assert selection['person_evidence']['detail'] in summary
+    assert selection['person_evidence']['questions']==[]
 
 
 def test_interrupted_response_usage_is_recorded_once(tmp_path):
@@ -193,7 +195,9 @@ def test_context_bound_and_no_unread_text_leakage(tmp_path):
     c=context_for(state,finalize=True)
     assert len(SYSTEM_PROMPT)+len(json.dumps(c,ensure_ascii=False))<=20000
     assert 'UNREAD_TAIL_MARKER' not in json.dumps(c)
-    assert all(s.get('read_evidence') for s in c['sources'])
+    previews=[s for source in c['sources'] for s in source.get('read_evidence',[])]
+    assert previews and sum(len(json.dumps(s,ensure_ascii=False))+32 for s in previews)<=3200
+    assert all(s['end']<=100 for s in previews)
 
 
 @pytest.mark.parametrize('intervals,version,expected', [
@@ -221,12 +225,13 @@ def test_preview_status_describes_displayed_text_and_fits_serialized_budget():
     text = 'Evidence includes "conditions" and 原文. ' * 100
     document = dict(version='v', blocks=[dict(text=text)])
     ranges = [dict(version='v', block=0, start=0, end=len(text))]
-    # Only the start of this long inspected block is marked; the bounded excerpt
-    # fits inside that mark and must not claim its displayed text is unmarked.
+    # Only the prefix is marked. Spend the bounded preview on an unmarked
+    # original instead of repeatedly displaying that saved prefix.
     marks = [dict(version='v', block=0, start=0, end=500)]
     spans = located_preview(document, ranges, ['Evidence'], 300, marks)
-    assert len(spans) == 1 and spans[0]['mark_status'] == 'marked'
-    assert 0 < spans[0]['end'] < 500
+    assert len(spans) == 1 and spans[0]['mark_status'] == 'unmarked'
+    assert spans[0]['start'] >= 500
+    assert 500 < spans[0]['end'] <= len(text)
     assert spans[0]['text'] == text[spans[0]['start']:spans[0]['end']]
     assert len(json.dumps(spans, ensure_ascii=False)) <= 300
 
@@ -253,7 +258,10 @@ def test_existing_finish_can_add_missing_fact_and_sentence_tail_without_rereadin
     # A scripted decision checks the existing one-call route, not LLM behavior.
     def decide(context):
         spans = context['sources'][0]['read_evidence']
-        assert {p['block']:p['mark_status'] for p in spans} == {0:'unmarked', 1:'partial', 2:'unmarked'}
+        assert {p['block']:p['mark_status'] for p in spans} == {0:'unmarked', 1:'unmarked', 2:'unmarked'}
+        tail=next(p for p in spans if p['block']==1)
+        assert tail['start']==first['end'] and 'only after local consent' in tail['text']
+        assert context['sources'][0]['priority_passages']==[first]
         return dict(action='finish', source_ids=[sid], gaps=[], reason='supported',
                     priority_passages=[
                         dict(marker(sid, doc, 0), fact_ids=['approach'], evidence_role='context'),

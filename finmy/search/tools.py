@@ -224,7 +224,9 @@ class SearchTools:
         self.state.trace(dict(action='search',query=query,provider_queries=provider_queries,result=result))
         return result
 
-    def read_source(self, source, location=None, *, query=None, agent_feedback=False):
+    def read_source(self, source, location=None, *, query=None, agent_feedback=False, question=None):
+        if question is not None and (not isinstance(question,str) or not question.strip()):
+            raise ValueError('Reading question must be nonempty text')
         if location is not None and (not isinstance(location,dict) or set(location)-{'block','offset'}
                 or any(type(v) is not int or v<0 for v in location.values())):
             raise ValueError('Copy read_location into location: {"block": integer, "offset": integer}; '
@@ -242,6 +244,13 @@ class SearchTools:
             url = self.state.data['sources'][source]['url']
             if urlsplit(url).scheme in {'http', 'https'}:
                 self.sources.register_link(url)
+        guarded = agent_feedback and self.state.config.retrieval.get('mode') == 'bm25'
+        if guarded:
+            from .progress import query_read_feedback, record_query_read
+            feedback = query_read_feedback(self.state, source, query, question=question) if query is not None else None
+            if feedback:
+                self.state.trace(dict(action='read_deferred', source=source, result=feedback))
+                return feedback
         started = time.monotonic()
         previous = list(self.state.data['sources'][source].get('read_ranges', []))
         self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))
@@ -272,6 +281,8 @@ class SearchTools:
                 'use an unread location, another source or a targeted search, or finish with gaps. '
                 'Changing keywords on a fully read saved body does not acquire missing article parts.')
         self.state.data['sources'][source]['last_read'] = result['progress']
+        if guarded:
+            record_query_read(self.state, source, query, result, question=question)
         self.state.save()
         self.state.trace(dict(action='read_source',source=source,result=result,duration_seconds=round(time.monotonic()-started,3)))
         return result

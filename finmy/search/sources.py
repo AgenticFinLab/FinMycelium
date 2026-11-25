@@ -301,6 +301,16 @@ class SourceStore:
             raise ValueError('Parsed source integrity mismatch')
         return json.loads(parsed)
 
+    def needs_partial_completion(self, sid):
+        """An unread partial version may be expanded once before its offsets freeze."""
+        entry = self.state.data['sources'][sid]
+        version = entry.get('version')
+        return bool(self.can_complete_partial and entry.get('status') == 'partial'
+            and version and urlsplit(entry['url']).scheme in {'http', 'https'}
+            and not any(r['version'] == version and r['end'] > r['start']
+                        for r in entry.get('read_ranges', []))
+            and version not in entry.get('acquisition_attempts', {}))
+
     def complete_partial(self, sid):
         """Try the original URL once before its partial body is first inspected.
 
@@ -309,10 +319,7 @@ class SourceStore:
         """
         entry = self.state.data['sources'][sid]
         version = entry.get('version')
-        if (not self.can_complete_partial or entry.get('status') != 'partial'
-                or not version or urlsplit(entry['url']).scheme not in {'http', 'https'}
-                or any(r['version'] == version and r['end'] > r['start'] for r in entry.get('read_ranges', []))
-                or version in entry.get('acquisition_attempts', {})):
+        if not self.needs_partial_completion(sid):
             return
         old = self.document(sid, version)
         attempt = dict(status='started', previous_version=version, started_at=now())

@@ -7,8 +7,9 @@ The material budget is an upper limit; unused budget may remain.
 
 The repository profile in `configs/search.yml` enables `retrieval: {mode: bm25}`.
 The search-evaluation CLI loads that profile by default while retaining its Kimi
-model and generation settings. BM25 ranks passages within a saved source; the
-research agent still decides which sources to read and which originals to mark.
+model and generation settings. BM25 ranks passages within saved sources and offers
+located cached excerpts before the next research decision. The research agent
+decides which originals to mark and which sources need further reading.
 
 `retrieval: {}` or `{mode: topic}` selects the existing topic reader, including
 its lexical ranking. A directly constructed `SearchConfig()` still defaults to
@@ -45,17 +46,40 @@ Up to three URLs download concurrently, using the existing 20-second acquisition
 timeout (or a shorter configured timeout); saved bodies and failed discovery downloads are reused across searches
 and resume. Downloads add HTTP work, not model or search-provider calls.
 
-Search feedback returns source IDs and provider results. Sources remain selectable
-through their titles and discovery leads; cached bodies are inspected with `read_source`.
-Fetching does not mark a body read. All-provider body previews have been removed,
-including from model context when resuming older checkpoints.
-The existing `read_source` action inspects the cached text; ordinary original-range
-marks then enter the existing delivery selector. Failed downloads keep their leads
-and acquisition errors visible. Search summaries never become original evidence.
+Search feedback returns source IDs and provider results. Fetching alone does not
+mark a body read. In BM25 mode, `cached_evidence` offers up to three selected original
+excerpts during research, sharing the existing context allowance with `read_evidence`.
+The serialized offer is capped at 3,200 characters, including locations and metadata;
+whole bodies and provider summaries are not added to the decision context.
 
-The later claim-ID checks, incremental fact ledger, mandatory followup return and
-checked-subrange selection have been removed. BM25, budgets and the earlier
-selection/finish behavior are retained. No new review stage is introduced.
+Before the first cached presentation, unread partial sources in that offer get
+their existing one-time original-fetch attempt. The agent rebuilds the context
+after acquisition so versions and offsets match. Failed expansion keeps the
+partial cache; already inspected versions remain frozen. Context inspection alone
+does not fetch, and newly ranked candidates wait rather than expanding the pool.
+
+All decision excerpts share one serialized allowance of `max_read_chars` (with a
+3,200-character floor for small read limits), also bounded by the remaining model
+context. Outstanding shown passages get priority; otherwise the latest requested
+read precedes older previews. Previews omit selected or explicitly excluded ranges. Mark coordinates and saved checks remain available without repeating their
+original bodies or copying them into recent actions. Task and source-catalog fields
+precede changing state in the model request, keeping the request prefix stable
+between discoveries. Explicit reads can still revisit marked wording.
+
+Candidates do not need an English full name in their paragraph or title. The
+current query and its existing `provider_queries` variants rank saved originals,
+including source-language passages and numerical matches beside abbreviations.
+Long prose is split into bounded windows at available sentence boundaries,
+including Chinese punctuation, without changing original offsets. A pronoun
+beside a person's name in the page title does not establish personal attribution.
+The agent verifies entities and marks useful support; ranking never selects delivery.
+
+Only ranges actually presented in a successful model call become inspected. Their
+source version and offsets are checked against the cached original before the
+returned action is processed, so useful excerpts can be marked in that same action.
+Calling the context builder or a failed model request does not establish a read.
+`read_source` expands an excerpt or reads another location. Failed downloads retain
+their leads and acquisition errors. Search summaries never become original evidence.
 
 ## Metadata and time
 
@@ -105,6 +129,16 @@ lose priority; personal statements, conditions, opposing claims and independent
 origins can still add value for an already-covered fact. Numeric/date/negation
 changes survive even if a model reuses a claim ID incorrectly.
 
+Every `fact_checks.evidence` location explicitly selects useful original text, even
+when its question remains `planned`, `missing` or `conflicting`. The ordinary action
+saves it through the existing mark validator; this does not promote the fact to
+`supported`. The model need not submit duplicate `priority_passages`. Unread or
+invalid locations cannot become marks. Existing marked annotations are preserved.
+New handoffs prioritize validated ranges cited by supported `fact_checks`. Shared fact/claim labels cannot let a shorter question displace its
+cited answer. The citations add coverage value only inside validated marks;
+they never establish a read or bypass version, coordinate or budget validation. Exact-copy deduplication and the
+material ceiling still apply, and any undelivered citation remains a gap.
+
 Necessary attribution, dates and qualifications must be included inside the marked
 support span, or marked as a specific condition. A `context` mark can earn value
 for `fact_ids` not yet covered by selected evidence. Pure background and context
@@ -119,12 +153,28 @@ All original files, versions, hashes, marks and omitted ranges remain intact.
 
 ## Read coverage and sentence boundaries
 
-The existing `read_evidence` preview contains only previously read text and adds
-`mark_status: marked|partial|unmarked`, calculated from marks in the same source
-version. It uses the existing preview budget. The prompt asks the agent to check
-all returned spans and add missing useful marks in its next action, including
-finish; an unmarked excerpt may still be irrelevant. This adds no model stage
-and does not automatically select background or schedule another read.
+For evidence-selected tasks (`entity_attribute_windows_v2`), `inspection.py`
+maintains one location ledger for originals actually included in a successful
+model request. Each excerpt carries a stable `passage_id` tied to its source,
+version, block and offsets. Context construction, failed requests, cached bodies
+and read ranges omitted from the context do not create pending decisions.
+
+The agent selects useful ranges using `fact_checks.evidence` or `priority_passages`
+and excludes other shown text with `passage_exclusions: {"passage_id": "reason"}`
+in the same ordinary action. A partial mark leaves the remaining text pending;
+an exclusion covers only the unselected remainder of that shown excerpt. It
+cannot exclude an entire source. Old decisions never apply to a new version.
+
+Kept ranges come from validated marks, so there is no second saved/support status
+to maintain. Pending originals return under the same shared excerpt allowance,
+before new candidates. Search, read and finish wait for their decisions. Deferred
+actions are not counted as attempted searches or reads. Legacy document-selection
+tasks retain their source-level contract.
+
+`commit_evidence` saves independently valid updates before validating the next
+tool action. One bad fact, rename, annotation or tool field cannot roll back a
+valid selection. `evidence_feedback` identifies rejected items. The ledger and
+marks survive checkpoints; resumed tasks need no duplicate fetch or model review.
 
 New annotations may expand clipped prose to closed sentence boundaries inside
 the same source block. Each extension must be fully covered by existing reads in
@@ -137,6 +187,75 @@ Alignment preserves the source wording. It does not correct a relevance mistake:
 an endpoint already inside company boilerplate may include the rest of that
 sentence. The agent still chooses the supporting passage. These checks are local
 and introduce no model calls or additional search requests.
+
+## Research questions and finishing
+
+The pipeline has one research loop: acquire originals, navigate with local BM25,
+select useful support and update `fact_checks`, then choose the next action from
+those checks. Final selection and citation validation use the same evidence.
+There is no separate LLM review or reranking stage.
+
+Establish important questions from the confirmed task scope during ordinary
+research. Each question names one verifiable fact. New originals may add a distinct
+reason, condition, response or outcome even when a broader check is supported.
+An announcement can support what was announced while actual completion remains a
+separate `planned` or `missing` question. These are model judgments about originals;
+no evaluation fact list or event-specific rules are injected.
+
+`fact_checks` updates accompany `search`, `read_source` or `finish`. Omitted checks
+persist. Supported updates cite exact inspected locations; new source-only support
+cannot establish delivery. Use `replaces: ["exact old question"]` to rename or merge
+checks, preserving unresolved obligations as separate questions. Citation locations
+and historical attempts follow the replacement.
+
+Both search and read actions use `question` to identify the saved question while
+`query` contains the search keywords. The first discovery search can omit it.
+Accepted actions provide the attempt history; rewording keywords does not reset a
+question. A new question explicitly named by an action is retained as missing until
+support is recorded. The existing source/version/range and no-gain guards still control reads.
+
+| Component | Responsibility |
+|---|---|
+| Sources | Acquire and version original bodies; acquisition alone is not inspection. |
+| BM25 and previews | Offer bounded original passages for discovery or a named question; ranking does not establish support. |
+| Agent and fact checks | Select useful originals and update atomic questions in the same action. |
+| `inspection.py` | Track shown ranges, commit independent selections/exclusions, and defer the next action while decisions remain pending. |
+| `research_steps` | Suggest review of inspected text, a cached location, or a previously unattempted targeted search. |
+| Selection and delivery checks | Deduplicate, retain marginal evidence within the ceiling, and validate actual delivered support. |
+
+`next_steps` suggests work during ordinary research.
+A named question restricts navigation to that question, without broad personal or
+background fallback groups. If no useful cached match remains and no targeted
+search for the question is recorded, it can suggest a search within the existing
+budget. Previously attempted questions may remain explicit gaps. Suggestions are
+navigation, not assertions that a candidate answers the question.
+
+Finish uses the same pending-range check as ordinary actions, then performs one
+located citation repair if necessary. The former general finish-time research
+check and personal-question reminder are removed; missing questions remain in
+ordinary `next_steps`. Once finalization is imposed, undecided originals become
+explicit source/version/offset gaps and cannot support a completeness claim.
+
+Free-form gap notes with matching saved support receive at most one ordinary
+finish-review turn within the existing model budget. `saved_gap_evidence` brings
+whole selected ranges back under the shared excerpt allowance, including at
+forced finalization, without marking new text. The model reconciles gap wording
+and fact checks together, preserving announced quantities and dates while keeping
+unconfirmed completion separate. Canonical ledger gaps need no extra review turn.
+
+No model, reranker or provider stage is added. Decisions accompany existing model
+calls. Ignored passages may consume existing retry turns; the current no-progress,
+model, source, context and material budgets still bound the run.
+
+Factual `gaps` derive from the checks after delivery validation. Other notes retain
+acquisition failures and operational limits. `person_evidence.questions` links to
+the same delivered checks, including renamed questions; status and detail are
+recomputed rather than preserving an independent narrative. Invalid or omitted
+support remains a gap even if a model described the fact as supported.
+
+New manifests use `question_flow_v3`. Frozen older manifests retain their previous
+selection and assessment behavior and exact original coordinates. The configured
+model, search, context and final material limits are unchanged.
 
 ## Frozen-source comparison
 
@@ -171,5 +290,7 @@ Offline tests:
 
 ```bash
 python -m pytest -q tests/test_search_retrieval.py tests/test_search_coverage.py \
-  tests/test_search_passage_boundaries.py tests/test_search_evidence_selection.py
+  tests/test_search_passage_boundaries.py tests/test_search_evidence_selection.py \
+  tests/test_search_evidence_routing.py tests/test_search_cache_selection.py \
+  tests/test_search_question_flow.py tests/test_search_inspection.py
 ```
