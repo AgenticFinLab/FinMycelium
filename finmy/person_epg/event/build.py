@@ -1,4 +1,4 @@
-"""Six-step construction of one confirmed person Event, with no external retrieval."""
+"""Six-step construction of one confirmed person Event, from a frozen handoff with optional bounded supplementary retrieval."""
 from collections import defaultdict
 from copy import deepcopy
 import json
@@ -55,10 +55,17 @@ class Construction:
         if role == 'relations':
             reserve = max(reserve, self.run.config.max_context_chars // 4)
             base['read_limits']['max_record_refs'] = 20
-        return sized_request(base, package, self.run.config.max_context_chars - len(system_prompt(role)),
-                             reserve=reserve)
+        limit = self.run.config.max_context_chars - len(system_prompt(role))
+        request = sized_request(base, package, limit, reserve=reserve)
+        if role != 'extraction':
+            from .role_evidence import add_role_evidence
+            add_role_evidence(request, index_records(package), limit - reserve, self.run.payload,
+                              self.facts.get('relation_candidates', ()) if role == 'organization' else ())
+        return request
 
     def receive(self, task_id, role, package, request, *, reserved=None, **scope):
+        if getattr(self, 'revised', False) and role != 'extraction':
+            task_id = 'revised.' + task_id
         system = system_prompt(role)
         request = self.run.task_request(task_id, system, request, package)
         group = self.run.attempt_group(task_id, system, request, package)
@@ -97,7 +104,7 @@ class Construction:
                 break
             self.run.reject_proposals(group, fingerprint(dict(task_id=step_id, response=raw)), combined['rejected'])
             fields = {k: deepcopy(v) for k, v in request.items() if k not in (
-                'role', 'identity', 'query_text', 'facts_index', 'read_limits', 'related_records', 'context_selection')}
+                'role', 'identity', 'query_text', 'facts_index', 'read_limits', 'related_records', 'context_selection', 'role_evidence')}
             fields['correction'] = dict(issues=correction_issues(combined['rejected'], allowed), allowed_records=allowed)
             if role == 'consolidation':
                 scope = dict(assigned={(c, oid) for c, ids in allowed.items() for oid in ids})
@@ -159,6 +166,8 @@ class Construction:
         if 'body' in request:
             block = request['body']
             ranges[block['sample_id']].append((block['start'], block['end']))
+        for window in request.get('role_evidence', {}).get('nearby_passages', []):
+            ranges[window['sample_id']].append((window['start'], window['end']))
         for read in self.run.state['reads']:
             if read['task_id'] != task_id:
                 continue
@@ -204,13 +213,15 @@ class Construction:
                 block['body_status'] = 'failed' if block['status'] == 'failed' else 'not_processed'
                 block['proposal_status'] = 'not_processed'
 
-    def extract(self):
+    def extract(self, start_at=0):
         ranges = list(body_ranges(self.run.payload, self.run.config))
-        self.coverage = [{k: v for k, v in block.items() if k != 'text'} | {'status': 'not_processed'} for block in ranges]
+        self.coverage = self.coverage[:start_at] + [
+            {k: v for k, v in block.items() if k != 'text'} | {'status': 'not_processed'} for block in ranges[start_at:]]
         self.save_facts()
-        for number, block in enumerate(ranges):
+        for number, block in enumerate(ranges[start_at:], start_at):
             task_id = 'extract.' + str(number)
-            request = self.request('extraction', self.facts, body=block, sources=self.facts['sources'])
+            request = self.request('extraction', self.facts, body=block, sources=self.facts['sources'],
+                **({'review_questions':self.supplement_questions} if getattr(self, 'revised', False) else {}))
             try:
                 self.facts, report = self.receive(task_id, 'extraction', self.facts, request)
                 self.coverage[number]['status'] = 'partial' if report['rejected'] or report['pending'] else 'processed'
@@ -355,7 +366,7 @@ class Construction:
                    if item['item'].startswith('context_updates:') for r in item['refs']}
         adopted = {(r['collection'], r['object_id']) for item in repaired.get('accepted_items', []) for r in item['refs']}
         for record in self.reports:
-            if record['role'] != role or record['task_id'].startswith('repair.'):
+            if record['role'] != role or record['task_id'].removeprefix('revised.').startswith('repair.'):
                 continue
             for issue in self.outstanding(record)['rejected']:
                 refs = {(r['collection'], r['object_id']) for r in issue['refs']}
@@ -510,6 +521,9 @@ class Construction:
         else:
             self.run.state.pop('reason', None)
         self.run.persist()
+        if self.run.config.automatic_search and execution_status == 'finished':
+            from .supplement_record import comparison
+            comparison(self)
         return deepcopy(self.run.state)
 
 
@@ -533,9 +547,21 @@ def run_event(payload, directory=None, config=None, *, allow_network=False, mode
         if model is None:
             from ..build import Model
             model = Model(config)
+        if resume and config.automatic_search:
+            from .supplement_record import input_transition
+            state = json.loads((directory / 'state.json').read_text())
+            if state.get('supplement', {}).get('transition'):
+                from .runtime import code_identity, semantic_config
+                if (state['code_sha256'] != code_identity() or
+                    semantic_config(config) != semantic_config(EventBuildConfig.from_saved(state['config']))):
+                    raise ValueError('Supplement resume requires the pinned implementation and semantic configuration')
+                payload = input_transition(directory, state, payload)
         execution = Execution(directory, payload, config, model, resume=resume, provenance=provenance)
         construction = Construction(execution)
         try:
+            if config.automatic_search:
+                from .supplement_build import with_search
+                return with_search(construction, provenance, allow_network, stop_after_organization)
             construction.extract()
             if config.full_corpus_supplement:
                 from .corpus_supplement import supplement

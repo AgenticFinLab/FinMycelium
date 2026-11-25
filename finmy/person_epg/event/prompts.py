@@ -421,6 +421,13 @@ silence do not resolve rejected work. All correction calls share the task attemp
     instruction = SUPPLEMENT_ROLE + '\n' + CANDIDATE_DIRECTION if is_supplement else ROLES[role]
     if role == 'extraction':
         instruction += '\n' + CONTEXT_DISCOVERY
+    if not is_supplement:
+        instruction += '\n' + {
+            'extraction': 'Record material, publicly checkable missing premises in the existing gaps with the field and reason. When review_questions are supplied, focus on original evidence for those questions.',
+            'consolidation': 'Compare the by-source groups in role_evidence for each candidate. Identify what each source attributes to the person, to the institution or to another actor. Keep differences and independent support when merging.',
+            'organization': 'Use time bounds, quoted decisions, state changes and conditions in role_evidence to justify Stage and Phase transitions. Preserve overlaps and incomplete ordering where the sources allow several sequences.',
+            'relations': 'Inspect both endpoint records and the passages supporting the link itself in role_evidence. Nearby passages are search leads for additional links; co-occurrence alone establishes none. Use local reads for missing connecting text. Preserve a material, checkable missing premise as a gap when warranted.'
+        }[role]
     arrays = (*FIELDS[role], 'support_additions') if is_supplement else FIELDS[role]
     return common + '\nROLE\n' + instruction + support_rules + json.dumps(dict(
         fields=field_contract, time_fields=TIME_SUPPORT if role != 'relations' else []), ensure_ascii=False) + \

@@ -56,7 +56,7 @@ def test_unsupported_model():
 
 def test_saved_default_preserves_legacy_semantic_config():
     old = asdict(EventBuildConfig())
-    for key in ('reasoning_effort', 'api_json_mode', 'full_corpus_supplement', 'max_calls'):
+    for key in ('reasoning_effort', 'api_json_mode', 'full_corpus_supplement', 'automatic_search', 'max_calls'):
         old.pop(key)
     assert semantic_config(EventBuildConfig.from_saved(old)) == old
     assert semantic_config(EventBuildConfig()) == {**old, 'reasoning_effort': 'by_stage', 'full_corpus_supplement': True}
