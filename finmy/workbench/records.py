@@ -528,8 +528,10 @@ def export_database(workspace):
             save(folder, 'summary.json', {'task_id': tid, 'status': row['status'],
                 **pick(body, ('finished', 'error_type', 'elapsed_seconds', 'graph_id', 'disposition', 'disposition_history')),
                 'usage': build_usage(body.get('usage')),
-                'run_state': pick(body.get('run_state', {}),
-                    ('execution_status', 'result_status', 'render_status', 'output', 'checks', 'facts')),
+                'run_state': pick(body.get('run_state', {}), (
+                    'execution_status', 'result_status', 'render_status', 'output', 'checks', 'facts',
+                    *(('input_sha256', 'original_input_sha256', 'supplement')
+                      if body.get('person_config', {}).get('automatic_search') else ()))),
                 'artifact_directory': relative(artifact, owner), 'content_review': 'not_implied_by_execution'})
         for owner, build_base in build_bases.items():
             _build_index(owner, build_base)

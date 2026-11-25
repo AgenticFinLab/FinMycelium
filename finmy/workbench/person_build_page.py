@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 from finmy.dataset import within
 from finmy.model_config import (PERSON_BUILD_STAGED_EFFORT, person_build_effort_options,
                                 person_build_json_mode_supported)
-from finmy.person_epg.event.runtime import EventBuildConfig
+from finmy.person_epg.event.runtime import EventBuildConfig, kimi_workbench_config
 from finmy.search.state import digest
 from finmy.workbench.build_tasks import BuildController
 from finmy.workbench.domain import encoded
@@ -34,10 +34,10 @@ def person_build_form(store, task_id, save_task):
     advanced = st.expander('调整构建配置')
     with advanced:
         model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
-        # Transfer the measured Ark Kimi budget only to that model's new tasks.
+        automatic = st.checkbox('允许按证据缺口补搜一轮', value=False, key='gap-search-'+task_id,
+            help='先核对确认正文和同次检索缓存。仍有关键缺口时调用公共检索，最多追加 8,000 字符。')
         if model == 'ark/kimi-k3-1-pro-261024':
-            defaults = EventBuildConfig(max_calls=60, max_new_tokens=65536, max_context_chars=240000,
-                                        max_read_calls=60, max_read_chars=160000)
+            defaults = kimi_workbench_config(automatic_search=automatic)
         else:
             defaults = EventBuildConfig()
         json_supported = person_build_json_mode_supported(model)
@@ -59,7 +59,10 @@ def person_build_form(store, task_id, save_task):
         supplement=st.checkbox('逐份抽取后，用完整交接正文补读一次', value=defaults.full_corpus_supplement,
             help='新任务默认开启，可取消。补读最多调用一次模型，计入总调用上限。Kimi 分阶段模式使用 high；完整请求超出上下文上限时跳过并记录原因。')
         repair=st.checkbox('允许最多一轮最终定向修正',value=bool(defaults.final_repair_rounds))
-        st.caption('沿用当前检索交接正文；此处不会扩大材料预算或启动补搜。')
+        if automatic:
+            st.caption('补搜共用一轮额度，最多 2 个问题、6 次渠道请求、4 个新阅读来源、12 次检索模型调用。追加正文单独计量。')
+        else:
+            st.caption('使用当前已确认的检索交接正文。')
     if model:
         st.write(model + ' · ' + effort_label(effort))
         st.caption(f"{'API JSON' if api_json_mode else '普通输出'} · {'全文补读一次' if supplement else '仅逐份抽取'} · "
@@ -69,7 +72,7 @@ def person_build_form(store, task_id, save_task):
         if st.form_submit_button('保存人物构建任务',type='primary'):
             try:
                 tid=save_task(
-                    dict(lm_name=model,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
+                    dict(lm_name=model,automatic_search=automatic,api_json_mode=api_json_mode,reasoning_effort=effort,max_calls=calls,max_new_tokens=tokens,max_context_chars=context,
                          extraction_chars=batch,full_corpus_supplement=supplement,max_read_calls=local_reads,max_read_chars=local_chars,final_repair_rounds=int(repair)),
                     confirmed=confirmed)
                 navigate('任务',**{'task-selected':tid,'task_event_filter':''})
@@ -99,9 +102,12 @@ def person_build_panel(store, controller, row, labels):
             run=json.loads(runtime.read_text())
         except (OSError, ValueError):
             st.caption('运行记录正在更新，请稍后刷新。')
-    stats([('输入正文字符',f"{sum(len(s['content']) for s in body['input']['samples']):,}",'已确认的原文输入'),
+    stats([('起始交接字符' if body['person_config'].get('automatic_search') else '输入正文字符',
+            f"{sum(len(s['content']) for s in body['input']['samples']):,}",'已确认的原文输入'),
            ('累计模型调用',len(run.get('calls',[])),f"上限 {body['person_config']['max_calls']}"),
            ('尝试次数',run.get('attempts',0),'恢复复用有效检查点')])
+    if body['person_config'].get('automatic_search'):
+        supplementary_panel(tid, body, run)
     if run.get('calls'):
         last=run['calls'][-1]
         progress = last.get('task_id', last.get('phase', 'unknown')) + ' · ' + last['status']
@@ -232,5 +238,44 @@ def person_build_panel(store, controller, row, labels):
         st.json(event,expanded=False)
         st.write('运行目录：'+body['artifact_directory'])
         st.json(run,expanded=False)
-        st.download_button('下载已确认构建输入',encoded(body['input']),tid+'-input.json',key='person-input-'+tid)
+        if not body['person_config'].get('automatic_search'):
+            st.download_button('下载已确认构建输入',encoded(body['input']),tid+'-input.json',key='person-input-'+tid)
         st.download_button('下载来源交接记录',encoded(body['provenance']),tid+'-provenance.json',key='person-provenance-'+tid)
+
+
+def supplementary_panel(tid, body, run):
+    from hashlib import sha256
+    from finmy.person_epg.event.supplement_record import read_artifact
+    root = Path(body['artifact_directory'])
+    ledger = run.get('supplement', {})
+    with st.expander('证据缺口与补充检索', expanded=bool(ledger.get('outcome'))):
+        files = ledger.get('files', {})
+        if 'decision' in files:
+            decision = read_artifact(root, 'decision', files['decision'])
+            st.write(decision['reason'])
+            for question in decision['questions']:
+                st.write(question['question'])
+                st.caption(question['impact'])
+            search = decision['search']
+            st.caption(f"追加 {decision['added_chars']:,} 字符 · 渠道请求 {search['search']}/6 · "
+                       f"新读来源 {search['read_sources']}/4 · 检索模型 {search['model']}/12")
+            st.json(decision['checks'], expanded=False)
+        elif run.get('execution_status'):
+            st.write('初稿形成后核对具体证据缺口。')
+        if ledger.get('comparison'):
+            raw = within(root, ledger['comparison']).read_bytes()
+            if sha256(raw).hexdigest() == ledger['comparison_sha256']:
+                report = json.loads(raw)
+                st.table([{'组件':key, '补搜前':change['before'], '同阶段复核后':change['after_evidence_review'],
+                           '收尾后':change['after'], '引用补充原文的字段':len({(r['object_id'],r['field'])
+                              for r in change['supplementary_support']})}
+                          for key,change in report['changes'].items()])
+                st.download_button('下载补搜前后对照', raw, tid+'-comparison.json', key='person-diff-'+tid)
+        if run.get('execution_status') == 'finished':
+            raw = (root/'input.json').read_bytes()
+            if sha256(raw).hexdigest() == run['input_sha256']:
+                samples = json.loads(raw)['samples']
+                material_chars = sum(len(sample['content']) for sample in samples)
+                st.caption(f'本图实际输入 · {len(samples)} 个正文片段 · {material_chars:,} 字符')
+                st.caption('本图绑定输入 SHA-256 · '+run['input_sha256'])
+                st.download_button('下载本图完整输入',raw,tid+'-input.json',key='person-input-'+tid)

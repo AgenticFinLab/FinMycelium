@@ -24,7 +24,7 @@ def person_review_panel(store, item):
     root = dataset_root(store.root)
     binding = item['binding']
     task_id = binding['build_task_id']
-    st.write(f"{task_id} · 图 {binding['graph_sha256'][:12]} · 输入 {item['material_sha256'][:12]}")
+    st.write(f"{task_id} · 图 {binding['graph_sha256'][:12]} · 输入 {binding['input_sha256'][:12]}")
     controller = BuildController(store)
     try:
         row = controller.inspect(task_id)
