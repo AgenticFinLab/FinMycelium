@@ -61,10 +61,21 @@ Use reading.candidate_locations when a query misses or a matching window is long
 
 Use fact_checks as the single record of task-relevant questions. Establish the important
 questions from the confirmed scope early; update them as originals reveal new facts.
+Select against the WHOLE confirmed event/person scope, not just the active question or facets.
+Keep event-linked funding/enabling actions, applied constraints/trade-offs and dated continued
+ownership/participation, even without new terms. Shared commitments or a dated holdings list
+can establish these facts when the target is explicitly included. Preserve that link; never
+assign group totals/returns or other entities' actions to the target alone. Unconnected general
+policy is background; later holdings establish a dated state, not an unreported exact receipt.
 Each shown original has a passage_id. In this SAME decision, select its useful ranges
 via fact_checks.evidence or priority_passages, and exclude any remaining text using
 passage_exclusions: {"shown passage_id":"specific reason: irrelevant, repeated, etc."}.
 An exclusion covers the unselected remainder of that shown passage, not its source.
+Keep useful complete sentences and referents in mixed passages. selected_context_before is
+an already-kept same-block prefix resolving phrases like 'these commitments' in the tail.
+Missing new terms, other entities or an answered check alone cannot justify exclusion.
+Explain actual irrelevance or duplication across actor/action, date, state, condition,
+qualification and independent support; a narrower question cannot establish irrelevance.
 Unresolved ranges return as pending_evidence before another search/read or finish can run.
 Use those originals directly; no reread is needed. Valid selections persist even if another
 fact update or the proposed tool action is invalid; evidence_feedback reports rejected items.
@@ -98,11 +109,13 @@ Reuse exact question wording; omitted checks and citations persist. Send only up
 To rename or merge, put replaces: [exact old question wording] INSIDE that fact check,
 retaining unresolved obligations as separate checks and carrying their evidence forward.
 Read explicitly supplied source leads or supply source_lead_decisions mapping IDs
-or seed URLs to concrete skip reasons. Do not silently substitute another source
+or seed URLs to concrete skip reasons. Unresolved leads defer voluntary finish.
+Do not silently substitute another source
 when the task specifically asks what a named document says.
 Use runtime IDs; planning SRC-* citations are not reads.
 For sequential reading use {"action":"read_source","source":"runtime ID","location":{"block":0,"offset":0}}; omit query.
 Copy read_location; block/start/end identifies an evidence range, not a cursor.
+If completion changes a source version, use its new next_location or query.
 
 priority_passages can retain other useful previously read evidence:
 [{"source_id":"runtime ID","block":3,"start":0,"end":200,"reason":"Response and qualification"}].
@@ -117,8 +130,9 @@ propositions), and evidence_role: terms, personal, condition, outcome, corrobora
 contradiction, or context. Different dates, conditions, planned/completed states and
 opposing claims require distinct claim_ids. Necessary context belongs INSIDE the support
 span. Cite the answer as support; an interviewer question is context, not an answer.
-Context supporting a new requested fact needs fact_ids; background without new
-facts does not enter delivery. A verified independent
+Context supporting a distinct fact within the confirmed scope needs fact_ids; create the
+atomic fact check when the original reveals it, even if the active question is already
+answered. Background without a scoped fact does not enter delivery. A verified independent
 corroboration may add independence_key naming its original evidence origin; reposts share
 one origin. Do not infer independence merely from different URLs. These selection judgments
 do not replace quotations. Cover the requested facts before adding repeated descriptions.
@@ -578,6 +592,9 @@ def execute_action(state, tools, action):
     # Keep proposed wording even when the pending-passage gate defers this finish;
     # the reserved finalization context must still be able to check its originals.
     state.data['proposed_gap_notes'] = list(action['gaps'])
+    from .review import record_lead_decisions, require_source_leads
+    if 'source_lead_decisions' in action:
+        record_lead_decisions(state, action['source_lead_decisions'])
     feedback = require_decisions(state,action)
     if feedback:
         return feedback
@@ -594,6 +611,9 @@ def execute_action(state, tools, action):
                 detail='The model did not provide a valid personal-evidence assessment; review required.')
     from .review import finish_review, review_before_finish
     finish_review(state, action)
+    feedback = require_source_leads(state)
+    if feedback:
+        return feedback
     if 'source_ids' in action:
         retained,review=source_pool(state,action['source_ids'],action.get('source_exclusions'))
         _,complete = prepare_complete_sources(state,retained,gaps=action['gaps'],

@@ -75,6 +75,23 @@ def pending_passages(state):
     return result
 
 
+def selected_prefix(state, ref, text):
+    """Restore a nearby kept referent without exposing an uninspected gap."""
+    marks = [m for m in state.data.get('priority_passages', [])
+             if all(m[k] == ref[k] for k in ('source_id', 'version', 'block'))
+             and m['start'] < m['end'] <= ref['start']]
+    start = end = ref['start']
+    for mark in sorted(marks, key=lambda m: (m['end'], m['start']), reverse=True):
+        if mark['end'] < start and text[mark['end']:start].strip():
+            break
+        if end - mark['start'] > 800:
+            break  # Keep complete marked ranges; do not invent a truncated prefix.
+        start = min(start, mark['start'])
+    if start < end and text[start:end].strip():
+        return dict(block=ref['block'], start=start, end=end, text=text[start:end])
+    return None
+
+
 def pending_preview(state, pending, limit):
     """Replay only outstanding originals under the existing serialized text budget."""
     result, store, documents = [], SourceStore(state), {}
@@ -84,6 +101,13 @@ def pending_preview(state, pending, limit):
             documents[key] = store.document(*key)
         text = documents[key]['blocks'][ref['block']]['text']
         row = dict(ref, passage_id=passage_id(ref['source_id'], ref['version'], ref), text='')
+        prefix = selected_prefix(state, ref, text)
+        # Undecided text has priority. Add its kept referent only when both fit,
+        # charging all context text/coordinates to the same serialized allowance.
+        if prefix and len(json.dumps(prefix, ensure_ascii=False)) <= limit // 4:
+            trial = dict(row, text=text[ref['start']:ref['end']], selected_context_before=prefix)
+            if len(json.dumps(result + [trial], ensure_ascii=False)) <= limit:
+                row['selected_context_before'] = prefix
         room = limit - len(json.dumps(result + [row], ensure_ascii=False))
         if room < 1:
             break
@@ -141,6 +165,8 @@ def require_decisions(state, action):
             action['reason'] = 'low_gain'
         return None
     return dict(kind='pending_evidence', operation_deferred=True, pending_count=len(pending),
-                hint='Select useful pending_evidence via fact_checks.evidence or priority_passages; '
+                hint='Judge pending_evidence against the whole confirmed event/person scope, not only the active question. '
+                     'Use selected_context_before to resolve a kept referent; preserve distinct process facts. '
+                     'Select useful ranges via fact_checks.evidence or priority_passages; '
                      'exclude the rest with passage_exclusions: {passage_id: reason}. '
                      'Submit those decisions with your next action. No reread is needed.')

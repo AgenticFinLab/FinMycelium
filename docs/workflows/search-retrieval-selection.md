@@ -97,6 +97,25 @@ unknown rather than selecting an arbitrary provider's date.
 
 ## Final evidence selection
 
+The model judges relevance against the entire confirmed event/person scope, rather
+than only the active question or retrieval facets. Funding and enabling actions,
+constraints applied to the commitment, and dated continued ownership/participation
+can establish distinct facts even after transaction terms are supported. Shared
+paragraphs must explicitly connect the target to those actions; group totals and
+other entities' actions cannot be attributed to the target alone. Unconnected
+general policy remains background. A later holding supports its dated state, not
+an unreported acquisition or exact receipt.
+
+For mixed passages, the model selects useful complete sentences with their
+referents before excluding the remainder. Pending remainders can include
+`selected_context_before`: up to 800 characters of an adjacent already-selected
+prefix in the same source/version/block. This preserves the antecedent of phrases
+such as "these commitments" when the prefix has left the ordinary preview. It uses
+the existing serialized excerpt allowance, is omitted if it would displace the
+remainder, and never exposes non-whitespace gaps or creates another delivery mark.
+Distinct scoped facts go into atomic fact checks; an answered broader question,
+absence of new terms, or mention of other entities alone does not justify exclusion.
+
 Delivery still starts exclusively from validated, previously read priority spans.
 Optional mark annotations support coverage-aware choice:
 
@@ -230,9 +249,22 @@ search for the question is recorded, it can suggest a search within the existing
 budget. Previously attempted questions may remain explicit gaps. Suggestions are
 navigation, not assertions that a candidate answers the question.
 
-Finish uses the same pending-range check as ordinary actions, then performs one
-located citation repair if necessary. The former general finish-time research
-check and personal-question reminder are removed; missing questions remain in
+Every first read, including a nonzero cursor, attempts eligible partial-body
+completion before recording inspected text. If completion changes the version,
+a nonzero cursor returns `source_version_changed` with a fresh `next_location`;
+it records no inspected ranges or query attempt. Acquisition progress prevents a
+stagnation stop while the next read is pending. Failed completion keeps the old
+body and cursor. Already inspected versions and their saved marks stay fixed.
+
+Finish uses the same pending-range check as ordinary actions. Voluntary finish
+also requires explicitly supplied seed sources to be inspected or skipped with
+concrete reasons. Deferred finish returns ordinary read actions; it never marks
+cached bodies inspected. Skip decisions persist across deferred actions and
+resume. Failed acquisition, exhausted source slots and forced finalization leave
+explicit source gaps and cannot claim supported completion. Both source-based
+and legacy span-based finish use this gate. Other candidates remain optional.
+Finish then performs one located citation repair if necessary. The former general
+finish-time research check and personal-question reminder are removed; missing questions remain in
 ordinary `next_steps`. Once finalization is imposed, undecided originals become
 explicit source/version/offset gaps and cannot support a completeness claim.
 
@@ -292,5 +324,6 @@ Offline tests:
 python -m pytest -q tests/test_search_retrieval.py tests/test_search_coverage.py \
   tests/test_search_passage_boundaries.py tests/test_search_evidence_selection.py \
   tests/test_search_evidence_routing.py tests/test_search_cache_selection.py \
-  tests/test_search_question_flow.py tests/test_search_inspection.py
+  tests/test_search_question_flow.py tests/test_search_inspection.py \
+  tests/test_search_acquisition.py tests/test_search_flow_transitions.py
 ```

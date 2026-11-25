@@ -54,7 +54,8 @@ def query_read_feedback(state, sid, query, *, question=None):
 
 
 def record_query_read(state, sid, query, result, *, question=None):
-    if not result.get('version') or result.get('status') not in {'success', 'partial'}:
+    if (result.get('operation_deferred') or not result.get('version')
+            or result.get('status') not in {'success', 'partial'}):
         return
     entry = state.data['sources'][sid]
     previous = (entry.get('query_read_attempts') or [{}])[-1]
@@ -107,10 +108,13 @@ def record_progress(state, operation, feedback, *, new_sources=0, new_marks=0, r
     if operation == 'finish':
         return
     new_chars = feedback.get('progress', {}).get('new_chars', 0)
+    version_changed = feedback.get('progress', {}).get('source_version_changed', False)
     previous = state.data.get('research_progress', {}).get('consecutive_no_gain', 0)
-    count = 0 if new_chars or new_sources or new_marks or reviewed_chars else previous + 1
+    count = 0 if new_chars or new_sources or new_marks or reviewed_chars or version_changed else previous + 1
     progress = dict(consecutive_no_gain=count, new_chars=new_chars,
                     new_sources=new_sources, new_priority_marks=new_marks)
+    if version_changed:
+        progress['source_version_changed'] = True
     if reviewed_chars:
         progress['reviewed_chars'] = reviewed_chars
     if count >= NO_PROGRESS_WARNING:

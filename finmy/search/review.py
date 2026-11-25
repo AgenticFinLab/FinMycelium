@@ -237,18 +237,59 @@ def check_gaps(checks, notes=()):
 
 
 def lead_reviews(state, decisions=None):
-    decisions = decisions or {}
+    """Derive lead readiness from actual inspection, saved decisions and access state."""
+    decisions = {} if decisions is None else decisions
     if not isinstance(decisions, dict) or any(not isinstance(v,str) or not v.strip() for v in decisions.values()):
         raise ValueError('source_lead_decisions maps source IDs or seed URLs to concrete reasons')
+    seeds = [(url, canonical_url(url)) for url in state.data['task'].get('seed_urls', [])]
+    by_url = {entry['url']: sid for sid, entry in state.data['sources'].items()}
+    valid = {key for url, canonical in seeds for key in (url, canonical, by_url.get(canonical)) if key}
+    if any(key not in valid for key in decisions):
+        raise ValueError('source_lead_decisions must identify an explicitly supplied seed URL or its source ID')
+    # Retain explicit decisions from older checkpoints too. Inspection and access
+    # failure are always recomputed from the current version, never from this log.
+    saved = {canonical_url(row['url']): row['reason']
+             for row in state.data.get('source_lead_review', [])
+             if row.get('status') == 'skipped' and row.get('reason')}
+    saved.update(state.data.get('source_lead_decisions', {}))
     rows = []
-    for url in state.data['task'].get('seed_urls', []):
-        sid, entry = next(((sid,e) for sid,e in state.data['sources'].items()
-                           if e['url']==canonical_url(url)), (None,{}))
+    for url, canonical in seeds:
+        sid = by_url.get(canonical)
+        entry = state.data['sources'].get(sid, {})
         read = any(r['version']==entry.get('version') and r['end']>r['start'] for r in entry.get('read_ranges', []))
-        reason = decisions.get(sid) or decisions.get(url)
+        reason = decisions.get(sid) or decisions.get(url) or decisions.get(canonical) or saved.get(canonical)
         status = 'read' if read else 'skipped' if reason else 'unresolved'
+        if status == 'unresolved':
+            if entry.get('status') == 'fetch_failed' or (entry.get('version')
+                    and entry.get('status') not in {'success', 'partial'}):
+                status, reason = 'unavailable', 'Source acquisition failed: ' + entry['status']
+            elif sid not in state.data['read_sources'] and len(state.data['read_sources']) >= state.config.max_read_sources:
+                reason = 'Not inspected: read-source budget exhausted.'
         rows.append(dict(url=url,source_id=sid,status=status,reason=reason))
     return rows
+
+
+def record_lead_decisions(state, decisions):
+    rows = lead_reviews(state, decisions)  # Validate before changing the saved ledger.
+    state.data['source_lead_decisions'] = {canonical_url(r['url']): r['reason']
+        for r in rows if r['status'] in {'read', 'skipped'} and r['reason']}
+    state.save()
+
+
+def require_source_leads(state):
+    """A voluntary finish must resolve supplied leads through the normal read loop."""
+    if state.data.get('finalization_trigger') or state.data['usage']['model'] >= state.config.max_model_calls:
+        return None
+    pending = [r for r in lead_reviews(state) if r['status'] == 'unresolved'
+        and (r['source_id'] in state.data['read_sources']
+             or len(state.data['read_sources']) < state.config.max_read_sources)]
+    if not pending:
+        return None
+    return dict(kind='source_leads_pending', operation_deferred=True, pending_count=len(pending),
+        next_steps=[dict(action='read_source', source=r['source_id'] or r['url'],
+                         location=dict(block=0, offset=0)) for r in pending[:3]],
+        hint='Explicitly supplied sources remain uninspected. Read these leads, or supply '
+             'source_lead_decisions with concrete skip reasons in finish. A saved body is not an inspection.')
 
 
 def _validate_check(state, check, previous, updated):
@@ -361,7 +402,7 @@ def finish_review(state, action):
         gaps.append('Fact update rejected: ' + str(row.get('question') or row.get('index')) + ': ' + row['reason'])
     if rejected and action['reason'] == 'supported':
         action['reason'] = 'low_gain'
-    if action['reason']=='supported' and (any(r['status']=='unresolved' for r in rows)
+    if action['reason']=='supported' and (any(r['status'] in {'unresolved', 'unavailable'} for r in rows)
                                          or any(c['status']!='supported' for c in checks)):
         action['reason']='low_gain'
     action['gaps']=check_gaps(checks,gaps)

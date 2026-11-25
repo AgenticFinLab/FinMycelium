@@ -409,10 +409,19 @@ class SourceStore:
         error = self.acquire(sid)
         if error:
             return error
-        # An explicit nonzero cursor belongs to the existing saved version.
-        if not block and not offset:
-            self.complete_partial(sid)
+        previous_version = entry.get('version')
+        self.complete_partial(sid)
         doc = self.document(sid)
+        if (block or offset) and doc['version'] != previous_version:
+            # Completion may change both block boundaries and offsets. Return a
+            # fresh cursor without treating the old location as inspected text.
+            return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=[],
+                kind='source_version_changed', operation_deferred=True,
+                previous_version=previous_version, requested_location=dict(block=block, offset=offset),
+                next_location=dict(block=0, offset=0),
+                progress=dict(source_version_changed=True,
+                    hint='The partial body was expanded before its first read. The old cursor is invalid; '
+                         'read this version using query or next_location. No text has been inspected yet.'))
         blocks = doc['blocks']
         if doc['status'] not in {'success', 'partial'}:
             return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=[],

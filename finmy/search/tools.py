@@ -268,7 +268,7 @@ class SearchTools:
         for span in result.get('spans', []):
             new_chars += sum(b-a for a,b in unread_ranges(span['block'], span['start'], span['end'], current))
             current.append(span)
-        result['progress'] = dict(new_chars=new_chars,
+        result['progress'] = dict(result.get('progress', {}), new_chars=new_chars,
             returned_chars=sum(len(s['text']) for s in result.get('spans', [])))
         entry = self.state.data['sources'][source]
         priority_key = digest(sorted((p['block'], p['start'], p['end'])
