@@ -89,8 +89,14 @@ request; inspect attempted calls before attributing it to the model service.
 The standard resume control raises cumulative calls only, not the context cap.
 For an unstarted task saved with the wrong context budget, create a new task from
 the same confirmed input with the intended settings.
-Search and build settings remain separate. Construction does not add external
-sources or increase the confirmed input budget.
+The default build uses the exact confirmed handoff. Enable **允许按证据缺口补搜一轮**
+in the workbench, or set `automatic_search=True` in `EventBuildConfig`, to review up
+to two concrete gaps after the first graph pass. The Builder checks the confirmed
+text and the cache from the same search handoff first. If more evidence is needed,
+it delegates one round to public Search. The round has a separate allowance of
+8,000 additional characters, six provider requests, four new sources read and
+12 Search model calls. The [`event-workbench` guide](event-workbench.md) lists
+the Ark Kimi workbench ceilings for this mode.
 
 ## Construction and recovery
 
@@ -128,6 +134,8 @@ Freeze identity, scope, source metadata and actual input
   -> exact deduplication and scoped semantic consolidation where needed
   -> jointly organize Stage / Phase and assign each Action
   -> complete typed relations and baseline / delta Context
+  -> optional evidence-gap review and public Search round
+     -> if there are selected passages, read them and repeat consolidation, organization and relations
   -> assemble, check, optionally repair once -> JSON and Gantt
 ```
 
@@ -138,6 +146,12 @@ staged effort it runs at high. Its receipt records the character count, accepted
 or rejected proposals, or the reason it was skipped. New person Event builds enable this pass by default. Clear the checkbox in the
 workbench or set `full_corpus_supplement=False` in Python to skip it. Saved tasks
 use their recorded setting. Tasks predating the option keep it disabled.
+
+The full-handoff pass rereads existing material. The separate `automatic_search`
+option can append new passages. When that happens, the run retains the parent input
+and pins the complete successor in `input.json`. Review and collection use the
+successor hash. If only existing passages are reread, the input hash stays the same.
+For observed costs and evidence gains, see the [Goldman Sachs experiment](../experiments/person-builder-supplemental-search.md).
 
 Four semantic roles propose scoped records or operations. The program assigns IDs,
 locates quotes, checks references and applies independent valid groups. Rejected

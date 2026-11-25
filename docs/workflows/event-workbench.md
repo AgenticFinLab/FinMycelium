@@ -32,6 +32,8 @@ Selecting several events with confirmed scopes saves one task per event. Per-tas
 
 For a person event, open the confirmed search handoff and review its material before saving a build task. The default Ark Kimi K3.1 Pro configuration uses low reasoning for per-source extraction, one full-handoff supplement and high reasoning for subsequent stages. It uses ordinary prompt-based JSON, up to 60 calls, 65,536 output tokens per call and 240,000 context characters. Extraction batches are 12,000 characters and local reading is capped at 60 reads and 160,000 characters total. Open **调整构建配置** to change this task. Saving freezes the selected handoff and settings. Start the build separately from its task detail.
 
+For an evidence-gap experiment, enable **允许按证据缺口补搜一轮** in the build settings. With Ark Kimi this selects ceilings of 120 Builder calls and 80 local reads totaling 200,000 characters. The per-call limits stay at 240,000 context characters and 65,536 output tokens. The task panel shows the questions, usage, added material, graph differences and the complete input bound to the graph. A resumed task shares the same Search round and counters.
+
 Under **数据集 → 普通事件 → 本机事件记录**, the local event list opens a detail view when you select a row. **返回事件列表**
 returns to the same filters. Use **显示 → 批量选择** for multi-event actions; additional
 filters and column controls stay in the toolbar. The task list opens the selected run in a separate detail view.

@@ -35,6 +35,9 @@ through their original search task.
 Under **事件图**, compare completed drafts by their actual frozen input. One
 search task can produce several handoff revisions. The workbench labels drafts
 that use the current material and also allows an earlier version to be selected.
+For a build with supplemental passages, the collected handoff identifies the original
+material. The review bundle includes the complete `input.json` used for that graph,
+with the additional passages and its own hash.
 Choose a draft and click **将此版本送审**. **改送此版本** replaces the pending choice.
 **撤回送审** returns the event to the pool of available drafts.
 
