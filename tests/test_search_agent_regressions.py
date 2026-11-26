@@ -158,9 +158,8 @@ def test_default_search_profile_enables_bm25_and_leaves_network_off():
     saved=yaml.safe_load((repo/'configs/search.yml').read_text())
     assert asdict(SearchConfig(**saved)) == saved
     assert saved['retrieval'] == {'mode': 'bm25'}
-    assert saved['lm_name'] == 'deepseek/deepseek-flash'
-    assert saved['generation_config'] == dict(max_tokens=8192, temperature=1.0, top_p=0.95,
-        response_format={'type':'json_object'}, reasoning_effort='high', extra_body={'thinking':{'type':'enabled'}})
+    assert saved['lm_name'] == 'ark/deepseek-v4-1-flash-261017'
+    assert saved['generation_config'] == {'max_tokens':8192}
     assert saved['allow_network'] is False
     assert saved['max_builder_material_chars'] == 90000
     for name in ('build_only_agent.yml','build_only_sparse.yml'):

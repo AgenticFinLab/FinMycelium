@@ -4,10 +4,9 @@ from .tools import SearchTools
 from .agent import run_agent
 
 
-def _run_search(task=None, *, root='output/search', task_id, run_id='initial', config=None,
-               model=None, transport=None, fetcher=None, max_steps=None):
-    if isinstance(config,dict):
-        config=SearchConfig(**config)
+def _run_search(task=None, *, root='output/search', task_id, run_id='initial',
+                config: SearchConfig | dict | None = None, model=None, transport=None,
+                fetcher=None, max_steps=None):
     state=SearchState(root,task_id,run_id,task=task,config=config)
     tools=SearchTools(state,transport=transport,fetcher=fetcher)
     if not state.data.get('seeds_imported'):

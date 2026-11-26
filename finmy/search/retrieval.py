@@ -112,7 +112,10 @@ def read_retrieved(session, document, query, limit, read_ranges, *, source_id=''
         chosen = take([]); replayed = bool(chosen)
     spans = [dict(r, text=document['blocks'][r['block']]['text'][r['start']:r['end']],
                   locator={k:v for k,v in document['blocks'][r['block']].items() if k != 'text'}) for r in chosen]
-    reading = dict(mode=record['mode'], query=query, match_status='matched' if spans else 'no_match',
+    match_status = 'matched' if spans else 'no_match'
+    if replayed:
+        match_status = 'already_read'
+    reading = dict(mode=record['mode'], query=query, match_status=match_status,
                    replayed=replayed, ranking=record,
                    note='Candidates only; validated explicit marks control final delivery.')
     if spans:

@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 from .pipeline import run_search
-from .state import SearchConfig, SearchState
+from .state import SearchConfig
 
 
 def main(argv=None):
@@ -20,9 +20,12 @@ def main(argv=None):
     config=None
     if args.config:
         import yaml
-        config=SearchConfig(**yaml.safe_load(Path(args.config).read_text()))
+        config=yaml.safe_load(Path(args.config).read_text())
+        if not isinstance(config, dict):
+            raise ValueError('Search configuration must be an object')
     if not args.execute:
         # Validate without creating a run whose configuration could obstruct execution.
+        preview_config = SearchConfig(**(config or {}))
         if task is None:
             path=Path(args.root)/args.task_id/'runs'/args.run_id/'run.json'
             data=json.loads(path.read_text())
@@ -32,12 +35,12 @@ def main(argv=None):
                 not isinstance(task.get(k),str) or not task[k].strip() for k in ('target_name','query_text')):
                 raise ValueError('Invalid research task')
             print(json.dumps({'status':'preflight_only','online_verified':False,
-                              'providers':(config or SearchConfig()).providers}))
+                              'providers':preview_config.providers}))
         return 0
     if config is None and task is not None:
         raise ValueError('Execution requires an explicit search configuration')
     if config is not None:
-        config.allow_network=True
+        config['allow_network']=True
     result=run_search(task,root=args.root,task_id=args.task_id,run_id=args.run_id,
                       config=config,max_steps=args.steps)
     print(json.dumps(result,ensure_ascii=False))

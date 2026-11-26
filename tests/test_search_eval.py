@@ -7,7 +7,7 @@ from copy import deepcopy
 
 import pytest
 
-from finmy.search.eval import collect_pool, default_config, evaluate, main, usage_totals
+from finmy.search.eval import collect_pool, evaluate, main, usage_totals
 from finmy.search.eval_judge import JudgeSession, KIMI_MODEL, validate_labels
 from finmy.search.eval_metrics import material_metrics, ranking_metrics
 from finmy.search.sources import SourceStore
@@ -76,13 +76,13 @@ def transport(provider, request, config):
                        for name, text in [('wrong', WRONG), ('good', GOOD), ('settlement', SETTLEMENT)]]}
 
 
-def config():
-    return SearchConfig(providers=['exa'], max_results=3, max_model_calls=8,
+def config(reader='topic'):
+    return SearchConfig(providers=['exa'], max_results=3, max_model_calls=8, retrieval={'mode': reader},
                         max_search_requests=3, max_read_sources=4)
 
 
-def options(tmp_path, judge):
-    return dict(root=tmp_path, config=config(), search_model=search_model,
+def options(tmp_path, judge, reader='topic'):
+    return dict(root=tmp_path, config=config(reader), search_model=search_model,
                 transport=transport, fetcher=lambda url:(GOOD.encode(), 'txt', 'utf-8'),
                 judge_model=judge, emit=lambda text:None, eval_mode="auto", eval_scope="pool")
 
@@ -123,6 +123,15 @@ def test_complete_search_then_eval_and_resume_without_research(tmp_path):
     saved = json.loads((tmp_path/report['task_id']/'output.json').read_text())
     assert saved['search']['final_material'] == report['search']['final_material']
     assert saved['judge_usage']['input_tokens'] == 200
+
+
+def test_bm25_eval_counts_additional_relevant_originals_in_the_handoff(tmp_path):
+    report = evaluate(TASK, **options(tmp_path, Judge(), reader='bm25'))
+    samples = report['search']['final_material']['samples']
+    assert len(samples) == 2
+    material = '\n'.join(sample['content'] for sample in samples)
+    assert GOOD in material and SETTLEMENT in material and WRONG not in material
+    assert report['metrics']['material']['question_coverage'] == 1
 
 
 def test_invalid_judge_quote_leaves_search_output_and_can_resume(tmp_path):
@@ -237,7 +246,7 @@ def test_cache_is_bound_to_task_original_and_prompt(tmp_path):
 
 
 @pytest.mark.parametrize('retrieval', [{}, {'mode':'bm25'}])
-def test_cli_needs_only_task_and_defaults_to_kimi(tmp_path, monkeypatch, retrieval):
+def test_cli_loads_search_model_and_reader_from_profile(tmp_path, monkeypatch, retrieval):
     from finmy.search import eval as module
     profile = tmp_path/'search.yml'
     profile.write_text(json.dumps(dict(retrieval=retrieval, max_model_calls=7,
@@ -256,11 +265,10 @@ def test_cli_needs_only_task_and_defaults_to_kimi(tmp_path, monkeypatch, retriev
     monkeypatch.setattr(module, 'evaluate', run)
     assert main(['--task', str(path)]) == 0
     assert received['task'] == TASK
-    assert received['config'].lm_name == KIMI_MODEL
+    assert received['config'].lm_name == 'ark/deepseek-v4-1-flash-261017'
     assert received['config'].max_model_calls == 7
     assert received['config'].retrieval == retrieval
-    assert received['config'].generation_config['max_tokens'] == 8192
-    assert default_config().generation_config['reasoning_effort'] == 'low'
+    assert received['config'].generation_config == {'max_tokens':1}
     state = SearchState(tmp_path, 'configured-reader', task=TASK, config=received['config'])
     store = SourceStore(state)
     sid = store.register('https://example.org/notice')
@@ -274,7 +282,7 @@ def test_cli_needs_only_task_and_defaults_to_kimi(tmp_path, monkeypatch, retriev
     override.write_text('retrieval: {mode: topic}\n')
     assert main(['--task', str(path), '--config', str(override)]) == 0
     assert received['config'].retrieval == {'mode':'topic'}
-    assert received['config'].lm_name == KIMI_MODEL
+    assert received['config'].lm_name == 'ark/deepseek-v4-1-flash-261017'
 
 
 def test_usage_counts_cached_tokens_as_subset():

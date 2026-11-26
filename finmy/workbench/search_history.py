@@ -10,6 +10,8 @@ def budget_policy_label(selection):
     # Saved identifiers are stable data, independent of the loaded allocator version.
     # Keep history readable when a running workbench still caches an older module.
     labels = {
+        'entity_attribute_windows_v2': '按研究问题选取已标记原文',
+        'entity_attribute_windows_v1': '按研究范围和检索词选取原文',
         'evidence_priority_windows_v5': '材料预算分配（重点原文、定位选段与共享余量）',
         'evidence_priority_windows_v4': 'v4 · BM25 按查询词覆盖率加权，保留重点原文与上下文',
         'evidence_priority_windows_v3': 'v3 · BM25 选段，保留重点原文与上下文',

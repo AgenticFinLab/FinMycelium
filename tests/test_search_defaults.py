@@ -18,11 +18,11 @@ def offline(monkeypatch):
     monkeypatch.setattr(socket.socket,'connect',lambda *a:pytest.fail('No service during configuration'))
 
 
-def test_yaml_enables_bm25_and_new_form_keeps_python_defaults(tmp_path):
+def test_yaml_python_and_new_form_share_the_ark_bm25_profile(tmp_path):
     expected=asdict(SearchConfig())
     profile = yaml.safe_load((Path(__file__).resolve().parents[1]/'configs/search.yml').read_text())
-    assert {k for k in expected if expected[k] != profile[k]} == {'retrieval', 'lm_name', 'generation_config'}
-    assert expected['retrieval'] == {} and expected['lm_name'] == 'ark/deepseek-v4-1-flash-261017'
+    assert profile == expected
+    assert expected['retrieval'] == {'mode': 'bm25'} and expected['lm_name'] == 'ark/deepseek-v4-1-flash-261017'
     assert load_defaults(tmp_path/'missing-profile.json')==expected
     assert expected['providers']==['baidu','bocha','exa']
     assert (expected['max_read_sources'],expected['max_model_calls'],expected['max_model_context_chars'])==(40,80,180000)
@@ -34,10 +34,14 @@ def test_yaml_enables_bm25_and_new_form_keeps_python_defaults(tmp_path):
     assert preview['thinking']=={'type':'enabled'} and preview['response_format']=={'type':'json_object'}
     assert (preview['temperature'],preview['top_p'])==(1.0,0.95)
 
+    local = tmp_path/'profile.json'
+    local.write_text(json.dumps({'providers': ['bocha']}))
+    assert load_defaults(local) == {**expected, 'providers': ['bocha']}
+
 
 def test_saved_profile_and_tasks_stay_fixed_and_parameter_widgets_refresh(tmp_path):
     saved=asdict(SearchConfig(providers=['bocha'],max_model_calls=60,max_read_sources=30,
-                 max_model_context_chars=120000,generation_config={'max_tokens':4096}))
+                 max_model_context_chars=120000,generation_config={'max_tokens':4096},retrieval={'mode':'topic'}))
     profile=tmp_path/'profile.json';profile.write_text(json.dumps(saved))
     task=dict(target_type='event',target_name='Example',query_text='Trace public decisions')
     state=SearchState(tmp_path/'tasks','case',task=task,config=SearchConfig(**saved))

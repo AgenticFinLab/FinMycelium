@@ -40,12 +40,13 @@ def mark(sid, doc, block=0):
                 reason='Keep the public statement and its condition')
 
 
-def test_interleaved_query_and_cursor_replays_stay_bounded_after_resume(tmp_path):
-    state, tools, sid, doc = setup(tmp_path)
+@pytest.mark.parametrize('reader', ['topic', 'bm25'])
+def test_interleaved_query_and_cursor_replays_stay_bounded_after_resume(tmp_path, reader):
+    state, tools, sid, doc = setup(tmp_path, retrieval={'mode': reader})
     original = json.dumps(tools.sources.document(sid), sort_keys=True)
-    first = tools.read_source(sid, query='public commitment')
+    first = tools.read_source(sid, query='invitation consent commitment')
     assert first['progress']['new_chars'] > 0
-    verification = tools.read_source(sid, query='terms of the commitment')
+    verification = tools.read_source(sid, query='invitation consent commitment details')
     assert verification['spans'] == first['spans']
     assert verification['progress']['new_chars'] == 0
     other = tools.sources.register('https://example.org/other')

@@ -59,7 +59,8 @@ def test_catalog_automatically_carries_person_goal_without_changing_scope(tmp_pa
 
 
 def test_short_query_read_keeps_qualifications_even_without_lexical_match(tmp_path):
-    state = SearchState(tmp_path, 'case', task=task(), config=SearchConfig(max_read_chars=1000))
+    config = SearchConfig(max_read_chars=1000, retrieval={'mode': 'topic'})
+    state = SearchState(tmp_path, 'case', task=task(), config=config)
     text = 'She agreed to fund the schools.\n\nThe promise depended on local consent.\n\nNo precise day was reported.'
     sid, doc = source(state, 'interview', text, partial=True)
     original = {p.name:p.read_bytes() for p in (state.root/'sources'/sid/doc['version']).iterdir()}

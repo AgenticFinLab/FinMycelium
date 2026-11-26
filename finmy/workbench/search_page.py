@@ -400,7 +400,8 @@ def search_form(store, catalog=None, previous_task=''):
             st.write(f"{options['max_builder_material_chars']:,} 字符 / 事件")
             st.caption(f"累计搜索 {options['max_search_requests']} 次 · 阅读 {options['max_read_sources']} 个来源")
             if mode != 'simple':
-                st.caption(f"搜索模型：{lm_name or '未设置'}")
+                reader = 'BM25' if defaults['retrieval'].get('mode') == 'bm25' else '主题阅读'
+                st.caption(f"搜索模型：{lm_name or '未设置'} · 正文阅读：{reader}")
             enabled = st.checkbox('允许启动后调用外部搜索与模型',value=False,key=config_key+'allow')
             confirmed = st.checkbox('确认本次研究范围与保存目录',value=False,key=case_key+'confirmed') if catalog else False
             st.caption('保存任务不会发起调用；明确启动后才运行。')

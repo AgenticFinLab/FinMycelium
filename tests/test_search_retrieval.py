@@ -38,14 +38,23 @@ def test_source_reader_uses_selected_mode_without_network(tmp_path):
     result=store.read(sid,query='delivery 2013-10-04')
     assert result['reading']['mode']=='bm25'
     assert result['spans'] and s.data['usage']['model']==0
-    assert s.data['sources'][sid]['read_ranges'][0]['version']==doc['version']
+    ranges = list(s.data['sources'][sid]['read_ranges'])
+    assert ranges[0]['version']==doc['version']
+    replay = store.read(sid, query='delivery 2013-10-04')
+    assert result['reading']['match_status'] == 'matched'
+    assert replay['reading']['match_status'] == 'already_read'
+    assert replay['spans'] == result['spans'] and s.data['sources'][sid]['read_ranges'] == ranges
 
 
 def test_old_checkpoint_config_defaults_remain_resumable(tmp_path):
     s=SearchState(tmp_path,'x',task=task())
     s.data['config'].pop('retrieval');s.save()
-    restored=SearchState(tmp_path,'x',config=SearchConfig())
+    restored=SearchState(tmp_path,'x')
     assert restored.config.retrieval=={}
+    assert SearchState(tmp_path,'x',config=s.data['config']).config == restored.config
+    assert SearchState(tmp_path,'x',config=SearchConfig(retrieval={})).config == restored.config
+    with pytest.raises(ValueError, match='retain saved configuration'):
+        SearchState(tmp_path,'x',config=SearchConfig())
 
 
 def test_unknown_metadata_survives_while_explicit_conflict_filters(tmp_path):

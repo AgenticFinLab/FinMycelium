@@ -118,7 +118,11 @@ class SearchController:
             old=json.loads((state.run_dir/'selection.json').read_text())
             complete_path=state.run_dir/'complete_material.json'
             if old.get('mode') == 'sources' and complete_path.exists():
-                payload=assemble_sources(state,old['source_ids'],complete_manifest=json.loads(complete_path.read_text()),max_chars=max_chars,allocation_policy=BUDGET_POLICY)
+                complete = json.loads(complete_path.read_text())
+                # A budget change must retain the scoped task's evidence-selection rules.
+                policy = (complete.get('retrieval_plan') or {}).get('policy', BUDGET_POLICY)
+                payload = assemble_sources(state, old['source_ids'], complete_manifest=complete,
+                                           max_chars=max_chars, allocation_policy=policy)
             elif old.get('mode') == 'sources':
                 payload = assemble_sources(state,old['source_ids'],versions=old['source_versions'],
                                            gaps=old['gaps'],reason=old['reason'],max_chars=max_chars)
