@@ -29,8 +29,10 @@ Candidate reading prioritizes likely evidence gain for important unresolved ques
 Cached-body availability and provider identity are not relevance scores. Unfetched
 candidates retain their titles, URLs and discovery hints; the decision context counts
 all unread candidates, cached unread bodies, unfetched candidates and failed fetches
-separately. Compact unread hints remain available at finalization. Fetch errors are
-visible, but displaying a candidate does not fetch it or admit it as evidence.
+separately. Compact unread hints and fetch errors remain visible at finalization.
+When fetching is enabled, discovery tries the original URL once for Baidu or Bocha
+results that lack a saved body and have no earlier fetch attempt. A cached body
+still needs to be inspected before its passages can be marked for delivery.
 The agent can use the existing `read_source` to fetch a promising uncached URL, or
 trace an original through an explicit link or a targeted `search`. These operations
 consume the existing budgets. There are no provider quotas or additional reviewer
@@ -352,9 +354,10 @@ New-task advanced settings expose the request timeout and context limit; stopped
 retain their configured values until explicitly changed.
 The handoff panel describes the recorded material allocation, and **设置 →
 接口与工作区** includes Ark, TokenHub, Baidu, Bocha and Exa configuration presence without displaying
-keys. Workbench simple mode runs fixed queries without a search model, using the common
-providers/readers and the existing span-based handoff. Enhanced mode uses source-level
-budget allocation. The original simple full runner keeps its own existing behavior.
+keys. Workbench simple mode runs fixed queries through the common providers and
+readers and delivers selected original spans. In enhanced mode, tasks with a scoped
+plan deliver marked passages. Tasks without a scoped plan use whole-block allocation
+within the handoff budget.
 Material adoption into an event's review list is explicit
 and does not automatically approve evidence or launch a Builder. After confirming
 the actual input, create a separate Builder task. See [event workbench](event-workbench.md)
@@ -363,13 +366,13 @@ for versioned inputs, draft review and execution boundaries.
 ## Reading relevant passages and stopping
 
 The shared `read_source` action accepts either `query` or a sequential `location`.
-When the saved body fits one read, a query returns its text in full, including
-qualifications outside lexical matches. `full_saved_text` describes the saved body;
-provider-returned partial text is still partial. Longer bodies use lexical ranking of
-temporary windows and return passages with nearby context, keeping version, page/block and
-character offsets. It uses the same per-read character limit and distinct-source quota,
-without a search API or an additional model call. An uncached source still requires the
-ordinary fetch. No fixed number of matching passages is imposed; the read budget applies.
+The default BM25 reader ranks passages even in short documents. To read an entire
+notice or see qualifications beyond a match, start at `{"block": 0, "offset": 0}`
+and follow `next_location` while more text remains. A query with the legacy topic
+reader and no scoped plan returns `full_saved_text` when the saved body fits in one
+read. Both readers preserve the source version, original block and character
+offsets, and respect the per-read character limit and distinct-source quota. A
+partial body keeps its acquisition status even after all its saved text has been read.
 
 Query reads prefer matching text that has not already been read. Once the matching
 passages have been inspected, they can replay bounded original passages with
