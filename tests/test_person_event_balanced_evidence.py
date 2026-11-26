@@ -89,6 +89,30 @@ def test_shared_evidence_is_delivered_once_and_counts_for_each_owner(graph):
         for r in request['context_selection']['evidence_by_owner'])
 
 
+def test_discovery_receives_exact_connecting_text_before_optional_records_fill_request(graph, payload):
+    graph = uneven(graph)
+    sample = payload['samples'][0]
+    first, middle, last = 'Lee signed the approval.', 'The approval released the funds.', 'Lee announced the award.'
+    sample['content'] = ' '.join((first, middle, last))
+    for eid, quote in [('E0-00', first), ('E0-17', middle), ('E2-00', last)]:
+        e = next(e for e in graph['evidence'] if e['evidence_id'] == eid)
+        start = sample['content'].index(quote)
+        e.update(sample_id=sample['sample_id'], source_id=sample['raw_data_id'], start=start, end=start+len(quote), quote=quote)
+    request = base(graph)
+    request['assigned_action_ids'] = ['A0']
+    request['assigned_records']['actions'] = [graph['actions'][0]]
+    request['relation_candidates'] = [dict(candidate_id='R', from_action_id='A0', to_action_id='A1',
+        type='enables', support=[dict(target='/type', evidence_ids=['E0-17'])])]
+    result = sized_request(request, graph, 22000, 4000, payload=payload)
+    role = result['role_evidence']
+    assert [e['action'] for e in role['records'][0]['endpoints']] == ['A0', 'A1']
+    assert {'E0-00', 'E0-17', 'E1-00'} <= set(evidence_ids(result))
+    assert role['nearby_passages'] and all(w['actions'] == ['A0', 'A2']
+        and w['text'] == sample['content'][w['start']:w['end']] for w in role['nearby_passages'])
+    assert result['context_selection']['related_included'] < result['context_selection']['related_available']
+    assert len(prompt_json(dict(task=result, read_results=[]))) <= 18000
+
+
 def test_no_support_is_reported_separately_from_budget_omission(graph):
     graph = uneven(graph)
     graph['actions'][1]['support'] = []

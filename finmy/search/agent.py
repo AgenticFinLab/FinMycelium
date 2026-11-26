@@ -9,8 +9,10 @@ from .sources import SourceStore, canonical_url
 from .metadata import publication_metadata
 from .html import navigation_hints
 from .reading import read_coverage, located_preview
-from .evidence import record_passages, source_pool
-from .handoff import assemble, assemble_sources
+from .evidence import source_pool
+from .inspection import (passage_id, pending_passages, pending_preview, excluded_ranges,
+                         accept_presentation, commit_evidence, require_decisions)
+from .handoff import assemble, prepare_complete_sources, derive_input, save_handoff
 from .protocol import parse_action, request_parameters, request_record
 from .progress import NO_PROGRESS_LIMIT, provider_observations, record_progress
 
@@ -21,9 +23,23 @@ unknown/negative evidence and association/causation. Snippets are leads only.
 Deliver reasons/narrative in English; query/read in source language. Lexical reads do not
 translate. For important gaps with weak English results and Chinese leads, try Chinese or
 aliases. provider_queries maps selected providers to SAME-question variants; others get query.
+When baidu is selected, include provider_queries.baidu in the SAME search action:
+at most 72 units (each CJK character counts 2, others 1). Preserve entity names,
+dates, negation and essential conditions; remove filler or use established aliases.
+Do not rely on the full query fitting Baidu or spend a separate model call rewriting it.
+cached_evidence and read_evidence contain located originals under one shared allowance.
+read_source can expand their locations; never infer unseen text.
+Missing Baidu/Bocha bodies are fetched from their URLs and cached during search.
+Search-returned original content may be partial; snippets and summaries remain leads.
+Cached partial bodies are offered only after their one original-fetch attempt when
+acquisition is available. Failed expansion keeps the partial original; do not invent its tail.
+On acquisition failure use search_leads to trace originals.
 Use provider_observations; no Chinese-only channel or required bilingual duplication.
 Apply equal evidence standards, trace originals, preserve quotes and label translations.
 Inspect results before exhausting searches; leave room for gaps/inaccessible originals.
+Search one unresolved question at a time; do not pack the whole event chronology into a query.
+Use terms from foreign-language leads when reading them. Missing an English full name
+is not an entity conflict; verify abbreviations and attribution from the shown originals.
 
 For person_event, research event progress AND evidenced personal participation from the
 first inspection. If important personal-action evidence is missing, prioritize a targeted
@@ -34,48 +50,132 @@ No transaction, private record, exact day or complete detail is required. Keep s
 scope; never invent acts, graph phases or counts. Corporate acts alone do not prove personal ones.
 
 Return ONE JSON action, then wait; no prose/XML/DSML or invented results:
-{"action":"search","query":"short question","provider_queries":{},"gap":"Missing fact, importance and why current evidence is insufficient"}
-{"action":"read_source","source":"runtime ID or public URL","query":"passage keywords"}
-{"action":"finish","source_ids":["inspected ID"],"source_exclusions":{},"priority_passages":[],"gaps":["question and attempt status"],"reason":"supported|low_gain|insufficient","reason_detail":"Evidence and limits"}
-Follow tool_constraints; for a 72-unit limit aim below 60. Read rationale goes in gap.
+{"action":"search","question":"exact saved question","query":"short keywords","provider_queries":{},"gap":"Importance and why saved material cannot answer it","fact_checks":[]}
+{"action":"read_source","question":"exact saved question","source":"runtime ID or public URL","query":"passage keywords","fact_checks":[]}
+{"action":"finish","source_ids":["inspected ID"],"source_exclusions":{},"gaps":[],"reason":"supported|low_gain|insufficient","fact_checks":[]}
+Follow provider-specific tool_constraints; keep queries concise. Read rationale goes in gap.
+The first search may omit question. Thereafter link searches and reads to one saved
+question; keep that wording when changing keywords or continuing with a cursor.
 Read long bodies with distinctive names/actions, not broad years/report words.
+Use reading.candidate_locations when a query misses or a matching window is long.
+
+Use fact_checks as the single record of task-relevant questions. Establish the important
+questions from the confirmed scope early; update them as originals reveal new facts.
+Select against the WHOLE confirmed event/person scope, not just the active question or facets.
+Keep event-linked funding/enabling actions, applied constraints/trade-offs and dated continued
+ownership/participation, even without new terms. Shared commitments or a dated holdings list
+can establish these facts when the target is explicitly included. Preserve that link; never
+assign group totals/returns or other entities' actions to the target alone. Unconnected general
+policy is background; later holdings establish a dated state, not an unreported exact receipt.
+Each shown original has a passage_id. In this SAME decision, select its useful ranges
+via fact_checks.evidence or priority_passages, and exclude any remaining text using
+passage_exclusions: {"shown passage_id":"specific reason: irrelevant, repeated, etc."}.
+An exclusion covers the unselected remainder of that shown passage, not its source.
+Keep useful complete sentences and referents in mixed passages. selected_context_before is
+an already-kept same-block prefix resolving phrases like 'these commitments' in the tail.
+Missing new terms, other entities or an answered check alone cannot justify exclusion.
+Explain actual irrelevance or duplication across actor/action, date, state, condition,
+qualification and independent support; a narrower question cannot establish irrelevance.
+Unresolved ranges return as pending_evidence before another search/read or finish can run.
+Use those originals directly; no reread is needed. Valid selections persist even if another
+fact update or the proposed tool action is invalid; evidence_feedback reports rejected items.
+Record distinct useful reasons, decisions, conditions, responses and outcomes even when
+a broader check is supported. Who approached, why that person was approached, and what
+conditions they imposed are different questions; one answer does not close the others.
+A new question needs task-relevant evidence or a concrete lead, not a speculative checklist.
+
+Each changed check has this shape:
+{"question":"one verifiable fact", "status":"supported|planned|missing|conflicting",
+ "source_ids":["inspected ID"], "detail":"What this exact original establishes",
+ "evidence":[{"source_id":"runtime ID","block":3,"start":0,"end":200}]}.
+Every explicit evidence location creates a validated delivery mark, including useful
+partial evidence for planned/missing/conflicting questions. Saving an original does not
+make its question supported. Do not repeat these locations in priority_passages.
+Use source_ids: [] when no source has been inspected; detail must explain what remains unknown.
+Copy complete supporting sentences with attribution, dates, conditions and negation.
+Source IDs, summaries or an interviewer question cannot replace the answer.
+
+Separate what was announced from what actually happened. An announcement question is
+supported by the announcement. A completion question stays planned or missing until a
+completion statement is found. Do not label a combined 'announced, executed and received'
+question supported while admitting one part is unconfirmed; split it now. Later holdings
+alone do not explain receipt. Event dates do not prohibit later confirmation sources.
+Before finishing, compare every factual gap with saved_gap_evidence and the saved checks.
+Those excerpts are already selected originals, not new leads. Preserve established numbers,
+dates and announced terms; describe only the missing completion or other unresolved part.
+Update the relevant fact_checks and remove stale gap wording in the SAME finish action.
+Operational access/budget notes do not imply that an already saved fact is unknown.
+Reuse exact question wording; omitted checks and citations persist. Send only updates.
+To rename or merge, put replaces: [exact old question wording] INSIDE that fact check,
+retaining unresolved obligations as separate checks and carrying their evidence forward.
+Read explicitly supplied source leads or supply source_lead_decisions mapping IDs
+or seed URLs to concrete skip reasons. Unresolved leads defer voluntary finish.
+Do not silently substitute another source
+when the task specifically asks what a named document says.
 Use runtime IDs; planning SRC-* citations are not reads.
 For sequential reading use {"action":"read_source","source":"runtime ID","location":{"block":0,"offset":0}}; omit query.
 Copy read_location; block/start/end identifies an evidence range, not a cursor.
+If completion changes a source version, use its new next_location or query.
 
-Mark decisive PREVIOUSLY READ passages on the next action; at finish add only missing marks:
-[{"source_id":"runtime ID","block":3,"start":0,"end":200,"reason":"Preserve response and qualification"}].
-Copy read/read_evidence locations. Version/reason are optional; reasons are not facts.
-Keep actions, conditions, outcomes and conflicts. Marks persist; explain exclusions.
+priority_passages can retain other useful previously read evidence:
+[{"source_id":"runtime ID","block":3,"start":0,"end":200,"reason":"Response and qualification"}].
+Copy source_id/block/start/end from the shown original; version/reason are optional.
+Marks persist. Select necessary neighboring context explicitly. Exclude pure background.
+Only validated marks enter delivery, within the character ceiling; no target length applies.
+For a multi-company table mark the target rows and their column headers/units. A PDF
+table's first row may be another company, not a header; read nearby header blocks if needed.
+Mark optional fact_ids as a list of stable atomic-question keys, e.g. ["payment"],
+claim_id (same only for equivalent
+propositions), and evidence_role: terms, personal, condition, outcome, corroboration,
+contradiction, or context. Different dates, conditions, planned/completed states and
+opposing claims require distinct claim_ids. Necessary context belongs INSIDE the support
+span. Cite the answer as support; an interviewer question is context, not an answer.
+Context supporting a distinct fact within the confirmed scope needs fact_ids; create the
+atomic fact check when the original reveals it, even if the active question is already
+answered. Background without a scoped fact does not enter delivery. A verified independent
+corroboration may add independence_key naming its original evidence origin; reposts share
+one origin. Do not infer independence merely from different URLs. These selection judgments
+do not replace quotations. Cover the requested facts before adding repeated descriptions.
 Person-event finish includes person_evidence:
-{"status":"supported|limited|unattempted","detail":"Personal evidence, attempts and unknowns"}.
-Assess separately from chronology. Finish in about 1,000 output tokens; no repeated quotes
-or marks. Put important unattempted, inaccessible or unsupported leads in gaps;
-unknown details and unused candidates need not block handoff.
+{"status":"supported|limited|unattempted","detail":"Personal evidence, attempts and unknowns",
+"questions":["exact wording of the personal fact checks supporting this assessment"]}.
+Its final detail is derived from those delivered checks; include conditions and remaining
+personal questions in this list. Use an empty list when personal research is unattempted.
+Assess separately from chronology. Personal detail and factual gaps are derived from the
+same delivered checks; finish.gaps is for acquisition/budget or other operational limits.
+Compare task scope with fact_checks throughout research, including important unattempted
+process questions. next_steps uses these same checks in the ordinary research loop:
+- review_passage: inspect the already shown original and cite useful support now;
+- read_source: read the matching cached location if its text is not currently shown;
+- search: make a targeted attempt for the named important question without cached support;
+- correct_citation/revise_selection: repair that specific delivery issue or retain the gap.
+Suggestions are navigation, not verified answers. Use the existing search/read_source/finish
+actions. Finish checks outstanding shown passages and specific delivery failures; it does
+not reopen general research. Already attempted low-yield questions may remain gaps.
+In finalize, save useful shown originals and finish within the imposed limit. Any undecided
+passage becomes a located gap; the program never silently treats it as irrelevant.
+Finish in about 1,000 output tokens; no repeated quotes or marks.
+Discarding one duplicate passage does not exclude distinct evidence elsewhere in its source.
 
-Read for evidence gain, not cache/provider. Uncached URLs can be fetched; unread is
-not access_failed or parse_failed. Read seeds then gaps. Follow observed links or search
-titles/authors/quotes for important missing originals; never invent URLs or texts.
-navigation links are leads, not verified originals. Respect fetch_error/retry_skipped/
-retry_in_seconds. Partial expansion tries the URL once and keeps cached originals on
-failure. already_read replays; no_match is lexical, not absence. New keywords cannot
-fix access or acquire missing article parts; trace another source or retain the gap.
+Read seeds, then gaps. Unread differs from access_failed/parse_failed; uncached URLs
+remain readable. Trace observed links, titles and quotes; do not invent originals.
+Respect retry timing. Failed partial expansion preserves cached text.
 
-Use progress.new_chars/research_progress, not returned length. Verification is allowed;
-already-read ranges receive one replay, then compact replay_suppressed feedback until
-this source has new validated marks or a new version. Missing text in a compact preview
-is not unread text; trust saved reading progress. Mark useful originals.
-After repeated zero gain, change source,
-unread location or query, or finish. In finalize, return finish ONLY and explain the
-constraint. For no_reading_progress use low_gain or insufficient, retaining gaps; this
-stop does not certify coverage. No provider quotas, minimum counts or spending targets.
+New text alone is not evidence gain. Two reads of the same question without new
+located marks defer further rewording: mark useful originals, switch source, or use
+an explicit new location. New questions and versions remain readable. Already-read
+ranges get one verification replay, then replay_suppressed feedback; a missing compact
+excerpt is not unread text. Read evidence remains available for marking.
+In finalize return finish ONLY, explaining the constraint and retaining unresolved gaps.
+For no_reading_progress use low_gain or insufficient. No source/provider quotas,
+minimum evidence counts or spending targets.
 
-Finish: source_ids contains inspected IDs; source_exclusions maps IDs to reasons; no overlap.
+Finish: source_ids contains inspected IDs; source_exclusions maps IDs to reasons.
+Explicit exclusions take precedence if an ID also appears in source_ids.
 Unread exclusions are candidate notes, not body reviews.
 Unmentioned inspected sources remain candidates. For person_event, judge personal-action
 evidence too: repeated facts or secondary status alone do not justify exclusion.
-Mark statements/qualifications; trace originals. Keep independent support and conflicts,
-without endorsing commentary. Do not cap sources or pre-trim;
+Keep independent support and conflicts. Do not cap sources or pre-trim;
 the program validates marks and allocates original text within budget.
 '''
 
@@ -123,7 +223,7 @@ class LmbaseModel:
             response = self.adapter.client.chat.completions.create(
                 model=self.adapter.model_name,
                 messages=[{'role':'system','content':SYSTEM_PROMPT},
-                          {'role':'user','content':json.dumps(context,ensure_ascii=False)}], **params)
+                          {'role':'user','content':model_context(context)}], **params)
         except Exception as exc:
             configuration_error = api_configuration_error(exc, 'Search model API')
             if configuration_error:
@@ -136,6 +236,16 @@ class LmbaseModel:
                              'for finish use concise gaps/details and only missing decisive passage marks, '
                              'without quotes or repeated chronology.')
         return response.choices[0].message.content
+
+
+def model_context(context):
+    """Stable task/catalog prefix; mutable reading state follows without copied titles."""
+    fixed = {k:context[k] for k in ('task','retrieval_plan','tool_constraints') if k in context}
+    fixed['source_catalog'] = [{k:s[k] for k in ('source_id','url','title')} for s in context.get('sources',[])]
+    current = {k:v for k,v in context.items() if k not in fixed}
+    if 'sources' in context:
+        current['sources'] = [{k:v for k,v in s.items() if k not in {'url','title'}} for s in context['sources']]
+    return json.dumps(dict(**fixed,**current),ensure_ascii=False)
 
 
 def finalization_reserve(config):
@@ -152,7 +262,7 @@ def research_attempts(state):
     urls = {entry['url']: sid for sid, entry in state.data['sources'].items()}
     for action in state.data.get('actions', []):
         if action.get('action') == 'search':
-            item = {k: action[k] for k in ('query', 'gap', 'provider_queries') if k in action}
+            item = {k: action[k] for k in ('query', 'gap', 'provider_queries', 'question') if k in action}
             if item not in searches:
                 searches.append(item)
         elif action.get('action') == 'read_source' and action.get('query'):
@@ -208,12 +318,12 @@ def context_for(state, *, finalize=False):
             source['version'] = entry['version']
             source['priority_passages'] = [p for p in state.data.get('priority_passages',[])
                                           if p['source_id']==sid and p['version']==entry['version']]
-        else:
+        if not reviewed or source.get('unread_saved_chars',0):
             # Keep discovery hints for uncached candidates as well as cached ones.
             # Short hints survive finalization so unresolved leads can be named;
             # they are never treated as inspected evidence or fetched implicitly.
             limit = 160 if finalizing else 350
-            source['leads'] = [{k:str(d.get(k) or '')[:limit] for k in ('provider','snippet','summary')}
+            source['leads'] = [{k:str(d.get(k) or '')[:limit] for k in ('provider','query','snippet','summary')}
                                for d in entry['discoveries'][-1 if finalizing else -2:]]
         if entry.get('status') == 'fetch_failed':
             source['fetch_error'] = entry.get('error_type', 'Acquisition failed')
@@ -236,10 +346,16 @@ def context_for(state, *, finalize=False):
             source.pop('navigation', None)
         sources.append(source)
     feedback = state.data.get('feedback')
-    if finalizing and isinstance(feedback, dict):
-        feedback = {k:v for k,v in feedback.items() if k != 'spans'}
-    context = dict(task=state.data['task'], sources=sources, feedback=feedback,
-                priority_feedback=state.data.get('priority_feedback'),
+    if isinstance(feedback, dict):
+        # Original ranges are rendered once under the shared excerpt budget below.
+        # Older checkpoints may contain copies from obsolete preview/finish paths.
+        feedback = {k:v for k,v in feedback.items() if k not in {'spans','body_previews','candidates'}}
+        if isinstance(feedback.get('reading'),dict):
+            feedback = dict(feedback,reading={k:v for k,v in feedback['reading'].items() if k != 'ranking'})
+    from .review import lead_reviews
+    context = dict(source_leads=lead_reviews(state), task=state.data['task'], sources=sources, feedback=feedback,
+                evidence_feedback=state.data.get('evidence_feedback',
+                    dict(priority_passages=state.data.get('priority_feedback'))),
                 provider_observations=provider_observations(state),
                 research_progress=state.data.get('research_progress'),
                 search_attempts=searches, finalization_reason=finalization_reason,
@@ -258,24 +374,129 @@ def context_for(state, *, finalize=False):
                     read_sources=state.config.max_read_sources-len(state.data['read_sources']),
                     model=remaining_model),
                 finalization_calls_reserved=finalization_reserve(state.config),
-                prior_actions=[] if finalizing else state.data.get('actions',[])[-6:])
+                prior_actions=[] if finalizing else [{k:v for k,v in a.items() if k not in
+                    {'priority_passages','fact_checks','person_evidence','passage_exclusions'}} for a in state.data.get('actions',[])[-6:]])
+    if state.data.get('retrieval_plan'):
+        context['retrieval_plan'] = state.data['retrieval_plan']
+        context['retrieval_guidance'] = ('Use the facets as separate reading/search questions; pursue the current evidence gap. '
+            'Exclusions are constraints, not positive queries. Local lexical no_match is not absence of evidence; '
+            'use an explicit original location for indirect personal statements or unfamiliar aliases.')
+    if state.data.get('fact_checks'):
+        # Saved citations remain in state; do not repeat their coordinates beside
+        # the existing source marks on every decision call.
+        context['fact_checks'] = [{k:c[k] for k in ('question','status','source_ids','detail')}
+                                 for c in state.data['fact_checks']]
+    from .review import research_steps
+    if not finalizing:
+        context['next_steps'] = research_steps(state)
     # Spend only the remaining context allowance on located originals. This works
     # at finalization too, after the latest feedback spans have been removed.
     available = max(0,state.config.max_model_context_chars-len(SYSTEM_PROMPT)
-                    -len(json.dumps(context,ensure_ascii=False))-1024)
-    remaining = len(documents)
+                    -len(model_context(context))-1024)
+    # One excerpt budget across all sources. Reading more sources cannot enlarge it.
+    available = min(available,max(3200,state.config.max_read_chars))
+    outstanding = pending_passages(state)
+    if finalizing or state.data.get('finish_gap_review'):
+        from .review import saved_gap_evidence
+        queries = state.data.get('proposed_gap_notes', []) + [
+            c['question'] for c in state.data.get('fact_checks', []) if c['status'] != 'supported']
+        if not queries:
+            queries = [c['question'] for c in state.data.get('fact_checks', [])]
+        excerpts = saved_gap_evidence(state, queries,
+                                      max_chars=available//2 if outstanding else available)
+        if excerpts:
+            context['saved_gap_evidence'] = excerpts
+            available -= len(json.dumps(excerpts,ensure_ascii=False)) + 32
+    if outstanding:
+        context['pending_evidence'] = pending_preview(state,outstanding,max(0,available-32))
+        context['pending_evidence_count'] = len(outstanding)
+        if not context['pending_evidence']:
+            context.update(phase='finalize',allowed_actions=['finish'],
+                           finalization_reason=finalization_reason or 'context_limit')
+        return context  # Resolve shown originals before introducing another batch.
+    prior = state.data.get('actions', [])
+    active = prior[-1].get('query') if prior else None
+    pending = context.get('next_steps', [])
+    focus = pending[0]['question'] if pending else None
+    if not finalizing and state.config.retrieval.get('mode') == 'bm25' and available > 400:
+        from .retrieval import cached_candidates
+        action = dict(fact_checks=state.data.get('fact_checks', []),
+                      query=active,provider_queries=prior[-1].get('provider_queries',{}) if prior else {})
+        if focus:
+            action['query'] = focus
+        quota = min(3200,available//2 if documents else available)
+        candidates = cached_candidates(state,action,unread_only=True,max_chars=min(2400,quota))
+        shown = []
+        for candidate in candidates:
+            for span in candidate['spans']:
+                span['passage_id'] = passage_id(candidate['source_id'],candidate['version'],span)
+            trial = shown + [candidate]
+            cost = len(json.dumps(trial,ensure_ascii=False)) + 32
+            if cost <= quota:
+                shown = trial
+        if shown:
+            context['cached_evidence'] = shown
+            available -= len(json.dumps(shown,ensure_ascii=False)) + 32
+    # Rank unmarked inspected excerpts together instead of reserving space for
+    # every source's old body. Marks and their original coordinates remain above.
+    from .budget import rank_blocks
+    queries = list(dict.fromkeys(([focus] if focus else []) + ([active] if active else []) +
+        [c['question'] for c in state.data.get('fact_checks',[]) if c['status']!='supported']))
+    if not queries:
+        queries = state.data.get('retrieval_plan',{}).get('facets',[]) + [state.data['task']['query_text']]
+    previews = []
+    by_id = {s['source_id']:s for s in sources}
+    recent = state.data.get('feedback') or {}
     for source in sources:
         sid = source['source_id']
         if sid not in documents:
             continue
-        quota = min(3200,max(0,available//max(remaining,1)))
-        excerpts = located_preview(documents[sid],state.data['sources'][sid].get('read_ranges',[]),
-                                   questions.get(sid) or [state.data['task']['query_text']],
-                                   max(0,quota-100),source['priority_passages'])
-        if excerpts:
-            source['read_evidence'] = excerpts
-            available -= len(json.dumps(excerpts,ensure_ascii=False))+25
-        remaining -= 1
+        latest = (recent.get('source_id')==sid and recent.get('version')==documents[sid]['version']
+                  and bool(recent.get('spans')))
+        ranges = ([dict(version=recent['version'],**{k:s[k] for k in ('block','start','end')})
+                   for s in recent['spans']] if latest else state.data['sources'][sid].get('read_ranges',[]))
+        excerpts = located_preview(documents[sid],ranges,
+                                   queries,available if latest else min(3200,available),
+                                   source['priority_passages']+excluded_ranges(state,sid,documents[sid]['version']),
+                                   unmarked_only=True)
+        previews.extend(dict(s,source_id=sid) for s in excerpts)
+    scores = {}
+    for row in rank_blocks({'blocks':list(range(len(previews)))},{'blocks':previews},queries):
+        for i,score in row['ranking']:
+            scores[i] = max(scores.get(i,0),score)
+    current_source = feedback.get('source_id') if isinstance(feedback,dict) else None
+    for i in sorted(range(len(previews)),key=lambda i:(previews[i]['source_id']!=current_source,-scores.get(i,0),i)):
+        preview = dict(previews[i]);source=by_id[preview.pop('source_id')]
+        preview['passage_id'] = passage_id(source['source_id'],source['version'],preview)
+        cost = len(json.dumps(preview,ensure_ascii=False))+32
+        if cost<=available:
+            source.setdefault('read_evidence',[]).append(preview)
+            available-=cost
+    return context
+
+
+def prepare_context(state, tools):
+    """Complete at most the offered cache sources before a model freezes their offsets."""
+    context = context_for(state)
+    if len(SYSTEM_PROMPT) + len(model_context(context)) > state.config.max_model_context_chars:
+        return context_for(state, finalize=True)
+    candidates = context.get('cached_evidence', [])
+    pending = list(dict.fromkeys(c['source_id'] for c in candidates
+                                if tools.sources.needs_partial_completion(c['source_id'])))
+    if not pending:
+        return context
+    for sid in pending:
+        tools.sources.complete_partial(sid)
+    # Expansion may change both paragraph offsets and the locally ranked candidates.
+    # Rebuild before sending anything; acquisition alone never establishes a read.
+    context = context_for(state)
+    if context.get('cached_evidence'):
+        # Newly ranked partial sources wait for the next call, bounding HTTP work
+        # to the original offer rather than recursively fetching the candidate pool.
+        context['cached_evidence'] = [c for c in context['cached_evidence']
+            if not tools.sources.needs_partial_completion(c['source_id'])]
+        if not context['cached_evidence']:
+            context.pop('cached_evidence')
     return context
 
 
@@ -283,11 +504,15 @@ def context_for(state, *, finalize=False):
 def execute_action(state, tools, action):
     if not isinstance(action,dict):
         raise ValueError('Action must be an object')
+    action = dict(action)  # Derived checks must not rewrite the recorded model decision.
+    commit_evidence(state,action)
     kind=action.get('action')
-    allowed={'search':{'action','query','gap','provider_queries'}, 'read_source':{'action','source','location','query','gap'},
-             'finish':{'action','source_ids','source_exclusions','selections','gaps','reason','reason_detail','finalization_reason'}}
+    allowed={'search':{'action','query','gap','provider_queries','question'}, 'read_source':{'action','source','location','query','gap','question'},
+             'finish':{'action','source_ids','source_exclusions','selections','gaps','reason','reason_detail','finalization_reason','source_lead_decisions','fact_checks'}}
     if not isinstance(kind,str) or kind not in allowed:
         raise ValueError('Unknown action; choose search, read_source or finish')
+    if state.data.get('finalization_trigger') and kind != 'finish':
+        raise ValueError('Reserved finalization call: return finish with evidence and gaps; no new search/read')
     # Repair only unambiguous cursor placement; never choose between query and cursor.
     if kind == 'read_source' and ({'block', 'offset'} & set(action) or action.get('location')):
         action = dict(action)
@@ -319,7 +544,7 @@ def execute_action(state, tools, action):
             state.trace(dict(action='action_normalized', operation='read_source',
                              source=action.get('source'), moved_fields=moved,
                              removed_empty_query=empty_query, location=location))
-    fields=allowed[kind]|{'priority_passages'}|({'person_evidence'} if kind=='finish' else set())
+    fields=allowed[kind]|{'priority_passages','fact_checks','passage_exclusions'}|({'person_evidence'} if kind=='finish' else set())
     unknown=set(action)-fields
     if unknown:
         cursor_hint = (' For a position read, put block/offset inside location, '
@@ -335,8 +560,19 @@ def execute_action(state, tools, action):
     for field in explanatory:
         if field in action and (not isinstance(action[field],str) or not action[field].strip()):
             raise ValueError(f'{kind} {field} must be nonempty text')
-    if 'priority_passages' in action:
-        record_passages(state,action['priority_passages'])
+    if 'question' in action and (not isinstance(action['question'],str) or not action['question'].strip()):
+        raise ValueError('question must name the research question being attempted')
+    if kind != 'finish':
+        feedback = require_decisions(state,action)
+        if feedback:
+            return feedback
+        question = action.get('question')
+        known = {q for c in state.data.get('fact_checks',[]) for q in [c['question'], *c.get('replaces',[])]}
+        if question and question not in known:
+            # A concrete question named by a tool action must not disappear simply
+            # because the model omitted a duplicate missing-check declaration.
+            state.data.setdefault('fact_checks',[]).append(dict(question=question,status='missing',source_ids=[],
+                detail='This question is being investigated; original support is not yet established.'))
     if kind=='search':
         gap=action.get('gap')
         if (state.data['usage']['search'] > 0 or 'gap' in action) and (not isinstance(gap,str) or not gap.strip()):
@@ -346,25 +582,51 @@ def execute_action(state, tools, action):
         if not isinstance(action['source'],str):
             raise ValueError('Source must be an ID or URL')
         return tools.read_source(action['source'],action.get('location'),
-                                 query=action.get('query'),agent_feedback=True)
+                                 query=action.get('query'),agent_feedback=True,question=action.get('question'))
     if action.get('reason') not in {'supported','low_gain','insufficient'}:
         raise ValueError('Finish requires an explicit stop reason')
     if not isinstance(action.get('gaps'),list) or any(not isinstance(g,str) for g in action['gaps']):
         raise ValueError('Finish needs gap strings')
     if ('source_ids' in action) == ('selections' in action):
         raise ValueError('Finish needs source_ids (or legacy selections), not both')
+    # Keep proposed wording even when the pending-passage gate defers this finish;
+    # the reserved finalization context must still be able to check its originals.
+    state.data['proposed_gap_notes'] = list(action['gaps'])
+    from .review import record_lead_decisions, require_source_leads
+    if 'source_lead_decisions' in action:
+        record_lead_decisions(state, action['source_lead_decisions'])
+    feedback = require_decisions(state,action)
+    if feedback:
+        return feedback
     if state.data['task'].get('catalog',{}).get('kind') == 'person_event':
         review = action.get('person_evidence')
-        if (isinstance(review,dict) and set(review)=={'status','detail'}
+        if (isinstance(review,dict) and {'status','detail'} <= set(review) <= {'status','detail','questions'}
                 and review['status'] in {'supported','limited','unattempted'}
-                and isinstance(review['detail'],str) and review['detail'].strip()):
+                and isinstance(review['detail'],str) and review['detail'].strip()
+                and ('questions' not in review or isinstance(review['questions'],list)
+                     and all(isinstance(q,str) and q.strip() for q in review['questions']))):
             state.data['person_evidence'] = dict(review)
         else:
             state.data['person_evidence'] = dict(status='not_assessed',
                 detail='The model did not provide a valid personal-evidence assessment; review required.')
+    from .review import finish_review, review_before_finish
+    finish_review(state, action)
+    feedback = require_source_leads(state)
+    if feedback:
+        return feedback
     if 'source_ids' in action:
         retained,review=source_pool(state,action['source_ids'],action.get('source_exclusions'))
-        payload=assemble_sources(state,retained,gaps=action['gaps'],reason=action['reason'],source_review=review)
+        _,complete = prepare_complete_sources(state,retained,gaps=action['gaps'],
+                                              reason=action['reason'],source_review=review)
+        payload,selection = derive_input(state,complete)
+        feedback = review_before_finish(state,selection.get('delivery_issues',[]),
+                                        gaps=selection['gaps'], selected=selection['selected'])
+        if feedback:
+            return feedback
+        if selection.get('delivery_issues') or selection['reason'] != action['reason']:
+            action['reason_detail'] = 'Some requested support remains unresolved; see fact_checks, person_evidence and gaps.'
+        action['reason'],action['gaps'] = selection['reason'],selection['gaps']
+        save_handoff(state,complete,payload,selection)
         state.trace(dict(action='source_retention',**review))
     else:
         # Existing explicit callers and historical span-based handoffs remain readable.
@@ -407,10 +669,10 @@ def run_agent(state, tools, model=None, *, max_steps=None):
         if state.data['usage']['model'] >= state.config.max_model_calls:
             state.data.update(status='limit',stop_reason='model_limit')
             break
-        context=context_for(state)
-        if len(SYSTEM_PROMPT) + len(json.dumps(context,ensure_ascii=False)) > state.config.max_model_context_chars:
+        context=prepare_context(state,tools)
+        if len(SYSTEM_PROMPT) + len(model_context(context)) > state.config.max_model_context_chars:
             context=context_for(state,finalize=True)
-        if len(SYSTEM_PROMPT) + len(json.dumps(context,ensure_ascii=False)) > state.config.max_model_context_chars:
+        if len(SYSTEM_PROMPT) + len(model_context(context)) > state.config.max_model_context_chars:
             state.data.update(status='paused',stop_reason='model_context_limit')
             break
         if context['phase'] == 'finalize' and not state.data.get('finalization_trigger'):
@@ -429,15 +691,14 @@ def run_agent(state, tools, model=None, *, max_steps=None):
             state.trace(dict(action='model_started',model_call=state.data['usage']['model'],phase=context['phase'],
                              finalization_reason=context['finalization_reason']))
             raw=model(context)
+            # A failed request or discarded oversized context never establishes a read.
+            presented_chars = accept_presentation(state,context)
             state.trace(dict(action='model_response',response=raw,usage=getattr(model,'last_usage',None),
                              finish_reason=getattr(model,'last_finish_reason',None),
                              request_options=getattr(model,'last_request_options',None),
                              model_call=state.data['usage']['model'],duration_seconds=round(time.monotonic()-started,3)))
             response_recorded = True
             action=parse_action(raw)
-            if isinstance(action, dict):
-                if context['phase']=='finalize' and action.get('action')!='finish':
-                    raise ValueError('Reserved finalization call: return finish with evidence and gaps; no new search/read')
             if (context['finalization_reason'] == 'no_reading_progress'
                     and isinstance(action, dict) and action.get('action') == 'finish'):
                 # A deterministic stagnation stop must not become a completeness claim.
@@ -452,14 +713,20 @@ def run_agent(state, tools, model=None, *, max_steps=None):
                         'validated priority marks; remaining leads are not certified complete.'])
             sources_before = len(state.data['sources'])
             marks_before = len(state.data.get('priority_passages', []))
+            pending_before = sum(r['end']-r['start'] for r in pending_passages(state))
             feedback=execute_action(state,tools,action)
-            record_progress(state, action['action'], feedback,
+            progress_feedback = dict(feedback,progress=dict(feedback.get('progress',{}),
+                new_chars=feedback.get('progress',{}).get('new_chars',0)+presented_chars))
+            deferred = feedback.get('operation_deferred',False)
+            record_progress(state, 'review_passages' if deferred else action['action'], progress_feedback,
                             new_sources=len(state.data['sources'])-sources_before,
-                            new_marks=len(state.data.get('priority_passages', []))-marks_before)
+                            new_marks=len(state.data.get('priority_passages', []))-marks_before,
+                            reviewed_chars=max(0,pending_before-sum(r['end']-r['start'] for r in pending_passages(state))))
             state.data['invalid_actions']=0
-            state.data.setdefault('actions',[]).append(action)
+            if not deferred:
+                state.data.setdefault('actions',[]).append(action)
             state.data['feedback']=feedback
-            state.trace(dict(action='action_completed',model_call=state.data['usage']['model'],
+            state.trace(dict(action='action_deferred' if deferred else 'action_completed',model_call=state.data['usage']['model'],
                              operation=action['action'],sample_count=feedback.get('sample_count')))
         except LimitReached as exc:
             state.data['feedback']={'error':'limit','kind':str(exc)}

@@ -67,7 +67,7 @@ def test_joint_full_chain_resume_and_independent_source_text(tmp_path,kind):
 def test_selected_provider_constraints_match_validation(tmp_path):
     state=SearchState(tmp_path,'case',task=task(),config=SearchConfig(providers=['exa','baidu','bocha']))
     c=context_for(state)['tool_constraints']
-    assert c['requests_per_new_query']==3 and c['query_max_units']==72
+    assert c['requests_per_new_query']==3 and c['provider_query_max_units']['baidu']==72
     request_payload('baidu','中'*36,state.config)
     with pytest.raises(ValueError):request_payload('baidu','中'*37,state.config)
     state.config.providers=['exa','bocha']
@@ -153,11 +153,14 @@ def test_search_model_does_not_overwrite_builder_model(tmp_path,monkeypatch):
     assert factory.call_args.args[0]['builder_config']['lm_name']=='ark/builder-test'
 
 
-def test_default_search_profile_matches_python_and_leaves_network_off():
+def test_default_search_profile_enables_bm25_and_leaves_network_off():
     repo=Path(__file__).resolve().parents[1]
     saved=yaml.safe_load((repo/'configs/search.yml').read_text())
-    assert saved==asdict(SearchConfig())
-    assert saved['lm_name']=='ark/deepseek-v4-1-flash-261017'
+    assert asdict(SearchConfig(**saved)) == saved
+    assert saved['retrieval'] == {'mode': 'bm25'}
+    assert saved['lm_name'] == 'deepseek/deepseek-flash'
+    assert saved['generation_config'] == dict(max_tokens=8192, temperature=1.0, top_p=0.95,
+        response_format={'type':'json_object'}, reasoning_effort='high', extra_body={'thinking':{'type':'enabled'}})
     assert saved['allow_network'] is False
     assert saved['max_builder_material_chars'] == 90000
     for name in ('build_only_agent.yml','build_only_sparse.yml'):
@@ -195,7 +198,7 @@ def test_existing_task_keeps_previously_saved_limits(tmp_path):
     assert asdict(restored.config)==asdict(old)
 
 
-def test_rejected_query_feedback_includes_length_and_query_without_provider_calls(tmp_path):
+def test_oversize_query_skips_only_baidu_without_model_repair(tmp_path):
     config=SearchConfig(providers=['baidu','bocha','exa'],max_model_calls=6)
     state=SearchState(tmp_path,'case',task=task(),config=config)
     too_long='合并' * 19
@@ -208,13 +211,10 @@ def test_rejected_query_feedback_includes_length_and_query_without_provider_call
         contexts.append(context)
         if len(contexts)==1:return dict(action='search',query=too_long)
         if len(contexts)==2:
-            assert calls==[] and context['remaining']['search']==config.max_search_requests
-            assert '76 units' in context['feedback']['hint']
-            assert 'limit is 72' in context['feedback']['hint']
-            assert too_long in context['feedback']['hint']
-            return dict(action='search',query='Synthetic merger closing')
+            assert calls==['bocha','exa']
+            assert context['feedback']['providers'][0]['status']=='skipped_length'
         return dict(action='finish',source_ids=[],gaps=['Sources not yet inspected'],reason='insufficient')
     run_agent(state,SearchTools(state,transport=observed),decide)
     assert state.data['status']=='insufficient'
-    assert state.data['usage']=={'model':3,'search':3}
-    assert calls==['baidu','bocha','exa']
+    assert state.data['usage']=={'model':2,'search':2}
+    assert calls==['bocha','exa']

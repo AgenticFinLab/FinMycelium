@@ -72,9 +72,9 @@ def test_provider_variants_use_actual_queries_validation_cache_and_provenance(tm
     assert not observed['exa']['chinese_query_tried'] and observed['exa']['chinese_hints'] == 1
     traces = [json.loads(l) for l in (state.run_dir/'trace.jsonl').read_text().splitlines()]
     assert next(e for e in traces if e['action']=='provider_started')['query'] == '艾达 教育计划 承诺'
-    with pytest.raises(ValueError):
-        execute_action(state, tools, dict(action, provider_queries={'baidu':'文'*37}))
-    assert state.data['usage']['search'] == 4
+    result=execute_action(state, tools, dict(action, provider_queries={'baidu':'文'*37}))
+    assert result['providers'][0]['status']=='skipped_length'
+    assert state.data['usage']['search'] == 5  # New Bocha variant; Exa remains cached.
 
 
 @pytest.mark.parametrize('variants', [[], {'unknown':'question'}, {'bocha':''}, {'bocha':3}])

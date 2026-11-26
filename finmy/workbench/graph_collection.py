@@ -123,7 +123,13 @@ def reviewed_artifacts(row):
         raise ValueError('Gantt 缺失或属于另一版图，请先重新绘图并审核')
     html = within(root, render['output']).read_bytes()
     report = json.loads(checks)
-    if (digest(json.loads(payload)) != body['input_hash']
+    original = json.loads(payload)
+    if state.get('original_input_sha256'):
+        from finmy.person_epg.event.supplement_record import read_artifact
+        original = read_artifact(root, 'base-input', state['original_input_sha256'])
+        if state['supplement']['files']['effective-input'] != state['input_sha256']:
+            raise ValueError('最终输入与追加材料绑定不一致')
+    if (digest(original) != body['input_hash']
             or digest(graph) != state['graph_sha256'] or digest(checks) != state['checks_sha256']
             or digest(payload) != state['input_sha256'] or digest(html) != render.get('html_sha256')
             or report.get('graph_sha256') != state['graph_sha256']

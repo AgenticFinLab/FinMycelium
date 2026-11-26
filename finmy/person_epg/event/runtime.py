@@ -36,6 +36,7 @@ class EventBuildConfig:
     graph_schema_version: str = GRAPH_VERSION
     api_json_mode: bool = False
     full_corpus_supplement: bool = True
+    automatic_search: bool = False
     reasoning_effort: str | None = 'auto'
 
     @classmethod
@@ -48,6 +49,8 @@ class EventBuildConfig:
             raise ValueError('Choose an independent build model')
         if type(self.full_corpus_supplement) is not bool:
             raise ValueError('full_corpus_supplement must be a boolean')
+        if type(self.automatic_search) is not bool:
+            raise ValueError('automatic_search must be a boolean')
         if type(self.api_json_mode) is not bool:
             raise ValueError('api_json_mode must be a boolean')
         if self.api_json_mode and not person_build_json_mode_supported(self.lm_name):
@@ -58,7 +61,7 @@ class EventBuildConfig:
         elif self.reasoning_effort not in effort_options:
             raise ValueError('reasoning_effort accepts by_stage, low, high or max for Kimi K3.1 Pro, or None for the service default')
         for key, value in asdict(self).items():
-            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'reasoning_effort'):
+            if key in ('lm_name', 'graph_schema_version', 'api_json_mode', 'full_corpus_supplement', 'automatic_search', 'reasoning_effort'):
                 continue
             minimum = 0 if key in ('extraction_overlap', 'final_repair_rounds', 'max_read_calls') else 1
             if type(value) is not int or value < minimum:
@@ -69,6 +72,12 @@ class EventBuildConfig:
             raise ValueError('Extraction overlap must be smaller than the batch')
         if self.final_repair_rounds > 1:
             raise ValueError('At most one final targeted repair round is supported')
+
+
+def kimi_workbench_config(*, automatic_search=False):
+    return EventBuildConfig(max_calls=120 if automatic_search else 60, max_new_tokens=65536,
+                            max_context_chars=240000, max_read_calls=80 if automatic_search else 60,
+                            max_read_chars=200000 if automatic_search else 160000, automatic_search=automatic_search)
 
 
 class LimitReached(Exception):
@@ -135,6 +144,8 @@ def semantic_config(config):
     value = {k: v for k, v in asdict(config).items() if k != 'max_calls'}
     # Missing in historical ordinary-mode configurations. Preserve their hashes;
     # explicit JSON mode still changes all request/checkpoint dependencies.
+    if not config.automatic_search:
+        value.pop('automatic_search')
     if not config.full_corpus_supplement:
         value.pop('full_corpus_supplement')
     if not config.api_json_mode:
@@ -387,7 +398,7 @@ class Execution:
             call = dict(call_id=call_id, task_id=task_id, dependency=dependency,
                         request_fingerprint=fingerprint(dict(system=system, user=user)), status='submitted',
                         api_json_mode=self.config.api_json_mode, reasoning_effort=effort,
-                        started_at=now(), usage=None, usage_status='unknown')
+                        context_chars=len(system) + len(user_text), started_at=now(), usage=None, usage_status='unknown')
             step_path = self.attempt / 'steps' / call_id
             write_json(step_path / 'request.json', dict(system=system, user=user, task_id=task_id,
                 dependency=dependency, api_json_mode=self.config.api_json_mode, reasoning_effort=effort))
@@ -405,6 +416,8 @@ class Execution:
                 write_json(step_path / 'response.json', dict(raw=raw))
                 value = parse(raw)
                 if 'read_requests' in value:
+                    if request.get('role') == 'gap_review':
+                        raise InvalidResponse('Evaluate the supplied evidence and return the requested decision')
                     if single_response:
                         raise InvalidResponse('The complete handoff is already present; this pass has no local reads')
                     if set(value) != {'read_requests'} or not isinstance(value['read_requests'], list) or not value['read_requests']:

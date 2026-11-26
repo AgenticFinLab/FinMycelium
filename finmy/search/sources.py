@@ -301,6 +301,16 @@ class SourceStore:
             raise ValueError('Parsed source integrity mismatch')
         return json.loads(parsed)
 
+    def needs_partial_completion(self, sid):
+        """An unread partial version may be expanded once before its offsets freeze."""
+        entry = self.state.data['sources'][sid]
+        version = entry.get('version')
+        return bool(self.can_complete_partial and entry.get('status') == 'partial'
+            and version and urlsplit(entry['url']).scheme in {'http', 'https'}
+            and not any(r['version'] == version and r['end'] > r['start']
+                        for r in entry.get('read_ranges', []))
+            and version not in entry.get('acquisition_attempts', {}))
+
     def complete_partial(self, sid):
         """Try the original URL once before its partial body is first inspected.
 
@@ -309,10 +319,7 @@ class SourceStore:
         """
         entry = self.state.data['sources'][sid]
         version = entry.get('version')
-        if (not self.can_complete_partial or entry.get('status') != 'partial'
-                or not version or urlsplit(entry['url']).scheme not in {'http', 'https'}
-                or any(r['version'] == version and r['end'] > r['start'] for r in entry.get('read_ranges', []))
-                or version in entry.get('acquisition_attempts', {})):
+        if not self.needs_partial_completion(sid):
             return
         old = self.document(sid, version)
         attempt = dict(status='started', previous_version=version, started_at=now())
@@ -358,15 +365,9 @@ class SourceStore:
         self.state.save()
         self.state.trace(dict(action='source_acquisition_result', source=sid, **attempt))
 
-    def read(self, sid, block=0, offset=0, *, query=None):
-        if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
-            raise ValueError('Invalid source location')
-        if query is not None and (not isinstance(query, str) or not query.strip()):
-            raise ValueError('Reading query must be nonempty text')
-        if query is not None and (block or offset):
-            raise ValueError('Choose a reading query or an explicit location, not both')
+    def acquire(self, sid, *, fetcher=None):
+        """Cache a URL body without spending a read or marking text inspected."""
         entry = self.state.data['sources'][sid]
-        self.state.reading(sid)
         if not entry.get('version'):
             attempts = entry.setdefault('fetch_attempts', [])
             if attempts:
@@ -382,7 +383,7 @@ class SourceStore:
             attempts.append(attempt)
             self.state.save()
             try:
-                fetched = self.fetcher(entry['url'])
+                fetched = (fetcher or self.fetcher)(entry['url'])
                 raw, kind, encoding = fetched
                 self.save_raw(sid, raw, kind, encoding, fetch_metadata=getattr(fetched, 'metadata', {}))
                 attempt['status'] = entry['status']
@@ -395,10 +396,32 @@ class SourceStore:
                 self.state.save()
                 return dict(source_id=sid, status='fetch_failed', error_type=type(exc).__name__,
                             fetch_error=error, attempts=len(attempts))
-        # An explicit nonzero cursor belongs to the existing saved version.
-        if not block and not offset:
-            self.complete_partial(sid)
+
+    def read(self, sid, block=0, offset=0, *, query=None):
+        if type(block) is not int or type(offset) is not int or block < 0 or offset < 0:
+            raise ValueError('Invalid source location')
+        if query is not None and (not isinstance(query, str) or not query.strip()):
+            raise ValueError('Reading query must be nonempty text')
+        if query is not None and (block or offset):
+            raise ValueError('Choose a reading query or an explicit location, not both')
+        entry = self.state.data['sources'][sid]
+        self.state.reading(sid)
+        error = self.acquire(sid)
+        if error:
+            return error
+        previous_version = entry.get('version')
+        self.complete_partial(sid)
         doc = self.document(sid)
+        if (block or offset) and doc['version'] != previous_version:
+            # Completion may change both block boundaries and offsets. Return a
+            # fresh cursor without treating the old location as inspected text.
+            return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=[],
+                kind='source_version_changed', operation_deferred=True,
+                previous_version=previous_version, requested_location=dict(block=block, offset=offset),
+                next_location=dict(block=0, offset=0),
+                progress=dict(source_version_changed=True,
+                    hint='The partial body was expanded before its first read. The old cursor is invalid; '
+                         'read this version using query or next_location. No text has been inspected yet.'))
         blocks = doc['blocks']
         if doc['status'] not in {'success', 'partial'}:
             return dict(source_id=sid, version=doc['version'], status=doc['status'], spans=[],
@@ -408,8 +431,17 @@ class SourceStore:
                 navigation=navigation_hints(doc.get('metadata', {})))
         if query is not None:
             from .reading import targeted_spans, read_coverage
-            spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,
-                                            entry.get('read_ranges', []))
+            if self.state.config.retrieval.get('mode', 'topic') != 'topic':
+                from .retrieval import RetrievalSession, read_retrieved
+                from .metadata import source_metadata
+                if not hasattr(self, '_retrieval_session'):
+                    self._retrieval_session = RetrievalSession(self.state)
+                spans, reading = read_retrieved(self._retrieval_session, doc, query,
+                    self.state.config.max_read_chars, entry.get('read_ranges', []),
+                    source_id=sid, metadata=source_metadata(entry, doc))
+            else:
+                spans, reading = targeted_spans(doc, query, self.state.config.max_read_chars,
+                                                entry.get('read_ranges', []), topic_plan=self.state.data.get('retrieval_plan'))
             ranges = entry.setdefault('read_ranges', [])
             for span in spans:
                 record = dict(version=doc['version'], **{k:span[k] for k in ('block','start','end')})

@@ -24,10 +24,11 @@ def capture(construction):
         id_map=construction.ids.mapping,
         origin=dict(run_id=run.state['run_id'], code_sha256=run.state['code_sha256'],
                     input_sha256=run.state['input_sha256'],
-                    calls=[c for c in run.state['calls'] if c['task_id'].startswith(('extract.', 'whole-corpus.supplement', 'consolidate.', 'organize'))],
-                    reads=[r for r in run.state['reads'] if r['task_id'].startswith(('extract.', 'whole-corpus.supplement', 'consolidate.', 'organize'))]))
+                    calls=[c for c in run.state['calls'] if c['task_id'].startswith(('extract.', 'whole-corpus.supplement', 'consolidate.', 'organize', 'revised.consolidate.', 'revised.organize', 'supplement.reread.'))],
+                    reads=[r for r in run.state['reads'] if r['task_id'].startswith(('extract.', 'whole-corpus.supplement', 'consolidate.', 'organize', 'revised.consolidate.', 'revised.organize', 'supplement.reread.'))]))
     envelope = dict(snapshot=deepcopy(body), fingerprint=fingerprint(body))
-    path, digest = run.save('organization-snapshot.json', envelope)
+    name = 'revised-organization-snapshot.json' if getattr(construction, 'revised', False) else 'organization-snapshot.json'
+    path, digest = run.save(name, envelope)
     run.state.update(organization_snapshot=path, organization_snapshot_sha256=digest)
     run.persist()
     return envelope

@@ -235,7 +235,7 @@ class BuildController:
             with directory_lock(directory):
                 from finmy.person_epg.event.records import json_bytes
                 state = json.loads((directory/'state.json').read_text())
-                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state['input_sha256']
+                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state.get('original_input_sha256', state['input_sha256'])
                         or body['person_config'] != state['config']):
                     raise ValueError('Recovery retains the exact saved input and all current budgets')
                 recovery = prepare_record_recovery(directory)
@@ -266,7 +266,7 @@ class BuildController:
                 if state.get('compatible_recovery', {}).get('record') == RELATION_RECORD:
                     recorded = validate_recovery(directory, state)
                     previous = recorded['previous_config']
-                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state['input_sha256']
+                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state.get('original_input_sha256', state['input_sha256'])
                         or body['person_config'] not in (previous, state['config'])):
                     raise ValueError('Recovery requires the exact saved input and recorded configuration')
                 recovery = prepare_relation_recovery(directory, max_context_chars=max_context_chars,
@@ -301,7 +301,7 @@ class BuildController:
                 previous = state['config']
                 if state.get('compatible_recovery', {}).get('record') == OUTPUT_RECORD:
                     previous = validate_recovery(directory, state)['previous_config']
-                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state['input_sha256']
+                if (hashlib.sha256(json_bytes(body['input'])).hexdigest() != state.get('original_input_sha256', state['input_sha256'])
                         or body['person_config'] not in (previous, state['config'])):
                     raise ValueError('Recovery requires the exact saved input and recorded configuration')
                 recovery = prepare_output_recovery(directory, max_new_tokens=max_new_tokens)
@@ -510,7 +510,15 @@ class BuildController:
                         if graph.get('schema_version') != body.get('graph_schema_version'):
                             raise ValueError('Build output protocol does not match the frozen task')
                         from finmy.person_epg.event.validation import check_graph
-                        checks = check_graph(graph, body['input'], complete=False)
+                        effective = body['input']
+                        if result['state'].get('original_input_sha256'):
+                            from finmy.person_epg.event.records import json_bytes, sha256
+                            raw = (directory / 'input.json').read_bytes()
+                            if (sha256(raw) != result['state']['input_sha256'] or
+                                sha256(json_bytes(effective)) != result['state']['original_input_sha256']):
+                                raise ValueError('Build input revision binding differs from its confirmed parent')
+                            effective = json.loads(raw)
+                        checks = check_graph(graph, effective, complete=False)
                         if any(i['code'] in {'SCHEMA_INVALID', 'INPUT_IDENTITY_CHANGED', 'SOURCE_METADATA_CHANGED',
                                              'SAMPLE_HASH_MISMATCH', 'QUOTE_MISMATCH'} for i in checks['issues']):
                             raise ValueError('Person output does not match the confirmed input')

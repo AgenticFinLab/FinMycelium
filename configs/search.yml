@@ -13,9 +13,17 @@ publication_start: null
 publication_end: null
 baidu_rewrite: false
 allow_network: false
-lm_name: ark/deepseek-v4-1-flash-261017  # Search only; never inherited by Builder.
+lm_name: deepseek/deepseek-flash  # Official DeepSeek API; uses DEEPSEEK_API_KEY.
 generation_config:
-  max_tokens: 8192  # Includes reasoning + answer on the default Ark DeepSeek model.
+  max_tokens: 8192  # Includes reasoning + answer.
+  temperature: 1.0
+  top_p: 0.95
+  response_format: {type: json_object}
+  reasoning_effort: high
+  extra_body:
+    thinking: {type: enabled}
 timeout: 120  # Per-request timeout; saved tasks retain their own values.
 max_download_bytes: 20000000
 max_model_context_chars: 180000  # Conservative character guard, not a model token guarantee.
+# Optional local BM25 reading: {mode: bm25}; empty keeps the existing topic reader.
+retrieval: {mode: bm25}

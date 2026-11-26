@@ -86,16 +86,50 @@ def test_unread_new_version_and_failed_acquisition_are_not_promoted(tmp_path):
     assert all(not note['evidence_reviewed'] for note in review['uninspected_exclusions'].values())
 
 
-def test_invalid_or_conflicting_decisions_do_not_silently_change_retention(tmp_path):
+def test_invalid_decisions_still_fail_before_normalizing_exclusions(tmp_path):
     state, store = setup(tmp_path)
     sid, _ = saved(store, 'letter', 'The scope and its qualification.')
     for exclusions in ([], {sid:''}, {sid:7}, {sid:'x'*301}):
         with pytest.raises(ValueError, match='source_exclusions'):
             source_pool(state, [], exclusions)
-    with pytest.raises(ValueError, match='both'):
-        source_pool(state, [sid], {sid:'Outside scope'})
     with pytest.raises(ValueError, match='Unknown source'):
         source_pool(state, [], {'invented':'Outside scope'})
+    with pytest.raises(ValueError, match='Unknown source'):
+        source_pool(state, ['invented'], {'invented':'Outside scope'})
+
+
+@pytest.mark.parametrize('read', [False, True])
+def test_explicit_exclusion_resolves_overlap_without_another_model_call(tmp_path, read):
+    state, store = setup(tmp_path)
+    kept, doc = saved(store, 'letter', 'I committed only after local consent.')
+    excluded, _ = saved(store, 'replacement', 'Generic site navigation.', read=read)
+    record_passages(state, [dict(source_id=kept, block=0, start=0,
+                                end=len(doc['blocks'][0]['text']))])
+    proposed = [kept, excluded, kept]
+    exclusions = {excluded:'The returned page is unrelated site navigation.'}
+    calls = []
+    def model(context):
+        calls.append(context)
+        return dict(action='finish', source_ids=proposed, source_exclusions=exclusions,
+                    gaps=[], reason='supported')
+    run_agent(state, SearchTools(state), model)
+    assert len(calls) == 1 and state.data['usage'] == {'model':1, 'search':0}
+    assert state.data['status'] == 'finished' and state.data['invalid_actions'] == 0
+    payload = json.loads((state.run_dir/'builder_input.json').read_text())
+    complete = json.loads((state.run_dir/'complete_material.json').read_text())
+    assert [s['raw_data_id'] for s in payload['samples']] == [kept]
+    assert 'I committed only after local consent.' in payload['samples'][0]['content']
+    review = complete['source_review']
+    assert review['proposed_source_ids'] == [kept]
+    assert review['excluded_from_proposed'] == [excluded]
+    if read:
+        assert review['exclusions'] == exclusions and not review['uninspected_exclusions']
+    else:
+        assert not review['exclusions']
+        assert not review['uninspected_exclusions'][excluded]['evidence_reviewed']
+        assert excluded not in state.data['read_sources']
+    assert proposed == [kept, excluded, kept]  # Input and saved model decision stay intact.
+    assert exclusions == {excluded:'The returned page is unrelated site navigation.'}
 
 
 def test_duplicate_bodies_still_collapse_after_automatic_retention(tmp_path):

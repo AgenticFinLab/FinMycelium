@@ -1,0 +1,60 @@
+{
+  "base": "9c61d4c2b251eb2d0af29816e574fdecccef4588",
+  "mode": "frozen-corpus material-selection replay; no new model calls",
+  "old": {
+    "selected_body_chars": 50367,
+    "selected_annotation_units": 137,
+    "useful_char_fraction": 0.2985883614271249,
+    "direct_evidence_char_fraction": 0.13959536998431513,
+    "topic_mismatch_rate": 0.23357664233576642,
+    "mismatch_counts": {
+      "wrong_event": 24,
+      "out_of_scope": 8
+    },
+    "evidence_quote_recall_in_saved_pool": 0.7105263157894737,
+    "retained_evidence_quotes": 27,
+    "reference_evidence_quotes": 38,
+    "question_coverage": 0.8571428571428571,
+    "question_coverage_in_saved_pool": 1.0,
+    "supported_question_ids": [
+      "Q1",
+      "Q2",
+      "Q3",
+      "Q4",
+      "Q5",
+      "Q6"
+    ],
+    "missed_supported_question_ids": [],
+    "questions_without_pool_support": [
+      "Q7"
+    ],
+    "exact_duplicate_text_fraction": 0.00902997394434831
+  },
+  "new": {
+    "selected_body_chars": 9501,
+    "selected_annotation_units": 27,
+    "useful_char_fraction": 1.0,
+    "direct_evidence_char_fraction": 0.7400273655404694,
+    "topic_mismatch_rate": 0.0,
+    "mismatch_counts": {},
+    "evidence_quote_recall_in_saved_pool": 0.7105263157894737,
+    "retained_evidence_quotes": 27,
+    "reference_evidence_quotes": 38,
+    "question_coverage": 0.8571428571428571,
+    "question_coverage_in_saved_pool": 1.0,
+    "supported_question_ids": [
+      "Q1",
+      "Q2",
+      "Q3",
+      "Q4",
+      "Q5",
+      "Q6"
+    ],
+    "missed_supported_question_ids": [],
+    "questions_without_pool_support": [
+      "Q7"
+    ],
+    "exact_duplicate_text_fraction": 0.044971037388099
+  },
+  "priority_spans_preserved": 10
+}

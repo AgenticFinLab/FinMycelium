@@ -1,0 +1,33 @@
+{
+  "target_type": "event",
+  "target_name": "Goldman Sachs crisis investment — Warren Edward Buffett",
+  "query_text": "Research this single event within the confirmed scope. Do not expand to other events.\n\nEvent: Goldman Sachs crisis investment (PERSON-0001-E0034)\n\nPerson: Warren Edward Buffett (PERSON-0001)\n\nStoryline: Securities investments (PERSON-0001-S0005)\n\nResearch both the event process and the focal person's evidenced actions within it. Look for decisions, authorization, communication, commitments, responses or adjustments where relevant; these are examples, not required categories. Distinguish the person's actions and statements from organizational or other parties' actions.\n\nActivity period: 2008–2013; later residual position as necessary. The task follows the preferred/warrant commitment through settlement; establish any residual common-stock endpoint from transaction records.\n\nIncluded: Preferred shares, warrants, negotiation, redemption and warrant settlement.\n\nExcluded: GE is E0035 and Bank of America E0036; a shared crisis date does not merge issuers.\n\nActivity dates do not limit publication dates; retrospective sources are allowed.\n\nPlanning context below guides research and is not source evidence:\n\nBuffett’s 2008 and 2009 letters report Berkshire’s Goldman financing position among its crisis-era commitments. [SRC-33, SRC-25]\n\nHis letters describe Berkshire’s commitment; separate investment responsibility from claims that he personally rescued the financial system. [SRC-33]\n\n- **Questions:** Which agreement and redemption records establish economics and the 2013 warrant treatment?\n- **Search leads:** SRC-33, Investments; SRC-25, preferred-stock table; Goldman SEC releases.\n- **Open issues and decisions:** Exact endpoint follows settlement documentation; any later common-stock investment is included only if derived from these warrants.\n\nSource leads (to verify):\n\n[{\"id\": \"SRC-25\", \"record\": \"SRC-25 | [2009 Letter to Shareholders](https://www.berkshirehathaway.com/letters/2009ltr.pdf) | Berkshire Hathaway; February 26, 2010 | BNSF passages, Investments and issuing-shares discussion read | BNSF acquisition, Goldman context and financing considerations.\"}, {\"id\": \"SRC-33\", \"record\": \"SRC-33 | [2008 Letter to Shareholders](https://www.berkshirehathaway.com/letters/2008ltr.pdf) | Berkshire Hathaway; February 27, 2009 | Investments narrative read, printed p. 15 | Goldman and GE financing positions; common crisis context is not event continuity.\"}]",
+  "key_words": [
+    "Warren Buffett",
+    "Berkshire Hathaway",
+    "Goldman Sachs",
+    "preferred shares",
+    "warrants",
+    "negotiation",
+    "redemption",
+    "2013 warrant settlement"
+  ],
+  "seed_urls": [
+    "https://www.berkshirehathaway.com/letters/2008ltr.pdf",
+    "https://www.berkshirehathaway.com/letters/2009ltr.pdf"
+  ],
+  "catalog": {
+    "kind": "person_event",
+    "person_id": "PERSON-0001",
+    "person_name": "Warren Edward Buffett",
+    "storyline_id": "PERSON-0001-S0005",
+    "storyline_name": "Securities investments",
+    "event_id": "PERSON-0001-E0034",
+    "event_name": "Goldman Sachs crisis investment"
+  },
+  "research_scope": {
+    "period": "2008–2013; later residual position as necessary. The task follows the preferred/warrant commitment through settlement; establish any residual common-stock endpoint from transaction records.",
+    "include": "Preferred shares, warrants, negotiation, redemption and warrant settlement.",
+    "exclude": "GE is E0035 and Bank of America E0036; a shared crisis date does not merge issuers."
+  }
+}

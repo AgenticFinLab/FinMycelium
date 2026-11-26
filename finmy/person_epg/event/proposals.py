@@ -303,7 +303,7 @@ class Receiver:
                 self.report['reported_pending'].append(deepcopy(item))
         return response
 
-    def add_records(self, records, collection, *, existing=False):
+    def add_records(self, records, collection, *, existing=False, original_order=()):
         """Dependency order is resolved by the caller; independent records are isolated."""
         key = COLLECTION_IDS[collection]
         for record in records:
@@ -322,7 +322,12 @@ class Receiver:
                     return
                 if collection == 'actions' and record.get('phase_id') is not None:
                     raise ValueError('Extraction cannot assign Phase')
-                package[collection].append(deepcopy(record))
+                members = package[collection]
+                position = len(members)
+                if record[key] in original_order:
+                    later = original_order[original_order.index(record[key]) + 1:]
+                    position = next((i for i, sibling in enumerate(members) if sibling[key] in later), position)
+                members.insert(position, deepcopy(record))
             self.apply(label, change, [reference(collection, record[key])] if isinstance(record, dict)
                        and isinstance(record.get(key), str) else [], proposal=record)
 
@@ -506,8 +511,10 @@ class Receiver:
             self.reject('unhandled_candidate', 'Candidate lacks an accepted decision', [reference(collection, oid)])
         return self.finish()
 
-    def organize(self, response, *, assigned=None):
+    def organize(self, response, *, assigned=None, hierarchy_order=None):
         response = self.prepare('organization', response)
+        self.report['hierarchy_order'] = {c: [r[COLLECTION_IDS[c]] for r in response[c]
+            if isinstance(r, dict) and isinstance(r.get(COLLECTION_IDS[c]), str)] for c in ('stages', 'phases')}
         allowed = set(index_records(self.package)['actions']) if assigned is None else set(assigned)
         if response['split_proposals']:
             lineage = []
@@ -568,7 +575,7 @@ class Receiver:
                         self.reject('phase', 'Organization must leave baseline Context empty')
                         phase = None
                 response[collection] = [p for p in response[collection] if not isinstance(p, dict) or not p.get('baseline_context_refs')]
-            self.add_records(response[collection], collection)
+            self.add_records(response[collection], collection, original_order=(hierarchy_order or {}).get(collection, ()))
         # Split, reference changes and all new assignments are one checked operation.
         for number, decision in enumerate(response['split_proposals']):
             outputs = decision.get('outputs') if isinstance(decision, dict) else None
@@ -615,7 +622,8 @@ class Receiver:
                 action['phase_id'] = item['phase_id']
                 action['support'] = [s for s in action['support'] if s['target'] != '/phase_id'] + deepcopy(item['support'])
             if self.apply('assignment:' + str(item.get('action_id')) if isinstance(item, dict) else 'assignment', change,
-                          [reference('actions', item['action_id'])] if isinstance(item, dict) and isinstance(item.get('action_id'), str) else []):
+                          [reference('actions', item['action_id'])] if isinstance(item, dict) and isinstance(item.get('action_id'), str) else [],
+                          proposal=item):
                 handled.add(item['action_id'])
         for aid in allowed - handled - {oid for _, oid in split_inputs}:
             self.reject('unassigned_action', 'Action lacks an accepted Phase assignment', [reference('actions', aid)])

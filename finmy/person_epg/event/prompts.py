@@ -228,7 +228,15 @@ Compare accounts of the same act for compatible bounds. Retain the tightest
 supported occurrence window or single limit, with its evidence and any inference.
 Keep supported coarse time when no stronger bound exists. Preserve disagreements
 and keep an otherwise supported action even when its timing remains open.""",
-    'organization': """Jointly organize situation Stages and behavioral-mode Phases for
+    'organization': """If correction.hierarchy_support is supplied, correct only the listed targets.
+Return each corrected Stage or Phase as its given ID and a support array for those targets only.
+Use O for what the record itself contains, A for a source's account of what happened, and I
+with explicit premises for an inferred boundary. Choose the mode supported by the wording and
+the original passage. If the field cannot be supported as written, leave it pending.
+Leave assignments, split_proposals and evidence empty and omit event_overview in this correction.
+The program retains other fields and rechecks dependent proposals from the original response.
+
+Jointly organize situation Stages and behavioral-mode Phases for
 this Event. Stages are not arbitrary date bins and Phases are not actor lists.
 Explain changes in situation and behavioral mode using evidence or explicit inference;
 source documents need not name the Stage/Phase or supply a day-precise boundary.
@@ -421,6 +429,13 @@ silence do not resolve rejected work. All correction calls share the task attemp
     instruction = SUPPLEMENT_ROLE + '\n' + CANDIDATE_DIRECTION if is_supplement else ROLES[role]
     if role == 'extraction':
         instruction += '\n' + CONTEXT_DISCOVERY
+    if not is_supplement:
+        instruction += '\n' + {
+            'extraction': 'Record material, publicly checkable missing premises in the existing gaps with the field and reason. When review_questions are supplied, focus on original evidence for those questions.',
+            'consolidation': 'Compare the by-source groups in role_evidence for each candidate. Identify what each source attributes to the person, to the institution or to another actor. Keep differences and independent support when merging.',
+            'organization': 'Use time bounds, quoted decisions, state changes and conditions in role_evidence to justify Stage and Phase transitions. Preserve overlaps and incomplete ordering where the sources allow several sequences.',
+            'relations': 'Inspect both endpoint records and the passages supporting the link itself in role_evidence. Nearby passages are search leads for additional links; co-occurrence alone establishes none. Use local reads for missing connecting text. Preserve a material, checkable missing premise as a gap when warranted.'
+        }[role]
     arrays = (*FIELDS[role], 'support_additions') if is_supplement else FIELDS[role]
     return common + '\nROLE\n' + instruction + support_rules + json.dumps(dict(
         fields=field_contract, time_fields=TIME_SUPPORT if role != 'relations' else []), ensure_ascii=False) + \

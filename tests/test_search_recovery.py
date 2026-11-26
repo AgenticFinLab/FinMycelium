@@ -26,7 +26,7 @@ def trace(root, task_id='case'):
 
 
 def test_five_consecutive_correctable_errors_recover_without_restart(tmp_path):
-    search = dict(action='search', query='x'*73, gap='Closing date remains unknown')
+    search = dict(action='search', query='', gap='Closing date remains unknown')
     responses = iter([READ, search, 'invalid', search, 'invalid', search, FINISH])
     seen, fetched = [], []
     def decide(context):
@@ -40,7 +40,7 @@ def test_five_consecutive_correctable_errors_recover_without_restart(tmp_path):
         model=decide, fetcher=fetch, transport=lambda *a:pytest.fail('Invalid queries must not execute'))
     assert result['status']=='finished' and result['usage']=={'model':7,'search':0}
     assert fetched==[URL] and len(seen)==7
-    assert '72' in seen[2]['feedback']['hint']
+    assert 'nonempty' in seen[2]['feedback']['hint']
     assert 'No action was executed' in seen[3]['feedback']['hint']
     rows=trace(tmp_path)
     assert not any(row['action']=='retry_started' for row in rows)
