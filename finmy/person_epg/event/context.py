@@ -6,6 +6,7 @@ from itertools import zip_longest
 from .context_links import shared_passage_leads
 from .proposals import ID_FIELDS, LIST_REFS
 from .records import index_records, prompt_json
+from .role_evidence import add_role_evidence
 from .schema import COLLECTION_IDS
 
 
@@ -79,7 +80,8 @@ def _relation_passages(indexes, fields):
     candidates = fields.get('relation_candidates', [])
     link_groups = [cited(c, ('/type', '')) or cited(c, ('/description',)) for c in candidates]
     action_groups = []
-    for aid in fields.get('assigned_action_ids', []):
+    endpoint_ids = [c.get(key) for c in candidates for key in ('from_action_id', 'to_action_id')]
+    for aid in dict.fromkeys([*fields.get('assigned_action_ids', []), *endpoint_ids]):
         action = indexes['actions'].get(aid, {})
         quotes = cited(action, ('/description', ''))
         if not quotes:
@@ -119,7 +121,13 @@ def task_records(role, package, fields, *, indexes=None):
         roots = [(r['collection'], r['object_id']) for r in fields.get('assigned', [])]
         supplied = set(roots)  # Full candidate records are already in the task.
     elif role == 'organization':
-        roots = [('actions', a['action_id']) for a in package['actions']]
+        repair = fields.get('correction', {}).get('hierarchy_support')
+        if repair:
+            roots = [('evidence', eid) for objects in repair.values() for entry in objects.values()
+                     for s in entry['record']['support'] if s['target'] in entry['targets']
+                     for eid in s['evidence_ids']]
+        else:
+            roots = [('actions', a['action_id']) for a in package['actions']]
     elif role == 'relations':
         roots = [('actions', aid) for aid in fields.get('assigned_action_ids', [])]
         roots += [('phases', pid) for pid in fields.get('assigned_phase_ids', [])]
@@ -151,7 +159,7 @@ def task_records(role, package, fields, *, indexes=None):
     return records
 
 
-def sized_request(base, package, max_chars, reserve):
+def sized_request(base, package, max_chars, reserve, *, payload=None):
     """Compress navigation first; never truncate the body or assigned operations."""
     request = deepcopy(base)
     limit = max(0, max_chars - reserve)
@@ -168,7 +176,8 @@ def sized_request(base, package, max_chars, reserve):
         request['context_selection'] = dict(navigation_preview_chars=preview, related_available=len(records),
             related_included=0, complete_records='read_records; exact source ranges through read_sample')
         if base['role'] == 'relations':
-            result = balanced_relation_request(request, indexes, records, limit, allowance)
+            request.pop('role_evidence', None)
+            result = balanced_relation_request(request, indexes, records, limit, allowance, payload)
             selection = result['context_selection']
             omitted = (len(selection['uncovered_action_ids']), len(selection['omitted_relation_evidence_ids']))
             if len(prompt_json(dict(task=result, read_results=[]))) <= limit:
@@ -195,7 +204,7 @@ def sized_request(base, package, max_chars, reserve):
     return request
 
 
-def balanced_relation_request(request, indexes, records, limit, allowance):
+def balanced_relation_request(request, indexes, records, limit, allowance, payload):
     """Give every owned Action a quote before optional dependencies use the budget.
 
     Full quotes and offsets remain immutable. A minimum quote per Action may use
@@ -276,7 +285,14 @@ def balanced_relation_request(request, indexes, records, limit, allowance):
                 break
     # Keep passages supporting the link itself even when both endpoints already have quotes.
     for eid in _relation_passages(indexes, request):
-        add(('evidence', eid))
+        add(('evidence', eid), minimum=True)
+    # Allocate the endpoint index and exact connecting text before optional
+    # citations and dependencies can consume the initial request. Local-read
+    # headroom is already excluded from limit.
+    if payload is not None and not request.get('correction'):
+        before = len(prompt_json(dict(task=request, read_results=[])))
+        add_role_evidence(request, indexes, limit, payload)
+        used += len(prompt_json(dict(task=request, read_results=[]))) - before
     # Equal turns stop an evidence-rich early Action from consuming every slot.
     for collection in ('actions', 'phases'):
         queues = [deque(eids) for c, _, eids in owners if c == collection]

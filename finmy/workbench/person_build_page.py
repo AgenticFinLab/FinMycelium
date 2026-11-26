@@ -34,12 +34,11 @@ def person_build_form(store, task_id, save_task):
     advanced = st.expander('调整构建配置')
     with advanced:
         model = model_picker(store.settings()['model'], 'ui-person-build-model-' + task_id, purpose='build', label='构建模型')
-        automatic = st.checkbox('允许按证据缺口补搜一轮', value=False, key='gap-search-'+task_id,
+        defaults = EventBuildConfig()
+        automatic = st.checkbox('允许按证据缺口补搜一轮', value=defaults.automatic_search, key='gap-search-'+task_id,
             help='先核对确认正文和同次检索缓存。仍有关键缺口时调用公共检索，最多追加 8,000 字符。')
         if model == 'ark/kimi-k3-1-pro-261024':
             defaults = kimi_workbench_config(automatic_search=automatic)
-        else:
-            defaults = EventBuildConfig()
         json_supported = person_build_json_mode_supported(model)
         api_json_mode = st.radio('模型输出模式', [False, True] if json_supported else [False],
             format_func=lambda enabled: 'API JSON 模式' if enabled else '普通（提示词约定 JSON）',

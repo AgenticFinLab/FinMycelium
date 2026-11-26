@@ -228,7 +228,15 @@ Compare accounts of the same act for compatible bounds. Retain the tightest
 supported occurrence window or single limit, with its evidence and any inference.
 Keep supported coarse time when no stronger bound exists. Preserve disagreements
 and keep an otherwise supported action even when its timing remains open.""",
-    'organization': """Jointly organize situation Stages and behavioral-mode Phases for
+    'organization': """If correction.hierarchy_support is supplied, correct only the listed targets.
+Return each corrected Stage or Phase as its given ID and a support array for those targets only.
+Use O for what the record itself contains, A for a source's account of what happened, and I
+with explicit premises for an inferred boundary. Choose the mode supported by the wording and
+the original passage. If the field cannot be supported as written, leave it pending.
+Leave assignments, split_proposals and evidence empty and omit event_overview in this correction.
+The program retains other fields and rechecks dependent proposals from the original response.
+
+Jointly organize situation Stages and behavioral-mode Phases for
 this Event. Stages are not arbitrary date bins and Phases are not actor lists.
 Explain changes in situation and behavioral mode using evidence or explicit inference;
 source documents need not name the Stage/Phase or supply a day-precise boundary.

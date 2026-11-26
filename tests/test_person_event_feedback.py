@@ -183,7 +183,7 @@ def test_final_hierarchy_repair_preserves_rejected_ids_and_closes_matching_issue
             for issue in request['repair_issues']:
                 record = issue.get('proposal')
                 for collection, key in [('stages', 'stage_id'), ('phases', 'phase_id')]:
-                    if isinstance(record, dict) and key in record:
+                    if issue['item'].startswith(collection + ':') and isinstance(record, dict) and key in record:
                         for item in value[collection]:
                             if item['name'] == record['name']:
                                 maps[collection][item[key]] = record[key]
@@ -221,6 +221,98 @@ def test_final_hierarchy_repair_preserves_rejected_ids_and_closes_matching_issue
     checks = json.loads((tmp_path / state['checks']).read_text())
     assert state['result_status'] == 'draft', checks['unresolved_tasks']
     assert state['final_repair_used']
+
+
+@pytest.mark.parametrize('defer_phase', [False, True])
+def test_mixed_hierarchy_support_rechecks_only_blocked_members_before_relations(tmp_path, payload, defer_phase):
+    model = SyntheticEventModel()
+    corrections = []
+
+    def reply(system, user, name):
+        if name.startswith('organize.correct.'):
+            scope = json.loads(user)['task']['correction']['hierarchy_support']
+            corrections.append(scope)
+            out = dict(stages=[], phases=[], assignments=[], split_proposals=[], evidence=[], pending=[])
+            for collection, records in scope.items():
+                if defer_phase and collection == 'phases' and len(corrections) == 1:
+                    continue
+                for oid, item in records.items():
+                    assert item['targets'] == ['/description']
+                    key = 'stage_id' if collection == 'stages' else 'phase_id'
+                    out[collection].append({key: oid, 'support': [s for s in item['record']['support']
+                        if s['target'] == '/description' and s['mode'] == 'A']})
+            return out
+        value = model(system, user, name)
+        if name == 'organize':
+            for item in (value['stages'][0], value['phases'][0]):
+                orig = next(s for s in item['support'] if s['target'] == '/description')
+                item['support'].append({**orig, 'mode': 'O'})
+        return value
+
+    state = run_event(payload, tmp_path, EventBuildConfig(final_repair_rounds=0), model=reply)
+    # The original Event overview has its own rejection. A hierarchy patch
+    # discharges only checked Stage/Phase proposals and their assignments.
+    checks = json.loads((tmp_path / state['checks']).read_text())
+    assert [i['item'] for r in checks['unresolved_tasks'] for i in r['report']['rejected']] == ['event_overview']
+    assert state['execution_status'] == 'finished' and not state.get('supplement')
+    assert state['config']['automatic_search'] is False
+    assert not any(c['task_id'].startswith('supplement.') for c in state['calls'])
+    assert set(corrections[0]) == {'stages', 'phases'}
+    assert len(corrections) == (2 if defer_phase else 1)
+    if defer_phase:
+        assert set(corrections[-1]) == {'phases'}
+    first = json.loads((tmp_path / 'attempts/0001/organize-adoption.json').read_text())['report']
+    proposed = {r['proposal']['action_id']: r['proposal']['phase_id'] for r in first['rejected']
+                if r['item'].startswith('assignment:')}
+    graph = json.loads((tmp_path / state['output']).read_text())
+    assert len(proposed) == 3 and {a['action_id']: a['phase_id'] for a in graph['actions']} == proposed
+
+
+def test_hierarchy_correction_cannot_rewrite_a_record_or_move_an_action(graph, payload):
+    from finmy.person_epg.event.hierarchy_correction import HierarchyCorrection
+    stage = deepcopy(graph['stages'][0])
+    original = next(s for s in stage['support'] if s['target'] == '/description')
+    stage['support'].append({**original, 'mode': 'O'})
+    graph['stages'] = []
+    oid = stage['stage_id']
+    issue = dict(item='stages:' + oid, proposal=stage, issues=[
+        dict(code='SUPPORT_MODE_MIXED', field='', object_type='stages', object_id=oid)])
+    plan = HierarchyCorrection([issue], graph)
+    empty = dict(stages=[], phases=[], assignments=[], split_proposals=[], evidence=[], pending=[])
+    good = dict(stage_id=oid, support=[original])
+    for patch in (dict(good, name='Replacement'), dict(good, stage_id='another'),
+                  dict(good, support=[{**original, 'target': '/time'}])):
+        with pytest.raises(ValueError):
+            plan.expand(dict(empty, stages=[patch]))
+    with pytest.raises(ValueError):
+        plan.expand(dict(empty, stages=[good], assignments=[dict(action_id='A', phase_id='P')]))
+    assert plan.expand(dict(empty, stages=[good]))['stages'][0]['name'] == stage['name']
+
+
+def test_paused_hierarchy_reuses_receipt_and_keeps_unresolved_mode_pending(tmp_path, payload):
+    model = SyntheticEventModel()
+    corrections = []
+
+    def reply(system, user, name):
+        if name.startswith('organize.correct.'):
+            corrections.append(name)
+            return dict(stages=[], phases=[], assignments=[], split_proposals=[], evidence=[], pending=[],
+                        note='The provided wording does not settle the attribution.')
+        out = model(system, user, name)
+        if name == 'organize':
+            stage = out['stages'][0]
+            stage['support'].append({**next(s for s in stage['support'] if s['target'] == '/description'), 'mode': 'O'})
+            (tmp_path / 'pause_requested').touch()
+        return out
+
+    cfg = EventBuildConfig(final_repair_rounds=0)
+    first = run_event(payload, tmp_path, cfg, model=reply)
+    assert first['execution_status'] == 'paused'
+    final = run_event(payload, tmp_path, cfg, model=reply, resume=True)
+    assert model.calls.count('organize') == 1 and corrections == ['organize.correct.1']
+    assert final['result_status'] == 'partial'
+    checks = json.loads((tmp_path / final['checks']).read_text())
+    assert any(i['item'].startswith('stages:') for r in checks['unresolved_tasks'] for i in r['report']['rejected'])
 
 
 def test_read_body_with_unresolved_proposals_is_not_reported_as_unread(tmp_path, payload):

@@ -16,6 +16,7 @@ from .feedback import (correction_scope, correction_issues, validate_correction,
                        unresolved_report, reserved_records, clear_resolved_pending)
 from .context import navigation, sized_request
 from .grouping import ambiguity_groups
+from .hierarchy_correction import HierarchyCorrection
 from .validation import check_graph
 from .relation_review import discovery_scope
 
@@ -56,8 +57,8 @@ class Construction:
             reserve = max(reserve, self.run.config.max_context_chars // 4)
             base['read_limits']['max_record_refs'] = 20
         limit = self.run.config.max_context_chars - len(system_prompt(role))
-        request = sized_request(base, package, limit, reserve=reserve)
-        if role != 'extraction':
+        request = sized_request(base, package, limit, reserve=reserve, payload=self.run.payload)
+        if role in ('consolidation', 'organization') and not (role == 'organization' and fields.get('correction')):
             from .role_evidence import add_role_evidence
             add_role_evidence(request, index_records(package), limit - reserve, self.run.payload,
                               self.facts.get('relation_candidates', ()) if role == 'organization' else ())
@@ -69,7 +70,7 @@ class Construction:
         system = system_prompt(role)
         request = self.run.task_request(task_id, system, request, package)
         group = self.run.attempt_group(task_id, system, request, package)
-        records, allowed = [], None
+        records, allowed, hierarchy = [], None, None
         result = package
         for number in range(self.run.config.max_json_attempts):
             step_id = task_id if number == 0 else task_id + '.correct.' + str(number)
@@ -77,26 +78,50 @@ class Construction:
                 request = self.run.task_request(step_id, system, request, result)
             validator = (lambda v: validate_envelope(role, v)) if allowed is None else \
                 (lambda v: validate_correction(role, v, allowed))
+            if hierarchy is not None:
+                validator = hierarchy.expand
             try:
                 raw = self.run.infer(step_id, system, request, result, validator, attempt_group=group)
             except InvalidResponse:
                 if not records:
                     raise
                 break  # Preserve adopted facts and the outstanding rejection evidence.
-            result, record = self.adopt(step_id, role, result, request, raw, reserved=allowed or reserved, **scope)
+            proposal = hierarchy.expand(raw) if hierarchy is not None else raw
+            if hierarchy is not None:
+                scope = dict(assigned=[a['action_id'] for a in proposal['assignments']],
+                             hierarchy_order=records[0]['report']['hierarchy_order'])
+            result, record = self.adopt(step_id, role, result, request, proposal, reserved=allowed or reserved, **scope)
             records.append(record)
             if number:
                 if role == 'relations':
                     self.resolve_relation_corrections(records[:-1], record, result)
+                elif hierarchy is not None:
+                    for prior in records[:-1]:
+                        for issue in self.outstanding(prior)['rejected']:
+                            if hierarchy.resolved(issue, record['report']['accepted']):
+                                prior.setdefault('resolutions', []).append(dict(
+                                    issue_fingerprint=fingerprint(issue), resolved_by=step_id))
                 else:
                     self.resolve_fact_corrections(records[:-1], record)
                 clear_resolved_pending(result, self.reports, self.outstanding)
-            if role == 'relations':
-                self.graph = result  # Preserve adopted edges if a local correction pauses/fails.
+            if role in ('organization', 'relations'):
+                self.graph = result  # Keep adopted graph records if a local correction pauses.
             if result.get('schema_version') == self.facts['schema_version']:
                 self.facts = result
                 self.save_facts()  # A pause/error during correction must retain valid neighbors.
             combined = unresolved_report(records, self.outstanding)
+            if role == 'organization':
+                if hierarchy is not None and not (proposal['stages'] or proposal['phases']):
+                    break
+                hierarchy = HierarchyCorrection(combined['rejected'], result)
+                if not hierarchy.roots or number + 1 == self.run.config.max_json_attempts:
+                    break
+                allowed = {c: sorted(objects) for c, objects in hierarchy.roots.items()}
+                # Preserve canonical IDs for both the corrected parents and replayed children.
+                allowed['phases'] = sorted(hierarchy.phase_ids)
+                self.run.reject_proposals(group, fingerprint(dict(task_id=step_id, response=raw)), combined['rejected'])
+                request = self.request(role, result, correction=dict(hierarchy_support=hierarchy.roots))
+                continue
             handled = {(ref['collection'], ref['object_id']) for r in records[1:]
                        for item in r['report']['accepted_items'] for ref in item['refs']}
             allowed = correction_scope(role, combined, result, handled)
