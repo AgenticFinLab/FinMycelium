@@ -5,7 +5,8 @@ The material budget is an upper limit; unused budget may remain.
 
 ## Defaults and separate comparisons
 
-The repository profile in `configs/search.yml` enables `retrieval: {mode: bm25}`.
+The repository profile in `configs/search.yml` selects the official DeepSeek Flash
+endpoint, high reasoning, JSON output and `retrieval: {mode: bm25}`.
 The search-evaluation CLI loads that profile by default while retaining its Kimi
 model and generation settings. BM25 ranks passages within saved sources and offers
 located cached excerpts before the next research decision. The research agent
@@ -13,9 +14,11 @@ decides which originals to mark and which sources need further reading.
 
 `retrieval: {}` or `{mode: topic}` selects the existing topic reader, including
 its lexical ranking. A directly constructed `SearchConfig()` still defaults to
-the topic reader unless configured. Both readers run locally without additional
-model calls or model weights. Retrieval scores do not create delivery marks
-automatically. Web providers and source acquisition are unchanged.
+the topic reader unless configured. A new workbench profile uses these Python
+defaults with Ark DeepSeek Flash. Saved tasks retain their recorded settings.
+Both readers run locally. A Baidu or Bocha result with a missing body can
+trigger an original-page fetch. The body becomes eligible for selection after
+the agent has inspected an original passage from that version.
 
 Optional BM25 settings, passed to the existing `--config` argument:
 

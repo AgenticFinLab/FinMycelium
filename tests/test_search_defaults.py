@@ -20,7 +20,9 @@ def offline(monkeypatch):
 
 def test_yaml_enables_bm25_and_new_form_keeps_python_defaults(tmp_path):
     expected=asdict(SearchConfig())
-    assert yaml.safe_load((Path(__file__).resolve().parents[1]/'configs/search.yml').read_text())==dict(expected, retrieval={'mode':'bm25'})
+    profile = yaml.safe_load((Path(__file__).resolve().parents[1]/'configs/search.yml').read_text())
+    assert {k for k in expected if expected[k] != profile[k]} == {'retrieval', 'lm_name', 'generation_config'}
+    assert expected['retrieval'] == {} and expected['lm_name'] == 'ark/deepseek-v4-1-flash-261017'
     assert load_defaults(tmp_path/'missing-profile.json')==expected
     assert expected['providers']==['baidu','bocha','exa']
     assert (expected['max_read_sources'],expected['max_model_calls'],expected['max_model_context_chars'])==(40,80,180000)

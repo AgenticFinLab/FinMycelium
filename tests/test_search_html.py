@@ -254,7 +254,12 @@ def test_uncached_provider_leads_use_the_same_body_reader(tmp_path, provider):
         return b'<article><p>The community approved the program after consultation.</p></article>', 'html', None
     tools = SearchTools(state, transport=transport, fetcher=fetch)
     sid = tools.search('program consent')['source_ids'][0]
-    assert context_for(state)['sources'][0]['acquisition_state'] == 'not_attempted'
+    prefetched = provider in ('baidu', 'bocha')
+    assert context_for(state)['sources'][0]['acquisition_state'] == ('obtained' if prefetched else 'not_attempted')
+    assert calls == (['https://example.org/program'] if prefetched else [])
+    assert not state.data['sources'][sid].get('read_ranges') and not state.data['read_sources']
+    with pytest.raises(ValueError, match='Inspect this source'):
+        assemble_sources(state, [sid])
     result = tools.read_source(sid)
     assert result['status'] == 'success' and 'after consultation' in result['spans'][0]['text']
     assert calls == ['https://example.org/program']
