@@ -215,7 +215,11 @@ those checks. Final selection and citation validation use the same evidence.
 There is no separate LLM review or reranking stage.
 
 Establish important questions from the confirmed task scope during ordinary
-research. Each question names one verifiable fact. New originals may add a distinct
+research, including task-derived questions whose sources have not yet been found.
+Each question names one verifiable fact. A supported answer to one condition or
+reason does not close an entire direction about conditions or reasons. Narrow the
+answered check and keep important unresolved parts as separate checks.
+New originals may add a distinct
 reason, condition, response or outcome even when a broader check is supported.
 An announcement can support what was announced while actual completion remains a
 separate `planned` or `missing` question. These are model judgments about originals;
@@ -263,9 +267,24 @@ cached bodies inspected. Skip decisions persist across deferred actions and
 resume. Failed acquisition, exhausted source slots and forced finalization leave
 explicit source gaps and cannot claim supported completion. Both source-based
 and legacy span-based finish use this gate. Other candidates remain optional.
-Finish then performs one located citation repair if necessary. The former general
-finish-time research check and personal-question reminder are removed; missing questions remain in
-ordinary `next_steps`. Once finalization is imposed, undecided originals become
+Before voluntary finish, the agent submits `scope_review` with a substantive
+`summary` comparing the original task with the actual saved answers, and
+`followups: [{"question": "one unresolved fact", "reason": "task requirement or source lead"}]`.
+This reviews unexplored parts of the task as well as already listed questions;
+all current checks being `supported` is not itself a coverage assessment.
+Followups enter the existing `fact_checks` ledger as missing. Reopening a supported
+question preserves its citations and selected originals. Omitting an unresolved
+question from a later scope review does not remove it from the ledger.
+New unattempted followups receive a bounded navigation opportunity through the same
+`next_steps`, source inspection and search budgets. Prior attempts and question
+renames are retained. A missing or malformed assessment receives at most one
+correction turn; if still absent, it remains an explicit coverage gap. Forced
+finalization does not spend extra calls and cannot claim assessed scope without
+a valid review. The review is saved in `run.json` under `scope_review` and can be
+reused after its followups have been resolved. No event-specific fact list is used.
+
+Finish then performs one located citation repair if necessary. Once finalization
+is imposed, undecided originals become
 explicit source/version/offset gaps and cannot support a completeness claim.
 
 Free-form gap notes with matching saved support receive at most one ordinary

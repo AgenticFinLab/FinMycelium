@@ -43,6 +43,9 @@ def saved(tools, name, text, *, read=False, scope=None):
 
 
 def finish(ids, **extra):
+    extra.setdefault('scope_review', dict(
+        summary='The fixture covers the requested Orion facts; no additional task-derived lead remains.',
+        followups=[]))
     return dict(action='finish', source_ids=ids, gaps=[], reason='supported', **extra)
 
 
