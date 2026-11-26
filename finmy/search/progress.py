@@ -107,6 +107,10 @@ def provider_observations(state):
 def record_progress(state, operation, feedback, *, new_sources=0, new_marks=0, reviewed_chars=0):
     if operation == 'finish':
         return
+    if feedback.get('kind') in {'task_scope_review', 'task_scope_followups'}:
+        # These bounded review requests are neither failed reads nor evidence gain.
+        # Do not let the review itself trigger stagnation before a followup can run.
+        return
     new_chars = feedback.get('progress', {}).get('new_chars', 0)
     version_changed = feedback.get('progress', {}).get('source_version_changed', False)
     previous = state.data.get('research_progress', {}).get('consecutive_no_gain', 0)
