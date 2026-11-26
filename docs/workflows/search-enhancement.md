@@ -61,10 +61,11 @@ required first. This is decision guidance, not a fixed query quota or a claim th
 case has private negotiations. Public decisions, communications, commitments, responses
 and adjustments may be supported across investment, family, charity or other storylines.
 
-Directed reading uses a within-document relative BM25 threshold
-(40% of the best score), with neighboring context and no fixed match-count cap. Already-read
-strong matches do not promote weak matches into the next read. Explicit locations remain
-available; filtered or unmatched text is not evidence that a fact is absent.
+The default BM25 reader ranks windows within a saved source. By default it considers
+up to 24 windows per query, subject to the read-character limit. Unread matches take
+priority. A verification replay reports `already_read`. The historical topic reader
+also supports a 40% within-document threshold with neighboring context for tasks
+without a scoped reading plan. Either reader accepts an explicit original location.
 Each read reports returned characters and newly inspected original characters, including
 explicit-location rereads. The agent may verify known text and mark important passages.
 Three consecutive operations adding no original text, new candidate or validated priority
@@ -172,8 +173,13 @@ span handoffs and explicit programmatic source lists retain their existing seman
 | `finmy/runner/search_pipeline_runner.py` | Opt-in enhanced search alongside the original simple chain |
 | `configs/search.yml` | Search-only defaults, independent of Builder configuration |
 
-New enhanced-search handoffs use `evidence_priority_windows_v3` with a default
-budget of 90,000 characters. To preserve evidence across varied wording, v3 ranks
+New tasks with an identified research entity save a scoped plan. The agent marks
+inspected original passages, and the program selects among them within the
+90,000-character limit. It checks question support against the ranges actually
+delivered. The workbench keeps the plan's selection policy when the budget changes.
+See [Passage retrieval and evidence selection](search-retrieval-selection.md).
+
+Tasks without a scoped plan use `evidence_priority_windows_v3`. This policy ranks
 additional passages by BM25 for each source and reading question. It keeps marked
 passages and their context, then expands eligible whole blocks at 50%, 40% and 30%
 of the best score for that question in that source, while space permits.
@@ -214,6 +220,7 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | Search setting | Default / meaning |
 |---|---|
 | `providers` | `[baidu, bocha, exa]`; any subset remains selectable |
+| `retrieval` | `{mode: bm25}` for new tasks. For tasks with a scoped plan, the agent marks inspected originals and reviews coverage before finishing. |
 | `max_results` | `{baidu: 3, bocha: 3, exa: 5}` per query; a saved integer still applies equally to all selected providers |
 | `max_search_requests` | 24 per task, shared across providers, initial search and follow-up |
 | `max_read_sources` | 40 distinct sources; rereading a source does not consume a new source slot |
@@ -384,8 +391,8 @@ core process gaps, especially personal actions versus corporate transactions. Th
 no minimum source count and no requirement to read every candidate or whole document.
 `finish.reason_detail` records why remaining leads do not justify further reading;
 older callers may omit it. These semantic decisions remain advisory, with existing
-budgets and forced finalization unchanged. Saved handoff bodies are still packaged
-independently of what the model has read.
+budgets and forced finalization unchanged. The complete source manifest preserves
+the saved bodies. The scoped Builder handoff contains selected, inspected passages.
 
 Person-event catalog tasks automatically ask for both the event process and evidenced
 actions of the focal person within the confirmed scope. Questions adapt to the storyline;
@@ -467,7 +474,11 @@ the selected text. Provider dates agree at day precision or remain unknown/confl
 with their original values and providers retained for review. No date is inferred from
 an event period, URL or PDF filename. Publication metadata does not verify an event date.
 
-Budget allocation is applied only when complete material exceeds the limit:
+### Whole-block allocation for tasks without a scoped plan
+
+The following rules apply to `evidence_priority_windows_v3` when complete
+material exceeds the budget. Scoped plans select marked ranges even when all
+saved text would fit.
 
 - Allocate half the budget across sources using max-min fair quotas. Each source uses
   its own successful reading questions and the confirmed research scope for core content.
@@ -505,10 +516,9 @@ Budget allocation is applied only when complete material exceeds the limit:
   blocks. Count only newly added text and retain whole blocks; skip windows that do
   not fit. Stop at the budget or when no eligible window fits at the 30% floor,
   without padding. Restore original block order and mark omitted gaps.
-- Record the policy, assembly code hash and each threshold stage. Directed reading
-  of long bodies remains fixed at 40%. New handoffs use the evidence-priority policy;
-  without priority locations it follows the same progressive allocation. Explicitly reassembling
-  an old handoff creates a new revision under this policy while retaining its original
+- Record the policy, assembly code hash and each threshold stage. Without priority
+  locations, v3 follows the same progressive allocation. Requesting workbench
+  reassembly of an older unscoped manifest creates a new v3 revision retaining its
   source versions, complete-material manifest and previous handoff files. Upgrading an
   older manifest without frozen scope queries uses its saved research task for fallback.
   Stored balanced and earlier evidence-priority policies retain their historical allocation
@@ -523,10 +533,9 @@ omissions. Queries are frozen in new complete manifests; old manifests fall back
 original task and keywords, never later searches. The allocation policy is frozen in
 new manifests; existing manifests without that field retain their prior allocation
 behavior. Reassembly retains previous revisions. No extra model call is used for assembly.
-The default evidence-priority policy allocates whole saved blocks. Existing manifests
-that record a window policy retain their original-offset replay behavior; new tasks
-do not select that policy. Reassembly explicitly uses the current default and saves a
-new revision without rewriting the old input.
+V3 allocates whole saved blocks. A historical manifest with a window policy
+supports replay at its original offsets. A scoped manifest retains its own
+selection policy when the workbench creates a revision at a different budget.
 Interrupted model responses retain their available usage and finish reason in the
 error trace. Responses already logged before an action-validation error are not charged
 again in that error record; recorded usage is not an account invoice.

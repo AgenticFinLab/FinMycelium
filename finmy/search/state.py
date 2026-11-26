@@ -43,7 +43,7 @@ class SearchConfig:
     max_download_bytes: int = 20000000
     max_model_context_chars: int = 180000
     lm_name: str | None = 'ark/deepseek-v4-1-flash-261017'
-    retrieval: dict = field(default_factory=dict)
+    retrieval: dict = field(default_factory=lambda: {'mode': 'bm25'})
     generation_config: dict = field(default_factory=lambda: {'max_tokens':8192})
 
     def __post_init__(self):
@@ -104,9 +104,12 @@ class SearchState:
             self.data = json.loads(path.read_text(encoding='utf-8'))
             if task is not None and task != self.data['task']:
                 raise ValueError('Task differs from saved scope; create a new task')
-            if config is not None and asdict(config) != asdict(SearchConfig(**self.data['config'])):
+            # Runs created before retrieval was recorded used the topic reader.
+            self.config = SearchConfig(**{'retrieval': {}, **self.data['config']})
+            if isinstance(config, dict):
+                config = SearchConfig(**{'retrieval': self.config.retrieval, **config})
+            if config is not None and config != self.config:
                 raise ValueError('Resume must retain saved configuration')
-            self.config = SearchConfig(**self.data['config'])
         else:
             if (self.root / 'runs').exists() and any((self.root / 'runs').iterdir()):
                 raise ValueError('Resume existing run; a new run ID cannot reset task usage')
@@ -116,7 +119,7 @@ class SearchState:
                 raise ValueError('Task needs target_name and original query_text')
             if not isinstance(task.get('key_words', []), list) or any(not isinstance(k,str) for k in task.get('key_words', [])):
                 raise ValueError('key_words must be a list of strings')
-            self.config = config or SearchConfig()
+            self.config = SearchConfig(**config) if isinstance(config, dict) else config or SearchConfig()
             self.data = dict(task=task, config=asdict(self.config), created_at=now(),
                              input_sha256=digest(task), code_sha256=digest({p.name:digest(p.read_bytes()) for p in Path(__file__).parent.glob('*.py')}),
                              status='ready', usage={'search': 0, 'model': 0},

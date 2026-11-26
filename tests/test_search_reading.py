@@ -32,7 +32,7 @@ def saved(tmp_path, text, **config):
 def test_query_reads_late_passage_and_context_without_rewriting_sources(tmp_path):
     text = '\n\n'.join('Unrelated operations section ' + str(i) + '. ' + 'Routine deliveries. ' * 90 for i in range(20))
     text += '\n\nThe proposal remained conditional.\n\nThe chairperson negotiated financing with Aster.\n\nApproval required a vote.'
-    state, store, sid, doc = saved(tmp_path, text, max_read_chars=3000)
+    state, store, sid, doc = saved(tmp_path, text, max_read_chars=3000, retrieval={'mode': 'topic'})
     files = list((state.root/'sources'/sid/doc['version']).iterdir())
     before = {p:p.read_bytes() for p in files}
     result = execute_action(state, SearchTools(state), dict(action='read_source', source=sid, query='chairperson negotiated financing'))
@@ -56,7 +56,7 @@ def test_query_returns_more_than_three_separated_matches_within_budget(tmp_path)
     for i in range(5):
         text.extend([f'Before milestone {i}.', f'Negotiation milestone {i}.', f'After milestone {i}.',
                      'Unrelated delivery details. ' * 200 + str(i)])
-    state, store, sid, _ = saved(tmp_path, '\n\n'.join(text), max_read_chars=2000)
+    state, store, sid, _ = saved(tmp_path, '\n\n'.join(text), max_read_chars=2000, retrieval={'mode': 'topic'})
     result = store.read(sid, query='Negotiation')
     content = '\n'.join(s['text'] for s in result['spans'])
     assert all(f'Negotiation milestone {i}.' in content for i in range(5))
@@ -180,7 +180,7 @@ def test_weak_matches_do_not_fill_read_budget_or_reappear_after_strong_matches(t
         'Routine warehouse operations. ' * 100,
         'Seasonal financing covers logistics.',
     ])
-    state, store, sid, document=saved(tmp_path,text,max_read_chars=3000)
+    state, store, sid, document=saved(tmp_path,text,max_read_chars=3000,retrieval={'mode': 'topic'})
     first=store.read(sid,query='Aster acquisition financing negotiated')
     content='\n'.join(s['text'] for s in first['spans'])
     assert 'Aster acquisition' in content and 'conditional on approval' in content

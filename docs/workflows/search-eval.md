@@ -31,11 +31,9 @@ python -m finmy.search.eval --task examples/search_eval/buffett_goldman.json --e
 For an occasional full reference-pool evaluation, append `--eval_scope pool`.
 This is more expensive; the default `selected` scope never reports pool recall
 or provider ranking estimates. Both scopes use the same cached task rubric.
-Ordinary Workbench defaults are unchanged. The CLI defaults search and Judge
-to `ark/kimi-k3-1-pro-261024` and uses the existing API keys. Search settings,
-including `retrieval`, load from the repository's `configs/search.yml` by default;
-the evaluation keeps its Kimi model and generation defaults. `--config` accepts
-SearchConfig JSON/YAML overrides, including an explicit model override.
+Search uses the Ark DeepSeek V4.1 Flash profile in `configs/search.yml`.
+Pass `--config` with SearchConfig JSON/YAML to override the model, generation
+settings or reader. Automatic grading uses Ark Kimi K3.1 Pro.
 
 The repository profile enables BM25 passage reading. Confirm the effective mode
 in `output.json` under `search_config.retrieval`, and inspect `passage_retrieval`

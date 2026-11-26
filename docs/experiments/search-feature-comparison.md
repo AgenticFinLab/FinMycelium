@@ -75,7 +75,9 @@ Precision、Recall、F1 和 AP 按去同源后的证据组计算；同一公告�
 
 ## 运行与核对
 
-评测入口读取[搜索配置](../../configs/search.yml)，保留评测的 Kimi 模型和生成参数。独立复跑使用：
+当前评测入口从仓库配置读取搜索模型，默认使用 Ark DeepSeek V4.1 Flash。复现上表的 Kimi 轮次时，使用 `--config` 指定当时的 `ark/kimi-k3-1-pro-261024`、`low` 和 8,192 token。后文两轮官方 DeepSeek 实验的模型、服务与成本按各自记录保留。[搜索配置](../../configs/search.yml)
+
+使用当前默认配置独立运行：
 
 ```bash
 python -m finmy.search.eval \
