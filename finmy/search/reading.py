@@ -28,6 +28,37 @@ def read_coverage(document, ranges):
     return saved, saved-unread
 
 
+def record_presented(state, candidates):
+    """Commit only original ranges actually presented to a model, never whole bodies."""
+    from .sources import SourceStore
+    rows = []
+    store = SourceStore(state)
+    for candidate in candidates:
+        sid,version = candidate['source_id'],candidate['version']
+        if state.data['sources'][sid].get('version') != version:
+            raise ValueError('Presented cache version changed')
+        doc = store.document(sid,version)
+        for span in candidate['spans']:
+            block,start,end = (span[k] for k in ('block','start','end'))
+            if not (0 <= start < end <= len(doc['blocks'][block]['text'])) or (
+                    doc['blocks'][block]['text'][start:end] != span['text']):
+                raise ValueError('Presented cache range must match its original')
+            rows.append((sid,dict(version=version,block=block,start=start,end=end)))
+    if len(set(state.data['read_sources']) | {sid for sid,_ in rows}) > state.config.max_read_sources:
+        raise ValueError('Presented cache exceeds the source reading limit')
+    new_chars = 0
+    for sid,row in rows:
+        if sid not in state.data['read_sources']:
+            state.data['read_sources'].append(sid)
+        ranges = state.data['sources'][sid].setdefault('read_ranges',[])
+        current = [r for r in ranges if r['version']==row['version']]
+        added = sum(b-a for a,b in unread_ranges(row['block'],row['start'],row['end'],current))
+        new_chars += added
+        if added:
+            ranges.append(row)
+    return new_chars
+
+
 def bound_replayed_text(entry, result, *, priority_key):
     """Keep one verification replay per covered range and source annotation state.
 
@@ -72,7 +103,7 @@ def bound_replayed_text(entry, result, *, priority_key):
     result['spans'] = []
 
 
-def targeted_spans(document, query, limit, read_ranges, *, replay=True):
+def targeted_spans(document, query, limit, read_ranges, *, replay=True, topic_plan=None):
     """Rank temporary text windows, then read anchors and nearby context within limit.
 
     Temporary windows never replace saved parsing or alter original evidence locations.
@@ -80,6 +111,9 @@ def targeted_spans(document, query, limit, read_ranges, *, replay=True):
     Previously read matches yield to unread matches; explicit
     location reads remain available for rereading. Lexical matches are navigation hints.
     """
+    if topic_plan:
+        from .topic_reading import read_topic
+        return read_topic(document, query, limit, read_ranges, topic_plan, replay=replay)
     current = [r for r in read_ranges if r['version'] == document['version']]
     saved_chars = sum(len(b['text']) for b in document['blocks'])
     if 0 < saved_chars <= limit:
@@ -187,19 +221,20 @@ def targeted_spans(document, query, limit, read_ranges, *, replay=True):
     return spans, reading
 
 
-def located_preview(document, ranges, queries, limit, priorities=()):
+def located_preview(document, ranges, queries, limit, priorities=(), *, unmarked_only=False):
     """Bounded original excerpts, including locations, never an LLM summary.
 
     The bound includes serialized metadata. Short inspected documents fit whole;
-    larger ones use the actual reading questions. Priority annotations only reorder
-    text already inspected in the current source version.
+    larger ones use the actual reading questions. Relevant unmarked originals get
+    space before already saved evidence, which is also present as located marks.
     """
     if limit < 160:
         return []
     current = [r for r in ranges if r['version'] == document['version']]
+    marks = [p for p in priorities if p.get('version', document['version']) == document['version']]
     candidates, seen = [], []
     for r in sorted(current,key=lambda x:(x['block'],x['start'])):
-        for start,end in unread_ranges(r['block'],r['start'],r['end'],seen):
+        for start,end in unread_ranges(r['block'],r['start'],r['end'],seen+(marks if unmarked_only else [])):
             item = dict(block=r['block'],start=start,end=end)
             seen.append(item)
             text = document['blocks'][r['block']]['text'][start:end]
@@ -207,8 +242,15 @@ def located_preview(document, ranges, queries, limit, priorities=()):
             # their original block IDs or offsets.
             for window in pdf_blocks(text,0):
                 if window['text'].strip():
-                    candidates.append(dict(block=r['block'],start=start+window['start'],
-                                           end=start+window['end'],text=window['text']))
+                    left, right = start+window['start'], start+window['end']
+                    # A marked prefix must not hide the following unmarked sentence.
+                    cuts = [left,right]
+                    if len(window['text']) > max(0,limit-200):
+                        cuts = sorted({left, right} | {p[k] for p in marks if p['block']==r['block']
+                                                      for k in ('start','end') if left<p[k]<right})
+                    for a,b in zip(cuts,cuts[1:]):
+                        candidates.append(dict(block=r['block'],start=a,end=b,
+                                               text=document['blocks'][r['block']]['text'][a:b]))
     if not candidates:
         return []
     ranking = rank_blocks({'blocks':list(range(len(candidates)))},
@@ -220,13 +262,14 @@ def located_preview(document, ranges, queries, limit, priorities=()):
             scores[i] = max(scores.get(i,0),score/maximum)
     def key(i):
         c = candidates[i]
-        marked = any(p['block']==c['block'] and p['start']<c['end'] and p['end']>c['start']
-                     for p in priorities)
-        return (not marked,-scores.get(i,0),i)
+        unmarked = any(unread_ranges(c['block'],c['start'],c['end'],marks))
+        score = scores.get(i,0)
+        return (score <= 0, not unmarked, -score, i)
     output = []
     for i in sorted(range(len(candidates)),key=key):
         c = dict(candidates[i])
         c['read_location'] = dict(block=c['block'],offset=c['start'])
+        c['mark_status'] = 'unmarked'  # Reserve the longest status before bounding text.
         overhead = len(json.dumps(output+[dict(c,text='')],ensure_ascii=False))
         room = limit-overhead
         if room < 80:
@@ -237,5 +280,8 @@ def located_preview(document, ranges, queries, limit, priorities=()):
         while c['text'] and len(json.dumps(output+[c],ensure_ascii=False))>limit:
             c['text'] = c['text'][:-1];c['end']-=1
         if c['text']:
+            unmarked = sum(end-start for start,end in unread_ranges(c['block'],c['start'],c['end'],marks))
+            c['mark_status'] = ('marked' if not unmarked else
+                                'partial' if unmarked < c['end']-c['start'] else 'unmarked')
             output.append(c)
     return sorted(output,key=lambda c:(c['block'],c['start']))

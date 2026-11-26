@@ -44,7 +44,7 @@ def test_context_preserves_original_task_source_details_and_recent_actions(tmp_p
     assert context['task']['query_text'] == state.data['task']['query_text']
     assert context['task']['research_scope'] == state.data['task']['research_scope']
     assert context['task'] == state.data['task']
-    assert context['prior_actions'] == state.data['actions']
+    assert context['prior_actions'] == [dict(action='read_source',source=sid,query='consent')]
     assert context['sources'][0]['read_progress'] == entry['read_progress']
     assert context['sources'][0]['last_read'] == entry['last_read']
     assert context['sources'][0]['acquisition'] == entry['acquisition_attempts']['one']
@@ -56,7 +56,7 @@ def test_context_preserves_original_task_source_details_and_recent_actions(tmp_p
 
 def test_finalization_survives_error_and_resume_until_explicit_budget_change(tmp_path):
     state, sid, _ = make_state(tmp_path, max_model_context_chars=len(SYSTEM_PROMPT)+15000)
-    state.data['feedback'] = {'spans':[{'text':'x'*20000}]}
+    state.data['actions'] = [dict(action='read_source',source=sid,query='consent',gap='x'*20000)]
     state.save()
     def invalid_read(context):
         assert context['phase'] == 'finalize'

@@ -284,6 +284,13 @@ uses Web Search standard with rewrite off by default; Bocha uses Web Search with
 Exa uses Search auto with text contents. Summaries/snippets are discovery leads. Baidu's
 72-unit query limit is checked before requests (CJK U+4E00..U+9FFF counts two, other
 characters one); overlong queries are rejected for correction, not silently truncated.
+When Baidu is selected, the decision model is instructed to supply its short variant
+in the same search action, preserving entities, dates, negation and essential conditions.
+Baidu `content` and Exa `text` are cached as partial original text with provider/field
+provenance. The first read still attempts the original URL; failed acquisition keeps
+the cached excerpt and its locations. Bocha summaries remain discovery leads:
+selected URLs use the existing HTML/PDF fetcher, and failed reads return `search_leads`
+outside evidence spans. No bulk fetching or additional LLM rewriting stage is added.
 Bocha domain-filter mapping is not supported. Publication filters are optional and
 independent of event dates: later retrospective material can support an earlier event.
 

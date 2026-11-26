@@ -43,9 +43,12 @@ class SearchConfig:
     max_download_bytes: int = 20000000
     max_model_context_chars: int = 180000
     lm_name: str | None = 'ark/deepseek-v4-1-flash-261017'
+    retrieval: dict = field(default_factory=dict)
     generation_config: dict = field(default_factory=lambda: {'max_tokens':8192})
 
     def __post_init__(self):
+        from .retrieval import validate_options
+        validate_options(self.retrieval)
         if not self.providers or len(set(self.providers)) != len(self.providers):
             raise ValueError('Select unique providers')
         if set(self.providers) - {'baidu', 'bocha', 'exa'}:
@@ -101,7 +104,7 @@ class SearchState:
             self.data = json.loads(path.read_text(encoding='utf-8'))
             if task is not None and task != self.data['task']:
                 raise ValueError('Task differs from saved scope; create a new task')
-            if config is not None and asdict(config) != self.data['config']:
+            if config is not None and asdict(config) != asdict(SearchConfig(**self.data['config'])):
                 raise ValueError('Resume must retain saved configuration')
             self.config = SearchConfig(**self.data['config'])
         else:
@@ -118,6 +121,10 @@ class SearchState:
                              input_sha256=digest(task), code_sha256=digest({p.name:digest(p.read_bytes()) for p in Path(__file__).parent.glob('*.py')}),
                              status='ready', usage={'search': 0, 'model': 0},
                              read_sources=[], sources={}, cache={}, feedback=None)
+            from .topic import plan_for
+            plan = plan_for(task)
+            if plan["entities"]:
+                self.data["retrieval_plan"] = plan
             self.save()
 
     def save(self):

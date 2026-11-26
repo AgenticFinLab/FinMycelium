@@ -42,11 +42,17 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(read['status'],'partial')
         self.assertIn('Not yet completed.',read['spans'][0]['text'])
 
-    def test_invalid_query_rejected_before_any_selected_provider(self):
+    def test_provider_length_limit_does_not_reject_other_providers(self):
         state=self.state(providers=['exa','baidu'])
-        tools=SearchTools(state, transport=lambda *a:self.fail('must not call'))
-        with self.assertRaises(ValueError): tools.search('长'*40)
-        self.assertEqual(state.data['usage']['search'],0)
+        calls=[]
+        def transport(provider,payload,config):
+            calls.append(provider)
+            return {'results':[]}
+        tools=SearchTools(state, transport=transport)
+        result=tools.search('长'*40)
+        self.assertEqual(calls,['exa'])
+        self.assertEqual(result['providers'][0]['status'],'skipped_length')
+        self.assertEqual(state.data['usage']['search'],1)
         payload=request_payload('exa','长'*40,SearchConfig(providers=['exa']))
         self.assertEqual(payload['query'],'长'*40)
 

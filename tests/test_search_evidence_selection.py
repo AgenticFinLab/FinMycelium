@@ -10,6 +10,7 @@ from finmy.search.agent import SYSTEM_PROMPT, context_for, execute_action, run_a
 from finmy.search.budget import ADAPTIVE_POLICY, BUDGET_POLICY
 from finmy.search.evidence import record_passages
 from finmy.search.handoff import derive_input, prepare_complete_sources
+from finmy.search.reading import located_preview
 from finmy.search.sources import SourceStore
 from finmy.search.state import SearchConfig, SearchState, digest
 from finmy.search.tools import SearchTools
@@ -161,7 +162,9 @@ def test_finish_records_person_assessment_without_inventing_builder_text(tmp_pat
     summary,_=render(data,'case',selection,payload)
     assert 'Valid priority annotations: 1; retained in input: 1' in summary
     assert 'Search Agent assessment: limited' in summary
-    assert review['detail'] in summary
+    assert review['detail'] not in summary
+    assert selection['person_evidence']['detail'] in summary
+    assert selection['person_evidence']['questions']==[]
 
 
 def test_interrupted_response_usage_is_recorded_once(tmp_path):
@@ -192,7 +195,85 @@ def test_context_bound_and_no_unread_text_leakage(tmp_path):
     c=context_for(state,finalize=True)
     assert len(SYSTEM_PROMPT)+len(json.dumps(c,ensure_ascii=False))<=20000
     assert 'UNREAD_TAIL_MARKER' not in json.dumps(c)
-    assert all(s.get('read_evidence') for s in c['sources'])
+    previews=[s for source in c['sources'] for s in source.get('read_evidence',[])]
+    assert previews and sum(len(json.dumps(s,ensure_ascii=False))+32 for s in previews)<=3200
+    assert all(s['end']<=100 for s in previews)
+
+
+@pytest.mark.parametrize('intervals,version,expected', [
+    ([], 'v', 'unmarked'),
+    ([(0, 10), (10, 20)], 'v', 'marked'),
+    ([(0, 12), (8, 20)], 'v', 'marked'),
+    ([(0, 8), (9, 20)], 'v', 'partial'),
+    ([(0, 8)], 'v', 'partial'),
+    ([(20, 30)], 'v', 'unmarked'),
+    ([(0, 20)], 'old', 'unmarked'),
+])
+def test_preview_mark_status_uses_current_version_and_interval_union(intervals, version, expected):
+    document = dict(version='v', blocks=[dict(text='Read evidence text. ' + 'UNREAD_TAIL')])
+    ranges = [dict(version='v', block=0, start=0, end=20)]
+    marks = [dict(version=version, block=0, start=a, end=b) for a,b in intervals]
+    before = deepcopy((document, ranges, marks))
+    spans = located_preview(document, ranges, ['evidence'], 500, marks)
+    assert len(spans) == 1 and spans[0]['mark_status'] == expected
+    assert spans[0]['text'] == document['blocks'][0]['text'][:20]
+    assert 'UNREAD_TAIL' not in json.dumps(spans)
+    assert (document, ranges, marks) == before
+
+
+def test_preview_status_describes_displayed_text_and_fits_serialized_budget():
+    text = 'Evidence includes "conditions" and 原文. ' * 100
+    document = dict(version='v', blocks=[dict(text=text)])
+    ranges = [dict(version='v', block=0, start=0, end=len(text))]
+    # Only the prefix is marked. Spend the bounded preview on an unmarked
+    # original instead of repeatedly displaying that saved prefix.
+    marks = [dict(version='v', block=0, start=0, end=500)]
+    spans = located_preview(document, ranges, ['Evidence'], 300, marks)
+    assert len(spans) == 1 and spans[0]['mark_status'] == 'unmarked'
+    assert spans[0]['start'] >= 500
+    assert 500 < spans[0]['end'] <= len(text)
+    assert spans[0]['text'] == text[spans[0]['start']:spans[0]['end']]
+    assert len(json.dumps(spans, ensure_ascii=False)) <= 300
+
+
+def test_existing_finish_can_add_missing_fact_and_sentence_tail_without_rereading(tmp_path):
+    task = dict(target_type='event', target_name='Cedar education program',
+                query_text='Trace the education program and Ada participation.',
+                key_words=['Cedar', 'education program', 'participation'],
+                catalog=dict(kind='person_event', person_name='Ada', event_name='Cedar education program'))
+    state = SearchState(tmp_path, 'case', task=task, config=SearchConfig(max_model_calls=1))
+    store = SourceStore(state)
+    parts = ['Cedar approached Ada because of their longstanding working relationship.',
+             'Ada accepted the invitation. Work would begin only after local consent.',
+             'An unrelated community festival took place in summer.']
+    sid, doc = saved(store, 'interview', '\n\n'.join(parts))
+    store.read(sid)
+    first = dict(marker(sid, doc, 1), end=len('Ada accepted the invitation.'),
+                 fact_ids=['acceptance'], evidence_role='personal')
+    record_passages(state, [first])
+    before = deepcopy(state.data)
+    context_for(state, finalize=True)
+    assert state.data == before
+
+    # A scripted decision checks the existing one-call route, not LLM behavior.
+    def decide(context):
+        spans = context['sources'][0]['read_evidence']
+        assert {p['block']:p['mark_status'] for p in spans} == {0:'unmarked', 1:'unmarked', 2:'unmarked'}
+        tail=next(p for p in spans if p['block']==1)
+        assert tail['start']==first['end'] and 'only after local consent' in tail['text']
+        assert context['sources'][0]['priority_passages']==[first]
+        return dict(action='finish', source_ids=[sid], gaps=[], reason='supported',
+                    priority_passages=[
+                        dict(marker(sid, doc, 0), fact_ids=['approach'], evidence_role='context'),
+                        dict(marker(sid, doc, 1), fact_ids=['consent'], evidence_role='condition')])
+
+    run_agent(state, SearchTools(state), decide)
+    payload = json.loads((state.run_dir/'builder_input.json').read_text())
+    text = '\n'.join(s['content'] for s in payload['samples'])
+    assert parts[0] in text and parts[1] in text and parts[2] not in text
+    assert state.data['status'] == 'finished' and state.data['usage'] == {'search':0, 'model':1}
+    assert state.data['sources'][sid]['read_ranges'] == before['sources'][sid]['read_ranges']
+    assert first in state.data['priority_passages']
 
 
 def test_read_locations_fail_clearly_before_source_registration(tmp_path):

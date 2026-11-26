@@ -81,16 +81,14 @@ def test_failed_or_unhelpful_fetch_keeps_cached_text_and_is_not_repeated(tmp_pat
     assert entry['acquisition_attempts'][original['version']]['status'] == 'kept_cached'
 
 
-def test_already_inspected_versions_and_nonzero_cursors_do_not_move(tmp_path):
+def test_already_inspected_versions_and_their_cursors_do_not_move(tmp_path):
     state, tools, sid, original = setup(tmp_path)
     tools.read_source(sid, query='Ada')  # Offline cached inspection.
     def forbidden(url):
         pytest.fail('An inspected location must not be rebased')
     result = SearchTools(state, fetcher=forbidden).read_source(sid, query='Ada')
     assert result['version'] == original['version']
-    other = tools.sources.register('https://example.org/other')
-    tools.sources.save_raw(other, INTRO.encode(), 'txt', partial=True)
-    result = SearchTools(state, fetcher=forbidden).read_source(other, location={'offset': 5})
+    result = SearchTools(state, fetcher=forbidden).read_source(sid, location={'offset': 5})
     assert result['spans'][0]['start'] == 5
 
 

@@ -1,6 +1,7 @@
 """Provider adapters behind one search operation. No provider-specific agent loop."""
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from urllib.parse import urlsplit
 from .sources import SourceStore
@@ -16,6 +17,10 @@ ENDPOINTS = {'baidu': ('https://qianfan.baidubce.com/v2/ai_search/web_search', '
 BAIDU_QUERY_UNITS = 72
 
 
+def query_units(query):
+    return sum(2 if '\u4e00' <= c <= '\u9fff' else 1 for c in query)
+
+
 def search_constraints(config):
     """Expose the same limits used by payload validation to the decision model."""
     return dict(providers=config.providers, requests_per_new_query=len(config.providers),
@@ -24,9 +29,9 @@ def search_constraints(config):
                                     query_uses_saved_body=True, consumes_search_requests=False,
                                     partial_body_original_fetch_once=True),
                 max_results_per_provider=config.max_results,
-                query_max_units=BAIDU_QUERY_UNITS if 'baidu' in config.providers else None,
+                query_max_units=None, provider_query_max_units={'baidu': BAIDU_QUERY_UNITS},
                 query_unit_rule='U+4E00..U+9FFF counts 2; each other character counts 1',
-                provider_queries='Optional mapping of selected providers to language/alias variants of the same question',
+                provider_queries='For selected baidu, include a <=72-unit same-question variant in this action; optional for other providers',
                 strategy='All selected providers search the same question; optional provider_queries adapts its expression, not its scope.')
 
 
@@ -108,10 +113,15 @@ def normalize(provider, response):
     for item in items:
         if not isinstance(item, dict) or not isinstance(item.get('url'), str):
             raise ValueError('Malformed result item')
+        # Only documented original-text fields can become partial source bodies.
+        # Bocha summary and generic snippets remain discovery leads.
+        field = {'baidu':'content', 'exa':'text'}.get(provider)
+        body = item.get(field) if field else None
         results.append(dict(url=item['url'], title=item.get('title',item.get('name','')),
-            snippet=item.get('snippet',''), summary=item.get('summary',''),
+            snippet=item.get('snippet') or (body if provider == 'baidu' and isinstance(body, str) else ''),
+            summary=item.get('summary',''),
             published_at=item.get('publishedDate',item.get('datePublished',item.get('date'))),
-            text=item.get('text') if provider == 'exa' else None))
+            text=body, text_field=field))
     return results
 
 
@@ -130,10 +140,22 @@ class SearchTools:
         if (not isinstance(provider_queries, dict) or set(provider_queries) - set(config.providers)
                 or any(not isinstance(q, str) or not q.strip() for q in provider_queries.values())):
             raise ValueError('provider_queries must map selected providers to nonempty query strings')
-        # Validate all selected providers before any request; never silently truncate.
+        # A provider's length limit must not reject the entire search action.
         queries = {p:provider_queries.get(p, query) for p in config.providers}
-        payloads = {p:request_payload(p, queries[p], config) for p in config.providers}
-        found, outcomes = [], []
+        payloads, found, outcomes = {}, [], []
+        for provider, original in queries.items():
+            adapted = ' '.join(original.split())
+            if provider == 'baidu' and query_units(adapted) > BAIDU_QUERY_UNITS:
+                # Do not delete entity tokens, negation, qualifiers or operators
+                # to satisfy one provider. Preserve the full question elsewhere.
+                self.state.trace(dict(action='query_adapted', provider=provider,
+                                      original=original, query=adapted))
+                if query_units(adapted) > BAIDU_QUERY_UNITS:
+                    outcomes.append(dict(provider=provider, query=original, status='skipped_length',
+                        hint='Other providers retain the full question. Use a shorter provider_queries variant only if this provider is needed.'))
+                    continue
+            queries[provider] = adapted
+            payloads[provider] = request_payload(provider, adapted, config)
         for provider, payload in payloads.items():
             configuration_error = None
             key = digest([provider, payload])
@@ -162,7 +184,9 @@ class SearchTools:
                     ids.append(sid)
                     # Search-returned text may be incomplete. Never label it a full document.
                     if isinstance(item['text'], str) and item['text'].strip() and not self.state.data['sources'][sid].get('version'):
-                        self.sources.save_raw(sid, item['text'].encode(), 'txt', partial=True)
+                        self.sources.save_raw(sid, item['text'].encode(), 'txt', partial=True,
+                            fetch_metadata=dict(origin='search_response', provider=provider,
+                                                content_field=item['text_field']))
                 self.state.data['cache'][key] = ids
                 found.extend(ids)
                 outcomes.append(dict(provider=provider,query=queries[provider],status='success' if ids else 'no_results'))
@@ -176,11 +200,33 @@ class SearchTools:
             self.state.save()
             if configuration_error:
                 raise configuration_error
-        result = dict(source_ids=list(dict.fromkeys(found)), providers=outcomes)
+        ids = list(dict.fromkeys(found))
+        # Finish acquisition for providers that return leads without originals.
+        # Reuse cached bodies across providers/queries/resume. Failed discovery
+        # downloads are not retried here; explicit reads retain their retry policy.
+        missing = [sid for sid in ids if self.sources.can_complete_partial
+            and not self.state.data['sources'][sid].get('version')
+            and not self.state.data['sources'][sid].get('fetch_attempts')
+            and any(d.get('provider') in {'baidu','bocha'}
+                    for d in self.state.data['sources'][sid]['discoveries'])]
+        if missing:
+            # Download concurrently; parse and persist only on this writer thread.
+            with ThreadPoolExecutor(max_workers=min(3, len(missing))) as pool:
+                downloads = {sid:pool.submit(self.sources.partial_fetcher,
+                    self.state.data['sources'][sid]['url']) for sid in missing}
+                for sid, download in downloads.items():
+                    started = time.monotonic()
+                    self.sources.acquire(sid, fetcher=lambda url, result=download:result.result())
+                    self.state.trace(dict(action='search_body_acquisition', source=sid,
+                        status=self.state.data['sources'][sid]['status'],
+                        wait_and_save_seconds=round(time.monotonic()-started,3)))
+        result = dict(source_ids=ids, providers=outcomes)
         self.state.trace(dict(action='search',query=query,provider_queries=provider_queries,result=result))
         return result
 
-    def read_source(self, source, location=None, *, query=None, agent_feedback=False):
+    def read_source(self, source, location=None, *, query=None, agent_feedback=False, question=None):
+        if question is not None and (not isinstance(question,str) or not question.strip()):
+            raise ValueError('Reading question must be nonempty text')
         if location is not None and (not isinstance(location,dict) or set(location)-{'block','offset'}
                 or any(type(v) is not int or v<0 for v in location.values())):
             raise ValueError('Copy read_location into location: {"block": integer, "offset": integer}; '
@@ -198,16 +244,31 @@ class SearchTools:
             url = self.state.data['sources'][source]['url']
             if urlsplit(url).scheme in {'http', 'https'}:
                 self.sources.register_link(url)
+        guarded = agent_feedback and self.state.config.retrieval.get('mode') == 'bm25'
+        if guarded:
+            from .progress import query_read_feedback, record_query_read
+            feedback = query_read_feedback(self.state, source, query, question=question) if query is not None else None
+            if feedback:
+                self.state.trace(dict(action='read_deferred', source=source, result=feedback))
+                return feedback
         started = time.monotonic()
         previous = list(self.state.data['sources'][source].get('read_ranges', []))
         self.state.trace(dict(action='read_started',source=source,location=location or {},query=query))
         result = self.sources.read(source, **(location or {}), query=query)
+        if result.get('status') == 'partial':
+            result['body_origin'] = self.sources.document(source, result['version']).get('fetch_metadata', {})
+        if result.get('status') not in {'success', 'partial'}:
+            # Keep leads visible on acquisition failure, outside evidence spans.
+            result['search_leads'] = [
+                {k:d[k] for k in ('provider', 'snippet', 'summary') if d.get(k)}
+                for d in self.state.data['sources'][source]['discoveries'][-2:]
+                if d.get('snippet') or d.get('summary')]
         current = [r for r in previous if r['version'] == result.get('version')]
         new_chars = 0
         for span in result.get('spans', []):
             new_chars += sum(b-a for a,b in unread_ranges(span['block'], span['start'], span['end'], current))
             current.append(span)
-        result['progress'] = dict(new_chars=new_chars,
+        result['progress'] = dict(result.get('progress', {}), new_chars=new_chars,
             returned_chars=sum(len(s['text']) for s in result.get('spans', [])))
         entry = self.state.data['sources'][source]
         priority_key = digest(sorted((p['block'], p['start'], p['end'])
@@ -220,6 +281,8 @@ class SearchTools:
                 'use an unread location, another source or a targeted search, or finish with gaps. '
                 'Changing keywords on a fully read saved body does not acquire missing article parts.')
         self.state.data['sources'][source]['last_read'] = result['progress']
+        if guarded:
+            record_query_read(self.state, source, query, result, question=question)
         self.state.save()
         self.state.trace(dict(action='read_source',source=source,result=result,duration_seconds=round(time.monotonic()-started,3)))
         return result

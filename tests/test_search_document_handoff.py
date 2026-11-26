@@ -100,11 +100,12 @@ def test_context_pressure_enters_document_finalization_before_call(tmp_path):
     limit=len(SYSTEM_PROMPT)+2500
     state=SearchState(tmp_path,'case',task=TASK,config=SearchConfig(max_model_calls=30,max_model_context_chars=limit))
     sid,_=document(state,'a','Proposal and conditional approval.')
-    state.data['feedback']={'spans':[{'text':'X'*9000}]};state.save()
+    state.data['actions']=[dict(action='read_source',source=sid,query='approval',gap='X'*9000)]
+    state.save()
     assert len(SYSTEM_PROMPT)+len(json.dumps(context_for(state),ensure_ascii=False))>limit
     assert len(SYSTEM_PROMPT)+len(json.dumps(context_for(state,finalize=True),ensure_ascii=False))<=limit
     def model(c):
-        assert c['phase']=='finalize' and 'spans' not in c['feedback']
+        assert c['phase']=='finalize' and not c['prior_actions']
         return dict(action='finish',source_ids=[sid],gaps=[],reason='low_gain')
     run_agent(state,SearchTools(state),model)
     assert state.data['status']=='finished' and state.data['usage']['model']==1

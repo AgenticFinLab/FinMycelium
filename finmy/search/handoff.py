@@ -59,7 +59,7 @@ def assemble(state, selections, *, gaps=None, reason='', max_chars=None):
     return payload
 
 
-def _clean_blocks(document):
+def _clean_blocks(document, protected=()):
     """Conservative cleanup only; keep original paragraph text and its block index."""
     chrome = {'首页', '登录', '注册', '返回顶部', 'home', 'sign in', 'log in', 'back to top'}
     kept, removed, seen = [], [], {}
@@ -71,7 +71,7 @@ def _clean_blocks(document):
             why = 'empty'
         elif document['kind'] == 'html' and normalized.casefold() in chrome:
             why = 'navigation_label'
-        elif len(normalized) >= 80 and normalized in seen:
+        elif index not in protected and len(normalized) >= 80 and normalized in seen:
             why = 'exact_repeated_paragraph'
         if why:
             removed.append(dict(block=index, reason=why))
@@ -114,7 +114,16 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
             raise ValueError('Inspect this source before keeping it: ' + sid)
         document = store.document(sid, version)
         selected_versions[sid] = version
-        blocks, removed = _clean_blocks(document)
+        from .evidence import validate_passage
+        marks = []
+        for mark in state.data.get('priority_passages', []):
+            if mark.get('source_id') != sid:
+                continue
+            try:
+                marks.append(validate_passage(state, mark, versions={sid: version}))
+            except (ValueError, KeyError, TypeError, IndexError, OSError):
+                continue  # retained_passages reports invalid/stale marks below.
+        blocks, removed = _clean_blocks(document, {m['block'] for m in marks})
         cleanup.extend(dict(source_id=sid, version=version, **r) for r in removed)
         if not blocks:
             omitted.append(dict(source_id=sid, version=version, omission_reason='no_usable_body'))
@@ -174,12 +183,18 @@ def prepare_complete_sources(state, source_ids, *, gaps=None, reason='', version
     record['retrieval_queries'] = list(dict.fromkeys(q for q in queries if q.strip()))
     from .evidence import retained_passages
     record['priority_passages'],record['priority_omissions'] = retained_passages(state,retained_versions)
+    record['fact_checks'] = state.data.get('fact_checks', [])
+    record['evidence_policy'] = 'question_flow_v3'
+    record['source_lead_review'] = state.data.get('source_lead_review', [])
     if state.data.get('person_evidence'):
         record['person_evidence'] = dict(state.data['person_evidence'])
     if source_review is not None:
         record['source_review'] = source_review
     from .budget import BUDGET_POLICY
     record['budget_policy'] = BUDGET_POLICY
+    if state.data.get('retrieval_plan'):
+        record['retrieval_plan'] = state.data['retrieval_plan']
+        record['budget_policy'] = state.data['retrieval_plan']['policy']
     record['complete_id'] = digest(record)
     return materialize_complete(state, record), record
 
@@ -200,7 +215,7 @@ def materialize_complete(state, record):
 
 
 def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', allocation_policy=None):
-    """Allocate source quotas and share remaining space within the input budget."""
+    """Derive selected evidence under a hard size ceiling, without a length target."""
     # Keep the caller-label alias; policy replay follows the manifest unless explicitly overridden.
     if budget_policy not in {'balanced', 'c2'}:
         raise ValueError('Unknown input budget policy')
@@ -218,6 +233,10 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', a
         omission_reason=e.get('omission_reason','material_limit'), note='Retained in complete material; omitted only from this input')
         for e in allocation['omitted']]
     notes = list(complete['gaps'])
+    if policy == 'entity_attribute_windows_v2' and not payload['samples']:
+        notes.append('No marked evidence fits this input. Mark inspected support and necessary context; lexical candidates are not delivered automatically.')
+    if any(d['status'] == 'material_limit' for d in allocation.get('priority_decisions', [])):
+        notes.append('Marked evidence was omitted by the material limit; inspect priority_decisions before relying on coverage.')
     if any(o['omission_reason'] == 'material_limit' for o in omitted):
         notes.append('Some complete paragraphs were omitted by the material limit; review the omission record.')
     if any(o['omission_reason'] == 'relevance_selection' for o in omitted):
@@ -237,6 +256,25 @@ def derive_input(state, complete, *, max_chars=None, budget_policy='balanced', a
         scope='Budgeted input derived from independently retained complete material')
     if 'source_review' in complete:
         record['source_review'] = complete['source_review']
+    if complete.get('evidence_policy') in {'located_delivery_v1','located_support_v2','question_flow_v3'}:
+        from .review import delivered_checks, delivered_person_evidence, check_gaps
+        record['fact_checks'],record['delivery_issues'] = delivered_checks(complete.get('fact_checks',[]),selected,state=state)
+        if complete.get('evidence_policy') == 'question_flow_v3':
+            record['gaps'] = check_gaps(record['fact_checks'],record['gaps'])
+        if record['delivery_issues']:
+            if complete.get('evidence_policy') != 'question_flow_v3':
+                record['gaps'] += [i['question']+': '+i['reason'] for i in record['delivery_issues']]
+            if record['reason'] == 'supported':
+                record['reason'] = 'low_gain'
+        if complete.get('evidence_policy') in {'located_support_v2','question_flow_v3'}:
+            record['person_evidence'] = delivered_person_evidence(
+                complete.get('person_evidence'),record['fact_checks'],record['delivery_issues'],
+                derive=complete.get('evidence_policy')=='question_flow_v3')
+            person = record['person_evidence']
+            if (person and person['status']=='limited'
+                    and complete['person_evidence']['status']=='supported' and record['reason']=='supported'):
+                record['reason'] = 'low_gain'
+                record['gaps'].append('Personal assessment has unresolved support; see person_evidence.')
     return payload, record
 
 
@@ -251,6 +289,11 @@ def assemble_sources(state, source_ids, *, complete_manifest=None, **options):
     if complete_manifest is None:
         _, complete_manifest = prepare_complete_sources(state,source_ids,**options)
     payload, record = derive_input(state,complete_manifest,max_chars=limit,allocation_policy=allocation_policy)
+    return save_handoff(state,complete_manifest,payload,record)
+
+
+def save_handoff(state, complete_manifest, payload, record):
+    """Persist the exact selection already checked by the finish controller."""
     from pathlib import Path
     from .state import digest
     record['assembly_code_sha256'] = digest({p.name:digest(p.read_bytes()) for p in Path(__file__).parent.glob('*.py')})
@@ -263,5 +306,8 @@ def assemble_sources(state, source_ids, *, complete_manifest=None, **options):
         write_json(folder / 'builder_input.json',payload)
     from .state import now
     state.data.update(handoff_revision=revision.name, handoff_updated_at=now())
+    for key in ('fact_checks','person_evidence'):
+        if record.get(key) is not None:
+            state.data[key] = record[key]
     state.save()
     return payload
