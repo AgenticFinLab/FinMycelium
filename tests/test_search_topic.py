@@ -96,3 +96,16 @@ def test_handoff_ranges_priority_and_legacy_replay(tmp_path):
     p2,a2=derive_input(s,c);assert p2==p and a2==a
     legacy,_=derive_input(s,c,allocation_policy='evidence_priority_windows_v3')
     assert 'insurance' in legacy['samples'][0]['content']
+
+    from finmy.search.control import SearchController
+    from finmy.search.handoff import save_handoff
+    save_handoff(s, c, p, a)
+    first_revision = s.run_dir / 'handoffs' / s.data['handoff_revision']
+    controller = SearchController(tmp_path)
+    assert controller.reassemble('t', 100000) == p
+    revised = controller.inspect('t')
+    assert revised['selection']['budget_policy'] == POLICY
+    assert revised['selection']['selected'] == a['selected']
+    assert revised['complete_material'] == c
+    assert revised['handoff_revision'] != first_revision.name
+    assert json.loads((first_revision / 'builder_input.json').read_text()) == p
