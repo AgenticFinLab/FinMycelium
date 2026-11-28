@@ -61,12 +61,23 @@ def timeline(events, data):
         if kind == 'model_started':
             model_number = event.get('model_call', model_number + 1)
             current = new(event, number=model_number)
+        elif kind == 'model_attempt':
+            if current is None or current.get('model_call') != event.get('model_call'):
+                current = new(event, number=event.get('model_call'))
+            current['duration'] = event.get('duration_seconds')
+            current['usage'] = event.get('attempt_usage')
+            current['finish_reason'] = event.get('finish_reason')
+            current['stream'] = event.get('stream')
+            if event.get('status') == 'idle_timeout':
+                current['status'] = 'warning'
+                current['errors'].append({'error': 'ModelIdleTimeout', 'hint': '30 seconds without response data'})
         elif kind == 'model_response':
             if current is None or current['status'] != 'waiting' or current.get('decision') is not None:
                 model_number += 1
                 current = new(event, number=event.get('model_call', model_number))
             current['usage'] = event.get('usage')
-            current['duration'] = event.get('duration_seconds')
+            if current['duration'] is None:
+                current['duration'] = event.get('duration_seconds')
             try:
                 action = event.get('response')
                 action = json.loads(action) if isinstance(action, str) else action
@@ -129,7 +140,8 @@ def timeline(events, data):
                 elif not result.get('spans'):
                     current['status'] = 'warning'
         elif kind in {'action_error', 'action_limited'}:
-            if current is None or current['status'] != 'waiting':
+            if current is None or (current['status'] != 'waiting'
+                    and current.get('model_call') != event.get('model_call')):
                 model_number += 1
                 current = new(event, number=event.get('model_call', model_number))
             current['status'] = 'error' if kind == 'action_error' else 'warning'
@@ -139,7 +151,7 @@ def timeline(events, data):
             if event.get('finish_reason') is not None:
                 current['finish_reason'] = event['finish_reason']
         elif kind == 'action_completed':
-            if current is not None and current['action'] == 'finish':
+            if current is not None and current['action'] in {'finish', 'read_state'}:
                 current['status'] = 'completed'
                 current['sample_count'] = event.get('sample_count')
     for previous in rows[:-1]:

@@ -3,6 +3,27 @@
 Evidence delivery combines validated original spans with coverage-aware selection.
 The material budget is an upper limit; unused budget may remain.
 
+## Review decisions and working context
+
+For scoped research, each decision context includes `evidence_review` with the
+exact `required_passage_ids` being shown and a JSON response schema. The agent
+submits useful evidence through `fact_checks.evidence` or `priority_passages`,
+and records remaining text in `passage_exclusions`, together with its next action.
+When every shown passage is fully selected, return `passage_exclusions: {}`.
+This contract is shown on the first
+presentation, before a missing-decision error can occur. JSON mode supplies the
+object; existing application validators verify IDs, original ranges and coverage.
+The schema is part of the prompt, not a provider-specific structured-output setting.
+Preparing the context does not mark evidence read. Only a completed response can
+commit a presentation; interrupted streams cannot change evidence state.
+
+Working context uses the original source-ledger view for every source, without
+selecting expanded metadata by the current question. Existing passage marks,
+question details and provider query histories remain visible under the original
+context rules. There is no additional 240-character truncation of supported checks
+or metadata paging action. Original excerpts and pending evidence retain their
+shared budget, and the overall context limit and finalization rules still apply.
+
 ## Defaults and separate comparisons
 
 The workbench, Python API and repository profile in `configs/search.yml` use

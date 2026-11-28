@@ -187,10 +187,15 @@ def usage_totals(rows):
 
 def search_usage(state):
     trace = read_jsonl(state.run_dir/'trace.jsonl')
-    # Failed completions sometimes expose usage without a model_response record.
-    calls = [row for row in trace if row['action'] in {'model_response', 'rerank_response'} or
-             (row['action'] == 'action_error' and row.get('usage')
-              and not row.get('usage_recorded_in_response'))]
+    # New traces account for every transport attempt, including timed-out streams.
+    # Do not count the enclosing response/error again. Old traces remain readable.
+    attempts = [dict(row, usage=row.get('attempt_usage')) for row in trace if row['action'] == 'model_attempt']
+    accounted = {row['model_call'] for row in attempts}
+    calls = attempts + [row for row in trace if row['action'] == 'rerank_response' or
+             (row.get('model_call') not in accounted and
+              (row['action'] == 'model_response' or
+               (row['action'] == 'action_error' and row.get('usage')
+                and not row.get('usage_recorded_in_response'))))]
     usage = usage_totals(calls)
     # Historical traces still count toward costs; new runs have no such stages.
     reranks = [r for r in trace if r['action'] == 'rerank_response']
@@ -200,6 +205,8 @@ def search_usage(state):
         usage['embedding'] = dict(batches=len(embeddings), texts=sum(r['count'] for r in embeddings),
                                   seconds=sum(r['duration_seconds'] for r in embeddings))
     usage['attempted_model_calls'] = state.data['usage']['model']
+    usage['idle_timeout_attempts'] = sum(r.get('status') == 'idle_timeout' for r in attempts)
+    usage['transport_retries'] = sum(r['action'] == 'model_started' and r.get('attempt', 1) > 1 for r in trace)
     usage['provider_requests'] = state.data['usage']['search']
     usage['provider_seconds'] = sum(r.get('duration_seconds', 0) or 0 for r in trace
                                     if r['action'] == 'provider_result')

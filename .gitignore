@@ -234,3 +234,6 @@ EXPERIMENT/
 *.duckdb-*
 *.patch
 .vscode*
+
+# Embedding Models used for semantic search
+models/

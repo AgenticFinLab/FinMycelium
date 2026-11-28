@@ -125,3 +125,24 @@ def test_interrupted_usage_survives_projection_without_double_counting():
     ],{'status':'limit'})
     assert len(rows)==2 and sum(r['usage']['total_tokens'] for r in rows)==240
     assert rows[0]['finish_reason']=='length'
+
+
+def test_stream_retries_keep_separate_attempt_times_and_usage():
+    usage = {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}
+    events = []
+    for number in (1, 2, 3):
+        events.extend([
+            {'action': 'model_started', 'model_call': number, 'attempt': number},
+            {'action': 'model_attempt', 'model_call': number,
+             'status': 'idle_timeout' if number < 3 else 'success',
+             'duration_seconds': 30 if number < 3 else 8,
+             'attempt_usage': None if number < 3 else usage}])
+    events.extend([
+        {'action': 'model_response', 'model_call': 3, 'duration_seconds': 68,
+         'usage': usage, 'response': {'action': 'read_state', 'source_ids': ['a']}},
+        {'action': 'action_completed', 'operation': 'read_state'}])
+    rows = timeline(events, {'status': 'paused'})
+    assert len(rows) == 3
+    assert [r['status'] for r in rows] == ['warning', 'warning', 'completed']
+    assert sum(r['duration'] for r in rows) == 68
+    assert sum((r['usage'] or {}).get('total_tokens', 0) for r in rows) == 120

@@ -229,6 +229,7 @@ def test_pending_text_without_context_room_finishes_instead_of_retrying_blindly(
     accept_presentation(state,context_for(state))
     context=context_for(state)
     context.pop('pending_evidence');context.pop('pending_evidence_count')
+    context.pop('evidence_review')  # Charge the forthcoming review contract separately.
     state.config.max_model_context_chars=len(SYSTEM_PROMPT)+len(model_context(context))+1024+50
     constrained=context_for(state)
     assert constrained['pending_evidence']==[]

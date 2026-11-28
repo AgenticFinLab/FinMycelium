@@ -28,6 +28,40 @@ def context_passages(context):
     yield from context.get('pending_evidence', [])
 
 
+def review_context(state, context, serialize, system_chars):
+    """Expose the exact forthcoming review obligation without committing a read."""
+    from .topic import POLICY
+    if state.data.get('retrieval_plan', {}).get('policy') != POLICY or 'allowed_actions' not in context:
+        return context
+    while True:
+        ids = list(dict.fromkeys(passage_id(r['source_id'], r['version'], r)
+                                for r in context_passages(context)))
+        context['evidence_review'] = dict(
+            phase='review_then_act' if ids else 'choose_action', required_passage_ids=ids,
+            instruction='In this response, keep useful ranges and explicitly exclude each remaining '
+                        'shown remainder. Submit those decisions WITH the next action. Fully kept '
+                        'passages need no exclusion: use passage_exclusions: {} when none remain.',
+            response_schema=dict(type='object', required=['action', 'passage_exclusions'] if ids else ['action'], properties={
+                'action': {'enum': context['allowed_actions']},
+                'fact_checks': {'type': 'array'}, 'priority_passages': {'type': 'array'},
+                'passage_exclusions': {'type': 'object', 'additionalProperties': {
+                    'type': 'string', 'minLength': 1, 'maxLength': 300}}}))
+        if system_chars + len(serialize(context)) <= state.config.max_model_context_chars:
+            return context
+        # Charge the obligation itself to the same context ceiling. Remove only
+        # whole previews; never mark a trimmed/unshown original as inspected.
+        containers = [context.get('pending_evidence', [])]
+        containers += [s.get('read_evidence', []) for s in context.get('sources', [])]
+        containers += [s.get('spans', []) for s in context.get('cached_evidence', [])]
+        container = next((c for c in reversed(containers) if c), None)
+        if container is None:
+            return context  # Caller already handles an oversized non-evidence base.
+        container.pop()
+        if context.get('pending_evidence_count') and not context.get('pending_evidence'):
+            context.update(phase='finalize', allowed_actions=['finish'],
+                           finalization_reason=context.get('finalization_reason') or 'context_limit')
+
+
 def accept_presentation(state, context):
     """Call only after a successful model response, including malformed responses."""
     from .topic import POLICY

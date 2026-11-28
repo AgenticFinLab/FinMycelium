@@ -231,7 +231,7 @@ CLI reads process environment variables; it does not automatically load `.env`.
 | `max_builder_material_chars` | 90,000 across sample contents, including source labels and omission markers |
 | `max_model_context_chars` | 180,000 for the serialized decision context and system prompt |
 | `generation_config.max_tokens` | 8,192 including reasoning on the default Ark DeepSeek model; semantics differ by model |
-| `timeout` | 120 seconds per request |
+| `timeout` | 120 seconds for provider requests; original acquisition remains capped at 20 seconds. Search model streaming uses the separate 30-second inactivity policy below. |
 | `allow_network` | `false`; preparation does not execute services |
 
 Default settings and new-task forms share the same configuration fields, including output
@@ -257,6 +257,22 @@ These search-only policies override conflicting output-format and thinking setti
 request time, including on resume; they leave saved task settings, sampling defaults,
 budgets and Builder requests intact. Other models retain their configured protocol.
 The trace records the effective request controls as `request_options`.
+
+Search model responses are streamed. A connection/read timeout of 30 seconds
+cancels that attempt; active streams may run longer than 30 seconds. Incoming
+reasoning data and SSE heartbeats keep the connection active. A timeout retries
+the same decision context at most twice, for three total attempts, subject to
+the remaining model-call budget. SDK retries are disabled. After the third
+timeout, the task pauses with `model_idle_timeout` and can be resumed explicitly.
+Partial output is discarded and cannot execute an action or establish a read.
+This policy applies to search decisions, not Builder requests or provider calls.
+
+Each `model_attempt` records duration, status, usage when reported, and stream
+counts without reasoning text. `context_size` records serialized character counts
+by component. Evaluation totals count each attempt once, including failed attempts,
+and report `idle_timeout_attempts` and `transport_retries`; enclosing response
+records are not counted again. A timed-out attempt without provider usage remains
+an unreported-usage attempt, rather than being represented as free.
 
 The decoder accepts a single JSON object, optionally enclosed in one JSON code fence.
 It rejects empty content, duplicate keys, multiple objects, commentary and XML/DSML
